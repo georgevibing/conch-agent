@@ -10,7 +10,14 @@ import type {
 
 import type { PermissionMode } from '@conch/protocol';
 
-import type { Engine, HostTool, PermissionDecision, ResolvedOptions } from '../engines/types';
+import type {
+  BridgedTool,
+  Engine,
+  EngineMcpServer,
+  HostTool,
+  PermissionDecision,
+  ResolvedOptions,
+} from '../engines/types';
 import { Emitter } from '../lib/emitter';
 import { newId } from '../lib/ids';
 import { buildSystemAppend } from '../memory/prompt';
@@ -42,6 +49,43 @@ export interface TurnResult {
   error?: string;
   /** Text of the last assistant message in the turn. */
   finalText: string;
+}
+
+/** An integration that isn't working, as a conversation shows it. */
+export interface IntegrationIssueInput {
+  integrationId: string;
+  name: string;
+  catalogId?: string;
+  state: 'needs-auth' | 'error';
+  message: string;
+}
+
+/** Integrations (MCP servers the user connected in Conch), as turns see them. */
+export interface TurnIntegrationsProvider {
+  forTurn(prompt: string): Promise<{
+    servers: Record<string, EngineMcpServer>;
+    disallowedTools: string[];
+    issues: IntegrationIssueInput[];
+  }>;
+  turnFailed(failed: { name: string; error: string }[]): Promise<IntegrationIssueInput[]>;
+  /** For engines without MCP of their own: Conch connects and hands over the tools. */
+  bridge(
+    servers: Record<string, EngineMcpServer>,
+    disallowedTools: string[],
+  ): Promise<{
+    tools: {
+      name: string;
+      description: string;
+      inputSchema: Record<string, unknown>;
+      call(args: Record<string, unknown>): Promise<{ text: string; isError: boolean }>;
+    }[];
+    failed: { name: string; error: string }[];
+    close(): Promise<void>;
+  }>;
+  /** `undefined` for tools that don't belong to an integration. */
+  decide(toolName: string): Promise<'allow' | 'ask' | 'off' | undefined>;
+  describeTool(toolName: string): Promise<{ integration: string; tool: string } | undefined>;
+  markUsed(toolName: string): Promise<void>;
 }
 
 /** Tools every conversation gets from other parts of Conch (e.g. routines). */
@@ -101,6 +145,7 @@ export class ConversationManager {
       context?: () => Promise<string>;
       /** Money spent outside a turn (naming a chat), for the usage ledger. */
       onSpend?: (usage: Usage) => void;
+      integrations?: TurnIntegrationsProvider;
     },
   ) {}
 
@@ -340,8 +385,84 @@ export class ConversationManager {
     );
     const resolved = resolveOptions(live.record.options, settings.preferences);
     if (extras?.permissionMode) resolved.permissionMode = extras.permissionMode;
+    const integrations = this.deps.integrations;
+    const appendIssue = (issue: IntegrationIssueInput) =>
+      this.#append(live, { type: 'integration.issue', ...issue });
+
+    let closeBridge: (() => Promise<void>) | undefined;
+    const requestPermission = async (
+      request: { toolName: string; toolUseId?: string; input: Record<string, unknown> },
+      signal: AbortSignal,
+    ): Promise<PermissionDecision> => {
+      // Your choices on the Integrations page come first: "Don't ask", or a tool you turned off.
+      const policy = await integrations?.decide(request.toolName).catch(() => undefined);
+      if (policy === 'allow') return 'allow';
+      if (policy === 'off') return 'deny';
+      if (live.alwaysAllow.has(request.toolName)) return 'allow';
+      const described = await integrations?.describeTool(request.toolName).catch(() => undefined);
+      const permissionId = newId('perm');
+      return new Promise<PermissionDecision>((resolve) => {
+        live.permissions.set(permissionId, { resolve, toolName: request.toolName });
+        const expire = () => {
+          if (!live.permissions.delete(permissionId)) return;
+          this.#append(live, {
+            type: 'permission.resolved',
+            permissionId,
+            decision: 'expired',
+          });
+          resolve('deny');
+        };
+        signal.addEventListener('abort', expire, { once: true });
+        abort.signal.addEventListener('abort', expire, { once: true });
+        // Nobody is watching an unattended run: after an hour, the answer is no.
+        if (extras) {
+          const timer = setTimeout(expire, UNATTENDED_PERMISSION_MS);
+          timer.unref();
+        }
+        this.#append(live, {
+          type: 'permission.requested',
+          permissionId,
+          toolUseId: request.toolUseId,
+          toolName: request.toolName,
+          input: request.input,
+          summary: described
+            ? `${described.tool.charAt(0).toLowerCase()}${described.tool.slice(1)} in ${described.integration}`
+            : summarizeToolUse(request.toolName, request.input),
+        });
+        this.#setStatus(live, 'awaiting-permission');
+      });
+    };
 
     try {
+      const loaded = await integrations?.forTurn(prompt).catch(() => undefined);
+      for (const issue of loaded?.issues ?? []) appendIssue(issue);
+      // Engines that can't run MCP servers get the tools through Conch instead.
+      const bridged =
+        loaded && engine.integrations.mode === 'bridge' && Object.keys(loaded.servers).length
+          ? await integrations
+              ?.bridge(loaded.servers, loaded.disallowedTools)
+              .catch(() => undefined)
+          : undefined;
+      closeBridge = bridged?.close;
+      if (bridged?.failed.length)
+        void integrations?.turnFailed(bridged.failed).then(
+          (issues) => issues.forEach(appendIssue),
+          () => undefined,
+        );
+      const bridgedTools: BridgedTool[] | undefined = bridged?.tools.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+        run: async (args, toolUseId) => {
+          const decision = await requestPermission(
+            { toolName: tool.name, toolUseId, input: args },
+            abort.signal,
+          );
+          if (decision === 'deny') return { text: 'The user declined this action.', isError: true };
+          return tool.call(args);
+        },
+      }));
+
       const stream = engine.runTurn({
         conversationId,
         prompt,
@@ -361,39 +482,11 @@ export class ConversationManager {
         cwd: await this.deps.settings.workspace(),
         tools,
         options: resolved,
+        mcpServers: engine.integrations.mode === 'native' ? loaded?.servers : undefined,
+        disallowedTools: loaded?.disallowedTools,
+        bridgedTools,
         signal: abort.signal,
-        requestPermission: (request, signal) => {
-          if (live.alwaysAllow.has(request.toolName)) return Promise.resolve('allow');
-          const permissionId = newId('perm');
-          return new Promise<PermissionDecision>((resolve) => {
-            live.permissions.set(permissionId, { resolve, toolName: request.toolName });
-            const expire = () => {
-              if (!live.permissions.delete(permissionId)) return;
-              this.#append(live, {
-                type: 'permission.resolved',
-                permissionId,
-                decision: 'expired',
-              });
-              resolve('deny');
-            };
-            signal.addEventListener('abort', expire, { once: true });
-            abort.signal.addEventListener('abort', expire, { once: true });
-            // Nobody is watching an unattended run: after an hour, the answer is no.
-            if (extras) {
-              const timer = setTimeout(expire, UNATTENDED_PERMISSION_MS);
-              timer.unref();
-            }
-            this.#append(live, {
-              type: 'permission.requested',
-              permissionId,
-              toolUseId: request.toolUseId,
-              toolName: request.toolName,
-              input: request.input,
-              summary: summarizeToolUse(request.toolName, request.input),
-            });
-            this.#setStatus(live, 'awaiting-permission');
-          });
-        },
+        requestPermission,
       });
 
       for await (const event of stream) {
@@ -427,6 +520,8 @@ export class ConversationManager {
             break;
           case 'tool-start':
             if (isHostTool(event.name)) break;
+            if (event.name.startsWith('mcp__'))
+              void integrations?.markUsed(event.name).catch(() => undefined);
             started.set(event.toolUseId, Date.now());
             this.#append(live, {
               type: 'tool.started',
@@ -449,6 +544,13 @@ export class ConversationManager {
           }
           case 'notice':
             this.#append(live, { type: 'notice', code: event.code, message: event.message });
+            break;
+          case 'mcp-status':
+            // Checking why takes a moment; don't hold up the reply for it.
+            void integrations?.turnFailed(event.failed).then(
+              (issues) => issues.forEach(appendIssue),
+              () => undefined,
+            );
             break;
           case 'done':
             outcome = event.outcome;
@@ -496,6 +598,7 @@ export class ConversationManager {
         },
         tail,
       );
+      await closeBridge?.();
       live.abort = undefined;
       live.permissions.clear();
       const status: ConversationStatus = outcome === 'error' ? 'error' : 'idle';

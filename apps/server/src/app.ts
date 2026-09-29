@@ -8,6 +8,7 @@ import {
   AppState,
   ClientCommand,
   CommandName,
+  CreateIntegrationBody,
   CreateMemoryBody,
   Id,
   LoginCodeBody,
@@ -20,15 +21,18 @@ import {
   SearchPreviewQuery,
   SearchQuery,
   StartLoginBody,
+  UpdateIntegrationBody,
   UpdateMemoryBody,
   UpdateSettingsBody,
   UsageBudgetBody,
   type ServerEvent,
 } from '@conch/protocol';
-import Fastify, { type FastifyReply } from 'fastify';
+import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import type { z } from 'zod';
 
+import { isLoopbackAddress } from './auth/network';
 import { ConversationError } from './conversations/manager';
+import { IntegrationError, type SignIn } from './integrations/service';
 import { preview } from './routines/schedule';
 import { RoutineError } from './routines/service';
 import { registerAuthRoutes } from './auth/routes';
@@ -46,7 +50,31 @@ function parse<T extends z.ZodType>(
   return undefined;
 }
 
+/**
+ * Where a service sends you back after signing in: this same address, so it
+ * works however you reached Conch (`Host` was already checked against the
+ * allowlist). HTTPS when the request was, directly or via a local TLS proxy.
+ */
+function signInFor(request: FastifyRequest): SignIn {
+  const https =
+    request.protocol === 'https' ||
+    (isLoopbackAddress(request.socket.remoteAddress) &&
+      request.headers['x-forwarded-proto'] === 'https');
+  const display = (request.query as { display?: string } | undefined)?.display;
+  return {
+    redirectUrl: `${https ? 'https' : 'http'}://${request.headers.host ?? 'localhost'}/oauth/callback`,
+    display: display === 'tab' ? 'tab' : 'popup',
+  };
+}
+
+const oauthParam = (value: unknown, max = 4096) =>
+  typeof value === 'string' && value.length > 0 && value.length <= max ? value : undefined;
+
 function sendError(reply: FastifyReply, error: unknown) {
+  if (error instanceof IntegrationError) {
+    const status = { 'not-found': 404, invalid: 400, unavailable: 503 }[error.code];
+    return reply.code(status).send({ error: error.code, message: error.message });
+  }
   if (error instanceof RoutineError) {
     const status = { 'not-found': 404, invalid: 400, busy: 409, 'engine-unavailable': 503 }[
       error.code
@@ -236,6 +264,92 @@ export async function buildApp(services: Services) {
       return await services.routines.runNow(request.params.id);
     } catch (error) {
       return sendError(reply, error);
+    }
+  });
+
+  // ── Integrations ───────────────────────────────────────────────────────
+  // Running a program of your choosing, or letting an integration act without
+  // asking, persists power beyond this chat: it needs a recent password or key.
+  const verifyRequired = (request: FastifyRequest, reply: FastifyReply) => {
+    if (gate.verified(request.access)) return false;
+    void reply
+      .code(403)
+      .send({ error: 'verify-required', message: 'Confirm it’s you to make this change.' });
+    return true;
+  };
+  const guarded = async <T>(reply: FastifyReply, task: () => Promise<T>) => {
+    try {
+      return await task();
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  };
+  app.get('/api/integrations', () => services.integrations.list());
+  app.get<{ Querystring: { refresh?: string } }>('/api/integrations/external', (request) =>
+    services.integrations.external(request.query.refresh === '1'),
+  );
+  app.post('/api/integrations', async (request, reply) => {
+    const body = parse(CreateIntegrationBody, request.body, reply);
+    if (!body) return;
+    if ('custom' in body && body.custom.type === 'stdio' && verifyRequired(request, reply)) return;
+    return guarded(reply, () => services.integrations.create(body, signInFor(request)));
+  });
+  app.get<{ Params: { id: string } }>('/api/integrations/:id', (request, reply) =>
+    guarded(reply, () => services.integrations.get(request.params.id)),
+  );
+  app.patch<{ Params: { id: string } }>('/api/integrations/:id', async (request, reply) => {
+    const body = parse(UpdateIntegrationBody, request.body, reply);
+    if (!body) return;
+    if (body.policy === 'trust' && verifyRequired(request, reply)) return;
+    return guarded(reply, () => services.integrations.update(request.params.id, body));
+  });
+  app.delete<{ Params: { id: string } }>('/api/integrations/:id', (request, reply) =>
+    guarded(reply, async () => {
+      await services.integrations.remove(request.params.id);
+      return { ok: true };
+    }),
+  );
+  app.post<{ Params: { id: string } }>('/api/integrations/:id/connect', (request, reply) =>
+    guarded(reply, () => services.integrations.connect(request.params.id, signInFor(request))),
+  );
+  app.post<{ Params: { id: string } }>('/api/integrations/:id/cancel', (request, reply) =>
+    guarded(reply, () => services.integrations.cancelConnect(request.params.id)),
+  );
+  app.post<{ Params: { id: string } }>('/api/integrations/:id/check', (request, reply) =>
+    guarded(reply, async () => {
+      await services.integrations.check(request.params.id);
+      return services.integrations.get(request.params.id);
+    }),
+  );
+
+  /**
+   * The service sends you back here after you sign in. It's a top-level
+   * navigation from another site, so it isn't under /api (which refuses
+   * cross-site requests) and can't rely on the SameSite session cookie: the
+   * single-use, 256-bit `state` is what ties it to the sign-in you started.
+   * The code is spent at once and the redirect drops it from the address bar.
+   */
+  app.get('/oauth/callback', async (request, reply) => {
+    const query = (request.query ?? {}) as Record<string, unknown>;
+    const state = oauthParam(query.state, 256);
+    const code = oauthParam(query.code);
+    const error = oauthParam(query.error, 200);
+    const back = (flow: { integrationId: string; display: string } | undefined, result: string) => {
+      if (!flow) return reply.redirect(`/integrations?result=${result}`, 303);
+      const base =
+        flow.display === 'popup' ? `/integrations/done` : `/integrations/${flow.integrationId}`;
+      return reply.redirect(`${base}?id=${flow.integrationId}&result=${result}`, 303);
+    };
+    if (!state) return back(undefined, 'expired');
+    if (error || !code) {
+      const flow = await services.integrations.failOAuth(state, error ?? 'no_code');
+      return back(flow, error === 'access_denied' ? 'denied' : 'failed');
+    }
+    try {
+      return back(await services.integrations.finishOAuth(state, code), 'connected');
+    } catch (failure) {
+      const flow = (failure as { flow?: { integrationId: string; display: string } }).flow;
+      return back(flow, flow ? 'failed' : 'expired');
     }
   });
 

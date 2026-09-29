@@ -26,6 +26,42 @@ export interface HostTool<Shape extends z.ZodRawShape = z.ZodRawShape> {
   run(args: z.infer<z.ZodObject<Shape>>): Promise<string>;
 }
 
+/**
+ * An integration's tool, handed to an engine that can't talk MCP itself
+ * (`integrations.mode === 'bridge'`). Conch holds the MCP connection;
+ * `run` has already been through the user's permission rules.
+ */
+export interface BridgedTool {
+  /** `mcp__<server>__<tool>`, the same name native engines use. */
+  name: string;
+  description: string;
+  /** JSON Schema for the arguments, straight from the server. */
+  inputSchema: Record<string, unknown>;
+  run(
+    args: Record<string, unknown>,
+    toolUseId: string,
+  ): Promise<{ text: string; isError: boolean }>;
+}
+
+/** How an engine takes part in integrations. Every engine must say. */
+export interface EngineIntegrations {
+  /**
+   * `native`: the engine runs MCP servers itself (Claude Code, Codex CLI) and
+   * gets `TurnInput.mcpServers`. `bridge`: a plain model API (OpenRouter,
+   * Anthropic API) that gets `TurnInput.bridgedTools` for its tool calling.
+   */
+  mode: 'native' | 'bridge';
+  /** The provider account's own connectors (e.g. claude.ai), if there are any. */
+  account?: {
+    label: string;
+    url: string;
+    /** Whether the current sign-in can use them. */
+    ready(status: EngineStatus): { ready: boolean; hint?: string };
+  };
+  /** How to sign in to a server the engine configured itself, in plain words. */
+  signInHint?: string;
+}
+
 export interface PermissionRequest {
   toolName: string;
   toolUseId?: string;
@@ -33,6 +69,26 @@ export interface PermissionRequest {
 }
 
 export type PermissionDecision = 'allow' | 'allow-always' | 'deny';
+
+/** An MCP server to load for a turn, secrets included. Never leaves the gateway. */
+export type EngineMcpServer =
+  | { type: 'http'; url: string; headers?: Record<string, string> }
+  | { type: 'stdio'; command: string; args: string[]; env?: Record<string, string> };
+
+/** An MCP server the engine loads on its own (its settings, the provider account, plugins). */
+export interface EngineMcpStatus {
+  /** Display name, cleaned of engine-specific prefixes. */
+  name: string;
+  status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled';
+  /** Where it's configured, normalised by the engine. */
+  source: 'engine' | 'project' | 'account' | 'plugin' | 'other';
+  error?: string;
+  /** The plugin that brings it, for servers a plugin adds. */
+  plugin?: string;
+  toolCount: number;
+  /** For recognising well-known services; never shown. */
+  url?: string;
+}
 
 export interface TurnInput {
   conversationId: string;
@@ -47,6 +103,12 @@ export interface TurnInput {
   signal: AbortSignal;
   /** Resolved choices for this turn (conversation overrides merged over defaults). */
   options: ResolvedOptions;
+  /** Native engines: integrations to load, keyed by server name (tools become `mcp__<name>__<tool>`). */
+  mcpServers?: Record<string, EngineMcpServer>;
+  /** Bridge engines: integration tools Conch is connected to for this turn. */
+  bridgedTools?: BridgedTool[];
+  /** Tools the user turned off; the model never sees them. */
+  disallowedTools?: string[];
 }
 
 export interface ResolvedOptions {
@@ -66,6 +128,8 @@ export type EngineEvent =
   | { type: 'tool-start'; toolUseId: string; name: string; input: unknown }
   | { type: 'tool-end'; toolUseId: string; status: ToolStatus; output?: string }
   | { type: 'notice'; code: string; message: string }
+  /** Integrations that failed to connect at the start of the turn. */
+  | { type: 'mcp-status'; failed: { name: string; error: string }[] }
   | { type: 'done'; outcome: 'success' | 'interrupted' | 'error'; usage?: Usage; error?: string };
 
 /** A one-shot, tool-less request for small housekeeping jobs (e.g. naming a chat). */
@@ -126,6 +190,10 @@ export interface Engine {
   complete?(input: CompletionInput): Promise<Completion>;
   /** Current plan limits. Engines without limits omit it; Conch then only tracks spend. */
   usage?(options?: { force?: boolean }): Promise<EngineUsage>;
+  /** How this engine uses integrations. */
+  readonly integrations: EngineIntegrations;
+  /** MCP servers the engine loads by itself, and whether they work. */
+  mcpStatus?(): Promise<EngineMcpStatus[]>;
   /** Subscribe to live limit hints emitted while turns run. */
   onLimits?(listener: (signal: LimitSignal) => void): () => void;
 }

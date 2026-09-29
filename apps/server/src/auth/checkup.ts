@@ -77,6 +77,8 @@ export interface CheckupInput {
   tailscale?: string;
   /** From `workspaceRules`. */
   workspaceRules?: string[];
+  /** Integrations that act without asking. */
+  trustedIntegrations?: string[];
 }
 
 /**
@@ -174,6 +176,16 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       level: 'warn',
       title: 'Your work folder has its own Claude Code rules',
       detail: `It sets ${input.workspaceRules.join(', ')}. They apply to every chat and routine there. Keep them only if you wrote them — a downloaded project could use them to act without asking.`,
+    });
+  }
+
+  if (input.trustedIntegrations?.length) {
+    const names = input.trustedIntegrations;
+    items.push({
+      id: 'trusted-integrations',
+      level: 'warn',
+      title: `${names.length === 1 ? `${names[0]} acts` : `${names.length} integrations act`} without asking`,
+      detail: `${names.join(', ')} can send, change and delete things on your behalf without checking with you. An email or page the assistant reads could trick it into doing that. In Integrations, choose “Ask before changes” instead.`,
     });
   }
 

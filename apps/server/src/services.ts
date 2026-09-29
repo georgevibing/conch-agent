@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import type { EngineId, LoginState, ServerEvent } from '@conch/protocol';
 
@@ -12,6 +12,9 @@ import { ClaudeCodeEngine } from './engines/claude-code/engine';
 import { MockEngine } from './engines/mock/engine';
 import type { Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
+import { type Blueprint, CATALOG } from './integrations/catalog';
+import { MockVendor } from './integrations/mock/vendor';
+import { IntegrationService } from './integrations/service';
 import { MemoryStore } from './memory/store';
 import { RoutineService } from './routines/service';
 import { SearchIndex } from './search/index';
@@ -20,7 +23,7 @@ import { RoutineStore } from './routines/store';
 import { SettingsStore } from './settings/store';
 import { UsageService } from './usage/service';
 
-export const SERVER_VERSION = '0.2.0';
+export { SERVER_VERSION } from './version';
 
 /** Every past turn's cost, oldest conversations included. */
 async function turnCosts(store: ConversationStore) {
@@ -50,6 +53,9 @@ export class Services {
   readonly conversations: ConversationManager;
   readonly engines: Map<EngineId, Engine>;
   readonly usage: UsageService;
+  readonly integrations: IntegrationService;
+  /** The pretend SaaS vendor used with the mock engine. */
+  readonly mockVendor?: MockVendor;
   /** Full-text search over every conversation; absent if the index can't be opened. */
   readonly search?: { index: SearchIndex; indexer: SearchIndexer };
   #login?: { handle: LoginHandle; state: LoginState };
@@ -74,6 +80,15 @@ export class Services {
         }),
       ],
     ]);
+    // With the mock engine, integrations talk to a pretend vendor on this machine too.
+    this.mockVendor = config.CONCH_ENGINE === 'mock' ? new MockVendor() : undefined;
+    this.integrations = new IntegrationService({
+      home: config.CONCH_HOME,
+      emit: (event) => this.broadcast.emit(event),
+      engine: () => this.engine(),
+      cwd: () => this.settings.workspace(),
+      blueprints: this.mockVendor && mockBlueprints(this.mockVendor),
+    });
     const conversationStore = new ConversationStore(join(config.CONCH_HOME, 'conversations'));
     this.conversations = new ConversationManager({
       store: conversationStore,
@@ -81,7 +96,11 @@ export class Services {
       memory: this.memory,
       engine: () => this.engine(),
       tools: (ctx) => this.routines.tools(ctx),
-      context: () => this.routines.promptSection(),
+      context: async () =>
+        [await this.routines.promptSection(), await this.integrations.promptSection()]
+          .filter(Boolean)
+          .join('\n\n'),
+      integrations: this.integrations,
       onSpend: (usage) => void this.usage.recordTurn(usage),
     });
     this.routines = new RoutineService({
@@ -104,6 +123,7 @@ export class Services {
       }
     });
     this.usage.start();
+    void (this.mockVendor?.start() ?? Promise.resolve()).then(() => this.integrations.start());
     this.search = openSearch(config, conversationStore, this.conversations);
   }
 
@@ -158,6 +178,23 @@ export class Services {
     await engine.setApiKey(apiKey);
     return this.engineStatus(true);
   }
+}
+
+/**
+ * Mock-mode catalog: web integrations point at the pretend vendor, local
+ * ones run a tiny test server. Token vendors accept one fixed token each.
+ */
+function mockBlueprints(vendor: MockVendor) {
+  vendor.validTokens.set('github', 'github_pat_mock_0123456789abcdefghij');
+  vendor.validTokens.set('home-assistant', 'mock-home-token');
+  const fixture = resolve(import.meta.dirname, 'test/mcpFixture.ts');
+  const tsx = resolve(import.meta.dirname, '../node_modules/.bin/tsx');
+  return (id: string): Blueprint | undefined => {
+    const entry = CATALOG.get(id);
+    if (!entry?.blueprint) return undefined;
+    if (entry.blueprint.type === 'stdio') return { type: 'stdio', command: tsx, args: [fixture] };
+    return { type: 'http', url: () => vendor.url(id) };
+  };
 }
 
 /** The search index is derived data: if it can't be opened, Conch runs without search. */

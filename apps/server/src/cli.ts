@@ -15,6 +15,7 @@ import { checkup, secureHome, workspaceRules } from './auth/checkup';
 import { HostPolicy, exposure } from './auth/network';
 import { AccessError, AccessStore } from './auth/store';
 import { loadConfig } from './config';
+import { IntegrationStore } from './integrations/store';
 import { SettingsStore } from './settings/store';
 
 const config = loadConfig();
@@ -167,6 +168,7 @@ async function status() {
     secure: exposure(config) === 'local',
     homeProblems: await secureHome(config.CONCH_HOME),
     workspaceRules: await workspaceRules(await settings.workspace()),
+    trustedIntegrations: await new IntegrationStore(config.CONCH_HOME).trusted(),
   });
   const icon = { ok: '✓', info: 'ℹ', warn: '⚠', danger: '⛔' } as const;
   say(bold('Conch security'));

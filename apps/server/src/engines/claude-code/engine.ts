@@ -2,6 +2,7 @@ import {
   createSdkMcpServer,
   query,
   tool,
+  type McpServerConfig,
   type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 import type {
@@ -19,6 +20,8 @@ import type {
   CompletionInput,
   Engine,
   EngineEvent,
+  EngineIntegrations,
+  EngineMcpStatus,
   EngineUsage,
   LimitSignal,
   LoginHandle,
@@ -34,6 +37,30 @@ const CACHE_MS = 20_000;
 const CAPABILITIES_MS = 10 * 60_000;
 const PROBE_TIMEOUT_MS = 30_000;
 const USAGE_MS = 60_000;
+const MCP_STATUS_MS = 60_000;
+/** How long servers get to start before Conch reports on them. */
+const MCP_SETTLE_MS = 20_000;
+/** How long a turn waits for its integrations to connect before starting anyway. */
+const MCP_CONNECT_WAIT_MS = 5_000;
+
+/** Claude Code's config scopes, in Conch's words. */
+function sourceOf(source?: string): EngineMcpStatus['source'] {
+  switch (source) {
+    case 'user':
+    case 'managed':
+    case 'enterprise':
+      return 'engine';
+    case 'project':
+    case 'local':
+      return 'project';
+    case 'claudeai':
+      return 'account';
+    case 'plugin':
+      return 'plugin';
+    default:
+      return 'other';
+  }
+}
 
 function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
@@ -48,6 +75,25 @@ export class ClaudeCodeEngine implements Engine {
   readonly label = 'Claude Code';
   /** Claude Code maps this to Haiku on every provider (or ANTHROPIC_DEFAULT_HAIKU_MODEL). */
   readonly smallModel = 'haiku';
+  /**
+   * Claude Code runs MCP servers itself, and brings the connectors from your
+   * Claude account (Gmail, Calendar, Drive, Slack…) when you sign in with it.
+   */
+  readonly integrations: EngineIntegrations = {
+    mode: 'native',
+    signInHint: 'In a terminal, run claude, then /mcp, to sign it in.',
+    account: {
+      label: 'your Claude account',
+      url: 'https://claude.ai/settings/connectors',
+      ready: (status) =>
+        status.auth?.method === 'subscription'
+          ? { ready: true }
+          : {
+              ready: false,
+              hint: 'These connect through a Claude subscription. Sign Claude Code in with your Claude account to use them.',
+            },
+    },
+  };
   #cache?: { status: EngineStatus; at: number };
   #inflight?: Promise<EngineStatus>;
   #capabilities?: { value: Capabilities; at: number };
@@ -55,6 +101,8 @@ export class ClaudeCodeEngine implements Engine {
   #usage?: { value: EngineUsage; at: number };
   #usageProbe?: Promise<EngineUsage>;
   #limits = new Emitter<LimitSignal>();
+  #mcp?: { value: EngineMcpStatus[]; at: number };
+  #mcpProbe?: Promise<EngineMcpStatus[]>;
 
   constructor(
     private readonly settings: SettingsStore,
@@ -214,6 +262,59 @@ export class ClaudeCodeEngine implements Engine {
     }
   }
 
+  /**
+   * The MCP servers Claude Code loads by itself — your `claude mcp add`
+   * servers, the workspace's `.mcp.json`, plugins and your Claude account's
+   * connectors — read from an idle session, like `/mcp` does.
+   */
+  async mcpStatus(): Promise<EngineMcpStatus[]> {
+    if (this.#mcp && Date.now() - this.#mcp.at < MCP_STATUS_MS) return this.#mcp.value;
+    this.#mcpProbe ??= (async () => {
+      const status = await this.detect();
+      if (status.state !== 'ready') return [];
+      const q = await this.#idleSession(status);
+      try {
+        // Servers connect in the background. Ask until every one has settled
+        // (or the deadline passes) — a snapshot taken too early says
+        // "pending" for everything and would read as "checking" forever.
+        const deadline = Date.now() + MCP_SETTLE_MS;
+        let servers = await withTimeout(
+          q.mcpServerStatus(),
+          'Timed out asking Claude Code for its integrations.',
+        );
+        while (servers.some((s) => s.status === 'pending') && Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 750));
+          servers = await withTimeout(
+            q.mcpServerStatus(),
+            'Timed out asking Claude Code for its integrations.',
+          );
+        }
+        const value = servers
+          .filter((s) => s.source !== 'sdk' && s.source !== 'dynamic')
+          .map((s): EngineMcpStatus => ({
+            name: s.name.replace(/^claude\.ai\s+/i, '').replace(/^plugin:[^:]+:/, ''),
+            // Still starting at the deadline: it isn't going to come up by itself.
+            status: s.status === 'pending' ? 'failed' : s.status,
+            source: sourceOf(s.source ?? s.scope),
+            plugin: /^plugin:([^:]+):/.exec(s.name)?.[1],
+            error:
+              s.status === 'pending'
+                ? `Didn’t finish starting within ${MCP_SETTLE_MS / 1000} seconds.`
+                : s.error,
+            toolCount: s.tools?.length ?? 0,
+            url: s.config && 'url' in s.config ? s.config.url : undefined,
+          }));
+        this.#mcp = { value, at: Date.now() };
+        return value;
+      } finally {
+        q.close();
+      }
+    })().finally(() => {
+      this.#mcpProbe = undefined;
+    });
+    return this.#mcpProbe;
+  }
+
   onLimits(listener: (signal: LimitSignal) => void): () => void {
     return this.#limits.on(listener);
   }
@@ -322,8 +423,16 @@ export class ClaudeCodeEngine implements Engine {
       ),
     });
 
+    // Integrations are handed over on Claude Code's stdin (setMcpServers),
+    // not in `options.mcpServers`: the SDK passes those as a command-line
+    // argument, where any user on this computer could read tokens with `ps`.
+    let release = () => {};
+    const connected = new Promise<void>((resolve) => (release = resolve));
+    let mcpReport: EngineEvent | undefined;
+
     // SDK MCP servers need streaming input; a one-message stream ends the turn cleanly.
     async function* prompt(): AsyncGenerator<SDKUserMessage> {
+      await connected;
       yield {
         type: 'user',
         message: { role: 'user', content: input.prompt },
@@ -353,6 +462,7 @@ export class ClaudeCodeEngine implements Engine {
             allowDangerouslySkipPermissions: true,
           }),
           mcpServers: { conch },
+          ...(input.disallowedTools?.length && { disallowedTools: input.disallowedTools }),
           canUseTool: async (toolName, toolInput, { signal, toolUseID }) => {
             // Conch's own tools (memory) are always allowed; the user sees their effects inline.
             if (toolName.startsWith('mcp__conch__'))
@@ -373,7 +483,31 @@ export class ClaudeCodeEngine implements Engine {
         },
       });
 
+      const integrations = Object.entries(input.mcpServers ?? {});
+      if (!integrations.length) release();
+      else {
+        const servers: Record<string, McpServerConfig> = { conch };
+        for (const [name, server] of integrations) servers[name] = server;
+        void Promise.race([
+          q.setMcpServers(servers).then(
+            (result) => {
+              const failed = Object.entries(result.errors).map(([name, error]) => ({
+                name,
+                error,
+              }));
+              if (failed.length) mcpReport = { type: 'mcp-status', failed };
+            },
+            () => undefined,
+          ),
+          new Promise((resolve) => setTimeout(resolve, MCP_CONNECT_WAIT_MS)),
+        ]).finally(release);
+      }
+
       for await (const message of q) {
+        if (mcpReport) {
+          yield mcpReport;
+          mcpReport = undefined;
+        }
         if (message.type === 'rate_limit_event') {
           this.#limits.emit(limitSignal(message.rate_limit_info));
           continue;

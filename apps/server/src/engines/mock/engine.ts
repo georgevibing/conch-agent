@@ -16,6 +16,8 @@ import type {
   CompletionInput,
   Engine,
   EngineEvent,
+  EngineIntegrations,
+  EngineMcpStatus,
   EngineUsage,
   LimitSignal,
   LoginHandle,
@@ -64,6 +66,19 @@ const STOPWORDS = new Set(
 export class MockEngine implements Engine {
   readonly id = 'mock' as const;
   readonly label = 'Claude Code';
+  /**
+   * The mock is a "bridge" engine, like a plain model API would be: Conch
+   * connects to the integrations and hands it their tools. That keeps the
+   * bridge exercised end to end, while Claude Code covers the native path.
+   */
+  readonly integrations: EngineIntegrations = {
+    mode: 'bridge',
+    account: {
+      label: 'your Claude account',
+      url: 'https://claude.ai/settings/connectors',
+      ready: () => ({ ready: true }),
+    },
+  };
   #state: EngineState;
   #speed: number;
   #installAfter?: number;
@@ -282,6 +297,16 @@ export class MockEngine implements Engine {
     return { text: words.join(' ').toLowerCase(), usage };
   }
 
+  /** Pretend Claude Code has a couple of servers of its own, one of them signed out. */
+  async mcpStatus(): Promise<EngineMcpStatus[]> {
+    if (process.env.CONCH_MOCK_EXTERNAL === 'none') return [];
+    return [
+      { name: 'Google Calendar', status: 'connected', source: 'account', toolCount: 7 },
+      { name: 'Gmail', status: 'needs-auth', source: 'account', toolCount: 0 },
+      { name: 'filesystem', status: 'connected', source: 'engine', toolCount: 11 },
+    ];
+  }
+
   async *runTurn(input: TurnInput): AsyncIterable<EngineEvent> {
     const wait = (ms: number) => sleep(ms * this.#speed, input.signal);
     const messageId = newId('msg');
@@ -330,6 +355,45 @@ export class MockEngine implements Engine {
               output:
                 'total 16\ndrwxr-xr-x  4 you  staff  128 notes\n-rw-r--r--  1 you  staff  412 todo.md',
             };
+      }
+
+      // Integrations (bridged, like a plain model API): mention one by name and
+      // the mock really calls its tools through Conch — searching, or writing if asked.
+      const servers = [
+        ...new Set((input.bridgedTools ?? []).map((t) => t.name.split('__')[1] ?? '')),
+      ];
+      const server = servers.find((name) =>
+        text.includes(name.replace(/-\d+$/, '').replace(/-/g, ' ')),
+      );
+      const write = /\b(create|add|make|write)\b/.test(text);
+      const tool = server
+        ? (input.bridgedTools ?? []).find(
+            (t) => t.name === `mcp__${server}__${write ? 'create_page' : 'search'}`,
+          )
+        : undefined;
+      if (tool) {
+        const toolUseId = newId('tool');
+        const args = write ? { title: 'Notes from Conch' } : { query: input.prompt.slice(0, 40) };
+        yield { type: 'tool-start', toolUseId, name: tool.name, input: args };
+        const result = await tool.run(args, toolUseId);
+        yield {
+          type: 'tool-end',
+          toolUseId,
+          status: result.isError ? 'error' : 'success',
+          output: result.text,
+        };
+        const reply = result.isError
+          ? 'No problem — I left it alone.'
+          : write
+            ? 'Done — I created **Notes from Conch** for you.'
+            : `I found **3 results**. The most recent one is from yesterday.`;
+        for (const chunk of reply.match(/.{1,6}/gs) ?? []) {
+          await wait(12);
+          yield { type: 'text', messageId, delta: chunk };
+        }
+        yield { type: 'message-done', messageId };
+        yield { type: 'done', outcome: 'success' };
+        return;
       }
 
       const { model = 'default', effort, fastMode, permissionMode } = input.options;
