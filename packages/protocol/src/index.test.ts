@@ -1,29 +1,47 @@
 import { describe, expect, it } from 'vitest';
 
-import { ClientCommand, isSessionEvent, ServerEvent } from './index';
+import {
+  ClientCommand,
+  ConversationEvent,
+  Persona,
+  ServerEvent,
+  UpdateSettingsBody,
+} from './index';
 
 describe('protocol', () => {
-  it('applies defaults to client commands', () => {
-    const cmd = ClientCommand.parse({ type: 'session.send', sessionId: 's1', text: 'hi' });
-    expect(cmd).toEqual({ type: 'session.send', sessionId: 's1', text: 'hi', attachments: [] });
+  it('applies persona defaults', () => {
+    expect(Persona.parse({})).toEqual({ name: 'Conch', tone: 'warm', instructions: '' });
+  });
+
+  it('trims and rejects empty messages', () => {
+    expect(
+      ClientCommand.safeParse({ type: 'conversation.send', clientMessageId: 'c1', text: '   ' })
+        .success,
+    ).toBe(false);
   });
 
   it('rejects unknown command types', () => {
-    expect(ClientCommand.safeParse({ type: 'session.nuke', sessionId: 's1' }).success).toBe(false);
+    expect(ClientCommand.safeParse({ type: 'conversation.nuke' }).success).toBe(false);
   });
 
-  it('distinguishes ordered session events', () => {
-    const delta = ServerEvent.parse({
-      type: 'message.delta',
-      sessionId: 's1',
-      seq: 4,
-      at: 0,
+  it('round-trips a conversation event inside a server event', () => {
+    const event = ConversationEvent.parse({
+      type: 'assistant.delta',
+      conversationId: 'c1',
+      seq: 3,
+      at: 1,
       messageId: 'm1',
       kind: 'text',
       delta: 'Hel',
     });
-    const hello = ServerEvent.parse({ type: 'hello', protocolVersion: 1, serverVersion: '0.1.0' });
-    expect(isSessionEvent(delta)).toBe(true);
-    expect(isSessionEvent(hello)).toBe(false);
+    expect(ServerEvent.parse({ type: 'conversation.event', event })).toMatchObject({
+      event: { delta: 'Hel' },
+    });
+  });
+
+  it('accepts partial settings updates', () => {
+    expect(UpdateSettingsBody.parse({ persona: { tone: 'playful' } })).toEqual({
+      persona: { tone: 'playful' },
+    });
   });
 });
