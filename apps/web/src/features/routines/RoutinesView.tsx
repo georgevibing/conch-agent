@@ -101,9 +101,12 @@ export function RoutinesView() {
           </Heading>
           <Text tone="muted">Things Conch does for you, on a schedule.</Text>
         </Stack>
-        <Button leadingIcon={<Plus />} onClick={() => setCreating(true)}>
-          New routine
-        </Button>
+        {/* When there are none yet, the empty state's button is the only call to action. */}
+        {Boolean(routines?.length) && (
+          <Button leadingIcon={<Plus />} onClick={() => setCreating(true)}>
+            New routine
+          </Button>
+        )}
       </header>
 
       {isPending ? (
