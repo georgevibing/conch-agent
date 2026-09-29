@@ -33,6 +33,9 @@ export class Services {
         new MockEngine({
           state: process.env.CONCH_MOCK_STATE,
           speed: Number(process.env.CONCH_MOCK_SPEED ?? 1),
+          installAfter: process.env.CONCH_MOCK_INSTALL_AFTER
+            ? Number(process.env.CONCH_MOCK_INSTALL_AFTER)
+            : undefined,
         }),
       ],
     ]);

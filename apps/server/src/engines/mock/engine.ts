@@ -25,13 +25,21 @@ export class MockEngine implements Engine {
   readonly label = 'Claude Code';
   #state: EngineState;
   #speed: number;
+  #installAfter?: number;
+  #checks = 0;
 
-  constructor(options: { state?: string; speed?: number } = {}) {
+  /**
+   * @param installAfter when starting `not-installed`, pretend the user installs
+   *   Claude Code after this many forced re-checks (exercises auto-detection).
+   */
+  constructor(options: { state?: string; speed?: number; installAfter?: number } = {}) {
     this.#state = (options.state as EngineState | undefined) ?? 'ready';
     this.#speed = options.speed ?? 1;
+    this.#installAfter = options.installAfter;
   }
 
-  async detect(): Promise<EngineStatus> {
+  async detect({ force = false } = {}): Promise<EngineStatus> {
+    if (force && this.#installAfter !== undefined && ++this.#checks >= this.#installAfter) this.install();
     const base = {
       engine: 'claude-code' as const,
       label: 'Claude Code',
