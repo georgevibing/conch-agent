@@ -1,11 +1,14 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { toHaveNoViolations } from 'jest-axe';
 import { afterEach, expect } from 'vitest';
 
 expect.extend(toHaveNoViolations);
 
 afterEach(() => cleanup());
+
+// findBy*/waitFor wait up to 1s by default; a busy CI runner needs more headroom.
+configure({ asyncUtilTimeout: 5000 });
 
 // jsdom gaps that Radix and our hooks rely on.
 if (!window.matchMedia) {

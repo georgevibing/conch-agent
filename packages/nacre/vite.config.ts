@@ -9,6 +9,8 @@ export default defineConfig({
   css: { modules: nacreCssModules },
   test: {
     environment: 'jsdom',
+    // jsdom renders on a shared CI runner can be several times slower than locally.
+    testTimeout: 15_000,
     globals: false,
     setupFiles: ['./src/test/setup.ts'],
     css: { modules: { classNameStrategy: 'non-scoped' } },

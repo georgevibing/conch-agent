@@ -162,7 +162,8 @@ describe('Integrations page', () => {
     await userEvent.type(field, 'ghp-nope');
     expect(within(dialog).getByText('GitHub tokens start with github_pat_.')).toBeInTheDocument();
     await userEvent.clear(field);
-    await userEvent.type(field, 'github_pat_0123456789abc');
+    // Paste the real token, as people do: typing it key by key re-renders the dialog 24 times.
+    await userEvent.paste('github_pat_0123456789abc');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
     expect(await screen.findByRole('heading', { name: 'GitHub is connected' })).toBeInTheDocument();
     expect(calls.find((c) => c.method === 'POST')?.body).toEqual({

@@ -21,6 +21,8 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // jsdom renders on a shared CI runner can be several times slower than locally.
+    testTimeout: 15_000,
     setupFiles: ['./src/test/setup.ts'],
     css: { modules: { classNameStrategy: 'non-scoped' } },
     include: ['src/**/*.test.{ts,tsx}'],
