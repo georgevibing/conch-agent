@@ -26,6 +26,8 @@ if (config.CONCH_OPEN && process.platform === 'darwin') execFile('open', [url]);
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
+    // Open WebSockets can hold close() up; never hang on the way out.
+    setTimeout(() => process.exit(0), 1500).unref();
     void app.close().then(() => process.exit(0));
   });
 }

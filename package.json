@@ -20,9 +20,11 @@
     "check": "pnpm format:check && turbo run lint typecheck test",
     "a11y": "node scripts/a11y-sweep.mjs",
     "start": "pnpm --filter @conch/web build && pnpm --filter @conch/server start",
-    "dev:mock": "CONCH_ENGINE=mock turbo run dev"
+    "dev:mock": "CONCH_ENGINE=mock turbo run dev",
+    "e2e": "pnpm --filter @conch/web build && playwright test -c e2e/playwright.config.ts"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "axe-core": "^4.13.0",
     "playwright": "^1.63.0",
     "prettier": "^3.9.9",

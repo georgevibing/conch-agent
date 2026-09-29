@@ -11,3 +11,5 @@ coverage/
 .vite/
 *.tsbuildinfo
 /.artifacts/
+test-results/
+playwright-report/
