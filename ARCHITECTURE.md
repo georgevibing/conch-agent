@@ -1,8 +1,10 @@
 # Architecture
 
-Conch is a **local-first facade over Claude Code**. It never talks to the Anthropic
-API itself: it drives the Claude Code installation (and its authentication, settings,
-MCP servers, hooks and CLAUDE.md files) that already exists on the host machine.
+Conch is a **local-first shell around an agent of your choosing**. Out of the box it
+drives the Claude Code installation (and its authentication, settings, MCP servers,
+hooks and CLAUDE.md files) that already exists on the host machine; it can equally
+drive another agent on that machine, or a model you hold a key for. Which one is a
+setting, not a rebuild — see [ADR 0010](./docs/adr/0010-providers.md).
 
 ```
 ┌────────────────────────── Browser ──────────────────────────┐
@@ -59,7 +61,9 @@ Zod schemas for everything on the wire (v2):
 - **REST** — `GET /api/state` (onboarding flag, persona, profile, preferences, engine
   status, workspace), `PATCH /api/settings`, `GET /api/engine?refresh=1`,
   `POST /api/engine/login` (+ `/code`, `/cancel`), `PUT|DELETE /api/engine/api-key`,
-  memory CRUD under `/api/memories`, conversations under `/api/conversations`.
+  `GET /api/providers` (+ `POST /api/providers/:id/use|check|login|signin`,
+  `PUT|DELETE /api/providers/:id/key`), memory CRUD under `/api/memories`,
+  conversations under `/api/conversations`.
 - **WebSocket `/ws`** — `ClientCommand`: `conversation.send` (creates a conversation
   when no id is given), `conversation.subscribe` (with `afterSeq`), `conversation.interrupt`,
   `permission.respond`. `ServerEvent`: `conversation.created|updated|deleted`,
@@ -83,6 +87,8 @@ src/
     types.ts                  Engine / HostTool / EngineEvent contracts
     claude-code/              detect, login, env scrub, SDK → EngineEvent translator
     mock/                     scripted engine for UI work and E2E tests
+  providers/                  the words for each engine, connecting them, switching, keys
+  secrets/                    where a key lives: this computer, or 1Password (`op read`)
 ```
 
 - Each turn calls `query()` from the Claude Agent SDK with `resume` (the Claude Code
@@ -119,6 +125,16 @@ src/
   `bridgedTools` from Conch's own MCP client. OAuth callback: `GET /oauth/callback`.
   Outbound requests pass the SSRF guard (`integrations/net.ts`). See
   [ADR 0009](./docs/adr/0009-integrations.md).
+- **Providers** (`providers/`): the engines you can connect, each with the words for
+  its card (`providers/catalog.ts`) and its live `EngineStatus`. The active one is
+  `preferences.engine`, so switching is a click and nothing restarts; `CONCH_ENGINE`
+  pins the choice and the UI says so. A provider's key is written, read and described
+  in one place (`providers/keys.ts`) and lives either in `~/.conch/secrets.json`
+  (0600) or in 1Password as an `op://` reference resolved by `op read` when a turn
+  needs it — never to draw a page, so nobody gets a surprise fingerprint prompt.
+  Keys are checked before they're kept. OpenRouter can mint one for you over PKCE
+  (`providers/oauth.ts`, callback `GET /oauth/provider/:flowId`). See
+  [ADR 0010](./docs/adr/0010-providers.md).
 - **Usage limits.** `GET /api/usage` returns one `UsageSnapshot`, whatever the sign-in.
   - Subscriptions report plan windows (5-hour session, weekly, per-model), read
     through the SDK's structured `/usage`.
@@ -144,9 +160,12 @@ src/
   `~/.conch/search.db`, fed by the conversation event stream and caught up on start;
   `GET /api/search` ranks and groups hits with snippets, `GET /api/search/preview`
   shows one in context. See [ADR 0007 — Search](./docs/adr/0007-search.md).
-- Local data lives in `~/.conch/` (`CONCH_HOME`): `settings.json`, `secrets.json`,
+- Local data lives in `~/.conch/` (`CONCH_HOME`): `settings.json`, `secrets.json`
+  (the API key and a key per provider, or a 1Password reference to one),
   `memory/*.md`, `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `search.db`,
-  `integrations.json` + `integrations.secrets.json`, `workspace/` (default cwd).
+  `integrations.json` + `integrations.secrets.json`, `api-sessions/<id>.json` (the
+  transcript a plain model API needs, since it keeps no session of its own),
+  `workspace/` (default cwd).
 
 See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
 [ADR 0004 — Engines](./docs/adr/0004-engines.md).
@@ -161,6 +180,11 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
 - Assistant output: markdown → Nacre `Prose`, fenced code → `CodeBlock`, tool calls →
   `ToolCall`, permission requests → inline approval cards, memory saves → inline pills
   with undo.
+- **Providers.** Settings → Providers is one card per provider: what it is, whether
+  it's connected, and one button — "Use this", "Connect", or "How to install" with
+  the command to copy while Conch watches for the program to appear. One dialog
+  covers every path, including a key field that also takes a 1Password reference.
+  First run asks which provider to use instead of assuming Claude Code.
 - **Integrations.** `/integrations` shows what's connected (broken first, each with its
   one fix), a catalog with bundled logos, and what the engine has set up itself;
   `/integrations/:id` has the policy, per-tool Allow · Ask · Off and the connection.

@@ -6,10 +6,11 @@ Nested `AGENTS.md` files override this one for their subtree.
 
 ## What Conch is
 
-A self-hosted web facade for [Claude Code](https://code.claude.com). A small Node
-gateway runs on the machine where Claude Code lives, drives it through the Claude
-Agent SDK, and streams the conversation to a React web app built on **Nacre**, our
-own design system. See [ARCHITECTURE.md](./ARCHITECTURE.md).
+A self-hosted web shell for a coding agent of your choosing. A small Node gateway
+runs on your own machine, drives the provider you connected — [Claude
+Code](https://code.claude.com) through the Claude Agent SDK, another installed CLI,
+or a model API — and streams the conversation to a React web app built on **Nacre**,
+our own design system. See [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ## Routing — where to go for what
 
@@ -21,6 +22,7 @@ own design system. See [ARCHITECTURE.md](./ARCHITECTURE.md).
 | Wire protocol between web and gateway                     | `packages/protocol/` + [ARCHITECTURE.md § Protocol](./ARCHITECTURE.md#wire-protocol-packagesprotocol)                                                                                             |
 | Lint / TS config shared across packages                   | `packages/eslint-config/`, `packages/tsconfig/`                                                                                                                                                   |
 | Integrations (apps/MCP servers, OAuth, the catalog)       | `apps/server/src/integrations/` + [ADR 0009](./docs/adr/0009-integrations.md) — security-relevant                                                                                                 |
+| Providers (which engine runs, connecting them, keys)      | `apps/server/src/providers/`, `apps/server/src/secrets/` + [ADR 0010](./docs/adr/0010-providers.md) — security-relevant                                                                           |
 | A decision that changes architecture or adds a dependency | Write an ADR in [`docs/adr/`](./docs/adr/) first                                                                                                                                                  |
 | Security, auth, exposing the gateway beyond localhost     | [§ Security engineering](#security-engineering) below → [ARCHITECTURE.md § Security](./ARCHITECTURE.md#security-model) → [ADR 0008](./docs/adr/0008-access-and-hardening.md) — treat as high-risk |
 
