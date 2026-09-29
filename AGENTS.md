@@ -55,6 +55,9 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
 | `pnpm storybook`                                                            | Nacre Storybook on http://localhost:6006                                                             |
 | `pnpm check`                                                                | Format check + lint + typecheck + tests. **Must pass before every commit.**                          |
 | `pnpm test`                                                                 | All unit tests (Vitest)                                                                              |
+| `pnpm e2e`                                                                  | Builds the web app and runs Playwright journeys against the gateway + mock engine                    |
+| `pnpm dev:mock`                                                             | Dev servers with the scripted mock engine (no Claude usage)                                          |
+| `pnpm start`                                                                | Build and run Conch for real at http://localhost:4317                                                |
 | `pnpm --filter @conch/nacre test -- src/components/Button`                  | Tests for one component                                                                              |
 | `pnpm a11y [--filter=button]`                                               | axe (incl. colour contrast) on every story, light + dark, in real Chrome (Storybook must be running) |
 | `node scripts/snap.mjs <story-id> [--mode=dark] [--hover=css] [--clip=css]` | Screenshot a story for visual QA (Storybook must be running)                                         |
