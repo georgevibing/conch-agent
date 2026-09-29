@@ -133,7 +133,8 @@ export class Services {
           .filter(Boolean)
           .join('\n\n'),
       integrations: this.integrations,
-      onSpend: (usage) => void this.usage.recordTurn(usage),
+      // A spend that can't be saved is lost, not fatal: an unhandled rejection would stop Conch.
+      onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
     });
     this.routines = new RoutineService({
       store: new RoutineStore(join(config.CONCH_HOME, 'routines')),
@@ -151,7 +152,7 @@ export class Services {
     this.usage.changed.on((usage) => this.broadcast.emit({ type: 'usage.changed', usage }));
     this.conversations.events.on((event) => {
       if (event.type === 'conversation.event' && event.event.type === 'turn.completed') {
-        void this.usage.recordTurn(event.event.usage);
+        void this.usage.recordTurn(event.event.usage).catch(() => undefined);
       }
     });
     this.usage.start();

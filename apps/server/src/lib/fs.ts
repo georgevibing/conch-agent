@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { platform } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 
 /**
@@ -19,7 +20,29 @@ export async function writeFileAtomic(path: string, data: string, mode = 0o600):
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const tmp = `${path}.${randomBytes(4).toString('hex')}.tmp`;
   await writeFile(tmp, data, { mode });
-  await rename(tmp, path);
+  try {
+    await replace(tmp, path);
+  } catch (error) {
+    await rm(tmp, { force: true });
+    throw error;
+  }
+}
+
+/** Errors Windows gives for a moment while another handle — a reader, a virus scan — has the file open. */
+const SHARING = new Set(['EPERM', 'EACCES', 'EBUSY']);
+
+/** `rename` over an existing file, waiting out Windows' brief sharing refusals. */
+async function replace(from: string, to: string): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await rename(from, to);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? '';
+      if (platform() !== 'win32' || !SHARING.has(code) || attempt >= 8) throw error;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(20 * 2 ** attempt, 500)));
+    }
+  }
 }
 
 export async function readJson<T>(path: string): Promise<T | undefined> {
