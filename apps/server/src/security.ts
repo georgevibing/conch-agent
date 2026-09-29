@@ -257,6 +257,18 @@ export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
   // page can send cross-site without a preflight, so we don't parse it at all.
   app.removeContentTypeParser('text/plain');
 
+  // Node detaches upgraded sockets from its HTTP parser. If an early guard
+  // rejects before @fastify/websocket sets request.ws, its cleanup hook cannot
+  // close the socket. A proxy must not reuse that connection for another request.
+  // Successful upgrades are hijacked by ws and do not run onSend.
+  app.addHook('onSend', async (request, reply, payload) => {
+    if (request.headers.upgrade?.toLowerCase() === 'websocket') reply.header('connection', 'close');
+    return payload;
+  });
+  app.addHook('onResponse', async (request) => {
+    if (request.headers.upgrade?.toLowerCase() === 'websocket') request.raw.socket.end();
+  });
+
   app.addHook('onRequest', async (request, reply) => {
     const host = hostname(request.headers.host);
     if (!host || !gate.hosts.allows(host)) {

@@ -41,3 +41,22 @@ gateway so its CSP covers the document; do not publish raw Vite source endpoints
 Tests without a provider are necessary but not sufficient: verify both login
 gates, API writes, WebSockets, logout and revocation across the deployed proxy.
 See [the deployment runbook](../REVERSE_PROXY.md).
+
+## Rejected upgrade connections
+
+Live verification exposed a connection-reuse failure after rejected upgrades.
+Node detaches a socket from its HTTP parser when it emits `upgrade`. Conch's
+security hook can reject before the websocket plugin marks `request.ws`, so the
+plugin's normal rejection cleanup does not close that socket. An HTTP rejection
+advertising keep-alive then allows a proxy to reuse a connection that can no
+longer parse the next request, stalling subsequent upgrades.
+
+An `onSend` hook now marks every HTTP response to a WebSocket upgrade
+`Connection: close`; an `onResponse` hook ends the detached socket after the
+response is flushed. Successful upgrades bypass these hooks via hijacking and remain
+unchanged. A real TCP regression verifies response delivery and EOF for 401, 403,
+and 421; the authenticated socket lifecycle test still verifies successful
+upgrade, ping and immediate revocation.
+
+Sources: [Node HTTP upgrade events](https://nodejs.org/api/http.html#event-upgrade)
+and [Fastify WebSocket hooks](https://github.com/fastify/fastify-websocket#using-hooks).

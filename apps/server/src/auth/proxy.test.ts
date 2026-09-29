@@ -139,3 +139,65 @@ it('keeps independent revocable key auth behind a host-preserving HTTPS proxy', 
     await rm(home, { recursive: true, force: true });
   }
 });
+
+it('closes rejected upgrade transports so a proxy cannot reuse a detached socket', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'conch-upgrade-'));
+  const app = await buildApp(
+    new Services(
+      loadConfig({
+        CONCH_HOME: home,
+        CONCH_ENGINE: 'mock',
+        CONCH_LOG_LEVEL: 'silent',
+        CONCH_WEB_DIST: '/nonexistent',
+        CONCH_ALLOWED_HOSTS: 'conch.example',
+      }),
+    ),
+  );
+  try {
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('Expected TCP listener');
+    for (const [host, origin, status] of [
+      ['conch.example', 'https://conch.example', 401],
+      ['conch.example', 'https://evil.example', 403],
+      ['evil.example', 'https://evil.example', 421],
+    ] as const) {
+      const socket = new Socket();
+      try {
+        const response = await new Promise<string>((resolve, reject) => {
+          let data = '';
+          socket.setTimeout(1500, () => reject(new Error('Rejected upgrade was left reusable')));
+          socket.on('error', reject);
+          socket.on('data', (chunk) => {
+            data += String(chunk);
+          });
+          socket.on('end', () => resolve(data));
+          socket.connect(address.port, '127.0.0.1', () => {
+            socket.write(
+              [
+                'GET /ws HTTP/1.1',
+                `Host: ${host}`,
+                `Origin: ${origin}`,
+                'Connection: Upgrade',
+                'Upgrade: websocket',
+                'Sec-WebSocket-Version: 13',
+                'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==',
+                'X-Forwarded-For: 203.0.113.9',
+                'X-Forwarded-Proto: https',
+                '',
+                '',
+              ].join('\r\n'),
+            );
+          });
+        });
+        expect(response).toMatch(new RegExp(`^HTTP/1.1 ${status} `));
+        expect(response).toMatch(/\r\nconnection: close\r\n/i);
+      } finally {
+        socket.destroy();
+      }
+    }
+  } finally {
+    await app.close();
+    await rm(home, { recursive: true, force: true });
+  }
+});
