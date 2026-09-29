@@ -111,3 +111,29 @@ describe('Composer', () => {
     expect(onRemove).toHaveBeenCalled();
   });
 });
+
+describe('Composer extensions', () => {
+  it('lets onTextareaKeyDown claim Enter, spreads textareaProps and renders the overlay', async () => {
+    const onSubmit = vi.fn();
+    const claim = vi.fn((e: { key: string; preventDefault(): void }) => {
+      if (e.key === 'Enter') e.preventDefault();
+    });
+    renderNacre(
+      <Composer
+        label="Message"
+        defaultValue="hello"
+        onSubmit={onSubmit}
+        onTextareaKeyDown={claim}
+        textareaProps={{ 'aria-autocomplete': 'list' }}
+        overlay={<div>Overlay here</div>}
+      />,
+    );
+    const field = screen.getByRole('textbox', { name: 'Message' });
+    expect(field).toHaveAttribute('aria-autocomplete', 'list');
+    expect(screen.getByText('Overlay here')).toBeInTheDocument();
+    field.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(claim).toHaveBeenCalled();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});

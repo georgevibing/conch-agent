@@ -1,0 +1,98 @@
+/* Story/test fixtures — not exported from the package. */
+import {
+  Brain,
+  Cpu,
+  FilePlus2,
+  Gauge,
+  MessageSquarePlus,
+  Minimize2,
+  Palette,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  Zap,
+} from 'lucide-react';
+
+import type { CommandItem } from './CommandMenu';
+
+export const commands: CommandItem[] = [
+  { id: 'model', name: 'model', description: 'Choose the model', group: 'Conch', icon: <Cpu /> },
+  {
+    id: 'effort',
+    name: 'effort',
+    argumentHint: '[auto|low|high|max]',
+    description: 'How hard Claude thinks',
+    group: 'Conch',
+    icon: <Gauge />,
+    keywords: ['thinking'],
+  },
+  { id: 'fast', name: 'fast', description: 'Toggle fast mode', group: 'Conch', icon: <Zap /> },
+  {
+    id: 'mode',
+    name: 'mode',
+    description: 'Ask first, auto, plan or full trust',
+    group: 'Conch',
+    icon: <ShieldCheck />,
+    keywords: ['permissions', 'trust'],
+  },
+  {
+    id: 'new',
+    name: 'new',
+    description: 'Start a new chat',
+    group: 'Conch',
+    icon: <MessageSquarePlus />,
+    keywords: ['clear'],
+  },
+  {
+    id: 'remember',
+    name: 'remember',
+    argumentHint: '<something about you>',
+    description: 'Save a memory',
+    group: 'Conch',
+    icon: <Brain />,
+  },
+  {
+    id: 'theme',
+    name: 'theme',
+    description: 'Switch light and dark',
+    group: 'Conch',
+    icon: <Palette />,
+  },
+  {
+    id: 'settings',
+    name: 'settings',
+    description: 'Open settings',
+    group: 'Conch',
+    icon: <Settings />,
+  },
+  {
+    id: 'standup',
+    name: 'standup',
+    description: 'Summarise what changed since yesterday',
+    group: 'Your commands',
+    icon: <Sparkles />,
+  },
+  {
+    id: 'pr',
+    name: 'pr',
+    argumentHint: '[branch]',
+    description: 'Write a pull request description',
+    group: 'Your commands',
+    icon: <FilePlus2 />,
+  },
+  {
+    id: 'compact',
+    name: 'compact',
+    argumentHint: '[instructions]',
+    description: 'Summarise the conversation to free up context',
+    group: 'Claude Code',
+    icon: <Minimize2 />,
+  },
+  { id: 'review', name: 'review', description: 'Review the current changes', group: 'Claude Code' },
+  {
+    id: 'init',
+    name: 'init',
+    description: 'Create a CLAUDE.md for this project',
+    group: 'Claude Code',
+  },
+];

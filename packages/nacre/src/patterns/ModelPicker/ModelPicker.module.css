@@ -1,0 +1,449 @@
+@layer nacre.components {
+  /* ── Provider logo ──────────────────────────────────────────────────── */
+  .logo {
+    flex-shrink: 0;
+    color: var(--nc-text-muted);
+  }
+
+  .logo[data-provider='claude'] {
+    color: light-dark(oklch(0.62 0.15 42), oklch(0.72 0.14 42));
+  }
+
+  /* ── Trigger chip (shared with ModePicker via composition) ─────────── */
+  .chip {
+    --nc-sheen-size: 60px;
+    --nc-sheen-hover: 0.3;
+    --nc-rim-hover: 0.6;
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    block-size: var(--nc-control-sm);
+    max-inline-size: 100%;
+    padding-inline: var(--nc-space-2) var(--nc-space-1-5);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text-muted);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  @media (hover: hover) {
+    .chip:hover:not(:disabled) {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+  }
+
+  .chip:active:not(:disabled) {
+    transform: scale(0.97);
+    transition-duration: var(--nc-duration-instant);
+  }
+
+  .chip[data-state='open'] {
+    background: var(--nc-wash-2);
+    color: var(--nc-text);
+  }
+
+  .chip:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .chip:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 1px;
+  }
+
+  .chipLabel {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .chipMeta {
+    color: var(--nc-text-subtle);
+    font-weight: var(--nc-weight-regular);
+  }
+
+  .chipFast {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+    color: light-dark(oklch(0.62 0.15 70), oklch(0.8 0.14 80));
+    fill: currentColor;
+  }
+
+  .chevron {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+    opacity: 0.7;
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .chip[data-state='open'] .chevron {
+    transform: rotate(180deg);
+  }
+
+  /* ── Panel ──────────────────────────────────────────────────────────── */
+  .panel {
+    inline-size: min(22rem, calc(100vw - 24px));
+    overflow: hidden;
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    max-block-size: min(22rem, 50vh);
+    padding: var(--nc-space-1-5);
+    overflow-y: auto;
+    outline: none;
+  }
+
+  .loading {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-4);
+  }
+
+  .skeletonRow {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .group + .group {
+    margin-block-start: var(--nc-space-1);
+    padding-block-start: var(--nc-space-1);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .groupHeader {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    padding: var(--nc-space-1-5) var(--nc-space-2) var(--nc-space-1);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text-muted);
+    letter-spacing: 0.01em;
+  }
+
+  .note {
+    margin-inline-start: auto;
+    font-weight: var(--nc-weight-regular);
+    color: var(--nc-text-subtle);
+  }
+
+  .row {
+    appearance: none;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    inline-size: 100%;
+    padding: var(--nc-space-2) var(--nc-space-2-5);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .row:hover {
+      background: var(--nc-wash-1);
+    }
+  }
+
+  .row:focus-visible {
+    outline: none;
+    background: var(--nc-wash-2);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--nc-ring) 45%, transparent);
+  }
+
+  .row[data-state='checked'] {
+    background: color-mix(in oklch, var(--nc-accent-9) 8%, transparent);
+  }
+
+  .rowText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 1px;
+    min-inline-size: 0;
+  }
+
+  .rowLabel {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-medium);
+    letter-spacing: -0.005em;
+  }
+
+  .rowDescription {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+    line-height: var(--nc-leading-snug);
+  }
+
+  .badge {
+    padding: 0 0.375rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-3);
+    color: var(--nc-accent-11);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-semibold);
+    line-height: 1.125rem;
+  }
+
+  .check {
+    display: grid;
+    place-items: center;
+    inline-size: 1rem;
+    color: var(--nc-accent-11);
+    animation: check-in var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .check > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    stroke-width: 2.4;
+  }
+
+  @keyframes check-in {
+    from {
+      opacity: 0;
+      transform: scale(0.4);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* ── Sections ───────────────────────────────────────────────────────── */
+  .section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-3) var(--nc-space-3-5);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .sectionHead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--nc-space-3);
+  }
+
+  .sectionTitle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .sectionHint {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+    text-align: end;
+  }
+
+  .fastRow {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .fastText {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .fastText .sectionHint {
+    text-align: start;
+  }
+
+  .fastIcon {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+    transition:
+      color var(--nc-duration-base) var(--nc-ease-out),
+      transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .fastIcon[data-on] {
+    color: light-dark(oklch(0.62 0.15 70), oklch(0.8 0.14 80));
+    fill: currentColor;
+    transform: scale(1.12) rotate(-6deg);
+  }
+
+  .switchWrap {
+    display: inline-flex;
+  }
+
+  /* ── Footer ─────────────────────────────────────────────────────────── */
+  .footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-block-size: 2.5rem;
+    padding: var(--nc-space-1-5) var(--nc-space-3);
+    border-block-start: 1px solid var(--nc-border-subtle);
+    background: var(--nc-wash-1);
+  }
+
+  .makeDefault {
+    appearance: none;
+    padding: var(--nc-space-1) var(--nc-space-2);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    background: transparent;
+    color: var(--nc-text-accent);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    cursor: pointer;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .makeDefault:hover {
+      background: color-mix(in oklch, var(--nc-accent-9) 10%, transparent);
+    }
+  }
+
+  .makeDefault:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 1px;
+  }
+
+  .defaultNote {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    padding-inline: var(--nc-space-2);
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-subtle);
+  }
+
+  .defaultCheck {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    stroke-width: 2.4;
+  }
+
+  .defaultNote[data-saved] {
+    color: light-dark(oklch(0.5 0.12 var(--nc-success-h)), oklch(0.78 0.12 var(--nc-success-h)));
+  }
+
+  .defaultNote[data-saved] .defaultCheck {
+    animation: check-in var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+}
+
+@layer nacre.components {
+  /* ── More models disclosure ─────────────────────────────────────────── */
+  .more {
+    appearance: none;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    inline-size: 100%;
+    margin-block-start: 2px;
+    padding: var(--nc-space-1-5) var(--nc-space-2-5);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text-muted);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    text-align: start;
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .more:hover {
+      background: var(--nc-wash-1);
+      color: var(--nc-text);
+    }
+  }
+
+  .more:focus-visible {
+    outline: none;
+    background: var(--nc-wash-2);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--nc-ring) 45%, transparent);
+  }
+
+  .moreChevron {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .more[aria-expanded='true'] .moreChevron {
+    transform: rotate(90deg);
+  }
+
+  .moreCount {
+    margin-inline-start: auto;
+    min-inline-size: 1.25rem;
+    padding-inline: 0.375rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-wash-2);
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-2xs);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.125rem;
+    text-align: center;
+  }
+
+  .moreList {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .moreList > * {
+    animation: nc-surface-in var(--nc-duration-base) var(--nc-ease-out) both;
+  }
+}
+
+@layer nacre.components {
+  .row[data-secondary] {
+    padding-block: var(--nc-space-1-5);
+  }
+
+  .row[data-secondary] .rowLabel {
+    font-size: var(--nc-text-sm);
+  }
+}

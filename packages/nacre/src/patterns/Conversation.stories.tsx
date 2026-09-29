@@ -1,13 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { ChevronDown, Paperclip, RotateCcw, Sparkles, ThumbsUp } from 'lucide-react';
+import { Paperclip, RotateCcw, ThumbsUp } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
-import { Button } from '../components/Button';
 import { IconButton } from '../components/IconButton';
 import { CodeBlock } from './CodeBlock';
 import { Composer } from './Composer';
 import { CopyButton } from './CopyButton';
 import { Diff } from './Diff';
+import { DemoToolbar } from './ModelPicker/fixtures';
 import { sampleCode, sampleDiff, sampleReply, sampleTestOutput } from './fixtures';
 import { Message, MessageList } from './Message';
 import { Prose } from './Prose';
@@ -38,9 +38,7 @@ const toolbar = (
     <IconButton size="sm" label="Attach files">
       <Paperclip />
     </IconButton>
-    <Button size="sm" variant="ghost" leadingIcon={<Sparkles />} trailingIcon={<ChevronDown />}>
-      Opus 5.5
-    </Button>
+    <DemoToolbar />
   </>
 );
 

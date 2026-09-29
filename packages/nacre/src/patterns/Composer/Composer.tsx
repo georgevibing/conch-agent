@@ -10,6 +10,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
   type Ref,
+  type TextareaHTMLAttributes,
 } from 'react';
 
 import { IconButton } from '../../components/IconButton';
@@ -48,6 +49,18 @@ export interface ComposerProps extends Omit<
   actions?: ReactNode;
   /** Ref to the underlying `<textarea>`. */
   ref?: Ref<HTMLTextAreaElement>;
+  /**
+   * Runs before the composer's own key handling. Call `event.preventDefault()`
+   * to claim the key (e.g. Enter while a command menu is open).
+   */
+  onTextareaKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
+  /** Extra attributes for the `<textarea>` (e.g. combobox ARIA from `useCommandMenu`). */
+  textareaProps?: Omit<
+    TextareaHTMLAttributes<HTMLTextAreaElement>,
+    'value' | 'onChange' | 'onKeyDown' | 'defaultValue'
+  >;
+  /** Floating content anchored to the composer, e.g. a `CommandMenu`. */
+  overlay?: ReactNode;
 }
 
 function assignRef<T>(ref: Ref<T> | undefined, value: T) {
@@ -79,6 +92,9 @@ export function Composer({
   toolbar,
   actions,
   ref,
+  onTextareaKeyDown,
+  textareaProps,
+  overlay,
   className,
   ...props
 }: ComposerProps) {
@@ -120,6 +136,8 @@ export function Composer({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    onTextareaKeyDown?.(event);
+    if (event.defaultPrevented) return;
     // Never act while an IME composition is in progress (CJK input etc.).
     if (event.nativeEvent.isComposing || event.keyCode === 229) return;
     if (event.key === 'Enter' && !event.shiftKey && !event.altKey) {
@@ -141,6 +159,7 @@ export function Composer({
       {...props}
     >
       <span className={styles.glow} aria-hidden />
+      {overlay}
       <div
         className={styles.surface}
         data-lustre=""
@@ -159,6 +178,7 @@ export function Composer({
           </div>
         )}
         <textarea
+          {...textareaProps}
           ref={(el) => {
             textarea.current = el;
             assignRef(ref, el);
