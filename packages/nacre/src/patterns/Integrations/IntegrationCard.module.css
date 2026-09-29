@@ -1,0 +1,271 @@
+@layer nacre.components {
+  .card {
+    --nc-rim-rest: 0.16;
+    --nc-rim-hover: 0.8;
+    --nc-sheen-size: 220px;
+    --nc-sheen-hover: 0.18;
+
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    min-inline-size: 0;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+    animation-delay: calc(var(--ic-i, 0) * 28ms);
+    transition:
+      box-shadow var(--nc-duration-slow) var(--nc-ease-out),
+      transform var(--nc-spring-soft-duration) var(--nc-spring-soft),
+      --nc-rim-near var(--nc-duration-slower) var(--nc-ease-out),
+      --nc-sheen var(--nc-duration-slower) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .card:hover {
+      transform: translateY(-1px);
+    }
+
+    .card:not([data-attention]):hover {
+      box-shadow:
+        inset 0 0 0 1px var(--nc-border-subtle),
+        var(--nc-glaze-edge),
+        var(--nc-elevation-3);
+    }
+
+    .tile:hover .affordance {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .card:active:not(:has(.toggle:active, .action:active)) {
+    transform: scale(0.99);
+    transition-duration: var(--nc-duration-fast);
+  }
+
+  .card:has(.open:focus-visible) {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-inline-size: 0;
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    letter-spacing: -0.008em;
+    color: var(--nc-text);
+  }
+
+  /* The title button stretches over the card so a tap anywhere opens it. */
+  .open {
+    appearance: none;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .open::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+  }
+
+  .open:focus-visible {
+    outline: none;
+  }
+
+  /* ── Catalog tile ──────────────────────────────────────────────────── */
+  .tile {
+    padding: var(--nc-space-3);
+  }
+
+  .tagline {
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .note {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    margin: 0.125rem 0 0;
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-subtle);
+  }
+
+  .note svg {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  .affordance {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    border-radius: var(--nc-radius-full);
+    color: var(--nc-text-subtle);
+    opacity: 0;
+    transform: translateX(-4px);
+    transition:
+      opacity var(--nc-duration-base) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .affordance svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .tile[data-connected] .affordance {
+    opacity: 1;
+    transform: none;
+    background: light-dark(
+      oklch(0.95 0.04 var(--nc-success-h)),
+      oklch(0.35 0.06 var(--nc-success-h))
+    );
+    color: light-dark(oklch(0.5 0.13 var(--nc-success-h)), oklch(0.82 0.12 var(--nc-success-h)));
+  }
+
+  /* Touch screens can't hover: always show where a tap goes. */
+  @media (hover: none) {
+    .affordance {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* ── Connected card ────────────────────────────────────────────────── */
+  .connected {
+    padding: var(--nc-space-4);
+  }
+
+  /* With a fix button the card grows; keep the logo at the top with the name. */
+  .connected:has(.action) {
+    align-items: flex-start;
+  }
+
+  .connected[data-state='off'] {
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .connected[data-state='off'] .title {
+    color: var(--nc-text-muted);
+  }
+
+  .connected[data-state='off'] > :first-child {
+    filter: grayscale(1);
+    opacity: 0.55;
+  }
+
+  .status {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+  }
+
+  .statusIcon {
+    display: inline-grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 0.875rem;
+    block-size: 1.25em;
+  }
+
+  .statusIcon svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    stroke-width: 2.2;
+  }
+
+  .statusText {
+    min-inline-size: 0;
+    text-wrap: pretty;
+  }
+
+  .status[data-tone='warning'] {
+    color: var(--nc-text);
+  }
+
+  .status[data-tone='warning'] .statusIcon {
+    color: light-dark(oklch(0.6 0.14 var(--nc-warning-h)), oklch(0.82 0.14 var(--nc-warning-h)));
+  }
+
+  .status[data-tone='danger'] {
+    color: var(--nc-text);
+  }
+
+  .status[data-tone='danger'] .statusIcon {
+    color: light-dark(oklch(0.56 0.2 var(--nc-danger-h)), oklch(0.74 0.16 var(--nc-danger-h)));
+  }
+
+  .action {
+    position: relative;
+    z-index: 2;
+    margin-block-start: var(--nc-space-2);
+  }
+
+  .toggle {
+    position: relative;
+    z-index: 2;
+    align-self: center;
+  }
+
+  /* Needing you: a warm edge on the leading side, like a routine that needs you. */
+  .connected[data-attention] {
+    --attention: light-dark(
+      oklch(0.72 0.15 var(--nc-warning-h)),
+      oklch(0.78 0.14 var(--nc-warning-h))
+    );
+    box-shadow:
+      inset 3px 0 0 0 var(--attention),
+      inset 0 0 0 1px color-mix(in oklch, var(--attention) 35%, transparent),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+  }
+
+  .connected[data-attention='danger'] {
+    --attention: light-dark(oklch(0.6 0.19 var(--nc-danger-h)), oklch(0.7 0.17 var(--nc-danger-h)));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card {
+      animation: none;
+    }
+  }
+}

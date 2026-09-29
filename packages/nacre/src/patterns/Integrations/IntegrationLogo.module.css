@@ -1,0 +1,113 @@
+@layer nacre.components {
+  .logo {
+    --il-size: 2.5rem;
+    --il-mark: 55%;
+    --il-radius: var(--nc-radius-md);
+    --il-bg: var(--il-color, oklch(0.56 0.13 var(--il-hue, 250)));
+
+    position: relative;
+    display: inline-grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: var(--il-size);
+    block-size: var(--il-size);
+    border-radius: var(--il-radius);
+    corner-shape: var(--nc-corner-shape);
+    /* A glazed top edge and a hairline keep dark brands (Notion, Vercel) visible on Abalone. */
+    background: linear-gradient(180deg, oklch(1 0 0 / 0.16), transparent 55%), var(--il-bg);
+    color: oklch(1 0 0);
+    box-shadow:
+      inset 0 0 0 1px oklch(1 0 0 / 0.1),
+      inset 0 1px 0 0 oklch(1 0 0 / 0.18),
+      0 1px 2px oklch(0 0 0 / 0.12);
+    user-select: none;
+  }
+
+  .logo[data-custom] {
+    --il-bg: light-dark(oklch(0.94 0.035 var(--il-hue, 250)), oklch(0.34 0.05 var(--il-hue, 250)));
+    color: light-dark(oklch(0.42 0.1 var(--il-hue, 250)), oklch(0.88 0.06 var(--il-hue, 250)));
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, currentColor 16%, transparent),
+      var(--nc-glaze-edge);
+  }
+
+  .logo[data-size='xs'] {
+    --il-size: 1.25rem;
+    --il-radius: var(--nc-radius-xs);
+  }
+  .logo[data-size='sm'] {
+    --il-size: 1.75rem;
+    --il-radius: var(--nc-radius-sm);
+  }
+  .logo[data-size='lg'] {
+    --il-size: 3.5rem;
+    --il-radius: var(--nc-radius-lg);
+  }
+  .logo[data-size='xl'] {
+    --il-size: 4.5rem;
+    --il-radius: var(--nc-radius-xl);
+  }
+
+  .mark {
+    inline-size: var(--il-mark);
+    block-size: var(--il-mark);
+    fill: currentColor;
+  }
+
+  .glyph {
+    display: grid;
+    place-items: center;
+  }
+
+  .glyph svg {
+    inline-size: calc(var(--il-size) * 0.5);
+    block-size: calc(var(--il-size) * 0.5);
+    stroke-width: 2;
+  }
+
+  .monogram {
+    font-size: calc(var(--il-size) * 0.4);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+
+  /* Status: a dot notched into the corner, ringed with the canvas colour. */
+  .dot {
+    --dot: var(--nc-gray-8);
+    position: absolute;
+    inset-block-end: -2px;
+    inset-inline-end: -2px;
+    inline-size: max(0.625rem, calc(var(--il-size) * 0.28));
+    block-size: max(0.625rem, calc(var(--il-size) * 0.28));
+    border-radius: var(--nc-radius-full);
+    background: var(--dot);
+    box-shadow: 0 0 0 2px var(--il-ring, var(--nc-surface));
+    transition: background-color var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .dot[data-state='ok'] {
+    --dot: light-dark(oklch(0.62 0.15 var(--nc-success-h)), oklch(0.72 0.15 var(--nc-success-h)));
+  }
+  .dot[data-state='warning'],
+  .dot[data-state='needs-auth'] {
+    --dot: light-dark(oklch(0.74 0.16 var(--nc-warning-h)), oklch(0.8 0.15 var(--nc-warning-h)));
+  }
+  .dot[data-state='error'] {
+    --dot: light-dark(oklch(0.6 0.2 var(--nc-danger-h)), oklch(0.68 0.18 var(--nc-danger-h)));
+  }
+  .dot[data-state='checking'],
+  .dot[data-state='connecting'] {
+    --dot: light-dark(oklch(0.62 0.14 var(--nc-info-h)), oklch(0.72 0.13 var(--nc-info-h)));
+    animation: nc-breathe 1.6s var(--nc-ease-in-out) infinite;
+  }
+  .dot[data-state='off'] {
+    --dot: var(--nc-gray-7);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dot {
+      animation: none !important;
+    }
+  }
+}

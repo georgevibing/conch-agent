@@ -1,0 +1,160 @@
+@layer nacre.components {
+  .root {
+    --hs-ok: light-dark(oklch(0.6 0.15 var(--nc-success-h)), oklch(0.72 0.15 var(--nc-success-h)));
+    --hs-bad: light-dark(oklch(0.6 0.2 var(--nc-danger-h)), oklch(0.7 0.17 var(--nc-danger-h)));
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--nc-space-2);
+    padding-block: var(--nc-space-2);
+  }
+
+  .side {
+    display: grid;
+    place-items: center;
+    inline-size: 4.5rem;
+    block-size: 4.5rem;
+    transition: transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .root[data-phase='connected'] .side:last-of-type {
+    animation: hs-nod var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .link {
+    position: relative;
+    display: grid;
+    place-items: center;
+    inline-size: 5.5rem;
+    block-size: 1.75rem;
+  }
+
+  .track,
+  .flow {
+    position: absolute;
+    inset-inline: 0;
+    block-size: 2px;
+    border-radius: var(--nc-radius-full);
+  }
+
+  .track {
+    background: repeating-linear-gradient(90deg, var(--nc-gray-7) 0 4px, transparent 4px 9px);
+    transition: opacity var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  /* Light travelling from Conch to the app while you sign in. */
+  .flow {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--nc-accent-9) 45%,
+      var(--nc-pearl-2) 55%,
+      transparent
+    );
+    background-size: 50% 100%;
+    background-repeat: no-repeat;
+    opacity: 0;
+    transition:
+      opacity var(--nc-duration-slow) var(--nc-ease-out),
+      background var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .root[data-phase='waiting'] .flow {
+    opacity: 1;
+    animation: hs-travel 1.4s var(--nc-ease-in-out) infinite;
+  }
+
+  .root[data-phase='connected'] .track {
+    opacity: 0;
+  }
+
+  .root[data-phase='connected'] .flow {
+    opacity: 1;
+    background: var(--hs-ok);
+    animation: hs-close var(--nc-duration-slower) var(--nc-ease-out) both;
+  }
+
+  .knot {
+    position: relative;
+    display: grid;
+    place-items: center;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    border-radius: var(--nc-radius-full);
+    color: oklch(1 0 0);
+    transform: scale(0);
+    transition: transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .knot svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    stroke-width: 3;
+  }
+
+  .root[data-phase='connected'] .knot {
+    background: var(--hs-ok);
+    box-shadow: 0 0 0 4px var(--nc-surface-overlay, var(--nc-surface));
+    transform: scale(1);
+    transition-delay: 180ms;
+  }
+
+  .root[data-phase='failed'] .knot {
+    background: var(--hs-bad);
+    box-shadow: 0 0 0 4px var(--nc-surface-overlay, var(--nc-surface));
+    transform: scale(1);
+  }
+
+  .root[data-phase='failed'] .track {
+    background: repeating-linear-gradient(90deg, var(--hs-bad) 0 4px, transparent 4px 9px);
+    opacity: 0.45;
+  }
+
+  .root[data-phase='failed'] .side:last-of-type {
+    animation: hs-shake 420ms var(--nc-ease-out);
+  }
+
+  @keyframes hs-travel {
+    from {
+      background-position: -100% 0;
+    }
+    to {
+      background-position: 200% 0;
+    }
+  }
+
+  @keyframes hs-close {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+    to {
+      clip-path: inset(0 0 0 0);
+    }
+  }
+
+  @keyframes hs-nod {
+    40% {
+      transform: scale(1.08);
+    }
+  }
+
+  @keyframes hs-shake {
+    20%,
+    60% {
+      transform: translateX(-4px);
+    }
+    40%,
+    80% {
+      transform: translateX(4px);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root *,
+    .root .side {
+      animation: none !important;
+      transition-duration: 0s !important;
+    }
+  }
+}

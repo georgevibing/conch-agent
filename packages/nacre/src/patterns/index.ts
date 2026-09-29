@@ -18,3 +18,4 @@ export * from './FindBar';
 export * from './SearchPreview';
 export * from './Usage';
 export * from './Security';
+export * from './Integrations';

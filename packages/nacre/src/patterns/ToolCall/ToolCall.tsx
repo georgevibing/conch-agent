@@ -45,6 +45,8 @@ export interface ToolCallProps extends Omit<
   children?: ReactNode;
   /** Override the icon inferred from `name`. */
   icon?: LucideIcon;
+  /** Replaces the icon and server name — e.g. an integration's logo and name. */
+  leading?: ReactNode;
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -144,6 +146,7 @@ export function ToolCall({
   outputLanguage = 'text',
   children,
   icon,
+  leading,
   open,
   defaultOpen,
   onOpenChange,
@@ -157,8 +160,15 @@ export function ToolCall({
     <>
       <StatusGlyph status={status} />
       <span className={styles.tool}>
-        {createElement(icon ?? toolIcon(name), { 'aria-hidden': true, className: styles.toolIcon })}
-        {server && <span className={styles.server}>{server}</span>}
+        {leading ?? (
+          <>
+            {createElement(icon ?? toolIcon(name), {
+              'aria-hidden': true,
+              className: styles.toolIcon,
+            })}
+            {server && <span className={styles.server}>{server}</span>}
+          </>
+        )}
         <span className={styles.name}>{tool}</span>
       </span>
       {summary != null && <span className={styles.summary}>{summary}</span>}

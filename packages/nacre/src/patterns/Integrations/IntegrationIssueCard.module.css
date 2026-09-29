@@ -1,0 +1,60 @@
+@layer nacre.components {
+  .card {
+    --issue: light-dark(oklch(0.72 0.15 var(--nc-warning-h)), oklch(0.78 0.14 var(--nc-warning-h)));
+
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    max-inline-size: 34rem;
+    padding: var(--nc-space-2-5) var(--nc-space-3);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow:
+      inset 3px 0 0 0 var(--issue),
+      inset 0 0 0 1px color-mix(in oklch, var(--issue) 30%, transparent);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .card[data-state='error'] {
+    --issue: light-dark(oklch(0.6 0.19 var(--nc-danger-h)), oklch(0.7 0.17 var(--nc-danger-h)));
+  }
+
+  .card[data-resolved] {
+    --issue: var(--nc-border-subtle);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-inline-size: 0;
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .card[data-resolved] .title {
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-muted);
+  }
+
+  .message {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card {
+      animation: none;
+    }
+  }
+}
