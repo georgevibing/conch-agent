@@ -19,7 +19,7 @@ import { useNavigate } from 'react-router';
 import { api } from '../../api/client';
 import { keys, useCommands } from '../../api/queries';
 import { useUi } from '../../app/ui';
-import { effortLabels, modes } from '../models/catalog';
+import { effortLabels, modelLabel, modes } from '../models/catalog';
 import type { useTurnOptions } from '../models/useTurnOptions';
 import {
   builtins,
@@ -110,13 +110,15 @@ export function useSlashCommands(options: {
           return ui.setPicker('model');
         }
         turn.set({ model: match.id });
-        return toast.success(`Using ${match.label}`);
+        return toast.success(`Using ${modelLabel(match.label).label}`);
       }
       case 'effort': {
         const effort = parseEffortArg(args);
         if (!effort) return ui.setPicker('model');
         if (effort !== 'auto' && !model?.efforts.includes(effort as never)) {
-          return toast(`${model?.label ?? 'This model'} doesn’t support that level`);
+          return toast(
+            `${model ? modelLabel(model.label).label : 'This model'} doesn’t support that level`,
+          );
         }
         turn.set({ effort: effort as never });
         return toast.success(
@@ -125,7 +127,9 @@ export function useSlashCommands(options: {
       }
       case 'fast':
         if (!model?.supportsFastMode) {
-          return toast(`Fast mode isn’t available for ${model?.label ?? 'this model'}`);
+          return toast(
+            `Fast mode isn’t available for ${model ? modelLabel(model.label).label : 'this model'}`,
+          );
         }
         turn.set({ fastMode: !current.fastMode });
         return toast.success(current.fastMode ? 'Fast mode off' : 'Fast mode on');

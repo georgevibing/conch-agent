@@ -73,6 +73,18 @@ export function modeInfo(value: PermissionMode): ModeInfo {
   return modes.find((m) => m.value === value) ?? (modes[0] as ModeInfo);
 }
 
+const recommended = /\s*\(recommended\)\s*$/i;
+
+/**
+ * Engines mark their pick in the name, e.g. Claude Code's "Default
+ * (recommended)". The chip shows just the name; the picker adds the badge.
+ */
+export function modelLabel(label: string): { label: string; badge?: string } {
+  return recommended.test(label)
+    ? { label: label.replace(recommended, ''), badge: 'Recommended' }
+    : { label };
+}
+
 /**
  * Older versions and long-context variants go under "More models" so the
  * list opens on the handful of choices most people need.

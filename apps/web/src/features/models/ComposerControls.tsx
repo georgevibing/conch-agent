@@ -2,7 +2,7 @@ import type { EffortChoice, PermissionMode } from '@conch/protocol';
 import { ModelPicker, ModePicker, type ModelProvider } from '@conch/nacre';
 
 import { useUi } from '../../app/ui';
-import { availableModes, effortOptions, isSecondaryModel } from './catalog';
+import { availableModes, effortOptions, isSecondaryModel, modelLabel } from './catalog';
 import type { useTurnOptions } from './useTurnOptions';
 
 /** The model chip and the mode chip that live in the composer's toolbar. */
@@ -24,7 +24,7 @@ export function ComposerControls({
       logo: 'claude',
       models: (capabilities?.models ?? []).map((m) => ({
         id: m.id,
-        label: m.label,
+        ...modelLabel(m.label),
         description: m.description,
         secondary: isSecondaryModel(m),
       })),

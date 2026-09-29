@@ -4,6 +4,7 @@ import {
   Callout,
   CommandMenu,
   Composer,
+  ComposerChip,
   Heading,
   Pearl,
   Stack,
@@ -163,7 +164,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   const slash = useSlashCommands({ draft, setDraft, send, turn });
 
   const workspaceName = useMemo(
-    () => app?.workspace.split('/').filter(Boolean).at(-1) ?? 'workspace',
+    () => app?.workspace.split(/[\\/]/).filter(Boolean).at(-1) ?? 'workspace',
     [app?.workspace],
   );
 
@@ -196,15 +197,13 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
           <>
             {engine?.state === 'ready' && <ComposerControls turn={turn} />}
             <Tooltip content={app?.workspace ?? ''}>
-              <Button
-                variant="ghost"
-                size="sm"
-                leadingIcon={<Folder />}
+              <ComposerChip
+                icon={<Folder />}
                 onClick={() => openSettings('providers')}
                 aria-label={`Working folder: ${workspaceName}`}
               >
                 {workspaceName}
-              </Button>
+              </ComposerChip>
             </Tooltip>
           </>
         }
