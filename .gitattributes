@@ -1,0 +1,4 @@
+# LF in every checkout, as .editorconfig and Prettier expect. Without this, Git
+# for Windows' default core.autocrlf=true checks files out with CRLF and
+# `pnpm format:check` fails on every file.
+* text=auto eol=lf
