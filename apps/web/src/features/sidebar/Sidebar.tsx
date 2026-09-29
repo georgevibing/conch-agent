@@ -81,16 +81,17 @@ function ConversationRow({
   const client = useQueryClient();
   const navigate = useNavigate();
   const { conversationId } = useParams();
-  const [renaming, setRenaming] = useState(false);
-  const [title, setTitle] = useState(conversation.title);
+  // The draft is taken from the current title when renaming starts — never a copy
+  // made at mount, which would be the first-line placeholder, not the generated title.
+  const [draft, setDraft] = useState<string>();
   const [confirm, setConfirm] = useState(false);
   const running =
     conversation.status === 'running' || conversation.status === 'awaiting-permission';
 
   const rename = async () => {
-    setRenaming(false);
-    const next = title.trim();
-    if (!next || next === conversation.title) return setTitle(conversation.title);
+    const next = draft?.trim();
+    setDraft(undefined);
+    if (!next || next === conversation.title) return;
     try {
       await api.renameConversation(conversation.id, next);
     } catch (e) {
@@ -110,17 +111,14 @@ function ConversationRow({
     }
   };
 
-  if (renaming) {
+  if (draft !== undefined) {
     return (
       <li className={styles.item}>
         <RenameField
-          value={title}
-          onChange={setTitle}
+          value={draft}
+          onChange={setDraft}
           onSave={() => void rename()}
-          onCancel={() => {
-            setTitle(conversation.title);
-            setRenaming(false);
-          }}
+          onCancel={() => setDraft(undefined)}
         />
       </li>
     );
@@ -150,7 +148,7 @@ function ConversationRow({
           </IconButton>
         </DropdownMenu.Trigger>
         <DropdownMenu.Content align="start">
-          <DropdownMenu.Item icon={<Pencil />} onSelect={() => setRenaming(true)}>
+          <DropdownMenu.Item icon={<Pencil />} onSelect={() => setDraft(conversation.title)}>
             Rename
           </DropdownMenu.Item>
           <DropdownMenu.Item icon={<Trash2 />} tone="danger" onSelect={() => setConfirm(true)}>
