@@ -188,11 +188,11 @@ function mockBlueprints(vendor: MockVendor) {
   vendor.validTokens.set('github', 'github_pat_mock_0123456789abcdefghij');
   vendor.validTokens.set('home-assistant', 'mock-home-token');
   const fixture = resolve(import.meta.dirname, 'test/mcpFixture.ts');
-  const tsx = resolve(import.meta.dirname, '../node_modules/.bin/tsx');
   return (id: string): Blueprint | undefined => {
     const entry = CATALOG.get(id);
     if (!entry?.blueprint) return undefined;
-    if (entry.blueprint.type === 'stdio') return { type: 'stdio', command: tsx, args: [fixture] };
+    if (entry.blueprint.type === 'stdio')
+      return { type: 'stdio', command: process.execPath, args: [fixture] };
     return { type: 'http', url: () => vendor.url(id) };
   };
 }

@@ -15,7 +15,9 @@ import { IntegrationService } from './service';
 
 const vendor = new MockVendor();
 const fixture = resolve(import.meta.dirname, '../test/mcpFixture.ts');
-const tsx = resolve(import.meta.dirname, '../../node_modules/.bin/tsx');
+// Node runs the TypeScript fixture directly (type stripping): no tsx start-up per
+// spawn, which on a busy CI runner was enough to time the test out.
+const node = process.execPath;
 const REDIRECT = { redirectUrl: 'http://localhost:4317/oauth/callback', display: 'popup' as const };
 const GITHUB_TOKEN = 'github_pat_mock_0123456789abcdefghij';
 
@@ -39,7 +41,7 @@ async function setup(options: { realCatalog?: boolean } = {}) {
       if (options.realCatalog) return undefined;
       const entry = CATALOG.get(id);
       if (entry?.blueprint?.type === 'stdio')
-        return { type: 'stdio', command: tsx, args: [fixture] };
+        return { type: 'stdio', command: node, args: [fixture] };
       return entry?.blueprint && { type: 'http', url: vendor.url(id) };
     },
   });
@@ -243,7 +245,7 @@ describe('policies', () => {
         custom: {
           type: 'stdio',
           name: 'Notes',
-          command: tsx,
+          command: node,
           args: [fixture],
           env: { FIXTURE_DESCRIPTION: 'Create a note.' },
         },
