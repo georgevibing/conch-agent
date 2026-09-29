@@ -13,6 +13,7 @@ function Harness(props: Omit<TimePickerProps, 'value'> & { initial?: string }) {
   return (
     <TimePicker
       aria-label="Start"
+      locale="en-US"
       {...rest}
       value={value}
       onValueChange={(v) => {

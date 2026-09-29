@@ -38,6 +38,8 @@ export interface RoutineCardProps extends Omit<ComponentProps<'article'>, 'title
   busy?: boolean;
   /** Reference time for relative phrases (tests/stories). */
   now?: number;
+  /** Formats times ("8:00 PM" / "20:00"); defaults to the reader's locale. */
+  locale?: string;
   timeZone?: string;
 }
 
@@ -46,14 +48,16 @@ const attention = new Set<RunStatusValue>(['needs-you', 'failed']);
 function LastRunLine({
   run,
   now,
+  locale,
   timeZone,
 }: {
   run: RoutineCardLastRun;
   now?: number;
+  locale?: string;
   timeZone?: string;
 }) {
   const meta = runStatusMeta[run.status];
-  const when = formatWhenInline(run.at, { now, timeZone });
+  const when = formatWhenInline(run.at, { now, locale, timeZone });
   const needsAttention = attention.has(run.status);
   return (
     <p className={styles.lastRun} data-status={run.status}>
@@ -91,12 +95,13 @@ export function RoutineCard({
   onDismiss,
   busy,
   now,
+  locale,
   timeZone,
   className,
   ...props
 }: RoutineCardProps) {
   const titleId = useId();
-  const nextText = nextRunAt ? formatWhenInline(nextRunAt, { now, timeZone }) : undefined;
+  const nextText = nextRunAt ? formatWhenInline(nextRunAt, { now, locale, timeZone }) : undefined;
 
   if (variant === 'proposal') {
     const settled = status !== 'draft';
@@ -233,7 +238,7 @@ export function RoutineCard({
                     : null}
           </span>
         </p>
-        {lastRun && <LastRunLine run={lastRun} now={now} timeZone={timeZone} />}
+        {lastRun && <LastRunLine run={lastRun} now={now} locale={locale} timeZone={timeZone} />}
       </div>
       {onToggle && status !== 'completed' && (
         <div className={styles.toggle}>

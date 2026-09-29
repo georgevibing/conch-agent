@@ -11,6 +11,7 @@ const base = {
   summary: 'A short summary of today’s calendar, weather and top news.',
   scheduleText: 'Weekdays at 7:30 AM',
   now,
+  locale: 'en-US',
   timeZone: 'UTC',
 };
 
@@ -30,6 +31,23 @@ describe('RoutineCard (list)', () => {
     expect(screen.getByText('Next run tomorrow at 8:00 AM')).toBeInTheDocument();
     expect(screen.getByText(/Sent your briefing\./)).toBeInTheDocument();
     await expectAccessible(container);
+  });
+
+  it.each([
+    ['en-US', '8:00 PM'],
+    ['en-GB', '20:00'],
+  ])('formats times in the given locale (%s)', (locale, time) => {
+    renderNacre(
+      <RoutineCard
+        {...base}
+        locale={locale}
+        status="active"
+        nextRunAt={now + 36 * 3_600_000}
+        lastRun={{ status: 'succeeded', at: now - 12 * 3_600_000, outcome: 'Sent your briefing.' }}
+      />,
+    );
+    expect(screen.getByText(`Next run tomorrow at ${time}`)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`yesterday at ${time}$`))).toBeInTheDocument();
   });
 
   it('opens from the title and toggles without opening', async () => {
