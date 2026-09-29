@@ -92,8 +92,23 @@ src/
   wired to inline permission prompts.
 - Child processes get a scrubbed environment: variables describing a _parent_ Claude
   Code session are removed so Conch works when launched from inside Claude Code.
+- **Models, thinking and modes.** `GET /api/capabilities` asks the engine what it
+  offers. For Claude Code, Conch opens a session with an input stream that never sends
+  anything, reads `supportedModels()` / `supportedCommands()` from the handshake and
+  closes it — no API call, cached for 10 minutes. Each conversation stores its own
+  `TurnOptions` (model, effort, fast mode, permission mode); unset keys fall back to
+  `preferences`. Turns pass them to the SDK as `model`, `effort`, `settings.fastMode`
+  and `permissionMode`.
+- **Slash commands.** Three sources, resolved in this order: Conch's own commands
+  (`/model`, `/effort`, `/mode`, `/fast`, `/new`, `/remember`, … — handled in the web
+  app, never sent to the model), your commands (`~/.conch/commands/<name>.md`, a
+  reusable prompt where `{{input}}` is replaced), and Claude Code's commands and
+  skills (sent as-is; Claude Code interprets them).
+- API retries from the engine surface as live `notice` events ("Retrying in 4s…"),
+  so a stalled provider is never a silent spinner.
 - Local data lives in `~/.conch/` (`CONCH_HOME`): `settings.json`, `secrets.json`,
-  `memory/*.md`, `conversations/index.json` + `<id>.jsonl`, `workspace/` (default cwd).
+  `memory/*.md`, `commands/*.md`, `conversations/index.json` + `<id>.jsonl`,
+  `workspace/` (default cwd).
 
 See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
 [ADR 0004 — Engines](./docs/adr/0004-engines.md).
@@ -108,6 +123,11 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
 - Assistant output: markdown → Nacre `Prose`, fenced code → `CodeBlock`, tool calls →
   `ToolCall`, permission requests → inline approval cards, memory saves → inline pills
   with undo.
+- The composer toolbar carries a `ModelPicker` (provider-grouped models, thinking
+  effort, fast mode, "make default") and a `ModePicker` (Ask first · Auto · Edit freely ·
+  Plan only · Full trust). Typing `/` opens a `CommandMenu`; `/model` and `/mode` open the
+  pickers. Defaults live in Settings → Models & modes; your commands in Settings →
+  Commands.
 
 ## Security model
 

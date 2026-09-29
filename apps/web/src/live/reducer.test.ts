@@ -115,4 +115,21 @@ describe('transcript reducer', () => {
   it('starts empty', () => {
     expect(emptyView.items).toEqual([]);
   });
+
+  it('shows retry notices until progress resumes, and tracks options', () => {
+    const e = (seq: number, rest: object) =>
+      ({ conversationId: 'c', seq, at: seq, ...rest }) as ConversationEvent;
+    let view = reduceAll([
+      e(0, { type: 'user.message', messageId: 'u', text: 'hi' }),
+      e(1, { type: 'notice', code: 'retry', message: 'Retrying in 2s' }),
+      e(2, { type: 'options', options: { effort: 'high' } }),
+    ]);
+    expect(view.notice).toBe('Retrying in 2s');
+    expect(view.options).toEqual({ effort: 'high' });
+    view = reduce(
+      view,
+      e(3, { type: 'assistant.delta', messageId: 'm', kind: 'text', delta: 'Hello' }),
+    );
+    expect(view.notice).toBeUndefined();
+  });
 });

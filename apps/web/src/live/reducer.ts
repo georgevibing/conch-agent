@@ -1,4 +1,10 @@
-import type { ConversationEvent, ConversationStatus, ToolStatus, Usage } from '@conch/protocol';
+import type {
+  ConversationEvent,
+  ConversationStatus,
+  ToolStatus,
+  TurnOptions,
+  Usage,
+} from '@conch/protocol';
 
 /** Everything the transcript renders, folded from the append-only event log. */
 export type TranscriptItem =
@@ -54,6 +60,10 @@ export interface ConversationView {
   title?: string;
   /** Start of the currently running turn (for elapsed timers). */
   turnStartedAt?: number;
+  /** A live, transient notice from the engine (e.g. "retrying…"); clears when progress resumes. */
+  notice?: string;
+  /** The conversation's model/effort/mode overrides, as last seen in the log. */
+  options?: TurnOptions;
 }
 
 export const emptyView: ConversationView = { lastSeq: -1, items: [], status: 'idle' };
@@ -85,7 +95,13 @@ function sealThinking(items: TranscriptItem[], at: number): TranscriptItem[] {
  */
 export function reduce(view: ConversationView, event: ConversationEvent): ConversationView {
   if (event.seq <= view.lastSeq) return view;
-  const base = { ...view, lastSeq: event.seq };
+  // Real progress (or the end of the turn) makes a stale "retrying…" notice irrelevant.
+  const progressed =
+    (event.type === 'assistant.delta' && event.kind === 'text') ||
+    event.type === 'tool.started' ||
+    event.type === 'turn.completed' ||
+    event.type === 'user.message';
+  const base = { ...view, lastSeq: event.seq, notice: progressed ? undefined : view.notice };
   const items =
     event.type === 'tool.started' ||
     event.type === 'permission.requested' ||
@@ -248,6 +264,10 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
     }
     case 'title':
       return { ...base, title: event.title };
+    case 'notice':
+      return { ...base, notice: event.message };
+    case 'options':
+      return { ...base, options: event.options };
   }
 }
 

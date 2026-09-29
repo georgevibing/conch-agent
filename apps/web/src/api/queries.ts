@@ -8,6 +8,8 @@ export const keys = {
   engine: ['engine'] as const,
   conversations: ['conversations'] as const,
   memories: ['memories'] as const,
+  capabilities: ['capabilities'] as const,
+  commands: ['commands'] as const,
 };
 
 export function useAppState() {
@@ -53,4 +55,18 @@ export function useConversations() {
 
 export function useMemories() {
   return useQuery({ queryKey: keys.memories, queryFn: api.memories });
+}
+
+/** Models, engine commands and modes. Cheap to keep around; refreshed when the engine changes. */
+export function useCapabilities(enabled = true) {
+  return useQuery({
+    queryKey: keys.capabilities,
+    queryFn: () => api.capabilities(),
+    staleTime: 10 * 60_000,
+    enabled,
+  });
+}
+
+export function useCommands() {
+  return useQuery({ queryKey: keys.commands, queryFn: api.commands, staleTime: 60_000 });
 }

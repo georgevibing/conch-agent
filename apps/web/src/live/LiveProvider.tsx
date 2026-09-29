@@ -1,4 +1,4 @@
-import type { ConversationSummary } from '@conch/protocol';
+import type { ConversationSummary, TurnOptions } from '@conch/protocol';
 import { toast } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
@@ -9,7 +9,9 @@ import { NEW, useLiveStore } from './store';
 
 interface LiveApi {
   /** Send a message; returns the clientMessageId. Omit conversationId for a new chat. */
-  send(text: string, conversationId?: string): string;
+  send(text: string, conversationId?: string, options?: TurnOptions): string;
+  /** Change a conversation's model/effort/mode. */
+  configure(conversationId: string, options: TurnOptions): void;
   interrupt(conversationId: string): void;
   respond(
     conversationId: string,
@@ -80,6 +82,8 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           break;
         case 'engine.status':
           setEngineStatus(client, event.status);
+          // Signing in or switching accounts can change which models exist.
+          void client.invalidateQueries({ queryKey: keys.capabilities });
           if (event.status.state === 'ready') live.setEngineIssue(undefined);
           break;
         case 'engine.login':
@@ -117,7 +121,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
 
   const value = useMemo<LiveApi>(
     () => ({
-      send(text, conversationId) {
+      send(text, conversationId, options) {
         const clientMessageId = `u_${crypto.randomUUID().slice(0, 12)}`;
         useLiveStore
           .getState()
@@ -127,8 +131,18 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           conversationId,
           clientMessageId,
           text,
+          ...(options && { options }),
         });
         return clientMessageId;
+      },
+      configure(conversationId, options) {
+        // Optimistic: the picker reflects the change immediately.
+        client.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>
+          list?.map((c) =>
+            c.id === conversationId ? { ...c, options: { ...c.options, ...options } } : c,
+          ),
+        );
+        socketRef.current?.send({ type: 'conversation.configure', conversationId, options });
       },
       interrupt(conversationId) {
         socketRef.current?.send({ type: 'conversation.interrupt', conversationId });
@@ -159,7 +173,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         };
       },
     }),
-    [],
+    [client],
   );
 
   return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>;

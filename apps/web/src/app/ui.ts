@@ -1,12 +1,22 @@
+import type { TurnOptions } from '@conch/protocol';
 import { create } from 'zustand';
 
-export type SettingsTab = 'personality' | 'about' | 'memory' | 'engine' | 'appearance';
+export type SettingsTab =
+  'personality' | 'about' | 'memory' | 'models' | 'commands' | 'engine' | 'appearance';
+
+/** Which composer picker is open (so `/model` and `/mode` can open them). */
+export type Picker = 'model' | 'mode' | null;
 
 interface UiState {
   sidebarOpen: boolean;
   mobileSidebarOpen: boolean;
   settings: SettingsTab | null;
   paletteOpen: boolean;
+  picker: Picker;
+  /** Model/effort/mode chosen for a new chat before its first message. */
+  draftOptions: TurnOptions;
+  setPicker(picker: Picker): void;
+  setDraftOptions(options: TurnOptions): void;
   toggleSidebar(): void;
   setMobileSidebar(open: boolean): void;
   openSettings(tab?: SettingsTab): void;
@@ -21,6 +31,10 @@ export const useUi = create<UiState>((set) => ({
   mobileSidebarOpen: false,
   settings: null,
   paletteOpen: false,
+  picker: null,
+  draftOptions: {},
+  setPicker: (picker) => set({ picker }),
+  setDraftOptions: (draftOptions) => set({ draftOptions }),
   toggleSidebar: () =>
     set((s) => {
       localStorage.setItem(SIDEBAR_KEY, s.sidebarOpen ? '0' : '1');

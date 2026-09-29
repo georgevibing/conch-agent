@@ -1,6 +1,8 @@
 import {
   AppState,
+  Capabilities,
   ConversationSummary,
+  CustomCommand,
   EngineStatus,
   Memory,
   type MemoryKind,
@@ -59,6 +61,18 @@ export const api = {
   setApiKey: (apiKey: string) =>
     request(EngineStatus, '/api/engine/api-key', { method: 'PUT', body: { apiKey } }),
   clearApiKey: () => request(EngineStatus, '/api/engine/api-key', { method: 'DELETE' }),
+
+  capabilities: (refresh = false) =>
+    request(Capabilities, `/api/capabilities${refresh ? '?refresh=1' : ''}`),
+
+  commands: () => request(z.array(CustomCommand), '/api/commands'),
+  saveCommand: (command: { name: string; description: string; prompt: string }) =>
+    request(CustomCommand, `/api/commands/${encodeURIComponent(command.name)}`, {
+      method: 'PUT',
+      body: { description: command.description, prompt: command.prompt },
+    }),
+  deleteCommand: (name: string) =>
+    request(Ok, `/api/commands/${encodeURIComponent(name)}`, { method: 'DELETE' }),
 
   memories: () => request(z.array(Memory), '/api/memories'),
   addMemory: (content: string, kind: MemoryKind = 'fact') =>

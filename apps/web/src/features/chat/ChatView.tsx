@@ -1,5 +1,15 @@
 import type { EngineStatus } from '@conch/protocol';
-import { Button, Callout, Composer, Heading, Pearl, Stack, Text, Tooltip } from '@conch/nacre';
+import {
+  Button,
+  Callout,
+  CommandMenu,
+  Composer,
+  Heading,
+  Pearl,
+  Stack,
+  Text,
+  Tooltip,
+} from '@conch/nacre';
 import { Folder } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -10,6 +20,9 @@ import { greeting } from '../../lib/time';
 import { useLive } from '../../live/LiveProvider';
 import { emptyView, lastUserText } from '../../live/reducer';
 import { NEW, useLiveStore } from '../../live/store';
+import { useSlashCommands } from '../commands/useSlashCommands';
+import { ComposerControls } from '../models/ComposerControls';
+import { useTurnOptions } from '../models/useTurnOptions';
 import styles from './ChatView.module.css';
 import { Transcript } from './Transcript';
 
@@ -104,14 +117,18 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
     composerRef.current?.focus();
   }, [conversationId]);
 
+  const turn = useTurnOptions(conversationId);
+
   const send = (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
     setEngineIssue(undefined);
-    const id = live.send(trimmed, conversationId);
+    const id = live.send(trimmed, conversationId, turn.takeDraft());
     if (!conversationId) setSentId(id);
     setDraft('');
   };
+
+  const slash = useSlashCommands({ draft, setDraft, send, turn });
 
   const workspaceName = useMemo(
     () => app?.workspace.split('/').filter(Boolean).at(-1) ?? 'workspace',
@@ -121,26 +138,42 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   const composer = (
     <div className={styles.composerWrap}>
       <EngineIssue status={engine} issue={engineIssue} />
+      {view.notice && running && (
+        <Callout tone="info" title="Still trying…" className={styles.issue}>
+          {view.notice}
+        </Callout>
+      )}
       <Composer
         ref={composerRef}
         value={draft}
-        onValueChange={setDraft}
-        onSubmit={send}
+        onValueChange={slash.onDraftChange}
+        onSubmit={(text) => {
+          if (!slash.submit(text)) send(text);
+        }}
+        onTextareaKeyDown={(e) => {
+          slash.menu.onKeyDown(e);
+        }}
+        textareaProps={slash.menu.inputProps}
+        overlay={<CommandMenu {...slash.menu.menuProps} />}
         onStop={() => conversationId && live.interrupt(conversationId)}
         running={running}
-        placeholder={running ? `${name} is working…` : `Message ${name}`}
+        placeholder={running ? `${name} is working…` : `Message ${name}, or type / for commands`}
         label={`Message ${name}`}
         toolbar={
-          <Tooltip content={app?.workspace ?? ''}>
-            <Button
-              variant="ghost"
-              size="sm"
-              leadingIcon={<Folder />}
-              onClick={() => openSettings('engine')}
-            >
-              {workspaceName}
-            </Button>
-          </Tooltip>
+          <>
+            {engine?.state === 'ready' && <ComposerControls turn={turn} />}
+            <Tooltip content={app?.workspace ?? ''}>
+              <Button
+                variant="ghost"
+                size="sm"
+                leadingIcon={<Folder />}
+                onClick={() => openSettings('engine')}
+                aria-label={`Working folder: ${workspaceName}`}
+              >
+                {workspaceName}
+              </Button>
+            </Tooltip>
+          </>
         }
       />
       <Text size="2xs" tone="subtle" align="center" className={styles.hint}>

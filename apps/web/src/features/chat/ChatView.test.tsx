@@ -34,6 +34,7 @@ describe('ChatView', () => {
       createdAt: 1,
       updatedAt: 1,
       status: 'running' as const,
+      options: {},
     };
     act(() => {
       socket?.push({

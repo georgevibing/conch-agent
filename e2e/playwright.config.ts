@@ -13,6 +13,7 @@ import { defineConfig, devices } from '@playwright/test';
  */
 const scenarios = {
   ready: { port: 4391, env: { CONCH_MOCK_STATE: 'ready' } },
+  models: { port: 4394, env: { CONCH_MOCK_STATE: 'ready' } },
   'signed-out': { port: 4392, env: { CONCH_MOCK_STATE: 'signed-out' } },
   'not-installed': {
     port: 4393,

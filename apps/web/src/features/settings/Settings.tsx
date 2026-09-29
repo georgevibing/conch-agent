@@ -5,7 +5,6 @@ import {
   Dialog,
   EmptyState,
   Field,
-  Heading,
   IconButton,
   Input,
   RadioGroup,
@@ -28,11 +27,13 @@ import {
   Brain,
   Check,
   Cpu,
+  Gauge,
   Monitor,
   Moon,
   Palette,
   Plus,
   Sparkles,
+  SquareSlash,
   Sun,
   Trash2,
   User,
@@ -53,59 +54,10 @@ import { useAutoFocus } from '../../lib/useAutoFocus';
 import { EngineConnect } from '../engine/EngineConnect';
 import { toneOptions } from '../onboarding/tones';
 import styles from './Settings.module.css';
+import { CommandsTab } from './CommandsTab';
+import { ModelsTab } from './ModelsTab';
+import { SaveStatus, Section } from './Section';
 import { useAutosave } from './useAutosave';
-
-function SaveStatus({ status }: { status: ReturnType<typeof useAutosave> }) {
-  return (
-    <Text
-      as="span"
-      size="xs"
-      tone="subtle"
-      className={styles.saved}
-      data-status={status}
-      aria-live="polite"
-    >
-      {status === 'saving'
-        ? 'Saving…'
-        : status === 'saved'
-          ? 'Saved'
-          : status === 'error'
-            ? 'Couldn’t save'
-            : ''}
-    </Text>
-  );
-}
-
-function Section({
-  title,
-  description,
-  status,
-  children,
-}: {
-  title: string;
-  description?: ReactNode;
-  status?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className={styles.section}>
-      <div className={styles.sectionHead}>
-        <Stack gap={0.5}>
-          <Heading level={3} size="lg">
-            {title}
-          </Heading>
-          {description && (
-            <Text size="sm" tone="muted">
-              {description}
-            </Text>
-          )}
-        </Stack>
-        {status}
-      </div>
-      {children}
-    </section>
-  );
-}
 
 function PersonalityTab({ initial }: { initial: Persona }) {
   const update = useUpdateSettings();
@@ -553,6 +505,8 @@ const tabs: { value: SettingsTab; label: string; icon: ReactNode }[] = [
   { value: 'personality', label: 'Personality', icon: <Sparkles /> },
   { value: 'about', label: 'About you', icon: <User /> },
   { value: 'memory', label: 'Memory', icon: <Brain /> },
+  { value: 'models', label: 'Models & modes', icon: <Gauge /> },
+  { value: 'commands', label: 'Commands', icon: <SquareSlash /> },
   { value: 'engine', label: 'Claude Code', icon: <Cpu /> },
   { value: 'appearance', label: 'Appearance', icon: <Palette /> },
 ];
@@ -597,6 +551,12 @@ export function Settings() {
               </Tabs.Content>
               <Tabs.Content value="memory">
                 <MemoryTab autoMemory={app.preferences.autoMemory} />
+              </Tabs.Content>
+              <Tabs.Content value="models">
+                <ModelsTab />
+              </Tabs.Content>
+              <Tabs.Content value="commands">
+                <CommandsTab />
               </Tabs.Content>
               <Tabs.Content value="engine">
                 <EngineTab workspace={app.workspace} workspacePref={app.preferences.workspace} />
