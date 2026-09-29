@@ -6,6 +6,8 @@ import { useLocation, useNavigate, useParams } from 'react-router';
 import { useConversations } from '../api/queries';
 import { ChatView } from '../features/chat/ChatView';
 import { EnginePill } from '../features/engine/EnginePill';
+import { IntegrationDetailView } from '../features/integrations/IntegrationDetailView';
+import { IntegrationsView } from '../features/integrations/IntegrationsView';
 import { Palette } from '../features/palette/Palette';
 import { RoutineDetailView } from '../features/routines/RoutineDetailView';
 import { RoutinesView } from '../features/routines/RoutinesView';
@@ -31,9 +33,11 @@ function Reconnecting() {
 }
 
 export function Shell() {
-  const { conversationId, routineId } = useParams();
+  const { conversationId, routineId, integrationId } = useParams();
   const navigate = useNavigate();
-  const routinesArea = useLocation().pathname.startsWith('/routines');
+  const path = useLocation().pathname;
+  const routinesArea = path.startsWith('/routines');
+  const integrationsArea = path.startsWith('/integrations');
 
   // Toasts and notifications raised outside the router ask us to navigate.
   useEffect(() => {
@@ -48,7 +52,11 @@ export function Shell() {
   const setPalette = useUi((s) => s.setPalette);
 
   const current = conversations?.find((c) => c.id === conversationId);
-  const title = routinesArea ? 'Routines' : (current?.title ?? (conversationId ? '' : 'New chat'));
+  const title = routinesArea
+    ? 'Routines'
+    : integrationsArea
+      ? 'Integrations'
+      : (current?.title ?? (conversationId ? '' : 'New chat'));
 
   useEffect(() => {
     document.title = current ? `${current.title} · Conch` : 'Conch';
@@ -101,7 +109,9 @@ export function Shell() {
             )
           )}
           <Text as="div" weight="medium" className={styles.title}>
-            <LiveTitle pending={!routinesArea && current?.titling}>{title}</LiveTitle>
+            <LiveTitle pending={!routinesArea && !integrationsArea && current?.titling}>
+              {title}
+            </LiveTitle>
           </Text>
           <UsageIndicator />
           {conversationId && (
@@ -116,7 +126,13 @@ export function Shell() {
           <EnginePill />
         </header>
         <Reconnecting />
-        {routinesArea ? (
+        {integrationsArea ? (
+          integrationId ? (
+            <IntegrationDetailView key={integrationId} integrationId={integrationId} />
+          ) : (
+            <IntegrationsView />
+          )
+        ) : routinesArea ? (
           routineId ? (
             <RoutineDetailView key={routineId} routineId={routineId} />
           ) : (

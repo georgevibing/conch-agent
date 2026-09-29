@@ -33,6 +33,7 @@ import { keys, useAppState, useConversations } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { dayGroup, type DayGroup } from '../../lib/time';
 import { useAutoFocus } from '../../lib/useAutoFocus';
+import { IntegrationsLink } from '../integrations/IntegrationsLink';
 import { RoutinesLink } from '../routines/RoutinesLink';
 import styles from './Sidebar.module.css';
 
@@ -246,6 +247,7 @@ export function Sidebar({
           <Kbd keys="mod+k" size="sm" aria-hidden />
         </Button>
         <RoutinesLink onNavigate={onNavigate} />
+        <IntegrationsLink onNavigate={onNavigate} />
       </div>
       <ScrollArea className={styles.scroll}>
         {!isPending && (conversations?.length ?? 0) === 0 && (

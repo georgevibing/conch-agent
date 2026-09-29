@@ -26,6 +26,7 @@ import { useAutoFocus } from '../../lib/useAutoFocus';
 import { StreamingMarkdown } from './Markdown';
 import { formatInput, toolDiff, toolSummary } from './tools';
 import styles from './Transcript.module.css';
+import { useToolLabel } from '../integrations/ChatBits';
 
 type Of<K extends TranscriptItem['kind']> = Extract<TranscriptItem, { kind: K }>;
 
@@ -182,12 +183,14 @@ const toolStatus: Record<Of<'tool'>['status'], ToolCallStatus> = {
 };
 
 export function ToolItem({ item }: { item: Of<'tool'> }) {
+  const label = useToolLabel()(item.name);
   const diff = toolDiff(item.name, item.input);
   const stopped = item.status === 'error' && item.output === 'Stopped.';
   return (
     <ToolCall
       data-anchor={item.id}
-      name={item.name}
+      name={label ? label.title : item.name}
+      leading={label?.leading}
       summary={toolSummary(item.name, item.input)}
       status={stopped ? 'cancelled' : toolStatus[item.status]}
       duration={item.durationMs}

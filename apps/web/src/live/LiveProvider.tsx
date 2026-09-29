@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
 
 import { keys, setEngineStatus } from '../api/queries';
+import { applyIntegrationEvent } from '../features/integrations/queries';
 import { applyRoutineEvent } from '../features/routines/queries';
 import { LiveSocket, socketUrl } from './socket';
 import { NEW, useLiveStore } from './store';
@@ -111,6 +112,10 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           }
           break;
         }
+        case 'integration.changed':
+        case 'integration.deleted':
+          applyIntegrationEvent(client, event);
+          break;
         case 'routine.changed':
         case 'routine.deleted':
         case 'routine.run':

@@ -53,6 +53,15 @@ export type TranscriptItem =
       title: string;
     }
   | {
+      kind: 'integration-issue';
+      id: string;
+      integrationId: string;
+      name: string;
+      catalogId?: string;
+      state: 'needs-auth' | 'error';
+      message: string;
+    }
+  | {
       kind: 'turn-end';
       id: string;
       outcome: 'success' | 'interrupted' | 'error';
@@ -275,6 +284,29 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
       return { ...base, notice: event.message };
     case 'options':
       return { ...base, options: event.options };
+    case 'integration.issue': {
+      // One card per integration per turn is plenty.
+      const turnStart = items.findLastIndex((i) => i.kind === 'user');
+      const shown = items
+        .slice(turnStart + 1)
+        .some((i) => i.kind === 'integration-issue' && i.integrationId === event.integrationId);
+      if (shown) return base;
+      return {
+        ...base,
+        items: [
+          ...items,
+          {
+            kind: 'integration-issue',
+            id: `issue-${event.seq}`,
+            integrationId: event.integrationId,
+            name: event.name,
+            catalogId: event.catalogId,
+            state: event.state,
+            message: event.message,
+          },
+        ],
+      };
+    }
     case 'routine':
       return {
         ...base,

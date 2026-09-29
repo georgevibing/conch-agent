@@ -15,6 +15,7 @@ import {
   Waiting,
   type Wait,
 } from './TranscriptItems';
+import { IntegrationIssue } from '../integrations/ChatBits';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
 import { RoutineInstruction } from '../routines/RunBanner';
 import styles from './Transcript.module.css';
@@ -122,6 +123,7 @@ export function Transcript({
     ((last?.kind === 'tool' && last.status !== 'running' && last.status !== 'pending') ||
       last?.kind === 'memory' ||
       last?.kind === 'routine' ||
+      last?.kind === 'integration-issue' ||
       (last?.kind === 'permission' && Boolean(last.decision)) ||
       (last?.kind === 'assistant' && last.done));
 
@@ -166,6 +168,7 @@ export function Transcript({
                 action={block.item.action}
               />
             )}
+            {block.item?.kind === 'integration-issue' && <IntegrationIssue item={block.item} />}
             {block.item?.kind === 'turn-end' && (
               <TurnEnd
                 item={block.item}

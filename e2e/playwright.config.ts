@@ -16,6 +16,7 @@ const scenarios = {
   models: { port: 4394, env: { CONCH_MOCK_STATE: 'ready' } },
   search: { port: 4396, env: { CONCH_MOCK_STATE: 'ready' } },
   routines: { port: 4395, env: { CONCH_MOCK_STATE: 'ready' } },
+  integrations: { port: 4398, env: { CONCH_MOCK_STATE: 'ready' } },
   security: {
     port: 4397,
     env: { CONCH_MOCK_STATE: 'ready', CONCH_ALLOWED_HOSTS: 'studio-mac.tail1234.ts.net' },

@@ -10,9 +10,9 @@ import {
   Text,
   Tooltip,
 } from '@conch/nacre';
-import { Folder } from 'lucide-react';
+import { ArrowRight, Folder } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 
 import { useAppState, useConversations } from '../../api/queries';
 import { useUi } from '../../app/ui';
@@ -28,6 +28,7 @@ import { useTurnOptions } from '../models/useTurnOptions';
 import { UsageComposerNotice } from '../usage/UsageComposerNotice';
 import styles from './ChatView.module.css';
 import { Transcript } from './Transcript';
+import { useIntegrations } from '../integrations/queries';
 
 const suggestions = [
   { label: 'Plan my week', prompt: 'Help me plan my week. Ask me a couple of questions first.' },
@@ -41,6 +42,24 @@ const suggestions = [
   },
   { label: 'Remember something', prompt: 'Remember that I prefer short, direct answers.' },
 ];
+
+/** Until something is connected, point at where the assistant gets its reach. */
+function ConnectAppsHint() {
+  const { data } = useIntegrations();
+  const navigate = useNavigate();
+  if (!data || data.integrations.length > 0) return null;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      trailingIcon={<ArrowRight />}
+      onClick={() => void navigate('/integrations')}
+      className={styles.connectHint}
+    >
+      Connect Gmail, Notion, GitHub and more
+    </Button>
+  );
+}
 
 function EngineIssue({ status, issue }: { status?: EngineStatus; issue?: string }) {
   const openSettings = useUi((s) => s.openSettings);
@@ -83,7 +102,11 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   const engineIssue = useLiveStore((s) => s.engineIssue);
   const setEngineIssue = useLiveStore((s) => s.setEngineIssue);
   const openSettings = useUi((s) => s.openSettings);
-  const [draft, setDraft] = useState('');
+  // "Try asking…" from an integration arrives as a ready-to-send draft.
+  const location = useLocation();
+  const [draft, setDraft] = useState(
+    () => (location.state as { draft?: string } | null)?.draft ?? '',
+  );
   const [sentId, setSentId] = useState<string>();
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const columnRef = useRef<HTMLDivElement>(null);
@@ -219,6 +242,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
             </Button>
           ))}
         </div>
+        <ConnectAppsHint />
       </div>
     );
   }

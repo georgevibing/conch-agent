@@ -1,0 +1,12 @@
+@layer nacre.components {
+  .toolLabel {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+  }
+
+  .toolApp {
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-muted);
+  }
+}

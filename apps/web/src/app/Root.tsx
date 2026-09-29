@@ -3,6 +3,7 @@ import { RotateCw } from 'lucide-react';
 import { Route, Routes } from 'react-router';
 
 import { useAppState } from '../api/queries';
+import { OAuthDone } from '../features/integrations/OAuthDone';
 import { Onboarding } from '../features/onboarding/Onboarding';
 import { Shell } from './Shell';
 import styles from './Root.module.css';
@@ -38,6 +39,9 @@ export function Root() {
     );
   }
 
+  // The sign-in window: a page of its own, without the app around it.
+  if (window.location.pathname === '/integrations/done') return <OAuthDone />;
+
   if (!state.data.onboarded) return <Onboarding />;
 
   return (
@@ -46,6 +50,8 @@ export function Root() {
       <Route path="/c/:conversationId" element={<Shell />} />
       <Route path="/routines" element={<Shell />} />
       <Route path="/routines/:routineId" element={<Shell />} />
+      <Route path="/integrations" element={<Shell />} />
+      <Route path="/integrations/:integrationId" element={<Shell />} />
       <Route path="*" element={<Shell />} />
     </Routes>
   );

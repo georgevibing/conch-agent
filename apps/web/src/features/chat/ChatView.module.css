@@ -58,6 +58,10 @@
     inline-size: min(40rem, 100%);
   }
 
+  .connectHint {
+    color: var(--nc-text-muted);
+  }
+
   .suggestions {
     display: flex;
     flex-wrap: wrap;

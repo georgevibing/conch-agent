@@ -1,0 +1,328 @@
+@layer nacre.components {
+  .page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-8);
+    inline-size: 100%;
+    max-inline-size: 64rem;
+    margin-inline: auto;
+    padding: var(--nc-space-8) var(--nc-space-6) var(--nc-space-12);
+    overflow-y: auto;
+  }
+
+  .pageHeader {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--nc-space-4);
+    flex-wrap: wrap;
+  }
+
+  .pageFooter {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    padding-block-start: var(--nc-space-4);
+    border-block-start: 1px solid var(--nc-border-subtle);
+    color: var(--nc-text-subtle);
+  }
+
+  .pageFooter svg {
+    flex-shrink: 0;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    margin-block-start: 0.1em;
+  }
+
+  .section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+  }
+
+  .cards,
+  .tiles {
+    display: grid;
+    align-items: start;
+    gap: var(--nc-space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .cards {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  }
+
+  .tiles {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 14.5rem), 1fr));
+    align-items: stretch;
+  }
+
+  .tiles > li {
+    display: grid;
+  }
+
+  .catalogHeader {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-3);
+  }
+
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .search {
+    inline-size: 12rem;
+  }
+
+  .noMatch {
+    padding-block: var(--nc-space-4);
+  }
+
+  .externalList {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .externalRow {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-2) 0;
+  }
+
+  .externalRow + .externalRow {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .externalName {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  /* ── Connect dialog ─────────────────────────────────────────────── */
+  .connectHeader {
+    align-items: center;
+    text-align: center;
+  }
+
+  .connectTitle {
+    text-align: center;
+  }
+
+  .connectLead {
+    max-inline-size: 26rem;
+    margin-inline: auto;
+    text-wrap: balance;
+  }
+
+  .connectFooter {
+    flex-wrap: wrap;
+  }
+
+  .access {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--nc-text-sm);
+  }
+
+  .access li {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+  }
+
+  .access svg {
+    flex-shrink: 0;
+    inline-size: 1rem;
+    block-size: 1rem;
+    margin-block-start: 0.1em;
+    color: light-dark(oklch(0.55 0.13 var(--nc-success-h)), oklch(0.78 0.13 var(--nc-success-h)));
+  }
+
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--nc-text-sm);
+  }
+
+  .steps li {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2-5);
+  }
+
+  .stepNumber {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 1.375rem;
+    block-size: 1.375rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-3);
+    color: var(--nc-accent-11);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  .tokenForm {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-4);
+  }
+
+  .helpButton {
+    align-self: flex-start;
+  }
+
+  .command,
+  .mono {
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+  }
+
+  .command {
+    overflow-wrap: anywhere;
+  }
+
+  .examples {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+  }
+
+  .example {
+    max-inline-size: 100%;
+    block-size: auto;
+    min-block-size: 2rem;
+    padding-block: var(--nc-space-1-5);
+    white-space: normal;
+    text-align: start;
+  }
+
+  .envRow {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr) auto;
+    gap: var(--nc-space-2);
+  }
+
+  .addEnv {
+    align-self: flex-start;
+  }
+
+  /* ── Detail ─────────────────────────────────────────────────────── */
+  .detailHeader {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-4);
+    flex-wrap: wrap;
+  }
+
+  .detailTitle {
+    flex: 1;
+    min-inline-size: 12rem;
+  }
+
+  .detailSwitch {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    cursor: pointer;
+  }
+
+  .policy {
+    align-self: flex-start;
+    max-inline-size: 100%;
+  }
+
+  .policyHelp {
+    max-inline-size: 38rem;
+  }
+
+  .detail summary {
+    cursor: pointer;
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .detail code {
+    display: block;
+    margin-block-start: var(--nc-space-1);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .facts {
+    display: grid;
+    gap: var(--nc-space-2);
+    margin: 0;
+  }
+
+  .facts > div {
+    display: grid;
+    grid-template-columns: 6rem minmax(0, 1fr);
+    align-items: baseline;
+    gap: var(--nc-space-3);
+    font-size: var(--nc-text-sm);
+  }
+
+  .facts dt {
+    color: var(--nc-text-muted);
+  }
+
+  .facts dd {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2);
+    margin: 0;
+    min-inline-size: 0;
+  }
+
+  .dangerZone {
+    padding-block-start: var(--nc-space-4);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  /* ── Sign-in window ─────────────────────────────────────────────── */
+  .done {
+    display: grid;
+    place-items: center;
+    min-block-size: 100dvh;
+    padding: var(--nc-space-6);
+    background: var(--nc-canvas);
+  }
+
+  @media (max-width: 640px) {
+    .page {
+      padding-inline: var(--nc-space-4);
+    }
+
+    .search {
+      inline-size: 100%;
+    }
+  }
+}
