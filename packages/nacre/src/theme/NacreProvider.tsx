@@ -1,3 +1,4 @@
+import { MotionConfig } from 'motion/react';
 import { Tooltip as TooltipPrimitive } from 'radix-ui';
 import {
   createContext,
@@ -167,10 +168,16 @@ export function NacreProvider({
     [theme, resolvedMode, setTheme],
   );
 
+  // JS-driven animations (the `motion` library) honour the same preference as CSS.
+  const reducedMotion =
+    theme.motion === 'reduced' ? 'always' : theme.motion === 'full' ? 'never' : 'user';
+
   const content = (
-    <TooltipPrimitive.Provider delayDuration={420} skipDelayDuration={260}>
-      {children}
-    </TooltipPrimitive.Provider>
+    <MotionConfig reducedMotion={reducedMotion}>
+      <TooltipPrimitive.Provider delayDuration={420} skipDelayDuration={260}>
+        {children}
+      </TooltipPrimitive.Provider>
+    </MotionConfig>
   );
 
   return (
