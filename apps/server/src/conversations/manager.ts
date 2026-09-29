@@ -4,10 +4,11 @@ import type {
   ConversationStatus,
   ConversationSummary,
   ServerEvent,
+  TurnOptions,
   Usage,
 } from '@conch/protocol';
 
-import type { Engine, PermissionDecision } from '../engines/types';
+import type { Engine, PermissionDecision, ResolvedOptions } from '../engines/types';
 import { Emitter } from '../lib/emitter';
 import { newId } from '../lib/ids';
 import { buildSystemAppend } from '../memory/prompt';
@@ -93,7 +94,12 @@ export class ConversationManager {
   }
 
   /** Send a user message, creating the conversation if needed. Returns immediately; the turn streams. */
-  async send(input: { conversationId?: string; clientMessageId: string; text: string }) {
+  async send(input: {
+    conversationId?: string;
+    clientMessageId: string;
+    text: string;
+    options?: TurnOptions;
+  }) {
     const engine = this.deps.engine();
     const status = await engine.detect();
     if (status.state !== 'ready') {
@@ -111,6 +117,7 @@ export class ConversationManager {
     if (input.conversationId) {
       live = await this.#get(input.conversationId);
       if (live.abort) throw new ConversationError('busy', 'Claude is still replying.');
+      if (input.options) this.#applyOptions(live, input.options);
     } else {
       const now = Date.now();
       const record: ConversationRecord = {
@@ -120,6 +127,7 @@ export class ConversationManager {
         createdAt: now,
         updatedAt: now,
         status: 'idle',
+        options: clean(input.options ?? {}),
         engine: engine.id,
       };
       live = { record, events: [], seq: 0, permissions: new Map(), alwaysAllow: new Set() };
@@ -143,6 +151,21 @@ export class ConversationManager {
     await this.#persist(live);
     void this.#runTurn(live, engine, input.text);
     return summary(live.record);
+  }
+
+  /** Change a conversation's model/effort/mode without sending a message. */
+  async configure(id: string, options: TurnOptions) {
+    const live = await this.#get(id);
+    this.#applyOptions(live, options);
+    await this.deps.store.upsert(live.record);
+    this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
+  }
+
+  #applyOptions(live: Live, options: TurnOptions) {
+    const next = clean({ ...live.record.options, ...options });
+    if (JSON.stringify(next) === JSON.stringify(live.record.options)) return;
+    live.record = { ...live.record, options: next };
+    this.#append(live, { type: 'options', options: next });
   }
 
   async interrupt(id: string) {
@@ -198,6 +221,7 @@ export class ConversationManager {
         }),
         cwd: await this.deps.settings.workspace(),
         tools,
+        options: resolveOptions(live.record.options, settings.preferences),
         signal: abort.signal,
         requestPermission: (request, signal) => {
           if (live.alwaysAllow.has(request.toolName)) return Promise.resolve('allow');
@@ -267,6 +291,9 @@ export class ConversationManager {
             });
             break;
           }
+          case 'notice':
+            this.#append(live, { type: 'notice', code: event.code, message: event.message });
+            break;
           case 'done':
             outcome = event.outcome;
             completed = { usage: event.usage, error: event.error };
@@ -369,5 +396,29 @@ export class ConversationManager {
 
 function summary(record: ConversationRecord): ConversationSummary {
   const { id, title, preview, createdAt, updatedAt, status } = record;
-  return { id, title, preview, createdAt, updatedAt, status };
+  return { id, title, preview, createdAt, updatedAt, status, options: record.options ?? {} };
+}
+
+/** Drop unset keys so "no override" is stored as absence, not `undefined`. */
+function clean(options: TurnOptions): TurnOptions {
+  return Object.fromEntries(
+    Object.entries(options).filter(([, v]) => v !== undefined),
+  ) as TurnOptions;
+}
+
+export function resolveOptions(
+  options: TurnOptions | undefined,
+  defaults: {
+    model?: string;
+    effort: ResolvedOptions['effort'];
+    fastMode: boolean;
+    permissionMode: ResolvedOptions['permissionMode'];
+  },
+): ResolvedOptions {
+  return {
+    model: options?.model ?? defaults.model,
+    effort: options?.effort ?? defaults.effort,
+    fastMode: options?.fastMode ?? defaults.fastMode,
+    permissionMode: options?.permissionMode ?? defaults.permissionMode,
+  };
 }

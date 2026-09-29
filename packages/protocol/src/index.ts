@@ -97,6 +97,87 @@ export const StartLoginBody = z.object({ method: LoginMethod.default('subscripti
 export const LoginCodeBody = z.object({ code: z.string().min(1).max(4096) });
 export const ApiKeyBody = z.object({ apiKey: z.string().min(10).max(512) });
 
+// ── Models, thinking and modes ──────────────────────────────────────────────
+
+/** How hard the model thinks. `auto` lets the model decide (engine default). */
+export const EffortChoice = z.enum(['auto', 'low', 'medium', 'high', 'xhigh', 'max']);
+export type EffortChoice = z.infer<typeof EffortChoice>;
+
+/**
+ * How much the agent may do without asking — mirrors Claude Code's permission
+ * modes: ask first, auto (a classifier approves safe actions), edit files
+ * freely, plan only (read-only), or full trust (never asks).
+ */
+export const PermissionMode = z.enum([
+  'default',
+  'auto',
+  'acceptEdits',
+  'plan',
+  'bypassPermissions',
+]);
+export type PermissionMode = z.infer<typeof PermissionMode>;
+
+/** Per-conversation choices; anything unset falls back to the user's defaults. */
+export const TurnOptions = z.object({
+  model: z.string().max(200).optional(),
+  effort: EffortChoice.optional(),
+  fastMode: z.boolean().optional(),
+  permissionMode: PermissionMode.optional(),
+});
+export type TurnOptions = z.infer<typeof TurnOptions>;
+
+export const ModelInfo = z.object({
+  /** Value passed to the engine (an alias like `opus` or a full id). */
+  id: z.string(),
+  label: z.string(),
+  description: z.string().default(''),
+  /** Effort levels this model accepts; empty = no effort control. */
+  efforts: z.array(EffortChoice.exclude(['auto'])).default([]),
+  supportsFastMode: z.boolean().default(false),
+  supportsAutoMode: z.boolean().default(false),
+});
+export type ModelInfo = z.infer<typeof ModelInfo>;
+
+export const CommandSource = z.enum(['conch', 'custom', 'engine']);
+export type CommandSource = z.infer<typeof CommandSource>;
+
+/** A slash command offered by the engine itself (e.g. Claude Code's /compact). */
+export const EngineCommand = z.object({
+  name: z.string(),
+  description: z.string().default(''),
+  argumentHint: z.string().default(''),
+});
+export type EngineCommand = z.infer<typeof EngineCommand>;
+
+export const Capabilities = z.object({
+  engine: EngineId,
+  label: z.string(),
+  models: z.array(ModelInfo),
+  commands: z.array(EngineCommand),
+  permissionModes: z.array(PermissionMode),
+});
+export type Capabilities = z.infer<typeof Capabilities>;
+
+/** A user-defined slash command: a reusable prompt. `{{input}}` is replaced by what follows the command. */
+export const CommandName = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9-]{0,31}$/, 'Use lowercase letters, numbers and dashes (max 32).');
+
+export const CustomCommand = z.object({
+  name: CommandName,
+  description: z.string().max(200).default(''),
+  prompt: z.string().min(1).max(20_000),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+export type CustomCommand = z.infer<typeof CustomCommand>;
+
+export const SaveCommandBody = z.object({
+  name: CommandName,
+  description: z.string().max(200).default(''),
+  prompt: z.string().trim().min(1).max(20_000),
+});
+
 // ── Personality & profile ───────────────────────────────────────────────────
 
 export const Tone = z.enum(['warm', 'concise', 'playful', 'precise']);
@@ -125,6 +206,11 @@ export const Preferences = z.object({
   engine: EngineId.default('claude-code'),
   /** Let the agent save memories on its own (it always tells you). */
   autoMemory: z.boolean().default(true),
+  /** Default model for new conversations; unset = the engine's own default. */
+  model: z.string().max(200).optional(),
+  effort: EffortChoice.default('auto'),
+  fastMode: z.boolean().default(false),
+  permissionMode: PermissionMode.default('default'),
 });
 export type Preferences = z.infer<typeof Preferences>;
 
@@ -183,7 +269,15 @@ export const UpdateSettingsBody = z.object({
     .partial()
     .optional(),
   preferences: z
-    .object({ workspace: z.string().max(4096), engine: EngineId, autoMemory: z.boolean() })
+    .object({
+      workspace: z.string().max(4096),
+      engine: EngineId,
+      autoMemory: z.boolean(),
+      model: z.string().max(200),
+      effort: EffortChoice,
+      fastMode: z.boolean(),
+      permissionMode: PermissionMode,
+    })
     .partial()
     .optional(),
   onboarded: z.boolean().optional(),
@@ -202,6 +296,8 @@ export const ConversationSummary = z.object({
   createdAt: z.number(),
   updatedAt: z.number(),
   status: ConversationStatus,
+  /** This conversation's own model/effort/mode choices (overrides defaults). */
+  options: TurnOptions.default({}),
 });
 export type ConversationSummary = z.infer<typeof ConversationSummary>;
 
@@ -290,6 +386,14 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     error: z.string().optional(),
   }),
   z.object({ ...logged, type: z.literal('title'), title: z.string() }),
+  z.object({
+    ...logged,
+    type: z.literal('notice'),
+    /** e.g. `retry` while the engine retries a failing request. */
+    code: z.string(),
+    message: z.string(),
+  }),
+  z.object({ ...logged, type: z.literal('options'), options: TurnOptions }),
 ]);
 export type ConversationEvent = z.infer<typeof ConversationEvent>;
 
@@ -309,6 +413,13 @@ export const ClientCommand = z.discriminatedUnion('type', [
     /** Client-generated id so the UI can reconcile optimistic messages. */
     clientMessageId: z.string().min(1).max(128),
     text: z.string().trim().min(1).max(200_000),
+    /** Model/effort/mode for this and later turns of the conversation. */
+    options: TurnOptions.optional(),
+  }),
+  z.object({
+    type: z.literal('conversation.configure'),
+    conversationId: z.string(),
+    options: TurnOptions,
   }),
   z.object({
     type: z.literal('conversation.subscribe'),

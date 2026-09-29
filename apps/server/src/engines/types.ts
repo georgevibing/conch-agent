@@ -1,8 +1,11 @@
 import type {
+  Capabilities,
+  EffortChoice,
   EngineId,
   EngineStatus,
   LoginMethod,
   LoginState,
+  PermissionMode,
   ToolStatus,
   Usage,
 } from '@conch/protocol';
@@ -39,6 +42,16 @@ export interface TurnInput {
   tools: HostTool[];
   requestPermission(request: PermissionRequest, signal: AbortSignal): Promise<PermissionDecision>;
   signal: AbortSignal;
+  /** Resolved choices for this turn (conversation overrides merged over defaults). */
+  options: ResolvedOptions;
+}
+
+export interface ResolvedOptions {
+  /** Undefined = the engine's default model. */
+  model?: string;
+  effort: EffortChoice;
+  fastMode: boolean;
+  permissionMode: PermissionMode;
 }
 
 /** Normalised stream every engine produces for a turn. */
@@ -49,6 +62,7 @@ export type EngineEvent =
   | { type: 'message-done'; messageId: string }
   | { type: 'tool-start'; toolUseId: string; name: string; input: unknown }
   | { type: 'tool-end'; toolUseId: string; status: ToolStatus; output?: string }
+  | { type: 'notice'; code: string; message: string }
   | { type: 'done'; outcome: 'success' | 'interrupted' | 'error'; usage?: Usage; error?: string };
 
 export interface LoginHandle {
@@ -65,5 +79,7 @@ export interface Engine {
   login?(method: LoginMethod, onUpdate: (state: LoginState) => void): LoginHandle;
   /** Store an API key the engine should use instead of an interactive login. */
   setApiKey?(apiKey: string | undefined): Promise<void>;
+  /** Models, slash commands and permission modes the engine offers right now. */
+  capabilities(options?: { force?: boolean }): Promise<Capabilities>;
   runTurn(input: TurnInput): AsyncIterable<EngineEvent>;
 }

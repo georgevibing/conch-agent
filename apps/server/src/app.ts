@@ -11,6 +11,7 @@ import {
   LoginCodeBody,
   PROTOCOL_VERSION,
   RenameConversationBody,
+  SaveCommandBody,
   StartLoginBody,
   UpdateMemoryBody,
   UpdateSettingsBody,
@@ -108,6 +109,34 @@ export async function buildApp(services: Services) {
     return services.setApiKey(body.apiKey.trim());
   });
   app.delete('/api/engine/api-key', () => services.setApiKey(undefined));
+
+  app.get<{ Querystring: { refresh?: string } }>('/api/capabilities', async (request, reply) => {
+    try {
+      return await services.capabilities(request.query.refresh === '1');
+    } catch (error) {
+      return reply
+        .code(503)
+        .send({ error: 'engine-unavailable', message: (error as Error).message });
+    }
+  });
+
+  // ── Custom commands ────────────────────────────────────────────────────
+  app.get('/api/commands', () => services.commands.list());
+  app.put<{ Params: { name: string } }>('/api/commands/:name', async (request, reply) => {
+    const body = parse(
+      SaveCommandBody,
+      { ...(request.body as object), name: request.params.name },
+      reply,
+    );
+    if (!body) return;
+    return services.commands.save(body);
+  });
+  app.delete<{ Params: { name: string } }>('/api/commands/:name', async (request, reply) => {
+    const removed = await services.commands.remove(request.params.name);
+    return removed
+      ? { ok: true }
+      : reply.code(404).send({ error: 'not-found', message: 'Command not found.' });
+  });
 
   // ── Memory ─────────────────────────────────────────────────────────────
   app.get('/api/memories', () => services.memory.list());
@@ -217,6 +246,8 @@ export async function buildApp(services: Services) {
             }
             return;
           }
+          case 'conversation.configure':
+            return await services.conversations.configure(command.conversationId, command.options);
           case 'conversation.interrupt':
             return await services.conversations.interrupt(command.conversationId);
           case 'permission.respond':

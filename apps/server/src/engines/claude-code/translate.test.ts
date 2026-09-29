@@ -126,4 +126,37 @@ describe('Translator', () => {
       error: expect.stringContaining('Sign in again'),
     });
   });
+
+  it('turns API retries into notices and hides raw API error text', () => {
+    const t = new Translator();
+    const [notice] = t.translate(
+      m({
+        type: 'system',
+        subtype: 'api_retry',
+        attempt: 2,
+        max_retries: 10,
+        retry_delay_ms: 4000,
+        error_status: null,
+        error: 'cloud_credential_error',
+      }),
+    );
+    expect(notice).toMatchObject({
+      type: 'notice',
+      code: 'retry',
+      message: expect.stringContaining('attempt 2 of 10'),
+    });
+    expect(
+      t.translate(
+        m({
+          type: 'assistant',
+          parent_tool_use_id: null,
+          error: 'cloud_credential_error',
+          message: {
+            id: 'e',
+            content: [{ type: 'text', text: 'API Error: Could not load AWS credentials' }],
+          },
+        }),
+      ),
+    ).toEqual([]);
+  });
 });

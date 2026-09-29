@@ -103,6 +103,29 @@ describe('gateway HTTP', () => {
   });
 });
 
+describe('gateway capabilities and commands', () => {
+  it('lists models, modes and custom commands', async () => {
+    const { app } = await setup();
+    close = () => app.close();
+    const caps = (await app.inject('/api/capabilities')).json();
+    expect(caps.models.map((m: { id: string }) => m.id)).toContain('opus');
+    expect(caps.permissionModes).toContain('bypassPermissions');
+    expect(
+      (await app.inject('/api/commands')).json().map((c: { name: string }) => c.name),
+    ).toContain('tldr');
+    const saved = await app.inject({
+      method: 'PUT',
+      url: '/api/commands/standup',
+      payload: { description: 'd', prompt: 'p' },
+    });
+    expect(saved.json()).toMatchObject({ name: 'standup', prompt: 'p' });
+    expect(
+      (await app.inject({ method: 'PUT', url: '/api/commands/Bad Name', payload: { prompt: 'p' } }))
+        .statusCode,
+    ).toBe(400);
+  });
+});
+
 describe('gateway WebSocket', () => {
   it('runs a full turn with memory, permission and streaming', async () => {
     const { app, services } = await setup();
@@ -166,6 +189,43 @@ describe('gateway WebSocket', () => {
     const detail = await fresh.conversations.detail(summary?.id ?? '');
     expect(detail.events.some((e) => e.type === 'assistant.delta')).toBe(true);
     expect(detail.conversation.status).toBe('idle');
+  });
+
+  it('applies per-conversation options and shows retry notices', async () => {
+    const { app, services } = await setup();
+    await services.settings.update({ preferences: { model: 'sonnet', effort: 'high' } });
+    close = () => app.close();
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const port = (app.server.address() as { port: number }).port;
+    const ws = new WebSocket(`ws://localhost:${port}/ws`);
+    const events: ServerEvent[] = [];
+    const done = new Promise<void>((resolve) => {
+      ws.onmessage = (msg) => {
+        const event = ServerEvent.parse(JSON.parse(String(msg.data)));
+        events.push(event);
+        if (event.type === 'conversation.event' && event.event.type === 'turn.completed') resolve();
+      };
+    });
+    await new Promise((r) => (ws.onopen = r));
+    ws.send(
+      JSON.stringify({
+        type: 'conversation.send',
+        clientMessageId: 'u1',
+        text: 'please retry this',
+        options: { fastMode: true, permissionMode: 'plan' },
+      }),
+    );
+    await done;
+    ws.close();
+    const convo = events.flatMap((e) => (e.type === 'conversation.event' ? [e.event] : []));
+    expect(convo.some((e) => e.type === 'notice' && e.code === 'retry')).toBe(true);
+    const text = convo
+      .flatMap((e) => (e.type === 'assistant.delta' && e.kind === 'text' ? [e.delta] : []))
+      .join('');
+    // Defaults (sonnet/high) merged with this conversation's overrides (fast/plan).
+    expect(text).toContain('sonnet · high effort · fast · plan');
+    const [summary] = await services.conversations.list();
+    expect(summary?.options).toEqual({ fastMode: true, permissionMode: 'plan' });
   });
 
   it('refuses to send when the engine is not ready', async () => {

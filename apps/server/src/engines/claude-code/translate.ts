@@ -49,9 +49,21 @@ export class Translator {
   translate(msg: SDKMessage): EngineEvent[] {
     switch (msg.type) {
       case 'system':
-        return msg.subtype === 'init'
-          ? [{ type: 'session', resumeId: msg.session_id, model: msg.model }]
-          : [];
+        if (msg.subtype === 'init') {
+          return [{ type: 'session', resumeId: msg.session_id, model: msg.model }];
+        }
+        if (msg.subtype === 'api_retry') {
+          const reason = friendlyError(msg.error) ?? 'Claude is having trouble responding.';
+          const seconds = Math.max(1, Math.round(msg.retry_delay_ms / 1000));
+          return [
+            {
+              type: 'notice',
+              code: 'retry',
+              message: `${reason} Retrying in ${seconds}s (attempt ${msg.attempt} of ${msg.max_retries}).`,
+            },
+          ];
+        }
+        return [];
 
       case 'stream_event': {
         if (msg.parent_tool_use_id) return [];
@@ -81,8 +93,12 @@ export class Translator {
 
       case 'assistant': {
         if (msg.parent_tool_use_id) return [];
-        if (msg.error) this.#error = friendlyError(msg.error);
         const out: EngineEvent[] = [];
+        if (msg.error) {
+          // The CLI also renders the raw API error as assistant text; show our friendly one instead.
+          this.#error = friendlyError(msg.error);
+          return out;
+        }
         const id = msg.message.id;
         const streamed = this.#streamed.has(id);
         for (const block of msg.message.content) {

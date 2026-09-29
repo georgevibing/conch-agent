@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { EngineId, LoginState, ServerEvent } from '@conch/protocol';
 
 import type { Config } from './config';
+import { CommandStore } from './commands/store';
 import { ConversationManager } from './conversations/manager';
 import { ConversationStore } from './conversations/store';
 import { ClaudeCodeEngine } from './engines/claude-code/engine';
@@ -19,6 +20,7 @@ export class Services {
   readonly broadcast = new Emitter<ServerEvent>();
   readonly settings: SettingsStore;
   readonly memory: MemoryStore;
+  readonly commands: CommandStore;
   readonly conversations: ConversationManager;
   readonly engines: Map<EngineId, Engine>;
   #login?: { handle: LoginHandle; state: LoginState };
@@ -26,6 +28,7 @@ export class Services {
   constructor(readonly config: Config) {
     this.settings = new SettingsStore(config.CONCH_HOME);
     this.memory = new MemoryStore(join(config.CONCH_HOME, 'memory'));
+    this.commands = new CommandStore(join(config.CONCH_HOME, 'commands'));
     this.engines = new Map<EngineId, Engine>([
       ['claude-code', new ClaudeCodeEngine(this.settings, config.CONCH_CLAUDE_PATH)],
       [
@@ -59,6 +62,10 @@ export class Services {
     const status = await this.engine().detect({ force });
     if (force) this.broadcast.emit({ type: 'engine.status', status });
     return status;
+  }
+
+  capabilities(force = false) {
+    return this.engine().capabilities({ force });
   }
 
   get login() {

@@ -1,4 +1,10 @@
-import type { EngineState, EngineStatus, LoginMethod, LoginState } from '@conch/protocol';
+import type {
+  Capabilities,
+  EngineState,
+  EngineStatus,
+  LoginMethod,
+  LoginState,
+} from '@conch/protocol';
 
 import { newId } from '../../lib/ids';
 import { installHints } from '../claude-code/detect';
@@ -39,7 +45,8 @@ export class MockEngine implements Engine {
   }
 
   async detect({ force = false } = {}): Promise<EngineStatus> {
-    if (force && this.#installAfter !== undefined && ++this.#checks >= this.#installAfter) this.install();
+    if (force && this.#installAfter !== undefined && ++this.#checks >= this.#installAfter)
+      this.install();
     const base = {
       engine: 'claude-code' as const,
       label: 'Claude Code',
@@ -99,6 +106,58 @@ export class MockEngine implements Engine {
     };
   }
 
+  async capabilities(): Promise<Capabilities> {
+    const efforts = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+    return {
+      engine: 'claude-code',
+      label: 'Claude Code',
+      models: [
+        {
+          id: 'default',
+          label: 'Default',
+          description: 'Use the default model (currently Opus 5.5)',
+          efforts: [...efforts],
+          supportsFastMode: true,
+          supportsAutoMode: true,
+        },
+        {
+          id: 'opus',
+          label: 'Opus 5.5',
+          description: 'Most capable for complex work',
+          efforts: [...efforts],
+          supportsFastMode: true,
+          supportsAutoMode: true,
+        },
+        {
+          id: 'sonnet',
+          label: 'Sonnet 5.5',
+          description: 'Fast and capable for everyday tasks',
+          efforts: [...efforts],
+          supportsFastMode: false,
+          supportsAutoMode: true,
+        },
+        {
+          id: 'haiku',
+          label: 'Haiku 4.5',
+          description: 'Quickest for simple questions',
+          efforts: [],
+          supportsFastMode: false,
+          supportsAutoMode: false,
+        },
+      ],
+      commands: [
+        {
+          name: 'compact',
+          description: 'Summarise the conversation to free up context',
+          argumentHint: '[instructions]',
+        },
+        { name: 'review', description: 'Review the current changes', argumentHint: '' },
+        { name: 'init', description: 'Create a CLAUDE.md for this project', argumentHint: '' },
+      ],
+      permissionModes: ['default', 'auto', 'acceptEdits', 'plan', 'bypassPermissions'],
+    };
+  }
+
   async setApiKey(apiKey: string | undefined): Promise<void> {
     if (apiKey) this.#state = 'ready';
   }
@@ -148,6 +207,27 @@ export class MockEngine implements Engine {
             };
       }
 
+      const { model = 'default', effort, fastMode, permissionMode } = input.options;
+      const setup = `*${model} · ${effort} effort${fastMode ? ' · fast' : ''} · ${permissionMode}*`;
+      if (/^\/\w/.test(input.prompt)) {
+        yield {
+          type: 'text',
+          messageId,
+          delta: `Ran \`${input.prompt.split(' ')[0]}\` — ${setup}`,
+        };
+        yield { type: 'message-done', messageId };
+        yield { type: 'done', outcome: 'success' };
+        return;
+      }
+      if (/retry/.test(text)) {
+        yield {
+          type: 'notice',
+          code: 'retry',
+          message: 'Claude is overloaded right now. Retrying in 2s (attempt 1 of 10).',
+        };
+        await wait(1500);
+      }
+
       const reply = rememberMatch
         ? "Got it — I'll remember that. You can see and edit everything I remember in **Settings → Memory**."
         : [
@@ -163,6 +243,8 @@ export class MockEngine implements Engine {
             '```',
             '',
             'Ask me to *remember* something, or to *list files*, to see memory and permissions in action.',
+            '',
+            setup,
           ].join('\n');
 
       for (const chunk of reply.match(/.{1,6}/gs) ?? []) {

@@ -70,7 +70,9 @@ export class ConversationStore {
     if (!this.#index) {
       const records = (await readJson<ConversationRecord[]>(join(this.dir, 'index.json'))) ?? [];
       // A turn can't survive a restart; don't show stale "running" states.
-      this.#index = new Map(records.map((r) => [r.id, { ...r, status: 'idle' }]));
+      this.#index = new Map(
+        records.map((r) => [r.id, { ...r, options: r.options ?? {}, status: 'idle' }]),
+      );
     }
     return this.#index;
   }
