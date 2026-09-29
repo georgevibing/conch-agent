@@ -16,6 +16,7 @@ import type {
 import type { ProviderKeys } from '../../providers/keys';
 import type { SettingsStore } from '../../settings/store';
 import { Emitter } from '../../lib/emitter';
+import { programFile } from '../../lib/proc';
 import type {
   Completion,
   CompletionInput,
@@ -222,7 +223,7 @@ export class ClaudeCodeEngine implements Engine {
     return query({
       prompt: idle(),
       options: {
-        pathToClaudeCodeExecutable: status.executablePath,
+        pathToClaudeCodeExecutable: programFile(status.executablePath),
         env: childEnv({ ANTHROPIC_API_KEY: anthropicApiKey }),
         cwd: await this.settings.workspace(),
       },
@@ -384,7 +385,7 @@ export class ClaudeCodeEngine implements Engine {
         prompt: input.prompt,
         options: {
           cwd: await this.settings.workspace(),
-          pathToClaudeCodeExecutable: status.executablePath,
+          pathToClaudeCodeExecutable: programFile(status.executablePath),
           env: childEnv({ ANTHROPIC_API_KEY: anthropicApiKey }),
           abortController: abort,
           systemPrompt: input.system,
@@ -461,7 +462,7 @@ export class ClaudeCodeEngine implements Engine {
         options: {
           cwd: input.cwd,
           resume: input.resumeId,
-          pathToClaudeCodeExecutable: status.executablePath,
+          pathToClaudeCodeExecutable: programFile(status.executablePath),
           env: childEnv({ ANTHROPIC_API_KEY: anthropicApiKey }),
           abortController: abort,
           includePartialMessages: true,

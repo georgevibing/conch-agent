@@ -7,12 +7,78 @@
  * credential) never reaches a process the agent can influence.
  */
 import { execFile } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { access, constants } from 'node:fs/promises';
 import { homedir, platform } from 'node:os';
-import { delimiter, join } from 'node:path';
+import { basename, delimiter, dirname, extname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
 const exec = promisify(execFile);
+
+/** A program as Node can start it without a shell: what to run, and the arguments that go first. */
+export interface Launch {
+  command: string;
+  prefix: string[];
+}
+
+/**
+ * Where a `.cmd` shim hands over its arguments: `"%dp0%\node_modules\…\cli.js" %*`
+ * (npm), `"%~dp0\..\…\cli.mjs" %*` (pnpm) or `"%~dp0\..\…\cli.cmd" %*` (Yarn).
+ */
+const SHIM_TARGET = /"%~?dp0%?\\([^"]+)"\s+%\*/i;
+
+/**
+ * How to start `file` without a shell. On Windows, npm, pnpm and Yarn install
+ * command-line tools as `.cmd` batch files, which Node won't start except
+ * through `cmd.exe` — and `cmd.exe` would read the arguments (a whole prompt,
+ * say) as commands of its own. So the batch file is read for the program it
+ * would run, and that starts directly. Anything else starts as itself.
+ */
+export function launch(file: string, depth = 0): Launch {
+  if (platform() !== 'win32' || !/\.(cmd|bat)$/i.test(file)) return { command: file, prefix: [] };
+  const dir = dirname(file);
+  const target = SHIM_TARGET.exec(readFileSync(file, 'utf8'))?.[1];
+  const program = target && resolve(dir, target);
+  if (program && /\.[cm]?js$/i.test(program)) {
+    const node = join(dir, 'node.exe');
+    return { command: existsSync(node) ? node : process.execPath, prefix: [program] };
+  }
+  if (program && /\.exe$/i.test(program)) return { command: program, prefix: [] };
+  if (program && /\.cmd$/i.test(program) && depth < 3) return launch(program, depth + 1);
+  throw new Error(
+    `${basename(file)} is a batch file Conch can’t start safely. Point Conch at the program it runs instead.`,
+  );
+}
+
+/**
+ * The file to hand a library that starts the program itself: the script behind
+ * a Windows shim (the Agent SDK runs a `.js` with Node), or the file as given.
+ */
+export function programFile(file: string | undefined): string | undefined {
+  if (!file) return undefined;
+  const { command, prefix } = launch(file);
+  return prefix[0] ?? command;
+}
+
+/**
+ * Whether Windows would find `command` the way `cmd.exe` does: as a path, or in
+ * the working folder or on `PATH`, with one of `PATHEXT`'s extensions.
+ */
+export function onWindowsPath(
+  command: string,
+  env: Record<string, string | undefined>,
+  cwd = process.cwd(),
+): boolean {
+  // Windows variable names ignore case (`Path` is common).
+  const variable = (name: string) =>
+    Object.entries(env).find(([key]) => key.toUpperCase() === name)?.[1] ?? process.env[name];
+  const extensions = (variable('PATHEXT') ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean);
+  const names = [...(extname(command) ? [command] : []), ...extensions.map((ext) => command + ext)];
+  const dirs = /[\\/]/.test(command)
+    ? [cwd]
+    : [cwd, ...(variable('PATH') ?? '').split(delimiter).filter(Boolean)];
+  return dirs.some((dir) => names.some((name) => existsSync(resolve(dir, name))));
+}
 
 /**
  * Variables that describe a *parent* agent session. Conch is often launched
@@ -60,7 +126,15 @@ export async function isExecutable(path: string): Promise<boolean> {
 /** Where tools land when they aren't on the PATH a desktop app inherits. */
 export function commonBinDirs(): string[] {
   const home = homedir();
+  const windows =
+    platform() === 'win32'
+      ? [
+          join(process.env.APPDATA ?? join(home, 'AppData', 'Roaming'), 'npm'),
+          join(process.env.LOCALAPPDATA ?? join(home, 'AppData', 'Local'), 'pnpm'),
+        ]
+      : [];
   return [
+    ...windows,
     join(home, '.local', 'bin'),
     join(home, '.npm-global', 'bin'),
     join(home, '.volta', 'bin'),
@@ -121,7 +195,8 @@ export async function run(
   } = {},
 ): Promise<RunResult> {
   try {
-    const { stdout, stderr } = await exec(file, args, {
+    const { command, prefix } = launch(file);
+    const { stdout, stderr } = await exec(command, [...prefix, ...args], {
       env: options.env ?? agentEnv(),
       cwd: options.cwd,
       timeout: options.timeout ?? 15_000,
@@ -137,9 +212,11 @@ export async function run(
       code?: number | string;
       message: string;
     };
+    // A program that never started (`ENOENT`, `EACCES`) printed nothing; its error says why.
+    const neverRan = e.stderr === undefined || typeof e.code === 'string';
     return {
       stdout: e.stdout ?? '',
-      stderr: e.stderr ?? e.message,
+      stderr: e.stderr || (neverRan ? e.message : ''),
       code: typeof e.code === 'number' ? e.code : undefined,
     };
   }

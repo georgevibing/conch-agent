@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import type { LoginMethod, LoginState } from '@conch/protocol';
 
 import { newId } from '../../lib/ids';
+import { launch } from '../../lib/proc';
 import type { LoginHandle } from '../types';
 import { childEnv } from './env';
 
@@ -33,7 +34,8 @@ export function startClaudeLogin(options: {
 
   const args = ['auth', 'login'];
   if (options.method === 'console') args.push('--console');
-  const child = spawn(options.executablePath, args, {
+  const { command, prefix } = launch(options.executablePath);
+  const child = spawn(command, [...prefix, ...args], {
     env: childEnv({ BROWSER: process.env.BROWSER }),
     stdio: ['pipe', 'pipe', 'pipe'],
   });

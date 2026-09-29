@@ -13,7 +13,7 @@ import { spawn } from 'node:child_process';
 import type { LoginMethod, LoginState } from '@conch/protocol';
 
 import { newId } from '../../lib/ids';
-import { agentEnv } from '../../lib/proc';
+import { agentEnv, launch } from '../../lib/proc';
 import type { LoginHandle } from '../types';
 
 const URL_RE = /https?:\/\/[^\s"'<>]+/;
@@ -60,7 +60,8 @@ export function startCodexLogin(
   // "another way in": the device-code flow, which is what you need when the
   // browser can't reach this computer's localhost.
   const args = method === 'console' ? ['login', '--device-auth'] : ['login'];
-  const child = spawn(executablePath, args, {
+  const { command, prefix } = launch(executablePath);
+  const child = spawn(command, [...prefix, ...args], {
     env: agentEnv(),
     // Nothing is ever typed into Codex: a pipe nobody writes to would hang it.
     stdio: ['ignore', 'pipe', 'pipe'],

@@ -10,9 +10,11 @@
  * It lives beside the engine (rather than in `src/test/`) because all three
  * test files here share it.
  */
-import { chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+import { fakeProgram } from './fakeProgram';
 
 export interface FakeCodexOptions {
   /** What follows `codex ` in `--version`. A git revision stands in for a dev build. */
@@ -71,50 +73,67 @@ export async function fakeCodex(options: FakeCodexOptions = {}): Promise<FakeCod
   await writeFile(join(dir, 'models'), options.models ?? DEFAULT_MODELS);
   await writeFile(join(dir, 'mcp'), options.mcpList ?? '[]');
 
-  const bin = join(dir, 'codex');
   const version = options.version ?? '0.52.0';
-  const script = `#!/bin/sh
-DIR='${dir}'
-{ printf '%s' '${CALL_MARK}'; printf '%s\\0' "$@"; } >> "$DIR/calls"
-case "$1" in
-  --version)
-${options.versionFails ? '    echo "codex: error: missing shared library" >&2; exit 1' : `    echo "codex ${version}"; exit 0`}
-    ;;
-  login)
-    if [ "$2" = "status" ]; then
-${
-  options.signedIn
-    ? '      echo "Logged in using ChatGPT" >&2; exit 0'
-    : '      echo "Not logged in" >&2; exit 1'
+  const bin = await fakeProgram(
+    dir,
+    'codex',
+    `const fs = require('node:fs');
+const path = require('node:path');
+const DIR = ${JSON.stringify(dir)};
+const OPTIONS = ${JSON.stringify({ ...options, version })};
+const args = process.argv.slice(2);
+fs.appendFileSync(
+  path.join(DIR, 'calls'),
+  ${JSON.stringify(CALL_MARK)} + args.map((arg) => arg + '\\0').join(''),
+);
+const say = (text) => process.stderr.write(text + '\\n');
+const print = (file) => process.stdout.write(fs.readFileSync(path.join(DIR, file)));
+const fail = (text, code = 1) => {
+  say(text);
+  process.exitCode = code;
+};
+const afterHang = (then) =>
+  OPTIONS.hangSeconds ? setTimeout(then, OPTIONS.hangSeconds * 1000) : then();
+switch (args[0]) {
+  case '--version':
+    if (OPTIONS.versionFails) fail('codex: error: missing shared library');
+    else console.log('codex ' + OPTIONS.version);
+    break;
+  case 'login':
+    if (args[1] === 'status') {
+      if (OPTIONS.signedIn) say('Logged in using ChatGPT');
+      else fail('Not logged in');
+      break;
+    }
+    say('Starting sign-in: ' + (OPTIONS.loginUrl ?? 'http://localhost:1455/auth/callback?state=abc'));
+    if (OPTIONS.loginCode) say('Then enter the code ' + OPTIONS.loginCode + ' on that page.');
+    afterHang(() => {
+      if (OPTIONS.loginFails) fail('error: sign-in was not completed');
+    });
+    break;
+  case 'exec':
+    fs.writeFileSync(
+      path.join(DIR, 'env'),
+      Object.entries(process.env).map(([key, value]) => key + '=' + value + '\\n').join(''),
+    );
+    say('codex: thinking…');
+    if (OPTIONS.execStderr) say(OPTIONS.execStderr);
+    print('transcript');
+    afterHang(() => {
+      process.exitCode = OPTIONS.execCode ?? 0;
+    });
+    break;
+  case 'debug':
+    print('models');
+    break;
+  case 'mcp':
+    if (args[2] !== '--json') console.log('Name  Enabled');
+    else if (OPTIONS.mcpJsonFails) fail('error: unexpected argument --json', 2);
+    else print('mcp');
+    break;
 }
-    fi
-    echo "Starting sign-in: ${options.loginUrl ?? 'http://localhost:1455/auth/callback?state=abc'}" >&2
-${options.loginCode ? `    echo "Then enter the code ${options.loginCode} on that page." >&2` : ''}
-${options.hangSeconds ? `    sleep ${options.hangSeconds}` : ''}
-${options.loginFails ? '    echo "error: sign-in was not completed" >&2; exit 1' : '    exit 0'}
-    ;;
-  exec)
-    printenv > "$DIR/env"
-    echo "codex: thinking…" >&2
-${options.execStderr ? `    echo "${options.execStderr}" >&2` : ''}
-    cat "$DIR/transcript"
-${options.hangSeconds ? `    sleep ${options.hangSeconds}` : ''}
-    exit ${options.execCode ?? 0}
-    ;;
-  debug)
-    cat "$DIR/models"; exit 0
-    ;;
-  mcp)
-    if [ "$3" = "--json" ]; then
-${options.mcpJsonFails ? '      echo "error: unexpected argument --json" >&2; exit 2' : '      cat "$DIR/mcp"; exit 0'}
-    fi
-    echo "Name  Enabled"; exit 0
-    ;;
-esac
-exit 0
-`;
-  await writeFile(bin, script);
-  await chmod(bin, 0o755);
+`,
+  );
 
   return {
     bin,

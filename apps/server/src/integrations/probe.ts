@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { platform } from 'node:os';
 
 import type { IntegrationHealth } from '@conch/protocol';
 import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js';
@@ -15,6 +16,7 @@ import {
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 
 import type { EngineMcpServer } from '../engines/types';
+import { onWindowsPath } from '../lib/proc';
 import { SERVER_VERSION } from '../version';
 import { EndpointError } from './net';
 import type { StoredTool } from './store';
@@ -221,11 +223,17 @@ export async function connectClient(
   };
 
   if (server.type === 'stdio') {
+    const env = { ...getDefaultEnvironment(), ...server.env };
+    // On Windows the SDK starts the command through `cmd.exe`, which reports a
+    // missing program as an ordinary exit; say what actually happened.
+    if (platform() === 'win32' && !onWindowsPath(server.command, env, options.cwd)) {
+      throw Object.assign(new Error(`spawn ${server.command} ENOENT`), { code: 'ENOENT' });
+    }
     let stderr = '';
     const transport = new StdioClientTransport({
       command: server.command,
       args: server.args,
-      env: { ...getDefaultEnvironment(), ...server.env },
+      env,
       stderr: 'pipe',
       cwd: options.cwd,
     });

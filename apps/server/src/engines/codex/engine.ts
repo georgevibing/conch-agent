@@ -27,7 +27,7 @@ import {
 } from '@conch/protocol';
 import { z } from 'zod';
 
-import { agentEnv, run } from '../../lib/proc';
+import { agentEnv, launch, run } from '../../lib/proc';
 import type { ProviderKeys } from '../../providers/keys';
 import type { SettingsStore } from '../../settings/store';
 import type {
@@ -640,7 +640,8 @@ export class CodexEngine implements Engine {
 
     this.#briefings.set(input.conversationId, input.systemAppend.trim());
 
-    const child = spawn(status.executablePath, args, {
+    const { command, prefix } = launch(status.executablePath);
+    const child = spawn(command, [...prefix, ...args], {
       cwd: input.cwd,
       env: agentEnv({ CODEX_API_KEY: await this.#apiKey(), ...mcp.env }),
       // Codex exec reads nothing from stdin; leaving it open would only risk a hang.

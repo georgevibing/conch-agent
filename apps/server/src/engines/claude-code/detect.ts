@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 
 import type { AuthMethod, EngineStatus, InstallHint } from '@conch/protocol';
 
+import { launch } from '../../lib/proc';
 import { childEnv } from './env';
 
 const exec = promisify(execFile);
@@ -14,7 +15,9 @@ export const DOCS_URL = 'https://code.claude.com/docs/en/setup';
 
 export function installHints(): InstallHint[] {
   const hints: InstallHint[] = [
-    { label: 'Install script', command: 'curl -fsSL https://claude.ai/install.sh | bash' },
+    platform() === 'win32'
+      ? { label: 'Install script', command: 'irm https://claude.ai/install.ps1 | iex' }
+      : { label: 'Install script', command: 'curl -fsSL https://claude.ai/install.sh | bash' },
   ];
   if (platform() === 'darwin') {
     hints.push({ label: 'Homebrew', command: 'brew install --cask claude-code' });
@@ -135,7 +138,8 @@ export async function detectClaude(options: {
   const env = childEnv({ ANTHROPIC_API_KEY: options.apiKey });
   let version: string | undefined;
   try {
-    const { stdout } = await exec(executablePath, ['--version'], { env, timeout: 15_000 });
+    const { command, prefix } = launch(executablePath);
+    const { stdout } = await exec(command, [...prefix, '--version'], { env, timeout: 15_000 });
     version = /\d+\.\d+\.\d+/.exec(stdout)?.[0];
   } catch (error) {
     return {
@@ -148,7 +152,8 @@ export async function detectClaude(options: {
 
   let auth: ClaudeAuthStatus | undefined;
   try {
-    const { stdout } = await exec(executablePath, ['auth', 'status', '--json'], {
+    const { command, prefix } = launch(executablePath);
+    const { stdout } = await exec(command, [...prefix, 'auth', 'status', '--json'], {
       env,
       timeout: 15_000,
     });
