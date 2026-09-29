@@ -16,6 +16,7 @@ export * from './components/Stack';
 export * from './components/Surface';
 export * from './components/Text';
 export * from './components/Separator';
+export * from './components/ResizeHandle';
 export * from './components/ScrollArea';
 
 // Actions

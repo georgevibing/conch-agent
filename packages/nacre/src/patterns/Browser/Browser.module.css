@@ -1,0 +1,1240 @@
+@layer nacre.components {
+  /* ── Window ────────────────────────────────────────────────────────── */
+  .window {
+    --bw-radius: var(--nc-radius-xl);
+    --bw-screen-radius: var(--nc-radius-md);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    min-block-size: 0;
+    block-size: 100%;
+    border-radius: var(--bw-radius);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-2);
+    overflow: hidden;
+    isolation: isolate;
+  }
+
+  /* ── Chrome ────────────────────────────────────────────────────────── */
+  .chrome {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-2) var(--nc-space-2) var(--nc-space-2) var(--nc-space-2);
+    border-block-end: 1px solid var(--nc-border-subtle);
+  }
+
+  .nav,
+  .tools {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-0-5);
+    flex-shrink: 0;
+  }
+
+  .tools {
+    gap: var(--nc-space-1);
+  }
+
+  .address {
+    --nc-sheen-size: 180px;
+    --nc-sheen-hover: 0.12;
+    --nc-rim-hover: 0.35;
+    appearance: none;
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+    block-size: var(--nc-control-sm);
+    margin: 0;
+    padding-inline: var(--nc-space-3);
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text-muted);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    text-align: start;
+    cursor: text;
+    transition: box-shadow var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .address[data-editing] {
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--nc-accent-9) 55%, var(--nc-border)),
+      0 0 0 3px color-mix(in oklch, var(--nc-accent-9) 14%, transparent);
+  }
+
+  .address:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 1px;
+  }
+
+  .addressIcon {
+    flex-shrink: 0;
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .addressText {
+    display: flex;
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .host {
+    flex-shrink: 0;
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .path {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--nc-text-subtle);
+  }
+
+  .addressPlaceholder {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--nc-text-subtle);
+  }
+
+  .addressInput {
+    flex: 1;
+    min-inline-size: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--nc-text);
+    font: inherit;
+  }
+
+  .addressInput::placeholder {
+    color: var(--nc-text-subtle);
+  }
+
+  /* "Conch is browsing": the pearl works, the words stay calm. */
+  .driver {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    padding-inline: var(--nc-space-2);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    white-space: nowrap;
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  /* An iridescent line sweeps under the chrome while a page loads. */
+  .loading {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: -1px;
+    block-size: 2px;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        var(--nc-pearl-2),
+        var(--nc-pearl-4),
+        transparent
+      )
+      0 0 / 40% 100% no-repeat;
+    opacity: 0;
+    transition: opacity var(--nc-duration-base) var(--nc-ease-out);
+    pointer-events: none;
+  }
+
+  .loading[data-on] {
+    opacity: 1;
+    animation: bw-sweep 1.1s var(--nc-ease-in-out) infinite;
+  }
+
+  @keyframes bw-sweep {
+    from {
+      background-position: -40% 0;
+    }
+    to {
+      background-position: 140% 0;
+    }
+  }
+
+  /* ── Handoff bar ───────────────────────────────────────────────────── */
+  .handoffBar {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-2-5) var(--nc-space-4);
+    background: linear-gradient(90deg, var(--nc-accent-3), var(--nc-accent-2));
+    border-block-end: 1px solid var(--nc-accent-5);
+    color: var(--nc-accent-12);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .handoffText {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+  }
+
+  .handoffText strong {
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  .handoffText span {
+    color: var(--nc-accent-11);
+  }
+
+  /* ── Stage and screen ──────────────────────────────────────────────── */
+  .stage {
+    position: relative;
+    display: grid;
+    flex: 1;
+    place-items: center;
+    min-block-size: 0;
+    padding: var(--nc-space-3);
+    background: var(--nc-surface-sunken);
+    container-type: size;
+  }
+
+  .screen {
+    position: relative;
+    inline-size: min(100cqw, calc(100cqh * 1.6));
+    max-block-size: 100cqh;
+    border-radius: var(--bw-screen-radius);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow:
+      0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-1);
+    overflow: hidden;
+    outline: none;
+    cursor: pointer;
+    touch-action: none;
+    transition: box-shadow var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .screen:focus-visible {
+    box-shadow:
+      0 0 0 2px var(--nc-ring),
+      var(--nc-elevation-1);
+  }
+
+  .screen[data-driving] {
+    cursor: default;
+    box-shadow:
+      0 0 0 2px color-mix(in oklch, var(--nc-accent-9) 70%, transparent),
+      0 0 0 6px color-mix(in oklch, var(--nc-accent-9) 12%, transparent),
+      var(--nc-elevation-2);
+  }
+
+  /* Waiting on you: the screen wears an orbiting pearl rim. */
+  .window[data-handoff] .screen::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 2px;
+    background: conic-gradient(from var(--nc-angle), var(--nc-pearl-spectrum));
+    mask:
+      linear-gradient(#000 0 0) content-box exclude,
+      linear-gradient(#000 0 0);
+    animation: bw-orbit 4s linear infinite;
+    pointer-events: none;
+  }
+
+  @keyframes bw-orbit {
+    to {
+      --nc-angle: 360deg;
+    }
+  }
+
+  /* The picture is a button: click it to take over; while you drive, your pointer goes to the page. */
+  .surface {
+    appearance: none;
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: inherit;
+    background: none;
+    cursor: pointer;
+    touch-action: none;
+  }
+
+  .surface:disabled {
+    cursor: default;
+  }
+
+  .surface:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  .screen[data-driving] .surface {
+    cursor: default;
+  }
+
+  /* Where your keys go while you drive: focusable, but not seen. */
+  .keys {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    inline-size: 1px;
+    block-size: 1px;
+    padding: 0;
+    border: 0;
+    opacity: 0;
+    resize: none;
+    pointer-events: none;
+  }
+
+  .screen:has(.keys:focus-visible) {
+    box-shadow:
+      0 0 0 2px var(--nc-ring),
+      var(--nc-elevation-2);
+  }
+
+  .frame {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  .frame[data-empty] {
+    visibility: hidden;
+  }
+
+  .message {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-6);
+    text-align: center;
+    cursor: default;
+    animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .messageTitle {
+    margin: var(--nc-space-2) 0 0;
+    color: var(--nc-text);
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .messageHint {
+    max-inline-size: 22rem;
+    margin: 0 0 var(--nc-space-2);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    text-wrap: pretty;
+  }
+
+  .messageProgress {
+    inline-size: min(18rem, 80%);
+  }
+
+  .command {
+    padding: var(--nc-space-1-5) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+    user-select: all;
+  }
+
+  .problemBar {
+    position: absolute;
+    inset-inline: var(--nc-space-3);
+    inset-block-start: var(--nc-space-3);
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-2) var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-surface-overlay);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border),
+      var(--nc-elevation-3);
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+  }
+
+  .problemBar > svg {
+    flex-shrink: 0;
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: light-dark(oklch(0.55 0.14 var(--nc-warning-h)), oklch(0.82 0.12 var(--nc-warning-h)));
+  }
+
+  .problemBar > span {
+    flex: 1;
+  }
+
+  /* ── The assistant's hand ──────────────────────────────────────────── */
+  /* The control it's about to touch lights up with a pearl rim. */
+  .highlight {
+    position: absolute;
+    border-radius: var(--nc-radius-sm);
+    box-shadow:
+      0 0 0 2px color-mix(in oklch, var(--nc-pearl-3) 80%, transparent),
+      0 0 0 6px color-mix(in oklch, var(--nc-pearl-2) 30%, transparent),
+      0 0 24px color-mix(in oklch, var(--nc-pearl-4) 45%, transparent);
+    pointer-events: none;
+    animation: bw-highlight 2.4s var(--nc-ease-out) both;
+  }
+
+  @keyframes bw-highlight {
+    0% {
+      opacity: 0;
+      transform: scale(1.08);
+    }
+    12% {
+      opacity: 1;
+      transform: none;
+    }
+    70% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+
+  /* A small pearl that glides (on a spring) to where the assistant points.
+     Its upper-left edge, like a pointer's tip, lands on the target, so the
+     control's words stay readable. */
+  .cursor {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    inline-size: 18px;
+    block-size: 18px;
+    margin: 2px 0 0 2px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 32% 28%, var(--nc-pearl-1) 0 18%, transparent 46%),
+      conic-gradient(from var(--nc-angle), var(--nc-pearl-spectrum));
+    box-shadow:
+      0 0 0 2px color-mix(in oklch, var(--nc-surface) 85%, transparent),
+      0 4px 14px color-mix(in oklch, var(--nc-pearl-4) 55%, transparent),
+      0 0 22px color-mix(in oklch, var(--nc-pearl-3) 50%, transparent);
+    opacity: 0;
+    transform: scale(0.6);
+    pointer-events: none;
+    transition:
+      left var(--nc-spring-soft-duration) var(--nc-spring-soft),
+      top var(--nc-spring-soft-duration) var(--nc-spring-soft),
+      opacity var(--nc-duration-base) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+    animation: bw-orbit 3s linear infinite;
+  }
+
+  .cursor[data-visible] {
+    opacity: 1;
+    transform: none;
+  }
+
+  .ripple {
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 2px solid var(--nc-pearl-3);
+    opacity: 0;
+  }
+
+  .cursor[data-visible][data-action='click'] .ripple,
+  .cursor[data-visible][data-action='select'] .ripple {
+    animation: bw-ripple 900ms var(--nc-ease-out) 380ms both;
+  }
+
+  @keyframes bw-ripple {
+    from {
+      opacity: 0.9;
+      transform: scale(0.6);
+    }
+    to {
+      opacity: 0;
+      transform: scale(2.8);
+    }
+  }
+
+  /* What it's doing, in words, at the foot of the screen. */
+  .caption {
+    position: absolute;
+    inset-inline-start: 50%;
+    inset-block-end: var(--nc-space-3);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    max-inline-size: calc(100% - var(--nc-space-6));
+    padding: var(--nc-space-1-5) var(--nc-space-3);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface-inverse);
+    color: var(--nc-text-inverse);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: var(--nc-elevation-3);
+    transform: translateX(-50%);
+    pointer-events: none;
+    animation: bw-caption 2.6s var(--nc-ease-out) both;
+  }
+
+  @keyframes bw-caption {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, 6px) scale(0.96);
+    }
+    10% {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+    85% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+
+  .captionDots {
+    display: inline-flex;
+    gap: 3px;
+  }
+
+  .captionDots i {
+    inline-size: 4px;
+    block-size: 4px;
+    border-radius: 50%;
+    background: var(--nc-pearl-3);
+    animation: nc-breathe 1.2s var(--nc-ease-in-out) infinite;
+  }
+
+  .captionDots i:nth-child(2) {
+    animation-delay: 160ms;
+  }
+
+  .captionDots i:nth-child(3) {
+    animation-delay: 320ms;
+  }
+
+  .takeHint {
+    position: absolute;
+    inset-block-start: var(--nc-space-3);
+    inset-inline-end: var(--nc-space-3);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    padding: var(--nc-space-1) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface-overlay);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-2);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    opacity: 0;
+    transform: translateY(-4px);
+    transition:
+      opacity var(--nc-duration-base) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+    pointer-events: none;
+  }
+
+  .takeHint > svg {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+  }
+
+  @media (hover: hover) {
+    .screen:hover .takeHint {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* ── Trail (transcript) ────────────────────────────────────────────── */
+  .trail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-3);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .trailHead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+  }
+
+  .trailToggle {
+    --nc-rim-hover: 0.3;
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+    margin: 0;
+    padding: var(--nc-space-1) var(--nc-space-1-5);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    background: transparent;
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    cursor: pointer;
+  }
+
+  .trailToggle:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  @media (hover: hover) {
+    .trailToggle:hover {
+      background: var(--nc-wash-1);
+    }
+  }
+
+  .trailIcon {
+    display: inline-grid;
+    place-items: center;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    flex-shrink: 0;
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-accent-3);
+    color: var(--nc-accent-11);
+  }
+
+  .trailIcon > svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  .trail[data-running] .trailIcon > svg {
+    animation: nc-spin 3.2s linear infinite;
+  }
+
+  .trailTitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .trailChevron {
+    flex-shrink: 0;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .trail[data-open] .trailChevron {
+    transform: rotate(180deg);
+  }
+
+  .film {
+    display: flex;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    padding: 0 0 var(--nc-space-0-5);
+    list-style: none;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .filmFrame {
+    flex-shrink: 0;
+    animation: bw-frame-in var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both;
+  }
+
+  @keyframes bw-frame-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px) scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .filmButton {
+    appearance: none;
+    display: block;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    background: none;
+    cursor: pointer;
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .filmButton:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  @media (hover: hover) {
+    .filmButton:hover {
+      transform: translateY(-2px);
+    }
+  }
+
+  .thumb {
+    position: relative;
+    display: grid;
+    place-items: center;
+    inline-size: 5.5rem;
+    aspect-ratio: 16 / 10;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text-subtle);
+    overflow: hidden;
+  }
+
+  .thumb[data-size='lg'] {
+    inline-size: 20rem;
+  }
+
+  .thumb > img {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  .thumb > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .thumb[data-status='running']::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      100deg,
+      transparent 20%,
+      color-mix(in oklch, var(--nc-pearl-2) 55%, transparent) 50%,
+      transparent 80%
+    );
+    background-size: 220% 100%;
+    animation: nc-shimmer 1.4s linear infinite;
+  }
+
+  .thumb[data-status='error'] {
+    box-shadow: inset 0 0 0 1px
+      color-mix(in oklch, oklch(0.6 0.18 var(--nc-danger-h)) 45%, var(--nc-border));
+  }
+
+  .preview {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    padding: var(--nc-space-2);
+  }
+
+  .previewLabel {
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .previewUrl {
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+  }
+
+  .trailNow {
+    margin: 0;
+    padding-inline: var(--nc-space-1-5);
+    overflow: hidden;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .trailNow[data-status='error'] {
+    color: light-dark(oklch(0.5 0.17 var(--nc-danger-h)), oklch(0.8 0.12 var(--nc-danger-h)));
+  }
+
+  .trailBody {
+    overflow: hidden;
+  }
+
+  .trailBody[data-state='open'] {
+    animation: bw-open var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .trailBody[data-state='closed'] {
+    animation: bw-close var(--nc-duration-fast) var(--nc-ease-in);
+  }
+
+  @keyframes bw-open {
+    from {
+      block-size: 0;
+      opacity: 0;
+    }
+    to {
+      block-size: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+  }
+
+  @keyframes bw-close {
+    from {
+      block-size: var(--radix-collapsible-content-height);
+    }
+    to {
+      block-size: 0;
+      opacity: 0;
+    }
+  }
+
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    margin: 0;
+    padding: var(--nc-space-1) 0 0;
+    list-style: none;
+  }
+
+  .step {
+    display: grid;
+    grid-template-columns: 1.25rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-1) var(--nc-space-1-5);
+    border-radius: var(--nc-radius-sm);
+    font-size: var(--nc-text-sm);
+  }
+
+  .stepGlyph {
+    display: inline-grid;
+    place-items: center;
+    color: light-dark(oklch(0.52 0.12 var(--nc-success-h)), oklch(0.8 0.12 var(--nc-success-h)));
+  }
+
+  .stepGlyph > svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  .step[data-status='error'] .stepGlyph {
+    color: light-dark(oklch(0.5 0.17 var(--nc-danger-h)), oklch(0.8 0.12 var(--nc-danger-h)));
+  }
+
+  .stepGlyph > i {
+    inline-size: 6px;
+    block-size: 6px;
+    border-radius: 50%;
+    background: var(--nc-accent-9);
+    animation: nc-breathe 1.2s var(--nc-ease-in-out) infinite;
+  }
+
+  .stepLabel {
+    overflow: hidden;
+    color: var(--nc-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .step[data-status='error'] .stepLabel {
+    white-space: normal;
+    color: var(--nc-text-muted);
+  }
+
+  .stepHost {
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+  }
+
+  /* ── Approval ──────────────────────────────────────────────────────── */
+  .approval {
+    --nc-rim-rest: 0.3;
+    --nc-rim-hover: 0.7;
+    --nc-sheen-size: 280px;
+    --nc-sheen-hover: 0.12;
+    position: relative;
+    display: flex;
+    gap: var(--nc-space-4);
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-2);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .approval[data-kind='high-stakes'] {
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, oklch(0.6 0.18 var(--nc-danger-h)) 35%, var(--nc-border)),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-2);
+  }
+
+  .approvalShot {
+    position: relative;
+    flex-shrink: 0;
+    align-self: flex-start;
+    inline-size: 11rem;
+    aspect-ratio: 16 / 10;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    overflow: hidden;
+  }
+
+  .approvalShot > img {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  .approvalBox {
+    position: absolute;
+    border-radius: 3px;
+    box-shadow:
+      0 0 0 2px var(--nc-accent-9),
+      0 0 0 999px color-mix(in oklch, var(--nc-canvas) 38%, transparent);
+    animation: bw-box 1.8s var(--nc-ease-in-out) infinite;
+  }
+
+  .approval[data-kind='high-stakes'] .approvalBox {
+    box-shadow:
+      0 0 0 2px oklch(0.62 0.2 var(--nc-danger-h)),
+      0 0 0 999px color-mix(in oklch, var(--nc-canvas) 38%, transparent);
+  }
+
+  @keyframes bw-box {
+    50% {
+      outline: 4px solid color-mix(in oklch, var(--nc-accent-9) 25%, transparent);
+    }
+  }
+
+  .approvalBody {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+  }
+
+  .approvalHead {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .approvalIcon {
+    display: inline-grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-accent-3);
+    color: var(--nc-accent-11);
+  }
+
+  .approval[data-kind='high-stakes'] .approvalIcon {
+    background: light-dark(
+      oklch(0.95 0.035 var(--nc-danger-h)),
+      oklch(0.28 0.06 var(--nc-danger-h))
+    );
+    color: light-dark(oklch(0.52 0.18 var(--nc-danger-h)), oklch(0.8 0.12 var(--nc-danger-h)));
+  }
+
+  .approvalIcon > svg {
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
+  }
+
+  .approvalTitle {
+    margin: 0;
+    color: var(--nc-text);
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    text-wrap: balance;
+  }
+
+  .approvalAction {
+    margin: 0;
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+  }
+
+  .approvalDetail {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    text-wrap: pretty;
+  }
+
+  .approvalActions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--nc-space-2);
+    margin-block-start: var(--nc-space-2);
+  }
+
+  .approvalDone {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+  }
+
+  .approvalDone > svg {
+    flex-shrink: 0;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  .approvalDone[data-allowed] > svg {
+    color: light-dark(oklch(0.52 0.12 var(--nc-success-h)), oklch(0.8 0.12 var(--nc-success-h)));
+  }
+
+  @media (max-width: 40rem) {
+    .approval {
+      flex-direction: column;
+    }
+
+    .approvalShot {
+      inline-size: 100%;
+    }
+  }
+
+  /* ── Handoff card ──────────────────────────────────────────────────── */
+  .handoff {
+    --nc-rim-rest: 0.5;
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-4);
+    padding: var(--nc-space-4) var(--nc-space-5);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(160deg, var(--nc-accent-2), var(--nc-surface) 60%);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-accent-5),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-2);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .handoffBody {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+  }
+
+  .handoffEyebrow {
+    margin: 0;
+    color: var(--nc-accent-11);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .handoffReason {
+    margin: 0;
+    color: var(--nc-text);
+    font-size: var(--nc-text-lg);
+    font-weight: var(--nc-weight-medium);
+    line-height: var(--nc-leading-snug);
+    text-wrap: balance;
+  }
+
+  .handoffNote {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+  }
+
+  /* ── Status (Settings) ─────────────────────────────────────────────── */
+  .status {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-4);
+    padding: var(--nc-space-5);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+  }
+
+  .statusHead {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-4);
+  }
+
+  .statusText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    min-inline-size: 0;
+  }
+
+  .statusTitle {
+    margin: 0;
+    color: var(--nc-text);
+    font-size: var(--nc-text-lg);
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  .statusLine {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    text-wrap: pretty;
+  }
+
+  .statusCommand {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+  }
+
+  .statusCommand code {
+    align-self: flex-start;
+    padding: var(--nc-space-1-5) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+    user-select: all;
+  }
+
+  .healed {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    padding-block-start: var(--nc-space-3);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .healedTitle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  .healedTitle > svg {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+    color: var(--nc-accent-10);
+  }
+
+  .healed ul {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .healed li {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--nc-space-3);
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+  }
+
+  .healed time {
+    flex-shrink: 0;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+  }
+
+  /* ── Motion off ────────────────────────────────────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    .loading[data-on],
+    .cursor,
+    .window[data-handoff] .screen::after,
+    .thumb[data-status='running']::after,
+    .trail[data-running] .trailIcon > svg,
+    .approvalBox,
+    .captionDots i {
+      animation: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .loading[data-on],
+  :global([data-nacre-motion='reduced']) .cursor,
+  :global([data-nacre-motion='reduced']) .window[data-handoff] .screen::after,
+  :global([data-nacre-motion='reduced']) .thumb[data-status='running']::after,
+  :global([data-nacre-motion='reduced']) .approvalBox,
+  :global([data-nacre-motion='reduced']) .captionDots i {
+    animation: none;
+  }
+}
