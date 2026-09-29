@@ -136,23 +136,24 @@ it('keeps independent revocable key auth behind a host-preserving HTTPS proxy', 
     expect((await app.inject({ url: '/api/state', headers: signedIn })).statusCode).toBe(401);
   } finally {
     await app.close();
+    // Windows won't delete a database that is still open.
+    services.search?.index.close();
     await rm(home, { recursive: true, force: true });
   }
 });
 
 it('closes rejected upgrade transports so a proxy cannot reuse a detached socket', async () => {
   const home = await mkdtemp(join(tmpdir(), 'conch-upgrade-'));
-  const app = await buildApp(
-    new Services(
-      loadConfig({
-        CONCH_HOME: home,
-        CONCH_ENGINE: 'mock',
-        CONCH_LOG_LEVEL: 'silent',
-        CONCH_WEB_DIST: '/nonexistent',
-        CONCH_ALLOWED_HOSTS: 'conch.example',
-      }),
-    ),
+  const services = new Services(
+    loadConfig({
+      CONCH_HOME: home,
+      CONCH_ENGINE: 'mock',
+      CONCH_LOG_LEVEL: 'silent',
+      CONCH_WEB_DIST: '/nonexistent',
+      CONCH_ALLOWED_HOSTS: 'conch.example',
+    }),
   );
+  const app = await buildApp(services);
   try {
     await app.listen({ host: '127.0.0.1', port: 0 });
     const address = app.server.address();
@@ -198,6 +199,7 @@ it('closes rejected upgrade transports so a proxy cannot reuse a detached socket
     }
   } finally {
     await app.close();
+    services.search?.index.close();
     await rm(home, { recursive: true, force: true });
   }
 });
