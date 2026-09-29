@@ -1,0 +1,13 @@
+@layer nacre.components {
+  .center {
+    display: grid;
+    place-items: center;
+    min-block-size: 100dvh;
+    padding: var(--nc-space-6);
+    animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .offline {
+    max-inline-size: 28rem;
+  }
+}

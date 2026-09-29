@@ -1,0 +1,96 @@
+import { IconButton, Sheet, Spinner, Text, useMediaQuery } from '@conch/nacre';
+import { Menu, PanelLeftOpen } from 'lucide-react';
+import { useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router';
+
+import { useConversations } from '../api/queries';
+import { ChatView } from '../features/chat/ChatView';
+import { EnginePill } from '../features/engine/EnginePill';
+import { Palette } from '../features/palette/Palette';
+import { Settings } from '../features/settings/Settings';
+import { Sidebar } from '../features/sidebar/Sidebar';
+import { useLiveStore } from '../live/store';
+import styles from './Shell.module.css';
+import { useUi } from './ui';
+import { useHotkey } from './useHotkey';
+
+function Reconnecting() {
+  const connection = useLiveStore((s) => s.connection);
+  if (connection !== 'reconnecting') return null;
+  return (
+    <div className={styles.reconnecting} role="status">
+      <Spinner size="xs" label={null} />
+      <Text as="span" size="xs" tone="muted">
+        Reconnecting to Conch…
+      </Text>
+    </div>
+  );
+}
+
+export function Shell() {
+  const { conversationId } = useParams();
+  const navigate = useNavigate();
+  const { data: conversations } = useConversations();
+  const narrow = useMediaQuery('(max-width: 820px)');
+  const { sidebarOpen, toggleSidebar, mobileSidebarOpen, setMobileSidebar, openSettings } = useUi();
+
+  const current = conversations?.find((c) => c.id === conversationId);
+  const title = current?.title ?? (conversationId ? '' : 'New chat');
+
+  useEffect(() => {
+    document.title = current ? `${current.title} · Conch` : 'Conch';
+  }, [current]);
+
+  useHotkey('mod+shift+o', () => void navigate('/'));
+  useHotkey('mod+b', () => (narrow ? setMobileSidebar(!mobileSidebarOpen) : toggleSidebar()));
+  useHotkey('mod+,', () => openSettings());
+
+  const showSidebar = !narrow && sidebarOpen;
+
+  return (
+    <div className={styles.shell} data-sidebar={showSidebar || undefined}>
+      {showSidebar && (
+        <aside className={styles.sidebar}>
+          <Sidebar />
+        </aside>
+      )}
+      {narrow && (
+        <Sheet.Root open={mobileSidebarOpen} onOpenChange={setMobileSidebar}>
+          <Sheet.Content
+            side="left"
+            size="sm"
+            hideClose
+            aria-label="Conversations"
+            className={styles.sheet}
+          >
+            <Sheet.Title className={styles.srOnly}>Conversations</Sheet.Title>
+            <Sidebar collapsible={false} onNavigate={() => setMobileSidebar(false)} />
+          </Sheet.Content>
+        </Sheet.Root>
+      )}
+      <main className={styles.main}>
+        <header className={styles.header}>
+          {narrow ? (
+            <IconButton label="Open conversations" onClick={() => setMobileSidebar(true)}>
+              <Menu />
+            </IconButton>
+          ) : (
+            !sidebarOpen && (
+              <IconButton label="Show sidebar" shortcut="mod+b" onClick={toggleSidebar}>
+                <PanelLeftOpen />
+              </IconButton>
+            )
+          )}
+          <Text as="span" weight="medium" truncate className={styles.title}>
+            {title}
+          </Text>
+          <EnginePill />
+        </header>
+        <Reconnecting />
+        <ChatView key={conversationId ?? 'new'} conversationId={conversationId} />
+      </main>
+      <Settings />
+      <Palette />
+    </div>
+  );
+}

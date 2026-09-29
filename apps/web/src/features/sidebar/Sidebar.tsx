@@ -1,0 +1,257 @@
+import type { ConversationSummary } from '@conch/protocol';
+import {
+  AlertDialog,
+  Avatar,
+  Button,
+  DropdownMenu,
+  IconButton,
+  Input,
+  Pearl,
+  ScrollArea,
+  Text,
+  cx,
+  toast,
+  Tooltip,
+} from '@conch/nacre';
+import { useQueryClient } from '@tanstack/react-query';
+import { MoreHorizontal, PanelLeftClose, Pencil, Settings, SquarePen, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { NavLink, useNavigate, useParams } from 'react-router';
+
+import { api } from '../../api/client';
+import { keys, useAppState, useConversations } from '../../api/queries';
+import { useUi } from '../../app/ui';
+import { dayGroup, type DayGroup } from '../../lib/time';
+import { useAutoFocus } from '../../lib/useAutoFocus';
+import styles from './Sidebar.module.css';
+
+function RenameField({
+  value,
+  onChange,
+  onSave,
+  onCancel,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  const ref = useAutoFocus<HTMLInputElement>();
+  return (
+    <form
+      className={styles.rename}
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave();
+      }}
+    >
+      <Input
+        ref={ref}
+        size="sm"
+        aria-label="Conversation title"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onSave}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') onCancel();
+        }}
+      />
+    </form>
+  );
+}
+
+function ConversationRow({
+  conversation,
+  onNavigate,
+}: {
+  conversation: ConversationSummary;
+  onNavigate?: () => void;
+}) {
+  const client = useQueryClient();
+  const navigate = useNavigate();
+  const { conversationId } = useParams();
+  const [renaming, setRenaming] = useState(false);
+  const [title, setTitle] = useState(conversation.title);
+  const [confirm, setConfirm] = useState(false);
+  const running =
+    conversation.status === 'running' || conversation.status === 'awaiting-permission';
+
+  const rename = async () => {
+    setRenaming(false);
+    const next = title.trim();
+    if (!next || next === conversation.title) return setTitle(conversation.title);
+    try {
+      await api.renameConversation(conversation.id, next);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  const remove = async () => {
+    try {
+      await api.deleteConversation(conversation.id);
+      client.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>
+        (list ?? []).filter((c) => c.id !== conversation.id),
+      );
+      if (conversationId === conversation.id) void navigate('/');
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  if (renaming) {
+    return (
+      <li className={styles.item}>
+        <RenameField
+          value={title}
+          onChange={setTitle}
+          onSave={() => void rename()}
+          onCancel={() => {
+            setTitle(conversation.title);
+            setRenaming(false);
+          }}
+        />
+      </li>
+    );
+  }
+
+  return (
+    <li className={styles.item}>
+      <NavLink
+        to={`/c/${conversation.id}`}
+        className={({ isActive }) => cx(styles.link, isActive && styles.active)}
+        onClick={onNavigate}
+      >
+        {running && <Pearl size="xs" state="thinking" label="Working" className={styles.running} />}
+        <span className={styles.title}>{conversation.title}</span>
+      </NavLink>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <IconButton
+            size="sm"
+            label={`Options for ${conversation.title}`}
+            tooltip={false}
+            className={styles.more}
+          >
+            <MoreHorizontal />
+          </IconButton>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content align="start">
+          <DropdownMenu.Item icon={<Pencil />} onSelect={() => setRenaming(true)}>
+            Rename
+          </DropdownMenu.Item>
+          <DropdownMenu.Item icon={<Trash2 />} tone="danger" onSelect={() => setConfirm(true)}>
+            Delete
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
+      <AlertDialog.Root open={confirm} onOpenChange={setConfirm}>
+        <AlertDialog.Content tone="danger" icon={<Trash2 />}>
+          <AlertDialog.Header>
+            <AlertDialog.Title>Delete this conversation?</AlertDialog.Title>
+            <AlertDialog.Description>
+              “{conversation.title}” will be removed from Conch. Anything I remembered from it stays
+              in memory.
+            </AlertDialog.Description>
+          </AlertDialog.Header>
+          <AlertDialog.Footer>
+            <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+            <AlertDialog.Action tone="danger" onClick={() => void remove()}>
+              Delete
+            </AlertDialog.Action>
+          </AlertDialog.Footer>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
+    </li>
+  );
+}
+
+const order: DayGroup[] = ['Today', 'Yesterday', 'Previous 7 days', 'Earlier'];
+
+export function Sidebar({
+  onNavigate,
+  collapsible = true,
+}: {
+  onNavigate?: () => void;
+  collapsible?: boolean;
+}) {
+  const { data: conversations, isPending } = useConversations();
+  const { data: app } = useAppState();
+  const toggleSidebar = useUi((s) => s.toggleSidebar);
+  const openSettings = useUi((s) => s.openSettings);
+  const navigate = useNavigate();
+
+  const groups = new Map<DayGroup, ConversationSummary[]>();
+  for (const c of conversations ?? []) {
+    const g = dayGroup(c.updatedAt);
+    groups.set(g, [...(groups.get(g) ?? []), c]);
+  }
+
+  return (
+    <nav className={styles.sidebar} aria-label="Conversations">
+      <div className={styles.brand}>
+        <Pearl size="xs" label={null} />
+        <span className={styles.wordmark}>{app?.persona.name ?? 'Conch'}</span>
+        {collapsible && (
+          <IconButton
+            size="sm"
+            label="Hide sidebar"
+            shortcut="mod+b"
+            onClick={toggleSidebar}
+            className={styles.collapse}
+          >
+            <PanelLeftClose />
+          </IconButton>
+        )}
+      </div>
+      <div className={styles.newChat}>
+        <Tooltip content="New chat" shortcut="mod+shift+o" side="right">
+          <Button
+            variant="surface"
+            block
+            leadingIcon={<SquarePen />}
+            onClick={() => {
+              void navigate('/');
+              onNavigate?.();
+            }}
+            className={styles.newChatButton}
+          >
+            New chat
+          </Button>
+        </Tooltip>
+      </div>
+      <ScrollArea className={styles.scroll}>
+        {!isPending && (conversations?.length ?? 0) === 0 && (
+          <Text size="sm" tone="subtle" className={styles.empty}>
+            Your conversations will appear here.
+          </Text>
+        )}
+        {order.map((group) => {
+          const items = groups.get(group);
+          if (!items?.length) return null;
+          return (
+            <section key={group} className={styles.group} aria-label={group}>
+              <Text as="span" size="xs" weight="medium" tone="subtle" className={styles.groupLabel}>
+                {group}
+              </Text>
+              <ul className={styles.list}>
+                {items.map((c) => (
+                  <ConversationRow key={c.id} conversation={c} onNavigate={onNavigate} />
+                ))}
+              </ul>
+            </section>
+          );
+        })}
+      </ScrollArea>
+      <div className={styles.footer}>
+        <button type="button" className={styles.me} onClick={() => openSettings('about')}>
+          <Avatar size="sm" name={app?.profile.name || 'You'} />
+          <span className={styles.meName}>{app?.profile.name || 'You'}</span>
+        </button>
+        <IconButton size="sm" label="Settings" shortcut="mod+," onClick={() => openSettings()}>
+          <Settings />
+        </IconButton>
+      </div>
+    </nav>
+  );
+}

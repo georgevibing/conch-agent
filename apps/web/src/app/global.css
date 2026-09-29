@@ -1,0 +1,11 @@
+html,
+body,
+#root {
+  block-size: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--nc-canvas);
+}

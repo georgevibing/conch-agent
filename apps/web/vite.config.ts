@@ -1,6 +1,9 @@
-import react from '@vitejs/plugin-react';
+/// <reference types="vitest/config" />
 import { nacreCssModules } from '@conch/nacre/vite';
+import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+
+const gateway = process.env.CONCH_GATEWAY ?? '127.0.0.1:4317';
 
 export default defineConfig({
   plugins: [react()],
@@ -8,8 +11,14 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://127.0.0.1:4317',
-      '/ws': { target: 'ws://127.0.0.1:4317', ws: true },
+      '/api': `http://${gateway}`,
+      '/ws': { target: `ws://${gateway}`, ws: true },
     },
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    css: { modules: { classNameStrategy: 'non-scoped' } },
+    include: ['src/**/*.test.{ts,tsx}'],
   },
 });

@@ -1,0 +1,80 @@
+@layer nacre.components {
+  .chat {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-block-size: 0;
+  }
+
+  .dock {
+    position: relative;
+    padding: 0 var(--nc-space-5) var(--nc-space-3);
+  }
+
+  /* Content fades under the composer instead of being cut off. */
+  .dock::before {
+    content: '';
+    position: absolute;
+    inset: calc(var(--nc-space-8) * -1) 0 auto;
+    block-size: var(--nc-space-8);
+    background: linear-gradient(to bottom, transparent, var(--nc-canvas));
+    pointer-events: none;
+  }
+
+  .composerWrap {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    inline-size: min(46rem, 100%);
+    margin-inline: auto;
+  }
+
+  .hint {
+    padding-block-start: var(--nc-space-1);
+  }
+
+  .issue {
+    animation: nc-surface-in var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .empty {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--nc-space-6);
+    min-block-size: 0;
+    padding: var(--nc-space-8) var(--nc-space-5) var(--nc-space-12);
+    overflow-y: auto;
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .hello {
+    margin-block-end: var(--nc-space-2);
+  }
+
+  .emptyComposer {
+    inline-size: min(40rem, 100%);
+  }
+
+  .suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--nc-space-2);
+    max-inline-size: 40rem;
+  }
+
+  @media (max-width: 640px) {
+    .dock {
+      padding-inline: var(--nc-space-3);
+    }
+
+    .empty {
+      justify-content: flex-end;
+      padding-inline: var(--nc-space-3);
+      padding-block-end: var(--nc-space-4);
+    }
+  }
+}
