@@ -2,11 +2,11 @@
   "name": "@conch/server",
   "version": "0.1.0",
   "private": true,
-  "description": "Conch gateway — bridges the web app to the local Claude Code install.",
+  "description": "Conch gateway \u2014 bridges the web app to the local Claude Code install.",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/main.ts",
-    "start": "tsx src/main.ts",
+    "start": "CONCH_OPEN=${CONCH_OPEN:-1} tsx src/main.ts",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"

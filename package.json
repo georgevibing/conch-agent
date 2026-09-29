@@ -18,7 +18,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check": "pnpm format:check && turbo run lint typecheck test",
-    "a11y": "node scripts/a11y-sweep.mjs"
+    "a11y": "node scripts/a11y-sweep.mjs",
+    "start": "pnpm --filter @conch/web build && pnpm --filter @conch/server start",
+    "dev:mock": "CONCH_ENGINE=mock turbo run dev"
   },
   "devDependencies": {
     "axe-core": "^4.13.0",
