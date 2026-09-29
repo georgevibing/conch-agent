@@ -1,0 +1,102 @@
+# Nacre — design language
+
+> _Nacre_ (mother-of-pearl) is the iridescent layer a mollusc builds inside its shell:
+> thousands of translucent platelets that turn plain light into shifting colour.
+> It's calm, solid, and alive when it moves. That's the brief for every pixel of Conch.
+
+## Principles
+
+1. **Calm by default, alive on contact.** At rest the interface is quiet porcelain.
+   Light only blooms where your attention is — under the pointer, around focus, while
+   the agent is working.
+2. **Solid, not glass.** Surfaces are opaque. Depth comes from layered, tinted
+   shadows and a glazed top edge, never from blur. This keeps text contrast high and
+   rendering cheap.
+3. **Physical motion.** Everything moves on springs. Things arrive by _surfacing_
+   (rising out of soft focus); they leave faster than they came.
+4. **One accent, many hues.** A single accent colour carries meaning; iridescence is
+   decoration and never encodes state.
+5. **Accessible is the baseline.** WCAG 2.2 AA contrast, full keyboard paths, visible
+   focus, 44 px touch targets at `lg`, and every effect degrades under
+   `prefers-reduced-motion` or `lustre = 0`.
+
+## The Lustre material
+
+Nacre's signature. Any element opts in with `data-lustre`; one delegated pointer
+listener (`installLustre`, installed by `NacreProvider`) writes CSS variables, so no
+React re-renders happen on pointer move.
+
+| Layer         | Pseudo                | What you see                                                                                                                              |
+| ------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Rim           | `::before`            | A 1 px pearl edge. A conic spectrum rotates with the pointer's angle around the element, so the edge "catches the light" as you orbit it. |
+| Sheen         | `::after`             | A soft iridescent spotlight under the pointer (thin-film banding perpendicular to the light direction).                                   |
+| Tide ring     | `::after`             | On press, a ring of pearl light ripples out from the press point (animated `--nc-bloom`).                                                 |
+| Ambient orbit | `data-lustre-ambient` | The rim becomes a slowly orbiting band — used when something is _alive_, e.g. the composer while Claude is working.                       |
+
+Knobs per component: `--nc-rim-rest`, `--nc-rim-hover`, `--nc-sheen-size`,
+`--nc-sheen-hover`, `--nc-sheen-blend`. Global intensity: `--nc-lustre` (0–1), set
+from `NacreProvider lustre={…}`.
+
+The pearl spectrum (`--nc-pearl-1…5`) is an accent-tinted pearl followed by aqua,
+periwinkle, lilac and rose, interpolated in Oklab so transitions pass through
+pearly near-white instead of mud.
+
+## Colour
+
+- Authored in **OKLCH**. Every scale is computed in CSS from knobs:
+  `--nc-accent-h`, `--nc-accent-c`, `--nc-neutral-h`, `--nc-neutral-c`.
+- 12-step scales (`--nc-gray-1…12`, `--nc-accent-1…12`) with Radix-style semantics:
+  1–2 backgrounds, 3–5 component fills, 6–8 borders, 9–10 solids, 11–12 text.
+- Light (**Pearl**) and dark (**Abalone**) resolved with `light-dark()` against the
+  root's `color-scheme`, so there is one token definition per value.
+- Accent presets: `coral` (default), `amber`, `kelp`, `lagoon`, `tide`, `iris`,
+  `orchid`, `graphite`. Any `{ hue, chroma }` works.
+- Neutral tints: `porcelain` (warm, default), `slate`, `tinted` (follows accent), `pure`.
+- Semantic tokens are what components use: `--nc-canvas`, `--nc-surface`,
+  `--nc-surface-overlay`, `--nc-surface-sunken`, `--nc-text`, `--nc-text-muted`,
+  `--nc-border`, `--nc-ring`, `--nc-wash-1…3` (translucent hover/press tints).
+
+## Type
+
+- **Geist** (variable) for UI, **Geist Mono** for code, **Instrument Serif** for
+  editorial display moments (`<Heading display>` — empty states, onboarding).
+- Base size 14 px. Tracking tightens as size grows (optical sizing by hand).
+- `text-wrap: pretty` for body and `balance` for headings.
+
+## Space, size, shape
+
+- 4 px grid: `--nc-space-*`.
+- Control heights: 24 / 30 / 36 / 44 px (`xs`…`lg`).
+- Radii scale with `--nc-radius-scale`. Where supported, corners use
+  `corner-shape: squircle` (continuous curvature) with radii re-tuned so the optical
+  size is unchanged.
+
+## Elevation
+
+`--nc-elevation-0…4`: stacked tight + ambient shadows tinted with the neutral hue,
+plus `--nc-glaze-edge`, a 1 px inner top highlight that makes surfaces read as glazed
+porcelain.
+
+## Motion
+
+| Token                         | Use                                             |
+| ----------------------------- | ----------------------------------------------- |
+| `--nc-spring-snappy` (400 ms) | Controls, toggles, press release                |
+| `--nc-spring-soft` (620 ms)   | Surfaces entering, layout shifts                |
+| `--nc-spring-bouncy` (780 ms) | Small confirmations (check-marks, switch thumb) |
+| `--nc-ease-out` + durations   | Colour, opacity, shadow                         |
+
+Springs are real damped-spring curves baked into CSS `linear()`; the same physics are
+exported for JS as `springs` from `@conch/nacre` for the `motion` library. Keyframes:
+`nc-surface-in` / `nc-surface-out` (rise + un-blur), `nc-fade-*`, `nc-shimmer`,
+`nc-breathe`, `nc-spin`. All durations collapse to ~0 under reduced motion.
+
+## Interaction checklist (every interactive component)
+
+- [ ] Hover: subtle fill/shadow change, Lustre where appropriate, `@media (hover: hover)` only
+- [ ] Press: scale ≈ 0.975 with instant ease-in, spring back on release
+- [ ] Focus: `:focus-visible` 2 px accent outline, offset 2 px
+- [ ] Disabled: 45 % opacity, `not-allowed` cursor, no Lustre
+- [ ] Loading: keep dimensions, `aria-busy`
+- [ ] Keyboard path identical to pointer path
+- [ ] Reduced motion and `lustre = 0` both still look finished

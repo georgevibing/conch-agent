@@ -1,0 +1,30 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Introduction" />
+
+# Nacre
+
+**Nacre** is the design language and component library behind **Conch**, a web facade
+for Claude Code.
+
+Nacre surfaces are opaque _glazed porcelain_. Instead of frosted glass, light behaves
+like mother-of-pearl: edges catch an iridescent rim that turns as your pointer moves
+around them, a soft sheen follows the cursor, and every press sends a faint ring of
+pearl light across the surface. At rest, everything is calm.
+
+- **Theme it live** with the toolbar above: mode (Pearl / Abalone), accent, Lustre
+  intensity, corner radius and motion.
+- **Foundations** covers colour, type, elevation, motion and the Lustre material.
+- **Components** are accessible primitives built on Radix.
+- **Patterns** are chat building blocks for the Conch app.
+
+```tsx
+import '@conch/nacre/styles.css';
+import { NacreProvider, Button } from '@conch/nacre';
+
+<NacreProvider accent="coral" storageKey="conch.theme">
+  <Button>Start session</Button>
+</NacreProvider>;
+```
+
+Read the full rationale in `docs/design/NACRE.md`.
