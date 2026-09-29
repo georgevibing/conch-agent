@@ -1,10 +1,9 @@
 import { readdir, readFile, rm } from 'node:fs/promises';
-import { join } from 'node:path';
 
 import { Routine, RoutineRun } from '@conch/protocol';
 import { z } from 'zod';
 
-import { Mutex, writeFileAtomic } from '../lib/fs';
+import { Mutex, safeJoin, writeFileAtomic } from '../lib/fs';
 
 /** What's on disk: the routine minus fields the server computes, plus scheduler bookkeeping. */
 export const StoredRoutine = Routine.omit({
@@ -45,7 +44,7 @@ export class RoutineStore {
     return this.#mutex.run(async () => {
       const parsed = StoredRoutine.parse(routine);
       await writeFileAtomic(
-        join(this.dir, `${parsed.id}.json`),
+        safeJoin(this.dir, `${parsed.id}.json`),
         `${JSON.stringify(parsed, null, 2)}\n`,
       );
       (await this.#load()).set(parsed.id, parsed);
@@ -57,8 +56,8 @@ export class RoutineStore {
     return this.#mutex.run(async () => {
       (await this.#load()).delete(id);
       this.#runs.delete(id);
-      await rm(join(this.dir, `${id}.json`), { force: true });
-      await rm(join(this.dir, `${id}.runs.jsonl`), { force: true });
+      await rm(safeJoin(this.dir, `${id}.json`), { force: true });
+      await rm(safeJoin(this.dir, `${id}.runs.jsonl`), { force: true });
     });
   }
 
@@ -68,7 +67,7 @@ export class RoutineStore {
     if (!runs) {
       runs = [];
       try {
-        const text = await readFile(join(this.dir, `${routineId}.runs.jsonl`), 'utf8');
+        const text = await readFile(safeJoin(this.dir, `${routineId}.runs.jsonl`), 'utf8');
         for (const line of text.split('\n').filter(Boolean)) {
           const parsed = RoutineRun.safeParse(JSON.parse(line));
           if (parsed.success) runs.push(parsed.data);
@@ -91,7 +90,7 @@ export class RoutineStore {
       const kept = runs.slice(-MAX_RUNS);
       this.#runs.set(run.routineId, kept);
       await writeFileAtomic(
-        join(this.dir, `${run.routineId}.runs.jsonl`),
+        safeJoin(this.dir, `${run.routineId}.runs.jsonl`),
         `${kept.map((r) => JSON.stringify(r)).join('\n')}\n`,
       );
       return run;
@@ -110,7 +109,7 @@ export class RoutineStore {
     for (const file of files) {
       try {
         const parsed = StoredRoutine.safeParse(
-          JSON.parse(await readFile(join(this.dir, file), 'utf8')),
+          JSON.parse(await readFile(safeJoin(this.dir, file), 'utf8')),
         );
         if (parsed.success) map.set(parsed.data.id, parsed.data);
       } catch {

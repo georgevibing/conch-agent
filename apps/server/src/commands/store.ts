@@ -1,9 +1,8 @@
 import { mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
-import { join } from 'node:path';
 
 import { CustomCommand } from '@conch/protocol';
 
-import { Mutex, writeFileAtomic } from '../lib/fs';
+import { Mutex, safeJoin, writeFileAtomic } from '../lib/fs';
 
 const STARTERS: Omit<CustomCommand, 'createdAt' | 'updatedAt'>[] = [
   {
@@ -32,7 +31,7 @@ export class CommandStore {
     await this.#seed();
     const files = (await readdir(this.dir)).filter((f) => f.endsWith('.md'));
     const commands = await Promise.all(
-      files.map(async (f) => parse(f.slice(0, -3), await readFile(join(this.dir, f), 'utf8'))),
+      files.map(async (f) => parse(f.slice(0, -3), await readFile(safeJoin(this.dir, f), 'utf8'))),
     );
     return commands
       .filter((c): c is CustomCommand => Boolean(c))
@@ -48,14 +47,14 @@ export class CommandStore {
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       });
-      await writeFileAtomic(join(this.dir, `${command.name}.md`), serialise(command));
+      await writeFileAtomic(safeJoin(this.dir, `${command.name}.md`), serialise(command));
       return command;
     });
   }
 
   remove(name: string): Promise<boolean> {
     return this.#mutex.run(async () => {
-      const path = join(this.dir, `${name}.md`);
+      const path = safeJoin(this.dir, `${name}.md`);
       const exists = await stat(path).then(
         () => true,
         () => false,
@@ -73,7 +72,7 @@ export class CommandStore {
       const now = Date.now();
       for (const starter of STARTERS) {
         await writeFileAtomic(
-          join(this.dir, `${starter.name}.md`),
+          safeJoin(this.dir, `${starter.name}.md`),
           serialise({ ...starter, createdAt: now, updatedAt: now }),
         );
       }

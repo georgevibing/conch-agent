@@ -1,7 +1,7 @@
 import {
   CreateRoutineBody,
   Routine,
-  RoutineTrust,
+  type RoutineTrust,
   Schedule,
   type ConversationEventInput,
   type PermissionMode,
@@ -387,6 +387,7 @@ export class RoutineService {
         'Draft a routine: a task Conch runs automatically on a schedule on this computer (while Conch is running).',
         'Use it when the user wants something done regularly or later ("every morning…", "each Friday…", "remind me at 5pm…").',
         'The user sees a card and turns it on themselves — never claim it is already active.',
+        'Drafts always ask before acting; the user can give a routine more trust from its card. You can’t.',
         'Write title, summary and prompt in this exact style:',
         '- title: 2–5 words, sentence case, no emoji or punctuation at the end. e.g. "Morning briefing".',
         '- summary: one plain sentence (max ~15 words) saying what the user gets, e.g. "A short summary of today’s calendar and the weather."',
@@ -398,7 +399,6 @@ export class RoutineService {
         summary: z.string().max(200),
         prompt: z.string().min(1).max(20_000),
         schedule: Schedule,
-        trust: RoutineTrust.optional(),
       },
       run: async (args) => {
         // Never quietly create a second copy of something the user already has.
@@ -414,7 +414,9 @@ export class RoutineService {
           const routine = await this.create(
             {
               ...(args as { title: string; summary: string; prompt: string; schedule: Schedule }),
-              trust: (args as { trust?: RoutineTrust }).trust ?? 'ask',
+              // Only a person can grant trust — an agent that read something hostile
+              // must not be able to schedule itself an unsupervised future.
+              trust: 'ask',
               timezone: localTimezone(),
               status: 'draft',
             },
@@ -453,20 +455,32 @@ export class RoutineService {
     const update: HostTool = {
       name: 'update_routine',
       description:
-        'Change an existing routine (by id from list_routines): its title, summary, prompt, schedule, or pause/resume it (status "paused"/"active"). Only change what the user asked for.',
+        'Change an existing routine (by id from list_routines): its title, summary, prompt or schedule, or pause it (status "paused"). Only change what the user asked for. You can’t turn routines on — the user does that from the card. Changing the instructions pauses it until the user reviews and turns it back on.',
       input: {
         id: z.string(),
         title: z.string().min(1).max(60).optional(),
         summary: z.string().max(200).optional(),
         prompt: z.string().min(1).max(20_000).optional(),
         schedule: Schedule.optional(),
-        status: z.enum(['active', 'paused']).optional(),
+        status: z.enum(['paused']).optional(),
       },
       run: async (args) => {
         const { id, ...patch } = args as { id: string } & UpdateRoutineBody;
         try {
-          const routine = await this.update(id, patch);
+          const current = await this.#require(id);
+          // New instructions from the agent need a person's review before they
+          // run unattended again, and never keep extra trust.
+          const rewritten = patch.prompt !== undefined && patch.prompt !== current.prompt;
+          const routine = await this.update(id, {
+            ...patch,
+            ...(rewritten && {
+              trust: 'ask',
+              ...(current.status === 'active' && { status: 'paused' as const }),
+            }),
+          });
           card(routine, patch.status === 'paused' ? 'paused' : 'updated');
+          if (rewritten && current.status === 'active')
+            return `Updated “${routine.title}”. Because its instructions changed, it’s paused until the user reviews it and turns it back on — tell them.`;
           return `Updated “${routine.title}” — ${routine.scheduleText}, ${routine.status}.`;
         } catch (error) {
           return `Couldn’t update the routine: ${(error as Error).message}`;

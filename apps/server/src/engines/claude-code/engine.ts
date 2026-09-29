@@ -353,7 +353,7 @@ export class ClaudeCodeEngine implements Engine {
             allowDangerouslySkipPermissions: true,
           }),
           mcpServers: { conch },
-          canUseTool: async (toolName, toolInput, { signal, suggestions, toolUseID }) => {
+          canUseTool: async (toolName, toolInput, { signal, toolUseID }) => {
             // Conch's own tools (memory) are always allowed; the user sees their effects inline.
             if (toolName.startsWith('mcp__conch__'))
               return { behavior: 'allow', updatedInput: toolInput };
@@ -364,12 +364,11 @@ export class ClaudeCodeEngine implements Engine {
             if (decision === 'deny') {
               return { behavior: 'deny', message: 'The user declined this action.' };
             }
-            return {
-              behavior: 'allow',
-              updatedInput: toolInput,
-              ...(decision === 'allow-always' &&
-                suggestions && { updatedPermissions: suggestions }),
-            };
+            // "Always allow" lasts for this conversation only (the manager
+            // remembers it). Claude Code's suggested rules are deliberately not
+            // forwarded: they'd be written to .claude/settings.local.json and
+            // silently apply to every future chat and routine.
+            return { behavior: 'allow', updatedInput: toolInput };
           },
         },
       });

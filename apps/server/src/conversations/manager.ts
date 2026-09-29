@@ -76,6 +76,12 @@ export class ConversationError extends Error {
 /** Host tools are shown through memory events, not as tool calls. */
 const isHostTool = (name: string) => name.startsWith('mcp__conch__');
 
+/** Conversations kept in memory at once (idle ones beyond this are dropped). */
+const MAX_LIVE = 50;
+
+/** How long an unattended run (a routine) waits for a permission answer. */
+const UNATTENDED_PERMISSION_MS = 60 * 60 * 1000;
+
 /**
  * Owns every conversation's live state: the event log, the running turn, and
  * pending permission prompts. Everything observable goes out through `events`.
@@ -324,8 +330,12 @@ export class ConversationManager {
     });
 
     tools.push(
-      ...(this.deps.tools?.({ conversationId, append: (event) => this.#append(live, event) }) ??
-        []),
+      // Unattended runs (routines) don't get the routine tools: a run that read
+      // something hostile must not be able to reschedule or rewrite routines.
+      ...(extras
+        ? []
+        : (this.deps.tools?.({ conversationId, append: (event) => this.#append(live, event) }) ??
+          [])),
       ...(extras?.tools ?? []),
     );
     const resolved = resolveOptions(live.record.options, settings.preferences);
@@ -368,6 +378,11 @@ export class ConversationManager {
             };
             signal.addEventListener('abort', expire, { once: true });
             abort.signal.addEventListener('abort', expire, { once: true });
+            // Nobody is watching an unattended run: after an hour, the answer is no.
+            if (extras) {
+              const timer = setTimeout(expire, UNATTENDED_PERMISSION_MS);
+              timer.unref();
+            }
             this.#append(live, {
               type: 'permission.requested',
               permissionId,
@@ -523,7 +538,12 @@ export class ConversationManager {
 
   async #get(id: string): Promise<Live> {
     const cached = this.#live.get(id);
-    if (cached) return cached;
+    if (cached) {
+      // Most recently used last, so eviction drops the stalest first.
+      this.#live.delete(id);
+      this.#live.set(id, cached);
+      return cached;
+    }
     const record = await this.deps.store.get(id);
     if (!record) throw new ConversationError('not-found', 'Conversation not found.');
     const events = await this.deps.store.events(id);
@@ -535,7 +555,21 @@ export class ConversationManager {
       alwaysAllow: new Set(),
     };
     this.#live.set(id, live);
+    this.#evict();
     return live;
+  }
+
+  /**
+   * Keep memory bounded: forget the least recently used conversations that
+   * are idle (nothing running, nothing waiting on the user). They reload from
+   * disk when opened again.
+   */
+  #evict() {
+    for (const [id, live] of this.#live) {
+      if (this.#live.size <= MAX_LIVE) break;
+      const busy = live.abort || live.extras || live.titling || live.permissions.size > 0;
+      if (!busy) this.#live.delete(id);
+    }
   }
 }
 

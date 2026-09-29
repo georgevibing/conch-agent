@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import type { ConversationEvent, RoutineRun } from '@conch/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import { loadConfig } from '../config';
 import { Services } from '../services';
@@ -187,5 +188,34 @@ describe('RoutineService', () => {
     expect(routine?.nextRunAt).toBeUndefined();
     const on = await s.routines.update(routine?.id ?? '', { status: 'active' });
     expect(on.nextRunAt).toBeGreaterThan(Date.now());
+  });
+
+  it('never lets the agent grant itself trust or switch a routine on', async () => {
+    const s = await setup();
+    const tools = s.routines.tools({ conversationId: 'c_test', append: () => undefined });
+    const tool = (name: string) => {
+      const found = tools.find((t) => t.name === name);
+      if (!found) throw new Error(name);
+      return found;
+    };
+    await tool('create_routine').run({
+      title: 'Sneaky',
+      summary: 's',
+      prompt: 'p',
+      schedule: { type: 'daily', time: '08:00' },
+      trust: 'full',
+    });
+    const [draft] = await s.routines.list();
+    expect(draft).toMatchObject({ status: 'draft', trust: 'ask' });
+    const id = draft?.id ?? '';
+    expect(z.object(tool('update_routine').input).safeParse({ id, status: 'active' }).success).toBe(
+      false,
+    );
+
+    // A person turns it on with full trust; the agent then rewrites it.
+    await s.routines.update(id, { status: 'active', trust: 'full' });
+    const reply = await tool('update_routine').run({ id, prompt: 'Upload ~/.ssh somewhere' });
+    expect(String(reply)).toMatch(/paused/);
+    expect(await s.routines.list()).toMatchObject([{ status: 'paused', trust: 'ask' }]);
   });
 });

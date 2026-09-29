@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync, type StatementSync } from 'node:sqlite';
 
@@ -68,7 +68,13 @@ export class SearchIndex {
   readonly #stmts: Record<string, StatementSync> = {};
 
   constructor(path: string) {
-    if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+    if (path !== ':memory:') {
+      mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+      // The index holds the text of every conversation: owner-only. SQLite
+      // gives the -wal/-shm files the same mode as the database file.
+      if (!existsSync(path)) writeFileSync(path, '', { mode: 0o600 });
+      else chmodSync(path, 0o600);
+    }
     this.#db = new DatabaseSync(path);
     this.#db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;');
     this.#migrate();

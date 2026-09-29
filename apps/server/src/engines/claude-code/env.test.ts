@@ -19,4 +19,12 @@ describe('childEnv', () => {
     expect(env.ANTHROPIC_API_KEY).toBe('k');
     expect('UNSET' in env).toBe(false);
   });
+
+  it('never hands Conch’s own settings (like CONCH_TOKEN) to the agent', () => {
+    process.env.CONCH_TOKEN = 'secret-secret-secret-secret-secret';
+    process.env.CONCH_HOME = '/tmp/x';
+    const env = childEnv();
+    expect(env.CONCH_TOKEN).toBeUndefined();
+    expect(env.CONCH_HOME).toBeUndefined();
+  });
 });

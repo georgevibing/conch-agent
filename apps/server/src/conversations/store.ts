@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { ConversationEvent, type ConversationSummary, type EngineId } from '@conch/protocol';
 
-import { Mutex, readJson, writeFileAtomic, writeJson } from '../lib/fs';
+import { Mutex, readJson, safeJoin, writeFileAtomic, writeJson } from '../lib/fs';
 
 export interface ConversationRecord extends ConversationSummary {
   engine: EngineId;
@@ -41,13 +41,13 @@ export class ConversationStore {
     return this.#mutex.run(async () => {
       (await this.#load()).delete(id);
       await this.#saveIndex();
-      await rm(join(this.dir, `${id}.jsonl`), { force: true });
+      await rm(safeJoin(this.dir, `${id}.jsonl`), { force: true });
     });
   }
 
   async events(id: string): Promise<ConversationEvent[]> {
     try {
-      const text = await readFile(join(this.dir, `${id}.jsonl`), 'utf8');
+      const text = await readFile(safeJoin(this.dir, `${id}.jsonl`), 'utf8');
       return text
         .split('\n')
         .filter(Boolean)
@@ -63,7 +63,7 @@ export class ConversationStore {
 
   saveEvents(id: string, events: ConversationEvent[]): Promise<void> {
     const lines = compact(events).map((e) => JSON.stringify(e));
-    return writeFileAtomic(join(this.dir, `${id}.jsonl`), `${lines.join('\n')}\n`);
+    return writeFileAtomic(safeJoin(this.dir, `${id}.jsonl`), `${lines.join('\n')}\n`);
   }
 
   async #load(): Promise<Map<string, ConversationRecord>> {

@@ -1,10 +1,9 @@
 import { readdir, readFile, rm } from 'node:fs/promises';
-import { join } from 'node:path';
 
 import { Memory, type MemoryKind } from '@conch/protocol';
 
 import { Emitter } from '../lib/emitter';
-import { Mutex, writeFileAtomic } from '../lib/fs';
+import { Mutex, safeJoin, writeFileAtomic } from '../lib/fs';
 import { newId } from '../lib/ids';
 
 /**
@@ -86,7 +85,7 @@ export class MemoryStore {
       const memories = await this.#load();
       const current = memories.get(id);
       if (!current) return undefined;
-      await rm(join(this.dir, `${id}.md`), { force: true });
+      await rm(safeJoin(this.dir, `${id}.md`), { force: true });
       memories.delete(id);
       this.changed.emit();
       return current;
@@ -111,7 +110,7 @@ export class MemoryStore {
   }
 
   async #write(memory: Memory): Promise<Memory> {
-    await writeFileAtomic(join(this.dir, `${memory.id}.md`), serialise(memory));
+    await writeFileAtomic(safeJoin(this.dir, `${memory.id}.md`), serialise(memory));
     (await this.#load()).set(memory.id, memory);
     this.changed.emit();
     return memory;
@@ -127,7 +126,7 @@ export class MemoryStore {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
     for (const file of files) {
-      const memory = parse(await readFile(join(this.dir, file), 'utf8'));
+      const memory = parse(await readFile(safeJoin(this.dir, file), 'utf8'));
       if (memory) map.set(memory.id, memory);
     }
     this.#cache = map;

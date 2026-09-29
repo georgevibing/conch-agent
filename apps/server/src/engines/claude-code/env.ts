@@ -17,10 +17,17 @@ const SESSION_VARS = [
   /^CLAUDE_PID$/,
 ];
 
+/**
+ * Conch's own configuration never reaches the agent: it could otherwise read
+ * CONCH_TOKEN (a sign-in credential) with a simple `env`.
+ */
+const CONCH_VARS = /^CONCH_/;
+
 export function childEnv(extra: Record<string, string | undefined> = {}): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
-    if (value === undefined || SESSION_VARS.some((re) => re.test(key))) continue;
+    if (value === undefined || CONCH_VARS.test(key) || SESSION_VARS.some((re) => re.test(key)))
+      continue;
     env[key] = value;
   }
   for (const [key, value] of Object.entries(extra)) {
