@@ -124,7 +124,10 @@ describe('password sign-in', () => {
     const file = await readFile(join(home, 'access.json'), 'utf8');
     expect(file).not.toContain(PASSWORD);
     expect(file).toMatch(/"passwordHash": "scrypt\$131072\$8\$1\$/);
-    expect((await stat(join(home, 'access.json'))).mode & 0o777).toBe(0o600);
+    // Windows has no POSIX modes; the user profile's permissions do this job there.
+    if (process.platform !== 'win32') {
+      expect((await stat(join(home, 'access.json'))).mode & 0o777).toBe(0o600);
+    }
   });
 
   it('signs in from another device with a hardened cookie, and signs out', async () => {

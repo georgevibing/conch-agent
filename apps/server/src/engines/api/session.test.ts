@@ -33,14 +33,21 @@ describe('the transcript on disk', () => {
     expect(await sessions.load(id, 'anthropic-api')).toEqual(messages);
   });
 
-  it('keeps a transcript as private as a chat (0600)', async () => {
-    const { store: sessions, dir } = await store();
-    const id = TranscriptStore.newId();
-    await sessions.save(id, { provider: 'openrouter', messages: [{ role: 'user', content: 'x' }] });
+  // Windows has no POSIX modes; the user profile's permissions do this job there.
+  it.skipIf(process.platform === 'win32')(
+    'keeps a transcript as private as a chat (0600)',
+    async () => {
+      const { store: sessions, dir } = await store();
+      const id = TranscriptStore.newId();
+      await sessions.save(id, {
+        provider: 'openrouter',
+        messages: [{ role: 'user', content: 'x' }],
+      });
 
-    const mode = (await stat(join(dir, `${id}.json`))).mode & 0o777;
-    expect(mode).toBe(0o600);
-  });
+      const mode = (await stat(join(dir, `${id}.json`))).mode & 0o777;
+      expect(mode).toBe(0o600);
+    },
+  );
 
   it('reads as empty rather than failing when the file is gone or corrupt', async () => {
     const { store: sessions, dir } = await store();
