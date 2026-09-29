@@ -9,6 +9,15 @@
     color: light-dark(oklch(0.62 0.15 42), oklch(0.72 0.14 42));
   }
 
+  /* OpenAI's mark is black on light and white on dark, as OpenAI shows it. */
+  .logo[data-provider='openai'] {
+    color: var(--nc-text);
+  }
+
+  .logo[data-provider='openrouter'] {
+    color: light-dark(oklch(0.55 0.2 277), oklch(0.72 0.14 277));
+  }
+
   /* ── Trigger chip (shared with ModePicker via composition) ─────────── */
   .chip {
     --nc-sheen-size: 60px;
@@ -100,9 +109,22 @@
   }
 
   /* ── Panel ──────────────────────────────────────────────────────────── */
+  /* A column: when the space above the composer runs short, the model list
+     gives way first, so the dials and the footer always stay in view. */
   .panel {
+    display: flex;
+    flex-direction: column;
     inline-size: min(22rem, calc(100vw - 24px));
     overflow: hidden;
+  }
+
+  .panel > * {
+    flex: none;
+  }
+
+  .panel > .list {
+    flex: 0 1 auto;
+    min-block-size: 7rem;
   }
 
   .list {
@@ -456,5 +478,101 @@
 
   .row[data-secondary] .rowLabel {
     font-size: var(--nc-text-sm);
+  }
+}
+
+@layer nacre.components {
+  /* ── Search ─────────────────────────────────────────────────────────── */
+  .search {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-2) var(--nc-space-3);
+    border-block-end: 1px solid var(--nc-border-subtle);
+  }
+
+  .searchIcon {
+    flex-shrink: 0;
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .searchInput {
+    flex: 1;
+    min-inline-size: 0;
+    block-size: var(--nc-control-sm);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    outline: none;
+  }
+
+  .searchInput::placeholder {
+    color: var(--nc-text-subtle);
+  }
+
+  /* The field's own clear button; ours is keyboard-reachable and labelled. */
+  .searchInput::-webkit-search-cancel-button {
+    appearance: none;
+  }
+
+  .search:focus-within .searchIcon {
+    color: var(--nc-text-accent);
+  }
+
+  .searchClear {
+    appearance: none;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    inline-size: 1.375rem;
+    block-size: 1.375rem;
+    padding: 0;
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-wash-2);
+    color: var(--nc-text-muted);
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .searchClear > svg {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    stroke-width: 2.4;
+  }
+
+  @media (hover: hover) {
+    .searchClear:hover {
+      background: var(--nc-wash-3);
+      color: var(--nc-text);
+    }
+  }
+
+  .searchClear:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 1px;
+  }
+
+  .searchMore,
+  .searchEmpty,
+  .groupMessage {
+    margin: 0;
+    padding: var(--nc-space-1-5) var(--nc-space-2-5);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+    line-height: var(--nc-leading-snug);
+  }
+
+  .searchEmpty {
+    padding-block: var(--nc-space-5);
+    font-size: var(--nc-text-sm);
+    text-align: center;
   }
 }

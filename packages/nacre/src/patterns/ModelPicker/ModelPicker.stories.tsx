@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { expect, userEvent, within } from 'storybook/test';
 
 import { Stack } from '../../components/Stack';
-import { claudeCode, DemoToolbar, efforts, futureProviders } from './fixtures';
+import { claudeCode, connectedProviders, DemoToolbar, efforts } from './fixtures';
 import { ModelPicker, type ModelPickerProps } from './ModelPicker';
 import { ProviderLogo } from './ProviderLogo';
 
@@ -44,7 +44,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The composer’s model chip. Models are grouped by the provider that serves them; the popover also holds thinking effort and fast mode, and lets people save the combination as their default.',
+          'The composer’s model chip. Every connected provider’s models sit in one list, grouped by provider; once there are more than fit at a glance a search field appears, and typing anywhere in the list searches every provider at once. The popover also holds thinking effort and fast mode, and lets people save the combination as their default.',
       },
     },
   },
@@ -87,8 +87,33 @@ export const SecondarySelected: Story = {
 
 export const Loading: Story = { render: (args) => <Stateful {...args} loading open /> };
 
-export const MoreProvidersSoon: Story = {
-  render: (args) => <Stateful {...args} providers={futureProviders} open />,
+export const EveryProvider: Story = {
+  name: 'Every connected provider',
+  render: (args) => <Stateful {...args} providers={connectedProviders} open />,
+};
+
+export const Searching: Story = {
+  name: 'Search by name',
+  render: (args) => <Stateful {...args} providers={connectedProviders} open />,
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await expect(await body.findByRole('radio', { name: /Opus 5.5/ })).toHaveFocus();
+    // Typing anywhere in the list searches every provider.
+    await userEvent.keyboard('qwen');
+    await expect(body.getByRole('searchbox', { name: 'Search models' })).toHaveValue('qwen');
+    await expect(body.getByRole('radio', { name: /Qwen3 Coder/ })).toBeInTheDocument();
+    await expect(body.queryByRole('radio', { name: /Opus 5.5/ })).toBeNull();
+  },
+};
+
+export const NothingMatches: Story = {
+  tags: ['!autodocs'],
+  render: (args) => <Stateful {...args} providers={connectedProviders} open />,
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.type(await body.findByRole('searchbox', { name: 'Search models' }), 'zzz');
+    await expect(body.getByText(/No model matches/)).toBeInTheDocument();
+  },
 };
 
 export const InToolbar: Story = {

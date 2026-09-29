@@ -63,7 +63,10 @@ export interface ProviderCardProps extends Omit<ComponentProps<'article'>, 'titl
   /** Four or five words: "Claude, on this computer". */
   tagline: string;
   state: ProviderStateValue;
-  /** In use for new conversations. Exactly one provider is. */
+  /**
+   * The default for new chats. Every connected provider can be picked in the
+   * model picker; exactly one is the default, and says so.
+   */
   active?: boolean;
   /** Quiet facts when it's connected: "Amazon Bedrock · 2.1.284". */
   meta?: ReactNode;
@@ -73,7 +76,7 @@ export interface ProviderCardProps extends Omit<ComponentProps<'article'>, 'titl
   highlights?: string[];
   /** Early support: said out loud rather than discovered. */
   experimental?: boolean;
-  /** The one thing to do: "Connect", "Use this", "Install". */
+  /** The one thing to do: "Connect", "Make default", "Install". */
   action?: ProviderAction;
   /** A quieter second action: "Check again", "Remove key". */
   secondary?: ProviderAction;
@@ -83,8 +86,8 @@ export interface ProviderCardProps extends Omit<ComponentProps<'article'>, 'titl
 
 /**
  * A provider at a glance: what it is, whether it's connected, and the one
- * button that moves it forward. The provider in use wears a ring and says so,
- * so "which one am I talking to?" is answered before you read a word.
+ * button that moves it forward. Every connected provider is available at
+ * once; the default for new chats wears a quiet badge.
  */
 export function ProviderCard({
   name,
@@ -138,7 +141,7 @@ export function ProviderCard({
           </h3>
           {active && (
             <Badge tone="accent" size="sm">
-              In use
+              Default
             </Badge>
           )}
           {experimental && (

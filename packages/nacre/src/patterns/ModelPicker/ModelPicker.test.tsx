@@ -1,10 +1,10 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { expectAccessible, renderNacre } from '../../test/render';
-import { claudeCode, efforts } from './fixtures';
-import { ModelPicker, type ModelPickerProps } from './ModelPicker';
+import { claudeCode, connectedProviders, efforts } from './fixtures';
+import { matchWords, ModelPicker, type ModelPickerProps } from './ModelPicker';
 import { ProviderLogo } from './ProviderLogo';
 
 function setup(overrides: Partial<ModelPickerProps> = {}) {
@@ -112,5 +112,73 @@ describe('ProviderLogo', () => {
     );
     expect(container.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
     expect(screen.getByRole('img', { name: 'OpenAI' })).toBeInTheDocument();
+  });
+});
+
+describe('ModelPicker with every provider', () => {
+  const many = () =>
+    setup({ providers: connectedProviders, model: 'opus', onModelChange: vi.fn() });
+
+  it('groups every provider and says why one has nothing to offer', async () => {
+    many();
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: /Model: Opus 5.5 \(Claude Code\)/ }));
+    for (const name of [/^Claude Code/, /^OpenRouter$/, /^Codex$/, /^Anthropic API$/])
+      expect(await screen.findByRole('group', { name })).toBeInTheDocument();
+    expect(screen.getByText(/Anthropic didn’t answer in time/)).toBeInTheDocument();
+  });
+
+  it('finds a model by name across providers, and picks the best hit with Enter', async () => {
+    const { props } = many();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /Model:/ }));
+    await screen.findByRole('radio', { name: /Opus 5.5/ });
+    // Typing in the list moves into the search field.
+    await user.keyboard('gpt');
+    const search = screen.getByRole('searchbox', { name: 'Search models' });
+    expect(search).toHaveFocus();
+    expect(search).toHaveValue('gpt');
+    const list = within(screen.getByRole('radiogroup', { name: 'Model' }));
+    const hits = list.getAllByRole('radio').map((r) => r.textContent);
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.filter((text) => !/GPT/.test(text ?? ''))).toEqual([]);
+    // Secondary ("More models") ones are searched too.
+    await user.clear(search);
+    await user.type(search, 'free qwen');
+    expect(screen.getByRole('radio', { name: /Qwen3 235B \(free\)/ })).toBeInTheDocument();
+    await user.keyboard('{Enter}');
+    expect(props.onModelChange).toHaveBeenCalledWith('qwen/qwen3-235b-a22b:free');
+  });
+
+  it('clears the search on the first Escape and says when nothing matches', async () => {
+    many();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /Model:/ }));
+    const search = await screen.findByRole('searchbox', { name: 'Search models' });
+    await user.type(search, 'zzz');
+    expect(screen.getByText('No model matches “zzz”.')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(search).toHaveValue('');
+    expect(screen.getByRole('radio', { name: /Opus 5.5/ })).toBeInTheDocument();
+  });
+
+  it('is accessible while searching', async () => {
+    const { container } = many();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /Model:/ }));
+    await user.type(await screen.findByRole('searchbox', { name: 'Search models' }), 'qwen');
+    await expectAccessible(container.ownerDocument.body);
+  });
+
+  it('matches every word, case- and accent-insensitively', () => {
+    expect(matchWords('Qwen: Qwen3 Coder', 'coder QWEN')).toMatchObject({
+      ranges: [
+        [0, 4],
+        [12, 17],
+      ],
+    });
+    expect(matchWords('Mistral Médium', 'medium')).not.toBeNull();
+    expect(matchWords('Opus 5.5', 'sonnet')).toBeNull();
   });
 });

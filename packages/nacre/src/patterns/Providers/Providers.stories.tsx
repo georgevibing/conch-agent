@@ -37,7 +37,7 @@ export const Gallery: Story = {
             provider.state === 'ready'
               ? provider.active
                 ? { label: 'Check again', onClick: () => {} }
-                : { label: 'Use this', onClick: () => {} }
+                : { label: 'Make default', onClick: () => {} }
               : provider.state === 'not-installed'
                 ? { label: 'How to install', onClick: () => {} }
                 : { label: 'Connect', onClick: () => {} }
@@ -84,7 +84,7 @@ export const Active: Story = {
   render: () => (
     <Stack gap={4} style={{ maxInlineSize: '40rem' }}>
       <Heading level={3} size="sm" tone="muted">
-        The one in use says so
+        The default says so
       </Heading>
       <ProviderCard
         name="Claude Code"

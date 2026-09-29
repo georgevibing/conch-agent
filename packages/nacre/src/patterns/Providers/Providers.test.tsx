@@ -8,7 +8,7 @@ import { ProviderCard, providerStateMeta, ProviderStatusBadge } from './Provider
 import { SecretField } from './SecretField';
 
 describe('ProviderCard', () => {
-  it('says which provider is in use, and what each one needs', async () => {
+  it('says which provider is the default, and what each one needs', async () => {
     const { container } = renderNacre(
       <>
         {providers.map((provider, index) => (
@@ -17,13 +17,13 @@ describe('ProviderCard', () => {
       </>,
     );
     const claude = screen.getByRole('article', { name: 'Claude Code' });
-    expect(claude).toHaveTextContent('In use');
+    expect(claude).toHaveTextContent('Default');
     expect(claude).toHaveTextContent('Claude Max · ada@example.com · 2.1.284');
     // Codex isn't here yet, and says so rather than looking broken.
     const codex = screen.getByRole('article', { name: 'Codex' });
     expect(codex).toHaveTextContent('Early support');
     expect(codex).toHaveTextContent('Codex isn’t on this computer yet.');
-    expect(screen.getByRole('article', { name: 'Anthropic API' })).not.toHaveTextContent('In use');
+    expect(screen.getByRole('article', { name: 'Anthropic API' })).not.toHaveTextContent('Default');
     await expectAccessible(container);
   });
 

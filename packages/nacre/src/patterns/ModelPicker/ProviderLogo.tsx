@@ -1,6 +1,7 @@
 import type { ComponentProps } from 'react';
 
 import { cx } from '../../utils/cx';
+import { brandMarks, OPENAI } from '../Integrations/brands';
 import styles from './ModelPicker.module.css';
 
 export type ProviderId = 'claude' | 'openai' | 'openrouter' | 'generic';
@@ -17,6 +18,12 @@ const claudeRays = Array.from({ length: 12 }, (_, i) => ({
   angle: i * 30 + (i % 2 ? 4 : -3),
   outer: i % 3 === 0 ? 10.6 : i % 3 === 1 ? 9.2 : 9.9,
 }));
+
+/** Real marks, where a provider has one we bundle (the Claude sunburst is drawn below). */
+const marks: Partial<Record<ProviderId, string>> = {
+  openai: OPENAI,
+  openrouter: brandMarks.openrouter,
+};
 
 /** Small mark that identifies which provider serves a model. */
 export function ProviderLogo({
@@ -50,6 +57,8 @@ export function ProviderLogo({
             />
           ))}
         </g>
+      ) : marks[provider] ? (
+        <path fill="currentColor" d={marks[provider]} />
       ) : (
         <>
           <rect
@@ -70,7 +79,7 @@ export function ProviderLogo({
             fill="currentColor"
             fontFamily="var(--nc-font-sans)"
           >
-            {provider === 'openai' ? 'O' : provider === 'openrouter' ? 'R' : '•'}
+            •
           </text>
         </>
       )}
