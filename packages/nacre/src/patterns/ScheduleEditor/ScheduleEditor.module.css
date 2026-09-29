@@ -1,0 +1,267 @@
+@layer nacre.components {
+  .editor {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-4);
+    min-inline-size: 0;
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .headIcon {
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: var(--nc-text-accent);
+  }
+
+  .label {
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: -0.006em;
+  }
+
+  .grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-3);
+  }
+
+  .field {
+    display: flex;
+    flex: 1 1 10rem;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+  }
+
+  .wide {
+    flex-basis: 100%;
+  }
+
+  .fieldLabel {
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-muted);
+  }
+
+  .time input {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Native date/time pickers: keep the calendar/clock glyph calm and on-theme. */
+  .field input::-webkit-calendar-picker-indicator {
+    opacity: 0.5;
+    cursor: pointer;
+  }
+
+  .stepper {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .count {
+    inline-size: 5rem;
+  }
+
+  .count input {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    -moz-appearance: textfield;
+  }
+
+  .count input::-webkit-inner-spin-button,
+  .count input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* ── Day chips ─────────────────────────────────────────────────────── */
+  .days {
+    display: flex;
+    gap: var(--nc-space-1-5);
+  }
+
+  .day {
+    appearance: none;
+    display: grid;
+    flex: 1 1 0;
+    place-items: center;
+    max-inline-size: 2.75rem;
+    aspect-ratio: 1;
+    padding: 0;
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface-sunken);
+    color: var(--nc-text-muted);
+    box-shadow: inset 0 0 0 1px var(--nc-border);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      box-shadow var(--nc-duration-base) var(--nc-ease-out),
+      transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  @media (hover: hover) {
+    .day:hover:not([data-on]) {
+      color: var(--nc-text);
+      box-shadow: inset 0 0 0 1px var(--nc-border-strong);
+    }
+  }
+
+  .day:active {
+    transform: scale(0.92);
+    transition-duration: var(--nc-duration-instant);
+  }
+
+  .day[data-on] {
+    background: linear-gradient(180deg, oklch(1 0 0 / 0.14), transparent 60%), var(--nc-accent-9);
+    color: var(--nc-accent-contrast);
+    box-shadow:
+      inset 0 1px 0 0 oklch(1 0 0 / 0.2),
+      0 2px 6px -2px color-mix(in oklch, var(--nc-accent-9) 60%, transparent);
+  }
+
+  .day:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  /* ── Custom (cron) ─────────────────────────────────────────────────── */
+  .cron {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+  }
+
+  .cronInput input {
+    font-family: var(--nc-font-mono);
+    letter-spacing: 0.02em;
+  }
+
+  .mono {
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+  }
+
+  .example {
+    appearance: none;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--nc-text-accent);
+    font: inherit;
+    text-decoration: underline;
+    text-decoration-color: color-mix(in oklch, currentColor 35%, transparent);
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+
+  .example:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+    border-radius: var(--nc-radius-xs);
+  }
+
+  .note,
+  .hint {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .hint {
+    color: var(--nc-text-muted);
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  /* ── Preview ───────────────────────────────────────────────────────── */
+  .preview {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background:
+      radial-gradient(
+        120% 140% at 0% 0%,
+        color-mix(in oklch, var(--nc-accent-9) 6%, transparent),
+        transparent 60%
+      ),
+      var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .preview[data-loading] {
+    opacity: 0.6;
+  }
+
+  .previewText {
+    margin: 0;
+    font-size: var(--nc-text-lg);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: -0.01em;
+    color: var(--nc-text);
+    text-wrap: balance;
+  }
+
+  .next {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+  }
+
+  .nextLabel {
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--nc-text-subtle);
+  }
+
+  .nextList {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .nextList li:first-child {
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .zone {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .zone svg {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  .callout {
+    margin: 0;
+  }
+}

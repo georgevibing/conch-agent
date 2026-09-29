@@ -1,0 +1,382 @@
+@layer nacre.components {
+  /* ── Shared ────────────────────────────────────────────────────────── */
+  .iconTile {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, oklch(1 0 0 / 0.5), transparent 70%), var(--nc-accent-3);
+    color: var(--nc-accent-11);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--nc-accent-9) 14%, transparent),
+      var(--nc-glaze-edge);
+  }
+
+  .iconTile svg {
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+  }
+
+  .text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    letter-spacing: -0.008em;
+    color: var(--nc-text);
+  }
+
+  .summary {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  .clamp {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+
+  .dim {
+    color: var(--nc-text-subtle);
+  }
+
+  /* ── List card ─────────────────────────────────────────────────────── */
+  .card {
+    --nc-rim-rest: 0.18;
+    --nc-rim-hover: 0.8;
+    --nc-sheen-size: 240px;
+    --nc-sheen-hover: 0.18;
+
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+    transition:
+      box-shadow var(--nc-duration-slow) var(--nc-ease-out),
+      transform var(--nc-spring-soft-duration) var(--nc-spring-soft),
+      --nc-rim-near var(--nc-duration-slower) var(--nc-ease-out),
+      --nc-sheen var(--nc-duration-slower) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .card:hover {
+      transform: translateY(-1px);
+    }
+
+    .card:not([data-attention]):hover {
+      box-shadow:
+        inset 0 0 0 1px var(--nc-border-subtle),
+        var(--nc-glaze-edge),
+        var(--nc-elevation-3);
+    }
+
+    .card[data-attention]:hover {
+      box-shadow:
+        inset 3px 0 0 0 var(--attention),
+        inset 0 0 0 1px color-mix(in oklch, var(--attention) 35%, transparent),
+        var(--nc-glaze-edge),
+        var(--nc-elevation-3);
+    }
+  }
+
+  .card:active:not(:has(.toggle:active)) {
+    transform: scale(0.995);
+    transition-duration: var(--nc-duration-fast);
+  }
+
+  .card:has(.open:focus-visible) {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  /* A run that needs you gets a warm edge on the leading side (Lustre owns the pseudo-elements). */
+  .card[data-attention] {
+    --attention: light-dark(
+      oklch(0.72 0.15 var(--nc-warning-h)),
+      oklch(0.78 0.14 var(--nc-warning-h))
+    );
+    box-shadow:
+      inset 3px 0 0 0 var(--attention),
+      inset 0 0 0 1px color-mix(in oklch, var(--attention) 35%, transparent),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+  }
+
+  .card[data-attention='failed'] {
+    --attention: light-dark(oklch(0.6 0.19 var(--nc-danger-h)), oklch(0.7 0.17 var(--nc-danger-h)));
+  }
+
+  .card[data-status='paused'] .iconTile,
+  .card[data-status='draft'] .iconTile {
+    background: var(--nc-gray-3);
+    color: var(--nc-text-subtle);
+  }
+
+  .card[data-status='paused'] .title {
+    color: var(--nc-text-muted);
+  }
+
+  /* The title button stretches over the whole card so any tap opens it. */
+  .open {
+    appearance: none;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .open::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+  }
+
+  .open:focus-visible {
+    outline: none;
+  }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-1-5) var(--nc-space-2);
+    margin: var(--nc-space-1) 0 0;
+    font-size: var(--nc-text-xs);
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    padding: 0.125rem var(--nc-space-2);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-wash-2);
+    color: var(--nc-text-muted);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .chip svg {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  .lastRun {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+    margin: var(--nc-space-1) 0 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+  }
+
+  .lastText {
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .lastRun[data-status='needs-you'] .lastText,
+  .lastRun[data-status='failed'] .lastText {
+    color: var(--nc-text);
+  }
+
+  .lastIcon {
+    display: inline-grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  .lastIcon svg {
+    inline-size: 100%;
+    block-size: 100%;
+    stroke-width: 2.4;
+  }
+
+  .lastIcon[data-tone='success'] {
+    color: light-dark(oklch(0.55 0.13 var(--nc-success-h)), oklch(0.75 0.13 var(--nc-success-h)));
+  }
+  .lastIcon[data-tone='info'] {
+    color: light-dark(oklch(0.55 0.13 var(--nc-info-h)), oklch(0.75 0.12 var(--nc-info-h)));
+  }
+  .lastIcon[data-tone='neutral'] {
+    color: var(--nc-text-subtle);
+  }
+
+  .toggle {
+    position: relative;
+    z-index: 2;
+    align-self: center;
+  }
+
+  /* ── Proposal (inline in a chat) ───────────────────────────────────── */
+  .proposal {
+    --nc-rim-rest: 0.45;
+    --nc-rim-hover: 0.9;
+    --nc-sheen-size: 260px;
+    --nc-sheen-hover: 0.16;
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    max-inline-size: 34rem;
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-2);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
+    transition:
+      padding var(--nc-duration-slow) var(--nc-ease-out),
+      box-shadow var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .proposal[data-status='active'],
+  .proposal[data-status='paused'],
+  .proposal[data-status='completed'],
+  .proposal[data-status='deleted'] {
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-3) var(--nc-space-4);
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .proposal[data-status='deleted'] {
+    opacity: 0.7;
+  }
+
+  .kicker {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--nc-text-accent);
+  }
+
+  .kicker svg {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+  }
+
+  .proposal[data-status='active'] .kicker {
+    color: light-dark(oklch(0.52 0.12 var(--nc-success-h)), oklch(0.78 0.12 var(--nc-success-h)));
+  }
+
+  .proposal[data-status='paused'] .kicker,
+  .proposal[data-status='deleted'] .kicker,
+  .proposal[data-status='completed'] .kicker {
+    color: var(--nc-text-subtle);
+  }
+
+  .proposal[data-status='active'] .kicker svg {
+    animation: check-pop var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .proposalBody {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-3);
+  }
+
+  .proposal:not([data-status='draft']) .iconTile {
+    inline-size: 2rem;
+    block-size: 2rem;
+  }
+
+  .proposal:not([data-status='draft']) .summary {
+    display: none;
+  }
+
+  .schedule {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-1-5);
+    margin: var(--nc-space-1) 0 0;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .schedule svg {
+    flex-shrink: 0;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    margin-block-start: 0.2em;
+    color: var(--nc-text-accent);
+  }
+
+  .schedule .dim {
+    font-weight: var(--nc-weight-regular);
+  }
+
+  .inlineOpen {
+    align-self: center;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .spacer {
+    flex: 1;
+  }
+
+  @keyframes check-pop {
+    from {
+      transform: scale(0.4);
+      opacity: 0;
+    }
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .proposal,
+    .proposal[data-status='active'] .kicker svg {
+      animation: none;
+    }
+  }
+}

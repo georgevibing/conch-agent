@@ -1,0 +1,217 @@
+@layer nacre.components {
+  .timeline {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-5);
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+  }
+
+  .day {
+    margin: 0;
+    padding-inline: var(--nc-space-2);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--nc-text-subtle);
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .item {
+    position: relative;
+  }
+
+  .row {
+    appearance: none;
+    display: grid;
+    grid-template-columns: 4.5rem 0.75rem minmax(0, 1fr) auto;
+    align-items: start;
+    gap: var(--nc-space-2);
+    inline-size: 100%;
+    padding: var(--nc-space-2-5) var(--nc-space-2);
+    border: 0;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  button.row {
+    cursor: pointer;
+  }
+
+  @media (hover: hover) {
+    button.row:hover {
+      background: var(--nc-wash-1);
+    }
+
+    button.row:hover .chevron {
+      color: var(--nc-text-muted);
+      transform: translateX(2px);
+    }
+  }
+
+  button.row:active {
+    background: var(--nc-wash-2);
+  }
+
+  button.row:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  .time {
+    padding-block-start: 0.1rem;
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-subtle);
+    white-space: nowrap;
+  }
+
+  /* A thin vertical rail with a dot, so the history reads as a timeline. */
+  .rail {
+    position: relative;
+    align-self: stretch;
+  }
+
+  .rail::before {
+    content: '';
+    position: absolute;
+    /* Row padding is outside the rail's box; extend through it so rows join. */
+    inset-block: calc(-1 * var(--nc-space-2-5) - 1px);
+    inset-inline-start: 50%;
+    inline-size: 1px;
+    background: var(--nc-border-subtle);
+  }
+
+  .item:first-child .rail::before {
+    inset-block-start: 0.55rem;
+  }
+
+  .item:last-child .rail::before {
+    inset-block-end: auto;
+    block-size: 0.6rem;
+  }
+
+  .rail::after {
+    content: '';
+    position: absolute;
+    inset-block-start: 0.35rem;
+    inset-inline-start: 50%;
+    inline-size: 7px;
+    block-size: 7px;
+    border-radius: 50%;
+    translate: -50% 0;
+    background: var(--nc-gray-8);
+    box-shadow: 0 0 0 3px var(--nc-canvas);
+  }
+
+  .rail[data-status='succeeded']::after {
+    background: light-dark(
+      oklch(0.6 0.13 var(--nc-success-h)),
+      oklch(0.72 0.13 var(--nc-success-h))
+    );
+  }
+  .rail[data-status='needs-you']::after {
+    background: light-dark(
+      oklch(0.72 0.15 var(--nc-warning-h)),
+      oklch(0.78 0.14 var(--nc-warning-h))
+    );
+  }
+  .rail[data-status='failed']::after {
+    background: light-dark(oklch(0.6 0.19 var(--nc-danger-h)), oklch(0.7 0.17 var(--nc-danger-h)));
+  }
+  .rail[data-status='running']::after {
+    background: light-dark(oklch(0.6 0.14 var(--nc-info-h)), oklch(0.72 0.12 var(--nc-info-h)));
+    animation: nc-breathe 1.6s var(--nc-ease-in-out) infinite;
+  }
+
+  .main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+  }
+
+  .top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-1-5) var(--nc-space-2);
+  }
+
+  .note {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .outcome {
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text);
+    text-wrap: pretty;
+  }
+
+  .outcome[data-status='skipped'],
+  .outcome[data-status='missed'],
+  .outcome[data-status='nothing-to-do'],
+  .outcome[data-status='stopped'] {
+    color: var(--nc-text-muted);
+  }
+
+  .chevron {
+    align-self: center;
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: var(--nc-text-subtle);
+    transition:
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-8) var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text-subtle);
+    text-align: center;
+  }
+
+  .empty svg {
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+  }
+
+  .empty p {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rail[data-status='running']::after {
+      animation: none;
+    }
+  }
+}

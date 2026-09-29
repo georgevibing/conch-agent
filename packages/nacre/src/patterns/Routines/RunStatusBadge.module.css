@@ -1,0 +1,9 @@
+@layer nacre.components {
+  .badge {
+    white-space: nowrap;
+  }
+
+  .badge[data-status='needs-you'] {
+    font-weight: var(--nc-weight-semibold);
+  }
+}
