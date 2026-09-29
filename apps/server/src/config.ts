@@ -21,8 +21,11 @@ const Env = z.object({
         .map((h) => h.trim().toLowerCase())
         .filter(Boolean),
     ),
-  /** Required when remote access is enabled. */
-  CONCH_TOKEN: z.string().min(16).optional(),
+  /**
+   * Legacy: a shared access key from the environment. Prefer creating access
+   * keys in Settings → Security (they're hashed at rest and revocable).
+   */
+  CONCH_TOKEN: z.string().min(16, 'CONCH_TOKEN must be at least 16 characters.').optional(),
   CONCH_HOME: z.string().default(join(homedir(), '.conch')),
   /** Force an engine regardless of preferences (e.g. `mock` for UI work and tests). */
   CONCH_ENGINE: EngineId.optional(),
@@ -47,16 +50,13 @@ const LOOPBACK = new Set(['127.0.0.1', '::1', 'localhost']);
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const config = Env.parse(env);
   config.CONCH_HOME = resolve(config.CONCH_HOME);
-  if (!LOOPBACK.has(config.CONCH_HOST)) {
-    if (!config.CONCH_ALLOW_REMOTE) {
-      throw new Error(
-        `Refusing to bind to ${config.CONCH_HOST}: Conch can run commands as you. ` +
-          'Set CONCH_ALLOW_REMOTE=1 and CONCH_TOKEN to opt in (prefer an SSH tunnel or Tailscale).',
-      );
-    }
-    if (!config.CONCH_TOKEN) {
-      throw new Error('CONCH_TOKEN (16+ characters) is required when CONCH_ALLOW_REMOTE=1.');
-    }
+  // Other devices are always refused until sign-in is set up (see security.ts),
+  // so listening on the network is safe — but still an explicit opt-in.
+  if (!LOOPBACK.has(config.CONCH_HOST) && !config.CONCH_ALLOW_REMOTE) {
+    throw new Error(
+      `Refusing to listen on ${config.CONCH_HOST}: Conch can run commands as you. ` +
+        'Run `pnpm start:network` (or set CONCH_ALLOW_REMOTE=1) to opt in — or, better, use Tailscale: see docs/SECURITY.md.',
+    );
   }
   return config;
 }

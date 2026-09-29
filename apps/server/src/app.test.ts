@@ -1,4 +1,4 @@
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -68,19 +68,40 @@ describe('gateway HTTP', () => {
     const same = await app.inject({
       method: 'PATCH',
       url: '/api/settings',
-      headers: { origin: 'http://localhost:5173' },
+      headers: { host: 'localhost:5173', origin: 'http://localhost:5173' },
       payload: {},
     });
     expect(same.statusCode).toBe(200);
   });
 
-  it('requires the token in remote mode', async () => {
+  it('treats a legacy CONCH_TOKEN as an access key', async () => {
     const { app } = await setup({ CONCH_TOKEN: 'a-very-long-secret-token' });
     close = () => app.close();
     expect((await app.inject('/api/state')).statusCode).toBe(401);
-    const ok = await app.inject('/api/state?token=a-very-long-secret-token');
-    expect(ok.statusCode).toBe(200);
-    expect(ok.headers['set-cookie']).toContain('HttpOnly');
+    // Never accepted in the URL, where it would land in logs and history.
+    expect((await app.inject('/api/state?token=a-very-long-secret-token')).statusCode).toBe(401);
+    const bearer = await app.inject({
+      url: '/api/state',
+      headers: { authorization: 'Bearer a-very-long-secret-token' },
+    });
+    expect(bearer.statusCode).toBe(200);
+  });
+
+  it('never turns a URL into a path outside its folder', async () => {
+    const { app, home } = await setup();
+    close = () => app.close();
+    const victim = join(home, 'victim.md');
+    await writeFile(victim, 'keep me');
+    for (const url of [
+      '/api/commands/..%2Fvictim',
+      '/api/conversations/..%2Fvictim',
+      '/api/memories/..%2F..%2Fvictim',
+      '/api/routines/..%2Fvictim',
+    ]) {
+      const res = await app.inject({ method: 'DELETE', url });
+      expect(res.statusCode, url).toBeGreaterThanOrEqual(400);
+    }
+    expect(await readFile(victim, 'utf8')).toBe('keep me');
   });
 
   it('manages memories', async () => {

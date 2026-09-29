@@ -2,6 +2,8 @@ import { join } from 'node:path';
 
 import type { EngineId, LoginState, ServerEvent } from '@conch/protocol';
 
+import { AccessStore } from './auth/store';
+import { Gatekeeper } from './security';
 import type { Config } from './config';
 import { CommandStore } from './commands/store';
 import { ConversationManager } from './conversations/manager';
@@ -37,6 +39,11 @@ async function turnCosts(store: ConversationStore) {
 export class Services {
   readonly broadcast = new Emitter<ServerEvent>();
   readonly settings: SettingsStore;
+  /** Who may sign in (`~/.conch/access.json`). */
+  readonly access: AccessStore;
+  readonly gate: Gatekeeper;
+  /** Files in CONCH_HOME whose permissions couldn't be tightened (see `secureHome`). */
+  homeProblems: string[] = [];
   readonly memory: MemoryStore;
   readonly commands: CommandStore;
   readonly routines: RoutineService;
@@ -49,6 +56,8 @@ export class Services {
 
   constructor(readonly config: Config) {
     this.settings = new SettingsStore(config.CONCH_HOME);
+    this.access = new AccessStore(config.CONCH_HOME);
+    this.gate = new Gatekeeper(config, this.access);
     this.memory = new MemoryStore(join(config.CONCH_HOME, 'memory'));
     this.commands = new CommandStore(join(config.CONCH_HOME, 'commands'));
     this.engines = new Map<EngineId, Engine>([

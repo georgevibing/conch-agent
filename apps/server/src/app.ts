@@ -7,7 +7,9 @@ import {
   ApiKeyBody,
   AppState,
   ClientCommand,
+  CommandName,
   CreateMemoryBody,
+  Id,
   LoginCodeBody,
   PROTOCOL_VERSION,
   CreateRoutineBody,
@@ -29,6 +31,7 @@ import type { z } from 'zod';
 import { ConversationError } from './conversations/manager';
 import { preview } from './routines/schedule';
 import { RoutineError } from './routines/service';
+import { registerAuthRoutes } from './auth/routes';
 import { registerSecurity } from './security';
 import { SERVER_VERSION, type Services } from './services';
 
@@ -60,10 +63,36 @@ function sendError(reply: FastifyReply, error: unknown) {
 export async function buildApp(services: Services) {
   const { config } = services;
   const app = Fastify({
-    logger: config.CONCH_LOG_LEVEL === 'silent' ? false : { level: config.CONCH_LOG_LEVEL },
+    logger:
+      config.CONCH_LOG_LEVEL === 'silent'
+        ? false
+        : {
+            level: config.CONCH_LOG_LEVEL,
+            // Never log query strings (search terms, legacy tokens) or headers.
+            serializers: {
+              req: (req: { method: string; url: string }) => ({
+                method: req.method,
+                url: req.url.split('?')[0],
+              }),
+            },
+          },
   });
-  registerSecurity(app, config);
-  await app.register(fastifyWebsocket);
+  const { gate } = services;
+  registerSecurity(app, gate);
+  // 1 MB per message is plenty for a 200k-character prompt; ws defaults to 100 MiB.
+  await app.register(fastifyWebsocket, { options: { maxPayload: 1_000_000 } });
+  registerAuthRoutes(app, services, gate);
+
+  // Every `:id` / `:name` in a URL is checked before any handler sees it, so
+  // `..%2F..%2Fanything` can never become a path on disk.
+  app.addHook('preValidation', async (request, reply) => {
+    const params = request.params as Record<string, string> | undefined;
+    if (params?.id !== undefined && !Id.safeParse(params.id).success)
+      return reply.code(404).send({ error: 'not-found', message: 'Not found.' });
+    const name = params?.name === undefined ? undefined : CommandName.safeParse(params.name);
+    if (name && !name.success)
+      return reply.code(400).send({ error: 'bad-request', message: name.error.issues[0]?.message });
+  });
 
   const appState = async () => {
     const settings = await services.settings.get();
@@ -277,8 +306,18 @@ export async function buildApp(services: Services) {
   });
 
   // ── Live stream ────────────────────────────────────────────────────────
-  app.get('/ws', { websocket: true }, (socket) => {
+  app.get('/ws', { websocket: true }, (socket, request) => {
     const subscribed = new Set<string>();
+    // Signing this device out (or its session expiring) closes the socket.
+    const session = request.access?.kind === 'session' ? request.access.session : undefined;
+    const untrack = session ? gate.track(session.id, socket) : undefined;
+    socket.on('close', () => untrack?.());
+    const stillSignedIn = async () => {
+      const resolved = await gate.resolve(request);
+      if (typeof resolved === 'object') return true;
+      socket.close(4401, 'Signed out');
+      return false;
+    };
     const send = (event: ServerEvent) => {
       if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(event));
     };
@@ -306,11 +345,13 @@ export async function buildApp(services: Services) {
         });
       }
       const command = parsed.data;
+      if (!(await stillSignedIn())) return;
       try {
         switch (command.type) {
           case 'ping':
             return send({ type: 'pong' });
           case 'conversation.subscribe': {
+            if (subscribed.size >= 200) subscribed.delete(subscribed.values().next().value ?? '');
             subscribed.add(command.conversationId);
             const events = await services.conversations.eventsAfter(
               command.conversationId,

@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "start": "CONCH_OPEN=${CONCH_OPEN:-1} tsx src/main.ts",
+    "conch": "tsx src/cli.ts",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"

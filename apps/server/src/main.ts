@@ -1,12 +1,16 @@
 import { execFile } from 'node:child_process';
 
 import { buildApp } from './app';
+import { checkup, secureHome, workspaceRules } from './auth/checkup';
+import { exposure } from './auth/network';
 import { loadConfig } from './config';
 import { Services } from './services';
 
 const config = loadConfig();
 const services = new Services(config);
+services.homeProblems = await secureHome(config.CONCH_HOME);
 const app = await buildApp(services);
+await services.gate.hosts.discover();
 
 try {
   await app.listen({ host: config.CONCH_HOST, port: config.CONCH_PORT });
@@ -25,6 +29,22 @@ await services.routines.start();
 
 const url = `http://${config.CONCH_HOST === '127.0.0.1' ? 'localhost' : config.CONCH_HOST}:${config.CONCH_PORT}`;
 console.warn(`\n  🐚  Conch is listening at ${url}\n`);
+
+// Say out loud anything that makes this setup unsafe.
+const findings = checkup({
+  config,
+  access: await services.access.get(),
+  permissionMode: (await services.settings.get()).preferences.permissionMode,
+  secure: exposure(config) === 'local',
+  homeProblems: services.homeProblems,
+  tailscale: services.gate.hosts.tailscale,
+  workspaceRules: await workspaceRules(await services.settings.workspace()),
+}).filter((item) => item.level === 'danger' || item.level === 'warn');
+for (const item of findings) {
+  console.warn(`  ${item.level === 'danger' ? '⛔' : '⚠️ '}  ${item.title}\n      ${item.detail}`);
+  if (item.command) console.warn(`      → ${item.command}`);
+}
+if (findings.length) console.warn('\n  Settings → Security in Conch has the details.\n');
 if (config.CONCH_OPEN && process.platform === 'darwin') execFile('open', [url]);
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
