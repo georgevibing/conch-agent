@@ -1,0 +1,27 @@
+@layer nacre.components {
+  .root {
+    --hl-bg: color-mix(in oklch, var(--nc-accent-9) 16%, transparent);
+    --hl-fg: var(--nc-accent-12);
+  }
+
+  .root[data-tone='strong'] {
+    --hl-bg: color-mix(in oklch, var(--nc-accent-9) 30%, transparent);
+  }
+
+  .mark {
+    padding-inline: 0.08em;
+    margin-inline: -0.08em;
+    border-radius: var(--nc-radius-xs);
+    background: var(--hl-bg);
+    color: var(--hl-fg);
+    font-weight: var(--nc-weight-medium);
+    box-decoration-break: clone;
+  }
+
+  @media (forced-colors: active) {
+    .mark {
+      background: Mark;
+      color: MarkText;
+    }
+  }
+}

@@ -36,6 +36,15 @@ export interface CommandPaletteProps {
   shouldFilter?: boolean;
   /** Hide the keyboard hint footer. */
   hideFooter?: boolean;
+  /** Replaces the default keyboard hints in the footer. */
+  footer?: ReactNode;
+  /** A pane beside the results (e.g. a preview of the selected item). Hidden on narrow screens. */
+  aside?: ReactNode;
+  /** `lg` makes room for an `aside`. */
+  size?: 'md' | 'lg';
+  /** Controlled selected item `value`. */
+  value?: string;
+  onValueChange?: (value: string) => void;
   children: ReactNode;
   className?: string;
 }
@@ -96,6 +105,11 @@ function CommandPaletteRoot({
   empty = 'No results found.',
   shouldFilter,
   hideFooter = false,
+  footer,
+  aside,
+  size = 'md',
+  value,
+  onValueChange,
   children,
   className,
 }: CommandPaletteProps) {
@@ -132,13 +146,22 @@ function CommandPaletteRoot({
         <DialogPrimitive.Overlay className={dialogStyles.veil} />
         <DialogPrimitive.Content
           data-lustre=""
+          data-size={size}
+          data-aside={aside ? '' : undefined}
           aria-describedby={undefined}
           className={cx(dialogStyles.content, styles.content, className)}
         >
           <VisuallyHidden.Root asChild>
             <DialogPrimitive.Title>{title}</DialogPrimitive.Title>
           </VisuallyHidden.Root>
-          <Command label={title} loop shouldFilter={shouldFilter} className={styles.command}>
+          <Command
+            label={title}
+            loop
+            shouldFilter={shouldFilter}
+            value={value}
+            onValueChange={onValueChange}
+            className={styles.command}
+          >
             <div className={styles.inputRow}>
               <span className={styles.searchIcon} aria-hidden>
                 {loading ? <Spinner size="sm" label={null} /> : <Search />}
@@ -151,24 +174,33 @@ function CommandPaletteRoot({
               />
               <Kbd keys="esc" size="sm" aria-hidden />
             </div>
-            <Command.List className={styles.list} aria-busy={loading || undefined}>
-              <SelectionGlide />
-              {loading && <Command.Loading className={styles.loading}>Searching…</Command.Loading>}
-              {!loading && <Command.Empty className={styles.empty}>{empty}</Command.Empty>}
-              {children}
-            </Command.List>
+            <div className={styles.body}>
+              <Command.List className={styles.list} aria-busy={loading || undefined}>
+                <SelectionGlide />
+                {loading && (
+                  <Command.Loading className={styles.loading}>Searching…</Command.Loading>
+                )}
+                {!loading && <Command.Empty className={styles.empty}>{empty}</Command.Empty>}
+                {children}
+              </Command.List>
+              {aside && <div className={styles.aside}>{aside}</div>}
+            </div>
             {!hideFooter && (
-              <div className={styles.footer} aria-hidden>
-                <span>
-                  <Kbd keys={['up']} size="sm" />
-                  <Kbd keys={['down']} size="sm" /> navigate
-                </span>
-                <span>
-                  <Kbd keys="enter" size="sm" /> select
-                </span>
-                <span>
-                  <Kbd keys="esc" size="sm" /> close
-                </span>
+              <div className={styles.footer}>
+                {footer ?? (
+                  <>
+                    <span aria-hidden>
+                      <Kbd keys={['up']} size="sm" />
+                      <Kbd keys={['down']} size="sm" /> navigate
+                    </span>
+                    <span aria-hidden>
+                      <Kbd keys="enter" size="sm" /> select
+                    </span>
+                    <span aria-hidden>
+                      <Kbd keys="esc" size="sm" /> close
+                    </span>
+                  </>
+                )}
               </div>
             )}
           </Command>
@@ -191,6 +223,10 @@ export interface CommandPaletteItemProps extends Omit<
   shortcut?: string | string[];
   /** Secondary text shown after the label, e.g. a path or timestamp. */
   hint?: ReactNode;
+  /** A second line under the label, e.g. a matching snippet. */
+  description?: ReactNode;
+  /** A quieter, indented item that belongs to the one above (e.g. more matches in a chat). */
+  inset?: boolean;
   children: ReactNode;
 }
 
@@ -198,19 +234,38 @@ function CommandPaletteItem({
   icon,
   shortcut,
   hint,
+  description,
+  inset,
   className,
   children,
   ...props
 }: CommandPaletteItemProps) {
   return (
-    <Command.Item className={cx(styles.item, className)} {...props}>
+    <Command.Item
+      className={cx(styles.item, className)}
+      data-description={description != null ? '' : undefined}
+      data-inset={inset || undefined}
+      {...props}
+    >
       {icon != null && (
         <span className={styles.icon} aria-hidden>
           {icon}
         </span>
       )}
-      <span className={styles.label}>{children}</span>
-      {hint != null && <span className={styles.hint}>{hint}</span>}
+      {description != null ? (
+        <span className={styles.text}>
+          <span className={styles.line}>
+            <span className={styles.label}>{children}</span>
+            {hint != null && <span className={styles.hint}>{hint}</span>}
+          </span>
+          <span className={styles.description}>{description}</span>
+        </span>
+      ) : (
+        <>
+          <span className={styles.label}>{children}</span>
+          {hint != null && <span className={styles.hint}>{hint}</span>}
+        </>
+      )}
       {shortcut && <Kbd keys={shortcut} size="sm" aria-hidden />}
     </Command.Item>
   );

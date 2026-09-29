@@ -157,3 +157,42 @@ export const AsyncResults: Story = {
   tags: ['!autodocs'],
   render: () => <AsyncSearch />,
 };
+
+/** Search with a preview pane: two-line results, inset follow-up hits, and an `aside`. */
+export const WithPreview: Story = {
+  render: () => (
+    <>
+      <Text tone="muted">Search palette</Text>
+      <CommandPalette
+        defaultOpen
+        hotkey={null}
+        size="lg"
+        shouldFilter={false}
+        search="redeploy"
+        placeholder="Search chats and messages…"
+        aside={
+          <div style={{ padding: 16 }}>
+            <Text weight="semibold">Redeploy the staging stack</Text>
+            <Text size="sm" tone="muted">
+              The preview of the selected result goes here.
+            </Text>
+          </div>
+        }
+        footer={<span style={{ flex: 1 }}>3 messages in 1 chat</span>}
+      >
+        <CommandPalette.Group heading="Messages">
+          <CommandPalette.Item
+            icon={<MessageSquare />}
+            hint="3 matches · 2h"
+            description="How do I redeploy the staging stack after changing the env vars?"
+          >
+            Redeploy the staging stack
+          </CommandPalette.Item>
+          <CommandPalette.Item icon={<FileCode2 />} inset>
+            …raise HEALTH_TIMEOUT to 90 and redeploy.
+          </CommandPalette.Item>
+        </CommandPalette.Group>
+      </CommandPalette>
+    </>
+  ),
+};

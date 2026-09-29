@@ -11,3 +11,27 @@
     border: 0 !important;
   }
 }
+
+@layer nacre.utilities {
+  /* A brief glow that says "you landed here" (set by find/search, removed after). */
+  [data-nc-flash] {
+    border-radius: var(--nc-radius-lg);
+    animation: nc-flash 1.8s var(--nc-ease-out) both;
+  }
+
+  @keyframes nc-flash {
+    0%,
+    30% {
+      box-shadow:
+        0 0 0 6px color-mix(in oklch, var(--nc-accent-9) 22%, transparent),
+        0 0 0 1px color-mix(in oklch, var(--nc-accent-9) 45%, transparent);
+      background-color: color-mix(in oklch, var(--nc-accent-9) 6%, transparent);
+    }
+    100% {
+      box-shadow:
+        0 0 0 14px transparent,
+        0 0 0 1px transparent;
+      background-color: transparent;
+    }
+  }
+}

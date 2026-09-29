@@ -1,5 +1,12 @@
 import { ArrowDown } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from 'react';
 
 import { Button } from '../../components/Button';
 import { cx } from '../../utils/cx';
@@ -10,6 +17,8 @@ export interface MessageListProps extends ComponentProps<'div'> {
   'aria-label'?: string;
   /** Distance from the bottom (px) within which the view stays pinned. */
   stickThreshold?: number;
+  /** Layered over the scrolling log (e.g. a find bar and its match rail). */
+  overlay?: ReactNode;
 }
 
 /**
@@ -21,6 +30,7 @@ export function MessageList({
   children,
   className,
   stickThreshold = 48,
+  overlay,
   'aria-label': ariaLabel = 'Conversation',
   ...props
 }: MessageListProps) {
@@ -75,6 +85,7 @@ export function MessageList({
           {children}
         </div>
       </div>
+      {overlay}
       {showJump && (
         <div className={styles.jump}>
           <Button

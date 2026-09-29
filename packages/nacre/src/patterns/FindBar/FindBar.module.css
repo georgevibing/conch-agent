@@ -1,0 +1,137 @@
+@layer nacre.components {
+  .bar {
+    --fb-h: 2.5rem;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    inline-size: min(24rem, calc(100vw - 2rem));
+    block-size: var(--fb-h);
+    padding-inline: var(--nc-space-3) var(--nc-space-1);
+    border-radius: var(--nc-radius-full);
+    corner-shape: round;
+    background: var(--nc-surface-overlay);
+    box-shadow:
+      var(--nc-glaze-edge),
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-3);
+    animation: fb-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+    transition: box-shadow var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .bar:focus-within {
+    box-shadow:
+      var(--nc-glaze-edge),
+      inset 0 0 0 1px color-mix(in oklch, var(--nc-accent-9) 55%, transparent),
+      0 0 0 3.5px color-mix(in oklch, var(--nc-accent-9) 16%, transparent),
+      var(--nc-elevation-3);
+  }
+
+  .icon {
+    flex-shrink: 0;
+    inline-size: 1rem;
+    block-size: 1rem;
+    stroke-width: 1.85;
+    color: var(--nc-text-subtle);
+  }
+
+  .input {
+    flex: 1;
+    min-inline-size: 0;
+    block-size: 100%;
+    padding: 0 var(--nc-space-1);
+    border: 0;
+    background: transparent;
+    font: inherit;
+    font-size: var(--nc-text-md);
+    color: var(--nc-text);
+    outline: none;
+  }
+
+  .input::placeholder {
+    color: var(--nc-text-subtle);
+  }
+
+  .input::-webkit-search-cancel-button {
+    display: none;
+  }
+
+  .count {
+    flex-shrink: 0;
+    min-inline-size: 3.5rem;
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+    text-align: end;
+    white-space: nowrap;
+    color: var(--nc-text-subtle);
+  }
+
+  .bar[data-empty] .count {
+    color: var(--nc-text-muted);
+  }
+
+  .bar[data-empty] {
+    animation: fb-nudge var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .divider {
+    inline-size: 1px;
+    block-size: 1.125rem;
+    margin-inline: var(--nc-space-1);
+    background: var(--nc-border-subtle);
+  }
+
+  .rail {
+    position: absolute;
+    inset-block: var(--nc-space-1);
+    inset-inline-end: 1px;
+    inline-size: 6px;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .tick {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-start: calc(var(--tick-y) * 100%);
+    block-size: 3px;
+    border-radius: var(--nc-radius-full);
+    background: color-mix(in oklch, var(--nc-accent-9) 55%, transparent);
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .tick[data-current] {
+    background: var(--nc-accent-9);
+    block-size: 4px;
+    box-shadow: 0 0 0 1px var(--nc-surface);
+    z-index: 1;
+  }
+
+  @keyframes fb-in {
+    from {
+      opacity: 0;
+      transform: translateY(-6px) scale(0.97);
+      filter: blur(3px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+      filter: none;
+    }
+  }
+
+  @keyframes fb-nudge {
+    30% {
+      transform: translateX(-3px);
+    }
+    60% {
+      transform: translateX(2px);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bar,
+    .bar[data-empty] {
+      animation: none;
+    }
+  }
+}

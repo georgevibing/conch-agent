@@ -1,0 +1,15 @@
+/*
+ * Find-in-page marks, painted with the CSS Custom Highlight API. These are
+ * global by nature (highlight names are document-wide), hence a plain sheet.
+ */
+@layer nacre.components {
+  ::highlight(nc-find) {
+    background-color: color-mix(in oklch, var(--nc-accent-9) 26%, transparent);
+    color: inherit;
+  }
+
+  ::highlight(nc-find-current) {
+    background-color: var(--nc-accent-9);
+    color: var(--nc-accent-contrast);
+  }
+}

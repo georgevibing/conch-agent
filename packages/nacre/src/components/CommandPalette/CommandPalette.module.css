@@ -8,10 +8,48 @@
     max-block-size: min(32rem, calc(100dvh - 20%));
   }
 
+  .content[data-size='lg'] {
+    --dialog-w: 52rem;
+    inset-block-start: 12%;
+    max-block-size: min(38rem, calc(100dvh - 14%));
+  }
+
   .command {
     display: flex;
     flex-direction: column;
     min-block-size: 0;
+  }
+
+  .body {
+    display: flex;
+    min-block-size: 0;
+  }
+
+  .body > .list {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .content[data-aside] .list {
+    block-size: 26rem;
+    max-block-size: calc(100dvh - 14% - 7rem);
+  }
+
+  .aside {
+    display: flex;
+    flex-direction: column;
+    inline-size: 45%;
+    flex-shrink: 0;
+    min-block-size: 0;
+    border-inline-start: 1px solid var(--nc-border-subtle);
+    background: var(--nc-wash-1);
+    overflow: hidden;
+  }
+
+  @media (max-width: 760px) {
+    .aside {
+      display: none;
+    }
   }
 
   .inputRow {
@@ -146,6 +184,62 @@
   .item[data-selected='true'] .icon {
     color: var(--nc-text-accent);
     transform: scale(1.04);
+  }
+
+  .item[data-description] {
+    align-items: flex-start;
+    padding-block: var(--nc-space-2);
+  }
+
+  .item[data-description] .icon {
+    margin-block-start: 0.0625rem;
+  }
+
+  .item[data-inset] {
+    min-block-size: 2rem;
+    padding-inline-start: calc(var(--nc-space-2-5) + 1.75rem + var(--nc-space-3));
+    gap: var(--nc-space-2);
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  .item[data-inset] .icon {
+    inline-size: 1rem;
+    block-size: 1rem;
+    background: none;
+    box-shadow: none;
+    color: var(--nc-text-subtle);
+  }
+
+  .item[data-inset] .icon > svg {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+  }
+
+  .text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .description {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+    overflow-wrap: anywhere;
+  }
+
+  .line {
+    display: flex;
+    align-items: baseline;
+    gap: var(--nc-space-3);
+    min-inline-size: 0;
   }
 
   .label {
