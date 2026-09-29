@@ -8,7 +8,9 @@ import type {
   Usage,
 } from '@conch/protocol';
 
-import type { Engine, PermissionDecision, ResolvedOptions } from '../engines/types';
+import type { PermissionMode } from '@conch/protocol';
+
+import type { Engine, HostTool, PermissionDecision, ResolvedOptions } from '../engines/types';
 import { Emitter } from '../lib/emitter';
 import { newId } from '../lib/ids';
 import { buildSystemAppend } from '../memory/prompt';
@@ -23,8 +25,34 @@ interface PendingPermission {
   toolName: string;
 }
 
+/** Per-turn additions used by routines (and future automations). */
+export interface TurnExtras {
+  /** Appended after the usual personality/memory prompt. */
+  systemExtra?: string;
+  tools?: HostTool[];
+  /** Overrides the conversation's permission mode for this turn. */
+  permissionMode?: PermissionMode;
+  onStatus?: (status: ConversationStatus) => void;
+}
+
+export interface TurnResult {
+  outcome: 'success' | 'interrupted' | 'error';
+  usage?: Usage;
+  error?: string;
+  /** Text of the last assistant message in the turn. */
+  finalText: string;
+}
+
+/** Tools every conversation gets from other parts of Conch (e.g. routines). */
+export type ToolProvider = (ctx: {
+  conversationId: string;
+  /** Add an event to the conversation's log (e.g. an inline routine card). */
+  append: (event: ConversationEventInput) => void;
+}) => HostTool[];
+
 interface Live {
   record: ConversationRecord;
+  extras?: TurnExtras;
   events: ConversationEvent[];
   seq: number;
   abort?: AbortController;
@@ -59,6 +87,9 @@ export class ConversationManager {
       settings: SettingsStore;
       memory: MemoryStore;
       engine: () => Engine;
+      tools?: ToolProvider;
+      /** Extra system-prompt context for every turn (e.g. the user's routines). */
+      context?: () => Promise<string>;
     },
   ) {}
 
@@ -153,6 +184,48 @@ export class ConversationManager {
     return summary(live.record);
   }
 
+  /**
+   * Start a conversation programmatically (a routine run). Resolves once the
+   * turn has started, with a promise for its result.
+   */
+  async start(input: {
+    title: string;
+    text: string;
+    options?: TurnOptions;
+    origin: NonNullable<ConversationRecord['origin']>;
+    extras: TurnExtras;
+  }): Promise<{ conversationId: string; result: Promise<TurnResult> }> {
+    const engine = this.deps.engine();
+    const now = Date.now();
+    const record: ConversationRecord = {
+      id: newId('c'),
+      title: input.title,
+      preview: input.text.slice(0, 140),
+      createdAt: now,
+      updatedAt: now,
+      status: 'idle',
+      options: clean(input.options ?? {}),
+      origin: input.origin,
+      engine: engine.id,
+    };
+    const live: Live = {
+      record,
+      events: [],
+      seq: 0,
+      permissions: new Map(),
+      alwaysAllow: new Set(),
+    };
+    this.#live.set(record.id, live);
+    await this.deps.store.upsert(record);
+    this.events.emit({ type: 'conversation.updated', conversation: summary(record) });
+    this.#append(live, { type: 'user.message', messageId: newId('u'), text: input.text });
+    live.abort = new AbortController();
+    live.extras = input.extras;
+    this.#setStatus(live, 'running');
+    await this.#persist(live);
+    return { conversationId: record.id, result: this.#runTurn(live, engine, input.text) };
+  }
+
   /** Change a conversation's model/effort/mode without sending a message. */
   async configure(id: string, options: TurnOptions) {
     const live = await this.#get(id);
@@ -184,7 +257,7 @@ export class ConversationManager {
     pending.resolve(decision);
   }
 
-  async #runTurn(live: Live, engine: Engine, prompt: string) {
+  async #runTurn(live: Live, engine: Engine, prompt: string): Promise<TurnResult> {
     const abort = live.abort ?? new AbortController();
     const conversationId = live.record.id;
     const settings = await this.deps.settings.get();
@@ -192,6 +265,9 @@ export class ConversationManager {
     const started = new Map<string, number>();
     let outcome: 'success' | 'interrupted' | 'error' = 'success';
     let completed: { usage?: Usage; error?: string } | undefined;
+    const extras = live.extras;
+    let finalText = '';
+    let finalMessageId: string | undefined;
 
     const tools = memoryTools({
       store: this.deps.memory,
@@ -208,20 +284,34 @@ export class ConversationManager {
       },
     });
 
+    tools.push(
+      ...(this.deps.tools?.({ conversationId, append: (event) => this.#append(live, event) }) ??
+        []),
+      ...(extras?.tools ?? []),
+    );
+    const resolved = resolveOptions(live.record.options, settings.preferences);
+    if (extras?.permissionMode) resolved.permissionMode = extras.permissionMode;
+
     try {
       const stream = engine.runTurn({
         conversationId,
         prompt,
         resumeId: live.record.resumeId,
-        systemAppend: buildSystemAppend({
-          persona: settings.persona,
-          profile: settings.profile,
-          memories,
-          autoMemory: settings.preferences.autoMemory,
-        }),
+        systemAppend: [
+          buildSystemAppend({
+            persona: settings.persona,
+            profile: settings.profile,
+            memories,
+            autoMemory: settings.preferences.autoMemory,
+          }),
+          await this.deps.context?.(),
+          extras?.systemExtra,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
         cwd: await this.deps.settings.workspace(),
         tools,
-        options: resolveOptions(live.record.options, settings.preferences),
+        options: resolved,
         signal: abort.signal,
         requestPermission: (request, signal) => {
           if (live.alwaysAllow.has(request.toolName)) return Promise.resolve('allow');
@@ -258,6 +348,18 @@ export class ConversationManager {
             live.record = { ...live.record, resumeId: event.resumeId };
             break;
           case 'text':
+            if (event.messageId !== finalMessageId) {
+              finalMessageId = event.messageId;
+              finalText = '';
+            }
+            finalText += event.delta;
+            this.#append(live, {
+              type: 'assistant.delta',
+              messageId: event.messageId,
+              kind: 'text',
+              delta: event.delta,
+            });
+            break;
           case 'thinking':
             this.#append(live, {
               type: 'assistant.delta',
@@ -348,7 +450,10 @@ export class ConversationManager {
       await this.#persist(live);
       for (const event of tail) this.events.emit({ type: 'conversation.event', event });
       this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
+      live.extras?.onStatus?.(status);
+      live.extras = undefined;
     }
+    return { outcome, usage: completed?.usage, error: completed?.error, finalText };
   }
 
   /** Append to the log and broadcast — or, if `defer` is given, collect for later broadcast. */
@@ -366,6 +471,7 @@ export class ConversationManager {
 
   #setStatus(live: Live, status: ConversationStatus) {
     if (live.record.status === status) return;
+    live.extras?.onStatus?.(status);
     live.record = { ...live.record, status };
     this.#append(live, { type: 'status', status });
     this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
@@ -395,8 +501,17 @@ export class ConversationManager {
 }
 
 function summary(record: ConversationRecord): ConversationSummary {
-  const { id, title, preview, createdAt, updatedAt, status } = record;
-  return { id, title, preview, createdAt, updatedAt, status, options: record.options ?? {} };
+  const { id, title, preview, createdAt, updatedAt, status, origin } = record;
+  return {
+    id,
+    title,
+    preview,
+    createdAt,
+    updatedAt,
+    status,
+    options: record.options ?? {},
+    ...(origin && { origin }),
+  };
 }
 
 /** Drop unset keys so "no override" is stored as absence, not `undefined`. */

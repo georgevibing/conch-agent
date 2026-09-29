@@ -46,6 +46,13 @@ export type TranscriptItem =
     }
   | { kind: 'memory'; id: string; memoryId: string; content: string; action: 'saved' | 'forgotten' }
   | {
+      kind: 'routine';
+      id: string;
+      routineId: string;
+      action: 'proposed' | 'updated' | 'paused' | 'deleted';
+      title: string;
+    }
+  | {
       kind: 'turn-end';
       id: string;
       outcome: 'success' | 'interrupted' | 'error';
@@ -268,6 +275,20 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
       return { ...base, notice: event.message };
     case 'options':
       return { ...base, options: event.options };
+    case 'routine':
+      return {
+        ...base,
+        items: [
+          ...items,
+          {
+            kind: 'routine',
+            id: `routine-${event.seq}`,
+            routineId: event.routineId,
+            action: event.action,
+            title: event.title,
+          },
+        ],
+      };
   }
 }
 

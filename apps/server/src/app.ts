@@ -10,8 +10,11 @@ import {
   CreateMemoryBody,
   LoginCodeBody,
   PROTOCOL_VERSION,
+  CreateRoutineBody,
   RenameConversationBody,
   SaveCommandBody,
+  SchedulePreviewBody,
+  UpdateRoutineBody,
   StartLoginBody,
   UpdateMemoryBody,
   UpdateSettingsBody,
@@ -21,6 +24,8 @@ import Fastify, { type FastifyReply } from 'fastify';
 import type { z } from 'zod';
 
 import { ConversationError } from './conversations/manager';
+import { preview } from './routines/schedule';
+import { RoutineError } from './routines/service';
 import { registerSecurity } from './security';
 import { SERVER_VERSION, type Services } from './services';
 
@@ -36,6 +41,12 @@ function parse<T extends z.ZodType>(
 }
 
 function sendError(reply: FastifyReply, error: unknown) {
+  if (error instanceof RoutineError) {
+    const status = { 'not-found': 404, invalid: 400, busy: 409, 'engine-unavailable': 503 }[
+      error.code
+    ];
+    return reply.code(status).send({ error: error.code, message: error.message });
+  }
   if (error instanceof ConversationError) {
     const status = error.code === 'not-found' ? 404 : error.code === 'busy' ? 409 : 503;
     return reply.code(status).send({ error: error.code, message: error.message });
@@ -136,6 +147,54 @@ export async function buildApp(services: Services) {
     return removed
       ? { ok: true }
       : reply.code(404).send({ error: 'not-found', message: 'Command not found.' });
+  });
+
+  // ── Routines ───────────────────────────────────────────────────────────
+  app.get('/api/routines', () => services.routines.list());
+  app.post('/api/routines/preview', async (request, reply) => {
+    const body = parse(SchedulePreviewBody, request.body, reply);
+    if (!body) return;
+    return preview(body.schedule, body.timezone);
+  });
+  app.post('/api/routines', async (request, reply) => {
+    const body = parse(CreateRoutineBody, request.body, reply);
+    if (!body) return;
+    try {
+      return await services.routines.create(body, { createdBy: 'user' });
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  app.get<{ Params: { id: string } }>('/api/routines/:id', async (request, reply) => {
+    try {
+      return await services.routines.detail(request.params.id);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  app.patch<{ Params: { id: string } }>('/api/routines/:id', async (request, reply) => {
+    const body = parse(UpdateRoutineBody, request.body, reply);
+    if (!body) return;
+    try {
+      return await services.routines.update(request.params.id, body);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  app.delete<{ Params: { id: string } }>('/api/routines/:id', async (request, reply) => {
+    try {
+      await services.routines.remove(request.params.id);
+      return { ok: true };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  app.post<{ Params: { id: string } }>('/api/routines/:id/run', async (request, reply) => {
+    try {
+      return await services.routines.runNow(request.params.id);
+    } catch (error) {
+      return sendError(reply, error);
+    }
   });
 
   // ── Memory ─────────────────────────────────────────────────────────────

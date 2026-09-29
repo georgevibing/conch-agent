@@ -228,6 +228,58 @@ export class MockEngine implements Engine {
         await wait(1500);
       }
 
+      // Routines: draft one when asked for something recurring; report outcomes on runs.
+      const createRoutine = input.tools.find((t) => t.name === 'create_routine');
+      if (
+        createRoutine &&
+        /\b(every (morning|day|weekday|week)|each (morning|day)|remind me)\b/i.test(text)
+      ) {
+        const toolUseId = newId('tool');
+        const args = {
+          title: 'Morning briefing',
+          summary: 'A short summary of today’s calendar and the weather.',
+          prompt:
+            'Look at my calendar for today and the local weather, then write a short, friendly briefing.',
+          schedule: { type: 'weekly', days: ['mon', 'tue', 'wed', 'thu', 'fri'], time: '07:30' },
+        };
+        yield { type: 'tool-start', toolUseId, name: 'mcp__conch__create_routine', input: args };
+        const output = await createRoutine.run(args as never);
+        yield { type: 'tool-end', toolUseId, status: 'success', output };
+        const confirm =
+          "I've drafted a **Morning briefing** for weekdays at 7:30. Turn it on from the card when you're happy with it.";
+        for (const chunk of confirm.match(/.{1,6}/gs) ?? []) {
+          await wait(12);
+          yield { type: 'text', messageId, delta: chunk };
+        }
+        yield { type: 'message-done', messageId };
+        yield { type: 'done', outcome: 'success' };
+        return;
+      }
+      const report = input.tools.find((t) => t.name === 'report_outcome');
+      if (report) {
+        const nothing = /nothing/i.test(text);
+        const brief = nothing
+          ? 'Nothing new since last time.'
+          : 'Good morning! You have **3 meetings** today and rain is expected after 4pm.';
+        for (const chunk of brief.match(/.{1,6}/gs) ?? []) {
+          await wait(12);
+          yield { type: 'text', messageId, delta: chunk };
+        }
+        yield { type: 'message-done', messageId };
+        await report.run({
+          status: nothing ? 'nothing-to-do' : 'done',
+          summary: nothing
+            ? 'Nothing new to report'
+            : 'Sent your briefing: 3 meetings and rain after 4pm',
+        } as never);
+        yield {
+          type: 'done',
+          outcome: 'success',
+          usage: { inputTokens: 900, outputTokens: 120, costUsd: 0.002, durationMs: 2100 },
+        };
+        return;
+      }
+
       const reply = rememberMatch
         ? "Got it — I'll remember that. You can see and edit everything I remember in **Settings → Memory**."
         : [

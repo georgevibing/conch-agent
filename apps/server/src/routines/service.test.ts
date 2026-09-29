@@ -1,0 +1,191 @@
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import type { ConversationEvent, RoutineRun } from '@conch/protocol';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { loadConfig } from '../config';
+import { Services } from '../services';
+
+const HOUR = 3_600_000;
+let services: Services | undefined;
+
+async function setup(state = 'ready') {
+  process.env.CONCH_MOCK_SPEED = '0.02';
+  process.env.CONCH_MOCK_STATE = state;
+  const home = await mkdtemp(join(tmpdir(), 'conch-routines-'));
+  services = new Services(
+    loadConfig({ CONCH_HOME: home, CONCH_ENGINE: 'mock', CONCH_LOG_LEVEL: 'silent' }),
+  );
+  delete process.env.CONCH_MOCK_STATE;
+  return services;
+}
+
+/** Wait until a routine's latest run reaches a final state. */
+async function settled(s: Services, routineId: string): Promise<RoutineRun> {
+  for (let i = 0; i < 200; i++) {
+    const [run] = (await s.routines.detail(routineId)).runs;
+    if (run && !['running', 'needs-you'].includes(run.status)) return run;
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  throw new Error(
+    `run never finished: ${JSON.stringify((await s.routines.detail(routineId)).runs)}`,
+  );
+}
+
+const base = {
+  title: 'morning briefing.',
+  summary: 'a short summary of today.',
+  prompt: 'Summarise my day.',
+  timezone: 'Europe/Berlin',
+};
+
+afterEach(() => services?.routines.stop());
+
+describe('RoutineService', () => {
+  it('creates routines with consistent text and a next run', async () => {
+    const s = await setup();
+    const r = await s.routines.create(
+      { ...base, schedule: { type: 'daily', time: '08:00' } },
+      { createdBy: 'user' },
+    );
+    expect(r).toMatchObject({
+      title: 'Morning briefing',
+      summary: 'A short summary of today.',
+      status: 'active',
+      runCount: 0,
+    });
+    expect(r.scheduleText).toMatch(/^Every day at 8:00/);
+    expect(r.nextRunAt).toBeGreaterThan(Date.now());
+    await expect(
+      s.routines.create(
+        { ...base, schedule: { type: 'interval', every: 1, unit: 'minutes' } },
+        { createdBy: 'user' },
+      ),
+    ).rejects.toThrow(/every 15 minutes/);
+  });
+
+  it('runs on demand as a real conversation and records the outcome', async () => {
+    const s = await setup();
+    const r = await s.routines.create(
+      { ...base, schedule: { type: 'daily', time: '08:00' } },
+      { createdBy: 'user' },
+    );
+    await s.routines.runNow(r.id);
+    const run = await settled(s, r.id);
+    expect(run).toMatchObject({
+      trigger: 'manual',
+      status: 'succeeded',
+      outcome: 'Sent your briefing: 3 meetings and rain after 4pm',
+    });
+    const convo = await s.conversations.detail(run.conversationId ?? '');
+    expect(convo.conversation.origin).toEqual({ kind: 'routine', routineId: r.id, runId: run.id });
+    expect((await s.routines.detail(r.id)).routine.lastRun?.id).toBe(run.id);
+  });
+
+  it('distinguishes "nothing to do" from done', async () => {
+    const s = await setup();
+    const r = await s.routines.create(
+      {
+        ...base,
+        prompt: 'Check for anything new; say nothing if there is nothing.',
+        schedule: { type: 'daily', time: '08:00' },
+      },
+      { createdBy: 'user' },
+    );
+    await s.routines.runNow(r.id);
+    expect((await settled(s, r.id)).status).toBe('nothing-to-do');
+  });
+
+  it('fires on schedule, anchors intervals, and never overlaps', async () => {
+    const s = await setup();
+    const r = await s.routines.create(
+      { ...base, schedule: { type: 'interval', every: 1, unit: 'hours' } },
+      { createdBy: 'user' },
+    );
+    const realNow = Date.now;
+    try {
+      Date.now = () => realNow() + HOUR + 1000;
+      await s.routines.checkNow();
+      // A second check while the first run is going must not start another.
+      await s.routines.checkNow();
+      const run = await settled(s, r.id);
+      expect(run.trigger).toBe('schedule');
+      expect((await s.routines.detail(r.id)).runs).toHaveLength(1);
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  it('records missed runs, or catches up once, after Conch was off', async () => {
+    const s = await setup();
+    const skip = await s.routines.create(
+      { ...base, catchUp: false, schedule: { type: 'interval', every: 1, unit: 'hours' } },
+      { createdBy: 'user' },
+    );
+    const catchUp = await s.routines.create(
+      { ...base, title: 'Catch up', schedule: { type: 'interval', every: 1, unit: 'hours' } },
+      { createdBy: 'user' },
+    );
+    const realNow = Date.now;
+    try {
+      Date.now = () => realNow() + 5 * HOUR;
+      await s.routines.checkNow();
+      expect((await s.routines.detail(skip.id)).runs[0]?.status).toBe('missed');
+      const run = await settled(s, catchUp.id);
+      expect(run.trigger).toBe('catch-up');
+      expect((await s.routines.detail(catchUp.id)).runs).toHaveLength(1);
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  it('fails clearly when Claude Code is signed out', async () => {
+    const s = await setup('signed-out');
+    const r = await s.routines.create(
+      { ...base, schedule: { type: 'daily', time: '08:00' } },
+      { createdBy: 'user' },
+    );
+    const run = await s.routines.runNow(r.id);
+    expect(run).toMatchObject({ status: 'failed', error: expect.stringContaining('signed out') });
+  });
+
+  it('completes one-off routines after they run', async () => {
+    const s = await setup();
+    const r = await s.routines.create(
+      { ...base, schedule: { type: 'once', at: new Date(Date.now() + HOUR).toISOString() } },
+      { createdBy: 'user' },
+    );
+    await s.routines.runNow(r.id);
+    await settled(s, r.id);
+    expect((await s.routines.detail(r.id)).routine.status).toBe('completed');
+  });
+
+  it('lets the agent draft routines from a chat, shown as a card', async () => {
+    const s = await setup();
+    const events: ConversationEvent[] = [];
+    s.conversations.events.on((e) => {
+      if (e.type === 'conversation.event') events.push(e.event);
+    });
+    await s.conversations.send({
+      clientMessageId: 'u1',
+      text: 'Every morning, give me a briefing',
+    });
+    for (let i = 0; i < 200 && !events.some((e) => e.type === 'turn.completed'); i++) {
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    const card = events.find((e) => e.type === 'routine');
+    expect(card).toMatchObject({ action: 'proposed', title: 'Morning briefing' });
+    const [routine] = await s.routines.list();
+    expect(routine).toMatchObject({
+      status: 'draft',
+      createdBy: 'agent',
+      scheduleText: expect.stringMatching(/^Every weekday at 7:30/),
+    });
+    // Drafts don't run until turned on.
+    expect(routine?.nextRunAt).toBeUndefined();
+    const on = await s.routines.update(routine?.id ?? '', { status: 'active' });
+    expect(on.nextRunAt).toBeGreaterThan(Date.now());
+  });
+});

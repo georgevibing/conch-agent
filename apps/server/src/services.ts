@@ -11,6 +11,8 @@ import { MockEngine } from './engines/mock/engine';
 import type { Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
 import { MemoryStore } from './memory/store';
+import { RoutineService } from './routines/service';
+import { RoutineStore } from './routines/store';
 import { SettingsStore } from './settings/store';
 
 export const SERVER_VERSION = '0.2.0';
@@ -21,6 +23,7 @@ export class Services {
   readonly settings: SettingsStore;
   readonly memory: MemoryStore;
   readonly commands: CommandStore;
+  readonly routines: RoutineService;
   readonly conversations: ConversationManager;
   readonly engines: Map<EngineId, Engine>;
   #login?: { handle: LoginHandle; state: LoginState };
@@ -47,6 +50,14 @@ export class Services {
       settings: this.settings,
       memory: this.memory,
       engine: () => this.engine(),
+      tools: (ctx) => this.routines.tools(ctx),
+      context: () => this.routines.promptSection(),
+    });
+    this.routines = new RoutineService({
+      store: new RoutineStore(join(config.CONCH_HOME, 'routines')),
+      conversations: this.conversations,
+      engine: () => this.engine(),
+      emit: (event) => this.broadcast.emit(event),
     });
     this.conversations.events.on((event) => this.broadcast.emit(event));
     this.memory.changed.on(() => this.broadcast.emit({ type: 'memory.changed' }));
