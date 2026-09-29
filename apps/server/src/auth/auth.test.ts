@@ -8,6 +8,9 @@ import { buildApp } from '../app';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 
+// Password hashing is deliberately slow (scrypt, N=2^17); shared CI runners need headroom.
+vi.setConfig({ testTimeout: 20_000 });
+
 const PASSWORD = 'purple otters juggle at dawn';
 const REMOTE = { remoteAddress: '192.168.1.20', host: 'conch.example' };
 
@@ -186,7 +189,7 @@ describe('password sign-in', () => {
       payload: { with: 'password', username: 'ada', password: PASSWORD },
     });
     expect(local.statusCode).toBe(200);
-  }, 20_000);
+  });
 
   it('signs every other device out when the password changes', async () => {
     const { app } = await setup();
@@ -208,7 +211,7 @@ describe('password sign-in', () => {
     expect((await app.inject({ url: '/api/state', headers: { cookie: mine } })).statusCode).toBe(
       200,
     );
-  }, 20_000);
+  });
 
   it('asks you to confirm it’s you before sensitive changes', async () => {
     const { app } = await setup();
@@ -242,7 +245,7 @@ describe('password sign-in', () => {
       headers: { cookie },
     });
     expect(ok.statusCode).toBe(200);
-  }, 20_000);
+  });
 });
 
 describe('access keys', () => {
@@ -382,7 +385,7 @@ describe('security checkup', () => {
     expect(ids).toContain('full-trust:warn');
     expect(ids).toContain('sign-in:ok');
     expect(cookie).toBeTruthy();
-  }, 20_000);
+  });
 
   it('warns when the work folder brings its own Claude Code rules', async () => {
     const { app, services } = await setup();
