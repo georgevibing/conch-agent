@@ -25,6 +25,7 @@ import { RunBanner } from '../routines/RunBanner';
 import { ComposerControls } from '../models/ComposerControls';
 import { ChatFind } from '../search/ChatFind';
 import { useTurnOptions } from '../models/useTurnOptions';
+import { UsageComposerNotice } from '../usage/UsageComposerNotice';
 import styles from './ChatView.module.css';
 import { Transcript } from './Transcript';
 
@@ -146,6 +147,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   const composer = (
     <div className={styles.composerWrap}>
       <EngineIssue status={engine} issue={engineIssue} />
+      <UsageComposerNotice />
       {view.notice && running && (
         <Callout tone="info" title="Still trying…" className={styles.issue}>
           {view.notice}

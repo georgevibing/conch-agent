@@ -20,6 +20,7 @@ import {
   StartLoginBody,
   UpdateMemoryBody,
   UpdateSettingsBody,
+  UsageBudgetBody,
   type ServerEvent,
 } from '@conch/protocol';
 import Fastify, { type FastifyReply } from 'fastify';
@@ -131,6 +132,16 @@ export async function buildApp(services: Services) {
         .code(503)
         .send({ error: 'engine-unavailable', message: (error as Error).message });
     }
+  });
+
+  // ── Usage limits ───────────────────────────────────────────────────────
+  app.get<{ Querystring: { refresh?: string } }>('/api/usage', (request) =>
+    services.usage.snapshot({ force: request.query.refresh === '1' }),
+  );
+  app.put('/api/usage/budget', async (request, reply) => {
+    const body = parse(UsageBudgetBody, request.body, reply);
+    if (!body) return;
+    return services.usage.setBudget(body.budget);
   });
 
   // ── Custom commands ────────────────────────────────────────────────────

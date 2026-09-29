@@ -8,7 +8,17 @@ import type {
 
 import { newId } from '../../lib/ids';
 import { installHints } from '../claude-code/detect';
-import type { Engine, EngineEvent, LoginHandle, TurnInput } from '../types';
+import { severityFor } from '@conch/protocol';
+
+import { Emitter } from '../../lib/emitter';
+import type {
+  Engine,
+  EngineEvent,
+  EngineUsage,
+  LimitSignal,
+  LoginHandle,
+  TurnInput,
+} from '../types';
 
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -24,7 +34,8 @@ const sleep = (ms: number, signal?: AbortSignal) =>
  * same paths as the real one — not installed, signed out, sign-in, streaming,
  * tools, permissions and memory — without spending a single token.
  *
- * `CONCH_MOCK_STATE` picks the starting state; `CONCH_MOCK_SPEED` scales delays.
+ * `CONCH_MOCK_STATE` picks the starting state; `CONCH_MOCK_SPEED` scales delays;
+ * `CONCH_MOCK_USAGE` (`plan` · `metered` · `exhausted`) picks how limits look.
  */
 export class MockEngine implements Engine {
   readonly id = 'mock' as const;
@@ -33,15 +44,24 @@ export class MockEngine implements Engine {
   #speed: number;
   #installAfter?: number;
   #checks = 0;
+  #usageMode: 'plan' | 'metered' | 'exhausted';
+  /** Share of the 5-hour window used; each turn spends a little of it. */
+  #sessionUsed: number;
+  #limits = new Emitter<LimitSignal>();
 
   /**
    * @param installAfter when starting `not-installed`, pretend the user installs
    *   Claude Code after this many forced re-checks (exercises auto-detection).
    */
-  constructor(options: { state?: string; speed?: number; installAfter?: number } = {}) {
+  constructor(
+    options: { state?: string; speed?: number; installAfter?: number; usage?: string } = {},
+  ) {
     this.#state = (options.state as EngineState | undefined) ?? 'ready';
     this.#speed = options.speed ?? 1;
     this.#installAfter = options.installAfter;
+    this.#usageMode =
+      options.usage === 'metered' || options.usage === 'exhausted' ? options.usage : 'plan';
+    this.#sessionUsed = this.#usageMode === 'exhausted' ? 100 : 38;
   }
 
   async detect({ force = false } = {}): Promise<EngineStatus> {
@@ -162,9 +182,60 @@ export class MockEngine implements Engine {
     if (apiKey) this.#state = 'ready';
   }
 
+  async usage(): Promise<EngineUsage> {
+    if (this.#state !== 'ready') return { kind: 'unknown', source: this.label, windows: [] };
+    if (this.#usageMode === 'metered')
+      return { kind: 'metered', source: 'Amazon Bedrock', windows: [] };
+    const now = Date.now();
+    const hour = 3_600_000;
+    return {
+      kind: 'plan',
+      source: 'Claude Max',
+      windows: [
+        {
+          id: 'session',
+          label: 'Current session',
+          usedPercent: this.#sessionUsed,
+          resetsAt: now + (this.#usageMode === 'exhausted' ? 0.6 : 2.2) * hour,
+          severity: severityFor(this.#sessionUsed),
+        },
+        {
+          id: 'weekly',
+          label: 'This week',
+          scope: 'all models',
+          usedPercent: 61,
+          resetsAt: now + 74 * hour,
+          severity: severityFor(61),
+        },
+        {
+          id: 'weekly-opus',
+          label: 'This week',
+          scope: 'Opus',
+          usedPercent: 22,
+          resetsAt: now + 74 * hour,
+          severity: severityFor(22),
+        },
+      ],
+    };
+  }
+
+  onLimits(listener: (signal: LimitSignal) => void): () => void {
+    return this.#limits.on(listener);
+  }
+
+  /** Each mock turn uses a bit of the session window, so meters visibly move. */
+  #spend() {
+    if (this.#usageMode === 'metered') return;
+    this.#sessionUsed = Math.min(100, this.#sessionUsed + 4);
+    const status =
+      this.#sessionUsed >= 100 ? 'rejected' : this.#sessionUsed >= 75 ? 'warning' : 'allowed';
+    this.#limits.emit({ status, windowId: 'session', resetsAt: Date.now() + 2.2 * 3_600_000 });
+  }
+
   async *runTurn(input: TurnInput): AsyncIterable<EngineEvent> {
     const wait = (ms: number) => sleep(ms * this.#speed, input.signal);
     const messageId = newId('msg');
+    this.#spend();
     try {
       yield { type: 'session', resumeId: input.resumeId ?? newId('mock-session'), model: 'mock' };
       await wait(700);

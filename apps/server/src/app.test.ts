@@ -2,7 +2,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { ServerEvent } from '@conch/protocol';
+import { ServerEvent, UsageSnapshot } from '@conch/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { buildApp } from './app';
@@ -123,6 +123,44 @@ describe('gateway capabilities and commands', () => {
       (await app.inject({ method: 'PUT', url: '/api/commands/Bad Name', payload: { prompt: 'p' } }))
         .statusCode,
     ).toBe(400);
+  });
+});
+
+describe('gateway usage', () => {
+  it('reports plan limits and validates budgets', async () => {
+    const { app, services } = await setup();
+    close = async () => {
+      services.usage.stop();
+      await app.close();
+    };
+    const usage = UsageSnapshot.parse((await app.inject('/api/usage')).json());
+    expect(usage).toMatchObject({ kind: 'plan', source: 'Claude Max' });
+    expect(usage.windows.map((w) => w.id)).toEqual(['session', 'weekly', 'weekly-opus']);
+
+    const bad = await app.inject({
+      method: 'PUT',
+      url: '/api/usage/budget',
+      payload: { budget: -1 },
+    });
+    expect(bad.statusCode).toBe(400);
+    const set = await app.inject({
+      method: 'PUT',
+      url: '/api/usage/budget',
+      payload: { budget: 50 },
+    });
+    expect(UsageSnapshot.parse(set.json()).spend.budget).toBe(50);
+  });
+
+  it('switches to spend tracking for metered sign-ins', async () => {
+    process.env.CONCH_MOCK_USAGE = 'metered';
+    const { app, services } = await setup();
+    delete process.env.CONCH_MOCK_USAGE;
+    close = async () => {
+      services.usage.stop();
+      await app.close();
+    };
+    const usage = UsageSnapshot.parse((await app.inject('/api/usage?refresh=1')).json());
+    expect(usage).toMatchObject({ kind: 'metered', source: 'Amazon Bedrock', windows: [] });
   });
 });
 

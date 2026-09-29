@@ -1,0 +1,488 @@
+@layer nacre.components {
+  /*
+   * Severity knobs. Every usage element carries `data-severity`; parts read
+   * `--usage-fill` (arcs and bars) and `--usage-fg` (text that takes the tone).
+   * Normal stays calm — accent fill, muted text. Colour always travels with words.
+   */
+  .ring,
+  .meter,
+  .gauge,
+  .notice {
+    --usage-fill: var(--nc-accent-9);
+    --usage-fg: var(--nc-text-muted);
+    --usage-wash: transparent;
+  }
+
+  .ring[data-severity='warning'],
+  .meter[data-severity='warning'],
+  .gauge[data-severity='warning'],
+  .notice[data-severity='warning'] {
+    --usage-fill: light-dark(
+      oklch(0.74 0.15 var(--nc-warning-h)),
+      oklch(0.8 0.14 var(--nc-warning-h))
+    );
+    --usage-fg: light-dark(oklch(0.5 0.12 60), oklch(0.85 0.12 var(--nc-warning-h)));
+    --usage-wash: light-dark(
+      oklch(0.97 0.035 var(--nc-warning-h)),
+      oklch(0.26 0.045 var(--nc-warning-h))
+    );
+    --usage-edge: light-dark(
+      oklch(0.87 0.07 var(--nc-warning-h)),
+      oklch(0.4 0.07 var(--nc-warning-h))
+    );
+  }
+
+  .ring:is([data-severity='critical'], [data-severity='exhausted']),
+  .meter:is([data-severity='critical'], [data-severity='exhausted']),
+  .gauge:is([data-severity='critical'], [data-severity='exhausted']),
+  .notice:is([data-severity='critical'], [data-severity='exhausted']) {
+    --usage-fill: light-dark(
+      oklch(0.58 0.2 var(--nc-danger-h)),
+      oklch(0.66 0.19 var(--nc-danger-h))
+    );
+    --usage-fg: light-dark(oklch(0.5 0.18 var(--nc-danger-h)), oklch(0.8 0.12 var(--nc-danger-h)));
+    --usage-wash: light-dark(
+      oklch(0.972 0.025 var(--nc-danger-h)),
+      oklch(0.25 0.05 var(--nc-danger-h))
+    );
+    --usage-edge: light-dark(
+      oklch(0.87 0.07 var(--nc-danger-h)),
+      oklch(0.4 0.09 var(--nc-danger-h))
+    );
+  }
+
+  /* ── Ring ───────────────────────────────────────────────────────────── */
+  .ring {
+    flex-shrink: 0;
+    transform: rotate(-90deg);
+    overflow: visible;
+  }
+
+  .ringTrack,
+  .ringFill {
+    fill: none;
+    stroke-width: var(--ring-stroke);
+  }
+
+  .ringTrack {
+    stroke: var(--nc-gray-5);
+  }
+
+  .ringFill {
+    stroke: var(--usage-fill);
+    stroke-linecap: round;
+    transition:
+      stroke-dashoffset var(--nc-spring-soft-duration) var(--nc-spring-soft),
+      stroke var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .ringFill[data-empty] {
+    opacity: 0;
+  }
+
+  .ring[data-neutral] .ringFill {
+    stroke: var(--nc-gray-8);
+  }
+
+  /* ── Meter (header chip) ────────────────────────────────────────────── */
+  .meter {
+    --nc-sheen-size: 56px;
+    --nc-sheen-hover: 0.25;
+    --nc-rim-hover: 0.5;
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    block-size: var(--nc-control-xs);
+    padding-inline: var(--nc-space-1-5) var(--nc-space-2-5);
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--usage-fg);
+    font: inherit;
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      box-shadow var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .meter[data-kind='unknown'] {
+    padding-inline: var(--nc-space-1-5);
+    opacity: 0.7;
+  }
+
+  .meter:is([data-severity='warning'], [data-severity='critical'], [data-severity='exhausted']) {
+    background: var(--usage-wash);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--usage-edge) 60%, transparent);
+  }
+
+  @media (hover: hover) {
+    .meter:hover:not(:disabled) {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+    .meter:is(
+        [data-severity='warning'],
+        [data-severity='critical'],
+        [data-severity='exhausted']
+      ):hover:not(:disabled) {
+      background: color-mix(in oklch, var(--usage-wash), var(--usage-edge) 30%);
+      color: var(--usage-fg);
+    }
+  }
+
+  .meter:active:not(:disabled) {
+    transform: scale(0.97);
+    transition-duration: var(--nc-duration-instant);
+  }
+
+  .meter[data-state='open'][data-severity='normal'] {
+    background: var(--nc-wash-2);
+    color: var(--nc-text);
+  }
+
+  .meter:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .meter:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .meterIcon {
+    inline-size: 14px;
+    block-size: 14px;
+    flex: none;
+    color: var(--nc-text-muted);
+    stroke-width: 2;
+  }
+
+  .meterText {
+    letter-spacing: 0.004em;
+  }
+
+  .meter[data-severity='exhausted'] .meterRing {
+    animation: usage-pulse 2.4s var(--nc-ease-in-out) infinite;
+  }
+
+  @keyframes usage-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.45;
+    }
+  }
+
+  /* ── Gauge rows ─────────────────────────────────────────────────────── */
+  .gauge {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+  }
+
+  .gaugeHead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--nc-space-3);
+    font-size: var(--nc-text-sm);
+  }
+
+  .gaugeLabel {
+    min-inline-size: 0;
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .gaugeScope {
+    color: var(--nc-text-subtle);
+    font-weight: var(--nc-weight-regular);
+  }
+
+  .gaugeReading {
+    flex-shrink: 0;
+    color: var(--nc-text-muted);
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .gauge:not([data-severity='normal']) .gaugeReading {
+    color: var(--usage-fg);
+  }
+
+  .gauge[data-emphasis] .gaugeHead {
+    font-size: var(--nc-text-md);
+  }
+
+  .gauge[data-emphasis] .gaugeLabel {
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  .gaugeBar [role='progressbar'] {
+    --fill: var(--usage-fill);
+    background: var(--nc-gray-4);
+  }
+
+  .gaugeCaption {
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Panel ──────────────────────────────────────────────────────────── */
+  .panel {
+    display: flex;
+    flex-direction: column;
+    inline-size: 20rem;
+    max-inline-size: 100%;
+    min-inline-size: 0;
+    color: var(--nc-text);
+    overflow-wrap: anywhere;
+  }
+
+  /* In a popover the panel is the scroller: never sideways, and a quiet scrollbar if short on height. */
+  :where([data-radix-popper-content-wrapper]) .panel {
+    max-inline-size: calc(100vw - 1.5rem);
+    max-block-size: var(--radix-popover-content-available-height, 80dvh);
+    overflow: hidden auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--nc-gray-6) transparent;
+    overscroll-behavior: contain;
+  }
+
+  .panelHeader {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    padding: var(--nc-space-4) var(--nc-space-4) 0;
+  }
+
+  .panelTitle,
+  .panelSubtitle,
+  .panelMessage,
+  .spendToday,
+  .spendMonth,
+  .hint {
+    margin: 0;
+  }
+
+  .panelTitle {
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: -0.005em;
+  }
+
+  .panelSubtitle {
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+  }
+
+  .panelMessage {
+    margin-block-start: var(--nc-space-2);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    text-wrap: pretty;
+  }
+
+  .blocked {
+    margin: var(--nc-space-3) var(--nc-space-4) 0;
+    animation: none;
+  }
+
+  .panelBody {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3-5);
+    padding: var(--nc-space-4);
+  }
+
+  .panel[data-kind='plan'] .panelBody > .gauge + .gauge {
+    padding-block-start: var(--nc-space-3-5);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .spend {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+  }
+
+  .spendToday {
+    display: flex;
+    align-items: baseline;
+    gap: var(--nc-space-2);
+  }
+
+  .spendAmount {
+    font-size: var(--nc-text-3xl);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .spendUnit {
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+  }
+
+  .spendMonth {
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .hint {
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    text-wrap: pretty;
+  }
+
+  .budgetButton {
+    align-self: flex-start;
+    margin-block-start: calc(-1 * var(--nc-space-2));
+    margin-inline-start: calc(-1 * var(--nc-space-2));
+  }
+
+  .panelFooter {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-block-size: var(--nc-control-sm);
+    margin-block-start: auto;
+    padding: var(--nc-space-1) var(--nc-space-1-5) var(--nc-space-1) var(--nc-space-4);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .panelHeader + .panelFooter {
+    margin-block-start: var(--nc-space-4);
+  }
+
+  .blocked + .panelFooter {
+    margin-block-start: var(--nc-space-4);
+  }
+
+  .updated {
+    flex: 1;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+  }
+
+  .refresh svg {
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .refresh[data-refreshing] svg {
+    animation: nc-spin 900ms linear infinite;
+  }
+
+  /* ── Notice ─────────────────────────────────────────────────────────── */
+  .notice {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    min-block-size: var(--nc-control-sm);
+    padding: var(--nc-space-0-5);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--usage-wash);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--usage-edge) 70%, transparent),
+      var(--nc-glaze-edge);
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+    animation: nc-surface-in var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .noticeMain {
+    appearance: none;
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+    min-block-size: var(--nc-control-sm);
+    padding: var(--nc-space-1) var(--nc-space-2-5);
+    border: 0;
+    border-radius: calc(var(--nc-radius-md) - 2px);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    font-variant-numeric: tabular-nums;
+  }
+
+  button.noticeMain {
+    cursor: pointer;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    button.noticeMain:hover {
+      background: var(--nc-wash-1);
+    }
+  }
+
+  button.noticeMain:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 0;
+  }
+
+  .noticeText {
+    flex: 1;
+    min-inline-size: 0;
+    text-wrap: pretty;
+  }
+
+  .noticeMore {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-0-5);
+    flex-shrink: 0;
+    color: var(--usage-fg);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .noticeMore > svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  .noticeDismiss {
+    flex-shrink: 0;
+  }
+
+  /* ── Reduced motion ─────────────────────────────────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    .meter[data-severity='exhausted'] .meterRing,
+    .notice {
+      animation: none;
+    }
+    .refresh[data-refreshing] svg {
+      animation-duration: 1800ms;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .meter[data-severity='exhausted'] .meterRing,
+  [data-nacre-motion='reduced'] .notice {
+    animation: none;
+  }
+
+  [data-nacre-motion='reduced'] .refresh[data-refreshing] svg {
+    animation-duration: 1800ms;
+  }
+}

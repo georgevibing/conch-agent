@@ -32,6 +32,7 @@ export type BuiltinAction =
   | 'memory'
   | 'settings'
   | 'commands'
+  | 'usage'
   | 'theme'
   | 'help';
 
@@ -75,6 +76,7 @@ export const builtins: Builtin[] = [
     aliases: ['schedule', 'cron'],
   },
   { name: 'commands', action: 'commands', description: 'Create your own commands' },
+  { name: 'usage', action: 'usage', description: 'See how much usage you have left' },
   { name: 'settings', action: 'settings', description: 'Open settings' },
   { name: 'theme', action: 'theme', description: 'Switch between light and dark' },
   { name: 'help', action: 'help', description: 'What can I do here?' },

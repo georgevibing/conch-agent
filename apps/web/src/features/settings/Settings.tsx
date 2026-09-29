@@ -24,6 +24,7 @@ import {
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  BatteryMedium,
   Brain,
   Check,
   Cpu,
@@ -53,6 +54,7 @@ import { relativeTime } from '../../lib/time';
 import { useAutoFocus } from '../../lib/useAutoFocus';
 import { EngineConnect } from '../engine/EngineConnect';
 import { toneOptions } from '../onboarding/tones';
+import { UsageTab } from '../usage/UsageTab';
 import styles from './Settings.module.css';
 import { CommandsTab } from './CommandsTab';
 import { ModelsTab } from './ModelsTab';
@@ -507,6 +509,7 @@ const tabs: { value: SettingsTab; label: string; icon: ReactNode }[] = [
   { value: 'memory', label: 'Memory', icon: <Brain /> },
   { value: 'models', label: 'Models & modes', icon: <Gauge /> },
   { value: 'commands', label: 'Commands', icon: <SquareSlash /> },
+  { value: 'usage', label: 'Usage', icon: <BatteryMedium /> },
   { value: 'engine', label: 'Claude Code', icon: <Cpu /> },
   { value: 'appearance', label: 'Appearance', icon: <Palette /> },
 ];
@@ -557,6 +560,9 @@ export function Settings() {
               </Tabs.Content>
               <Tabs.Content value="commands">
                 <CommandsTab />
+              </Tabs.Content>
+              <Tabs.Content value="usage">
+                <UsageTab />
               </Tabs.Content>
               <Tabs.Content value="engine">
                 <EngineTab workspace={app.workspace} workspacePref={app.preferences.workspace} />

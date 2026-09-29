@@ -10,6 +10,7 @@ export const keys = {
   memories: ['memories'] as const,
   capabilities: ['capabilities'] as const,
   commands: ['commands'] as const,
+  usage: ['usage'] as const,
 };
 
 export function useAppState() {
@@ -63,6 +64,24 @@ export function useCapabilities(enabled = true) {
     queryKey: keys.capabilities,
     queryFn: () => api.capabilities(),
     staleTime: 10 * 60_000,
+    enabled,
+  });
+}
+
+/**
+ * How much usage is left. The gateway pushes every change over the socket
+ * (`usage.changed`); refetching on focus re-reads the provider, because you
+ * may have used your plan elsewhere (claude.ai, another machine) meanwhile.
+ */
+export function useUsage(enabled = true) {
+  const client = useQueryClient();
+  return useQuery({
+    queryKey: keys.usage,
+    // The first read takes the gateway's cached answer; later ones ask the provider afresh.
+    queryFn: () => api.usage(client.getQueryData(keys.usage) !== undefined),
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+    refetchOnWindowFocus: true,
     enabled,
   });
 }

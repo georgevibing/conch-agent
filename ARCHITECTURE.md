@@ -110,6 +110,14 @@ src/
   `report_outcome` tool. Chats get `create_routine` / `list_routines` /
   `update_routine` / `delete_routine`; drafts only run once the user turns them on.
   See [ADR 0006](./docs/adr/0006-routines.md).
+- **Usage limits.** `GET /api/usage` returns one `UsageSnapshot`, whatever the sign-in.
+  - Subscriptions report plan windows (5-hour session, weekly, per-model), read
+    through the SDK's structured `/usage`.
+  - API key and cloud sign-ins report spend, from `~/.conch/usage.json`, against an
+    optional budget.
+  - `usage.changed` is pushed after every turn, on the provider's live rate-limit
+    events, when a window resets, and every 5 minutes.
+  - See [ADR 0005](./docs/adr/0005-usage-limits.md).
 - API retries from the engine surface as live `notice` events ("Retrying in 4s…"),
   so a stalled provider is never a silent spinner.
 - **Search.** `search/` keeps a SQLite FTS5 (trigram) index of every message in
@@ -117,7 +125,7 @@ src/
   `GET /api/search` ranks and groups hits with snippets, `GET /api/search/preview`
   shows one in context. See [ADR 0007 — Search](./docs/adr/0007-search.md).
 - Local data lives in `~/.conch/` (`CONCH_HOME`): `settings.json`, `secrets.json`,
-  `memory/*.md`, `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`), `conversations/index.json` + `<id>.jsonl`, `search.db`,
+  `memory/*.md`, `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `search.db`,
   `workspace/` (default cwd).
 
 See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
@@ -139,7 +147,9 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   find-in-chat (⌘F, ⌘G / ⇧⌘G) already showing every match.
 - The composer toolbar carries a `ModelPicker` (provider-grouped models, thinking
   effort, fast mode, "make default") and a `ModePicker` (Ask first · Auto · Edit freely ·
-  Plan only · Full trust). Typing `/` opens a `CommandMenu`; `/model` and `/mode` open the
+  Plan only · Full trust). A `UsageMeter` in the header shows what's left of your
+  tightest limit, and a `UsageNotice` appears above the composer when it runs low.
+  Typing `/` opens a `CommandMenu`; `/model` and `/mode` open the
   pickers. Defaults live in Settings → Models & modes; your commands in Settings →
   Commands.
 

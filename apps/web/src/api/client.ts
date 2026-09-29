@@ -9,6 +9,7 @@ import {
   SearchPreview,
   SearchResults,
   type UpdateSettingsBody,
+  UsageSnapshot,
 } from '@conch/protocol';
 import { z } from 'zod';
 
@@ -65,6 +66,10 @@ export const api = {
   setApiKey: (apiKey: string) =>
     request(EngineStatus, '/api/engine/api-key', { method: 'PUT', body: { apiKey } }),
   clearApiKey: () => request(EngineStatus, '/api/engine/api-key', { method: 'DELETE' }),
+
+  usage: (refresh = false) => request(UsageSnapshot, `/api/usage${refresh ? '?refresh=1' : ''}`),
+  setBudget: (budget: number | null) =>
+    request(UsageSnapshot, '/api/usage/budget', { method: 'PUT', body: { budget } }),
 
   capabilities: (refresh = false) =>
     request(Capabilities, `/api/capabilities${refresh ? '?refresh=1' : ''}`),

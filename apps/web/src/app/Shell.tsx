@@ -11,6 +11,7 @@ import { RoutineDetailView } from '../features/routines/RoutineDetailView';
 import { RoutinesView } from '../features/routines/RoutinesView';
 import { Settings } from '../features/settings/Settings';
 import { Sidebar } from '../features/sidebar/Sidebar';
+import { UsageIndicator } from '../features/usage/UsageIndicator';
 import { useLiveStore } from '../live/store';
 import styles from './Shell.module.css';
 import { useUi } from './ui';
@@ -102,6 +103,7 @@ export function Shell() {
           <Text as="span" weight="medium" truncate className={styles.title}>
             {title}
           </Text>
+          <UsageIndicator />
           {conversationId && (
             <IconButton
               label="Find in chat"

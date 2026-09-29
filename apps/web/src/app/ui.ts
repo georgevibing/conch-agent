@@ -2,7 +2,14 @@ import type { TurnOptions } from '@conch/protocol';
 import { create } from 'zustand';
 
 export type SettingsTab =
-  'personality' | 'about' | 'memory' | 'models' | 'commands' | 'engine' | 'appearance';
+  | 'personality'
+  | 'about'
+  | 'memory'
+  | 'models'
+  | 'commands'
+  | 'usage'
+  | 'engine'
+  | 'appearance';
 
 /** Which composer picker is open (so `/model` and `/mode` can open them). */
 export type Picker = 'model' | 'mode' | null;
@@ -25,6 +32,8 @@ interface UiState {
   find: FindState | null;
   /** What find last searched for, so ⌘F reopens where you left off. */
   lastFind?: { conversationId: string; query: string };
+  /** The header usage popover (so `/usage` and the composer notice can open it). */
+  usageOpen: boolean;
   picker: Picker;
   /** Model/effort/mode chosen for a new chat before its first message. */
   draftOptions: TurnOptions;
@@ -38,6 +47,7 @@ interface UiState {
   openFind(conversationId: string, query?: string, target?: string): void;
   setFindQuery(query: string): void;
   closeFind(): void;
+  setUsageOpen(open: boolean): void;
 }
 
 const SIDEBAR_KEY = 'conch.sidebar';
@@ -48,6 +58,7 @@ export const useUi = create<UiState>((set) => ({
   settings: null,
   paletteOpen: false,
   find: null,
+  usageOpen: false,
   picker: null,
   draftOptions: {},
   setPicker: (picker) => set({ picker }),
@@ -87,4 +98,5 @@ export const useUi = create<UiState>((set) => ({
         ? { conversationId: s.find.conversationId, query: s.find.query }
         : s.lastFind,
     })),
+  setUsageOpen: (usageOpen) => set({ usageOpen }),
 }));

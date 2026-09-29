@@ -9,10 +9,12 @@ import { z } from 'zod';
 
 import { EffortChoice, PermissionMode, TurnOptions, Usage } from './common';
 import { Routine, RoutineRun } from './routines';
+import { UsageSnapshot } from './usage';
 
 export * from './common';
 export * from './routines';
 export * from './search';
+export * from './usage';
 
 export const PROTOCOL_VERSION = 3;
 
@@ -445,6 +447,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('routine.changed'), routine: Routine }),
   z.object({ type: z.literal('routine.deleted'), routineId: z.string() }),
   z.object({ type: z.literal('routine.run'), run: RoutineRun }),
+  /** Remaining usage changed (a turn finished, a window reset, the provider warned). */
+  z.object({ type: z.literal('usage.changed'), usage: UsageSnapshot }),
   z.object({ type: z.literal('pong') }),
   z.object({
     type: z.literal('error'),

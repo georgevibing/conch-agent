@@ -18,6 +18,7 @@ import {
 import {
   Brain,
   CornerDownRight,
+  Gauge,
   MessageSquare,
   Moon,
   PanelLeft,
@@ -166,6 +167,7 @@ export function Palette() {
   const open = useUi((s) => s.paletteOpen);
   const setOpen = useUi((s) => s.setPalette);
   const openSettings = useUi((s) => s.openSettings);
+  const setUsageOpen = useUi((s) => s.setUsageOpen);
   const toggleSidebar = useUi((s) => s.toggleSidebar);
   const openFind = useUi((s) => s.openFind);
   const theme = useNacreTheme();
@@ -217,6 +219,13 @@ export function Palette() {
       icon: <Brain />,
       keywords: 'memory memories',
       run: () => openSettings('memory'),
+    },
+    {
+      id: 'usage',
+      label: 'How much usage do I have left?',
+      icon: <Gauge />,
+      keywords: 'limits quota plan',
+      run: () => setUsageOpen(true),
     },
     {
       id: 'theme',

@@ -6,8 +6,11 @@ import type {
   LoginMethod,
   LoginState,
   PermissionMode,
+  ExtraUsage,
   ToolStatus,
   Usage,
+  UsageKind,
+  UsageWindow,
 } from '@conch/protocol';
 import type { z } from 'zod';
 
@@ -65,6 +68,24 @@ export type EngineEvent =
   | { type: 'notice'; code: string; message: string }
   | { type: 'done'; outcome: 'success' | 'interrupted' | 'error'; usage?: Usage; error?: string };
 
+/** What the engine's provider says about your limits right now. */
+export interface EngineUsage {
+  kind: UsageKind;
+  /** Who meters you, e.g. "Claude Max" or "Amazon Bedrock". */
+  source: string;
+  windows: UsageWindow[];
+  extra?: ExtraUsage;
+  message?: string;
+}
+
+/** A live hint from the provider during a turn (e.g. a rate-limit header changed). */
+export interface LimitSignal {
+  status: 'allowed' | 'warning' | 'rejected';
+  windowId?: string;
+  /** Epoch ms. */
+  resetsAt?: number;
+}
+
 export interface LoginHandle {
   submitCode(code: string): void;
   cancel(): void;
@@ -82,4 +103,8 @@ export interface Engine {
   /** Models, slash commands and permission modes the engine offers right now. */
   capabilities(options?: { force?: boolean }): Promise<Capabilities>;
   runTurn(input: TurnInput): AsyncIterable<EngineEvent>;
+  /** Current plan limits. Engines without limits omit it; Conch then only tracks spend. */
+  usage?(options?: { force?: boolean }): Promise<EngineUsage>;
+  /** Subscribe to live limit hints emitted while turns run. */
+  onLimits?(listener: (signal: LimitSignal) => void): () => void;
 }

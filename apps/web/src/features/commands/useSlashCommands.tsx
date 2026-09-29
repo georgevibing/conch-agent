@@ -7,8 +7,8 @@ import {
   Moon,
   Plus,
   Settings,
-  Repeat,
   Shield,
+  Repeat,
   SquareSlash,
   Sparkles,
   Zap,
@@ -163,6 +163,8 @@ export function useSlashCommands(options: {
         return void navigate('/routines');
       case 'commands':
         return ui.openSettings('commands');
+      case 'usage':
+        return ui.setUsageOpen(true);
       case 'settings':
         return ui.openSettings();
       case 'theme':

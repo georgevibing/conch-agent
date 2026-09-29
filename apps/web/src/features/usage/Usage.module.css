@@ -1,0 +1,7 @@
+@layer nacre.utilities {
+  /* In Settings the panel fills its section instead of sizing like a popover. */
+  .inline {
+    inline-size: 100%;
+    max-inline-size: 32rem;
+  }
+}

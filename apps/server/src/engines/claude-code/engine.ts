@@ -13,15 +13,33 @@ import type {
 } from '@conch/protocol';
 
 import type { SettingsStore } from '../../settings/store';
-import type { Engine, EngineEvent, LoginHandle, TurnInput } from '../types';
+import { Emitter } from '../../lib/emitter';
+import type {
+  Engine,
+  EngineEvent,
+  EngineUsage,
+  LimitSignal,
+  LoginHandle,
+  TurnInput,
+} from '../types';
 import { detectClaude } from './detect';
 import { childEnv } from './env';
 import { startClaudeLogin } from './login';
 import { Translator } from './translate';
+import { limitSignal, usageFromResponse, usageFromStatus } from './usage';
 
 const CACHE_MS = 20_000;
 const CAPABILITIES_MS = 10 * 60_000;
 const PROBE_TIMEOUT_MS = 30_000;
+const USAGE_MS = 60_000;
+
+function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), PROBE_TIMEOUT_MS);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 export class ClaudeCodeEngine implements Engine {
   readonly id = 'claude-code' as const;
@@ -30,6 +48,9 @@ export class ClaudeCodeEngine implements Engine {
   #inflight?: Promise<EngineStatus>;
   #capabilities?: { value: Capabilities; at: number };
   #probing?: Promise<Capabilities>;
+  #usage?: { value: EngineUsage; at: number };
+  #usageProbe?: Promise<EngineUsage>;
+  #limits = new Emitter<LimitSignal>();
 
   constructor(
     private readonly settings: SettingsStore,
@@ -94,30 +115,12 @@ export class ClaudeCodeEngine implements Engine {
       permissionModes: ['default', 'acceptEdits', 'plan', 'bypassPermissions'],
     };
     if (status.state !== 'ready') return empty;
-    const { anthropicApiKey } = await this.settings.secrets();
-    // An input stream that never yields: keeps the session open without sending a prompt.
-    const idle = async function* (): AsyncGenerator<SDKUserMessage> {
-      yield* await new Promise<SDKUserMessage[]>(() => {});
-    };
-    const q = query({
-      prompt: idle(),
-      options: {
-        pathToClaudeCodeExecutable: status.executablePath,
-        env: childEnv({ ANTHROPIC_API_KEY: anthropicApiKey }),
-        cwd: await this.settings.workspace(),
-      },
-    });
+    const q = await this.#idleSession(status);
     try {
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error('Timed out asking Claude Code for its models.')),
-          PROBE_TIMEOUT_MS,
-        ),
-      );
-      const [models, commands] = await Promise.race([
+      const [models, commands] = await withTimeout(
         Promise.all([q.supportedModels(), q.supportedCommands()]),
-        timeout,
-      ]);
+        'Timed out asking Claude Code for its models.',
+      );
       const autoMode = models.some((m) => m.supportsAutoMode);
       const value: Capabilities = {
         ...empty,
@@ -145,10 +148,77 @@ export class ClaudeCodeEngine implements Engine {
     }
   }
 
+  /**
+   * A session whose input stream never yields: it completes the initialize
+   * handshake (so control requests work) without ever sending a prompt.
+   */
+  async #idleSession(status: EngineStatus) {
+    const { anthropicApiKey } = await this.settings.secrets();
+    const idle = async function* (): AsyncGenerator<SDKUserMessage> {
+      yield* await new Promise<SDKUserMessage[]>(() => {});
+    };
+    return query({
+      prompt: idle(),
+      options: {
+        pathToClaudeCodeExecutable: status.executablePath,
+        env: childEnv({ ANTHROPIC_API_KEY: anthropicApiKey }),
+        cwd: await this.settings.workspace(),
+      },
+    });
+  }
+
+  /**
+   * Plan limits, read the way Claude Code's own `/usage` reads them. Metered
+   * sign-ins (API key, Bedrock, …) are answered from the auth status alone;
+   * subscriptions open an idle session and ask — no model request is made.
+   */
+  async usage({ force = false } = {}): Promise<EngineUsage> {
+    const status = await this.detect();
+    const quick = usageFromStatus(status);
+    if (quick) return quick;
+    if (!force && this.#usage && Date.now() - this.#usage.at < USAGE_MS) return this.#usage.value;
+    this.#usageProbe ??= this.#probeUsage(status).finally(() => {
+      this.#usageProbe = undefined;
+    });
+    return this.#usageProbe;
+  }
+
+  async #probeUsage(status: EngineStatus): Promise<EngineUsage> {
+    const q = await this.#idleSession(status);
+    try {
+      // Experimental in the SDK; if it's renamed we degrade to "no plan limits known".
+      type UsageApi = 'usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET';
+      const read = (q as Partial<Pick<typeof q, UsageApi>>)
+        .usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET;
+      if (!read) {
+        return {
+          kind: 'unknown',
+          source: status.auth?.description ?? this.label,
+          windows: [],
+          message: 'Update Claude Code to let Conch show your usage limits.',
+        };
+      }
+      const response = await withTimeout(
+        read.call(q, { skipBehaviors: true }),
+        'Timed out asking Claude Code for your usage.',
+      );
+      const value = usageFromResponse(response);
+      this.#usage = { value, at: Date.now() };
+      return value;
+    } finally {
+      q.close();
+    }
+  }
+
+  onLimits(listener: (signal: LimitSignal) => void): () => void {
+    return this.#limits.on(listener);
+  }
+
   async setApiKey(apiKey: string | undefined): Promise<void> {
     await this.settings.setSecrets({ anthropicApiKey: apiKey });
     this.#cache = undefined;
     this.#capabilities = undefined;
+    this.#usage = undefined;
   }
 
   async *runTurn(input: TurnInput): AsyncIterable<EngineEvent> {
@@ -221,6 +291,10 @@ export class ClaudeCodeEngine implements Engine {
       });
 
       for await (const message of q) {
+        if (message.type === 'rate_limit_event') {
+          this.#limits.emit(limitSignal(message.rate_limit_info));
+          continue;
+        }
         for (const event of translator.translate(message)) {
           if (event.type === 'done') finished = true;
           yield event;

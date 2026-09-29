@@ -16,8 +16,22 @@ import { SearchIndex } from './search/index';
 import { SearchIndexer } from './search/indexer';
 import { RoutineStore } from './routines/store';
 import { SettingsStore } from './settings/store';
+import { UsageService } from './usage/service';
 
 export const SERVER_VERSION = '0.2.0';
+
+/** Every past turn's cost, oldest conversations included. */
+async function turnCosts(store: ConversationStore) {
+  const turns: { at: number; costUsd: number }[] = [];
+  for (const record of await store.list()) {
+    for (const event of await store.events(record.id)) {
+      if (event.type === 'turn.completed' && event.usage?.costUsd) {
+        turns.push({ at: event.at, costUsd: event.usage.costUsd });
+      }
+    }
+  }
+  return turns;
+}
 
 /** Everything the HTTP layer needs, wired once. Tests build this with a temp home. */
 export class Services {
@@ -28,6 +42,7 @@ export class Services {
   readonly routines: RoutineService;
   readonly conversations: ConversationManager;
   readonly engines: Map<EngineId, Engine>;
+  readonly usage: UsageService;
   /** Full-text search over every conversation; absent if the index can't be opened. */
   readonly search?: { index: SearchIndex; indexer: SearchIndexer };
   #login?: { handle: LoginHandle; state: LoginState };
@@ -46,6 +61,7 @@ export class Services {
           installAfter: process.env.CONCH_MOCK_INSTALL_AFTER
             ? Number(process.env.CONCH_MOCK_INSTALL_AFTER)
             : undefined,
+          usage: process.env.CONCH_MOCK_USAGE,
         }),
       ],
     ]);
@@ -66,6 +82,18 @@ export class Services {
     });
     this.conversations.events.on((event) => this.broadcast.emit(event));
     this.memory.changed.on(() => this.broadcast.emit({ type: 'memory.changed' }));
+    this.usage = new UsageService({
+      home: config.CONCH_HOME,
+      engine: () => this.engine(),
+      history: () => turnCosts(conversationStore),
+    });
+    this.usage.changed.on((usage) => this.broadcast.emit({ type: 'usage.changed', usage }));
+    this.conversations.events.on((event) => {
+      if (event.type === 'conversation.event' && event.event.type === 'turn.completed') {
+        void this.usage.recordTurn(event.event.usage);
+      }
+    });
+    this.usage.start();
     this.search = openSearch(config, conversationStore, this.conversations);
   }
 
@@ -77,7 +105,11 @@ export class Services {
 
   async engineStatus(force = false) {
     const status = await this.engine().detect({ force });
-    if (force) this.broadcast.emit({ type: 'engine.status', status });
+    if (force) {
+      this.broadcast.emit({ type: 'engine.status', status });
+      // Signing in, out or switching accounts changes which limits apply.
+      void this.usage.refresh({ force: true });
+    }
     return status;
   }
 

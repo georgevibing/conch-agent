@@ -93,6 +93,9 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         case 'memory.changed':
           void client.invalidateQueries({ queryKey: keys.memories });
           break;
+        case 'usage.changed':
+          client.setQueryData(keys.usage, event.usage);
+          break;
         case 'error': {
           const key = event.conversationId ?? NEW;
           if (event.clientMessageId) live.returnPending(key, event.clientMessageId);
