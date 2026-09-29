@@ -65,7 +65,7 @@ export const Slots: Story = {
         <Input
           aria-label="API key"
           type={visible ? 'text' : 'password'}
-          defaultValue="sk-ant-api03-secret"
+          defaultValue="correct-horse-battery-staple"
           trailing={
             <IconButton
               size="sm"
