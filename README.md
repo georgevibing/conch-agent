@@ -18,11 +18,23 @@ surfaces with a pointer-reactive, mother-of-pearl iridescence we call _Lustre_.
 ```bash
 corepack enable     # or: npm i -g pnpm
 pnpm install
-pnpm storybook      # explore Nacre at http://localhost:6006
-pnpm dev            # web on :5173, gateway on :4317
+pnpm start          # builds the app and opens http://localhost:4317
 ```
 
-Requires Node ≥ 24 and a working `claude` (Claude Code) login on the host.
+That's it. Conch finds Claude Code on your machine, tells you if it needs installing
+or signing in (and can sign you in), then asks a couple of optional questions so it
+can be _yours_. Everything it stores — settings, memories, conversations — lives in
+`~/.conch` as plain files.
+
+Development:
+
+```bash
+pnpm dev            # web on :5173 (hot reload) + gateway on :4317
+pnpm dev:mock       # same, with a scripted engine — no Claude usage
+pnpm storybook      # explore Nacre at http://localhost:6006
+```
+
+Requires Node ≥ 24. Claude Code is optional to start — Conch will walk you through it.
 
 ## Layout
 
@@ -42,5 +54,7 @@ Requires Node ≥ 24 and a working `claude` (Claude Code) login on the host.
 
 ## Status
 
-Milestone 1: monorepo, tooling and the Nacre component library. The chat
-experience is next.
+- ✅ Milestone 1 — monorepo, tooling, Nacre design system
+- ✅ Milestone 2 — the Conch agent: onboarding, chat over Claude Code, memory,
+  personality, permissions
+- Next — Codex CLI, Anthropic API and OpenRouter engines

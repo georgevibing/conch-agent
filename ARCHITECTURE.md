@@ -15,7 +15,7 @@ MCP servers, hooks and CLAUDE.md files) that already exists on the host machine.
                 │ HTTP: REST (sessions, fs)    │
 ┌───────────────┴──────────────────────────────▼──────────────┐
 │  apps/server  (Node ≥ 24, Fastify + @fastify/websocket)     │
-│   ├─ auth: pairing token → httpOnly session cookie          │
+│   ├─ guards: Host/Origin checks · token for remote access   │
 │   ├─ SessionManager: one AgentRun per active session        │
 │   ├─ AgentRun: wraps query() from the Claude Agent SDK      │
 │   │    streaming input · partial messages · canUseTool      │
@@ -54,61 +54,78 @@ apps can override predictably. Full design rationale: [docs/design/NACRE.md](./d
 
 ### Wire protocol (`packages/protocol`)
 
-Zod schemas for:
+Zod schemas for everything on the wire (v2):
 
-- `ClientCommand` (browser → server): `session.create`, `session.send`,
-  `session.interrupt`, `permission.respond`, `session.subscribe` (with `afterSeq`
-  for resumption), `session.setMode`.
-- `ServerEvent` (server → browser): `session.state`, `message.delta` (streamed text/
-  thinking), `message.complete`, `tool.started` / `tool.progress` / `tool.finished`,
-  `permission.requested`, `result` (cost, usage, duration), `error`.
-
-Every `ServerEvent` has a per-session monotonically increasing `seq`; clients
-re-subscribe with the last seen `seq` and the server replays from its ring buffer.
+- **REST** — `GET /api/state` (onboarding flag, persona, profile, preferences, engine
+  status, workspace), `PATCH /api/settings`, `GET /api/engine?refresh=1`,
+  `POST /api/engine/login` (+ `/code`, `/cancel`), `PUT|DELETE /api/engine/api-key`,
+  memory CRUD under `/api/memories`, conversations under `/api/conversations`.
+- **WebSocket `/ws`** — `ClientCommand`: `conversation.send` (creates a conversation
+  when no id is given), `conversation.subscribe` (with `afterSeq`), `conversation.interrupt`,
+  `permission.respond`. `ServerEvent`: `conversation.created|updated|deleted`,
+  `conversation.event`, `engine.status`, `engine.login`, `memory.changed`, `error`.
+- A conversation is an **append-only log of `ConversationEvent`s** (user message,
+  assistant deltas, tool start/finish, permission requested/resolved, memory
+  saved/forgotten, status, turn completed). Each has a per-conversation `seq`; clients
+  resubscribe with the last `seq` they saw and the server replays the rest.
 
 ### Gateway (`apps/server`)
 
-- **Fastify** for HTTP (health, session list/history, directory picker) and
-  **@fastify/websocket** for the live stream. One socket per tab, multiplexing
-  sessions by id.
-- **AgentRun** wraps `query({ prompt, options })` from `@anthropic-ai/claude-agent-sdk`:
-  - `prompt` is an `AsyncIterable<SDKUserMessage>` fed by a queue, so follow-up
-    messages stream into the same live session.
-  - `includePartialMessages: true` for token-level streaming.
-  - `resume: sessionId` to continue Claude Code sessions (including ones started in
-    the terminal).
-  - `canUseTool` delegates to the **PermissionBroker**, which emits
-    `permission.requested` and awaits the browser's `permission.respond`.
-  - `permissionMode` is surfaced as a UI toggle (`default`, `acceptEdits`, `plan`, …).
-  - `query.interrupt()` backs the Stop button.
-- SDK messages are translated into protocol events in a single pure module
-  (`translate.ts`) with exhaustive `switch`es — unknown message types are logged
-  and dropped, never forwarded raw.
+```
+src/
+  config.ts, security.ts      env validation; Host/Origin guards; remote token
+  services.ts                 wiring: stores, engines, conversation manager, login
+  app.ts                      Fastify routes + /ws + static web app
+  settings/store.ts           ~/.conch/settings.json and secrets.json (0600)
+  memory/                     file-per-memory store, prompt builder, memory tools
+  conversations/              manager (turns, permissions, events) + JSONL store
+  engines/
+    types.ts                  Engine / HostTool / EngineEvent contracts
+    claude-code/              detect, login, env scrub, SDK → EngineEvent translator
+    mock/                     scripted engine for UI work and E2E tests
+```
+
+- Each turn calls `query()` from the Claude Agent SDK with `resume` (the Claude Code
+  session id from the previous turn), `includePartialMessages` for token streaming,
+  `systemPrompt: { preset: 'claude_code', append }` carrying personality, profile and
+  memory, an in-process MCP server exposing Conch's memory tools, and `canUseTool`
+  wired to inline permission prompts.
+- Child processes get a scrubbed environment: variables describing a _parent_ Claude
+  Code session are removed so Conch works when launched from inside Claude Code.
+- Local data lives in `~/.conch/` (`CONCH_HOME`): `settings.json`, `secrets.json`,
+  `memory/*.md`, `conversations/index.json` + `<id>.jsonl`, `workspace/` (default cwd).
+
+See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
+[ADR 0004 — Engines](./docs/adr/0004-engines.md).
 
 ### Web app (`apps/web`)
 
-- React 19 + Vite, React Router for routes.
-- **TanStack Query** for REST data; a small **Zustand** store per session for the live
-  event stream (append-only, keyed by `seq`, derived selectors for render).
-- Rendering assistant output: markdown → Nacre `Prose`, fenced code → `CodeBlock`,
-  tool calls → `ToolCall`, permission requests → inline approval cards.
-- Virtualised transcript for long sessions; the composer is always reachable
-  (`⌘K` command palette, `Esc` to interrupt).
+- React 19 + Vite, React Router (`/`, `/c/:id`), TanStack Query for REST, a zustand
+  store that folds `ConversationEvent`s into view models (pure, unit-tested reducer),
+  and a reconnecting WebSocket client.
+- First run is a short, skippable flow: welcome → connect Claude Code (install /
+  sign-in / API key, with live re-checks) → personality and "about you" → chat.
+- Assistant output: markdown → Nacre `Prose`, fenced code → `CodeBlock`, tool calls →
+  `ToolCall`, permission requests → inline approval cards, memory saves → inline pills
+  with undo.
 
 ## Security model
 
 The gateway can read and write files and run commands on the host **as the user**.
 Treat it like an SSH server.
 
-- Binds `127.0.0.1` by default. `CONCH_HOST=0.0.0.0` prints a loud warning and
-  requires `CONCH_ALLOW_REMOTE=1`; the recommended remote path is an SSH tunnel or
-  Tailscale, never a public port.
-- First run prints a one-time **pairing token**; the browser exchanges it for a
-  signed, `httpOnly`, `SameSite=Strict` cookie. WebSocket upgrades check the cookie
-  and `Origin`.
-- Tool permissions are never auto-approved by the gateway; `bypassPermissions` must be
-  chosen per session in the UI and is visually loud.
-- No telemetry. Logs redact prompt content unless `CONCH_LOG_CONTENT=1`.
+- Binds `127.0.0.1` by default. Binding elsewhere requires `CONCH_ALLOW_REMOTE=1`
+  **and** a `CONCH_TOKEN` (16+ chars); the browser presents it once via `?token=` and
+  receives an `HttpOnly`, `SameSite=Strict` cookie. Prefer an SSH tunnel or Tailscale
+  over a public port.
+- **DNS-rebinding guard:** requests are answered only when `Host` is loopback,
+  `CONCH_ALLOWED_HOSTS`, or the configured remote host.
+- **Cross-site guard:** WebSocket upgrades and all non-GET requests carrying an
+  `Origin` must come from an allowed host, so a web page can't drive the agent.
+- Tool permissions are never auto-approved by the gateway (except Conch's own memory
+  tools, whose effects are shown inline); "Always allow" is scoped to the conversation.
+- Secrets (API keys) live in `~/.conch/secrets.json` (0600) and are never returned to
+  the browser. No telemetry.
 
 ## Quality gates
 
