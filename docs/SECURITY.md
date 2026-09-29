@@ -88,6 +88,23 @@ tells you, in plain words, when something is risky:
 | Other people may read your Conch files         | `~/.conch` holds every conversation.                            |
 | Your work folder has its own Claude Code rules | A downloaded project's hooks could run commands without asking. |
 
+## Connecting apps (integrations)
+
+- **Sign-ins happen on the app's own page.** Conch never sees your password, and it
+  keeps the resulting token only on this computer, readable by you alone. Nothing is
+  shown again after you save it.
+- **By default, your assistant asks before it changes anything** in a connected app
+  (creating, sending, editing, deleting). Reading is allowed. You can make an app
+  "Ask every time", or turn single tools off.
+- **"Don't ask" is powerful.** An email or page the assistant reads could try to trick
+  it. Conch asks you to confirm it's you before you choose it, and the security
+  checkup reminds you it's on.
+- **If an app changes what a tool does,** Conch stops auto-allowing that tool and
+  tells you.
+- **Programs you add run as you.** Only add ones from people you trust.
+- **Disconnecting** makes Conch forget the sign-in. To revoke it on the app's side
+  too, remove Conch from that app's "connected apps" settings.
+
 ## Good habits
 
 - Keep **Ask first** or **Auto** as your default mode. Use **Full trust** only in a

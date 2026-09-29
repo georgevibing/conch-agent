@@ -110,6 +110,15 @@ src/
   `report_outcome` tool. Chats get `create_routine` / `list_routines` /
   `update_routine` / `delete_routine`; drafts only run once the user turns them on.
   See [ADR 0006](./docs/adr/0006-routines.md).
+- **Integrations** (`integrations/`): MCP servers the user connects from a catalog
+  (one-click OAuth, tokens, local programs) or adds by address/command. The service
+  keeps health (probe → plain-language state + one fix action), refreshes tokens
+  (single-flight), pins tool definitions, and applies per-integration / per-tool
+  policies in `requestPermission`. Engines declare `integrations.mode`: `native`
+  engines get servers over stdin (`setMcpServers`, never argv), `bridge` engines get
+  `bridgedTools` from Conch's own MCP client. OAuth callback: `GET /oauth/callback`.
+  Outbound requests pass the SSRF guard (`integrations/net.ts`). See
+  [ADR 0009](./docs/adr/0009-integrations.md).
 - **Usage limits.** `GET /api/usage` returns one `UsageSnapshot`, whatever the sign-in.
   - Subscriptions report plan windows (5-hour session, weekly, per-model), read
     through the SDK's structured `/usage`.
@@ -137,7 +146,7 @@ src/
   shows one in context. See [ADR 0007 — Search](./docs/adr/0007-search.md).
 - Local data lives in `~/.conch/` (`CONCH_HOME`): `settings.json`, `secrets.json`,
   `memory/*.md`, `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `search.db`,
-  `workspace/` (default cwd).
+  `integrations.json` + `integrations.secrets.json`, `workspace/` (default cwd).
 
 See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
 [ADR 0004 — Engines](./docs/adr/0004-engines.md).
@@ -152,6 +161,12 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
 - Assistant output: markdown → Nacre `Prose`, fenced code → `CodeBlock`, tool calls →
   `ToolCall`, permission requests → inline approval cards, memory saves → inline pills
   with undo.
+- **Integrations.** `/integrations` shows what's connected (broken first, each with its
+  one fix), a catalog with bundled logos, and what the engine has set up itself;
+  `/integrations/:id` has the policy, per-tool Allow · Ask · Off and the connection.
+  Connecting opens a dialog whose handshake animates through waiting → connected /
+  failed; OAuth runs in a popup that lands on `/integrations/done`. Broken
+  integrations show inline in chats (`integration.issue`) and as a sidebar count.
 - **Search.** ⌘K (or Search in the sidebar) is one box for everything: fuzzy chat
   titles (client-side), full-text message hits from every conversation, and actions,
   with a live preview of the selected hit. Enter opens the chat at that message with
@@ -201,6 +216,9 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
   - unattended runs get no routine tools, and their permission prompts expire;
   - "Always allow" lasts for the conversation only and is never written to
     Claude Code's settings;
+  - integrations ask before changes by default; "Don't ask" needs a recent
+    password/key and is flagged by the checkup; a tool whose definition changes
+    loses "allow"; integration content is framed as data, not instructions;
   - memories are injected as facts, not instructions.
 - **Memory:** at most 50 conversations are held in memory; idle ones are dropped and reloaded from disk.
 - **Storage:** `~/.conch` is tightened to 0700/0600 at start-up, and every store

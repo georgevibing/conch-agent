@@ -20,6 +20,7 @@ own design system. See [ARCHITECTURE.md](./ARCHITECTURE.md).
 | The gateway / Claude Code integration / permissions       | `apps/server/` + [ARCHITECTURE.md § Gateway](./ARCHITECTURE.md#gateway-appsserver)                                                                                                                |
 | Wire protocol between web and gateway                     | `packages/protocol/` + [ARCHITECTURE.md § Protocol](./ARCHITECTURE.md#wire-protocol-packagesprotocol)                                                                                             |
 | Lint / TS config shared across packages                   | `packages/eslint-config/`, `packages/tsconfig/`                                                                                                                                                   |
+| Integrations (apps/MCP servers, OAuth, the catalog)       | `apps/server/src/integrations/` + [ADR 0009](./docs/adr/0009-integrations.md) — security-relevant                                                                                                 |
 | A decision that changes architecture or adds a dependency | Write an ADR in [`docs/adr/`](./docs/adr/) first                                                                                                                                                  |
 | Security, auth, exposing the gateway beyond localhost     | [§ Security engineering](#security-engineering) below → [ARCHITECTURE.md § Security](./ARCHITECTURE.md#security-model) → [ADR 0008](./docs/adr/0008-access-and-hardening.md) — treat as high-risk |
 
@@ -83,6 +84,23 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
 7. **Inclusive language** in code, comments and docs (primary/replica, allowlist/denylist).
 8. **Don't edit generated or vendored files** (`pnpm-lock.yaml` by hand, `dist/`,
    `storybook-static/`).
+9. **Design for every provider, not just Claude Code.** Conch will drive other
+   engines (Codex CLI, OpenRouter, the Anthropic API, local models). Every feature
+   must work for all of them, or degrade on purpose:
+   - Put engine-specific behaviour behind the `Engine` interface
+     (`apps/server/src/engines/types.ts`), as a declared capability. Features ask
+     the engine what it can do (e.g. `engine.integrations.mode`, `usage?`,
+     `complete?`); they never check which engine it is.
+   - Keep the protocol and UI generic. Use the engine's `label` and the
+     assistant's name (`persona.name`), never a hard-coded "Claude" or "Claude
+     Code" in product copy (a few older screens still do: fix them when you
+     touch them). Give things generic names (`account` connectors, not
+     `claude-ai`).
+   - When an engine lacks a capability, Conch fills the gap where it reasonably
+     can (e.g. the MCP bridge for engines without MCP) or hides the feature with
+     an explanation. It never breaks.
+   - The mock engine is the second provider: it takes the other path where one
+     exists (it's a "bridge" engine for integrations), so both paths are tested.
 
 ## Security engineering
 
