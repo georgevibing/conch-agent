@@ -12,8 +12,8 @@ test('first run to first conversation', async ({ page, request }) => {
   await expect(page.getByRole('heading', { name: 'Hello.' })).toBeVisible();
   await page.getByRole('button', { name: 'Get started' }).click();
 
-  // Connect: Claude Code is ready, so this advances by itself.
-  await expect(page.getByText(/Signed in · Claude Max/)).toBeVisible();
+  // Connect: the provider is already connected, so this advances by itself.
+  await expect(page.getByText(/Claude Max/)).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Give me a personality' })).toBeVisible({
     timeout: 8000,
   });

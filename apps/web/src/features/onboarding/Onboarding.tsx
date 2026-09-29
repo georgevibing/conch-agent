@@ -17,7 +17,7 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 
 import { useAppState, useUpdateSettings } from '../../api/queries';
 import { useAutoFocus } from '../../lib/useAutoFocus';
-import { EngineConnect } from '../engine/EngineConnect';
+import { ProviderSetup } from '../providers/ProviderSetup';
 import styles from './Onboarding.module.css';
 import { toneOptions } from './tones';
 
@@ -80,7 +80,7 @@ function Welcome({ onNext }: { onNext: () => void }) {
         Hello.
       </Heading>
       <Text size="lg" tone="muted" align="center" className={styles.welcomeLead}>
-        I’m Conch — a calm place to think and build with Claude, right here on your computer.
+        I’m Conch — a calm place to think and build, right here on your computer.
       </Text>
       <Button ref={ref} size="lg" trailingIcon={<ArrowRight />} onClick={onNext}>
         Get started
@@ -307,10 +307,10 @@ export function Onboarding() {
         {step === 'connect' && (
           <StepFrame
             eyebrow="Connect"
-            title="Let’s connect to Claude"
-            lead="Conch uses Claude Code on this computer to think, read and build."
+            title="Choose what powers me"
+            lead="An agent already on this computer, or a model you hold a key for. You can switch later, or set up more than one."
           >
-            <EngineConnect onReady={() => setStep((s) => (s === 'connect' ? 'persona' : s))} />
+            <ProviderSetup onReady={() => setStep((s) => (s === 'connect' ? 'persona' : s))} />
           </StepFrame>
         )}
         {step === 'persona' && (

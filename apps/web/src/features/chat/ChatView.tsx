@@ -78,7 +78,7 @@ function EngineIssue({ status, issue }: { status?: EngineStatus; issue?: string 
       title={title}
       className={styles.issue}
       action={
-        <Button size="sm" onClick={() => openSettings('engine')}>
+        <Button size="sm" onClick={() => openSettings('providers')}>
           {status.state === 'signed-out' ? 'Sign in' : 'Fix this'}
         </Button>
       }
@@ -200,7 +200,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
                 variant="ghost"
                 size="sm"
                 leadingIcon={<Folder />}
-                onClick={() => openSettings('engine')}
+                onClick={() => openSettings('providers')}
                 aria-label={`Working folder: ${workspaceName}`}
               >
                 {workspaceName}

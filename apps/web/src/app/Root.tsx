@@ -4,6 +4,7 @@ import { Route, Routes } from 'react-router';
 
 import { useAppState } from '../api/queries';
 import { OAuthDone } from '../features/integrations/OAuthDone';
+import { ProviderDone } from '../features/providers/ProviderDone';
 import { Onboarding } from '../features/onboarding/Onboarding';
 import { Shell } from './Shell';
 import styles from './Root.module.css';
@@ -39,8 +40,9 @@ export function Root() {
     );
   }
 
-  // The sign-in window: a page of its own, without the app around it.
+  // The sign-in windows: pages of their own, without the app around them.
   if (window.location.pathname === '/integrations/done') return <OAuthDone />;
+  if (window.location.pathname === '/providers/done') return <ProviderDone />;
 
   if (!state.data.onboarded) return <Onboarding />;
 

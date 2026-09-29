@@ -43,19 +43,13 @@ import {
 import { useState, type ReactNode } from 'react';
 
 import { api } from '../../api/client';
-import {
-  keys,
-  setEngineStatus,
-  useAppState,
-  useMemories,
-  useUpdateSettings,
-} from '../../api/queries';
+import { keys, useAppState, useMemories, useUpdateSettings } from '../../api/queries';
 import { useUi, type SettingsTab } from '../../app/ui';
 import { relativeTime } from '../../lib/time';
 import { useAutoFocus } from '../../lib/useAutoFocus';
 import { SecurityTab } from '../auth/SecurityTab';
-import { EngineConnect } from '../engine/EngineConnect';
 import { toneOptions } from '../onboarding/tones';
+import { ProvidersTab } from '../providers/ProvidersTab';
 import { UsageTab } from '../usage/UsageTab';
 import styles from './Settings.module.css';
 import { CommandsTab } from './CommandsTab';
@@ -320,94 +314,6 @@ function MemoryTab({ autoMemory }: { autoMemory: boolean }) {
   );
 }
 
-function EngineTab({ workspace, workspacePref }: { workspace: string; workspacePref?: string }) {
-  const { data: app } = useAppState();
-  const client = useQueryClient();
-  const update = useUpdateSettings();
-  const [folder, setFolder] = useState(workspacePref ?? '');
-  const status = useAutosave(
-    folder,
-    (f) => update.mutateAsync({ preferences: { workspace: f.trim() } }),
-    900,
-  );
-  const engine = app?.engine;
-  return (
-    <Stack gap={8}>
-      <Section
-        title="Claude Code"
-        description="Conch delegates every conversation to Claude Code on this computer."
-      >
-        {engine?.state === 'ready' ? (
-          <Stack gap={4}>
-            <dl className={styles.facts}>
-              <dt>Status</dt>
-              <dd>
-                <Badge tone="success" dot>
-                  Connected
-                </Badge>
-              </dd>
-              <dt>Account</dt>
-              <dd>{engine.auth?.description ?? 'Signed in'}</dd>
-              {engine.version && (
-                <>
-                  <dt>Version</dt>
-                  <dd>{engine.version}</dd>
-                </>
-              )}
-              {engine.executablePath && (
-                <>
-                  <dt>Location</dt>
-                  <dd className={styles.mono}>{engine.executablePath}</dd>
-                </>
-              )}
-            </dl>
-            <Stack direction="row" gap={2}>
-              <Button
-                variant="surface"
-                size="sm"
-                onClick={async () => setEngineStatus(client, await api.engine(true))}
-              >
-                Check again
-              </Button>
-              {engine.auth?.method === 'api-key' && (
-                <Button
-                  variant="ghost"
-                  tone="danger"
-                  size="sm"
-                  onClick={async () => setEngineStatus(client, await api.clearApiKey())}
-                >
-                  Remove API key
-                </Button>
-              )}
-            </Stack>
-          </Stack>
-        ) : (
-          <EngineConnect />
-        )}
-      </Section>
-      <Section
-        title="Working folder"
-        description="Where Claude reads and writes files when you ask it to."
-        status={<SaveStatus status={status} />}
-      >
-        <Field>
-          <Field.Label>Folder</Field.Label>
-          <Input
-            value={folder}
-            placeholder={workspace}
-            spellCheck={false}
-            className={styles.mono}
-            onChange={(e) => setFolder(e.target.value)}
-          />
-          <Field.Description>
-            Leave empty to use Conch’s own workspace ({workspace}).
-          </Field.Description>
-        </Field>
-      </Section>
-    </Stack>
-  );
-}
-
 const accentSwatches = Object.keys(accents) as AccentName[];
 
 function AppearanceTab() {
@@ -513,7 +419,7 @@ const tabs: { value: SettingsTab; label: string; icon: ReactNode }[] = [
   { value: 'commands', label: 'Commands', icon: <SquareSlash /> },
   { value: 'usage', label: 'Usage', icon: <BatteryMedium /> },
   { value: 'security', label: 'Security', icon: <ShieldCheck /> },
-  { value: 'engine', label: 'Claude Code', icon: <Cpu /> },
+  { value: 'providers', label: 'Providers', icon: <Cpu /> },
   { value: 'appearance', label: 'Appearance', icon: <Palette /> },
 ];
 
@@ -570,8 +476,8 @@ export function Settings() {
               <Tabs.Content value="security">
                 <SecurityTab />
               </Tabs.Content>
-              <Tabs.Content value="engine">
-                <EngineTab workspace={app.workspace} workspacePref={app.preferences.workspace} />
+              <Tabs.Content value="providers">
+                <ProvidersTab workspace={app.workspace} workspacePref={app.preferences.workspace} />
               </Tabs.Content>
               <Tabs.Content value="appearance">
                 <AppearanceTab />

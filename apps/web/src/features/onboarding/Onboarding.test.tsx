@@ -2,7 +2,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { appState, baseEngine, mockFetch, renderApp } from '../../test/harness';
+import { appState, baseEngine, baseProviders, mockFetch, renderApp } from '../../test/harness';
 import { Onboarding } from './Onboarding';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -13,6 +13,7 @@ describe('Onboarding', () => {
     const calls = mockFetch({
       'GET /api/state': () => state,
       'GET /api/engine': () => baseEngine,
+      'GET /api/providers': () => baseProviders,
       'PATCH /api/settings': (body) => {
         const patch = body as { profile?: object; persona?: object; onboarded?: boolean };
         state = {
@@ -29,9 +30,9 @@ describe('Onboarding', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Get started' }));
     expect(
-      await screen.findByRole('heading', { name: 'Let’s connect to Claude' }),
+      await screen.findByRole('heading', { name: 'Choose what powers me' }),
     ).toBeInTheDocument();
-    // Ready engines advance on their own.
+    // A provider that's already connected carries you onward by itself.
     expect(
       await screen.findByRole('heading', { name: 'Give me a personality' }, { timeout: 4000 }),
     ).toBeInTheDocument();
@@ -63,6 +64,7 @@ describe('Onboarding', () => {
     mockFetch({
       'GET /api/state': () => appState({ onboarded: false }),
       'GET /api/engine': () => baseEngine,
+      'GET /api/providers': () => baseProviders,
     });
     const user = userEvent.setup();
     renderApp(<Onboarding />);

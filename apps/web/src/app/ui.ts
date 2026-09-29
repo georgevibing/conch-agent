@@ -9,7 +9,7 @@ export type SettingsTab =
   | 'commands'
   | 'usage'
   | 'security'
-  | 'engine'
+  | 'providers'
   | 'appearance';
 
 /** Which composer picker is open (so `/model` and `/mode` can open them). */

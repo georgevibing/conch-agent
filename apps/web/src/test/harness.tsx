@@ -1,4 +1,4 @@
-import type { AppState, EngineStatus, ServerEvent } from '@conch/protocol';
+import type { AppState, EngineStatus, Provider, ProvidersList, ServerEvent } from '@conch/protocol';
 import { NacreProvider } from '@conch/nacre';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
@@ -55,6 +55,89 @@ export const baseEngine: EngineStatus = {
   canSignIn: true,
   checkedAt: 1,
 };
+
+/** One provider, ready to be tweaked per test. */
+export function provider(patch: Partial<Provider> = {}): Provider {
+  return {
+    id: 'claude-code',
+    name: 'Claude Code',
+    tagline: 'Claude, on this computer',
+    description: 'Anthropic’s coding agent, already on this machine.',
+    connect: 'program',
+    status: baseEngine,
+    active: true,
+    ready: true,
+    highlights: ['Works with your files'],
+    limits: [],
+    install: baseEngine.install,
+    experimental: false,
+    hidden: false,
+    ...patch,
+  };
+}
+
+export const baseProviders: ProvidersList = {
+  active: 'claude-code',
+  providers: [
+    provider(),
+    provider({
+      id: 'codex-cli',
+      name: 'Codex',
+      tagline: 'OpenAI’s coding agent',
+      description: 'OpenAI’s agent for your machine.',
+      active: false,
+      ready: false,
+      experimental: true,
+      limits: ['Codex decides inside its own sandbox, so Conch can’t ask you before each step.'],
+      status: {
+        engine: 'codex-cli',
+        label: 'Codex',
+        state: 'not-installed',
+        message: 'Codex isn’t on this computer yet.',
+        install: [{ label: 'npm', command: 'npm install -g @openai/codex' }],
+        canSignIn: true,
+        checkedAt: 1,
+      },
+      install: [{ label: 'npm', command: 'npm install -g @openai/codex' }],
+    }),
+    provider({
+      id: 'openrouter',
+      name: 'OpenRouter',
+      tagline: 'Hundreds of models, one key',
+      description: 'One key for models from every lab.',
+      connect: 'key',
+      active: false,
+      ready: false,
+      status: {
+        engine: 'openrouter',
+        label: 'OpenRouter',
+        state: 'signed-out',
+        install: [],
+        canSignIn: false,
+        checkedAt: 1,
+      },
+      install: [],
+      keyForm: {
+        label: 'OpenRouter key',
+        placeholder: 'sk-or-v1-…',
+        help: 'Or sign in and let OpenRouter make one.',
+        url: 'https://openrouter.ai/settings/keys',
+        pattern: '^sk-or-',
+        patternHint: 'OpenRouter keys start with sk-or-.',
+        canSignIn: true,
+      },
+    }),
+  ],
+  onePassword: {
+    available: false,
+    message: 'Install the 1Password command line tool to keep keys in 1Password.',
+    installCommand: 'brew install 1password-cli',
+  },
+};
+
+export function providersList(patch: Partial<ProvidersList> = {}): ProvidersList {
+  return { ...baseProviders, ...patch };
+}
 
 export function appState(patch: Partial<AppState> = {}): AppState {
   return {

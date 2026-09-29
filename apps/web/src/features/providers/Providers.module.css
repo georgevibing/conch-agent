@@ -1,0 +1,97 @@
+@layer nacre.components {
+  .mono {
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-sm);
+  }
+
+  /* Key/value readout for a connected provider, same shape as Settings' facts. */
+  .facts {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--nc-space-2) var(--nc-space-4);
+    margin: 0;
+    font-size: var(--nc-text-sm);
+  }
+
+  .facts dt {
+    color: var(--nc-text-subtle);
+  }
+
+  .facts dd {
+    margin: 0;
+    color: var(--nc-text);
+    overflow-wrap: anywhere;
+  }
+
+  /* Install commands: one line each, with the copy button where the eye lands. */
+  .commands {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .command {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-2) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .commandLabel {
+    flex-shrink: 0;
+    inline-size: 6.5rem;
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-subtle);
+  }
+
+  .commandText {
+    flex: 1;
+    min-inline-size: 0;
+    overflow-x: auto;
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text);
+    white-space: nowrap;
+  }
+
+  .waiting {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .spacer {
+    flex: 1;
+  }
+
+  .linkIcon {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  .row {
+    display: flex;
+    gap: var(--nc-space-2);
+  }
+
+  .row > :first-child {
+    flex: 1;
+  }
+
+  /* The window a provider sends you back to. */
+  .done {
+    display: grid;
+    place-items: center;
+    min-block-size: 100dvh;
+    padding: var(--nc-space-6);
+    background: var(--nc-canvas);
+  }
+}

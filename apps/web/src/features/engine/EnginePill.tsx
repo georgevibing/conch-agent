@@ -77,7 +77,7 @@ export function EnginePill() {
               size="sm"
               variant="ghost"
               leadingIcon={<Settings2 />}
-              onClick={() => openSettings('engine')}
+              onClick={() => openSettings('providers')}
             >
               Settings
             </Button>

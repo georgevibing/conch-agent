@@ -16,6 +16,7 @@ import { Sidebar } from '../features/sidebar/Sidebar';
 import { UsageIndicator } from '../features/usage/UsageIndicator';
 import { useLiveStore } from '../live/store';
 import styles from './Shell.module.css';
+import { useProviderSignInResult } from '../features/providers/useSignInResult';
 import { useUi } from './ui';
 import { useHotkey } from './useHotkey';
 
@@ -45,6 +46,8 @@ export function Shell() {
     window.addEventListener('conch:navigate', go);
     return () => window.removeEventListener('conch:navigate', go);
   }, [navigate]);
+  // A provider sign-in that had to come back to this tab instead of a popup.
+  useProviderSignInResult();
   const { data: conversations } = useConversations();
   const narrow = useMediaQuery('(max-width: 820px)');
   const { sidebarOpen, toggleSidebar, mobileSidebarOpen, setMobileSidebar, openSettings } = useUi();

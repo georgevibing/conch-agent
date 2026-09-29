@@ -1,0 +1,208 @@
+import type { Provider } from '@conch/protocol';
+import {
+  AlertDialog,
+  Button,
+  Callout,
+  Field,
+  Input,
+  ProviderCard,
+  Skeleton,
+  Stack,
+  Text,
+} from '@conch/nacre';
+import { useState } from 'react';
+
+import { useAppState, useUpdateSettings } from '../../api/queries';
+import { Section, SaveStatus } from '../settings/Section';
+import { useAutosave } from '../settings/useAutosave';
+import { ConnectProviderDialog } from './ConnectProviderDialog';
+import styles from './Providers.module.css';
+import { useCheckProvider, useClearProviderKey, useProviders, useUseProvider } from './queries';
+
+/** Quiet facts for a connected provider: who you are, and what Conch is running. */
+function metaOf(provider: Provider): string {
+  const { status } = provider;
+  const parts = [status.auth?.description];
+  if (provider.key?.source === '1password') parts.push('key in 1Password');
+  if (status.version) parts.push(status.version);
+  return parts.filter(Boolean).join(' · ') || 'Connected';
+}
+
+/** Broken and unconnected first — the things you might want to act on. */
+function order(a: Provider, b: Provider) {
+  const rank = (p: Provider) => (p.active ? 0 : p.status.state === 'ready' ? 1 : 2);
+  return rank(a) - rank(b);
+}
+
+export function ProvidersTab({
+  workspace,
+  workspacePref,
+}: {
+  workspace: string;
+  workspacePref?: string;
+}) {
+  const { data: app } = useAppState();
+  const update = useUpdateSettings();
+  const [folder, setFolder] = useState(workspacePref ?? '');
+  const folderStatus = useAutosave(
+    folder,
+    (next) => update.mutateAsync({ preferences: { workspace: next.trim() } }),
+    900,
+  );
+
+  const assistant = app?.persona.name ?? 'Conch';
+  const [connecting, setConnecting] = useState<string>();
+  const [removing, setRemoving] = useState<Provider>();
+  const use = useUseProvider();
+  const check = useCheckProvider();
+  const clearKey = useClearProviderKey();
+
+  const { data, isPending } = useProviders();
+  const providers = data?.providers ?? [];
+  const open = providers.find((provider) => provider.id === connecting);
+
+  return (
+    <Stack gap={8}>
+      <Section
+        title="Providers"
+        description={`Where ${assistant}’s intelligence comes from. One provider is in use; the others stay connected and ready.`}
+      >
+        <Stack gap={3}>
+          {data?.pinned && (
+            <Callout tone="info" title="Fixed for this run">
+              {data.pinned}
+            </Callout>
+          )}
+          {isPending ? (
+            <>
+              <Skeleton shape="block" height="7rem" />
+              <Skeleton shape="block" height="7rem" />
+            </>
+          ) : (
+            [...providers].sort(order).map((provider, index) => {
+              const ready = provider.status.state === 'ready';
+              const busy =
+                (use.isPending && use.variables === provider.id) ||
+                (check.isPending && check.variables === provider.id);
+              return (
+                <ProviderCard
+                  key={provider.id}
+                  index={index}
+                  name={provider.name}
+                  brand={provider.status.engine}
+                  color={provider.color}
+                  tagline={provider.tagline}
+                  state={provider.status.state}
+                  active={provider.active}
+                  experimental={provider.experimental}
+                  meta={metaOf(provider)}
+                  message={
+                    ready
+                      ? undefined
+                      : (provider.status.message ??
+                        (provider.connect === 'key'
+                          ? `Add a key and ${provider.name} is ready.`
+                          : undefined))
+                  }
+                  highlights={provider.highlights}
+                  action={
+                    ready && !provider.active
+                      ? {
+                          label: 'Use this',
+                          onClick: () => use.mutate(provider.id),
+                          loading: busy,
+                        }
+                      : ready
+                        ? {
+                            label: 'Check again',
+                            onClick: () => check.mutate(provider.id),
+                            loading: busy,
+                          }
+                        : {
+                            label:
+                              provider.status.state === 'not-installed'
+                                ? 'How to install'
+                                : provider.status.state === 'error'
+                                  ? 'Try again'
+                                  : 'Connect',
+                            onClick: () => setConnecting(provider.id),
+                          }
+                  }
+                  secondary={
+                    ready
+                      ? provider.key
+                        ? { label: 'Remove key', onClick: () => setRemoving(provider) }
+                        : { label: 'Details', onClick: () => setConnecting(provider.id) }
+                      : undefined
+                  }
+                />
+              );
+            })
+          )}
+          <Text size="xs" tone="subtle">
+            Keys stay on this computer (or in 1Password) and are never shown again. Switching
+            provider only changes new messages — your chats stay where they are.
+          </Text>
+        </Stack>
+      </Section>
+
+      <Section
+        title="Working folder"
+        description={`Where ${assistant} reads and writes files when you ask it to.`}
+        status={<SaveStatus status={folderStatus} />}
+      >
+        <Field>
+          <Field.Label>Folder</Field.Label>
+          <Input
+            value={folder}
+            placeholder={workspace}
+            spellCheck={false}
+            className={styles.mono}
+            onChange={(event) => setFolder(event.target.value)}
+          />
+          <Field.Description>
+            Leave empty to use Conch’s own workspace ({workspace}). Providers that only talk to a
+            model over the internet don’t read files at all.
+          </Field.Description>
+        </Field>
+      </Section>
+
+      <ConnectProviderDialog
+        provider={open}
+        onePassword={data?.onePassword ?? { available: false }}
+        onOpenChange={(next) => !next && setConnecting(undefined)}
+      />
+
+      <AlertDialog.Root
+        open={Boolean(removing)}
+        onOpenChange={(next) => !next && setRemoving(undefined)}
+      >
+        <AlertDialog.Content tone="danger">
+          <AlertDialog.Title>Remove the {removing?.name} key?</AlertDialog.Title>
+          <AlertDialog.Description>
+            {removing?.key?.source === '1password'
+              ? 'Conch forgets where to find it. The key itself stays in 1Password.'
+              : 'Conch forgets it. You can paste it again any time.'}
+          </AlertDialog.Description>
+          <AlertDialog.Footer>
+            <AlertDialog.Cancel asChild>
+              <Button variant="ghost">Keep it</Button>
+            </AlertDialog.Cancel>
+            <AlertDialog.Action asChild>
+              <Button
+                tone="danger"
+                loading={clearKey.isPending}
+                onClick={() => {
+                  if (removing) clearKey.mutate(removing.id);
+                  setRemoving(undefined);
+                }}
+              >
+                Remove key
+              </Button>
+            </AlertDialog.Action>
+          </AlertDialog.Footer>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
+    </Stack>
+  );
+}
