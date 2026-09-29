@@ -1,0 +1,137 @@
+@layer nacre.components {
+  .form {
+    display: block;
+  }
+
+  .meter {
+    margin-block-start: var(--nc-space-2);
+  }
+
+  .formActions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+  }
+
+  .inline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--nc-space-3);
+  }
+
+  .grow {
+    flex: 1;
+    min-inline-size: 12rem;
+  }
+
+  .full {
+    flex-basis: 100%;
+  }
+
+  .start {
+    align-self: flex-start;
+  }
+
+  .end {
+    align-self: flex-end;
+  }
+
+  .methods {
+    grid-template-columns: 1fr;
+  }
+
+  .methodLabel {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .keys {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .key {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    padding-block: var(--nc-space-2);
+  }
+
+  .key + .key {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .key p {
+    margin: 0;
+  }
+
+  .keyIcon {
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: var(--nc-text-subtle);
+    flex-shrink: 0;
+  }
+
+  .mono,
+  .command code,
+  .link code {
+    font-family: var(--nc-font-mono);
+  }
+
+  .command,
+  .link {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    max-inline-size: 100%;
+    margin-block: var(--nc-space-2);
+    padding-inline: var(--nc-space-3) var(--nc-space-0-5);
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-surface-sunken);
+    font-size: var(--nc-text-xs);
+  }
+
+  .command code,
+  .link code {
+    flex: 1;
+    min-inline-size: 0;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .link {
+    inline-size: 100%;
+    margin: 0;
+  }
+
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    margin: 0 0 var(--nc-space-3);
+    padding-inline-start: var(--nc-space-5);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+  }
+
+  .steps a {
+    color: var(--nc-text-accent);
+  }
+
+  .footnote {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+  }
+
+  .footnote > svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+}

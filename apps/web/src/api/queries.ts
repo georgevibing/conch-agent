@@ -11,6 +11,8 @@ export const keys = {
   capabilities: ['capabilities'] as const,
   commands: ['commands'] as const,
   usage: ['usage'] as const,
+  auth: ['auth'] as const,
+  access: ['access'] as const,
 };
 
 export function useAppState() {

@@ -46,7 +46,8 @@
   .panel {
     min-block-size: 0;
     overflow-y: auto;
-    padding: var(--nc-space-6) var(--nc-space-8) var(--nc-space-10);
+    /* Clear the dialog's corner close button, so nothing ever sits under it. */
+    padding: var(--nc-space-12) var(--nc-space-8) var(--nc-space-10);
   }
 
   .section {
@@ -214,7 +215,7 @@
     }
 
     .nav {
-      padding: var(--nc-space-4) var(--nc-space-3) var(--nc-space-2);
+      padding: var(--nc-space-4) var(--nc-space-12) var(--nc-space-2) var(--nc-space-3);
       border-inline-end: 0;
       border-block-end: 1px solid var(--nc-border-subtle);
       overflow-x: auto;

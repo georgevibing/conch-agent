@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import { BrowserRouter } from 'react-router';
 
+import { AuthGate } from '../features/auth/AuthGate';
 import { LiveProvider } from '../live/LiveProvider';
 import { Root } from './Root';
 
@@ -18,11 +19,13 @@ export function App() {
   return (
     <NacreProvider storageKey="conch.theme">
       <QueryClientProvider client={client}>
-        <LiveProvider>
-          <BrowserRouter>
-            <Root />
-          </BrowserRouter>
-        </LiveProvider>
+        <AuthGate>
+          <LiveProvider>
+            <BrowserRouter>
+              <Root />
+            </BrowserRouter>
+          </LiveProvider>
+        </AuthGate>
         <Toaster />
       </QueryClientProvider>
     </NacreProvider>

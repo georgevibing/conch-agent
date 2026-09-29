@@ -33,6 +33,7 @@ import {
   Moon,
   Palette,
   Plus,
+  ShieldCheck,
   Sparkles,
   SquareSlash,
   Sun,
@@ -52,6 +53,7 @@ import {
 import { useUi, type SettingsTab } from '../../app/ui';
 import { relativeTime } from '../../lib/time';
 import { useAutoFocus } from '../../lib/useAutoFocus';
+import { SecurityTab } from '../auth/SecurityTab';
 import { EngineConnect } from '../engine/EngineConnect';
 import { toneOptions } from '../onboarding/tones';
 import { UsageTab } from '../usage/UsageTab';
@@ -510,6 +512,7 @@ const tabs: { value: SettingsTab; label: string; icon: ReactNode }[] = [
   { value: 'models', label: 'Models & modes', icon: <Gauge /> },
   { value: 'commands', label: 'Commands', icon: <SquareSlash /> },
   { value: 'usage', label: 'Usage', icon: <BatteryMedium /> },
+  { value: 'security', label: 'Security', icon: <ShieldCheck /> },
   { value: 'engine', label: 'Claude Code', icon: <Cpu /> },
   { value: 'appearance', label: 'Appearance', icon: <Palette /> },
 ];
@@ -563,6 +566,9 @@ export function Settings() {
               </Tabs.Content>
               <Tabs.Content value="usage">
                 <UsageTab />
+              </Tabs.Content>
+              <Tabs.Content value="security">
+                <SecurityTab />
               </Tabs.Content>
               <Tabs.Content value="engine">
                 <EngineTab workspace={app.workspace} workspacePref={app.preferences.workspace} />

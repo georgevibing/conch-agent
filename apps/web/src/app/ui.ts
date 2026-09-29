@@ -8,6 +8,7 @@ export type SettingsTab =
   | 'models'
   | 'commands'
   | 'usage'
+  | 'security'
   | 'engine'
   | 'appearance';
 

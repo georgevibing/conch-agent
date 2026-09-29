@@ -1,5 +1,10 @@
 import {
+  AccessSettings,
   AppState,
+  AuthStatus,
+  CreatedKey,
+  PairingCode,
+  type SignInBody,
   Capabilities,
   ConversationSummary,
   CustomCommand,
@@ -18,10 +23,15 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: string,
     message: string,
+    /** Seconds to wait, when rate-limited. */
+    readonly retryAfter?: number,
   ) {
     super(message);
   }
 }
+
+/** Fired when the gateway says this browser isn't (or is no longer) signed in. */
+export const SIGNED_OUT_EVENT = 'conch:signed-out';
 
 export async function request<T extends z.ZodType>(
   schema: T,
@@ -43,8 +53,15 @@ export async function request<T extends z.ZodType>(
   const text = await response.text();
   const json: unknown = text ? JSON.parse(text) : undefined;
   if (!response.ok) {
-    const body = (json ?? {}) as { error?: string; message?: string };
-    throw new ApiError(response.status, body.error ?? 'error', body.message ?? response.statusText);
+    const body = (json ?? {}) as { error?: string; message?: string; retryAfter?: number };
+    if (response.status === 401 && !path.startsWith('/api/auth'))
+      window.dispatchEvent(new Event(SIGNED_OUT_EVENT));
+    throw new ApiError(
+      response.status,
+      body.error ?? 'error',
+      body.message ?? response.statusText,
+      body.retryAfter,
+    );
   }
   return schema.parse(json);
 }
@@ -53,6 +70,30 @@ const Ok = z.object({ ok: z.boolean() });
 
 /** Typed REST client. Every response is validated against the shared protocol. */
 export const api = {
+  // Sign-in & security
+  auth: () => request(AuthStatus, '/api/auth'),
+  signIn: (body: SignInBody) => request(AuthStatus, '/api/auth/sign-in', { method: 'POST', body }),
+  signOut: () => request(Ok, '/api/auth/sign-out', { method: 'POST' }),
+  access: () => request(AccessSettings, '/api/access'),
+  verify: (secret: string) =>
+    request(AccessSettings, '/api/access/verify', { method: 'POST', body: { secret } }),
+  setPassword: (username: string, password: string) =>
+    request(AccessSettings, '/api/access/password', {
+      method: 'PUT',
+      body: { username, password },
+    }),
+  createKey: (name: string) =>
+    request(CreatedKey, '/api/access/keys', { method: 'POST', body: { name } }),
+  revokeKey: (id: string) =>
+    request(AccessSettings, `/api/access/keys/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  disableSignIn: () => request(Ok, '/api/access', { method: 'DELETE' }),
+  createPairing: () => request(PairingCode, '/api/access/pairing', { method: 'POST' }),
+  revokeSession: (id: string) =>
+    request(AccessSettings, `/api/access/sessions/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  revokeOtherSessions: () => request(AccessSettings, '/api/access/sessions', { method: 'DELETE' }),
+
   state: () => request(AppState, '/api/state'),
   updateSettings: (body: UpdateSettingsBody) =>
     request(AppState, '/api/settings', { method: 'PATCH', body }),

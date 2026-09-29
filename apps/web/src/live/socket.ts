@@ -50,9 +50,15 @@ export class LiveSocket {
       }
       for (const listener of this.#listeners) listener(parsed.data);
     };
-    ws.onclose = () => {
+    ws.onclose = (event?: { code?: number }) => {
       clearInterval(this.#heartbeat);
       if (this.#closed) return;
+      // 4401: this device was signed out. Don't retry — show the sign-in screen.
+      if (event?.code === 4401) {
+        this.#closed = true;
+        window.dispatchEvent(new Event('conch:signed-out'));
+        return;
+      }
       this.hooks.onState('reconnecting');
       const delay = Math.min(8000, 400 * 2 ** this.#attempt++) * (0.8 + Math.random() * 0.4);
       this.#timer = setTimeout(() => this.connect(), delay);

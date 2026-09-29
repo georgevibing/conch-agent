@@ -58,7 +58,8 @@ export const modes: ModeInfo[] = [
   {
     value: 'bypassPermissions',
     label: 'Full trust',
-    description: 'Claude can do anything without asking. Use with care.',
+    description:
+      'Claude can do anything without asking — and a web page or file it reads could trick it. Only in a folder you can afford to lose.',
     icon: <Zap />,
     tone: 'danger',
   },

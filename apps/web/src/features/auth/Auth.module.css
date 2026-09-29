@@ -1,0 +1,79 @@
+@layer nacre.components {
+  .center {
+    display: grid;
+    place-items: center;
+    min-block-size: 100dvh;
+    animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .root {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    min-block-size: 100dvh;
+    padding: var(--nc-space-12) var(--nc-space-6);
+    overflow-y: auto;
+  }
+
+  .glow {
+    position: fixed;
+    inset: -30% -10% auto;
+    block-size: 70vh;
+    background:
+      radial-gradient(
+        40% 50% at 30% 40%,
+        color-mix(in oklch, var(--nc-pearl-1) 45%, transparent),
+        transparent 70%
+      ),
+      radial-gradient(
+        35% 45% at 70% 30%,
+        color-mix(in oklch, var(--nc-pearl-3) 35%, transparent),
+        transparent 70%
+      );
+    opacity: 0.42;
+    pointer-events: none;
+    animation: nc-fade-in 1.2s var(--nc-ease-out);
+  }
+
+  .card {
+    position: relative;
+    inline-size: min(24rem, 100%);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .form {
+    display: contents;
+  }
+
+  .help {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    margin-inline: auto;
+    padding: var(--nc-space-1) var(--nc-space-2);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    background: none;
+    color: var(--nc-text-muted);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    cursor: pointer;
+  }
+
+  .help:focus-visible {
+    outline: none;
+    box-shadow: var(--nc-ring);
+  }
+
+  @media (hover: hover) {
+    .help:hover {
+      color: var(--nc-text);
+    }
+  }
+
+  .helpBody {
+    padding-block-start: var(--nc-space-2);
+    text-align: center;
+  }
+}

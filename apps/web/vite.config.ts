@@ -9,7 +9,11 @@ export default defineConfig({
   plugins: [react()],
   css: { modules: nacreCssModules },
   server: {
+    // Loopback only: `vite --host` would let LAN visitors reach the gateway
+    // through the proxy looking like this computer.
+    host: '127.0.0.1',
     port: 5173,
+    strictPort: true,
     proxy: {
       '/api': `http://${gateway}`,
       '/ws': { target: `ws://${gateway}`, ws: true },

@@ -40,7 +40,8 @@ const trustOptions: { value: RoutineTrust; label: string; description: string }[
   {
     value: 'full',
     label: 'Allow everything',
-    description: 'It can run commands and change anything without asking.',
+    description:
+      'It can run commands and change anything, with nobody watching. Anything it reads could steer it — only for tasks you fully trust.',
   },
 ];
 
