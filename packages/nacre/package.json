@@ -2,7 +2,7 @@
   "name": "@conch/nacre",
   "version": "0.1.0",
   "private": true,
-  "description": "Nacre \u2014 Conch's design language and React component library.",
+  "description": "Nacre — Conch's design language and React component library.",
   "type": "module",
   "sideEffects": [
     "**/*.css"
@@ -31,7 +31,8 @@
     "motion": "^13.4.5",
     "radix-ui": "^1.6.7",
     "shiki": "^4.4.3",
-    "sonner": "^2.0.8"
+    "sonner": "^2.0.8",
+    "uqr": "0.1.3"
   },
   "peerDependencies": {
     "react": "^19.0.0",
