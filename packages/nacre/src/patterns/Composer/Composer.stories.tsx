@@ -1,23 +1,27 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { AtSign, ChevronDown, Paperclip, Sparkles } from 'lucide-react';
+import { Folder } from 'lucide-react';
 import { useState } from 'react';
 import { fn } from 'storybook/test';
 
-import { Button } from '../../components/Button';
-import { IconButton } from '../../components/IconButton';
-import { Composer, ComposerAttachment } from './Composer';
+import { Tooltip } from '../../components/Tooltip';
+import { DemoToolbar } from '../ModelPicker/fixtures';
+import { Composer, ComposerAttachment, ComposerChip } from './Composer';
+
+function FolderChip({ path }: { path: string }) {
+  const name = path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
+  return (
+    <Tooltip content={path}>
+      <ComposerChip icon={<Folder />} aria-label={`Working folder: ${name}`}>
+        {name}
+      </ComposerChip>
+    </Tooltip>
+  );
+}
 
 const toolbar = (
   <>
-    <IconButton size="sm" label="Attach files" shortcut="mod+u">
-      <Paperclip />
-    </IconButton>
-    <IconButton size="sm" label="Mention a file">
-      <AtSign />
-    </IconButton>
-    <Button size="sm" variant="ghost" leadingIcon={<Sparkles />} trailingIcon={<ChevronDown />}>
-      Opus 5.5
-    </Button>
+    <DemoToolbar />
+    <FolderChip path="~/projects/conch" />
   </>
 );
 
@@ -79,6 +83,34 @@ export const Multiline: Story = {
 
 export const Disabled: Story = {
   args: { disabled: true, placeholder: 'Connecting to Claude Code…' },
+};
+
+/**
+ * When the footer runs short, things give way in order: the keyboard hint
+ * goes first, then the folder name truncates (the tooltip keeps the full
+ * path), then the model name. The mode chip is a safety setting and never
+ * truncates; send never moves.
+ */
+export const CrowdedToolbar: Story = {
+  render: (args) => (
+    <div style={{ display: 'grid', gap: 24 }}>
+      {[640, 520, 400, 320].map((width) => (
+        <div key={width} style={{ inlineSize: width }}>
+          <Composer
+            {...args}
+            toolbar={
+              <>
+                <DemoToolbar
+                  initial={{ model: 'opus', effort: 'xhigh', fast: true, mode: 'acceptEdits' }}
+                />
+                <FolderChip path="C:\Users\ada\projects\conch-agent-experiments" />
+              </>
+            }
+          />
+        </div>
+      ))}
+    </div>
+  ),
 };
 
 export const Interactive: Story = {

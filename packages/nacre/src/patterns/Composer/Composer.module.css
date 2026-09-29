@@ -115,11 +115,12 @@
   }
 
   /* ── Footer ───────────────────────────────────────────────────────── */
+  /* When space runs short, things give way in order: the keyboard hint
+     goes, then the toolbar shrinks (its chips decide how), and the send
+     button never moves. */
   .footer {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--nc-space-2);
     padding: var(--nc-space-1-5) var(--nc-space-2) var(--nc-space-2);
     min-block-size: calc(var(--nc-control-sm) + var(--nc-space-3));
   }
@@ -129,19 +130,43 @@
     display: flex;
     align-items: center;
     gap: var(--nc-space-1);
+  }
+
+  .toolbar {
+    flex: 0 1 auto;
     min-inline-size: 0;
   }
 
   .end {
-    margin-inline-start: auto;
     flex-shrink: 0;
+    margin-inline-start: var(--nc-space-2);
+  }
+
+  /* Grows into the leftover space only. If the hint doesn't fit there it
+     wraps onto a second line, which the fixed height clips away; the empty
+     strut keeps the first line in place. */
+  .hintSlot {
+    display: flex;
+    flex: 1 1 0;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    min-inline-size: 0;
+    block-size: var(--nc-control-sm);
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .hintSlot::before {
+    content: '';
+    block-size: 100%;
   }
 
   .hint {
     display: inline-flex;
     align-items: center;
     gap: var(--nc-space-1);
-    margin-inline-end: var(--nc-space-1-5);
+    margin-inline: var(--nc-space-2) var(--nc-space-1-5);
     font-size: var(--nc-text-xs);
     color: var(--nc-text-subtle);
     white-space: nowrap;
@@ -150,7 +175,6 @@
     transition:
       opacity var(--nc-duration-base) var(--nc-ease-out),
       transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
-    pointer-events: none;
   }
 
   .surface:focus-within .hint,
@@ -163,6 +187,30 @@
     .hint {
       display: none;
     }
+  }
+
+  /* ── Toolbar chip ─────────────────────────────────────────────────── */
+  /* Gives way before its neighbours, down to its icon; the clip hides the
+     gap and ellipsis once the label is gone. Flex shrink is shared out by
+     ratio, so the factor is big enough that a neighbour's share rounds to
+     zero (even a hundredth of a pixel would put an ellipsis on its label). */
+  .chip {
+    flex-shrink: 100000;
+    min-inline-size: var(--nc-control-sm);
+    padding-inline: var(--nc-space-2);
+    overflow: hidden;
+  }
+
+  .chipIcon {
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
+
+  .chipIcon > svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    stroke-width: 2;
   }
 
   /* ── Send ⇄ Stop ──────────────────────────────────────────────────── */

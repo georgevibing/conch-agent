@@ -1,4 +1,9 @@
 @layer nacre.components {
+  /* The mode decides what may happen without asking: always read in full. */
+  .chip {
+    flex-shrink: 0;
+  }
+
   .chipIcon {
     display: inline-grid;
     place-items: center;

@@ -103,17 +103,18 @@ export const modes: ModeOption[] = [
 ];
 
 /** A stateful model + mode toolbar, as the app wires it. */
-export function DemoToolbar({ providers = [claudeCode] }: { providers?: ModelProvider[] }) {
-  const [model, setModel] = useState('opus');
-  const [effort, setEffort] = useState('auto');
-  const [fast, setFast] = useState(false);
-  const [mode, setMode] = useState('default');
-  const [defaults, setDefaults] = useState({
-    model: 'opus',
-    effort: 'auto',
-    fast: false,
-    mode: 'default',
-  });
+export function DemoToolbar({
+  providers = [claudeCode],
+  initial = {},
+}: {
+  providers?: ModelProvider[];
+  initial?: { model?: string; effort?: string; fast?: boolean; mode?: string };
+}) {
+  const [model, setModel] = useState(initial.model ?? 'opus');
+  const [effort, setEffort] = useState(initial.effort ?? 'auto');
+  const [fast, setFast] = useState(initial.fast ?? false);
+  const [mode, setMode] = useState(initial.mode ?? 'default');
+  const [defaults, setDefaults] = useState({ model, effort, fast, mode });
   return (
     <>
       <ModelPicker

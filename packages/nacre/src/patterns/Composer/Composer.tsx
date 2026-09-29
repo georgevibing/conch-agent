@@ -16,6 +16,7 @@ import {
 import { IconButton } from '../../components/IconButton';
 import { Kbd } from '../../components/Kbd';
 import { cx } from '../../utils/cx';
+import picker from '../ModelPicker/ModelPicker.module.css';
 import styles from './Composer.module.css';
 
 export interface ComposerProps extends Omit<
@@ -199,13 +200,14 @@ export function Composer({
         />
         <div className={styles.footer}>
           <div className={styles.toolbar}>{toolbar}</div>
-          <div className={styles.end}>
-            <span id={hintId} className="nc-visually-hidden">
-              {running && onStop
-                ? 'Press Escape to stop.'
-                : 'Press Enter to send, Shift+Enter for a new line.'}
-            </span>
-            <span className={styles.hint} aria-hidden>
+          <span id={hintId} className="nc-visually-hidden">
+            {running && onStop
+              ? 'Press Escape to stop.'
+              : 'Press Enter to send, Shift+Enter for a new line.'}
+          </span>
+          {/* Takes only the space the toolbar leaves over, and bows out when that's too little. */}
+          <span className={styles.hintSlot} aria-hidden>
+            <span className={styles.hint}>
               {running && onStop ? (
                 <>
                   <Kbd keys="esc" size="sm" /> to stop
@@ -217,6 +219,8 @@ export function Composer({
                 </>
               )}
             </span>
+          </span>
+          <div className={styles.end}>
             {actions}
             <IconButton
               variant="solid"
@@ -239,6 +243,41 @@ export function Composer({
         </div>
       </div>
     </div>
+  );
+}
+
+export interface ComposerChipProps extends ComponentProps<'button'> {
+  /** Icon before the label; stays visible when the label is squeezed out. */
+  icon?: ReactNode;
+}
+
+/**
+ * A quiet toolbar button that matches the model and mode chips, e.g. the
+ * working folder. When the footer runs out of room it gives way first: the
+ * label truncates, down to the icon alone. Wrap it in a `Tooltip` with the
+ * full text and give it an `aria-label`, so nothing is lost when it does.
+ */
+export function ComposerChip({
+  icon,
+  type = 'button',
+  className,
+  children,
+  ...props
+}: ComposerChipProps) {
+  return (
+    <button
+      type={type}
+      data-lustre=""
+      className={cx(picker.chip, styles.chip, className)}
+      {...props}
+    >
+      {icon != null && (
+        <span className={styles.chipIcon} aria-hidden>
+          {icon}
+        </span>
+      )}
+      <span className={picker.chipLabel}>{children}</span>
+    </button>
   );
 }
 

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { expectAccessible, renderNacre } from '../../test/render';
-import { Composer, ComposerAttachment } from './Composer';
+import { Composer, ComposerAttachment, ComposerChip } from './Composer';
 
 describe('Composer', () => {
   it('is accessible', async () => {
@@ -135,5 +135,30 @@ describe('Composer extensions', () => {
     await userEvent.keyboard('{Enter}');
     expect(claim).toHaveBeenCalled();
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
+describe('ComposerChip', () => {
+  it('is an accessible toolbar button that keeps its full name when truncated', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const { container } = renderNacre(
+      <Composer
+        toolbar={
+          <ComposerChip
+            icon={<svg />}
+            aria-label="Working folder: conch-agent-experiments"
+            onClick={onClick}
+          >
+            conch-agent-experiments
+          </ComposerChip>
+        }
+      />,
+    );
+    const chip = screen.getByRole('button', { name: 'Working folder: conch-agent-experiments' });
+    expect(chip).toHaveAttribute('type', 'button');
+    await user.click(chip);
+    expect(onClick).toHaveBeenCalledOnce();
+    await expectAccessible(container);
   });
 });
