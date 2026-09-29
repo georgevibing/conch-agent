@@ -4,6 +4,7 @@
     --spin: 18s;
     --swirl: 26s;
     --breath: 0s;
+    --breath-depth: 0.9;
     --halo-opacity: 0.35;
     --halo-scale: 1.25;
     --tint-h: var(--nc-accent-h);
@@ -132,7 +133,17 @@
   }
 
   .pearl[data-state='thinking'] .halo {
-    animation: pearl-halo 2.8s var(--nc-ease-in-out) infinite;
+    animation: pearl-halo var(--breath) var(--nc-ease-in-out) infinite;
+  }
+
+  /* At list-row size a gentle breath is sub-pixel; deepen and quicken it so
+     "working" still reads at a glance, and let the glow carry the pulse. */
+  .pearl[data-size='xs'][data-state='thinking'] {
+    --spin: 4s;
+    --breath: 1.8s;
+    --breath-depth: 0.8;
+    --halo-opacity: 0.9;
+    --halo-scale: 1.9;
   }
 
   .pearl[data-state='streaming'] {
@@ -186,7 +197,7 @@
       transform: scale(1);
     }
     50% {
-      transform: scale(0.9);
+      transform: scale(var(--breath-depth));
     }
   }
 
