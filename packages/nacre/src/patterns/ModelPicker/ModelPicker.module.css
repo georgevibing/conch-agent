@@ -312,17 +312,21 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    min-block-size: 2.5rem;
-    padding: var(--nc-space-1-5) var(--nc-space-3);
+    min-block-size: 2.75rem;
+    /* Equal inset on every side so the button sits concentrically in the panel's corner. */
+    padding: var(--nc-space-2);
     border-block-start: 1px solid var(--nc-border-subtle);
     background: var(--nc-wash-1);
   }
 
   .makeDefault {
     appearance: none;
-    padding: var(--nc-space-1) var(--nc-space-2);
+    min-block-size: 1.875rem;
+    padding: var(--nc-space-1) var(--nc-space-3);
     border: 0;
-    border-radius: var(--nc-radius-sm);
+    /* Panel radius minus the footer inset → a concentric corner. */
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
     background: transparent;
     color: var(--nc-text-accent);
     font: inherit;

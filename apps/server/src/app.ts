@@ -274,12 +274,17 @@ export async function buildApp(services: Services) {
   // ── Web app ────────────────────────────────────────────────────────────
   const dist = config.CONCH_WEB_DIST ?? resolve(import.meta.dirname, '../../web/dist');
   if (existsSync(join(dist, 'index.html'))) {
-    await app.register(fastifyStatic, { root: dist, wildcard: false });
-    app.setNotFoundHandler((request, reply) =>
-      request.url.startsWith('/api')
-        ? reply.code(404).send({ error: 'not-found' })
-        : reply.sendFile('index.html'),
-    );
+    // `wildcard: true` resolves files per request, so a rebuilt web app is served
+    // without restarting the gateway. Unknown app routes fall back to the SPA;
+    // missing assets (anything with a file extension) stay a real 404.
+    await app.register(fastifyStatic, { root: dist, wildcard: true });
+    app.setNotFoundHandler((request, reply) => {
+      const path = request.url.split('?')[0] ?? '';
+      if (path.startsWith('/api') || /\.[a-z0-9]+$/i.test(path)) {
+        return reply.code(404).send({ error: 'not-found' });
+      }
+      return reply.sendFile('index.html');
+    });
   }
 
   return app;
