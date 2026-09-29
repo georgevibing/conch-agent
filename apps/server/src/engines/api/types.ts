@@ -1,0 +1,164 @@
+/**
+ * What the two API engines share.
+ *
+ * `openrouter` and `anthropic-api` are one engine driving a plain model API:
+ * no program on this computer, no session on the provider's side, no files and
+ * no shell. Everything that differs between them is an `ApiVariant` — the words
+ * on the page, the URLs, and the wire adapter that knows the provider's HTTP.
+ */
+import type { EffortChoice, EngineId, ModelInfo } from '@conch/protocol';
+
+import type { Wire } from './wire';
+
+/** The providers this engine family speaks for. */
+export type ApiProviderId = Extract<EngineId, 'openrouter' | 'anthropic-api'>;
+
+/** The one function a wire adapter needs from the outside world, so tests can supply their own. */
+export type FetchLike = typeof globalThis.fetch;
+
+/** Injected pieces, for tests and for wiring in `services.ts`. */
+export interface ApiDeps {
+  /** Defaults to the global `fetch`. Tests pass a stub; nothing is monkey-patched. */
+  fetch?: FetchLike;
+  /** Conch's home directory (`config.CONCH_HOME`). Defaults to `~/.conch`. */
+  home?: string;
+}
+
+/**
+ * One provider, described once. `services.ts` builds these with
+ * `openrouterVariant()` / `anthropicApiVariant()`.
+ */
+export interface ApiVariant {
+  readonly id: ApiProviderId;
+  /** "OpenRouter", "Anthropic API". */
+  readonly label: string;
+  /** Where a person reads about it. */
+  readonly docsUrl: string;
+  /** The page that makes a key, for error copy that tells people what to do. */
+  readonly keyUrl: string;
+  /** Whether Conch can get a key by signing in, rather than asking for a paste. */
+  readonly canSignIn: boolean;
+  /** The provider's HTTP, behind one small interface. */
+  readonly wire: Wire;
+  /** Where transcripts live: `<home>/api-sessions`. */
+  readonly home: string;
+}
+
+/** A message exactly as the provider's wire format has it. Stored and replayed verbatim. */
+export type WireMessage = Record<string, unknown>;
+
+/** JSON Schema for a tool's arguments. */
+export type JsonSchema = Record<string, unknown>;
+
+/** One tool as the model sees it: a name, a sentence, and a schema. */
+export interface ToolSpec {
+  name: string;
+  description: string;
+  schema: JsonSchema;
+}
+
+/** What one request cost. `costUsd` is only set where the provider prices it for us. */
+export interface WireUsage {
+  inputTokens: number;
+  outputTokens: number;
+  costUsd?: number;
+}
+
+/** A tool call the model made. `argumentsJson` is untrusted text, not yet parsed. */
+export interface WireToolCall {
+  id: string;
+  name: string;
+  argumentsJson: string;
+}
+
+/** Why the model stopped talking. */
+export type WireStop = 'end' | 'tools' | 'length';
+
+/**
+ * One streamed request, normalised. Exactly one `end` event closes it, and it
+ * carries the assistant message to append to the transcript — reconstructed
+ * block for block, so thinking signatures survive a replay.
+ */
+export type WireEvent =
+  | { type: 'text'; delta: string }
+  | { type: 'thinking'; delta: string }
+  | {
+      type: 'end';
+      message: WireMessage;
+      toolCalls: WireToolCall[];
+      stop: WireStop;
+      usage?: WireUsage;
+    };
+
+export interface WireRequest {
+  key: string;
+  model: string;
+  system: string;
+  messages: WireMessage[];
+  tools: ToolSpec[];
+  /** `auto` means "don't ask for a thinking budget at all". */
+  effort: EffortChoice;
+  signal: AbortSignal;
+}
+
+export interface WireCompletion {
+  key: string;
+  model: string;
+  system: string;
+  prompt: string;
+  maxTokens: number;
+  signal: AbortSignal;
+}
+
+/** What a key turned out to be, in words a person can read on a card. */
+export interface WireAccount {
+  /** e.g. "OpenRouter · $12.40 left" or "Anthropic API key". */
+  description: string;
+}
+
+/** A model, with the extra facts only the provider's own list knows. */
+export interface WireModel {
+  info: ModelInfo;
+  /** Whether the model can call tools at all (no tools, no integrations). */
+  tools: boolean;
+  /** The provider's thinking switch, when it has one. */
+  thinking?: boolean;
+  /** Largest output the provider will allow, when it says. */
+  maxOutputTokens?: number;
+}
+
+/** Why a request failed, in the few shapes the engine reacts to differently. */
+export type ApiErrorKind =
+  | 'auth'
+  | 'payment'
+  | 'rate-limit'
+  | 'overloaded'
+  | 'context'
+  | 'policy'
+  | 'timeout'
+  | 'network'
+  | 'not-found'
+  | 'other';
+
+/**
+ * A failure with a plain-language message, already scrubbed of anything that
+ * looked like a key. Nothing above the wire ever sees a stack trace.
+ */
+export class ApiError extends Error {
+  readonly kind: ApiErrorKind;
+  readonly retryable: boolean;
+  /** How long the provider asked us to wait, when it said. */
+  readonly retryAfterMs?: number;
+
+  constructor(
+    kind: ApiErrorKind,
+    message: string,
+    options: { retryable?: boolean; retryAfterMs?: number } = {},
+  ) {
+    super(message);
+    this.name = 'ApiError';
+    this.kind = kind;
+    this.retryable = options.retryable ?? false;
+    this.retryAfterMs = options.retryAfterMs;
+  }
+}

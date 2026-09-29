@@ -5,6 +5,7 @@ import { Persona, Preferences, Profile, type UpdateSettingsBody } from '@conch/p
 import { z } from 'zod';
 
 import { Mutex, readJson, writeJson } from '../lib/fs';
+import { StoredSecret } from '../secrets/vault';
 
 const SettingsFile = z.object({
   version: z.literal(1).default(1),
@@ -16,7 +17,13 @@ const SettingsFile = z.object({
 export type Settings = z.infer<typeof SettingsFile>;
 
 const SecretsFile = z.object({
+  /**
+   * Claude Code's API key, from before every provider had its own. Read as a
+   * fallback and cleared the next time a key is saved.
+   */
   anthropicApiKey: z.string().optional(),
+  /** A key per provider, by engine id. Either the value or a 1Password reference. */
+  providers: z.record(z.string(), StoredSecret).default({}),
 });
 export type Secrets = z.infer<typeof SecretsFile>;
 
@@ -78,6 +85,33 @@ export class SettingsStore {
   setSecrets(patch: Partial<Secrets>): Promise<void> {
     return this.#mutex.run(async () => {
       const next = { ...(await this.secrets()), ...patch };
+      await writeJson(this.#secretsPath, next);
+    });
+  }
+
+  /**
+   * The key saved for one provider. Claude Code falls back to the older
+   * top-level `anthropicApiKey`, so an existing install keeps working.
+   */
+  async providerSecret(id: string): Promise<StoredSecret | undefined> {
+    const secrets = await this.secrets();
+    const stored = secrets.providers[id];
+    if (stored) return stored;
+    if (id === 'claude-code' && secrets.anthropicApiKey)
+      return { source: 'conch', value: secrets.anthropicApiKey, savedAt: 0 };
+    return undefined;
+  }
+
+  /** Save or clear one provider's key. Saving also retires the legacy field. */
+  setProviderSecret(id: string, secret: StoredSecret | undefined): Promise<void> {
+    return this.#mutex.run(async () => {
+      const { anthropicApiKey, providers } = await this.secrets();
+      const rest = Object.fromEntries(Object.entries(providers).filter(([key]) => key !== id));
+      const next: Secrets = {
+        providers: secret ? { ...rest, [id]: secret } : rest,
+        // Saving a key here retires the one an older Conch wrote.
+        ...(id !== 'claude-code' && anthropicApiKey !== undefined && { anthropicApiKey }),
+      };
       await writeJson(this.#secretsPath, next);
     });
   }

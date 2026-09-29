@@ -14,6 +14,8 @@ import {
   LoginCodeBody,
   PROTOCOL_VERSION,
   CreateRoutineBody,
+  EngineId,
+  ProviderKeyBody,
   RenameConversationBody,
   SchedulePreviewBody,
   UpdateRoutineBody,
@@ -36,6 +38,7 @@ import { IntegrationError, type SignIn } from './integrations/service';
 import { preview } from './routines/schedule';
 import { RoutineError } from './routines/service';
 import { registerAuthRoutes } from './auth/routes';
+import { ProviderError } from './providers/service';
 import { registerSecurity } from './security';
 import { SERVER_VERSION, type Services } from './services';
 
@@ -71,6 +74,10 @@ const oauthParam = (value: unknown, max = 4096) =>
   typeof value === 'string' && value.length > 0 && value.length <= max ? value : undefined;
 
 function sendError(reply: FastifyReply, error: unknown) {
+  if (error instanceof ProviderError) {
+    const status = { 'not-found': 404, invalid: 400, pinned: 409 }[error.code];
+    return reply.code(status).send({ error: error.code, message: error.message });
+  }
   if (error instanceof IntegrationError) {
     const status = { 'not-found': 404, invalid: 400, unavailable: 503 }[error.code];
     return reply.code(status).send({ error: error.code, message: error.message });
@@ -121,6 +128,9 @@ export async function buildApp(services: Services) {
     if (name && !name.success)
       return reply.code(400).send({ error: 'bad-request', message: name.error.issues[0]?.message });
   });
+
+  // The remembered provider is read once, before the first request is served.
+  app.addHook('onReady', () => services.start());
 
   const appState = async () => {
     const settings = await services.settings.get();
@@ -180,6 +190,80 @@ export async function buildApp(services: Services) {
     return services.setApiKey(body.apiKey.trim());
   });
   app.delete('/api/engine/api-key', () => services.setApiKey(undefined));
+
+  // ── Providers (what powers the assistant) ──────────────────────────────
+  const providerId = (params: unknown, reply: FastifyReply) =>
+    parse(EngineId, (params as { id?: string } | undefined)?.id, reply);
+
+  app.get<{ Querystring: { refresh?: string } }>('/api/providers', (request) =>
+    services.providers.list({ force: request.query.refresh === '1' }),
+  );
+  app.post<{ Params: { id: string } }>('/api/providers/:id/use', async (request, reply) => {
+    const id = providerId(request.params, reply);
+    if (!id) return;
+    try {
+      return await services.providers.use(id);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  app.post<{ Params: { id: string } }>('/api/providers/:id/check', async (request, reply) => {
+    const id = providerId(request.params, reply);
+    if (!id) return;
+    try {
+      return await services.providers.get(id, { force: true });
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  app.put<{ Params: { id: string } }>('/api/providers/:id/key', async (request, reply) => {
+    const id = providerId(request.params, reply);
+    if (!id) return;
+    const body = parse(ProviderKeyBody, request.body, reply);
+    if (!body) return;
+    try {
+      return await services.providers.setKey(id, body.value);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  app.delete<{ Params: { id: string } }>('/api/providers/:id/key', async (request, reply) => {
+    const id = providerId(request.params, reply);
+    if (!id) return;
+    try {
+      return await services.providers.clearKey(id);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  app.post<{ Params: { id: string } }>('/api/providers/:id/signin', async (request, reply) => {
+    const id = providerId(request.params, reply);
+    if (!id) return;
+    const { redirectUrl, display } = signInFor(request);
+    try {
+      const origin = new URL(redirectUrl).origin;
+      const { authorizeUrl } = services.providers.startSignIn({ id, origin, display });
+      return { authorizeUrl };
+    } catch (error) {
+      return reply.code(400).send({ error: 'bad-request', message: (error as Error).message });
+    }
+  });
+  app.post<{ Params: { id: string } }>('/api/providers/:id/login', async (request, reply) => {
+    const id = providerId(request.params, reply);
+    if (!id) return;
+    const body = parse(StartLoginBody, request.body ?? {}, reply);
+    if (!body) return;
+    if (body.method === 'api-key')
+      return reply
+        .code(400)
+        .send({ error: 'bad-request', message: 'Use PUT /api/providers/:id/key.' });
+    try {
+      services.startLogin(body.method, id);
+      return { ok: true };
+    } catch (error) {
+      return reply.code(400).send({ error: 'bad-request', message: (error as Error).message });
+    }
+  });
 
   app.get<{ Querystring: { refresh?: string } }>('/api/capabilities', async (request, reply) => {
     try {
@@ -321,6 +405,40 @@ export async function buildApp(services: Services) {
       return services.integrations.get(request.params.id);
     }),
   );
+
+  /**
+   * A provider sends you back here after making a key for you. Like the
+   * integration callback below it's a cross-site top-level navigation, so it
+   * lives outside /api; the single-use, 256-bit flow id in the path is what
+   * ties it to the sign-in you started. OpenRouter's flow has no `state`
+   * parameter of its own, which is why the id is in the path.
+   */
+  app.get<{ Params: { flowId: string } }>('/oauth/provider/:flowId', async (request, reply) => {
+    const flowId = oauthParam(request.params.flowId, 256);
+    const query = (request.query ?? {}) as Record<string, unknown>;
+    const code = oauthParam(query.code);
+    const error = oauthParam(query.error, 200);
+    const pending = flowId ? services.providers.signIns.peek(flowId) : undefined;
+    const back = (result: string) => {
+      // A popup lands on its own page; a tab comes back into the app, which
+      // opens Settings → Providers and says how it went.
+      const base = pending?.display === 'popup' ? '/providers/done' : '/';
+      const provider = pending?.providerId ?? '';
+      return reply.redirect(`${base}?provider=${provider}&result=${result}`, 303);
+    };
+    if (!flowId || !pending) return back('expired');
+    if (error || !code) {
+      services.providers.signIns.cancel(flowId);
+      return back(error === 'access_denied' ? 'denied' : 'failed');
+    }
+    try {
+      await services.providers.finishSignIn(flowId, code);
+      return back('connected');
+    } catch (err) {
+      request.log.warn({ err: (err as Error).message }, 'provider sign-in failed');
+      return back('failed');
+    }
+  });
 
   /**
    * The service sends you back here after you sign in. It's a top-level

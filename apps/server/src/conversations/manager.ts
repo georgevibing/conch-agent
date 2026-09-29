@@ -473,6 +473,7 @@ export class ConversationManager {
             profile: settings.profile,
             memories,
             autoMemory: settings.preferences.autoMemory,
+            tools: engine.hostTools !== false,
           }),
           await this.deps.context?.(),
           extras?.systemExtra,

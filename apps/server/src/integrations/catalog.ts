@@ -197,6 +197,35 @@ const raw: CatalogItem[] = [
     blueprint: { type: 'stdio', command: 'npx', args: ['-y', '@playwright/mcp@latest'] },
   },
   {
+    id: '1password',
+    name: '1Password',
+    tagline: 'Environments and variables',
+    description:
+      'Look after the Environments you keep in 1Password — the names of your variables, and new ones you ask for. It never hands over a secret value, by design: 1Password answers with names only.',
+    category: 'developer',
+    auth: 'none',
+    local: true,
+    color: '#145FE4',
+    homepage: 'https://www.1password.dev/environments/mcp-server/',
+    requires: 'The 1Password app, with its MCP server turned on',
+    command: '1password-mcp',
+    steps: [
+      'In the 1Password app, open Settings → Labs and turn on “Enable local MCP server”.',
+      'In Settings → Developer, turn on “Integrate with MCP clients”.',
+      'Connect here. 1Password will ask you to approve it the first time, and again when it locks.',
+    ],
+    examples: [
+      'Which Environments do I have?',
+      'Add a DATABASE_URL variable to my staging Environment',
+    ],
+    access: [
+      'Sees the names of your Environments and their variables',
+      'Creates Environments and adds variables (asks first)',
+      'Never reads the secret values themselves',
+    ],
+    blueprint: { type: 'stdio', command: '1password-mcp', args: [] },
+  },
+  {
     id: 'home-assistant',
     name: 'Home Assistant',
     tagline: 'Lights, heating and devices',

@@ -101,6 +101,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
         tailscale: gate.hosts.tailscale,
         workspaceRules: await workspaceRules(await services.settings.workspace()),
         trustedIntegrations: await services.integrations.store.trusted(),
+        provider: services.providers.activeCopy(),
       }),
       exposure: exposure(services.config),
       port: services.config.CONCH_PORT,

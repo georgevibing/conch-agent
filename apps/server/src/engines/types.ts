@@ -192,6 +192,13 @@ export interface Engine {
   usage?(options?: { force?: boolean }): Promise<EngineUsage>;
   /** How this engine uses integrations. */
   readonly integrations: EngineIntegrations;
+  /**
+   * Whether the engine can run Conch's own tools (`TurnInput.tools`: memory,
+   * routines). Absent means yes. An engine that says `false` is never told
+   * about tools it can't call, so it won't promise the user something it
+   * can't do.
+   */
+  readonly hostTools?: boolean;
   /** MCP servers the engine loads by itself, and whether they work. */
   mcpStatus?(): Promise<EngineMcpStatus[]>;
   /** Subscribe to live limit hints emitted while turns run. */

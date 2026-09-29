@@ -40,6 +40,7 @@ const findings = checkup({
   tailscale: services.gate.hosts.tailscale,
   workspaceRules: await workspaceRules(await services.settings.workspace()),
   trustedIntegrations: await services.integrations.store.trusted(),
+  provider: services.providers.activeCopy(),
 }).filter((item) => item.level === 'danger' || item.level === 'warn');
 for (const item of findings) {
   console.warn(`  ${item.level === 'danger' ? '⛔' : '⚠️ '}  ${item.title}\n      ${item.detail}`);

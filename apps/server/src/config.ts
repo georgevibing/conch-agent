@@ -31,6 +31,7 @@ const Env = z.object({
   CONCH_ENGINE: EngineId.optional(),
   /** Explicit path to the Claude Code executable. */
   CONCH_CLAUDE_PATH: z.string().optional(),
+  CONCH_CODEX_PATH: z.string().optional(),
   /** Built web app to serve at `/`. */
   CONCH_WEB_DIST: z.string().optional(),
   CONCH_OPEN: z

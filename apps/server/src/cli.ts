@@ -16,6 +16,7 @@ import { HostPolicy, exposure } from './auth/network';
 import { AccessError, AccessStore } from './auth/store';
 import { loadConfig } from './config';
 import { IntegrationStore } from './integrations/store';
+import { PROVIDER_COPY } from './providers/catalog';
 import { SettingsStore } from './settings/store';
 
 const config = loadConfig();
@@ -158,6 +159,12 @@ async function reset() {
   say('  Settings → Security, or run: pnpm conch password');
 }
 
+/** The provider in use, for the checkup, without starting the whole gateway. */
+function providerCopy(id: string) {
+  const copy = PROVIDER_COPY.get(id as never);
+  return { name: copy?.name ?? id, asksFirst: copy?.asksFirst ?? true };
+}
+
 async function status() {
   const access = await store.get();
   const settings = new SettingsStore(config.CONCH_HOME);
@@ -169,6 +176,7 @@ async function status() {
     homeProblems: await secureHome(config.CONCH_HOME),
     workspaceRules: await workspaceRules(await settings.workspace()),
     trustedIntegrations: await new IntegrationStore(config.CONCH_HOME).trusted(),
+    provider: providerCopy(config.CONCH_ENGINE ?? (await settings.get()).preferences.engine),
   });
   const icon = { ok: '✓', info: 'ℹ', warn: '⚠', danger: '⛔' } as const;
   say(bold('Conch security'));

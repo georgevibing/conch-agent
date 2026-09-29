@@ -8,10 +8,15 @@ import type { Config } from './config';
 import { CommandStore } from './commands/store';
 import { ConversationManager } from './conversations/manager';
 import { ConversationStore } from './conversations/store';
+import { anthropicApiVariant, ApiEngine, openrouterVariant } from './engines/api';
 import { ClaudeCodeEngine } from './engines/claude-code/engine';
+import { CodexEngine } from './engines/codex/engine';
 import { MockEngine } from './engines/mock/engine';
 import type { Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
+import { ProviderKeys } from './providers/keys';
+import { ProviderService } from './providers/service';
+import { SecretVault } from './secrets/vault';
 import { type Blueprint, CATALOG } from './integrations/catalog';
 import { MockVendor } from './integrations/mock/vendor';
 import { IntegrationService } from './integrations/service';
@@ -52,6 +57,10 @@ export class Services {
   readonly routines: RoutineService;
   readonly conversations: ConversationManager;
   readonly engines: Map<EngineId, Engine>;
+  /** Where every provider's key lives, whether that's here or in 1Password. */
+  readonly keys: ProviderKeys;
+  /** Connecting providers, switching between them, and saying how they are. */
+  readonly providers: ProviderService;
   readonly usage: UsageService;
   readonly integrations: IntegrationService;
   /** The pretend SaaS vendor used with the mock engine. */
@@ -66,8 +75,18 @@ export class Services {
     this.gate = new Gatekeeper(config, this.access);
     this.memory = new MemoryStore(join(config.CONCH_HOME, 'memory'));
     this.commands = new CommandStore(join(config.CONCH_HOME, 'commands'));
+    this.keys = new ProviderKeys(this.settings, new SecretVault());
     this.engines = new Map<EngineId, Engine>([
-      ['claude-code', new ClaudeCodeEngine(this.settings, config.CONCH_CLAUDE_PATH)],
+      ['claude-code', new ClaudeCodeEngine(this.settings, this.keys, config.CONCH_CLAUDE_PATH)],
+      ['codex-cli', new CodexEngine(this.settings, this.keys, config.CONCH_CODEX_PATH)],
+      [
+        'openrouter',
+        new ApiEngine(openrouterVariant({ home: config.CONCH_HOME }), this.settings, this.keys),
+      ],
+      [
+        'anthropic-api',
+        new ApiEngine(anthropicApiVariant({ home: config.CONCH_HOME }), this.settings, this.keys),
+      ],
       [
         'mock',
         new MockEngine({
@@ -80,6 +99,15 @@ export class Services {
         }),
       ],
     ]);
+    this.providers = new ProviderService({
+      engines: this.engines,
+      settings: this.settings,
+      keys: this.keys,
+      pinned: config.CONCH_ENGINE,
+      emit: (event) => this.broadcast.emit(event),
+      // A different provider means different limits and a different model list.
+      onSwitch: () => void this.usage.refresh({ force: true }),
+    });
     // With the mock engine, integrations talk to a pretend vendor on this machine too.
     this.mockVendor = config.CONCH_ENGINE === 'mock' ? new MockVendor() : undefined;
     this.integrations = new IntegrationService({
@@ -95,9 +123,13 @@ export class Services {
       settings: this.settings,
       memory: this.memory,
       engine: () => this.engine(),
-      tools: (ctx) => this.routines.tools(ctx),
+      // An engine that can't run Conch's own tools is never offered them.
+      tools: (ctx) => (this.engine().hostTools === false ? [] : this.routines.tools(ctx)),
       context: async () =>
-        [await this.routines.promptSection(), await this.integrations.promptSection()]
+        [
+          this.engine().hostTools === false ? '' : await this.routines.promptSection(),
+          await this.integrations.promptSection(),
+        ]
           .filter(Boolean)
           .join('\n\n'),
       integrations: this.integrations,
@@ -127,10 +159,14 @@ export class Services {
     this.search = openSearch(config, conversationStore, this.conversations);
   }
 
-  /** The active engine. Only Claude Code (and the mock) exist today; others fall back. */
+  /** The provider every turn goes through: your choice, or `CONCH_ENGINE` when it's set. */
   engine(): Engine {
-    const id = this.config.CONCH_ENGINE ?? 'claude-code';
-    return this.engines.get(id) ?? (this.engines.get('claude-code') as Engine);
+    return this.providers.engine();
+  }
+
+  /** Read the remembered provider before the first request arrives. */
+  async start() {
+    await this.providers.load();
   }
 
   async engineStatus(force = false) {
@@ -151,9 +187,9 @@ export class Services {
     return this.#login?.state;
   }
 
-  startLogin(method: 'subscription' | 'console') {
+  startLogin(method: 'subscription' | 'console', id?: EngineId) {
     this.#login?.handle.cancel();
-    const engine = this.engine();
+    const engine = (id && this.engines.get(id)) ?? this.engine();
     if (!engine.login) throw new Error(`${engine.label} doesn't support signing in from Conch.`);
     const handle = engine.login(method, (state) => {
       if (this.#login) this.#login.state = state;
@@ -172,10 +208,14 @@ export class Services {
     this.#login = undefined;
   }
 
+  /**
+   * The active provider's key. Kept for the first-run flow, which knows about
+   * one provider; Settings uses `/api/providers/:id/key`.
+   */
   async setApiKey(apiKey: string | undefined) {
-    const engine = this.engine();
-    if (!engine.setApiKey) throw new Error(`${engine.label} doesn't accept API keys.`);
-    await engine.setApiKey(apiKey);
+    const id = this.providers.activeIdNow();
+    if (apiKey === undefined) await this.providers.clearKey(id);
+    else await this.providers.setKey(id, apiKey);
     return this.engineStatus(true);
   }
 }

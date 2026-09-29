@@ -79,6 +79,8 @@ export interface CheckupInput {
   workspaceRules?: string[];
   /** Integrations that act without asking. */
   trustedIntegrations?: string[];
+  /** The provider in use, and whether Conch can ask you before each step with it. */
+  provider?: { name: string; asksFirst: boolean };
 }
 
 /**
@@ -176,6 +178,16 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       level: 'warn',
       title: 'Your work folder has its own Claude Code rules',
       detail: `It sets ${input.workspaceRules.join(', ')}. They apply to every chat and routine there. Keep them only if you wrote them — a downloaded project could use them to act without asking.`,
+    });
+  }
+
+  if (input.provider && !input.provider.asksFirst) {
+    const { name } = input.provider;
+    items.push({
+      id: 'provider-prompts',
+      level: 'warn',
+      title: `${name} can’t ask you before each step`,
+      detail: `${name} decides inside its own sandbox, so Conch can only choose how much it may touch — it can’t show you each command first. Keep it to reading only, or switch provider, if that matters to you.`,
     });
   }
 

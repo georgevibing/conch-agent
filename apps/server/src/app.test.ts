@@ -52,6 +52,42 @@ describe('gateway HTTP', () => {
     });
   });
 
+  it('lists providers, and refuses a made-up one', async () => {
+    const { app } = await setup();
+    close = () => app.close();
+    const list = (await app.inject('/api/providers')).json();
+    // CONCH_ENGINE=mock pins the choice, so the list says so instead of offering a switch.
+    expect(list).toMatchObject({ active: 'mock', pinned: expect.stringContaining('CONCH_ENGINE') });
+    expect((await app.inject({ method: 'POST', url: '/api/providers/nope/use' })).statusCode).toBe(
+      400,
+    );
+    expect(
+      (await app.inject({ method: 'POST', url: '/api/providers/claude-code/use' })).statusCode,
+    ).toBe(409);
+  });
+
+  it('takes a provider key without ever giving it back', async () => {
+    const { app, home } = await setup();
+    close = () => app.close();
+    const saved = await app.inject({
+      method: 'PUT',
+      url: '/api/providers/mock/key',
+      payload: { value: 'sk-mock-0123456789' },
+    });
+    // The mock provider takes no key at all, and says so rather than pretending.
+    expect(saved.statusCode).toBe(400);
+
+    const bad = await app.inject({
+      method: 'PUT',
+      url: '/api/providers/openrouter/key',
+      payload: { value: 'short' },
+    });
+    expect(bad.statusCode).toBe(400);
+    expect(await readFile(join(home, 'secrets.json'), 'utf8').catch(() => '')).not.toContain(
+      'short',
+    );
+  });
+
   it('rejects foreign hosts and cross-origin writes', async () => {
     const { app } = await setup();
     close = () => app.close();

@@ -13,6 +13,7 @@ import type {
   PermissionMode,
 } from '@conch/protocol';
 
+import type { ProviderKeys } from '../../providers/keys';
 import type { SettingsStore } from '../../settings/store';
 import { Emitter } from '../../lib/emitter';
 import type {
@@ -106,16 +107,25 @@ export class ClaudeCodeEngine implements Engine {
 
   constructor(
     private readonly settings: SettingsStore,
+    private readonly keys: ProviderKeys,
     private readonly explicitPath?: string,
   ) {}
+
+  /**
+   * Claude Code's own key, when you gave Conch one. `peek` is used wherever the
+   * caller is only drawing a page: a key kept in 1Password must never make
+   * Settings ask for a fingerprint.
+   */
+  #apiKey(options: { peek?: boolean } = {}) {
+    return this.keys.value('claude-code', options).catch(() => undefined);
+  }
 
   async detect({ force = false } = {}): Promise<EngineStatus> {
     if (!force && this.#cache && Date.now() - this.#cache.at < CACHE_MS) return this.#cache.status;
     this.#inflight ??= (async () => {
-      const { anthropicApiKey } = await this.settings.secrets();
       const status = await detectClaude({
         explicitPath: this.explicitPath,
-        apiKey: anthropicApiKey,
+        apiKey: await this.#apiKey({ peek: true }),
       });
       this.#cache = { status, at: Date.now() };
       return status;
@@ -205,7 +215,7 @@ export class ClaudeCodeEngine implements Engine {
    * handshake (so control requests work) without ever sending a prompt.
    */
   async #idleSession(status: EngineStatus) {
-    const { anthropicApiKey } = await this.settings.secrets();
+    const anthropicApiKey = await this.#apiKey();
     const idle = async function* (): AsyncGenerator<SDKUserMessage> {
       yield* await new Promise<SDKUserMessage[]>(() => {});
     };
@@ -319,8 +329,11 @@ export class ClaudeCodeEngine implements Engine {
     return this.#limits.on(listener);
   }
 
-  async setApiKey(apiKey: string | undefined): Promise<void> {
-    await this.settings.setSecrets({ anthropicApiKey: apiKey });
+  /**
+   * The key changed (the provider service stores it): forget everything that
+   * depended on it, so the next check reflects the new sign-in.
+   */
+  async setApiKey(): Promise<void> {
     this.#cache = undefined;
     this.#capabilities = undefined;
     this.#usage = undefined;
@@ -340,7 +353,7 @@ export class ClaudeCodeEngine implements Engine {
   async complete(input: CompletionInput): Promise<Completion> {
     const status = await this.detect();
     if (status.state !== 'ready') throw new Error(`${this.label} isn't ready.`);
-    const { anthropicApiKey } = await this.settings.secrets();
+    const anthropicApiKey = await this.#apiKey();
     const method = status.auth?.method;
     const bare =
       Boolean(anthropicApiKey) ||
@@ -408,7 +421,7 @@ export class ClaudeCodeEngine implements Engine {
 
   async *runTurn(input: TurnInput): AsyncIterable<EngineEvent> {
     const status = await this.detect();
-    const { anthropicApiKey } = await this.settings.secrets();
+    const anthropicApiKey = await this.#apiKey();
     const abort = new AbortController();
     const onAbort = () => abort.abort();
     input.signal.addEventListener('abort', onAbort, { once: true });
