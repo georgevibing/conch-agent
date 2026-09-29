@@ -42,6 +42,8 @@ two minutes (Tailscale recommended; `pnpm conch reset` if you forget).
 
 ## Layout
 
+For an authenticated HTTPS reverse proxy, see [docs/REVERSE_PROXY.md](./docs/REVERSE_PROXY.md).
+
 | Path                | What                                          |
 | ------------------- | --------------------------------------------- |
 | `apps/web`          | React 19 + Vite chat UI                       |

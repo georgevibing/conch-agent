@@ -106,6 +106,10 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
 
 ## Security engineering
 
+For authenticated reverse proxies, follow [docs/REVERSE_PROXY.md](./docs/REVERSE_PROXY.md).
+Keep deployment hostnames in configuration, preserve Host/Origin for HTTP and WS,
+and serve built assets through the gateway so document security headers apply.
+
 Conch runs commands **as the user**, and a prompt-injected agent is part of the
 threat model. Hold every change to the bar of a FAANG security review:
 
