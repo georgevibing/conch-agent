@@ -8,10 +8,12 @@
 import { z } from 'zod';
 
 import { EffortChoice, Id, PermissionMode, TurnOptions, Usage } from './common';
+import { Integration } from './integrations';
 import { Routine, RoutineRun } from './routines';
 import { UsageSnapshot } from './usage';
 
 export * from './access';
+export * from './integrations';
 export * from './common';
 export * from './routines';
 export * from './search';
@@ -395,6 +397,19 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     /** Snapshot for display if the routine is later deleted. */
     title: z.string(),
   }),
+  /**
+   * An integration Claude would have used isn't working (expired sign-in,
+   * unreachable). Rendered inline with a button to fix it.
+   */
+  z.object({
+    ...logged,
+    type: z.literal('integration.issue'),
+    integrationId: z.string(),
+    name: z.string(),
+    catalogId: z.string().optional(),
+    state: z.enum(['needs-auth', 'error']),
+    message: z.string(),
+  }),
 ]);
 export type ConversationEvent = z.infer<typeof ConversationEvent>;
 
@@ -461,6 +476,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('routine.changed'), routine: Routine }),
   z.object({ type: z.literal('routine.deleted'), routineId: z.string() }),
   z.object({ type: z.literal('routine.run'), run: RoutineRun }),
+  z.object({ type: z.literal('integration.changed'), integration: Integration }),
+  z.object({ type: z.literal('integration.deleted'), integrationId: z.string() }),
   /** Remaining usage changed (a turn finished, a window reset, the provider warned). */
   z.object({ type: z.literal('usage.changed'), usage: UsageSnapshot }),
   z.object({ type: z.literal('pong') }),
