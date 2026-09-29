@@ -1,0 +1,332 @@
+@layer nacre.components {
+  /* ── Field ─────────────────────────────────────────────────────────── */
+  /* Attribute selectors out-rank Input's base rules regardless of stylesheet order. */
+  .well[data-size] {
+    display: inline-flex;
+    inline-size: 100%;
+    padding-inline: calc(var(--well-px) - 0.375rem) 0.25rem;
+    cursor: pointer;
+  }
+
+  .well[data-open] {
+    --well-border: color-mix(in oklch, var(--well-halo) 70%, transparent);
+    background-color: var(--nc-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--well-border),
+      0 0 0 3.5px color-mix(in oklch, var(--well-halo) 18%, transparent),
+      var(--nc-elevation-1);
+  }
+
+  .segments {
+    display: inline-flex;
+    flex: 1 1 auto;
+    align-items: center;
+    min-inline-size: 0;
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--nc-weight-medium);
+    letter-spacing: 0.005em;
+  }
+
+  .segmentWrap {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .segmentWrap:has([data-segment='period']) {
+    margin-inline-start: 0.25rem;
+  }
+
+  .colon {
+    padding-inline: 0;
+    color: var(--nc-text-subtle);
+    transform: translateY(-0.04em);
+  }
+
+  .segment {
+    display: inline-block;
+    min-inline-size: 1.25em;
+    padding: 0.125rem 0.1875rem;
+    border-radius: var(--nc-radius-xs);
+    corner-shape: var(--nc-corner-shape);
+    text-align: center;
+    color: var(--nc-text);
+    caret-color: transparent;
+    outline: none;
+    cursor: text;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .segment[data-segment='period'] {
+    min-inline-size: 0;
+    font-size: 0.9em;
+    color: var(--nc-text-muted);
+  }
+
+  @media (hover: hover) {
+    .well:not([data-disabled]) .segment:hover:not(:focus) {
+      background: var(--nc-wash-2);
+    }
+  }
+
+  .segment:focus {
+    background: var(--nc-accent-9);
+    color: var(--nc-accent-contrast);
+  }
+
+  .segment[data-typing] {
+    background: color-mix(in oklch, var(--nc-accent-9) 18%, transparent);
+    color: var(--nc-text-accent);
+  }
+
+  .well[data-disabled] .segment {
+    cursor: not-allowed;
+  }
+
+  .trigger {
+    appearance: none;
+    display: inline-grid;
+    flex: 0 0 auto;
+    place-items: center;
+    inline-size: calc(var(--well-h) - 0.5rem);
+    block-size: calc(var(--well-h) - 0.5rem);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: calc(var(--well-radius) - 0.25rem);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text-subtle);
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .trigger > svg {
+    inline-size: var(--well-icon);
+    block-size: var(--well-icon);
+    stroke-width: 1.85;
+  }
+
+  @media (hover: hover) {
+    .trigger:hover:not(:disabled) {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+  }
+
+  .trigger:active:not(:disabled) {
+    transform: scale(0.9);
+  }
+
+  .trigger[data-state='open'] {
+    color: var(--nc-text-accent);
+  }
+
+  .trigger:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 1px;
+  }
+
+  .trigger:disabled {
+    cursor: not-allowed;
+  }
+
+  /* ── Clock face ────────────────────────────────────────────────────── */
+  .content {
+    padding: var(--nc-space-3);
+    min-inline-size: 0;
+  }
+
+  .face {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: var(--nc-space-3);
+  }
+
+  .column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+  }
+
+  .columnHead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-3);
+    min-block-size: var(--nc-control-sm);
+    padding-inline-start: var(--nc-space-1);
+  }
+
+  .columnLabel {
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--nc-text-subtle);
+  }
+
+  .divider {
+    align-self: stretch;
+    inline-size: 1px;
+    background: var(--nc-border-subtle);
+  }
+
+  .chips {
+    --chip: 2.5rem;
+
+    display: grid;
+    grid-template-columns: repeat(var(--cols, 4), var(--chip));
+    gap: 0.125rem;
+    isolation: isolate;
+  }
+
+  .chips[data-cols='6'] {
+    --cols: 6;
+  }
+
+  .chips[data-cols='2'] {
+    --cols: 2;
+  }
+
+  .chip {
+    appearance: none;
+    position: relative;
+    display: grid;
+    place-items: center;
+    block-size: 2.25rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text-muted);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    user-select: none;
+    touch-action: manipulation;
+    transition:
+      color var(--nc-duration-base) var(--nc-ease-out),
+      background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .chip:hover:not([data-state='on']) {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+  }
+
+  .chip[data-state='on'] {
+    color: var(--nc-accent-contrast);
+  }
+
+  .chip:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 1px;
+  }
+
+  .chipText {
+    position: relative;
+    z-index: 1;
+    transition: transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .chip:active .chipText {
+    transform: scale(0.9);
+    transition-duration: var(--nc-duration-instant);
+  }
+
+  .pill {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    corner-shape: inherit;
+    background: linear-gradient(180deg, oklch(1 0 0 / 0.14), transparent 60%), var(--nc-accent-9);
+    box-shadow:
+      inset 0 1px 0 0 oklch(1 0 0 / 0.2),
+      0 2px 6px -2px color-mix(in oklch, var(--nc-accent-9) 60%, transparent);
+  }
+
+  /* ── Presets ───────────────────────────────────────────────────────── */
+  .presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1-5);
+    margin-block-start: var(--nc-space-3);
+    padding-block-start: var(--nc-space-3);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .preset {
+    appearance: none;
+    display: inline-flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.0625rem;
+    min-inline-size: 5.5rem;
+    margin: 0;
+    padding: var(--nc-space-1-5) var(--nc-space-2-5);
+    border: 0;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    color: var(--nc-text);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    text-align: start;
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      box-shadow var(--nc-duration-base) var(--nc-ease-out),
+      transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .presetTime {
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-regular);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-subtle);
+  }
+
+  @media (hover: hover) {
+    .preset:hover:not([data-on]) {
+      background: var(--nc-surface);
+      box-shadow:
+        inset 0 0 0 1px var(--nc-border),
+        var(--nc-elevation-1);
+    }
+  }
+
+  .preset:active {
+    transform: scale(0.96);
+    transition-duration: var(--nc-duration-instant);
+  }
+
+  .preset[data-on] {
+    background: color-mix(in oklch, var(--nc-accent-9) 10%, var(--nc-surface));
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--nc-accent-9) 45%, transparent);
+  }
+
+  .preset[data-on] .presetTime {
+    color: var(--nc-text-accent);
+  }
+
+  .preset:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+}

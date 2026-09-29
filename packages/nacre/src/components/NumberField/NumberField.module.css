@@ -1,0 +1,112 @@
+@layer nacre.components {
+  /*
+   * Rides on Input's well; the − and + sit inside it as soft round keys so the
+   * whole control reads as one object rather than three.
+   */
+  /* Attribute selectors out-rank Input's base rules regardless of stylesheet order. */
+  .well[data-size] {
+    --nf-key: calc(var(--well-h) - 0.5rem);
+
+    display: inline-flex;
+    gap: 0;
+    padding-inline: 0.25rem;
+    cursor: default;
+  }
+
+  .value {
+    display: inline-flex;
+    flex: 1 1 auto;
+    align-items: baseline;
+    justify-content: center;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+    padding-inline: var(--nc-space-1);
+    overflow: hidden;
+  }
+
+  .value .input {
+    flex: 0 0 auto;
+    min-inline-size: 2ch;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--nc-weight-medium);
+    cursor: text;
+  }
+
+  .input[data-nudge='up'] {
+    animation: nf-nudge-up var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .input[data-nudge='down'] {
+    animation: nf-nudge-down var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .unit {
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-sm);
+    white-space: nowrap;
+  }
+
+  .step {
+    appearance: none;
+    display: inline-grid;
+    flex: 0 0 auto;
+    place-items: center;
+    inline-size: var(--nf-key);
+    block-size: var(--nf-key);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: calc(var(--well-radius) - 0.25rem);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text-muted);
+    cursor: pointer;
+    touch-action: manipulation;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      box-shadow var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .step > svg {
+    inline-size: var(--well-icon);
+    block-size: var(--well-icon);
+    stroke-width: 2.1;
+  }
+
+  @media (hover: hover) {
+    .step:hover:not(:disabled) {
+      background: var(--nc-surface);
+      color: var(--nc-text);
+      box-shadow:
+        inset 0 0 0 1px var(--nc-border-subtle),
+        var(--nc-elevation-1);
+    }
+  }
+
+  .step:active:not(:disabled) {
+    transform: scale(0.86);
+    transition-duration: var(--nc-duration-instant);
+  }
+
+  .step:disabled {
+    color: var(--nc-text-disabled);
+    cursor: default;
+  }
+
+  @keyframes nf-nudge-up {
+    from {
+      transform: translateY(35%);
+      opacity: 0.35;
+    }
+  }
+
+  @keyframes nf-nudge-down {
+    from {
+      transform: translateY(-35%);
+      opacity: 0.35;
+    }
+  }
+}

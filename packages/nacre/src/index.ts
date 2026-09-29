@@ -33,6 +33,9 @@ export * from './components/RadioGroup';
 export * from './components/Select';
 export * from './components/Slider';
 export * from './components/SegmentedControl';
+export * from './components/NumberField';
+export * from './components/DatePicker';
+export * from './components/TimePicker';
 
 // Navigation & disclosure
 export * from './components/Tabs';

@@ -48,16 +48,6 @@
     color: var(--nc-text-muted);
   }
 
-  .time input {
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* Native date/time pickers: keep the calendar/clock glyph calm and on-theme. */
-  .field input::-webkit-calendar-picker-indicator {
-    opacity: 0.5;
-    cursor: pointer;
-  }
-
   .stepper {
     display: flex;
     flex-wrap: wrap;
@@ -66,19 +56,7 @@
   }
 
   .count {
-    inline-size: 5rem;
-  }
-
-  .count input {
-    text-align: center;
-    font-variant-numeric: tabular-nums;
-    -moz-appearance: textfield;
-  }
-
-  .count input::-webkit-inner-spin-button,
-  .count input::-webkit-outer-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
+    inline-size: 9rem;
   }
 
   /* ── Day chips ─────────────────────────────────────────────────────── */

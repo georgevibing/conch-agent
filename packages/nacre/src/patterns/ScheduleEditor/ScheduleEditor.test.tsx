@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -90,16 +90,23 @@ describe('ScheduleEditor', () => {
     });
   });
 
-  it('clamps intervals to 15 minutes with a gentle hint', () => {
+  it('clamps intervals to 15 minutes and explains why', async () => {
     const onChange = vi.fn();
     renderNacre(
       <Harness initial={{ type: 'interval', every: 20, unit: 'minutes' }} onChange={onChange} />,
     );
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Number of minutes' }), {
-      target: { value: '5' },
-    });
+    const every = screen.getByRole('spinbutton', { name: 'Every' });
+    await userEvent.clear(every);
+    await userEvent.type(every, '5');
+    fireEvent.blur(every);
     expect(onChange).toHaveBeenLastCalledWith({ type: 'interval', every: 15, unit: 'minutes' });
-    expect(screen.getByRole('status')).toHaveTextContent('Every 15 minutes is the most often');
+    expect(every).toHaveAccessibleDescription(
+      'Every 15 minutes is the most often a routine can run.',
+    );
+    expect(screen.getByRole('button', { name: 'Less often' })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'More often' }));
+    expect(onChange).toHaveBeenLastCalledWith({ type: 'interval', every: 20, unit: 'minutes' });
   });
 
   it('warns about very frequent schedules', () => {
@@ -115,11 +122,27 @@ describe('ScheduleEditor', () => {
     expect(onChange).toHaveBeenLastCalledWith({ type: 'cron', expression: '0 9 * * 1-5' });
   });
 
-  it('changes the time', () => {
+  it('changes the time by typing', async () => {
     const onChange = vi.fn();
     renderNacre(<Harness initial={{ type: 'daily', time: '08:00' }} onChange={onChange} />);
-    fireEvent.change(screen.getByLabelText('At'), { target: { value: '06:15' } });
+    const at = screen.getByRole('group', { name: 'At' });
+    within(at).getByRole('spinbutton', { name: 'Hour' }).focus();
+    await userEvent.keyboard('615');
     expect(onChange).toHaveBeenLastCalledWith({ type: 'daily', time: '06:15' });
+  });
+
+  it('picks a date for one-off runs', async () => {
+    const onChange = vi.fn();
+    renderNacre(
+      <Harness
+        initial={{ type: 'once', at: new Date(Date.now() + 26 * 3_600_000).toISOString() }}
+        onChange={onChange}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Date' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Next week' }));
+    const last = onChange.mock.lastCall?.[0] as ScheduleValue;
+    expect(last.type).toBe('once');
   });
 
   it('notes that short months are skipped for late days', () => {

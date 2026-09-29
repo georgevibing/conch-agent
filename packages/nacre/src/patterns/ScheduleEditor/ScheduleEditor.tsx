@@ -1,12 +1,14 @@
-import { CalendarClock, Globe, Minus, Plus } from 'lucide-react';
+import { CalendarClock, Globe } from 'lucide-react';
 import { useId, useState, type ComponentProps } from 'react';
 
 import { Callout } from '../../components/Callout';
-import { IconButton } from '../../components/IconButton';
+import { DatePicker } from '../../components/DatePicker';
 import { Input } from '../../components/Input';
+import { NumberField } from '../../components/NumberField';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { Select } from '../../components/Select';
 import { Skeleton } from '../../components/Skeleton';
+import { TimePicker, type TimePreset } from '../../components/TimePicker';
 import { cx } from '../../utils/cx';
 import { formatWhen } from '../Routines/time';
 import {
@@ -35,6 +37,13 @@ const repeatLabels: Record<RepeatKind, string> = {
 const WORKWEEK: Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri'];
 export const MIN_INTERVAL_MINUTES = 15;
 const DEFAULT_TIME = '09:00';
+const MAX_EVERY = { minutes: 1440, hours: 168 } as const;
+
+const timePresets: TimePreset[] = [
+  { label: 'Morning', value: '08:00' },
+  { label: 'Midday', value: '12:00' },
+  { label: 'Evening', value: '18:00' },
+];
 
 export function repeatKindOf(value: ScheduleValue): RepeatKind {
   if (value.type === 'weekly') {
@@ -143,20 +152,16 @@ export function ScheduleEditor({
 
   const setInterval = (every: number, unit: 'minutes' | 'hours') => {
     const minimum = unit === 'minutes' ? MIN_INTERVAL_MINUTES : 1;
-    if (!Number.isFinite(every) || every < minimum) {
-      setHint(
-        unit === 'minutes'
-          ? `Every ${MIN_INTERVAL_MINUTES} minutes is the most often a routine can run.`
-          : 'Every hour is the most often in hours.',
-      );
-      onChange({ type: 'interval', every: minimum, unit });
-      return;
-    }
-    setHint(undefined);
-    onChange({ type: 'interval', every: Math.min(every, unit === 'minutes' ? 1440 : 168), unit });
+    onChange({
+      type: 'interval',
+      every: Math.min(Math.max(every, minimum), MAX_EVERY[unit]),
+      unit,
+    });
   };
 
   const repeatId = `${id}-repeat`;
+  const atMinimum =
+    value.type === 'interval' && value.unit === 'minutes' && value.every <= MIN_INTERVAL_MINUTES;
   const timeValue = timeOf(value, timezone);
 
   return (
@@ -199,14 +204,13 @@ export function ScheduleEditor({
             <label htmlFor={`${id}-date`} className={styles.fieldLabel}>
               Date
             </label>
-            <Input
+            <DatePicker
               id={`${id}-date`}
-              type="date"
               value={fromZonedIso(value.at, timezone).date}
               min={zonedDate(timezone)}
-              onChange={(e) =>
-                e.target.value &&
-                onChange({ type: 'once', at: toZonedIso(e.target.value, timeValue, timezone) })
+              today={zonedDate(timezone)}
+              onValueChange={(date) =>
+                onChange({ type: 'once', at: toZonedIso(date, timeValue, timezone) })
               }
             />
           </div>
@@ -237,58 +241,39 @@ export function ScheduleEditor({
 
         {'time' in value || value.type === 'once' ? (
           <div className={styles.field}>
-            <label htmlFor={`${id}-time`} className={styles.fieldLabel}>
+            <span id={`${id}-time-label`} className={styles.fieldLabel}>
               At
-            </label>
-            <Input
+            </span>
+            <TimePicker
               id={`${id}-time`}
-              type="time"
+              aria-labelledby={`${id}-time-label`}
               value={timeValue}
-              onChange={(e) => setTime(e.target.value)}
-              rootClassName={styles.time}
+              onValueChange={setTime}
+              presets={timePresets}
             />
           </div>
         ) : null}
 
         {value.type === 'interval' && (
           <div className={cx(styles.field, styles.wide)}>
-            <span className={styles.fieldLabel} id={`${id}-every`}>
+            <label className={styles.fieldLabel} htmlFor={`${id}-every`}>
               Every
-            </span>
-            <div className={styles.stepper} role="group" aria-labelledby={`${id}-every`}>
-              <IconButton
-                label="Less often"
-                variant="surface"
-                size="sm"
-                tooltip={false}
-                onClick={() => setInterval(value.every - 1, value.unit)}
-              >
-                <Minus />
-              </IconButton>
-              <Input
-                type="number"
-                inputMode="numeric"
-                aria-label={`Number of ${value.unit}`}
+            </label>
+            <div className={styles.stepper}>
+              <NumberField
+                id={`${id}-every`}
+                aria-describedby={atMinimum ? `${id}-every-note` : undefined}
                 value={value.every}
                 min={value.unit === 'minutes' ? MIN_INTERVAL_MINUTES : 1}
-                onChange={(e) => {
-                  const n = Number(e.target.value);
-                  if (e.target.value !== '') setInterval(n, value.unit);
-                }}
+                max={MAX_EVERY[value.unit]}
+                step={value.unit === 'minutes' ? 5 : 1}
+                decrementLabel="Less often"
+                incrementLabel="More often"
+                onValueChange={(every) => setInterval(every, value.unit)}
                 rootClassName={styles.count}
               />
-              <IconButton
-                label="More often"
-                variant="surface"
-                size="sm"
-                tooltip={false}
-                onClick={() => setInterval(value.every + 1, value.unit)}
-              >
-                <Plus />
-              </IconButton>
               <SegmentedControl
                 aria-label="Unit"
-                size="sm"
                 value={value.unit}
                 onValueChange={(unit) =>
                   setInterval(
@@ -301,6 +286,11 @@ export function ScheduleEditor({
                 <SegmentedControl.Item value="hours">hours</SegmentedControl.Item>
               </SegmentedControl>
             </div>
+            {atMinimum && (
+              <p id={`${id}-every-note`} className={styles.note}>
+                Every {MIN_INTERVAL_MINUTES} minutes is the most often a routine can run.
+              </p>
+            )}
           </div>
         )}
       </div>

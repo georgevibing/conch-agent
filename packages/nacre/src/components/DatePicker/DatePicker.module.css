@@ -1,0 +1,268 @@
+@layer nacre.components {
+  /* ── Trigger (rides on Select's field trigger) ─────────────────────── */
+  /*
+   * When space runs out the date wraps onto a hidden second line, so a narrow
+   * trigger shows "Tomorrow" whole rather than "Tomorrow · We…".
+   */
+  .value {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: var(--nc-space-1-5);
+    block-size: calc(1em * var(--nc-leading-snug));
+    line-height: var(--nc-leading-snug);
+  }
+
+  .value > * {
+    white-space: nowrap;
+  }
+
+  .relative {
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .relative + .muted::before {
+    content: '·';
+    margin-inline-end: var(--nc-space-1-5);
+    color: var(--nc-text-subtle);
+  }
+
+  .muted {
+    color: var(--nc-text-muted);
+  }
+
+  /* ── Calendar ──────────────────────────────────────────────────────── */
+  .content {
+    --cal-cell: 2.5rem;
+
+    padding: var(--nc-space-3);
+    min-inline-size: 0;
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    margin-block-end: var(--nc-space-2);
+    padding-inline-start: var(--nc-space-1-5);
+  }
+
+  .title {
+    position: relative;
+    display: grid;
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+  }
+
+  .titleText {
+    grid-area: 1 / 1;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+  }
+
+  .grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .weeks {
+    position: relative;
+    overflow: hidden;
+    /* Room for the focus ring on edge days. */
+    padding: 2px;
+    margin: -2px;
+  }
+
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: repeat(7, var(--cal-cell));
+    gap: 0.125rem;
+  }
+
+  .weekday {
+    display: grid;
+    place-items: center;
+    block-size: 1.75rem;
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--nc-text-subtle);
+  }
+
+  .day {
+    appearance: none;
+    position: relative;
+    display: grid;
+    place-items: center;
+    inline-size: 100%;
+    block-size: calc(var(--cal-cell) - 0.25rem);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    user-select: none;
+    touch-action: manipulation;
+    isolation: isolate;
+    transition:
+      color var(--nc-duration-base) var(--nc-ease-out),
+      background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .day[data-outside] {
+    color: var(--nc-text-subtle);
+  }
+
+  @media (hover: hover) {
+    .day:hover:not(:disabled, [data-selected]) {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+  }
+
+  .day:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 1px;
+  }
+
+  .day:disabled {
+    color: var(--nc-text-disabled);
+    cursor: not-allowed;
+  }
+
+  .dayText {
+    position: relative;
+    z-index: 1;
+    transition: transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .day:active:not(:disabled) .dayText {
+    transform: scale(0.88);
+    transition-duration: var(--nc-duration-instant);
+  }
+
+  /* Today: a small accent pearl under the number. */
+  .day[data-today]::after {
+    content: '';
+    position: absolute;
+    inset-block-end: 0.3rem;
+    inset-inline-start: 50%;
+    inline-size: 0.25rem;
+    block-size: 0.25rem;
+    margin-inline-start: -0.125rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-9);
+    z-index: 1;
+  }
+
+  .day[data-today]:not([data-selected]) {
+    color: var(--nc-text-accent);
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  /* Selected: the accent pill springs up behind the number. */
+  .day[data-selected] {
+    color: var(--nc-accent-contrast);
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  .day[data-selected]::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    corner-shape: inherit;
+    background: linear-gradient(180deg, oklch(1 0 0 / 0.14), transparent 60%), var(--nc-accent-9);
+    box-shadow:
+      inset 0 1px 0 0 oklch(1 0 0 / 0.2),
+      0 2px 6px -2px color-mix(in oklch, var(--nc-accent-9) 60%, transparent);
+    animation: cal-pop var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .day[data-selected][data-today]::after {
+    background: var(--nc-accent-contrast);
+  }
+
+  @keyframes cal-pop {
+    from {
+      transform: scale(0.6);
+      opacity: 0;
+    }
+  }
+
+  /* ── Quick picks ───────────────────────────────────────────────────── */
+  .picks {
+    display: flex;
+    gap: var(--nc-space-1-5);
+    margin-block-start: var(--nc-space-3);
+    padding-block-start: var(--nc-space-3);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .pick {
+    appearance: none;
+    flex: 1 1 0;
+    block-size: var(--nc-control-sm);
+    margin: 0;
+    padding: 0 var(--nc-space-2-5);
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface-sunken);
+    color: var(--nc-text-muted);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    font: inherit;
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      box-shadow var(--nc-duration-base) var(--nc-ease-out),
+      transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  @media (hover: hover) {
+    .pick:hover:not([data-on]) {
+      background: var(--nc-surface);
+      color: var(--nc-text);
+      box-shadow:
+        inset 0 0 0 1px var(--nc-border),
+        var(--nc-elevation-1);
+    }
+  }
+
+  .pick:active {
+    transform: scale(0.95);
+    transition-duration: var(--nc-duration-instant);
+  }
+
+  .pick[data-on] {
+    background: color-mix(in oklch, var(--nc-accent-9) 12%, var(--nc-surface));
+    color: var(--nc-text-accent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--nc-accent-9) 45%, transparent);
+  }
+
+  .pick:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+}

@@ -100,3 +100,21 @@ exported for JS as `springs` from `@conch/nacre` for the `motion` library. Keyfr
 - [ ] Loading: keep dimensions, `aria-busy`
 - [ ] Keyboard path identical to pointer path
 - [ ] Reduced motion and `lustre = 0` both still look finished
+
+## Form controls: never native pickers
+
+Browser date, time, number and select pickers can't be themed, animate differently on
+every platform, and ignore Lustre. Every form value goes through a Nacre control:
+
+| Value          | Control       | Notes                                                                  |
+| -------------- | ------------- | ---------------------------------------------------------------------- |
+| Text           | `Input`       | `PasswordInput` for secrets (show/hide toggle)                         |
+| One of a list  | `Select`      | `SegmentedControl` for 2–4 visible choices, `RadioGroup` for rich ones |
+| Whole number   | `NumberField` | − / + with press-and-hold, arrows, Page Up/Down, clamps on commit      |
+| Time of day    | `TimePicker`  | Typeable spin-button segments + a chip clock face; value `HH:MM`       |
+| Calendar date  | `DatePicker`  | Speech-like trigger, keyboard grid, quick picks; value `YYYY-MM-DD`    |
+| Range / amount | `Slider`      |                                                                        |
+
+If a screen needs a value none of these cover, build the control in Nacre first (with
+stories and an axe test). `<input type="date|time|number|range|color">` and bare
+`<select>` never ship.
