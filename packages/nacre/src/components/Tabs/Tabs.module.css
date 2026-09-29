@@ -1,0 +1,194 @@
+@layer nacre.components {
+  .root {
+    --tab-h: var(--nc-control-md);
+    --tab-px: var(--nc-space-3);
+    --tab-font: var(--nc-text-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-4);
+  }
+
+  .root[data-size='sm'] {
+    --tab-h: var(--nc-control-sm);
+    --tab-px: var(--nc-space-2-5);
+    --tab-font: var(--nc-text-sm);
+    gap: var(--nc-space-3);
+  }
+
+  .root[data-orientation='vertical'] {
+    flex-direction: row;
+  }
+
+  /* The list owns the stacking context so the gliding indicator always paints
+     beneath every label, including neighbours it passes over. */
+  .list {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    max-inline-size: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .list[data-orientation='vertical'] {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .list[data-variant='line'] {
+    gap: var(--nc-space-1);
+    box-shadow: inset 0 -1px 0 0 var(--nc-border-subtle);
+  }
+
+  .list[data-variant='line'][data-orientation='vertical'] {
+    box-shadow: inset -1px 0 0 0 var(--nc-border-subtle);
+  }
+
+  .trigger {
+    appearance: none;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--nc-space-2);
+    block-size: var(--tab-h);
+    padding-inline: var(--tab-px);
+    margin: 0;
+    border: 0;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text-subtle);
+    font: inherit;
+    font-size: var(--tab-font);
+    font-weight: var(--nc-weight-medium);
+    letter-spacing: -0.005em;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    transition:
+      color var(--nc-duration-base) var(--nc-ease-out),
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .list[data-variant='line'] .trigger {
+    margin-block-end: 1px;
+  }
+
+  @media (hover: hover) {
+    .trigger:hover:not([data-disabled]) {
+      color: var(--nc-text);
+    }
+    .list[data-variant='line'] .trigger:hover:not([data-state='active'], [data-disabled]) {
+      background: var(--nc-wash-1);
+    }
+    .list[data-variant='pill'] .trigger:hover:not([data-state='active'], [data-disabled]) {
+      background: var(--nc-wash-1);
+    }
+  }
+
+  .trigger:active:not([data-disabled]) {
+    transform: scale(0.97);
+    transition-duration: var(--nc-duration-instant);
+  }
+
+  .trigger[data-state='active'] {
+    color: var(--nc-text);
+  }
+
+  .trigger[data-disabled] {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .trigger:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -1px;
+  }
+
+  .icon {
+    display: inline-grid;
+    place-items: center;
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .icon > svg {
+    inline-size: 100%;
+    block-size: 100%;
+    stroke-width: 1.9;
+  }
+
+  .meta {
+    display: inline-grid;
+    place-items: center;
+    min-inline-size: 1.125rem;
+    block-size: 1.125rem;
+    padding-inline: 0.3rem;
+    border-radius: var(--nc-radius-full);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-semibold);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-muted);
+    background: var(--nc-gray-4);
+    transition:
+      background-color var(--nc-duration-base) var(--nc-ease-out),
+      color var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .trigger[data-state='active'] .meta {
+    color: var(--nc-accent-11);
+    background: var(--nc-accent-4);
+  }
+
+  /* ── Indicator ────────────────────────────────────────────────────── */
+  .indicator {
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  .indicator[data-variant='line'] {
+    inset-inline: var(--nc-space-2);
+    inset-block-end: -1px;
+    block-size: 2px;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-9);
+    box-shadow: 0 0 8px 0 color-mix(in oklch, var(--nc-accent-9) 45%, transparent);
+  }
+
+  .list[data-orientation='vertical'] .indicator[data-variant='line'] {
+    inset-inline: auto -1px;
+    inset-block: var(--nc-space-1-5);
+    inline-size: 2px;
+    block-size: auto;
+  }
+
+  .indicator[data-variant='pill'] {
+    inset: 0;
+    border-radius: inherit;
+    corner-shape: inherit;
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+  }
+
+  /* ── Content ──────────────────────────────────────────────────────── */
+  .content {
+    outline-offset: 4px;
+    border-radius: var(--nc-radius-sm);
+  }
+
+  .content[data-state='active'] {
+    animation: nc-surface-in var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .content:focus-visible {
+    outline: 2px solid var(--nc-ring);
+  }
+}

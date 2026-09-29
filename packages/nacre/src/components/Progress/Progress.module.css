@@ -1,0 +1,136 @@
+@layer nacre.components {
+  .wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    inline-size: 100%;
+  }
+
+  .header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--nc-space-3);
+    font-size: var(--nc-text-sm);
+  }
+
+  .label {
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .value {
+    color: var(--nc-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .track {
+    --track-h: 0.375rem;
+    --fill: var(--nc-accent-9);
+    position: relative;
+    inline-size: 100%;
+    block-size: var(--track-h);
+    overflow: hidden;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-gray-4);
+    box-shadow: inset 0 1px 1px 0 var(--nc-wash-2);
+    isolation: isolate;
+  }
+
+  .track[data-size='sm'] {
+    --track-h: 0.25rem;
+  }
+  .track[data-size='lg'] {
+    --track-h: 0.625rem;
+  }
+
+  .track[data-tone='neutral'] {
+    --fill: var(--nc-gray-12);
+  }
+  .track[data-tone='success'] {
+    --fill: light-dark(oklch(0.62 0.15 var(--nc-success-h)), oklch(0.7 0.15 var(--nc-success-h)));
+  }
+  .track[data-tone='danger'] {
+    --fill: light-dark(oklch(0.58 0.2 var(--nc-danger-h)), oklch(0.66 0.19 var(--nc-danger-h)));
+  }
+
+  .indicator {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    inline-size: var(--progress);
+    border-radius: inherit;
+    background: linear-gradient(180deg, oklch(1 0 0 / 0.22), transparent 70%), var(--fill);
+    box-shadow: 0 0 10px -2px color-mix(in oklch, var(--fill) 60%, transparent);
+    transition: inline-size var(--nc-spring-soft-duration) var(--nc-spring-soft);
+    overflow: hidden;
+  }
+
+  /* The travelling pearl sheen. */
+  .indicator::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      color-mix(in oklch, var(--nc-pearl-2) 70%, transparent) 40%,
+      color-mix(in oklch, var(--nc-pearl-4) 80%, transparent) 50%,
+      color-mix(in oklch, var(--nc-pearl-5) 70%, transparent) 60%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    background-repeat: no-repeat;
+    mix-blend-mode: soft-light;
+    opacity: calc(0.9 * var(--nc-lustre));
+    animation: nc-shimmer 2.6s var(--nc-ease-in-out) infinite;
+  }
+
+  .track[data-state='indeterminate'] .indicator {
+    inline-size: 38%;
+    animation: progress-indeterminate 1.6s var(--nc-ease-in-out) infinite;
+  }
+
+  @keyframes progress-indeterminate {
+    0% {
+      transform: translateX(-105%);
+    }
+    100% {
+      transform: translateX(270%);
+    }
+  }
+
+  .track[data-state='complete'] .indicator::after {
+    animation-iteration-count: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .indicator::after {
+      animation: none;
+      opacity: 0;
+    }
+    .track[data-state='indeterminate'] .indicator {
+      inline-size: 100%;
+      animation: progress-pulse 2s ease-in-out infinite;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .indicator::after {
+    animation: none;
+    opacity: 0;
+  }
+  [data-nacre-motion='reduced'] .track[data-state='indeterminate'] .indicator {
+    inline-size: 100%;
+    animation: progress-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes progress-pulse {
+    0%,
+    100% {
+      opacity: 0.35;
+    }
+    50% {
+      opacity: 0.8;
+    }
+  }
+}

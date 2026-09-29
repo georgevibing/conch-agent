@@ -1,0 +1,91 @@
+@layer nacre.components {
+  .empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--nc-space-5);
+    margin-inline: auto;
+    max-inline-size: 30rem;
+    padding: var(--nc-space-10) var(--nc-space-6);
+    text-align: center;
+  }
+
+  .empty[data-size='sm'] {
+    gap: var(--nc-space-4);
+    padding: var(--nc-space-6) var(--nc-space-4);
+    max-inline-size: 24rem;
+  }
+
+  .empty[data-size='lg'] {
+    gap: var(--nc-space-6);
+    padding-block: var(--nc-space-16);
+    max-inline-size: 36rem;
+  }
+
+  .empty > * {
+    animation: nc-surface-in var(--nc-duration-slower) var(--nc-ease-out) both;
+  }
+  .empty > :nth-child(2) {
+    animation-delay: 60ms;
+  }
+  .empty > :nth-child(3) {
+    animation-delay: 120ms;
+  }
+
+  .tile {
+    --nc-rim-rest: 0.55;
+    --nc-rim-hover: 1;
+    --nc-sheen-size: 80px;
+    --nc-sheen-hover: 0.5;
+    display: grid;
+    place-items: center;
+    inline-size: 3.5rem;
+    block-size: 3.5rem;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    color: var(--nc-accent-11);
+    background: linear-gradient(160deg, var(--nc-surface-hi), var(--nc-accent-2));
+    box-shadow:
+      var(--nc-glaze-edge),
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-2);
+  }
+
+  .empty[data-size='sm'] .tile {
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+    border-radius: var(--nc-radius-md);
+  }
+
+  .tile > svg {
+    inline-size: 45%;
+    block-size: 45%;
+    stroke-width: 1.6;
+  }
+
+  .text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+  }
+
+  .description {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-md);
+    line-height: var(--nc-leading-relaxed);
+    text-wrap: pretty;
+  }
+
+  .empty[data-size='sm'] .description {
+    font-size: var(--nc-text-sm);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--nc-space-2);
+  }
+}

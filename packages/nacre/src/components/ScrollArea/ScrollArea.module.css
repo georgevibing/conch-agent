@@ -1,0 +1,148 @@
+@property --nc-sa-top {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --nc-sa-bottom {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --nc-sa-start {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --nc-sa-end {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@layer nacre.components {
+  .root {
+    --fade-size: 1.75rem;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .viewport {
+    inline-size: 100%;
+    block-size: 100%;
+    flex: 1;
+    border-radius: inherit;
+    outline-offset: -2px;
+    transition:
+      --nc-sa-top var(--nc-duration-base) var(--nc-ease-out),
+      --nc-sa-bottom var(--nc-duration-base) var(--nc-ease-out),
+      --nc-sa-start var(--nc-duration-base) var(--nc-ease-out),
+      --nc-sa-end var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .viewport[data-fade='vertical'],
+  .viewport[data-fade='both'] {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 var(--nc-sa-top),
+      #000 calc(100% - var(--nc-sa-bottom)),
+      transparent 100%
+    );
+  }
+
+  .viewport[data-fade='horizontal'] {
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--nc-sa-start),
+      #000 calc(100% - var(--nc-sa-end)),
+      transparent 100%
+    );
+  }
+
+  .viewport[data-fade-top='true'] {
+    --nc-sa-top: var(--fade-size);
+  }
+  .viewport[data-fade-bottom='true'] {
+    --nc-sa-bottom: var(--fade-size);
+  }
+  .viewport[data-fade-start='true'] {
+    --nc-sa-start: var(--fade-size);
+  }
+  .viewport[data-fade-end='true'] {
+    --nc-sa-end: var(--fade-size);
+  }
+
+  .scrollbar {
+    display: flex;
+    padding: 2px;
+    user-select: none;
+    touch-action: none;
+    z-index: 1;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      opacity var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .scrollbar[data-orientation='vertical'] {
+    inline-size: 10px;
+  }
+
+  .scrollbar[data-orientation='horizontal'] {
+    flex-direction: column;
+    block-size: 10px;
+  }
+
+  .scrollbar[data-state='visible'] {
+    animation: nc-fade-in var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .scrollbar[data-state='hidden'] {
+    animation: nc-fade-out var(--nc-duration-base) var(--nc-ease-in) forwards;
+  }
+
+  .thumb {
+    position: relative;
+    flex: 1;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-gray-7);
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .scrollbar[data-orientation='vertical'] .thumb {
+    transform: scaleX(0.66);
+    transform-origin: right;
+  }
+  .scrollbar[data-orientation='horizontal'] .thumb {
+    transform: scaleY(0.66);
+    transform-origin: bottom;
+  }
+
+  @media (hover: hover) {
+    .scrollbar:hover .thumb {
+      background: var(--nc-gray-9);
+      transform: none;
+    }
+  }
+
+  .thumb:active {
+    background: var(--nc-gray-10);
+    transform: none;
+  }
+
+  /* Expand the hit area without changing the visual size. */
+  .thumb::before {
+    content: '';
+    position: absolute;
+    inset: 50% auto auto 50%;
+    translate: -50% -50%;
+    inline-size: 100%;
+    block-size: 100%;
+    min-inline-size: 24px;
+    min-block-size: 24px;
+  }
+}

@@ -1,0 +1,222 @@
+@layer nacre.components {
+  .pearl {
+    --size: 1.5rem;
+    --spin: 18s;
+    --swirl: 26s;
+    --breath: 0s;
+    --halo-opacity: 0.35;
+    --halo-scale: 1.25;
+    --tint-h: var(--nc-accent-h);
+    --tint-c: 0.06;
+
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    inline-size: var(--size);
+    block-size: var(--size);
+    flex-shrink: 0;
+    vertical-align: middle;
+    isolation: isolate;
+  }
+
+  .pearl[data-size='xs'] {
+    --size: 0.75rem;
+  }
+  .pearl[data-size='sm'] {
+    --size: 1rem;
+  }
+  .pearl[data-size='lg'] {
+    --size: 2.5rem;
+  }
+  .pearl[data-size='xl'] {
+    --size: 4.5rem;
+  }
+
+  .halo,
+  .core,
+  .core > span {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+  }
+
+  /* Soft coloured light the pearl casts onto its surroundings. */
+  .halo {
+    z-index: -1;
+    background: radial-gradient(
+      circle,
+      color-mix(in oklch, var(--nc-pearl-1) 90%, transparent) 0%,
+      color-mix(in oklch, var(--nc-pearl-3) 50%, transparent) 40%,
+      transparent 70%
+    );
+    filter: blur(calc(var(--size) * 0.18));
+    opacity: calc(var(--halo-opacity) * var(--nc-lustre, 1));
+    transform: scale(var(--halo-scale));
+    transition:
+      opacity var(--nc-duration-slower) var(--nc-ease-out),
+      transform var(--nc-duration-slower) var(--nc-ease-out);
+  }
+
+  .core {
+    overflow: hidden;
+    animation: pearl-breathe var(--breath) var(--nc-ease-in-out) infinite;
+    animation-play-state: var(--breath-state, paused);
+    box-shadow:
+      0 calc(var(--size) * 0.04) calc(var(--size) * 0.12) 0
+        light-dark(oklch(0.35 0.04 var(--tint-h) / 0.22), oklch(0 0 0 / 0.5)),
+      inset 0 0 0 0.5px light-dark(oklch(0.4 0.03 var(--tint-h) / 0.18), oklch(1 0 0 / 0.14));
+  }
+
+  /* Spherical body: lit from the upper left, with a faint accent-tinted nacre. */
+  .body {
+    background: radial-gradient(
+      circle at 32% 28%,
+      oklch(0.995 0.01 var(--tint-h)) 0%,
+      oklch(0.95 calc(var(--tint-c) * 0.6) var(--tint-h)) 30%,
+      oklch(0.84 var(--tint-c) calc(var(--tint-h) + 20)) 62%,
+      oklch(0.7 calc(var(--tint-c) * 1.3) calc(var(--tint-h) + 40)) 100%
+    );
+  }
+
+  /* Primary iridescent film — strongest toward the rim (fresnel). */
+  .film {
+    background: conic-gradient(from 0deg, var(--nc-pearl-spectrum));
+    mask: radial-gradient(circle at 40% 36%, transparent 12%, rgb(0 0 0 / 0.55) 50%, #000 92%);
+    mix-blend-mode: normal;
+    opacity: 0.62;
+    animation: nc-spin var(--spin) linear infinite;
+  }
+
+  /* Counter-rotating interference band for depth and slow "weather". */
+  .swirl {
+    background: conic-gradient(
+      from 120deg,
+      transparent 0deg,
+      color-mix(in oklch, var(--nc-pearl-4) 90%, transparent) 60deg,
+      transparent 130deg,
+      color-mix(in oklch, var(--nc-pearl-2) 90%, transparent) 210deg,
+      transparent 280deg,
+      color-mix(in oklch, var(--nc-pearl-5) 80%, transparent) 330deg,
+      transparent 360deg
+    );
+    filter: blur(calc(var(--size) * 0.06));
+    mix-blend-mode: soft-light;
+    opacity: 0.7;
+    animation: nc-spin var(--swirl) linear infinite reverse;
+  }
+
+  .specular {
+    background:
+      radial-gradient(
+        ellipse 34% 24% at 34% 26%,
+        oklch(1 0 0 / 0.95) 0%,
+        oklch(1 0 0 / 0.4) 45%,
+        transparent 100%
+      ),
+      radial-gradient(ellipse 30% 14% at 62% 86%, oklch(1 0 0 / 0.35) 0%, transparent 100%);
+  }
+
+  /* Tiny sizes can't resolve fine detail — simplify. */
+  .pearl[data-size='xs'] .swirl {
+    display: none;
+  }
+
+  /* ── States ────────────────────────────────────────────────────────── */
+  .pearl[data-state='thinking'] {
+    --spin: 7s;
+    --swirl: 10s;
+    --breath: 2.8s;
+    --breath-state: running;
+    --halo-opacity: 0.6;
+    --halo-scale: 1.35;
+  }
+
+  .pearl[data-state='thinking'] .halo {
+    animation: pearl-halo 2.8s var(--nc-ease-in-out) infinite;
+  }
+
+  .pearl[data-state='streaming'] {
+    --spin: 3.2s;
+    --swirl: 5s;
+    --halo-opacity: 0.75;
+    --halo-scale: 1.45;
+  }
+
+  .pearl[data-state='streaming'] .film {
+    opacity: 0.78;
+  }
+
+  .pearl[data-state='error'] {
+    --tint-h: var(--nc-danger-h);
+    --halo-opacity: 0.35;
+  }
+
+  /* A still, rose-grey stone — clearly "not alive" without shouting. */
+  .pearl[data-state='error'] .body {
+    background: radial-gradient(
+      circle at 32% 28%,
+      oklch(0.93 0.02 var(--tint-h)) 0%,
+      oklch(0.78 0.05 var(--tint-h)) 38%,
+      oklch(0.6 0.1 var(--tint-h)) 78%,
+      oklch(0.5 0.12 var(--tint-h)) 100%
+    );
+  }
+
+  .pearl[data-state='error'] .film {
+    animation-play-state: paused;
+    filter: grayscale(1);
+    opacity: 0.18;
+  }
+
+  .pearl[data-state='error'] .swirl {
+    display: none;
+  }
+
+  .pearl[data-state='error'] .halo {
+    background: radial-gradient(
+      circle,
+      oklch(0.7 0.15 var(--nc-danger-h) / 0.8) 0%,
+      transparent 70%
+    );
+  }
+
+  @keyframes pearl-breathe {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(0.9);
+    }
+  }
+
+  @keyframes pearl-halo {
+    0%,
+    100% {
+      opacity: calc(var(--halo-opacity) * var(--nc-lustre, 1));
+      transform: scale(var(--halo-scale));
+    }
+    50% {
+      opacity: calc(var(--halo-opacity) * 0.45 * var(--nc-lustre, 1));
+      transform: scale(calc(var(--halo-scale) * 0.85));
+    }
+  }
+
+  /* Reduced motion: keep the material, drop the movement. State is still
+     legible through glow and tint. */
+  @media (prefers-reduced-motion: reduce) {
+    .core,
+    .film,
+    .swirl,
+    .halo {
+      animation: none !important;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .pearl .core,
+  [data-nacre-motion='reduced'] .pearl .film,
+  [data-nacre-motion='reduced'] .pearl .swirl,
+  [data-nacre-motion='reduced'] .pearl .halo {
+    animation: none !important;
+  }
+}

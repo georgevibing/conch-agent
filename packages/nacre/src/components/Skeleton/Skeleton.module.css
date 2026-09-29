@@ -1,0 +1,56 @@
+@layer nacre.components {
+  .skeleton {
+    display: block;
+    inline-size: 100%;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background-color: var(--nc-gray-3);
+    background-image: linear-gradient(
+      100deg,
+      transparent 20%,
+      color-mix(in oklch, var(--nc-pearl-2) 35%, transparent) 38%,
+      color-mix(in oklch, var(--nc-surface-hi) 70%, transparent) 50%,
+      color-mix(in oklch, var(--nc-pearl-4) 35%, transparent) 62%,
+      transparent 80%
+    );
+    background-size: 220% 100%;
+    background-repeat: no-repeat;
+    animation: nc-shimmer 2.2s var(--nc-ease-in-out) infinite;
+  }
+
+  .skeleton[data-shape='text'] {
+    block-size: 0.75em;
+    margin-block: 0.375em;
+    border-radius: var(--nc-radius-xs);
+  }
+
+  .skeleton[data-shape='block'] {
+    block-size: 4rem;
+  }
+
+  .skeleton[data-shape='circle'] {
+    inline-size: 2rem;
+    block-size: 2rem;
+    border-radius: 50%;
+    corner-shape: round;
+    flex-shrink: 0;
+  }
+
+  .lines {
+    display: flex;
+    flex-direction: column;
+    inline-size: 100%;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton {
+      animation: none;
+      background-image: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .skeleton {
+    animation: none;
+    background-image: none;
+  }
+}

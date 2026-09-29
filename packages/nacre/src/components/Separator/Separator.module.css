@@ -1,0 +1,61 @@
+@layer nacre.components {
+  .separator {
+    flex-shrink: 0;
+    border: 0;
+    background: var(--nc-border);
+  }
+
+  .separator[data-orientation='horizontal'] {
+    block-size: 1px;
+    inline-size: 100%;
+  }
+
+  .separator[data-orientation='vertical'] {
+    inline-size: 1px;
+    block-size: auto;
+    align-self: stretch;
+    min-block-size: 1em;
+  }
+
+  .separator[data-orientation='horizontal'][data-inset] {
+    inline-size: auto;
+    margin-inline: var(--nc-space-4);
+  }
+
+  .separator[data-orientation='vertical'][data-inset] {
+    margin-block: var(--nc-space-1-5);
+  }
+
+  .labelled {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    inline-size: 100%;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    letter-spacing: 0.01em;
+  }
+
+  .labelled[data-inset] {
+    padding-inline: var(--nc-space-4);
+  }
+
+  .line {
+    flex: 1;
+    block-size: 1px;
+  }
+
+  .line:first-child {
+    background: linear-gradient(90deg, transparent, var(--nc-border-strong));
+  }
+
+  .line:last-child {
+    background: linear-gradient(90deg, var(--nc-border-strong), transparent);
+  }
+
+  .label {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+}

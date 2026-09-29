@@ -1,0 +1,191 @@
+@layer nacre.components {
+  .avatar {
+    --avatar-size: 2rem;
+    --avatar-font: 0.75rem;
+    --avatar-h: 0;
+    --avatar-radius: 50%;
+
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    inline-size: var(--avatar-size);
+    block-size: var(--avatar-size);
+    flex-shrink: 0;
+    border-radius: var(--avatar-radius);
+    corner-shape: var(--nc-corner-shape);
+    vertical-align: middle;
+    user-select: none;
+  }
+
+  .avatar[data-size='xs'] {
+    --avatar-size: 1.25rem;
+    --avatar-font: 0.5625rem;
+  }
+  .avatar[data-size='sm'] {
+    --avatar-size: 1.625rem;
+    --avatar-font: 0.6875rem;
+  }
+  .avatar[data-size='lg'] {
+    --avatar-size: 2.5rem;
+    --avatar-font: 0.9375rem;
+  }
+  .avatar[data-size='xl'] {
+    --avatar-size: 3.5rem;
+    --avatar-font: 1.25rem;
+  }
+
+  /* Circles must stay true circles even where squircle corners are enabled. */
+  .avatar[data-shape='circle'] {
+    corner-shape: round;
+  }
+
+  .avatar[data-shape='square'] {
+    --avatar-radius: calc(var(--avatar-size) * 0.3);
+  }
+
+  .image,
+  .fallback {
+    grid-area: 1 / 1;
+    inline-size: 100%;
+    block-size: 100%;
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  .image {
+    object-fit: cover;
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  /* Pearl-tinted fallback: a soft two-tone gradient from the name's hue. */
+  .fallback {
+    display: grid;
+    place-items: center;
+    font-size: var(--avatar-font);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: 0.01em;
+    line-height: 1;
+    color: light-dark(oklch(0.42 0.09 var(--avatar-h)), oklch(0.88 0.06 var(--avatar-h)));
+    background: linear-gradient(
+      145deg,
+      light-dark(oklch(0.93 0.05 var(--avatar-h)), oklch(0.4 0.07 var(--avatar-h))),
+      light-dark(
+        oklch(0.87 0.07 calc(var(--avatar-h) + 40)),
+        oklch(0.32 0.07 calc(var(--avatar-h) + 40))
+      )
+    );
+    box-shadow:
+      inset 0 0 0 1px light-dark(oklch(0.3 0.05 var(--avatar-h) / 0.08), oklch(1 0 0 / 0.08)),
+      inset 0 1px 0 0 light-dark(oklch(1 0 0 / 0.6), oklch(1 0 0 / 0.1));
+  }
+
+  .fallback > svg {
+    inline-size: 55%;
+    block-size: 55%;
+  }
+
+  .status {
+    --dot: calc(var(--avatar-size) * 0.28);
+    position: absolute;
+    inset-block-end: 0;
+    inset-inline-end: 0;
+    inline-size: max(0.5rem, var(--dot));
+    block-size: max(0.5rem, var(--dot));
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px var(--nc-canvas);
+  }
+
+  .avatar[data-shape='square'] .status {
+    inset-block-end: -2px;
+    inset-inline-end: -2px;
+  }
+
+  .status[data-status='online'] {
+    background: light-dark(
+      oklch(0.64 0.15 var(--nc-success-h)),
+      oklch(0.72 0.15 var(--nc-success-h))
+    );
+  }
+  .status[data-status='busy'] {
+    background: oklch(0.76 0.15 var(--nc-warning-h));
+  }
+  .status[data-status='offline'] {
+    background: var(--nc-gray-8);
+  }
+  .status[data-status='working'] {
+    background:
+      radial-gradient(circle at 35% 30%, oklch(1 0 0 / 0.85), transparent 55%),
+      conic-gradient(
+        from 0deg,
+        var(--nc-accent-9),
+        var(--nc-pearl-3),
+        var(--nc-pearl-4),
+        var(--nc-accent-9)
+      );
+    animation: avatar-working 2.4s var(--nc-ease-in-out) infinite;
+  }
+
+  @keyframes avatar-working {
+    0%,
+    100% {
+      box-shadow:
+        0 0 0 2px var(--nc-canvas),
+        0 0 0 2px color-mix(in oklch, var(--nc-accent-9) 0%, transparent);
+    }
+    50% {
+      box-shadow:
+        0 0 0 2px var(--nc-canvas),
+        0 0 0 5px color-mix(in oklch, var(--nc-accent-9) 22%, transparent);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .status[data-status='working'] {
+      animation: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .status[data-status='working'] {
+    animation: none;
+  }
+
+  /* ── Group ───────────────────────────────────────────────────────── */
+  .group {
+    display: inline-flex;
+    align-items: center;
+    padding-inline-start: calc(var(--overlap) * 1);
+    --overlap: 0.5rem;
+  }
+
+  .group[data-size='xs'],
+  .group[data-size='sm'] {
+    --overlap: 0.375rem;
+  }
+  .group[data-size='lg'] {
+    --overlap: 0.625rem;
+  }
+  .group[data-size='xl'] {
+    --overlap: 0.875rem;
+  }
+
+  .group > .avatar {
+    margin-inline-start: calc(var(--overlap) * -1);
+    box-shadow: 0 0 0 2px var(--nc-canvas);
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  @media (hover: hover) {
+    .group > .avatar:hover {
+      transform: translateY(-2px);
+      z-index: 1;
+    }
+  }
+
+  .overflow {
+    font-size: var(--avatar-font);
+    font-weight: var(--nc-weight-semibold);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-muted);
+    background: var(--nc-gray-3);
+  }
+}

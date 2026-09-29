@@ -1,0 +1,107 @@
+@layer nacre.components {
+  .root {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .trigger {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    align-self: flex-start;
+    margin: 0;
+    padding: var(--nc-space-1) var(--nc-space-2) var(--nc-space-1) var(--nc-space-1-5);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text-muted);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .trigger:hover {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+  }
+
+  .trigger:active {
+    background: var(--nc-wash-3);
+  }
+
+  .trigger:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 1px;
+  }
+
+  .chevron {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    stroke-width: 2.2;
+    color: var(--nc-text-subtle);
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .trigger[data-state='open'] .chevron {
+    transform: rotate(90deg);
+  }
+
+  .content {
+    overflow: hidden;
+  }
+
+  .content[data-state='open'] {
+    animation: collapsible-open var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .content[data-state='closed'] {
+    animation: collapsible-close var(--nc-duration-base) var(--nc-ease-in-out);
+  }
+
+  .inner {
+    transition:
+      opacity var(--nc-duration-base) var(--nc-ease-out),
+      translate var(--nc-duration-slow) var(--nc-ease-out),
+      filter var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .content[data-state='closed'] .inner {
+    opacity: 0;
+    translate: 0 -4px;
+    filter: blur(2px);
+  }
+
+  @starting-style {
+    .content[data-state='open'] .inner {
+      opacity: 0;
+      translate: 0 -4px;
+      filter: blur(2px);
+    }
+  }
+
+  @keyframes collapsible-open {
+    from {
+      block-size: 0;
+    }
+    to {
+      block-size: var(--radix-collapsible-content-height);
+    }
+  }
+
+  @keyframes collapsible-close {
+    from {
+      block-size: var(--radix-collapsible-content-height);
+    }
+    to {
+      block-size: 0;
+    }
+  }
+}
