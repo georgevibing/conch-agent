@@ -59,6 +59,7 @@
 
   .icon {
     display: inline-grid;
+    flex-shrink: 0;
     place-items: center;
     align-self: center;
     inline-size: 1.25rem;
@@ -83,8 +84,13 @@
   }
 
   .name {
+    /* The name is what you're looking for: it shrinks last, and only when very long. */
     flex-shrink: 0;
+    max-inline-size: 62%;
+    overflow: hidden;
     font-family: var(--nc-font-mono);
+    white-space: nowrap;
+    text-overflow: ellipsis;
     font-size: var(--nc-text-sm);
     font-weight: var(--nc-weight-medium);
     color: var(--nc-text);
@@ -97,13 +103,18 @@
   }
 
   .hint {
-    flex-shrink: 0;
+    flex-shrink: 3;
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
     font-family: var(--nc-font-mono);
     font-size: var(--nc-text-xs);
     color: var(--nc-text-subtle);
   }
 
   .description {
+    flex-shrink: 2;
     min-inline-size: 0;
     margin-inline-start: auto;
     padding-inline-start: var(--nc-space-3);

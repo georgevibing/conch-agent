@@ -79,13 +79,19 @@ export function useSlashCommands(options: {
       argumentHint: c.prompt.includes('{{input}}') ? 'text' : undefined,
       group: 'Your commands',
     })),
-    ...engineCommands.map((c) => ({
-      id: `engine:${c.name}`,
-      name: c.name,
-      description: c.description,
-      argumentHint: c.argumentHint || undefined,
-      group: 'Claude Code',
-    })),
+    // Plain commands first; plugin commands ("plugin:skill") after, so /review beats
+    // "some-plugin:code-reviews" when both match.
+    ...[...engineCommands]
+      .sort((a, b) => Number(a.name.includes(':')) - Number(b.name.includes(':')))
+      .map((c) => ({
+        id: `engine:${c.name}`,
+        name: c.name,
+        // Plugin skills repeat their plugin name in brackets; the name already says it.
+        description: c.description.replace(/^\([^)]*\)\s*/, ''),
+        keywords: c.name.includes(':') ? [c.name.split(':').at(-1) ?? c.name] : undefined,
+        argumentHint: c.argumentHint || undefined,
+        group: 'Claude Code',
+      })),
   ];
 
   const runBuiltin = (action: BuiltinAction, args: string) => {
