@@ -4,6 +4,7 @@ import type {
   ConversationStatus,
   ConversationSummary,
   ServerEvent,
+  Usage,
 } from '@conch/protocol';
 
 import type { Engine, PermissionDecision } from '../engines/types';
@@ -167,7 +168,7 @@ export class ConversationManager {
     const memories = await this.deps.memory.list();
     const started = new Map<string, number>();
     let outcome: 'success' | 'interrupted' | 'error' = 'success';
-    let completed = false;
+    let completed: { usage?: Usage; error?: string } | undefined;
 
     const tools = memoryTools({
       store: this.deps.memory,
@@ -268,52 +269,63 @@ export class ConversationManager {
           }
           case 'done':
             outcome = event.outcome;
-            completed = true;
-            this.#append(live, {
-              type: 'turn.completed',
-              outcome: event.outcome,
-              usage: event.usage,
-              error: event.error,
-            });
+            completed = { usage: event.usage, error: event.error };
             break;
         }
       }
-      if (!completed) {
-        outcome = abort.signal.aborted ? 'interrupted' : 'error';
-        this.#append(live, { type: 'turn.completed', outcome });
-      }
+      if (!completed) outcome = abort.signal.aborted ? 'interrupted' : 'error';
     } catch (error) {
       outcome = 'error';
-      this.#append(live, {
-        type: 'turn.completed',
-        outcome: 'error',
-        error: (error as Error).message || 'Something went wrong.',
-      });
+      completed = { error: (error as Error).message || 'Something went wrong.' };
     } finally {
+      // The closing events are persisted before they're broadcast, so a client
+      // that reloads the moment it sees `turn.completed` finds a complete log.
+      const tail: ConversationEvent[] = [];
       // Close any tool call the engine never finished (e.g. interrupted mid-run).
       const finished = new Set(
         live.events.flatMap((e) => (e.type === 'tool.finished' ? [e.toolUseId] : [])),
       );
       for (const [toolUseId, at] of started) {
         if (!finished.has(toolUseId)) {
-          this.#append(live, {
-            type: 'tool.finished',
-            toolUseId,
-            status: 'error',
-            output: outcome === 'interrupted' ? 'Stopped.' : undefined,
-            durationMs: Date.now() - at,
-          });
+          this.#append(
+            live,
+            {
+              type: 'tool.finished',
+              toolUseId,
+              status: 'error',
+              output: outcome === 'interrupted' ? 'Stopped.' : undefined,
+              durationMs: Date.now() - at,
+            },
+            tail,
+          );
         }
       }
+      this.#append(
+        live,
+        {
+          type: 'turn.completed',
+          outcome,
+          usage: completed?.usage,
+          error:
+            outcome === 'error'
+              ? (completed?.error ?? 'Claude Code stopped unexpectedly.')
+              : undefined,
+        },
+        tail,
+      );
       live.abort = undefined;
       live.permissions.clear();
-      live.record = { ...live.record, updatedAt: Date.now() };
-      this.#setStatus(live, outcome === 'error' ? 'error' : 'idle');
+      const status: ConversationStatus = outcome === 'error' ? 'error' : 'idle';
+      live.record = { ...live.record, status, updatedAt: Date.now() };
+      this.#append(live, { type: 'status', status }, tail);
       await this.#persist(live);
+      for (const event of tail) this.events.emit({ type: 'conversation.event', event });
+      this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
     }
   }
 
-  #append(live: Live, input: ConversationEventInput) {
+  /** Append to the log and broadcast — or, if `defer` is given, collect for later broadcast. */
+  #append(live: Live, input: ConversationEventInput, defer?: ConversationEvent[]) {
     const event = {
       ...input,
       conversationId: live.record.id,
@@ -321,7 +333,8 @@ export class ConversationManager {
       at: Date.now(),
     } as ConversationEvent;
     live.events.push(event);
-    this.events.emit({ type: 'conversation.event', event });
+    if (defer) defer.push(event);
+    else this.events.emit({ type: 'conversation.event', event });
   }
 
   #setStatus(live: Live, status: ConversationStatus) {
