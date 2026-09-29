@@ -7,6 +7,8 @@
 
   .iconButton[data-shape='circle'] {
     --btn-radius: var(--nc-radius-full);
+    /* Squircle corners turn a 50% radius into a rounded square. */
+    corner-shape: round;
   }
 
   .iconButton > span {
