@@ -6,6 +6,7 @@ import {
   CopyButton,
   Field,
   Input,
+  PasswordInput,
   Spinner,
   Stack,
   Text,
@@ -169,10 +170,8 @@ function ApiKeyForm({ onSaved }: { onSaved: (status: EngineStatus) => void }) {
       <Field invalid={Boolean(error)}>
         <Field.Label>Anthropic API key</Field.Label>
         <div className={styles.keyRow}>
-          <Input
-            type="password"
+          <PasswordInput
             autoComplete="off"
-            spellCheck={false}
             placeholder="sk-ant-…"
             value={value}
             onChange={(e) => setValue(e.target.value)}
