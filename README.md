@@ -13,6 +13,12 @@ servers: Conch just gives them a better shell.
 The UI is built on **Nacre**, Conch's own design system: opaque "glazed porcelain"
 surfaces with a pointer-reactive, mother-of-pearl iridescence we call _Lustre_.
 
+**It can use the web for you.** Conch has a browser of its own, with nothing to
+install. You watch it work live beside the chat, and can take the wheel at any
+time. It asks before it acts on a new site or does anything significant, and hands
+you the keyboard for passwords, which it never sees. See
+[docs/BROWSER.md](./docs/BROWSER.md).
+
 ## Quick start
 
 ```bash
@@ -56,6 +62,7 @@ For an authenticated HTTPS reverse proxy, see [docs/REVERSE_PROXY.md](./docs/REV
 - [AGENTS.md](./AGENTS.md) — how to work in this repo (humans and AI agents)
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — system design and security model
 - [docs/SECURITY.md](./docs/SECURITY.md) — signing in, phones, recovery, warnings
+- [docs/BROWSER.md](./docs/BROWSER.md) — the browser: watching, taking over, what it asks
 - [docs/design/NACRE.md](./docs/design/NACRE.md) — the design language
 - [docs/adr](./docs/adr) — decision records
 

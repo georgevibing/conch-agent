@@ -111,6 +111,28 @@ should flow, never stutter.
   to the text colour, like wet ink. Half-arrived Markdown is closed so raw `**` never
   flashes. The wait holds its place and the reply replaces it in place, with no jump.
 
+### The browser (chat)
+
+The browser panel shows someone else's page, so Nacre stays out of its way. The page
+is never tinted, blurred or framed with decoration. What Nacre adds is the
+assistant's presence, and it wears the pearl:
+
+- **The hand.** A small pearl cursor glides on `--nc-spring-soft` to the control
+  it's about to touch. Its tip, not its middle, lands on the target, so the words
+  stay readable. The control gets a pearl rim, and a click sends out one ripple.
+- **The caption.** One line on the inverse surface at the foot of the page says what
+  is happening, then fades. It never stacks or scrolls.
+- **Your turn.** When the assistant waits for you, the page wears the orbiting pearl
+  rim (the same ambient Lustre as the working composer), and the chat card does too.
+  Waiting on a person is the only time the browser asks for attention.
+- **Driving.** When you have the wheel, the screen gets a steady accent ring: clear,
+  not animated.
+- **The trail.** Steps become a filmstrip of thumbnails that grows as the agent
+  works, with the running frame shimmering at the end.
+
+The screen is a `<button>` (take over) with a hidden `<textarea>` for the keys, so it
+stays within jsx-a11y strict and works with input methods and phone keyboards.
+
 ## Interaction checklist (every interactive component)
 
 - [ ] Hover: subtle fill/shadow change, Lustre where appropriate, `@media (hover: hover)` only

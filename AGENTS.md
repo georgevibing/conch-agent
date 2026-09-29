@@ -14,6 +14,12 @@ a React web app built on **Nacre**, our own design system. Integrations and skil
 belong to Conch, so they work with every provider. See
 [ARCHITECTURE.md](./ARCHITECTURE.md).
 
+**The Conch promise.** Anyone can use it, including people who have never opened a
+terminal. Conch sets itself up, fixes what breaks before anyone notices, and
+interrupts only to ask for approval of something that matters, or for the one
+thing only a person can do. Every feature is judged by that promise first. See
+working agreement 11: _fix it before you ask_.
+
 ## Routing — where to go for what
 
 | If your task involves…                                    | Read / work in                                                                                                                                                                                    |
@@ -26,6 +32,7 @@ belong to Conch, so they work with every provider. See
 | Integrations (apps/MCP servers, OAuth, the catalog)       | `apps/server/src/integrations/` + [ADR 0009](./docs/adr/0009-integrations.md) — security-relevant                                                                                                 |
 | Providers (which engine runs, connecting them, keys)      | `apps/server/src/providers/`, `apps/server/src/secrets/` + [ADR 0010](./docs/adr/0010-providers.md), [ADR 0012](./docs/adr/0012-every-provider-at-once.md) — security-relevant                    |
 | Skills (SKILL.md, other agents' folders, `use_skill`)     | `apps/server/src/skills/` + [ADR 0013](./docs/adr/0013-skills.md) — security-relevant                                                                                                             |
+| The browser (live view, takeover, per-site permissions)   | `apps/server/src/browser/`, `apps/web/src/features/browser/`, `packages/nacre/src/patterns/Browser/` + [ADR 0014](./docs/adr/0014-browser.md) — security-relevant                                 |
 | What ⌘K can find by name                                  | `apps/web/src/features/palette/` (`findables.tsx`) — see working agreement 10                                                                                                                     |
 | A decision that changes architecture or adds a dependency | Write an ADR in [`docs/adr/`](./docs/adr/) first                                                                                                                                                  |
 | Security, auth, exposing the gateway beyond localhost     | [§ Security engineering](#security-engineering) below → [ARCHITECTURE.md § Security](./ARCHITECTURE.md#security-model) → [ADR 0008](./docs/adr/0008-access-and-hardening.md) — treat as high-risk |
@@ -122,6 +129,46 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
     (with the words people would type) in the same change, and extend
     `Palette.test.tsx`. Choosing it does the obvious thing: open it, or use it
     right there (a skill goes into the composer, a model applies to the chat).
+11. **Fix it before you ask.** Conch is for people who don't debug. When something
+    is missing, stale or broken, Conch repairs it itself and carries on. The person
+    is asked only for approvals that matter, or for what only they can do. Proactive,
+    never intrusive:
+    - **Heal first.** Handle every failure you can foresee, in code, without asking:
+      - Install what's missing (with progress) and fall back to the next good
+        option.
+      - Clear stale locks and orphaned processes.
+      - Relaunch what crashed and restore where it was.
+      - Retry flaky networks lighter and with backoff.
+      - Refresh expired tokens.
+
+      The browser (ADR 0014) is the reference: it finds a browser or downloads
+      one, clears a dead profile lock, falls back from Chrome to Edge to
+      Chromium, relaunches after a crash and reopens each chat's page, and
+      declines cookie banners.
+
+    - **Say what you fixed, quietly.** Record each repair as a plain "fixed on its
+      own" note (e.g. `BrowserStatus.healed`), shown as reassurance, never as an
+      error or a toast that demands attention.
+    - **Ask only what matters.**
+      - Ask about spending, sending, publishing or deleting; about changes that
+        grant trust or reach; and about credentials, which the person types
+        themselves and the agent never sees.
+      - Ask for things only a person can do: sign in, solve a captcha, run a
+        command as administrator.
+      - Ask once, in the flow, in plain words, with one obvious button. Never
+        ask something Conch could have worked out or fixed itself.
+    - **Never a dead end.** Every problem state says what happened in one sentence
+      and offers one next step: Repair, Try again or Open settings. When only the
+      person can do it (a system library on Linux), show the exact command to
+      copy. A subsystem with state exposes its health and a single **Repair**
+      that tries every fix in turn. The destructive fix (wiping a profile) comes
+      last, and only after confirmation.
+    - **Errors are for the agent too.** Tool errors say what happened and what to
+      try next, in words a model can act on ("something is covering that button;
+      close the dialog first"). The agent's prompt tells it to try once more
+      another way before it tells the person.
+    - **Test the healing, not just the happy path.** Every self-repair gets a test:
+      the stale lock, the crash, the fallback, the retry.
 
 ## Security engineering
 
@@ -176,6 +223,7 @@ threat model. Hold every change to the bar of a FAANG security review:
 - [ ] New behaviour has tests (unit for logic, play/axe for components)
 - [ ] Docs updated where behaviour or architecture changed (this file, ARCHITECTURE.md, NACRE.md, an ADR)
 - [ ] Security-relevant? Threat-modelled, abuse cases tested, checkup updated, sources cited
+- [ ] Fails well (working agreement 11)? Foreseeable failures heal themselves or end in one plain next step, and the healing paths are tested
 
 <!-- BEGIN:turborepo-agent-rules -->
 

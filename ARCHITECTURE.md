@@ -45,6 +45,9 @@ Integrations and skills belong to Conch, so every provider gets them.
 4. **Safe by default.** Binds to `127.0.0.1`; remote access is an explicit, documented
    opt-in (see Security).
 5. **Design system first.** Screens compose Nacre; Nacre owns look, motion and a11y.
+6. **Fix it before you ask.** Foreseeable failures heal themselves (and say so,
+   quietly). People are asked only for approvals that matter or what only they can
+   do. See AGENTS.md working agreement 11.
 
 ## Packages
 
@@ -184,6 +187,41 @@ src/
   (a shimmer while pending, a write-in when the title lands).
 - API retries from the engine surface as live `notice` events ("Retrying in 4s…"),
   so a stalled provider is never a silent spinner.
+- **The browser** (`browser/`, [ADR 0014](./docs/adr/0014-browser.md)).
+  - **Runtime.** One headless browser per gateway, driven with `playwright-core`:
+    the Chrome, Edge, Brave or Chromium already installed (`locate.ts`), else a
+    Chromium downloaded on first use (`install.ts`). It gets its own profile in
+    `~/.conch/browser/profile`.
+  - **Self-healing** (`runtime.ts`). A browser that won't start falls back to the
+    next one found, then to a download. Processes still holding the profile are
+    found by command line and ended. A crash relaunches, and each chat's tab
+    reopens at its last address. The browser stops after 10 idle minutes. Each
+    repair is logged in `BrowserStatus.healed`.
+  - **Tabs.** One per conversation (`tab.ts`). Popups (sign-in windows) stack.
+    The page's viewport takes the watching panel's shape: desktop-wide, as tall
+    as the panel.
+  - **Agent tools.** `browser_*` host tools (`tools.ts`) reach every engine with
+    host tools, the same way memory does. Claude Code gets them in-process, API
+    engines and the mock as function tools; Codex has no host tools yet, so it
+    doesn't browse.
+    - Pages are read as Playwright's AI accessibility snapshot with refs, with
+      secret fields masked, framed as untrusted.
+    - Each action logs a `browser.step` (running, then done, with a thumbnail in
+      `~/.conch/browser/shots/<id>/`).
+    - Permissions are the browser's own, via the tool context's `ask`, so every
+      engine behaves the same. It asks per site (registrable domain via tldts)
+      and always for high-stakes controls and downloads. Plan mode only reads.
+    - Typing into a secret field becomes a `browser.handoff` to the user.
+  - **Live view.** `/api/browser/live?conversationId=` is its own WebSocket:
+    - binary JPEG screencast frames, sent only while a watcher is visible,
+      latest wins;
+    - `tab` and `action` events (for the agent's cursor and captions);
+    - your mouse, keys and text when you take over, sent through CDP input.
+  - **REST.** `GET /api/browser` (status), `PATCH /api/browser/settings` (`allowLocal`
+    needs recent verification), `DELETE /api/browser/sites/:site`, `POST
+/api/browser/repair`, `POST /api/browser/wipe`, `POST /api/browser/:id/control`
+    (hand back from the transcript), and `GET /api/browser/shots/:id/:shot`.
+    `browser.status` is broadcast on every change, install progress included.
 - **Search.** `search/` keeps a SQLite FTS5 (trigram) index of every message in
   `~/.conch/search.db`, fed by the conversation event stream and caught up on start;
   `GET /api/search` ranks and groups hits with snippets, `GET /api/search/preview`
@@ -194,7 +232,8 @@ src/
   `integrations.json` + `integrations.secrets.json`, `skills/<name>/SKILL.md` +
   `skills.json` (modes for skills Conch doesn't own), `api-sessions/<id>.json` (the
   transcript a plain model API needs, since it keeps no session of its own),
-  `workspace/` (default cwd).
+  `browser.json` (browser settings, sites you always allow) + `browser/profile/` +
+  `browser/shots/`, `workspace/` (default cwd).
 
 See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
 [ADR 0004 — Engines](./docs/adr/0004-engines.md).
@@ -287,7 +326,12 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
   - integrations ask before changes by default; "Don't ask" needs a recent
     password/key and is flagged by the checkup; a tool whose definition changes
     loses "allow"; integration content is framed as data, not instructions;
-  - memories are injected as facts, not instructions.
+  - memories are injected as facts, not instructions;
+  - the agent's browser can never reach the gateway (every request and WebSocket
+    is checked after DNS resolution, service workers are blocked). Local and
+    private addresses need "Open local apps" (recent verification, and flagged by
+    the checkup). It asks per site and for anything high-stakes, and the model
+    never sees secret fields: you type them after a handoff.
 - **Memory:** at most 50 conversations are held in memory; idle ones are dropped and reloaded from disk.
 - **Storage:** `~/.conch` is tightened to 0700/0600 at start-up, and every store
   builds paths with `safeJoin`. All wire ids are `Id` (no dots or slashes).
@@ -302,6 +346,10 @@ Known limits:
 - The agent can read `ANTHROPIC_API_KEY`, which it needs.
 - Claude Code loads the workspace's own `.claude/` settings; the checkup warns when they add hooks, auto-allowed tools or MCP servers.
 - Breached-password checks use a local blocklist only.
+- The browser: a site you allowed could still inject instructions that steer the
+  agent within that site, or leak what it read through the addresses it opens.
+  Per-site approval, high-stakes confirmation and the secrets rule limit this
+  risk; they don't remove it (ADR 0014).
 
 ## Quality gates
 
