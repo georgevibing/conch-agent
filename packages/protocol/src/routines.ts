@@ -19,7 +19,8 @@ export const ClockTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use a ti
 export const MIN_INTERVAL_MINUTES = 15;
 
 export const Schedule = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('once'), at: z.iso.datetime({ offset: true }) }),
+  /** `at` without an offset is a wall-clock time in the routine's timezone. */
+  z.object({ type: z.literal('once'), at: z.iso.datetime({ offset: true, local: true }) }),
   z.object({ type: z.literal('daily'), time: ClockTime }),
   z.object({ type: z.literal('weekly'), days: z.array(Weekday).min(1).max(7), time: ClockTime }),
   z.object({

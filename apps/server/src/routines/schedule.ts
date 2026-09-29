@@ -29,6 +29,32 @@ const ORDER: Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
 export class ScheduleError extends Error {}
 
+/** Epoch ms for a one-off time; offset-less times are read in `timezone`. */
+export function onceAt(at: string, timezone: string): number {
+  if (/(Z|[+-]\d\d:?\d\d)$/i.test(at)) return Date.parse(at);
+  const [date = '', time = '00:00'] = at.split('T');
+  const [y, mo, d] = date.split('-').map(Number);
+  const [h = 0, mi = 0, sec = 0] = time.split(':').map(Number);
+  const guess = Date.UTC(y ?? 1970, (mo ?? 1) - 1, d ?? 1, h, mi, Math.floor(sec));
+  // Offset of the timezone at that moment, applied twice to settle across DST changes.
+  const offset = (t: number) => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }).formatToParts(t);
+    const v = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+    return Date.UTC(v('year'), v('month') - 1, v('day'), v('hour'), v('minute'), v('second')) - t;
+  };
+  const first = guess - offset(guess);
+  return guess - offset(first);
+}
+
 /** Cron expression for calendar schedules; undefined for `once` and `interval`. */
 export function toCron(schedule: Schedule): string | undefined {
   const hm = (time: string) => {
@@ -64,7 +90,8 @@ export function validate(schedule: Schedule, timezone: string, now = Date.now())
     return;
   }
   if (schedule.type === 'once') {
-    if (Date.parse(schedule.at) <= now) throw new ScheduleError('That time has already passed.');
+    if (onceAt(schedule.at, timezone) <= now)
+      throw new ScheduleError('That time has already passed.');
     return;
   }
   const expression = toCron(schedule) ?? '';
@@ -94,7 +121,7 @@ export function nextRuns(
   const count = options.count ?? 1;
   switch (schedule.type) {
     case 'once': {
-      const at = Date.parse(schedule.at);
+      const at = onceAt(schedule.at, timezone);
       return at > from ? [at] : [];
     }
     case 'interval': {
@@ -124,7 +151,7 @@ export function previousRun(
 ): number | undefined {
   switch (schedule.type) {
     case 'once': {
-      const at = Date.parse(schedule.at);
+      const at = onceAt(schedule.at, timezone);
       return at <= now ? at : undefined;
     }
     case 'interval': {
@@ -196,7 +223,7 @@ export function describe(schedule: Schedule, timezone: string, locale?: string):
         hour: 'numeric',
         minute: '2-digit',
         timeZone: timezone,
-      }).format(new Date(schedule.at))}`;
+      }).format(onceAt(schedule.at, timezone))}`;
     case 'daily':
       return `Every day at ${formatTime(schedule.time, locale)}`;
     case 'weekly':

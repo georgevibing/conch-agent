@@ -1,6 +1,15 @@
 import { describe as suite, expect, it } from 'vitest';
 
-import { describe, nextRuns, perDay, preview, previousRun, toCron, validate } from './schedule';
+import {
+  describe,
+  nextRuns,
+  onceAt,
+  perDay,
+  preview,
+  previousRun,
+  toCron,
+  validate,
+} from './schedule';
 
 const TZ = 'Europe/Berlin';
 
@@ -82,5 +91,12 @@ suite('schedules', () => {
     expect(
       perDay({ type: 'weekly', days: ['mon', 'tue', 'wed', 'thu', 'fri'], time: '08:00' }, TZ),
     ).toBeCloseTo(5 / 7, 0);
+  });
+
+  it('reads one-off times without an offset in the routine timezone', () => {
+    const at = onceAt('2030-07-01T09:00', TZ); // CEST, UTC+2
+    expect(new Date(at).toISOString()).toBe('2030-07-01T07:00:00.000Z');
+    expect(onceAt('2030-01-15T09:00:00', TZ)).toBe(Date.parse('2030-01-15T08:00:00Z')); // CET
+    expect(onceAt('2030-01-15T09:00:00Z', TZ)).toBe(Date.parse('2030-01-15T09:00:00Z'));
   });
 });

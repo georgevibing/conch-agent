@@ -104,10 +104,16 @@ src/
   app, never sent to the model), your commands (`~/.conch/commands/<name>.md`, a
   reusable prompt where `{{input}}` is replaced), and Claude Code's commands and
   skills (sent as-is; Claude Code interprets them).
+- **Routines** (`routines/`): structured schedules (croner for calendar maths,
+  cronstrue for custom cron), a 30-second clock with single catch-up after downtime,
+  and runs executed as ordinary conversations via `ConversationManager.start()` with a
+  `report_outcome` tool. Chats get `create_routine` / `list_routines` /
+  `update_routine` / `delete_routine`; drafts only run once the user turns them on.
+  See [ADR 0006](./docs/adr/0006-routines.md).
 - API retries from the engine surface as live `notice` events ("Retrying in 4s…"),
   so a stalled provider is never a silent spinner.
 - Local data lives in `~/.conch/` (`CONCH_HOME`): `settings.json`, `secrets.json`,
-  `memory/*.md`, `commands/*.md`, `conversations/index.json` + `<id>.jsonl`,
+  `memory/*.md`, `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`), `conversations/index.json` + `<id>.jsonl`,
   `workspace/` (default cwd).
 
 See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
