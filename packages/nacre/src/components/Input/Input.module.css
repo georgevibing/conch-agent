@@ -1,0 +1,197 @@
+@layer nacre.components {
+  /*
+   * The "well": a softly recessed field. Idle it sits a step below the
+   * surface; on hover the hairline firms up; on focus it lifts to the surface
+   * colour, the border takes the accent and a soft halo blooms around it.
+   */
+  .well {
+    --well-h: var(--nc-control-md);
+    --well-px: var(--nc-space-3);
+    --well-radius: var(--nc-radius-md);
+    --well-font: var(--nc-text-md);
+    --well-icon: 1rem;
+    --well-border: var(--nc-border);
+    --well-halo: var(--nc-accent-9);
+
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+    min-block-size: var(--well-h);
+    padding-inline: var(--well-px);
+    border-radius: var(--well-radius);
+    corner-shape: var(--nc-corner-shape);
+    background-color: var(--nc-surface-sunken);
+    color: var(--nc-text);
+    font-size: var(--well-font);
+    box-shadow:
+      inset 0 0 0 1px var(--well-border),
+      inset 0 1px 2px 0 var(--nc-wash-1);
+    cursor: text;
+    transition:
+      background-color var(--nc-duration-base) var(--nc-ease-out),
+      box-shadow var(--nc-duration-base) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  @media (hover: hover) {
+    .well:hover:not([data-disabled], :focus-within) {
+      --well-border: var(--nc-border-strong);
+    }
+  }
+
+  .well:focus-within {
+    --well-border: color-mix(in oklch, var(--well-halo) 70%, transparent);
+    background-color: var(--nc-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--well-border),
+      0 0 0 3.5px color-mix(in oklch, var(--well-halo) 18%, transparent),
+      var(--nc-elevation-1);
+  }
+
+  .well[data-invalid] {
+    --well-halo: light-dark(
+      oklch(0.58 0.2 var(--nc-danger-h)),
+      oklch(0.66 0.19 var(--nc-danger-h))
+    );
+    --well-border: color-mix(in oklch, var(--well-halo) 55%, transparent);
+  }
+
+  .well[data-disabled] {
+    cursor: not-allowed;
+    opacity: 0.55;
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .well[data-size='sm'] {
+    --well-h: var(--nc-control-sm);
+    --well-px: var(--nc-space-2-5);
+    --well-radius: var(--nc-radius-sm);
+    --well-font: var(--nc-text-sm);
+    --well-icon: 0.875rem;
+  }
+
+  .well[data-size='lg'] {
+    --well-h: var(--nc-control-lg);
+    --well-px: var(--nc-space-4);
+    --well-radius: var(--nc-radius-lg);
+    --well-font: var(--nc-text-lg);
+    --well-icon: 1.125rem;
+  }
+
+  .input {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    block-size: var(--well-h);
+    padding: 0;
+    margin: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    font: inherit;
+    font-size: var(--well-font);
+    letter-spacing: -0.003em;
+    color: inherit;
+    caret-color: var(--nc-accent-9);
+  }
+
+  .input:focus-visible {
+    outline: none;
+  }
+
+  .input::placeholder {
+    color: var(--nc-text-subtle);
+    opacity: 1;
+    transition: color var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .well:focus-within .input::placeholder {
+    color: color-mix(in oklch, var(--nc-text-subtle) 70%, transparent);
+  }
+
+  .input:disabled {
+    cursor: not-allowed;
+  }
+
+  /* Hide native search/number chrome for a consistent look. */
+  .input::-webkit-search-cancel-button,
+  .input::-webkit-inner-spin-button,
+  .input::-webkit-outer-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+
+  .slot {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    flex-shrink: 0;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-sm);
+    transition: color var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .slot > svg {
+    inline-size: var(--well-icon);
+    block-size: var(--well-icon);
+    stroke-width: 1.85;
+  }
+
+  .well:focus-within .slot[data-slot='leading'] {
+    color: var(--nc-text-muted);
+  }
+
+  /* IconButtons in slots sit flush with the well's padding. */
+  .slot[data-slot='trailing']:has(button) {
+    margin-inline-end: calc(var(--well-px) * -0.5);
+  }
+  .slot[data-slot='leading']:has(button) {
+    margin-inline-start: calc(var(--well-px) * -0.5);
+  }
+
+  .clear {
+    appearance: none;
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-gray-7);
+    color: var(--nc-surface);
+    cursor: pointer;
+    opacity: 0;
+    transform: scale(0.6);
+    pointer-events: none;
+    transition:
+      opacity var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy),
+      background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .clear > svg {
+    inline-size: 0.6875rem;
+    block-size: 0.6875rem;
+    stroke-width: 3;
+  }
+
+  .clear[data-visible] {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  @media (hover: hover) {
+    .clear:hover {
+      background: var(--nc-gray-9);
+    }
+  }
+
+  .clear:active {
+    transform: scale(0.88);
+  }
+}

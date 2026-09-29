@@ -1,0 +1,58 @@
+@layer nacre.components {
+  .root {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding-inline: 0;
+  }
+
+  .textarea {
+    --pad-y: calc((var(--well-h) - 1lh) / 2);
+    display: block;
+    inline-size: 100%;
+    min-block-size: calc(var(--min-rows, 3) * 1lh + var(--pad-y) * 2);
+    padding: var(--pad-y) var(--well-px);
+    margin: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    font: inherit;
+    font-size: var(--well-font);
+    line-height: var(--nc-leading-normal);
+    letter-spacing: -0.003em;
+    color: inherit;
+    caret-color: var(--nc-accent-9);
+    resize: vertical;
+    scrollbar-gutter: stable;
+  }
+
+  .textarea[data-autosize] {
+    resize: none;
+    field-sizing: content;
+    max-block-size: calc(var(--max-rows, 12) * 1lh + var(--pad-y) * 2);
+    overflow-y: auto;
+  }
+
+  .textarea:focus-visible {
+    outline: none;
+  }
+
+  .textarea::placeholder {
+    color: var(--nc-text-subtle);
+    opacity: 1;
+  }
+
+  .textarea:disabled {
+    cursor: not-allowed;
+  }
+
+  .footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--nc-space-2);
+    padding: 0 var(--nc-space-2) var(--nc-space-2);
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+  }
+}

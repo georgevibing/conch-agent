@@ -1,0 +1,54 @@
+@layer nacre.components {
+  .row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2-5);
+    min-inline-size: 0;
+  }
+
+  .row[data-control-position='end'] {
+    flex-direction: row-reverse;
+    justify-content: space-between;
+    gap: var(--nc-space-4);
+  }
+
+  .control {
+    display: inline-flex;
+    align-items: center;
+    /* Optically centre the control on the first line of the label. */
+    min-block-size: calc(var(--nc-text-md) * var(--nc-leading-snug));
+    flex-shrink: 0;
+  }
+
+  .text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    min-inline-size: 0;
+  }
+
+  .label {
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-medium);
+    line-height: var(--nc-leading-snug);
+    letter-spacing: -0.004em;
+    color: var(--nc-text);
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .description {
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-subtle);
+    text-wrap: pretty;
+  }
+
+  .row[data-disabled] .label {
+    color: var(--nc-text-disabled);
+    cursor: not-allowed;
+  }
+  .row[data-disabled] .description {
+    color: var(--nc-text-disabled);
+  }
+}

@@ -1,0 +1,223 @@
+@layer nacre.components {
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+  }
+
+  .group[data-orientation='horizontal'] {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--nc-space-5);
+  }
+
+  .group[data-variant='card'] {
+    display: grid;
+    gap: var(--nc-space-2);
+  }
+
+  .group[data-variant='card'][data-orientation='horizontal'] {
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: var(--nc-space-3);
+  }
+
+  /* ── Radio dot ─────────────────────────────────────────────────────── */
+  .radio {
+    --size: 1.125rem;
+    appearance: none;
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+    inline-size: var(--size);
+    block-size: var(--size);
+    padding: 0;
+    margin: 0;
+    border: 0;
+    border-radius: 50%;
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-strong),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      box-shadow var(--nc-duration-base) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  @media (hover: hover) {
+    button.radio:hover:not(:disabled) {
+      box-shadow:
+        inset 0 0 0 1px color-mix(in oklch, var(--nc-border-strong), var(--nc-text) 12%),
+        var(--nc-glaze-edge),
+        var(--nc-elevation-1),
+        0 0 0 4px color-mix(in oklch, var(--nc-accent-9) 10%, transparent);
+    }
+  }
+
+  button.radio:active:not(:disabled) {
+    transform: scale(0.86);
+  }
+
+  .radio:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .radio:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .radio:has(> .dot[data-state='checked']) {
+    background:
+      linear-gradient(180deg, oklch(1 0 0 / 0.18), oklch(1 0 0 / 0) 60%), var(--nc-accent-9);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--nc-accent-9), black 14%),
+      inset 0 1px 0 0 oklch(1 0 0 / 0.22),
+      0 1px 2px -0.5px color-mix(in oklch, var(--nc-accent-9) 55%, transparent),
+      0 2px 6px -2px color-mix(in oklch, var(--nc-accent-9) 50%, transparent);
+  }
+
+  .dot {
+    display: block;
+    inline-size: calc(var(--size) * 0.36);
+    block-size: calc(var(--size) * 0.36);
+    border-radius: 50%;
+    background: var(--nc-accent-contrast);
+    box-shadow: 0 0.5px 1px 0 oklch(0 0 0 / 0.2);
+    transform: scale(0);
+    transition: transform var(--nc-duration-fast) var(--nc-ease-in);
+  }
+
+  .dot[data-state='checked'] {
+    transform: scale(1);
+    transition: transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  /* ── Card variant ──────────────────────────────────────────────────── */
+  .card {
+    --nc-rim-rest: 0;
+    --nc-rim-hover: 0.9;
+    --nc-sheen-size: 180px;
+    --nc-sheen-hover: 0.22;
+    --card-border: var(--nc-border);
+
+    appearance: none;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-3);
+    inline-size: 100%;
+    margin: 0;
+    padding: var(--nc-space-3) var(--nc-space-3-5);
+    border: 0;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    color: var(--nc-text);
+    text-align: start;
+    font: inherit;
+    box-shadow:
+      inset 0 0 0 1px var(--card-border),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+    cursor: pointer;
+    transition:
+      box-shadow var(--nc-duration-base) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy),
+      --nc-rim-near var(--nc-duration-slow) var(--nc-ease-out),
+      --nc-sheen var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .card:hover:not(:disabled) {
+      box-shadow:
+        inset 0 0 0 1px var(--card-border),
+        var(--nc-glaze-edge),
+        var(--nc-elevation-2);
+    }
+  }
+
+  .card:active:not(:disabled) {
+    transform: scale(0.99);
+  }
+
+  .card:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .card[data-state='checked'] {
+    --card-border: color-mix(in oklch, var(--nc-accent-9) 70%, transparent);
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--nc-accent-2), var(--nc-surface) 30%),
+      var(--nc-surface) 70%
+    );
+    box-shadow:
+      inset 0 0 0 1px var(--card-border),
+      var(--nc-glaze-edge),
+      0 1px 2px -0.5px color-mix(in oklch, var(--nc-accent-9) 20%, transparent),
+      0 4px 12px -6px color-mix(in oklch, var(--nc-accent-9) 30%, transparent);
+  }
+
+  .card:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .card .radio {
+    --size: 1rem;
+    margin-block-start: 0.125rem;
+    margin-inline-start: auto;
+  }
+
+  .cardIcon {
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+    inline-size: 2rem;
+    block-size: 2rem;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-gray-3);
+    color: var(--nc-text-muted);
+    transition:
+      background-color var(--nc-duration-base) var(--nc-ease-out),
+      color var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .cardIcon > svg {
+    inline-size: 1.0625rem;
+    block-size: 1.0625rem;
+    stroke-width: 1.85;
+  }
+
+  .card[data-state='checked'] .cardIcon {
+    background: var(--nc-accent-4);
+    color: var(--nc-accent-11);
+  }
+
+  .cardText {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    min-inline-size: 0;
+  }
+
+  .cardLabel {
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-medium);
+    line-height: var(--nc-leading-snug);
+    letter-spacing: -0.004em;
+  }
+
+  .cardDescription {
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-subtle);
+    text-wrap: pretty;
+  }
+}

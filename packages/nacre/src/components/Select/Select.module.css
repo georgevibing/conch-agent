@@ -1,0 +1,314 @@
+@layer nacre.components {
+  /* ── Trigger ───────────────────────────────────────────────────────── */
+  .trigger {
+    --h: var(--nc-control-md);
+    --px: var(--nc-space-3);
+    --radius: var(--nc-radius-md);
+    --font: var(--nc-text-md);
+    --icon: 1rem;
+    --border: var(--nc-border);
+    --halo: var(--nc-accent-9);
+    --nc-sheen-size: 90px;
+    --nc-sheen-hover: 0.3;
+    --nc-rim-hover: 1;
+
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    inline-size: 100%;
+    min-inline-size: 0;
+    block-size: var(--h);
+    padding: 0 calc(var(--px) - 0.125rem) 0 var(--px);
+    margin: 0;
+    border: 0;
+    border-radius: var(--radius);
+    corner-shape: var(--nc-corner-shape);
+    background-color: var(--nc-surface-sunken);
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--font);
+    letter-spacing: -0.003em;
+    text-align: start;
+    box-shadow:
+      inset 0 0 0 1px var(--border),
+      inset 0 1px 2px 0 var(--nc-wash-1);
+    cursor: pointer;
+    user-select: none;
+    transition:
+      background-color var(--nc-duration-base) var(--nc-ease-out),
+      box-shadow var(--nc-duration-base) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy),
+      --nc-rim-near var(--nc-duration-slow) var(--nc-ease-out),
+      --nc-sheen var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .trigger[data-size='sm'] {
+    --h: var(--nc-control-sm);
+    --px: var(--nc-space-2-5);
+    --radius: var(--nc-radius-sm);
+    --font: var(--nc-text-sm);
+    --icon: 0.875rem;
+  }
+
+  .trigger[data-size='lg'] {
+    --h: var(--nc-control-lg);
+    --px: var(--nc-space-4);
+    --radius: var(--nc-radius-lg);
+    --font: var(--nc-text-lg);
+    --icon: 1.125rem;
+  }
+
+  @media (hover: hover) {
+    .trigger[data-variant='field']:hover:not(:disabled, [data-state='open']) {
+      --border: var(--nc-border-strong);
+    }
+  }
+
+  .trigger[data-variant='field']:focus-visible,
+  .trigger[data-variant='field'][data-state='open'] {
+    outline: none;
+    --border: color-mix(in oklch, var(--halo) 70%, transparent);
+    background-color: var(--nc-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--border),
+      0 0 0 3.5px color-mix(in oklch, var(--halo) 18%, transparent),
+      var(--nc-elevation-1);
+  }
+
+  .trigger[data-variant='surface'] {
+    inline-size: auto;
+    background: linear-gradient(180deg, transparent 40%, var(--nc-wash-1) 100%), var(--nc-surface);
+    font-weight: var(--nc-weight-medium);
+    box-shadow:
+      inset 0 0 0 1px var(--border),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+  }
+
+  @media (hover: hover) {
+    .trigger[data-variant='surface']:hover:not(:disabled) {
+      box-shadow:
+        inset 0 0 0 1px var(--border),
+        var(--nc-glaze-edge),
+        var(--nc-elevation-2);
+    }
+  }
+
+  .trigger[data-variant='ghost'] {
+    inline-size: auto;
+    background: transparent;
+    color: var(--nc-text-muted);
+    font-weight: var(--nc-weight-medium);
+    box-shadow: none;
+  }
+
+  @media (hover: hover) {
+    .trigger[data-variant='ghost']:hover:not(:disabled) {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+  }
+
+  .trigger[data-variant='ghost'][data-state='open'] {
+    background: var(--nc-wash-2);
+    color: var(--nc-text);
+  }
+
+  .trigger:is([data-variant='surface'], [data-variant='ghost']):active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  .trigger:is([data-variant='surface'], [data-variant='ghost']):focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .trigger[data-invalid] {
+    --halo: light-dark(oklch(0.58 0.2 var(--nc-danger-h)), oklch(0.66 0.19 var(--nc-danger-h)));
+    --border: color-mix(in oklch, var(--halo) 55%, transparent);
+  }
+
+  .trigger:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .value {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .trigger[data-placeholder] .value {
+    color: var(--nc-text-subtle);
+  }
+
+  .leading {
+    display: inline-grid;
+    place-items: center;
+    color: var(--nc-text-subtle);
+  }
+
+  .leading > svg,
+  .chevron > svg {
+    inline-size: var(--icon);
+    block-size: var(--icon);
+    stroke-width: 1.85;
+  }
+
+  .chevron {
+    display: inline-grid;
+    place-items: center;
+    color: var(--nc-text-subtle);
+    transition:
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy),
+      color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .trigger[data-state='open'] .chevron {
+    transform: rotate(180deg);
+    color: var(--nc-text-muted);
+  }
+
+  /* ── Content ───────────────────────────────────────────────────────── */
+  .content {
+    --nc-enter-y: -4px;
+    z-index: var(--nc-z-popover);
+    min-inline-size: max(var(--radix-select-trigger-width), 10rem);
+    max-block-size: min(22rem, var(--radix-select-content-available-height));
+    overflow: hidden;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-overlay);
+    color: var(--nc-text);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-3);
+    transform-origin: var(--radix-select-content-transform-origin);
+    animation: nc-surface-in var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .content[data-side='top'] {
+    --nc-enter-y: 4px;
+  }
+
+  .viewport {
+    padding: var(--nc-space-1);
+    scroll-padding-block: var(--nc-space-1);
+  }
+
+  .item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    min-block-size: 2rem;
+    padding: var(--nc-space-1-5) var(--nc-space-2) var(--nc-space-1-5) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    font-size: var(--nc-text-md);
+    line-height: var(--nc-leading-snug);
+    letter-spacing: -0.003em;
+    color: var(--nc-text);
+    outline: none;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color var(--nc-duration-instant) var(--nc-ease-out);
+  }
+
+  .item[data-highlighted] {
+    background-color: var(--nc-wash-2);
+  }
+
+  .item[data-state='checked'] {
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .item[data-disabled] {
+    color: var(--nc-text-disabled);
+    cursor: not-allowed;
+  }
+
+  .itemIcon {
+    display: inline-grid;
+    place-items: center;
+    color: var(--nc-text-subtle);
+    align-self: flex-start;
+    block-size: calc(1em * var(--nc-leading-snug));
+  }
+
+  .itemIcon > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    stroke-width: 1.85;
+  }
+
+  .item[data-highlighted] .itemIcon {
+    color: var(--nc-text-muted);
+  }
+
+  .itemText {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    flex: 1 1 auto;
+    min-inline-size: 0;
+  }
+
+  .itemDescription {
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-regular);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-subtle);
+  }
+
+  .indicator {
+    display: inline-grid;
+    place-items: center;
+    color: var(--nc-accent-10);
+    animation: nc-fade-in var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .indicator > svg {
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
+    stroke-width: 2.4;
+  }
+
+  .group + .group,
+  .separator + .group {
+    margin-block-start: var(--nc-space-1);
+  }
+
+  .groupLabel {
+    padding: var(--nc-space-1-5) var(--nc-space-2-5) var(--nc-space-1);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--nc-text-subtle);
+  }
+
+  .separator {
+    block-size: 1px;
+    margin: var(--nc-space-1) var(--nc-space-2);
+    background: var(--nc-border-subtle);
+  }
+
+  .scroll {
+    display: grid;
+    place-items: center;
+    block-size: 1.5rem;
+    color: var(--nc-text-subtle);
+    cursor: default;
+  }
+
+  .scroll > svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+}

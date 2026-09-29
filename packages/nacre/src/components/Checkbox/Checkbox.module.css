@@ -1,0 +1,134 @@
+@layer nacre.components {
+  .box {
+    --box: 1.125rem;
+    --box-radius: calc(var(--nc-radius-xs) * 1.35);
+    --halo: var(--nc-accent-9);
+
+    appearance: none;
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    inline-size: var(--box);
+    block-size: var(--box);
+    padding: 0;
+    margin: 0;
+    border: 0;
+    border-radius: var(--box-radius);
+    corner-shape: var(--nc-corner-shape);
+    flex-shrink: 0;
+    color: var(--nc-accent-contrast);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-strong),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      box-shadow var(--nc-duration-base) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .box[data-size='sm'] {
+    --box: 0.9375rem;
+    --box-radius: var(--nc-radius-xs);
+  }
+
+  @media (hover: hover) {
+    .box:hover:not(:disabled) {
+      box-shadow:
+        inset 0 0 0 1px color-mix(in oklch, var(--nc-border-strong), var(--nc-text) 12%),
+        var(--nc-glaze-edge),
+        var(--nc-elevation-1),
+        0 0 0 4px color-mix(in oklch, var(--halo) 10%, transparent);
+    }
+  }
+
+  .box:active:not(:disabled) {
+    transform: scale(0.86);
+    transition-duration: var(--nc-duration-fast), var(--nc-duration-fast), 120ms;
+  }
+
+  .box:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .box[data-state='checked'],
+  .box[data-state='indeterminate'] {
+    background:
+      linear-gradient(180deg, oklch(1 0 0 / 0.18), oklch(1 0 0 / 0) 60%), var(--nc-accent-9);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--nc-accent-9), black 14%),
+      inset 0 1px 0 0 oklch(1 0 0 / 0.22),
+      0 1px 2px -0.5px color-mix(in oklch, var(--nc-accent-9) 55%, transparent),
+      0 2px 6px -2px color-mix(in oklch, var(--nc-accent-9) 50%, transparent);
+  }
+
+  @media (hover: hover) {
+    .box:is([data-state='checked'], [data-state='indeterminate']):hover:not(:disabled) {
+      background:
+        linear-gradient(180deg, oklch(1 0 0 / 0.18), oklch(1 0 0 / 0) 60%), var(--nc-accent-10);
+      box-shadow:
+        inset 0 0 0 1px color-mix(in oklch, var(--nc-accent-9), black 14%),
+        inset 0 1px 0 0 oklch(1 0 0 / 0.22),
+        0 2px 6px -2px color-mix(in oklch, var(--nc-accent-9) 60%, transparent),
+        0 0 0 4px color-mix(in oklch, var(--halo) 12%, transparent);
+    }
+  }
+
+  .box[data-invalid]:not([data-state='checked']) {
+    --halo: oklch(0.6 0.2 var(--nc-danger-h));
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--halo) 65%, transparent),
+      var(--nc-glaze-edge);
+  }
+
+  .box:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .indicator {
+    display: grid;
+    place-items: center;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .glyph {
+    inline-size: 80%;
+    block-size: 80%;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.1;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    overflow: visible;
+    filter: drop-shadow(0 0.5px 0 oklch(0 0 0 / 0.12));
+  }
+
+  .check,
+  .dash {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    transition: stroke-dashoffset var(--nc-duration-fast) var(--nc-ease-in);
+  }
+
+  .indicator {
+    transform: scale(0.7);
+    transition: transform var(--nc-duration-fast) var(--nc-ease-in);
+  }
+
+  .indicator[data-state='checked'],
+  .indicator[data-state='indeterminate'] {
+    transform: none;
+    transition: transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .indicator[data-state='checked'] .check,
+  .indicator[data-state='indeterminate'] .dash {
+    stroke-dashoffset: 0;
+    transition: stroke-dashoffset var(--nc-duration-slow) var(--nc-ease-out) 40ms;
+  }
+}

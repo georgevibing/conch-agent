@@ -1,0 +1,131 @@
+@layer nacre.components {
+  .root {
+    --track-h: 0.3125rem;
+    --thumb: 1.125rem;
+    --thumb-scale: 1;
+
+    position: relative;
+    display: flex;
+    align-items: center;
+    inline-size: 100%;
+    min-inline-size: 6rem;
+    block-size: calc(var(--thumb) + 0.5rem);
+    touch-action: none;
+    user-select: none;
+    cursor: pointer;
+  }
+
+  .root[data-size='sm'] {
+    --track-h: 0.25rem;
+    --thumb: 0.875rem;
+  }
+
+  .root[data-disabled] {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .track {
+    position: relative;
+    flex-grow: 1;
+    block-size: var(--track-h);
+    overflow: hidden;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-gray-4);
+    box-shadow: inset 0 0.5px 1.5px 0 var(--nc-wash-3);
+    transition: block-size var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  @media (hover: hover) {
+    .root:hover:not([data-disabled]) .track {
+      --track-h: 0.375rem;
+    }
+  }
+
+  .range {
+    position: absolute;
+    block-size: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--nc-accent-8), var(--nc-accent-9));
+  }
+
+  .thumb {
+    position: relative;
+    display: block;
+    inline-size: var(--thumb);
+    block-size: var(--thumb);
+    border-radius: 50%;
+    background: linear-gradient(180deg, oklch(1 0 0), oklch(0.97 0.003 var(--nc-neutral-h)));
+    box-shadow:
+      0 0 0 0.5px oklch(0 0 0 / 0.08),
+      0 0 0 2.5px var(--nc-accent-9),
+      0 2px 6px -1px color-mix(in oklch, var(--nc-accent-9) 45%, transparent),
+      0 1px 2px 0 oklch(0 0 0 / 0.12);
+    transform: scale(var(--thumb-scale));
+    transition:
+      transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy),
+      box-shadow var(--nc-duration-base) var(--nc-ease-out);
+    cursor: grab;
+  }
+
+  @media (hover: hover) {
+    .root:not([data-disabled]) .thumb:hover {
+      --thumb-scale: 1.12;
+      box-shadow:
+        0 0 0 0.5px oklch(0 0 0 / 0.08),
+        0 0 0 2.5px var(--nc-accent-9),
+        0 0 0 7px color-mix(in oklch, var(--nc-accent-9) 14%, transparent),
+        0 3px 8px -1px color-mix(in oklch, var(--nc-accent-9) 45%, transparent);
+    }
+  }
+
+  .root:active:not([data-disabled]) .thumb {
+    --thumb-scale: 1.2;
+    cursor: grabbing;
+  }
+
+  .thumb:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 3px;
+  }
+
+  .root[data-disabled] .thumb {
+    cursor: not-allowed;
+  }
+
+  /* ── Value bubble ──────────────────────────────────────────────────── */
+  .bubble {
+    position: absolute;
+    inset-block-end: calc(100% + 0.625rem);
+    inset-inline-start: 50%;
+    padding: 0.1875rem 0.4375rem;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-semibold);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+    white-space: nowrap;
+    color: var(--nc-text-inverse);
+    background: var(--nc-surface-inverse);
+    box-shadow: var(--nc-elevation-2);
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, 4px) scale(calc(0.9 / var(--thumb-scale)));
+    transform-origin: 50% 100%;
+    filter: blur(2px);
+    transition:
+      opacity var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy),
+      filter var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .root[data-show-value='always'] .bubble,
+  .thumb:hover .bubble,
+  .thumb:focus-visible .bubble,
+  .root:active .bubble {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(calc(1 / var(--thumb-scale)));
+    filter: blur(0);
+  }
+}
