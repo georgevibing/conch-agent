@@ -1,14 +1,18 @@
-import { MessageList, ThinkingIndicator } from '@conch/nacre';
+import { MessageList } from '@conch/nacre';
 import { Fragment, type ReactNode, type Ref } from 'react';
 
 import type { ConversationView, TranscriptItem } from '../../live/reducer';
+import { verbsFor } from './stream';
 import {
   AssistantMessage,
+  AssistantPlaceholder,
   MemoryPill,
   PermissionCard,
   ToolItem,
   TurnEnd,
   UserMessage,
+  Waiting,
+  type Wait,
 } from './TranscriptItems';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
 import { RoutineInstruction } from '../routines/RunBanner';
@@ -76,12 +80,31 @@ export function Transcript({
   ];
   const last = items.at(-1);
   const lastErrorId = [...items].reverse().find((i) => i.kind === 'turn-end')?.id;
-  // Show the thinking row until visible text arrives (and not while asking permission).
-  const showThinking =
-    (running || pending.length > 0) &&
-    view.status !== 'awaiting-permission' &&
-    !(last?.kind === 'assistant' && last.text && !last.done) &&
-    last?.kind !== 'tool';
+  const turnStart = items.findLastIndex((i) => i.kind === 'user');
+  const prompt = turnStart === -1 ? '' : (items[turnStart] as { text: string }).text;
+  const busy = (running || pending.length > 0) && view.status !== 'awaiting-permission';
+  const startedAt = view.turnStartedAt ?? pending[0]?.at;
+  const wait: Wait = {
+    verbs: verbsFor(prompt, 'starting'),
+    startedAt,
+    srLabel: `${name} is thinking`,
+  };
+  const afterTool: Wait = {
+    verbs: verbsFor(prompt, 'after-tool'),
+    startedAt,
+    srLabel: `${name} is working`,
+  };
+  // Nothing from the assistant yet this turn: hold its place with the wait.
+  const placeholder = busy && last?.kind === 'user';
+  // Between steps (a tool finished, a reply paused): a quieter wait that appears only if it lingers.
+  const between =
+    busy &&
+    !placeholder &&
+    ((last?.kind === 'tool' && last.status !== 'running' && last.status !== 'pending') ||
+      last?.kind === 'memory' ||
+      last?.kind === 'routine' ||
+      (last?.kind === 'permission' && Boolean(last.decision)) ||
+      (last?.kind === 'assistant' && last.done));
 
   return (
     <MessageList className={styles.list} aria-label="Conversation" overlay={overlay}>
@@ -101,7 +124,14 @@ export function Transcript({
               ) : (
                 <UserMessage item={block.item} />
               ))}
-            {block.item?.kind === 'assistant' && <AssistantMessage item={block.item} name={name} />}
+            {block.item?.kind === 'assistant' && (
+              <AssistantMessage
+                item={block.item}
+                name={name}
+                wait={busy ? wait : undefined}
+                entrance={!(running && items.indexOf(block.item) > turnStart)}
+              />
+            )}
             {block.item?.kind === 'permission' && (
               <PermissionCard
                 item={block.item}
@@ -125,12 +155,11 @@ export function Transcript({
             )}
           </Fragment>
         ))}
-        {showThinking && (
-          <ThinkingIndicator
-            className={styles.thinkingRow}
-            label={`${name} is thinking…`}
-            startedAt={view.turnStartedAt ?? pending[0]?.at}
-          />
+        {placeholder && <AssistantPlaceholder name={name} wait={wait} />}
+        {between && (
+          <div className={styles.between}>
+            <Waiting wait={afterTool} compact />
+          </div>
         )}
         {footer}
       </div>

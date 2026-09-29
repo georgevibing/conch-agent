@@ -9,8 +9,10 @@ import {
   Stack,
   Surface,
   Text,
+  ThinkingIndicator,
   ToolCall,
   toast,
+  useSmoothText,
   type ToolCallStatus,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
@@ -21,7 +23,7 @@ import { api } from '../../api/client';
 import { keys } from '../../api/queries';
 import type { TranscriptItem } from '../../live/reducer';
 import { useAutoFocus } from '../../lib/useAutoFocus';
-import { Markdown } from './Markdown';
+import { StreamingMarkdown } from './Markdown';
 import { formatInput, toolDiff, toolSummary } from './tools';
 import styles from './Transcript.module.css';
 
@@ -48,9 +50,76 @@ function thoughtFor(item: Of<'assistant'>): string {
   return `Thought for ${s}s`;
 }
 
-export function AssistantMessage({ item, name }: { item: Of<'assistant'>; name: string }) {
+/** How the wait looks: the words it cycles through and when the turn began. */
+export interface Wait {
+  verbs: readonly string[];
+  startedAt?: number;
+  srLabel: string;
+}
+
+export function Waiting({
+  wait,
+  trail,
+  compact,
+}: {
+  wait: Wait;
+  trail?: string;
+  compact?: boolean;
+}) {
+  return (
+    <ThinkingIndicator
+      verbs={wait.verbs}
+      srLabel={wait.srLabel}
+      startedAt={wait.startedAt}
+      trail={trail}
+      orb={Boolean(compact)}
+      size={compact ? 'sm' : 'md'}
+    />
+  );
+}
+
+/** Stands in for the reply before anything arrives; the real one takes its place seamlessly. */
+export function AssistantPlaceholder({ name, wait }: { name: string; wait: Wait }) {
+  return (
+    <Message
+      from="assistant"
+      author={name}
+      status="streaming"
+      timestamp={wait.startedAt === undefined ? undefined : new Date(wait.startedAt)}
+    >
+      <Waiting wait={wait} />
+    </Message>
+  );
+}
+
+export function AssistantMessage({
+  item,
+  name,
+  wait,
+  entrance = true,
+}: {
+  item: Of<'assistant'>;
+  name: string;
+  /** Present while the turn runs: shown in place of the reply until its first words arrive. */
+  wait?: Wait;
+  entrance?: boolean;
+}) {
   const streaming = !item.done;
+  const smooth = useSmoothText(item.text, { streaming });
   if (!item.text && !item.thinking) return null;
+  // Keep the wait up until the first whole word is ready to show.
+  const pondering = streaming && !smooth.text && wait !== undefined;
+  const thought = item.thinking && !pondering && (
+    <Collapsible className={styles.thoughtWrap}>
+      <Collapsible.Trigger className={styles.thought}>{thoughtFor(item)}</Collapsible.Trigger>
+      <Collapsible.Content>
+        <Text size="sm" tone="muted" className={styles.thinking}>
+          {item.thinking}
+        </Text>
+      </Collapsible.Content>
+    </Collapsible>
+  );
+  const reply = smooth.text && <StreamingMarkdown text={item.text} smooth={smooth} />;
   if (item.continuation) {
     return (
       <div
@@ -58,12 +127,9 @@ export function AssistantMessage({ item, name }: { item: Of<'assistant'>; name: 
         data-anchor={item.messageId}
         data-streaming={streaming || undefined}
       >
-        {item.thinking && !item.text && (
-          <Text size="sm" tone="subtle">
-            {thoughtFor(item)}
-          </Text>
-        )}
-        {item.text && <Markdown text={item.text} />}
+        {pondering && <Waiting wait={wait} trail={item.thinking} compact />}
+        {!item.text && thought}
+        {reply}
       </div>
     );
   }
@@ -74,22 +140,15 @@ export function AssistantMessage({ item, name }: { item: Of<'assistant'>; name: 
       author={name}
       timestamp={new Date(item.startedAt)}
       status={streaming ? 'streaming' : 'complete'}
+      entrance={entrance}
       actions={
         item.done && item.text ? <CopyButton value={item.text} label="Copy reply" /> : undefined
       }
     >
       <Stack gap={2}>
-        {item.thinking && (
-          <Collapsible>
-            <Collapsible.Trigger className={styles.thought}>{thoughtFor(item)}</Collapsible.Trigger>
-            <Collapsible.Content>
-              <Text size="sm" tone="muted" className={styles.thinking}>
-                {item.thinking}
-              </Text>
-            </Collapsible.Content>
-          </Collapsible>
-        )}
-        {item.text && <Markdown text={item.text} />}
+        {pondering && <Waiting wait={wait} trail={item.thinking} />}
+        {thought}
+        {reply}
       </Stack>
     </Message>
   );

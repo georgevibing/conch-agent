@@ -31,6 +31,22 @@ const sleep = (ms: number, signal?: AbortSignal) =>
     });
   });
 
+/**
+ * Split text the way real models deliver it: clumps of a few to a few dozen
+ * characters with irregular pauses between them (deterministic, for tests).
+ */
+function bursts(text: string): { text: string; pause: number }[] {
+  const out: { text: string; pause: number }[] = [];
+  let seed = text.length;
+  const next = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  for (let i = 0; i < text.length;) {
+    const size = 4 + Math.floor(next() * 36);
+    out.push({ text: text.slice(i, i + size), pause: 20 + Math.floor(next() * 140) });
+    i += size;
+  }
+  return out;
+}
+
 const STOPWORDS = new Set(
   'the and for you your can could would should please with that this what how are about from into have just like need want me my our'.split(
     ' ',
@@ -273,8 +289,12 @@ export class MockEngine implements Engine {
     try {
       yield { type: 'session', resumeId: input.resumeId ?? newId('mock-session'), model: 'mock' };
       await wait(700);
-      yield { type: 'thinking', messageId, delta: 'Considering how best to help…' };
-      await wait(500);
+      // Reasoning streams in uneven clumps, like the real thing.
+      const thought = `The question is about "${input.prompt.slice(0, 48)}". Let me consider what they actually need, what they already know, and the clearest way to put it — starting with the essentials, then one concrete example.`;
+      for (const chunk of bursts(thought)) {
+        yield { type: 'thinking', messageId, delta: chunk.text };
+        await wait(chunk.pause);
+      }
 
       const text = input.prompt.toLowerCase();
       const rememberMatch = /remember (?:that )?(.+)/i.exec(input.prompt);
@@ -404,9 +424,9 @@ export class MockEngine implements Engine {
             setup,
           ].join('\n');
 
-      for (const chunk of reply.match(/.{1,6}/gs) ?? []) {
-        await wait(18);
-        yield { type: 'text', messageId, delta: chunk };
+      for (const chunk of bursts(reply)) {
+        await wait(chunk.pause);
+        yield { type: 'text', messageId, delta: chunk.text };
       }
       yield { type: 'message-done', messageId };
       yield {

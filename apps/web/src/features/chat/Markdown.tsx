@@ -1,7 +1,9 @@
-import { CodeBlock, InlineCode, Prose } from '@conch/nacre';
-import { isValidElement, memo, type ReactElement, type ReactNode } from 'react';
+import { CodeBlock, InlineCode, Prose, revealWords, type SmoothText } from '@conch/nacre';
+import { isValidElement, memo, useMemo, type ReactElement, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+
+import { closeOpenMarkdown, splitBlocks } from './stream';
 
 const components: Components = {
   pre({ children }) {
@@ -34,3 +36,46 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
     </Prose>
   );
 });
+
+/** One block of a streaming reply. Memoised: only the growing tail re-renders. */
+const LiveBlock = memo(function LiveBlock({
+  text,
+  offset,
+  freshFrom,
+}: {
+  text: string;
+  offset: number;
+  freshFrom: number | null;
+}) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      rehypePlugins={[[revealWords, { freshFrom, offset }]]}
+      components={components}
+    >
+      {text}
+    </ReactMarkdown>
+  );
+});
+
+/**
+ * A reply as it's being written. Bursty deltas are paced (by `useSmoothText`,
+ * whose result is passed in) into an even flow of whole words; each settles in
+ * as it lands; half-arrived syntax is closed so it never flashes raw; and
+ * finished blocks are memoised so long replies stay smooth. Replies that
+ * arrive complete (history) render in one pass.
+ */
+export function StreamingMarkdown({ text, smooth }: { text: string; smooth: SmoothText }) {
+  const shown = smooth.live ? closeOpenMarkdown(smooth.text) : smooth.text;
+  const blocks = useMemo(() => splitBlocks(shown), [shown]);
+  if (!smooth.live) return <Markdown text={text} />;
+  return (
+    <Prose>
+      {blocks.map((block, i) => {
+        const end = block.start + block.text.length;
+        const fresh = smooth.freshFrom !== null && smooth.freshFrom < end ? smooth.freshFrom : null;
+        return <LiveBlock key={i} text={block.text} offset={block.start} freshFrom={fresh} />;
+      })}
+    </Prose>
+  );
+}

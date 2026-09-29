@@ -60,8 +60,15 @@
     white-space: pre-wrap;
   }
 
-  .thinkingRow {
+  /* The quiet wait between steps only shows if the pause lingers, so quick hand-offs don't flicker. */
+  .between {
     padding-inline-start: 2.75rem;
+    margin-block-start: calc(var(--nc-space-3) * -1);
+    animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) 650ms both;
+  }
+
+  .thoughtWrap {
+    animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) both;
   }
 
   .permission {
@@ -187,7 +194,7 @@
 
     .tools,
     .continuation,
-    .thinkingRow {
+    .between {
       padding-inline-start: 0;
     }
 
