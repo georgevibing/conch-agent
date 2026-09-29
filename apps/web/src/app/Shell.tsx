@@ -1,4 +1,4 @@
-import { IconButton, Sheet, Spinner, Text, useMediaQuery } from '@conch/nacre';
+import { IconButton, LiveTitle, Sheet, Spinner, Text, useMediaQuery } from '@conch/nacre';
 import { Menu, PanelLeftOpen, TextSearch } from 'lucide-react';
 import { useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
@@ -100,8 +100,8 @@ export function Shell() {
               </IconButton>
             )
           )}
-          <Text as="span" weight="medium" truncate className={styles.title}>
-            {title}
+          <Text as="div" weight="medium" className={styles.title}>
+            <LiveTitle pending={!routinesArea && current?.titling}>{title}</LiveTitle>
           </Text>
           <UsageIndicator />
           {conversationId && (

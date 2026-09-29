@@ -15,6 +15,8 @@ import type {
 import type { SettingsStore } from '../../settings/store';
 import { Emitter } from '../../lib/emitter';
 import type {
+  Completion,
+  CompletionInput,
   Engine,
   EngineEvent,
   EngineUsage,
@@ -44,6 +46,8 @@ function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
 export class ClaudeCodeEngine implements Engine {
   readonly id = 'claude-code' as const;
   readonly label = 'Claude Code';
+  /** Claude Code maps this to Haiku on every provider (or ANTHROPIC_DEFAULT_HAIKU_MODEL). */
+  readonly smallModel = 'haiku';
   #cache?: { status: EngineStatus; at: number };
   #inflight?: Promise<EngineStatus>;
   #capabilities?: { value: Capabilities; at: number };
@@ -219,6 +223,86 @@ export class ClaudeCodeEngine implements Engine {
     this.#cache = undefined;
     this.#capabilities = undefined;
     this.#usage = undefined;
+  }
+
+  /**
+   * A single, cheap request: our own short system prompt instead of Claude
+   * Code's, no tools, no MCP servers, no thinking, nothing written to disk.
+   * User settings still load, because that's where provider config
+   * (e.g. Bedrock) often lives.
+   *
+   * Where the sign-in allows it, Claude Code runs `--bare`: no CLAUDE.md,
+   * rules, plugins or hooks. That context is thousands of tokens a title
+   * doesn't need — about 20× the cost. Bare mode can't read OAuth or keychain
+   * credentials, so subscriptions (and any bare failure) run normally.
+   */
+  async complete(input: CompletionInput): Promise<Completion> {
+    const status = await this.detect();
+    if (status.state !== 'ready') throw new Error(`${this.label} isn't ready.`);
+    const { anthropicApiKey } = await this.settings.secrets();
+    const method = status.auth?.method;
+    const bare =
+      Boolean(anthropicApiKey) ||
+      method === 'bedrock' ||
+      method === 'vertex' ||
+      method === 'foundry';
+    if (bare) {
+      try {
+        return await this.#complete(input, status, anthropicApiKey, true);
+      } catch (error) {
+        if (input.signal.aborted) throw error;
+      }
+    }
+    return this.#complete(input, status, anthropicApiKey, false);
+  }
+
+  async #complete(
+    input: CompletionInput,
+    status: EngineStatus,
+    anthropicApiKey: string | undefined,
+    bare: boolean,
+  ): Promise<Completion> {
+    const abort = new AbortController();
+    const onAbort = () => abort.abort();
+    input.signal.addEventListener('abort', onAbort, { once: true });
+    try {
+      const q = query({
+        prompt: input.prompt,
+        options: {
+          cwd: await this.settings.workspace(),
+          pathToClaudeCodeExecutable: status.executablePath,
+          env: childEnv({ ANTHROPIC_API_KEY: anthropicApiKey }),
+          abortController: abort,
+          systemPrompt: input.system,
+          ...(input.model && input.model !== 'default' && { model: input.model }),
+          tools: [],
+          mcpServers: {},
+          strictMcpConfig: true,
+          settingSources: ['user'],
+          thinking: { type: 'disabled' },
+          maxTurns: 1,
+          persistSession: false,
+          ...(bare && { extraArgs: { bare: null } }),
+        },
+      });
+      for await (const message of q) {
+        if (message.type !== 'result') continue;
+        if (message.subtype !== 'success' || message.is_error) {
+          throw new Error(`${this.label} couldn't answer (${message.subtype}).`);
+        }
+        return {
+          text: message.result,
+          usage: {
+            inputTokens: message.usage.input_tokens ?? 0,
+            outputTokens: message.usage.output_tokens ?? 0,
+            costUsd: message.total_cost_usd,
+          },
+        };
+      }
+      throw new Error(`${this.label} ended without an answer.`);
+    } finally {
+      input.signal.removeEventListener('abort', onAbort);
+    }
   }
 
   async *runTurn(input: TurnInput): AsyncIterable<EngineEvent> {

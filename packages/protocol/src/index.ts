@@ -188,6 +188,8 @@ export const Preferences = z.object({
   engine: EngineId.default('claude-code'),
   /** Let the agent save memories on its own (it always tells you). */
   autoMemory: z.boolean().default(true),
+  /** Name new conversations with a small, cheap model instead of their first line. */
+  autoTitle: z.boolean().default(true),
   /** Default model for new conversations; unset = the engine's own default. */
   model: z.string().max(200).optional(),
   effort: EffortChoice.default('auto'),
@@ -255,6 +257,7 @@ export const UpdateSettingsBody = z.object({
       workspace: z.string().max(4096),
       engine: EngineId,
       autoMemory: z.boolean(),
+      autoTitle: z.boolean(),
       model: z.string().max(200),
       effort: EffortChoice,
       fastMode: z.boolean(),
@@ -278,6 +281,8 @@ export const ConversationSummary = z.object({
   createdAt: z.number(),
   updatedAt: z.number(),
   status: ConversationStatus,
+  /** A descriptive title is being written; `title` is the first-line placeholder until then. */
+  titling: z.boolean().optional(),
   /** This conversation's own model/effort/mode choices (overrides defaults). */
   options: TurnOptions.default({}),
   /** Set when the conversation is a routine's run rather than a chat you started. */

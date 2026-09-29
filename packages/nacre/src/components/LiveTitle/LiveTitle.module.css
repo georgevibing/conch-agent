@@ -1,0 +1,87 @@
+@layer nacre.components {
+  .root {
+    display: block;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── Pending: a band of pearl light drifts across the placeholder ─── */
+  .root[data-pending] {
+    color: transparent;
+    background: linear-gradient(
+        100deg,
+        var(--nc-text-subtle) 0%,
+        var(--nc-text-subtle) 36%,
+        var(--nc-text) 46%,
+        var(--nc-accent-11) 50%,
+        var(--nc-text) 54%,
+        var(--nc-text-subtle) 64%,
+        var(--nc-text-subtle) 100%
+      )
+      0 0 / 260% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    animation: shimmer 2.4s var(--nc-ease-in-out) infinite;
+  }
+
+  @keyframes shimmer {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: 0% 0;
+    }
+  }
+
+  /* ── Resolved: the real title is written in, left to right ──────────── */
+  .root[data-revealed]:not([data-pending]) {
+    mask-image: linear-gradient(90deg, oklch(0 0 0) 0 40%, transparent 60% 100%);
+    mask-size: 250% 100%;
+    mask-repeat: no-repeat;
+    animation:
+      write-in calc(var(--nc-duration-slower) * 1.6) var(--nc-ease-out) both,
+      settle calc(var(--nc-duration-slower) * 1.4) var(--nc-ease-out) both;
+  }
+
+  @keyframes write-in {
+    from {
+      mask-position: 100% 0;
+    }
+    to {
+      mask-position: 0% 0;
+    }
+  }
+
+  @keyframes settle {
+    from {
+      filter: blur(3px);
+      color: var(--nc-accent-11);
+    }
+    to {
+      filter: blur(0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root[data-pending] {
+      animation: none;
+      color: var(--nc-text-subtle);
+    }
+    .root[data-revealed]:not([data-pending]) {
+      animation: none;
+      mask-image: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .root[data-pending] {
+    animation: none;
+    color: var(--nc-text-subtle);
+  }
+
+  :global([data-nacre-motion='reduced']) .root[data-revealed]:not([data-pending]) {
+    animation: none;
+    mask-image: none;
+  }
+}

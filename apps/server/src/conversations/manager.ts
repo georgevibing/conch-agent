@@ -19,6 +19,7 @@ import { memoryTools } from '../memory/tools';
 import type { SettingsStore } from '../settings/store';
 import type { ConversationRecord, ConversationStore } from './store';
 import { summarizeToolUse, titleFrom } from './summarize';
+import { generateTitle } from './title';
 
 interface PendingPermission {
   resolve: (decision: PermissionDecision) => void;
@@ -59,6 +60,8 @@ interface Live {
   permissions: Map<string, PendingPermission>;
   /** Tools the user said "always allow" for, in this conversation. */
   alwaysAllow: Set<string>;
+  /** Cancels an in-flight title (e.g. the user renamed it first). */
+  titling?: AbortController;
 }
 
 export class ConversationError extends Error {
@@ -90,6 +93,8 @@ export class ConversationManager {
       tools?: ToolProvider;
       /** Extra system-prompt context for every turn (e.g. the user's routines). */
       context?: () => Promise<string>;
+      /** Money spent outside a turn (naming a chat), for the usage ledger. */
+      onSpend?: (usage: Usage) => void;
     },
   ) {}
 
@@ -105,7 +110,10 @@ export class ConversationManager {
 
   async rename(id: string, title: string) {
     const live = await this.#get(id);
-    live.record = { ...live.record, title };
+    // The user's own title always wins over one still being written.
+    live.titling?.abort();
+    live.titling = undefined;
+    live.record = { ...live.record, title, titling: undefined };
     await this.deps.store.upsert(live.record);
     this.#append(live, { type: 'title', title });
     this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
@@ -114,6 +122,7 @@ export class ConversationManager {
   async remove(id: string) {
     const live = this.#live.get(id);
     live?.abort?.abort();
+    live?.titling?.abort();
     this.#live.delete(id);
     await this.deps.store.remove(id);
     this.events.emit({ type: 'conversation.deleted', conversationId: id });
@@ -145,14 +154,18 @@ export class ConversationManager {
     }
 
     let live: Live;
+    let autoTitle = false;
     if (input.conversationId) {
       live = await this.#get(input.conversationId);
       if (live.abort) throw new ConversationError('busy', 'Claude is still replying.');
       if (input.options) this.#applyOptions(live, input.options);
     } else {
       const now = Date.now();
+      const { preferences } = await this.deps.settings.get();
+      autoTitle = preferences.autoTitle && Boolean(engine.complete);
       const record: ConversationRecord = {
         id: newId('c'),
+        // The first line is shown straight away and kept if no better title comes.
         title: titleFrom(input.text),
         preview: input.text.slice(0, 140),
         createdAt: now,
@@ -160,6 +173,7 @@ export class ConversationManager {
         status: 'idle',
         options: clean(input.options ?? {}),
         engine: engine.id,
+        ...(autoTitle && { titling: true }),
       };
       live = { record, events: [], seq: 0, permissions: new Map(), alwaysAllow: new Set() };
       this.#live.set(record.id, live);
@@ -181,7 +195,32 @@ export class ConversationManager {
     this.#setStatus(live, 'running');
     await this.#persist(live);
     void this.#runTurn(live, engine, input.text);
+    if (autoTitle) void this.#autoTitle(live, engine, input.text);
     return summary(live.record);
+  }
+
+  /**
+   * Name a new chat after what it's about, alongside its first turn. Whatever
+   * happens — a poor reply, an error, a timeout — `titling` is cleared and the
+   * first-line title simply stays.
+   */
+  async #autoTitle(live: Live, engine: Engine, text: string) {
+    const abort = new AbortController();
+    live.titling = abort;
+    let title: string | undefined;
+    try {
+      const result = await generateTitle(engine, text, abort.signal);
+      if (result.usage) this.deps.onSpend?.(result.usage);
+      title = result.title;
+    } catch {
+      // Keep the first line.
+    }
+    if (abort.signal.aborted || live.titling !== abort) return;
+    live.titling = undefined;
+    live.record = { ...live.record, ...(title && { title }), titling: undefined };
+    if (title) this.#append(live, { type: 'title', title });
+    await this.#persist(live).catch(() => {});
+    this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
   }
 
   /**
@@ -501,7 +540,7 @@ export class ConversationManager {
 }
 
 function summary(record: ConversationRecord): ConversationSummary {
-  const { id, title, preview, createdAt, updatedAt, status, origin } = record;
+  const { id, title, preview, createdAt, updatedAt, status, origin, titling } = record;
   return {
     id,
     title,
@@ -509,6 +548,7 @@ function summary(record: ConversationRecord): ConversationSummary {
     createdAt,
     updatedAt,
     status,
+    ...(titling && { titling }),
     options: record.options ?? {},
     ...(origin && { origin }),
   };

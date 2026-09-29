@@ -7,6 +7,7 @@ import {
   IconButton,
   Input,
   Kbd,
+  LiveTitle,
   Pearl,
   ScrollArea,
   Text,
@@ -133,7 +134,9 @@ function ConversationRow({
         onClick={onNavigate}
       >
         {running && <Pearl size="xs" state="thinking" label="Working" className={styles.running} />}
-        <span className={styles.title}>{conversation.title}</span>
+        <LiveTitle pending={conversation.titling} className={styles.title}>
+          {conversation.title}
+        </LiveTitle>
       </NavLink>
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>

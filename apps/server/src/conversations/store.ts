@@ -69,9 +69,12 @@ export class ConversationStore {
   async #load(): Promise<Map<string, ConversationRecord>> {
     if (!this.#index) {
       const records = (await readJson<ConversationRecord[]>(join(this.dir, 'index.json'))) ?? [];
-      // A turn can't survive a restart; don't show stale "running" states.
+      // A turn (or a title being written) can't survive a restart; don't show stale states.
       this.#index = new Map(
-        records.map((r) => [r.id, { ...r, options: r.options ?? {}, status: 'idle' }]),
+        records.map((r) => [
+          r.id,
+          { ...r, options: r.options ?? {}, status: 'idle', titling: undefined },
+        ]),
       );
     }
     return this.#index;

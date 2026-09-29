@@ -60,6 +60,7 @@ export * from './components/Toast';
 // Display
 export * from './components/Kbd';
 export * from './components/Highlight';
+export * from './components/LiveTitle';
 export * from './components/Badge';
 export * from './components/Avatar';
 export * from './components/EmptyState';

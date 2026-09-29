@@ -66,6 +66,7 @@ export function appState(patch: Partial<AppState> = {}): AppState {
     preferences: {
       engine: 'claude-code',
       autoMemory: true,
+      autoTitle: true,
       effort: 'auto',
       fastMode: false,
       permissionMode: 'default',

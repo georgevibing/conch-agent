@@ -73,6 +73,7 @@ export class Services {
       engine: () => this.engine(),
       tools: (ctx) => this.routines.tools(ctx),
       context: () => this.routines.promptSection(),
+      onSpend: (usage) => void this.usage.recordTurn(usage),
     });
     this.routines = new RoutineService({
       store: new RoutineStore(join(config.CONCH_HOME, 'routines')),

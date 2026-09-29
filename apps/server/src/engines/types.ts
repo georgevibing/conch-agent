@@ -68,6 +68,20 @@ export type EngineEvent =
   | { type: 'notice'; code: string; message: string }
   | { type: 'done'; outcome: 'success' | 'interrupted' | 'error'; usage?: Usage; error?: string };
 
+/** A one-shot, tool-less request for small housekeeping jobs (e.g. naming a chat). */
+export interface CompletionInput {
+  system: string;
+  prompt: string;
+  /** Undefined = the engine's default model. */
+  model?: string;
+  signal: AbortSignal;
+}
+
+export interface Completion {
+  text: string;
+  usage?: Usage;
+}
+
 /** What the engine's provider says about your limits right now. */
 export interface EngineUsage {
   kind: UsageKind;
@@ -103,6 +117,13 @@ export interface Engine {
   /** Models, slash commands and permission modes the engine offers right now. */
   capabilities(options?: { force?: boolean }): Promise<Capabilities>;
   runTurn(input: TurnInput): AsyncIterable<EngineEvent>;
+  /**
+   * The provider's small, fast model (an alias the engine resolves), for when
+   * the model list doesn't show one — some accounts hide it but still serve it.
+   */
+  readonly smallModel?: string;
+  /** Answer a single prompt with plain text: no tools, no session, no thinking. */
+  complete?(input: CompletionInput): Promise<Completion>;
   /** Current plan limits. Engines without limits omit it; Conch then only tracks spend. */
   usage?(options?: { force?: boolean }): Promise<EngineUsage>;
   /** Subscribe to live limit hints emitted while turns run. */

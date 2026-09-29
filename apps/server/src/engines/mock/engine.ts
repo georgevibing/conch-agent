@@ -12,6 +12,8 @@ import { severityFor } from '@conch/protocol';
 
 import { Emitter } from '../../lib/emitter';
 import type {
+  Completion,
+  CompletionInput,
   Engine,
   EngineEvent,
   EngineUsage,
@@ -28,6 +30,12 @@ const sleep = (ms: number, signal?: AbortSignal) =>
       reject(new DOMException('Aborted', 'AbortError'));
     });
   });
+
+const STOPWORDS = new Set(
+  'the and for you your can could would should please with that this what how are about from into have just like need want me my our'.split(
+    ' ',
+  ),
+);
 
 /**
  * A scripted engine for UI development and end-to-end tests. It walks the
@@ -230,6 +238,32 @@ export class MockEngine implements Engine {
     const status =
       this.#sessionUsed >= 100 ? 'rejected' : this.#sessionUsed >= 75 ? 'warning' : 'allowed';
     this.#limits.emit({ status, windowId: 'session', resetsAt: Date.now() + 2.2 * 3_600_000 });
+  }
+
+  /** Models asked to complete, most recent last (tests read this). */
+  readonly completions: (string | undefined)[] = [];
+
+  /**
+   * Names a chat the way a small model would: greetings get a description,
+   * anything else its key words. Say "untitled" to get a reply that fails the
+   * quality check, or "title-fail" to make the request fail.
+   */
+  async complete(input: CompletionInput): Promise<Completion> {
+    this.completions.push(input.model);
+    await sleep(1400 * this.#speed, input.signal);
+    const message = /<message>\n([\s\S]*)\n<\/message>/.exec(input.prompt)?.[1] ?? input.prompt;
+    if (/title-fail/i.test(message)) throw new Error('Mock completion failed.');
+    const usage = { inputTokens: 120, outputTokens: 8, costUsd: 0.0002 };
+    if (/untitled/i.test(message)) return { text: 'Untitled', usage };
+    if (/^\s*(hi|hello|hey|good (morning|afternoon|evening))\b/i.test(message)) {
+      return { text: 'Friendly check-in', usage };
+    }
+    const words = message
+      .replace(/[^\p{L}\p{N}\s'-]/gu, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length > 2 && !STOPWORDS.has(w.toLowerCase()))
+      .slice(0, 5);
+    return { text: words.join(' ').toLowerCase(), usage };
   }
 
   async *runTurn(input: TurnInput): AsyncIterable<EngineEvent> {

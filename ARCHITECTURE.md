@@ -118,6 +118,17 @@ src/
   - `usage.changed` is pushed after every turn, on the provider's live rate-limit
     events, when a window resets, and every 5 minutes.
   - See [ADR 0005](./docs/adr/0005-usage-limits.md).
+- **Chat titles.** A new chat is listed under its first line with `titling: true`
+  while `conversations/title.ts` asks the engine for a 2–6 word title, alongside the
+  first turn. It uses `Engine.complete()`, a one-shot call with no tools, thinking,
+  MCP or session. The model is the cheapest one listed (Haiku), else the engine's
+  `smallModel` alias, else the default model. For API-key and cloud sign-ins Claude
+  Code runs `--bare`, which skips CLAUDE.md, rules and plugins: about $0.0002 a title
+  on Haiku instead of about $0.025. A reply that fails `cleanTitle` (a refusal, a
+  placeholder, too long) keeps the first line, and so do an error, a timeout or a
+  rename by the user. The cost goes to the usage ledger. Toggle it with
+  `preferences.autoTitle`. The web app renders both states with Nacre's `LiveTitle`
+  (a shimmer while pending, a write-in when the title lands).
 - API retries from the engine surface as live `notice` events ("Retrying in 4s…"),
   so a stalled provider is never a silent spinner.
 - **Search.** `search/` keeps a SQLite FTS5 (trigram) index of every message in

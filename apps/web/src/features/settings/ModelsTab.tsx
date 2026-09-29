@@ -117,6 +117,13 @@ export function ModelsTab() {
                   : 'Not available for this model or account.'
               }
             />
+
+            <Switch
+              checked={prefs?.autoTitle ?? true}
+              onCheckedChange={(autoTitle) => save({ autoTitle })}
+              label="Name new chats automatically"
+              description="A small, fast model (Haiku where your account has it) titles each new chat from its first message — usually a fraction of a cent."
+            />
           </Stack>
         )}
       </Section>
