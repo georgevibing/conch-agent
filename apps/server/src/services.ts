@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import type { EngineId, LoginState, ServerEvent, SkillSource } from '@conch/protocol';
 
 import { AccessStore } from './auth/store';
+import { BrowserService } from './browser/service';
 import { Gatekeeper } from './security';
 import type { Config } from './config';
 import { CommandStore } from './commands/store';
@@ -58,6 +59,7 @@ export class Services {
   readonly commands: CommandStore;
   readonly routines: RoutineService;
   readonly conversations: ConversationManager;
+  readonly browser: BrowserService;
   readonly engines: Map<EngineId, Engine>;
   /** Where every provider's key lives, whether that's here or in 1Password. */
   readonly keys: ProviderKeys;
@@ -134,6 +136,12 @@ export class Services {
       emit: (event) => this.broadcast.emit(event),
       onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
     });
+    this.browser = new BrowserService({
+      home: config.CONCH_HOME,
+      gatewayPort: config.CONCH_PORT,
+      workspace: () => this.settings.workspace(),
+      emit: (event) => this.broadcast.emit(event),
+    });
     const conversationStore = new ConversationStore(join(config.CONCH_HOME, 'conversations'));
     this.conversations = new ConversationManager({
       store: conversationStore,
@@ -144,11 +152,12 @@ export class Services {
       tools: (ctx) =>
         ctx.engine.hostTools === false
           ? []
-          : [...this.routines.tools(ctx), ...this.skills.tools(ctx)],
+          : [...this.routines.tools(ctx), ...this.skills.tools(ctx), ...this.browser.tools(ctx)],
       context: async (engine) =>
         [
           engine.hostTools === false ? '' : await this.routines.promptSection(),
           await this.skills.promptSection(engine).catch(() => ''),
+          await this.browser.promptSection(engine).catch(() => ''),
           await this.integrations.promptSection(),
         ]
           .filter(Boolean)
@@ -165,6 +174,10 @@ export class Services {
       emit: (event) => this.broadcast.emit(event),
     });
     this.conversations.events.on((event) => this.broadcast.emit(event));
+    // A deleted chat takes its browser tab and thumbnails with it.
+    this.conversations.events.on((event) => {
+      if (event.type === 'conversation.deleted') void this.browser.forget(event.conversationId);
+    });
     this.memory.changed.on(() => this.broadcast.emit({ type: 'memory.changed' }));
     this.usage = new UsageService({
       home: config.CONCH_HOME,

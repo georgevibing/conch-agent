@@ -1,4 +1,5 @@
 import type {
+  BrowserPermission,
   ConversationEvent,
   ConversationEventInput,
   ConversationStatus,
@@ -34,6 +35,17 @@ import { generateTitle } from './title';
 interface PendingPermission {
   resolve: (decision: PermissionDecision) => void;
   toolName: string;
+  /** "Always allow" adds the tool to the conversation's list. Off when the asker keeps its own (the browser: per site). */
+  remember: boolean;
+}
+
+/** A question a host tool puts to the user, through the same prompt as any permission. */
+export interface AskRequest {
+  toolName: string;
+  input: Record<string, unknown>;
+  /** One line, e.g. "use booking.com". */
+  summary: string;
+  browser?: BrowserPermission;
 }
 
 /** Per-turn additions used by routines (and future automations). */
@@ -91,14 +103,23 @@ export interface TurnIntegrationsProvider {
   markUsed(toolName: string): Promise<void>;
 }
 
-/** Tools every conversation gets from other parts of Conch (e.g. routines, skills). */
-export type ToolProvider = (ctx: {
+/** What a tool provider knows about the turn its tools run in. */
+export interface ToolContext {
   conversationId: string;
   /** Add an event to the conversation's log (e.g. an inline routine card). */
   append: (event: ConversationEventInput) => void;
   /** The provider answering this turn. */
   engine: Engine;
-}) => HostTool[];
+  /** How much the agent may do without asking, for this turn. */
+  permissionMode: PermissionMode;
+  /** Ask the user (a permission prompt in the chat). Resolves `deny` if the turn stops first. */
+  ask: (request: AskRequest) => Promise<PermissionDecision>;
+  /** Aborts when the turn is stopped or ends. */
+  signal: AbortSignal;
+}
+
+/** Tools every conversation gets from other parts of Conch (e.g. routines, skills, the browser). */
+export type ToolProvider = (ctx: ToolContext) => HostTool[];
 
 /**
  * Turns a message that asks for something by name (`/weekly-review …`) into
@@ -369,7 +390,7 @@ export class ConversationManager {
     const pending = live.permissions.get(permissionId);
     if (!pending) return;
     live.permissions.delete(permissionId);
-    if (decision === 'allow-always') live.alwaysAllow.add(pending.toolName);
+    if (decision === 'allow-always' && pending.remember) live.alwaysAllow.add(pending.toolName);
     this.#append(live, { type: 'permission.resolved', permissionId, decision });
     if (live.permissions.size === 0) this.#setStatus(live, 'running');
     pending.resolve(decision);
@@ -386,6 +407,52 @@ export class ConversationManager {
     const extras = live.extras;
     let finalText = '';
     let finalMessageId: string | undefined;
+
+    // The default provider is the pinned one when there's a pin, whatever the preference says.
+    const defaults = { ...settings.preferences, engine: this.deps.engine().id };
+    const resolved = resolveOptions(live.record.options, defaults, engine.id);
+    if (extras?.permissionMode) resolved.permissionMode = extras.permissionMode;
+
+    /** Puts a question to the user and waits; expires (deny) if the turn stops first. */
+    const askUser = (
+      request: AskRequest & { toolUseId?: string; remember: boolean },
+      signal: AbortSignal,
+    ): Promise<PermissionDecision> => {
+      const permissionId = newId('perm');
+      return new Promise<PermissionDecision>((resolve) => {
+        live.permissions.set(permissionId, {
+          resolve,
+          toolName: request.toolName,
+          remember: request.remember,
+        });
+        const expire = () => {
+          if (!live.permissions.delete(permissionId)) return;
+          this.#append(live, {
+            type: 'permission.resolved',
+            permissionId,
+            decision: 'expired',
+          });
+          resolve('deny');
+        };
+        signal.addEventListener('abort', expire, { once: true });
+        abort.signal.addEventListener('abort', expire, { once: true });
+        // Nobody is watching an unattended run: after an hour, the answer is no.
+        if (extras) {
+          const timer = setTimeout(expire, UNATTENDED_PERMISSION_MS);
+          timer.unref();
+        }
+        this.#append(live, {
+          type: 'permission.requested',
+          permissionId,
+          toolUseId: request.toolUseId,
+          toolName: request.toolName,
+          input: request.input,
+          summary: request.summary,
+          browser: request.browser,
+        });
+        this.#setStatus(live, 'awaiting-permission');
+      });
+    };
 
     const tools = memoryTools({
       store: this.deps.memory,
@@ -411,18 +478,17 @@ export class ConversationManager {
             conversationId,
             append: (event) => this.#append(live, event),
             engine,
+            permissionMode: resolved.permissionMode,
+            ask: (request) => askUser({ ...request, remember: false }, abort.signal),
+            signal: abort.signal,
           }) ?? [])),
       ...(extras?.tools ?? []),
     );
-    // The default provider is the pinned one when there's a pin, whatever the preference says.
-    const defaults = { ...settings.preferences, engine: this.deps.engine().id };
-    const resolved = resolveOptions(live.record.options, defaults, engine.id);
     // This provider's own session, and whatever it missed while others answered.
     const session = live.record.sessions?.[engine.id];
     const asked = live.events.findLast((e) => e.type === 'user.message')?.seq ?? live.seq;
     const missed = handoff(live.events, { afterSeq: session?.seq ?? -1, beforeSeq: asked });
     let answeredWith: string | undefined;
-    if (extras?.permissionMode) resolved.permissionMode = extras.permissionMode;
     const integrations = this.deps.integrations;
     const appendIssue = (issue: IntegrationIssueInput) =>
       this.#append(live, { type: 'integration.issue', ...issue });
@@ -438,37 +504,18 @@ export class ConversationManager {
       if (policy === 'off') return 'deny';
       if (live.alwaysAllow.has(request.toolName)) return 'allow';
       const described = await integrations?.describeTool(request.toolName).catch(() => undefined);
-      const permissionId = newId('perm');
-      return new Promise<PermissionDecision>((resolve) => {
-        live.permissions.set(permissionId, { resolve, toolName: request.toolName });
-        const expire = () => {
-          if (!live.permissions.delete(permissionId)) return;
-          this.#append(live, {
-            type: 'permission.resolved',
-            permissionId,
-            decision: 'expired',
-          });
-          resolve('deny');
-        };
-        signal.addEventListener('abort', expire, { once: true });
-        abort.signal.addEventListener('abort', expire, { once: true });
-        // Nobody is watching an unattended run: after an hour, the answer is no.
-        if (extras) {
-          const timer = setTimeout(expire, UNATTENDED_PERMISSION_MS);
-          timer.unref();
-        }
-        this.#append(live, {
-          type: 'permission.requested',
-          permissionId,
-          toolUseId: request.toolUseId,
+      return askUser(
+        {
           toolName: request.toolName,
+          toolUseId: request.toolUseId,
           input: request.input,
           summary: described
             ? `${described.tool.charAt(0).toLowerCase()}${described.tool.slice(1)} in ${described.integration}`
             : summarizeToolUse(request.toolName, request.input),
-        });
-        this.#setStatus(live, 'awaiting-permission');
-      });
+          remember: true,
+        },
+        signal,
+      );
     };
 
     try {

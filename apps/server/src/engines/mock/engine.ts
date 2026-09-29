@@ -11,6 +11,7 @@ import { installHints } from '../claude-code/detect';
 import { severityFor } from '@conch/protocol';
 
 import { Emitter } from '../../lib/emitter';
+import { hostToolText } from '../types';
 import type {
   Completion,
   CompletionInput,
@@ -346,7 +347,7 @@ export class MockEngine implements Engine {
         const args = { content: rememberMatch[1].replace(/[.!]$/, ''), kind: 'fact' as const };
         yield { type: 'tool-start', toolUseId, name: 'mcp__conch__remember', input: args };
         const memoryTool = input.tools.find((t) => t.name === 'remember');
-        const output = memoryTool ? await memoryTool.run(args) : 'Saved.';
+        const output = memoryTool ? hostToolText(await memoryTool.run(args)) : 'Saved.';
         yield { type: 'tool-end', toolUseId, status: 'success', output };
       }
 
@@ -450,7 +451,7 @@ export class MockEngine implements Engine {
           schedule: { type: 'weekly', days: ['mon', 'tue', 'wed', 'thu', 'fri'], time: '07:30' },
         };
         yield { type: 'tool-start', toolUseId, name: 'mcp__conch__create_routine', input: args };
-        const output = await createRoutine.run(args as never);
+        const output = hostToolText(await createRoutine.run(args as never));
         yield { type: 'tool-end', toolUseId, status: 'success', output };
         const confirm =
           "I've drafted a **Morning briefing** for weekdays at 7:30. Turn it on from the card when you're happy with it.";

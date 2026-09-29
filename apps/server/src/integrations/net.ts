@@ -48,14 +48,14 @@ export function isPrivateAddress(address: string): boolean {
   return privateNets.check(a, family(a)) || linkLocal.check(a, family(a));
 }
 
-function isBlockedAddress(address: string): boolean {
+export function isBlockedAddress(address: string): boolean {
   const a = unmapped(address);
   return linkLocal.check(a, family(a));
 }
 
 const bare = (hostname: string) => hostname.replace(/^\[|\]$/g, '').toLowerCase();
 
-async function addresses(hostname: string): Promise<string[]> {
+export async function addresses(hostname: string): Promise<string[]> {
   const host = bare(hostname);
   if (isIP(host)) return [host];
   if (host === 'localhost' || host.endsWith('.localhost')) return ['127.0.0.1'];

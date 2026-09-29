@@ -25,6 +25,7 @@ import type {
   EngineIntegrations,
   EngineMcpStatus,
   EngineUsage,
+  HostToolResult,
   LimitSignal,
   LoginHandle,
   TurnInput,
@@ -44,6 +45,19 @@ const MCP_STATUS_MS = 60_000;
 const MCP_SETTLE_MS = 20_000;
 /** How long a turn waits for its integrations to connect before starting anyway. */
 const MCP_CONNECT_WAIT_MS = 5_000;
+
+/** A host tool's result as MCP content: its text, then any images (the model sees them). */
+function sdkContent(result: string | HostToolResult) {
+  if (typeof result === 'string') return [{ type: 'text' as const, text: result }];
+  return [
+    { type: 'text' as const, text: result.text },
+    ...(result.images ?? []).map((image) => ({
+      type: 'image' as const,
+      data: image.data,
+      mimeType: image.mimeType,
+    })),
+  ];
+}
 
 /** Claude Code's config scopes, in Conch's words. */
 function sourceOf(source?: string): EngineMcpStatus['source'] {
@@ -434,7 +448,7 @@ export class ClaudeCodeEngine implements Engine {
       version: '1.0.0',
       tools: input.tools.map((t) =>
         tool(t.name, t.description, t.input, async (args) => ({
-          content: [{ type: 'text', text: await t.run(args) }],
+          content: sdkContent(await t.run(args)),
         })),
       ),
     });

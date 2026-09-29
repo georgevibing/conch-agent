@@ -7,6 +7,7 @@
  */
 import { z } from 'zod';
 
+import { BrowserHandoff, BrowserPermission, BrowserStatus, BrowserStep } from './browser';
 import { EffortChoice, EngineId, Id, PermissionMode, TurnOptions, Usage } from './common';
 import { EngineStatus, LoginState } from './engine';
 import { Integration } from './integrations';
@@ -14,6 +15,7 @@ import { Routine, RoutineRun } from './routines';
 import { UsageSnapshot } from './usage';
 
 export * from './access';
+export * from './browser';
 export * from './engine';
 export * from './integrations';
 export * from './common';
@@ -23,7 +25,7 @@ export * from './search';
 export * from './skills';
 export * from './usage';
 
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 /** A user-defined slash command: a reusable prompt. `{{input}}` is replaced by what follows the command. */
 export const CommandName = z
@@ -228,6 +230,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     input: z.unknown(),
     /** One-line human summary, e.g. "Run `npm test`". */
     summary: z.string(),
+    /** The browser asks about a site or a significant action: show the site and the control. */
+    browser: BrowserPermission.optional(),
   }),
   z.object({
     ...logged,
@@ -276,6 +280,10 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     message: z.string(),
   }),
   z.object({ ...logged, type: z.literal('options'), options: TurnOptions }),
+  /** A step the agent (or you, while driving) took in this chat's browser tab. */
+  z.object({ ...logged, type: z.literal('browser.step'), step: BrowserStep }),
+  /** The agent handed the browser to you (sign in, a captcha) — and later, that you handed it back. */
+  z.object({ ...logged, type: z.literal('browser.handoff'), handoff: BrowserHandoff }),
   /** The agent created or changed a routine from this chat; rendered as an inline card. */
   z.object({
     ...logged,
@@ -370,6 +378,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('skills.changed') }),
   /** Remaining usage changed (a turn finished, a window reset, the provider warned). */
   z.object({ type: z.literal('usage.changed'), usage: UsageSnapshot }),
+  /** The browser started, stopped, is installing (with progress), healed itself or needs you. */
+  z.object({ type: z.literal('browser.status'), status: BrowserStatus }),
   z.object({ type: z.literal('pong') }),
   z.object({
     type: z.literal('error'),

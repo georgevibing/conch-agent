@@ -16,15 +16,29 @@ import type {
 import type { z } from 'zod';
 
 /**
- * A capability Conch gives the agent regardless of engine (memory today).
- * Engines adapt these to their own mechanism — in-process MCP for Claude
- * Code, function calling for API engines.
+ * What a host tool returns when text isn't enough: a screenshot, say.
+ * Engines that can show a model images pass them on; the rest use `text`.
+ */
+export interface HostToolResult {
+  text: string;
+  images?: { data: string; mimeType: 'image/jpeg' | 'image/png' }[];
+}
+
+/**
+ * A capability Conch gives the agent regardless of engine (memory, the
+ * browser…). Engines adapt these to their own mechanism — in-process MCP for
+ * Claude Code, function calling for API engines.
  */
 export interface HostTool<Shape extends z.ZodRawShape = z.ZodRawShape> {
   name: string;
   description: string;
   input: Shape;
-  run(args: z.infer<z.ZodObject<Shape>>): Promise<string>;
+  run(args: z.infer<z.ZodObject<Shape>>): Promise<string | HostToolResult>;
+}
+
+/** A host tool's result as plain text, for engines (and logs) that only take text. */
+export function hostToolText(result: string | HostToolResult): string {
+  return typeof result === 'string' ? result : result.text;
 }
 
 /**

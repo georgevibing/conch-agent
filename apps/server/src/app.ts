@@ -41,6 +41,7 @@ import { IntegrationError, type SignIn } from './integrations/service';
 import { preview } from './routines/schedule';
 import { RoutineError } from './routines/service';
 import { registerAuthRoutes } from './auth/routes';
+import { registerBrowserRoutes } from './browser/routes';
 import { ProviderError } from './providers/service';
 import { SkillError } from './skills/store';
 import { registerSecurity } from './security';
@@ -125,6 +126,8 @@ export async function buildApp(services: Services) {
   // 1 MB per message is plenty for a 200k-character prompt; ws defaults to 100 MiB.
   await app.register(fastifyWebsocket, { options: { maxPayload: 1_000_000 } });
   registerAuthRoutes(app, services, gate);
+  registerBrowserRoutes(app, services, gate);
+  app.addHook('onClose', () => services.browser.stop());
 
   // Every `:id` / `:name` in a URL is checked before any handler sees it, so
   // `..%2F..%2Fanything` can never become a path on disk.
