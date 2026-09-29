@@ -14,6 +14,7 @@ import { renderUnicodeCompact } from 'uqr';
 import { checkup, secureHome, workspaceRules } from './auth/checkup';
 import { HostPolicy, exposure } from './auth/network';
 import { AccessError, AccessStore } from './auth/store';
+import { BrowserStore } from './browser/store';
 import { loadConfig } from './config';
 import { IntegrationStore } from './integrations/store';
 import { PROVIDER_COPY } from './providers/catalog';
@@ -176,6 +177,7 @@ async function status() {
     homeProblems: await secureHome(config.CONCH_HOME),
     workspaceRules: await workspaceRules(await settings.workspace()),
     trustedIntegrations: await new IntegrationStore(config.CONCH_HOME).trusted(),
+    browserLocal: (await new BrowserStore(config.CONCH_HOME).settings()).allowLocal,
     provider: providerCopy(config.CONCH_ENGINE ?? (await settings.get()).preferences.engine),
   });
   const icon = { ok: '✓', info: 'ℹ', warn: '⚠', danger: '⛔' } as const;

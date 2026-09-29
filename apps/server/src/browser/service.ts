@@ -313,6 +313,11 @@ export class BrowserService {
     watcher: Watcher,
     command: BrowserLiveCommand,
   ): Promise<void> {
+    if (command.type === 'fit') {
+      const tab = this.tabIfOpen(conversationId);
+      if (tab && (await tab.fit(command))) await this.#pushTab(conversationId);
+      return;
+    }
     if (command.type === 'watch') {
       watcher.visible = command.visible;
       await this.tabIfOpen(conversationId)?.refresh();

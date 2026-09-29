@@ -463,6 +463,67 @@ export class MockEngine implements Engine {
         yield { type: 'done', outcome: 'success' };
         return;
       }
+      // The browser: open what was asked for, click what was named, hand over to sign in.
+      const address =
+        /\b(https?:\/\/[^\s)"”]+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?(?:\/[^\s)"”]*)?)/i.exec(
+          input.prompt,
+        )?.[1];
+      const canBrowse = input.tools.some((t) => t.name === 'browser_open');
+      if (
+        canBrowse &&
+        address &&
+        /\b(browse|browser|website|web ?page|open|go to|look at)\b/.test(text)
+      ) {
+        const use = async function* (name: string, args: Record<string, unknown>) {
+          const tool = input.tools.find((t) => t.name === name);
+          const toolUseId = newId('tool');
+          yield {
+            type: 'tool-start',
+            toolUseId,
+            name: `mcp__conch__${name}`,
+            input: args,
+          } as const;
+          const output = tool ? hostToolText(await tool.run(args as never)) : '';
+          yield { type: 'tool-end', toolUseId, status: 'success', output } as const;
+          return output;
+        };
+        let page = yield* use('browser_open', { url: address });
+        const title = /^Page: (.*)$/m.exec(page)?.[1] ?? address;
+        const done: string[] = [`opened **${title}**`];
+        const target = /\bclick(?:s|ing)?\s+(?:on\s+)?[“"']([^”"']+)[”"']/i.exec(input.prompt)?.[1];
+        if (target) {
+          const escaped = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const ref = new RegExp(
+            `(?:button|link)\\s+"${escaped}"[^\\n]*?\\[ref=([a-z0-9]+)\\]`,
+            'i',
+          ).exec(page)?.[1];
+          if (ref) {
+            page = yield* use('browser_click', { ref, element: target });
+            done.push(
+              /said no|doesn’t want|Plan only/.test(page)
+                ? `didn’t click “${target}” (${page.split('\n')[0]})`
+                : `clicked “${target}”`,
+            );
+          }
+        }
+        if (/\bsign(?:ed)? in\b|\blog ?in\b/.test(text)) {
+          page = yield* use('browser_handoff', {
+            reason: `Sign in to ${new URL(/^https?:/.test(address) ? address : `https://${address}`).host}, then hand the browser back.`,
+          });
+          done.push(
+            /user is done/i.test(page) ? 'waited while you signed in' : 'asked you to sign in',
+          );
+        }
+        const summary = `I ${done.join(', then ')}. You can watch it in the browser panel, and take over any time.`;
+        for (const chunk of summary.match(/.{1,6}/gs) ?? []) {
+          await wait(12);
+          yield { type: 'text', messageId, delta: chunk };
+        }
+        yield { type: 'message-done', messageId };
+        yield { type: 'done', outcome: 'success' };
+        return;
+      }
+
       const report = input.tools.find((t) => t.name === 'report_outcome');
       if (report) {
         const nothing = /nothing/i.test(text);

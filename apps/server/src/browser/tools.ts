@@ -128,7 +128,7 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
     log('running', labels.running);
     try {
       const outcome = await work(tab);
-      const shot = await service.saveShot(conversationId, await tab.thumbnail());
+      const shot = await service.saveShot(conversationId, (await tab.thumbnail())?.jpeg);
       const title = await tab.page.title().catch(() => '');
       ctx.append({
         type: 'browser.step',
@@ -188,7 +188,8 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
       if (ctx.permissionMode === 'bypassPermissions') return;
       if (tab.sites.has(site) || (await service.store.trusts(site))) return;
     }
-    const shot = await service.saveShot(conversationId, await tab.thumbnail());
+    const picture = await tab.thumbnail(request.box);
+    const shot = await service.saveShot(conversationId, picture?.jpeg);
     const title = await tab.page.title().catch(() => '');
     const decision = await ctx.ask({
       toolName: `browser_${kind}`,
@@ -197,7 +198,7 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
         kind === 'site'
           ? `use ${site}`
           : `${request.action.charAt(0).toLowerCase()}${request.action.slice(1)} on ${site}`,
-      browser: { kind, site, url, title, action: request.action, box: request.box, shot },
+      browser: { kind, site, url, title, action: request.action, box: picture?.box, shot },
     });
     if (decision === 'deny') {
       throw new Refusal(

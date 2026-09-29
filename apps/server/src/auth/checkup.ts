@@ -79,6 +79,8 @@ export interface CheckupInput {
   workspaceRules?: string[];
   /** Integrations that act without asking. */
   trustedIntegrations?: string[];
+  /** The agent's browser may open pages on this computer and your network (Settings › Browser). */
+  browserLocal?: boolean;
   /** A connected provider, and whether Conch can ask you before each step with it (the one that can't, if any). */
   provider?: { name: string; asksFirst: boolean };
 }
@@ -198,6 +200,16 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       level: 'warn',
       title: `${names.length === 1 ? `${names[0]} acts` : `${names.length} integrations act`} without asking`,
       detail: `${names.join(', ')} can send, change and delete things on your behalf without checking with you. An email or page the assistant reads could trick it into doing that. In Integrations, choose “Ask before changes” instead.`,
+    });
+  }
+
+  if (input.browserLocal) {
+    items.push({
+      id: 'browser-local',
+      level: 'warn',
+      title: 'The browser can open local apps',
+      detail:
+        'The assistant’s browser can reach pages on this computer and your network, like a router or a dev server. A web page it visits could try to use them too. Conch itself stays out of reach. If you don’t need it, turn off “Open local apps” in Settings › Browser.',
     });
   }
 

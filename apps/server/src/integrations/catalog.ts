@@ -10,6 +10,11 @@ export interface CatalogItem extends z.input<typeof CatalogEntry> {
   blueprint?: Blueprint;
   /** Field that carries the bearer token for `token` integrations. */
   tokenField?: string;
+  /**
+   * No longer offered in the gallery (something built in does it better);
+   * already-connected ones keep working.
+   */
+  retired?: boolean;
 }
 
 /**
@@ -195,6 +200,8 @@ const raw: CatalogItem[] = [
       'Visits sites and clicks (asks first)',
     ],
     blueprint: { type: 'stdio', command: 'npx', args: ['-y', '@playwright/mcp@latest'] },
+    // Conch has a browser of its own now (ADR 0014): nothing to install, and it asks per site.
+    retired: true,
   },
   {
     id: '1password',
@@ -332,12 +339,14 @@ const raw: CatalogItem[] = [
   },
 ];
 
-export type ResolvedCatalogItem = CatalogEntry & Pick<CatalogItem, 'blueprint' | 'tokenField'>;
+export type ResolvedCatalogItem = CatalogEntry &
+  Pick<CatalogItem, 'blueprint' | 'tokenField' | 'retired'>;
 
-const items: ResolvedCatalogItem[] = raw.map(({ blueprint, tokenField, ...entry }) => ({
+const items: ResolvedCatalogItem[] = raw.map(({ blueprint, tokenField, retired, ...entry }) => ({
   ...CatalogEntry.parse(entry),
   blueprint,
   tokenField,
+  retired,
 }));
 
 export const CATALOG: ReadonlyMap<string, ResolvedCatalogItem> = new Map(
@@ -346,7 +355,9 @@ export const CATALOG: ReadonlyMap<string, ResolvedCatalogItem> = new Map(
 
 /** The public part of the catalog (no blueprints). */
 export function publicCatalog(): CatalogEntry[] {
-  return items.map(({ blueprint: _b, tokenField: _t, ...entry }) => entry);
+  return items
+    .filter((item) => !item.retired)
+    .map(({ blueprint: _b, tokenField: _t, retired: _r, ...entry }) => entry);
 }
 
 /** Guess which catalog entry an MCP server someone else configured is, for its logo. */

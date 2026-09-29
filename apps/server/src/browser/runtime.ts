@@ -48,31 +48,50 @@ function profileInUse(message: string): boolean {
 
 const quotePs = (value: string) => `'${value.replace(/'/g, "''")}'`;
 
-/** Ends browser processes left running on Conch's profile (by an earlier Conch that crashed). */
-async function killOrphans(profileDir: string): Promise<void> {
+/**
+ * Browser processes running on Conch's profile: left behind by an earlier
+ * Conch that crashed, or started by hand. Found by their command line, which
+ * names the profile folder.
+ */
+async function orphans(profileDir: string): Promise<number[]> {
   if (platform() === 'win32') {
-    await run(
+    const { stdout } = await run(
       'powershell.exe',
       [
         '-NoProfile',
         '-NonInteractive',
         '-Command',
-        `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Contains(${quotePs(profileDir)}) } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`,
+        `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Contains(${quotePs(profileDir)}) -and $_.ProcessId -ne ${process.pid} } | ForEach-Object { $_.ProcessId }`,
       ],
       { timeout: 20_000 },
     );
-    return;
+    return stdout
+      .split(/\s+/)
+      .map(Number)
+      .filter((pid) => Number.isInteger(pid) && pid > 0);
   }
   const { stdout } = await run('ps', ['-axo', 'pid=,command='], { timeout: 10_000 });
+  const pids: number[] = [];
   for (const line of stdout.split('\n')) {
     const match = /^\s*(\d+)\s+(.*)$/.exec(line);
-    if (!match?.[1] || !match[2]?.includes(`--user-data-dir=${profileDir}`)) continue;
+    if (match?.[1] && match[2]?.includes(`--user-data-dir=${profileDir}`))
+      pids.push(Number(match[1]));
+  }
+  return pids.filter((pid) => pid !== process.pid);
+}
+
+/** Ends the processes holding Conch's profile. Returns how many there were. */
+async function killOrphans(profileDir: string): Promise<number> {
+  const pids = await orphans(profileDir).catch(() => []);
+  for (const pid of pids) {
     try {
-      process.kill(Number(match[1]), 'SIGKILL');
+      process.kill(pid, 'SIGKILL');
     } catch {
       // Already gone.
     }
   }
+  if (pids.length) await new Promise((resolve) => setTimeout(resolve, 400));
+  return pids.length;
 }
 
 async function clearLocks(profileDir: string): Promise<void> {
@@ -101,6 +120,8 @@ export interface RuntimeDeps {
   onClosed: () => void;
   /** The page shown instead of anything the guard blocks. */
   blockedPage: (message: string, url: string) => string;
+  /** Where to look for browsers (tests hand in their own). */
+  locate?: () => BrowserCandidate[];
 }
 
 export class BrowserRuntime {
@@ -116,7 +137,7 @@ export class BrowserRuntime {
   constructor(private readonly deps: RuntimeDeps) {}
 
   candidates(): BrowserCandidate[] {
-    return findBrowsers({ downloaded: downloadedPath });
+    return this.deps.locate?.() ?? findBrowsers({ downloaded: downloadedPath });
   }
 
   get alive(): boolean {
@@ -242,8 +263,11 @@ export class BrowserRuntime {
     try {
       return await this.#launch(candidate);
     } catch (error) {
-      if (!profileInUse(String((error as Error).message))) throw error;
-      await killOrphans(this.deps.store.profileDir);
+      // A browser still holding the profile makes a new one hand over and quit
+      // (Windows: "browser has been closed"), or refuse (ProcessSingleton).
+      // Don't guess from the message: look for the process itself.
+      const killed = await killOrphans(this.deps.store.profileDir);
+      if (!killed && !profileInUse(String((error as Error).message))) throw error;
       await clearLocks(this.deps.store.profileDir);
       const context = await this.#launch(candidate);
       this.heal(

@@ -19,7 +19,12 @@ export interface Watcher {
   frame(jpeg: Buffer): void;
 }
 
-interface Modifiers { alt?: boolean; ctrl?: boolean; meta?: boolean; shift?: boolean }
+interface Modifiers {
+  alt?: boolean;
+  ctrl?: boolean;
+  meta?: boolean;
+  shift?: boolean;
+}
 
 const MODIFIER_KEYS: [keyof Modifiers, string][] = [
   ['alt', 'Alt'],
@@ -41,6 +46,8 @@ export class Tab {
   /** You drove since the agent last acted: its next result says so. */
   touched = false;
   lastUsed = Date.now();
+  /** The page's size: desktop-wide, shaped like the panel watching it (see `fit`). */
+  viewport = { ...VIEWPORT };
   #pages: Page[] = [];
   #cdp?: { page: Page; session: CDPSession };
   #waiters = new Set<() => void>();
@@ -79,6 +86,8 @@ export class Tab {
 
   #adopt(page: Page): void {
     this.#pages.push(page);
+    if (page.viewportSize()?.height !== this.viewport.height)
+      void page.setViewportSize(this.viewport).catch(() => undefined);
     page.on('framenavigated', (frame) => {
       if (frame === page.mainFrame()) this.hooks.changed(this);
     });
@@ -117,9 +126,34 @@ export class Tab {
       canGoBack: this.#pages.length > 1 || url !== 'about:blank',
       canGoForward: false,
       control: this.control,
-      viewport: VIEWPORT,
+      viewport: this.viewport,
       handoff: this.handoff,
     };
+  }
+
+  /**
+   * Give the page the panel's shape. Width stays desktop-like (so sites don't
+   * switch to their phone layout) at about 1.6× the panel, so text stays
+   * readable; height follows the panel, so the picture fills it.
+   */
+  async fit(stage: { width: number; height: number }): Promise<boolean> {
+    const width = Math.round(Math.min(1440, Math.max(960, stage.width * 1.6)));
+    const height = Math.round(Math.min(2400, Math.max(540, (width * stage.height) / stage.width)));
+    if (Math.abs(width - this.viewport.width) < 8 && Math.abs(height - this.viewport.height) < 8)
+      return false;
+    this.viewport = { width, height };
+    await Promise.all(
+      this.#pages.map((p) => p.setViewportSize(this.viewport).catch(() => undefined)),
+    );
+    // The screencast is sized at start: begin again at the new size.
+    if (this.#cdp) {
+      const { session } = this.#cdp;
+      this.#cdp = undefined;
+      await session.send('Page.stopScreencast').catch(() => undefined);
+      await session.detach().catch(() => undefined);
+    }
+    await this.refresh();
+    return true;
   }
 
   // ── Who's driving ─────────────────────────────────────────────────────
@@ -178,8 +212,8 @@ export class Tab {
       .send('Page.startScreencast', {
         format: 'jpeg',
         quality: 72,
-        maxWidth: VIEWPORT.width,
-        maxHeight: VIEWPORT.height,
+        maxWidth: this.viewport.width,
+        maxHeight: this.viewport.height,
         everyNthFrame: 1,
       })
       .catch(() => undefined);
@@ -191,7 +225,8 @@ export class Tab {
 
   /** Tell watchers what the agent is about to do, and where. */
   announce(event: Extract<BrowserLiveEvent, { type: 'action' }>): void {
-    for (const watcher of this.watchers()) watcher.send(event);
+    const stamped = { ...event, url: this.current?.url() };
+    for (const watcher of this.watchers()) watcher.send(stamped);
   }
 
   /** Where a control is, as 0–1 of the viewport, for the agent's cursor. */
@@ -200,25 +235,43 @@ export class Tab {
     if (!box) return undefined;
     const clamp = (n: number) => Math.min(1, Math.max(0, n));
     return {
-      x: clamp(box.x / VIEWPORT.width),
-      y: clamp(box.y / VIEWPORT.height),
-      width: clamp(box.width / VIEWPORT.width),
-      height: clamp(box.height / VIEWPORT.height),
+      x: clamp(box.x / this.viewport.width),
+      y: clamp(box.y / this.viewport.height),
+      width: clamp(box.width / this.viewport.width),
+      height: clamp(box.height / this.viewport.height),
     };
   }
 
-  /** A small JPEG of the page for the transcript (about 320×200). */
-  async thumbnail(): Promise<Buffer | undefined> {
+  /**
+   * A small JPEG (320×200) of what's on screen for the transcript, whatever
+   * the panel's shape: the top of the view, or the part around `focus` (the
+   * control a question is about), with `focus` mapped into the picture.
+   */
+  async thumbnail(focus?: BrowserBox): Promise<{ jpeg: Buffer; box?: BrowserBox } | undefined> {
     const page = this.page;
+    const { width, height } = this.viewport;
+    const tall = Math.min(height, Math.round(width / 1.6));
+    const centre = focus ? (focus.y + focus.height / 2) * height : tall / 2;
+    const top = Math.round(Math.min(height - tall, Math.max(0, centre - tall / 2)));
     try {
       const session = await page.context().newCDPSession(page);
       try {
+        // Clips are in page coordinates: add how far the page is scrolled.
+        const scroll = (await page
+          .evaluate('[window.scrollX, window.scrollY]')
+          .catch(() => [0, 0])) as [number, number];
         const shot = await session.send('Page.captureScreenshot', {
           format: 'jpeg',
           quality: 60,
-          clip: { x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height, scale: 0.25 },
+          clip: { x: scroll[0], y: scroll[1] + top, width, height: tall, scale: 320 / width },
         });
-        return Buffer.from(shot.data, 'base64');
+        const box = focus && {
+          x: focus.x,
+          width: focus.width,
+          y: (focus.y * height - top) / tall,
+          height: (focus.height * height) / tall,
+        };
+        return { jpeg: Buffer.from(shot.data, 'base64'), box };
       } finally {
         await session.detach().catch(() => undefined);
       }
@@ -235,8 +288,8 @@ export class Tab {
     this.lastUsed = Date.now();
     switch (command.type) {
       case 'mouse': {
-        const x = command.x * VIEWPORT.width;
-        const y = command.y * VIEWPORT.height;
+        const x = command.x * this.viewport.width;
+        const y = command.y * this.viewport.height;
         const button = command.button ?? 'left';
         if (command.action === 'move') return page.mouse.move(x, y);
         if (command.action === 'wheel') {

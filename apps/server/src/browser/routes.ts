@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 import { BrowserLiveCommand, Id, UpdateBrowserSettingsBody } from '@conch/protocol';
+import { z } from 'zod';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import type { Gatekeeper } from '../security';
@@ -54,6 +55,20 @@ export function registerBrowserRoutes(app: FastifyInstance, services: Services, 
   });
 
   app.post('/api/browser/repair', () => browser.repair());
+
+  /** Take the wheel or hand it back from outside the live view (the transcript's "I’m done"). */
+  app.post<{ Params: { id: string } }>('/api/browser/:id/control', async (request, reply) => {
+    const body = z.object({ to: z.enum(['user', 'agent']) }).safeParse(request.body);
+    if (!body.success)
+      return reply.code(400).send({ error: 'bad-request', message: 'Say who drives.' });
+    const tab = browser.tabIfOpen(request.params.id);
+    if (!tab)
+      return reply
+        .code(404)
+        .send({ error: 'not-found', message: 'No browser tab is open for this chat.' });
+    tab.setControl(body.data.to === 'user' ? 'user' : 'idle');
+    return { ok: true };
+  });
 
   /** Sign out of everything: the browser's profile is deleted. */
   app.post('/api/browser/wipe', () => browser.wipe());

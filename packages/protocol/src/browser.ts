@@ -210,6 +210,8 @@ export const BrowserLiveEvent = z.discriminatedUnion('type', [
     action: BrowserActionKind,
     label: z.string(),
     box: BrowserBox.optional(),
+    /** The page it happens on (a highlight never lands on the next page). */
+    url: z.string().optional(),
   }),
   z.object({ type: z.literal('error'), message: z.string() }),
 ]);
@@ -252,6 +254,15 @@ export const BrowserLiveCommand = z.discriminatedUnion('type', [
   z.object({ type: z.literal('history'), action: z.enum(['back', 'forward', 'reload']) }),
   /** Take the wheel (`user`) or give it back (`agent`). Handing back also finishes a handoff. */
   z.object({ type: z.literal('control'), to: z.enum(['user', 'agent']) }),
+  /**
+   * The panel's screen size (CSS pixels). The page takes the panel's shape: a
+   * desktop-width viewport as tall as the panel allows, so nothing is letterboxed.
+   */
+  z.object({
+    type: z.literal('fit'),
+    width: z.number().int().min(120).max(8000),
+    height: z.number().int().min(120).max(8000),
+  }),
   /** Frames only flow while someone looks: the panel says when it's visible. */
   z.object({ type: z.literal('watch'), visible: z.boolean() }),
 ]);
