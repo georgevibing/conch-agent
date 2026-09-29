@@ -48,6 +48,10 @@ for (const item of findings) {
 }
 if (findings.length) console.warn('\n  Settings → Security in Conch has the details.\n');
 if (config.CONCH_OPEN && process.platform === 'darwin') execFile('open', [url]);
+// `start` is a cmd.exe built-in; this is the same hand-off without a shell.
+if (config.CONCH_OPEN && process.platform === 'win32') {
+  execFile('rundll32', ['url.dll,FileProtocolHandler', url], { windowsHide: true });
+}
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
