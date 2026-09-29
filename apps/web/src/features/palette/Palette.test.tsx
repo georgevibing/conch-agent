@@ -236,5 +236,12 @@ describe('Palette search', () => {
     await waitFor(() =>
       expect(screen.queryByRole('option', { name: /Settings: Memory/ })).toBeNull(),
     );
+
+    // The browser's settings answer to the words people use for it.
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'cookies');
+    expect(await screen.findByRole('option', { name: /Settings: Browser/ })).toBeInTheDocument();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(useUi.getState().settings).toBe('browser'));
   });
 });

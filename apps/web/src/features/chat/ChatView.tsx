@@ -30,6 +30,7 @@ import { UsageComposerNotice } from '../usage/UsageComposerNotice';
 import styles from './ChatView.module.css';
 import { Transcript } from './Transcript';
 import { useIntegrations } from '../integrations/queries';
+import { BrowserDock } from '../browser/BrowserDock';
 
 const suggestions = [
   { label: 'Plan my week', prompt: 'Help me plan my week. Ask me a couple of questions first.' },
@@ -273,11 +274,12 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
     );
   }
 
-  return (
+  const chat = (
     <div className={styles.chat}>
       <RunBanner conversationId={conversationId} />
       <Transcript
         view={view}
+        conversationId={conversationId}
         columnRef={columnRef}
         routineRun={isRoutineRun}
         overlay={
@@ -301,5 +303,12 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
       />
       <div className={styles.dock}>{composer}</div>
     </div>
+  );
+  return conversationId ? (
+    <BrowserDock conversationId={conversationId} view={view}>
+      {chat}
+    </BrowserDock>
+  ) : (
+    chat
   );
 }

@@ -29,6 +29,7 @@ import {
   Check,
   Cpu,
   Gauge,
+  Globe,
   Monitor,
   Moon,
   Palette,
@@ -48,6 +49,7 @@ import { useUi, type SettingsTab } from '../../app/ui';
 import { relativeTime } from '../../lib/time';
 import { useAutoFocus } from '../../lib/useAutoFocus';
 import { SecurityTab } from '../auth/SecurityTab';
+import { BrowserSettings } from '../browser/BrowserSettings';
 import { toneOptions } from '../onboarding/tones';
 import { ProvidersTab } from '../providers/ProvidersTab';
 import { UsageTab } from '../usage/UsageTab';
@@ -420,6 +422,7 @@ const tabs: { value: SettingsTab; label: string; icon: ReactNode }[] = [
   { value: 'usage', label: 'Usage', icon: <BatteryMedium /> },
   { value: 'security', label: 'Security', icon: <ShieldCheck /> },
   { value: 'providers', label: 'Providers', icon: <Cpu /> },
+  { value: 'browser', label: 'Browser', icon: <Globe /> },
   { value: 'appearance', label: 'Appearance', icon: <Palette /> },
 ];
 
@@ -478,6 +481,9 @@ export function Settings() {
               </Tabs.Content>
               <Tabs.Content value="providers">
                 <ProvidersTab workspace={app.workspace} workspacePref={app.preferences.workspace} />
+              </Tabs.Content>
+              <Tabs.Content value="browser">
+                <BrowserSettings />
               </Tabs.Content>
               <Tabs.Content value="appearance">
                 <AppearanceTab />

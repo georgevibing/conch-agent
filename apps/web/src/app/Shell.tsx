@@ -19,6 +19,7 @@ import { Sidebar } from '../features/sidebar/Sidebar';
 import { UsageIndicator } from '../features/usage/UsageIndicator';
 import { useLiveStore } from '../live/store';
 import styles from './Shell.module.css';
+import { BrowserToggle } from '../features/browser/BrowserToggle';
 import { useProviderSignInResult } from '../features/providers/useSignInResult';
 import { useUi } from './ui';
 import { useHotkey } from './useHotkey';
@@ -125,6 +126,7 @@ export function Shell() {
             </LiveTitle>
           </Text>
           <UsageIndicator />
+          {conversationId && <BrowserToggle conversationId={conversationId} />}
           {conversationId && (
             <IconButton
               label="Find in chat"

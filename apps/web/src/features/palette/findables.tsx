@@ -6,6 +6,7 @@ import {
   Brain,
   Cpu,
   Gauge,
+  Globe,
   Palette as PaletteIcon,
   Plus,
   Repeat,
@@ -68,6 +69,12 @@ const settingsPlaces: { tab: SettingsTab; label: string; keywords: string; icon:
     icon: <Cpu />,
   },
   {
+    tab: 'browser',
+    label: 'Browser',
+    keywords: 'web browse chrome edge sites cookies sign out local localhost repair',
+    icon: <Globe />,
+  },
+  {
     tab: 'appearance',
     label: 'Appearance',
     keywords: 'theme dark light colour',
@@ -113,6 +120,7 @@ export function useFindables(query: string, conversationId: string | undefined):
   const navigate = useNavigate();
   const openSettings = useUi((s) => s.openSettings);
   const setComposerText = useUi((s) => s.setComposerText);
+  const openBrowser = useUi((s) => s.openBrowser);
   const turn = useTurnOptions(conversationId);
   const { data: skills } = useSkills();
   const { data: integrations } = useIntegrations();
@@ -266,6 +274,17 @@ export function useFindables(query: string, conversationId: string | undefined):
       icon: <Blocks />,
       run: () => void navigate('/integrations'),
     },
+    ...(conversationId
+      ? [
+          {
+            id: 'browser',
+            label: 'Show the browser',
+            keywords: 'web browse page watch take over',
+            icon: <Globe />,
+            run: () => openBrowser(conversationId),
+          },
+        ]
+      : []),
     ...settingsPlaces.map((p) => ({
       id: `settings-${p.tab}`,
       label: `Settings: ${p.label}`,

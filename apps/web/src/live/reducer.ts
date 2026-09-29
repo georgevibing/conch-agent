@@ -1,4 +1,7 @@
 import type {
+  BrowserHandoff,
+  BrowserPermission,
+  BrowserStep,
   ConversationEvent,
   ConversationStatus,
   EngineId,
@@ -44,7 +47,17 @@ export type TranscriptItem =
       summary: string;
       input: unknown;
       decision?: 'allow' | 'allow-always' | 'deny' | 'expired';
+      /** The browser asking about a site or a significant action. */
+      browser?: BrowserPermission;
     }
+  | {
+      /** One browser step; a later event with the same id replaces it (running → done). */
+      kind: 'browser';
+      id: string;
+      step: BrowserStep;
+      at: number;
+    }
+  | { kind: 'handoff'; id: string; handoff: BrowserHandoff }
   | { kind: 'memory'; id: string; memoryId: string; content: string; action: 'saved' | 'forgotten' }
   | {
       kind: 'routine';
@@ -230,6 +243,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             toolName: event.toolName,
             summary: event.summary,
             input: event.input,
+            browser: event.browser,
           },
         ],
       };
@@ -336,6 +350,31 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
           },
         ],
       };
+    case 'browser.step': {
+      const updated = updateItem(items, 'browser', event.step.stepId, (item) => ({
+        ...item,
+        step: event.step,
+      }));
+      if (updated) return { ...base, items: updated };
+      return {
+        ...base,
+        items: [
+          ...items,
+          { kind: 'browser', id: event.step.stepId, step: event.step, at: event.at },
+        ],
+      };
+    }
+    case 'browser.handoff': {
+      const updated = updateItem(items, 'handoff', event.handoff.handoffId, (item) => ({
+        ...item,
+        handoff: event.handoff,
+      }));
+      if (updated) return { ...base, items: updated };
+      return {
+        ...base,
+        items: [...items, { kind: 'handoff', id: event.handoff.handoffId, handoff: event.handoff }],
+      };
+    }
     case 'routine':
       return {
         ...base,

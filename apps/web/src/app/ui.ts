@@ -10,6 +10,7 @@ export type SettingsTab =
   | 'usage'
   | 'security'
   | 'providers'
+  | 'browser'
   | 'appearance';
 
 /** Which composer picker is open (so `/model` and `/mode` can open them). */
@@ -52,9 +53,25 @@ interface UiState {
   setFindQuery(query: string): void;
   closeFind(): void;
   setUsageOpen(open: boolean): void;
+  /** The chat whose browser panel is open, if any. */
+  browserFor: string | null;
+  /** When you last closed a chat's browser panel: it only opens by itself for newer browsing. */
+  browserDismissed: Record<string, number>;
+  /** The panel's width in pixels (remembered). */
+  browserWidth: number;
+  openBrowser(conversationId: string): void;
+  closeBrowser(): void;
+  setBrowserWidth(width: number): void;
 }
 
 const SIDEBAR_KEY = 'conch.sidebar';
+const BROWSER_WIDTH_KEY = 'conch.browserWidth';
+
+function storedWidth(): number {
+  const value =
+    typeof localStorage === 'undefined' ? NaN : Number(localStorage.getItem(BROWSER_WIDTH_KEY));
+  return Number.isFinite(value) && value >= 320 ? value : 560;
+}
 
 export const useUi = create<UiState>((set) => ({
   sidebarOpen: typeof localStorage === 'undefined' || localStorage.getItem(SIDEBAR_KEY) !== '0',
@@ -105,4 +122,25 @@ export const useUi = create<UiState>((set) => ({
         : s.lastFind,
     })),
   setUsageOpen: (usageOpen) => set({ usageOpen }),
+  browserFor: null,
+  browserDismissed: {},
+  browserWidth: storedWidth(),
+  openBrowser: (browserFor) => set({ browserFor, paletteOpen: false }),
+  closeBrowser: () =>
+    set((s) =>
+      s.browserFor
+        ? {
+            browserFor: null,
+            browserDismissed: { ...s.browserDismissed, [s.browserFor]: Date.now() },
+          }
+        : s,
+    ),
+  setBrowserWidth: (browserWidth) => {
+    try {
+      localStorage.setItem(BROWSER_WIDTH_KEY, String(Math.round(browserWidth)));
+    } catch {
+      // Private windows: the width just isn't remembered.
+    }
+    set({ browserWidth });
+  },
 }));

@@ -16,6 +16,7 @@ import {
   Waiting,
   type Wait,
 } from './TranscriptItems';
+import { BrowserApprovalItem, BrowserTrailItem, HandoffItem } from '../browser/ChatCards';
 import { IntegrationIssue } from '../integrations/ChatBits';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
 import { RoutineInstruction } from '../routines/RunBanner';
@@ -32,6 +33,8 @@ export interface TranscriptProps {
   overlay?: ReactNode;
   /** The column holding every message (what find-in-chat searches). */
   columnRef?: Ref<HTMLDivElement>;
+  /** For the browser's thumbnails and buttons. */
+  conversationId?: string;
 }
 
 /** Tolerance for the gateway's clock running a little behind this device's. */
@@ -42,10 +45,11 @@ interface Block {
   /** When the block (or the latest thing before it) happened, for telling live from history. */
   at: number;
   tools?: Extract<TranscriptItem, { kind: 'tool' }>[];
+  browser?: Extract<TranscriptItem, { kind: 'browser' }>[];
   item?: TranscriptItem;
 }
 
-/** Consecutive tool calls are grouped into one tight stack. */
+/** Consecutive tool calls are grouped into one tight stack; browser steps into one trail. */
 function blocks(items: TranscriptItem[]): Block[] {
   const out: Block[] = [];
   let at = 0;
@@ -55,6 +59,9 @@ function blocks(items: TranscriptItem[]): Block[] {
     if (item.kind === 'tool') {
       if (last?.tools) last.tools.push(item);
       else out.push({ key: `tools-${item.id}`, tools: [item], at });
+    } else if (item.kind === 'browser') {
+      if (last?.browser) last.browser.push(item);
+      else out.push({ key: `browser-${item.id}`, browser: [item], at });
     } else {
       out.push({ key: `${item.kind}-${item.id}`, item, at });
     }
@@ -65,6 +72,7 @@ function blocks(items: TranscriptItem[]): Block[] {
 function timeOf(item: TranscriptItem): number | undefined {
   if (item.kind === 'user') return item.at;
   if (item.kind === 'assistant' || item.kind === 'tool') return item.startedAt;
+  if (item.kind === 'browser') return item.at;
   return undefined;
 }
 
@@ -77,6 +85,7 @@ export function Transcript({
   footer,
   overlay,
   columnRef,
+  conversationId,
   routineRun,
 }: TranscriptProps & {
   /** This conversation is a routine run: its first message is the routine's instruction. */
@@ -103,7 +112,10 @@ export function Transcript({
   const lastErrorId = [...items].reverse().find((i) => i.kind === 'turn-end')?.id;
   const turnStart = items.findLastIndex((i) => i.kind === 'user');
   const prompt = turnStart === -1 ? '' : (items[turnStart] as { text: string }).text;
-  const busy = (running || pending.length > 0) && view.status !== 'awaiting-permission';
+  // Waiting on you (a question, a handoff): no "working…" while it's your move.
+  const handingOff = last?.kind === 'handoff' && last.handoff.state === 'waiting';
+  const busy =
+    (running || pending.length > 0) && view.status !== 'awaiting-permission' && !handingOff;
   const startedAt = view.turnStartedAt ?? pending[0]?.at;
   const wait: Wait = {
     verbs: verbsFor(prompt, 'starting'),
@@ -126,6 +138,8 @@ export function Transcript({
       last?.kind === 'skill' ||
       last?.kind === 'routine' ||
       last?.kind === 'integration-issue' ||
+      (last?.kind === 'browser' && last.step.status !== 'running') ||
+      (last?.kind === 'handoff' && last.handoff.state !== 'waiting') ||
       (last?.kind === 'permission' && Boolean(last.decision)) ||
       (last?.kind === 'assistant' && last.done));
 
@@ -155,7 +169,23 @@ export function Transcript({
                 entrance={!(running && items.indexOf(block.item) > turnStart)}
               />
             )}
-            {block.item?.kind === 'permission' && (
+            {block.browser && conversationId && (
+              <div className={styles.tools}>
+                <BrowserTrailItem conversationId={conversationId} steps={block.browser} />
+              </div>
+            )}
+            {block.item?.kind === 'handoff' && conversationId && (
+              <HandoffItem conversationId={conversationId} item={block.item} name={name} />
+            )}
+            {block.item?.kind === 'permission' && block.item.browser && conversationId && (
+              <BrowserApprovalItem
+                conversationId={conversationId}
+                item={block.item}
+                name={name}
+                onRespond={(d) => onRespond((block.item as { id: string }).id, d)}
+              />
+            )}
+            {block.item?.kind === 'permission' && !block.item.browser && (
               <PermissionCard
                 item={block.item}
                 name={name}

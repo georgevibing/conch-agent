@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
 
 import { keys, setEngineStatus } from '../api/queries';
+import { browserKeys } from '../features/browser/queries';
 import { applyIntegrationEvent } from '../features/integrations/queries';
 import { applyRoutineEvent } from '../features/routines/queries';
 import { skillKeys } from '../features/skills/queries';
@@ -113,6 +114,9 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           }
           break;
         }
+        case 'browser.status':
+          client.setQueryData(browserKeys.status, event.status);
+          break;
         case 'skills.changed':
           void client.invalidateQueries({ queryKey: skillKeys.all });
           break;

@@ -1,0 +1,44 @@
+@layer nacre.components {
+  .row {
+    display: flex;
+    flex: 1;
+    min-block-size: 0;
+  }
+
+  .chat {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+    min-block-size: 0;
+  }
+
+  .handle {
+    align-self: stretch;
+  }
+
+  /* The panel surfaces from the right edge. */
+  .pane {
+    --nc-enter-x: 24px;
+    --nc-enter-y: 0px;
+    flex-shrink: 0;
+    min-inline-size: 0;
+    padding: 0 var(--nc-space-3) var(--nc-space-3) 0;
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .sheet {
+    display: flex;
+    flex-direction: column;
+    padding: var(--nc-space-2);
+  }
+
+  .srOnly {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
