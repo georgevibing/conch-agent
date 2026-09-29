@@ -1,0 +1,22 @@
+@layer nacre.components {
+  .area {
+    display: grid;
+    place-items: center;
+    inline-size: 22rem;
+    block-size: 11rem;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    border: 1.5px dashed var(--nc-border-strong);
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-sm);
+    user-select: none;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      border-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .area[data-state='open'] {
+    background: var(--nc-wash-1);
+    border-color: var(--nc-accent-7);
+  }
+}

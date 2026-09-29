@@ -1,0 +1,75 @@
+@layer nacre.components {
+  .content {
+    --badge-bg: light-dark(
+      oklch(0.955 0.035 var(--nc-danger-h)),
+      oklch(0.28 0.07 var(--nc-danger-h))
+    );
+    --badge-fg: light-dark(
+      oklch(0.55 0.19 var(--nc-danger-h)),
+      oklch(0.78 0.13 var(--nc-danger-h))
+    );
+    padding-block-start: var(--nc-space-6);
+  }
+
+  .content[data-tone='accent'] {
+    --badge-bg: var(--nc-accent-3);
+    --badge-fg: var(--nc-accent-11);
+  }
+
+  .content[data-tone='neutral'] {
+    --badge-bg: var(--nc-gray-3);
+    --badge-fg: var(--nc-text-muted);
+  }
+
+  .badge {
+    display: grid;
+    place-items: center;
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+    margin-inline-start: var(--nc-space-5);
+    margin-block-end: var(--nc-space-4);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    color: var(--badge-fg);
+    background: var(--badge-bg);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--badge-fg) 14%, transparent),
+      var(--nc-glaze-edge);
+    animation: badge-in var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both;
+    animation-delay: 60ms;
+  }
+
+  .badge > svg {
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    stroke-width: 1.85;
+  }
+
+  @keyframes badge-in {
+    from {
+      transform: scale(0.6) rotate(-8deg);
+      opacity: 0;
+    }
+  }
+
+  .header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    padding-inline: var(--nc-space-5);
+  }
+
+  .footer {
+    display: flex;
+    flex-wrap: wrap-reverse;
+    justify-content: flex-end;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-6) var(--nc-space-5) var(--nc-space-5);
+  }
+
+  @media (max-width: 30rem) {
+    .footer > * {
+      flex: 1 1 auto;
+    }
+  }
+}

@@ -1,0 +1,69 @@
+@layer nacre.components {
+  /*
+   * Floating panel — shared by Popover and HoverCard. The entrance "surfaces"
+   * from the trigger: it rises out of soft focus along the side it opens on,
+   * scaling from Radix's computed transform origin.
+   */
+  .floating {
+    --nc-enter-x: 0;
+    --nc-enter-y: -4px;
+    --nc-exit-x: 0;
+    --nc-exit-y: -2px;
+    --nc-rim-rest: 0.35;
+    --nc-rim-hover: 0.7;
+    --nc-sheen-size: 240px;
+    --nc-sheen-hover: 0.08;
+
+    z-index: var(--nc-z-popover);
+    max-inline-size: calc(100vw - 1.5rem);
+    max-block-size: var(--radix-popover-content-available-height, 80dvh);
+    overflow: auto;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    color: var(--nc-text);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface-overlay) 60%);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-3);
+    outline: none;
+    will-change: transform, opacity;
+  }
+
+  .floating[data-side='top'] {
+    --nc-enter-y: 4px;
+    --nc-exit-y: 2px;
+  }
+  .floating[data-side='left'] {
+    --nc-enter-x: 4px;
+    --nc-enter-y: 0;
+    --nc-exit-x: 2px;
+    --nc-exit-y: 0;
+  }
+  .floating[data-side='right'] {
+    --nc-enter-x: -4px;
+    --nc-enter-y: 0;
+    --nc-exit-x: -2px;
+    --nc-exit-y: 0;
+  }
+
+  .floating[data-state='open'] {
+    animation: nc-surface-in var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .floating[data-state='closed'] {
+    animation: nc-surface-out var(--nc-duration-fast) var(--nc-ease-in) forwards;
+  }
+
+  .popover {
+    transform-origin: var(--radix-popover-content-transform-origin);
+    min-inline-size: 12rem;
+  }
+
+  .popover[data-padding='sm'] {
+    padding: var(--nc-space-2);
+  }
+  .popover[data-padding='md'] {
+    padding: var(--nc-space-4);
+  }
+}

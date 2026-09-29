@@ -1,0 +1,8 @@
+@layer nacre.components {
+  .content {
+    inline-size: 20rem;
+    padding: var(--nc-space-4);
+    transform-origin: var(--radix-hover-card-content-transform-origin);
+    max-block-size: var(--radix-hover-card-content-available-height, 80dvh);
+  }
+}

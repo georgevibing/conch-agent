@@ -1,0 +1,227 @@
+/*
+ * Shared menu styling for DropdownMenu and ContextMenu.
+ *
+ * Signature detail: instead of each item painting its own hover background,
+ * one "glide" wash travels between items on a spring as the highlight moves
+ * (pointer or keyboard), so scanning a menu feels continuous and calm.
+ */
+@layer nacre.components {
+  .content {
+    --nc-enter-x: 0;
+    --nc-enter-y: -4px;
+    --nc-exit-x: 0;
+    --nc-exit-y: -2px;
+    --menu-pad: var(--nc-space-1);
+
+    position: relative;
+    z-index: var(--nc-z-popover);
+    min-inline-size: 13rem;
+    max-inline-size: min(22rem, calc(100vw - 1.5rem));
+    max-block-size: var(--menu-available-height, 70dvh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--menu-pad);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    color: var(--nc-text);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface-overlay) 60%);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-3);
+    outline: none;
+    font-size: var(--nc-text-sm);
+    user-select: none;
+    will-change: transform, opacity;
+  }
+
+  .content[data-side='top'] {
+    --nc-enter-y: 4px;
+    --nc-exit-y: 2px;
+  }
+  .content[data-side='left'] {
+    --nc-enter-x: 4px;
+    --nc-enter-y: 0;
+    --nc-exit-x: 2px;
+    --nc-exit-y: 0;
+  }
+  .content[data-side='right'] {
+    --nc-enter-x: -4px;
+    --nc-enter-y: 0;
+    --nc-exit-x: -2px;
+    --nc-exit-y: 0;
+  }
+
+  .content[data-state='open'] {
+    animation: nc-surface-in var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .content[data-state='closed'] {
+    animation: nc-surface-out var(--nc-duration-fast) var(--nc-ease-in) forwards;
+  }
+
+  /* ── Glide ─────────────────────────────────────────────────────────── */
+  .glide {
+    position: absolute;
+    inset-inline: var(--menu-pad);
+    inset-block-start: 0;
+    block-size: var(--glide-h, 2rem);
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-wash-2);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    transform: translateY(var(--glide-y, 0));
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy),
+      block-size var(--nc-spring-snappy-duration) var(--nc-spring-snappy),
+      opacity var(--nc-duration-fast) var(--nc-ease-out),
+      background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .glide[data-visible] {
+    opacity: 1;
+  }
+
+  .glide[data-tone='danger'] {
+    background: color-mix(in oklch, oklch(0.6 0.2 var(--nc-danger-h)) 12%, transparent);
+  }
+
+  /* ── Items ─────────────────────────────────────────────────────────── */
+  .item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    min-block-size: 2rem;
+    padding-inline: var(--nc-space-2) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-sm);
+    color: var(--nc-text);
+    line-height: var(--nc-leading-snug);
+    cursor: default;
+    outline: none;
+    transition: color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .item[data-inset] {
+    padding-inline-start: calc(var(--nc-space-2) + 1rem + var(--nc-space-2-5));
+  }
+
+  .item[data-disabled] {
+    color: var(--nc-text-disabled);
+    pointer-events: none;
+  }
+
+  .item[data-tone='danger'] {
+    color: light-dark(oklch(0.52 0.18 var(--nc-danger-h)), oklch(0.78 0.13 var(--nc-danger-h)));
+  }
+
+  /* The glide is the focus indicator; Radix moves focus on hover too, so a
+     ring here would flash on every pointer move. */
+  .item:focus-visible {
+    outline: none;
+  }
+
+  .item[data-state='open'] {
+    background: var(--nc-wash-1);
+  }
+
+  .icon {
+    display: grid;
+    place-items: center;
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: var(--nc-text-subtle);
+    transition: color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .icon > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    stroke-width: 1.85;
+  }
+
+  .item[data-highlighted] .icon {
+    color: var(--nc-text-muted);
+  }
+
+  .item[data-tone='danger'] .icon {
+    color: inherit;
+  }
+
+  .label {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .trailing {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    margin-inline-start: var(--nc-space-4);
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+  }
+
+  .indicator {
+    display: grid;
+    place-items: center;
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: var(--nc-text-accent);
+  }
+
+  .indicator > span {
+    display: grid;
+    place-items: center;
+  }
+
+  .indicator svg {
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
+    stroke-width: 2.25;
+    animation: indicator-in var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .dot {
+    display: block;
+    inline-size: 0.4375rem;
+    block-size: 0.4375rem;
+    border-radius: 50%;
+    background: currentColor;
+    animation: indicator-in var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  @keyframes indicator-in {
+    from {
+      transform: scale(0.4);
+      opacity: 0;
+    }
+  }
+
+  .chevron {
+    margin-inline-start: auto;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .menuLabel {
+    padding: var(--nc-space-2) var(--nc-space-2) var(--nc-space-1);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-medium);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--nc-text-subtle);
+  }
+
+  .separator {
+    block-size: 1px;
+    margin: var(--nc-space-1) calc(var(--menu-pad) * -1);
+    background: var(--nc-border-subtle);
+  }
+}

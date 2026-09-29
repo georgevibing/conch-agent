@@ -1,0 +1,101 @@
+@layer nacre.components {
+  .content {
+    --sheet-size: 24rem;
+    --sheet-gap: 0px;
+    --sheet-from: translateX(100%);
+
+    position: fixed;
+    z-index: var(--nc-z-modal);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    color: var(--nc-text);
+    background: var(--nc-surface-overlay);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-4);
+    outline: none;
+    will-change: transform;
+  }
+
+  .content[data-floating] {
+    --sheet-gap: var(--nc-space-2);
+    border-radius: var(--nc-radius-xl);
+    corner-shape: var(--nc-corner-shape);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-4);
+  }
+
+  .content[data-side='right'],
+  .content[data-side='left'] {
+    inset-block: var(--sheet-gap);
+    inline-size: min(var(--sheet-size), calc(100vw - 2 * var(--sheet-gap) - 2.5rem));
+  }
+
+  .content[data-side='right'] {
+    inset-inline-end: var(--sheet-gap);
+    --sheet-from: translateX(calc(100% + var(--sheet-gap) + 1rem));
+  }
+
+  .content[data-side='left'] {
+    inset-inline-start: var(--sheet-gap);
+    --sheet-from: translateX(calc(-100% - var(--sheet-gap) - 1rem));
+  }
+
+  .content[data-side='bottom'] {
+    inset-inline: var(--sheet-gap);
+    inset-block-end: var(--sheet-gap);
+    max-block-size: min(var(--sheet-size), calc(100dvh - 3rem));
+    margin-inline: auto;
+    max-inline-size: 40rem;
+    --sheet-from: translateY(calc(100% + var(--sheet-gap) + 1rem));
+  }
+
+  .content[data-size='sm'] {
+    --sheet-size: 20rem;
+  }
+  .content[data-size='lg'] {
+    --sheet-size: 32rem;
+  }
+  .content[data-side='bottom'][data-size='sm'] {
+    --sheet-size: 40dvh;
+  }
+  .content[data-side='bottom'][data-size='md'] {
+    --sheet-size: 60dvh;
+  }
+  .content[data-side='bottom'][data-size='lg'] {
+    --sheet-size: 85dvh;
+  }
+
+  .content[data-state='open'] {
+    animation: sheet-in var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .content[data-state='closed'] {
+    animation: sheet-out var(--nc-duration-base) var(--nc-ease-in) forwards;
+  }
+
+  @keyframes sheet-in {
+    from {
+      transform: var(--sheet-from);
+    }
+  }
+
+  @keyframes sheet-out {
+    to {
+      transform: var(--sheet-from);
+    }
+  }
+
+  .grabber {
+    align-self: center;
+    flex-shrink: 0;
+    inline-size: 2.25rem;
+    block-size: 0.3125rem;
+    margin-block-start: var(--nc-space-2);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-gray-6);
+  }
+}
