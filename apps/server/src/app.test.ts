@@ -163,7 +163,7 @@ describe('gateway WebSocket', () => {
     // History survives a restart of the manager (fresh Services on the same home).
     const [summary] = await services.conversations.list();
     const fresh = new Services(services.config);
-    const detail = await fresh.conversations.detail(summary!.id);
+    const detail = await fresh.conversations.detail(summary?.id ?? '');
     expect(detail.events.some((e) => e.type === 'assistant.delta')).toBe(true);
     expect(detail.conversation.status).toBe('idle');
   });
