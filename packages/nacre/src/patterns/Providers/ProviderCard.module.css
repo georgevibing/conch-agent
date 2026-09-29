@@ -1,0 +1,215 @@
+@layer nacre.components {
+  .card {
+    --nc-rim-rest: 0.16;
+    --nc-rim-hover: 0.8;
+    --nc-sheen-size: 220px;
+    --nc-sheen-hover: 0.18;
+
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-3-5);
+    min-inline-size: 0;
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+    animation-delay: calc(var(--pc-i, 0) * 34ms);
+    transition:
+      box-shadow var(--nc-duration-slow) var(--nc-ease-out),
+      transform var(--nc-spring-soft-duration) var(--nc-spring-soft),
+      --nc-rim-near var(--nc-duration-slower) var(--nc-ease-out),
+      --nc-sheen var(--nc-duration-slower) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .card:hover {
+      box-shadow:
+        inset 0 0 0 1px var(--nc-border-subtle),
+        var(--nc-glaze-edge),
+        var(--nc-elevation-3);
+      transform: translateY(-1px);
+    }
+  }
+
+  /* The one in use: an accent ring, so you never have to hunt for it. */
+  .card[data-active] {
+    --ring: light-dark(oklch(0.66 0.13 var(--nc-accent-h)), oklch(0.74 0.12 var(--nc-accent-h)));
+
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--ring) 7%, var(--nc-surface-hi)),
+      var(--nc-surface)
+    );
+    box-shadow:
+      inset 0 0 0 1.5px color-mix(in oklch, var(--ring) 55%, transparent),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-2);
+  }
+
+  /* Needs you: a warm edge on the leading side, the same language as a broken integration. */
+  .card[data-attention='warning'],
+  .card[data-attention='danger'] {
+    --attention: light-dark(
+      oklch(0.72 0.15 var(--nc-warning-h)),
+      oklch(0.78 0.14 var(--nc-warning-h))
+    );
+    box-shadow:
+      inset 3px 0 0 0 var(--attention),
+      inset 0 0 0 1px color-mix(in oklch, var(--attention) 35%, transparent),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+  }
+
+  .card[data-attention='danger'] {
+    --attention: light-dark(oklch(0.6 0.19 var(--nc-danger-h)), oklch(0.7 0.17 var(--nc-danger-h)));
+  }
+
+  /* Not here yet: quieter, so what you can actually use reads first. */
+  .card[data-state='not-installed'] {
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .card[data-state='not-installed'] > :first-child {
+    opacity: 0.7;
+  }
+
+  .text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-inline-size: 0;
+  }
+
+  .heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    letter-spacing: -0.008em;
+    color: var(--nc-text);
+  }
+
+  .tagline {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  .status {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+    margin: var(--nc-space-2) 0 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+  }
+
+  .statusIcon {
+    display: inline-grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 0.875rem;
+    block-size: 1.25em;
+  }
+
+  .statusIcon svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    stroke-width: 2.2;
+  }
+
+  .statusText {
+    min-inline-size: 0;
+    text-wrap: pretty;
+  }
+
+  .status[data-tone='success'] .statusIcon {
+    color: light-dark(oklch(0.55 0.14 var(--nc-success-h)), oklch(0.76 0.14 var(--nc-success-h)));
+  }
+
+  .status[data-tone='warning'],
+  .status[data-tone='danger'] {
+    color: var(--nc-text);
+  }
+
+  .status[data-tone='warning'] .statusIcon {
+    color: light-dark(oklch(0.6 0.14 var(--nc-warning-h)), oklch(0.82 0.14 var(--nc-warning-h)));
+  }
+
+  .status[data-tone='danger'] .statusIcon {
+    color: light-dark(oklch(0.56 0.2 var(--nc-danger-h)), oklch(0.74 0.16 var(--nc-danger-h)));
+  }
+
+  /* What it's good at: three quiet facts, only while it isn't connected. */
+  .highlights {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1-5);
+    margin: var(--nc-space-2-5) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .highlights li {
+    padding: 0.1875rem var(--nc-space-2);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-subtle);
+    white-space: nowrap;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-2);
+    margin-block-start: var(--nc-space-3);
+  }
+
+  .caution {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  .caution svg {
+    flex-shrink: 0;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    margin-block-start: 0.125em;
+    color: light-dark(oklch(0.62 0.14 var(--nc-warning-h)), oklch(0.82 0.14 var(--nc-warning-h)));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card {
+      animation: none;
+    }
+  }
+}

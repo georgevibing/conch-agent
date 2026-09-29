@@ -19,3 +19,4 @@ export * from './SearchPreview';
 export * from './Usage';
 export * from './Security';
 export * from './Integrations';
+export * from './Providers';
