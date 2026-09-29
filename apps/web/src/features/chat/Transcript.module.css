@@ -13,6 +13,16 @@
     padding: var(--nc-space-8) var(--nc-space-5) var(--nc-space-10);
   }
 
+  .arrival {
+    display: contents;
+  }
+
+  /* History shows at rest: nothing replays its entrance on reload. */
+  .arrival[data-at-rest] :is(*, *::before, *::after) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+
   .user[data-pending] {
     opacity: 0.72;
   }

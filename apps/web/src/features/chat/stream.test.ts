@@ -44,7 +44,8 @@ describe('verbsFor', () => {
   });
 
   it('admits a long think and reads results after tools', () => {
-    expect(verbsFor('hello', 'starting', 30_000)).toContain('Still with you');
+    const verbs = verbsFor('hello', 'starting');
+    expect(verbs.at(-1)).toBe('Still with you');
     expect(verbsFor('hello', 'after-tool')).toContain('Reading the results');
   });
 });

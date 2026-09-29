@@ -17,7 +17,7 @@ import {
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { Brain, Check, ShieldQuestion, Undo2, X } from 'lucide-react';
-import { useState } from 'react';
+import { createContext, useContext, useState, type ReactNode } from 'react';
 
 import { api } from '../../api/client';
 import { keys } from '../../api/queries';
@@ -48,6 +48,24 @@ function thoughtFor(item: Of<'assistant'>): string {
   if (!end) return 'Thinking…';
   const s = Math.max(1, Math.round((end - item.startedAt) / 1000));
   return `Thought for ${s}s`;
+}
+
+const ArrivedLive = createContext(false);
+
+/**
+ * Wraps one transcript block. Whether it arrived live is decided once, when it
+ * first appears, and never changes: blocks that were already there (history, a
+ * reload) render at rest — no entrance, no reveal; only news animates.
+ */
+export function Arrival({ live, children }: { live: boolean; children: ReactNode }) {
+  const [arrivedLive] = useState(live);
+  return (
+    <ArrivedLive value={arrivedLive}>
+      <div className={styles.arrival} data-at-rest={arrivedLive ? undefined : ''}>
+        {children}
+      </div>
+    </ArrivedLive>
+  );
 }
 
 /** How the wait looks: the words it cycles through and when the turn began. */
@@ -105,7 +123,9 @@ export function AssistantMessage({
   entrance?: boolean;
 }) {
   const streaming = !item.done;
-  const smooth = useSmoothText(item.text, { streaming });
+  const arrivedLive = useContext(ArrivedLive);
+  // Only a reply being written right now is revealed; history (e.g. after a reload) just shows.
+  const smooth = useSmoothText(item.text, { streaming: streaming && arrivedLive });
   if (!item.text && !item.thinking) return null;
   // Keep the wait up until the first whole word is ready to show.
   const pondering = streaming && !smooth.text && wait !== undefined;

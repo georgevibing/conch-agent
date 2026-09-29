@@ -113,9 +113,10 @@ const LONG = ['Diving deeper still', 'Worth getting right', 'Still with you'];
  * the problem", an email gets "Finding the words". It always opens by
  * listening, and admits to a long think instead of pretending it's nearly done.
  */
-export function verbsFor(prompt: string, phase: ThinkingPhase, elapsedMs = 0): string[] {
+export function verbsFor(prompt: string, phase: ThinkingPhase): string[] {
   if (phase === 'after-tool') return AFTER_TOOL;
   const themed = THEMES.find(([pattern]) => pattern.test(prompt))?.[1] ?? GENERAL;
-  const verbs = elapsedMs > 25_000 ? [...themed, ...LONG] : themed;
+  // The long-think words come last, so they only show once the wait has gone on a while.
+  const verbs = [...themed, ...LONG];
   return phase === 'starting' ? ['Listening', ...verbs] : verbs;
 }

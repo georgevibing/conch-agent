@@ -74,11 +74,14 @@ export class Translator {
         }
         if (!this.#current) return [];
         if (event.type === 'content_block_delta') {
+          // Hidden reasoning arrives as empty deltas; they carry nothing to show.
           if (event.delta.type === 'text_delta') {
+            if (!event.delta.text) return [];
             this.#streamed.add(this.#current);
             return [{ type: 'text', messageId: this.#current, delta: event.delta.text }];
           }
           if (event.delta.type === 'thinking_delta') {
+            if (!event.delta.thinking) return [];
             this.#streamed.add(this.#current);
             return [{ type: 'thinking', messageId: this.#current, delta: event.delta.thinking }];
           }

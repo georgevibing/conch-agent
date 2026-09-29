@@ -159,4 +159,26 @@ describe('Translator', () => {
       ),
     ).toEqual([]);
   });
+
+  it('drops the empty deltas of hidden reasoning', () => {
+    const t = new Translator();
+    const delta = (d: unknown) =>
+      m({
+        type: 'stream_event',
+        parent_tool_use_id: null,
+        event: { type: 'content_block_delta', index: 0, delta: d },
+      });
+    t.translate(
+      m({
+        type: 'stream_event',
+        parent_tool_use_id: null,
+        event: { type: 'message_start', message: { id: 'msg1' } },
+      }),
+    );
+    expect(t.translate(delta({ type: 'thinking_delta', thinking: '' }))).toEqual([]);
+    expect(t.translate(delta({ type: 'text_delta', text: '' }))).toEqual([]);
+    expect(t.translate(delta({ type: 'text_delta', text: 'Hi' }))).toEqual([
+      { type: 'text', messageId: 'msg1', delta: 'Hi' },
+    ]);
+  });
 });

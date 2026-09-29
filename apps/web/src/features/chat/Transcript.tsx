@@ -1,10 +1,11 @@
 import { MessageList } from '@conch/nacre';
-import { Fragment, type ReactNode, type Ref } from 'react';
+import { useState, type ReactNode, type Ref } from 'react';
 
 import type { ConversationView, TranscriptItem } from '../../live/reducer';
 import { verbsFor } from './stream';
 import {
   AssistantMessage,
+  Arrival,
   AssistantPlaceholder,
   MemoryPill,
   PermissionCard,
@@ -31,8 +32,13 @@ export interface TranscriptProps {
   columnRef?: Ref<HTMLDivElement>;
 }
 
+/** Tolerance for the gateway's clock running a little behind this device's. */
+const CLOCK_SLACK_MS = 1500;
+
 interface Block {
   key: string;
+  /** When the block (or the latest thing before it) happened, for telling live from history. */
+  at: number;
   tools?: Extract<TranscriptItem, { kind: 'tool' }>[];
   item?: TranscriptItem;
 }
@@ -40,16 +46,24 @@ interface Block {
 /** Consecutive tool calls are grouped into one tight stack. */
 function blocks(items: TranscriptItem[]): Block[] {
   const out: Block[] = [];
+  let at = 0;
   for (const item of items) {
+    at = timeOf(item) ?? at;
     const last = out.at(-1);
     if (item.kind === 'tool') {
       if (last?.tools) last.tools.push(item);
-      else out.push({ key: `tools-${item.id}`, tools: [item] });
+      else out.push({ key: `tools-${item.id}`, tools: [item], at });
     } else {
-      out.push({ key: `${item.kind}-${item.id}`, item });
+      out.push({ key: `${item.kind}-${item.id}`, item, at });
     }
   }
   return out;
+}
+
+function timeOf(item: TranscriptItem): number | undefined {
+  if (item.kind === 'user') return item.at;
+  if (item.kind === 'assistant' || item.kind === 'tool') return item.startedAt;
+  return undefined;
 }
 
 export function Transcript({
@@ -66,6 +80,9 @@ export function Transcript({
   /** This conversation is a routine run: its first message is the routine's instruction. */
   routineRun?: boolean;
 }) {
+  // News is what happened after the chat was opened. A reload replays history as a
+  // burst of events (turn status included), so their own timestamps are what tell.
+  const [openedAt] = useState(() => Date.now());
   const firstUserId = routineRun ? view.items.find((i) => i.kind === 'user')?.id : undefined;
   const running = view.status === 'running' || view.status === 'awaiting-permission';
   const items: TranscriptItem[] = [
@@ -78,7 +95,9 @@ export function Transcript({
       pending: true,
     })),
   ];
-  const last = items.at(-1);
+  // The model's hidden reasoning arrives as empty items that render nothing, so they
+  // mustn't count as "something arrived" — the wait stays until there's something to see.
+  const last = items.filter((i) => !(i.kind === 'assistant' && !i.text && !i.thinking)).at(-1);
   const lastErrorId = [...items].reverse().find((i) => i.kind === 'turn-end')?.id;
   const turnStart = items.findLastIndex((i) => i.kind === 'user');
   const prompt = turnStart === -1 ? '' : (items[turnStart] as { text: string }).text;
@@ -110,7 +129,7 @@ export function Transcript({
     <MessageList className={styles.list} aria-label="Conversation" overlay={overlay}>
       <div ref={columnRef} className={styles.column}>
         {blocks(items).map((block) => (
-          <Fragment key={block.key}>
+          <Arrival key={block.key} live={block.at >= openedAt - CLOCK_SLACK_MS}>
             {block.tools && (
               <div className={styles.tools}>
                 {block.tools.map((t) => (
@@ -153,7 +172,7 @@ export function Transcript({
                 onRetry={block.item.id === lastErrorId && !running ? onRetry : undefined}
               />
             )}
-          </Fragment>
+          </Arrival>
         ))}
         {placeholder && <AssistantPlaceholder name={name} wait={wait} />}
         {between && (

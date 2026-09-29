@@ -70,15 +70,18 @@ export function useSmoothText(
     // Replaced rather than extended: show it as is.
     current = { shown: target, freshFrom: null, live: state.live };
     setState(current);
-  } else if (!canAnimate && state.shown !== target) {
+  } else if ((!canAnimate || (!streaming && !state.live)) && state.shown !== target) {
+    // Nothing to animate, or text that was never live (history catching up, e.g.
+    // a reload replaying its deltas): show it as it is.
     current = { ...state, shown: target, freshFrom: null };
     setState(current);
   }
 
   const shownLength = current.shown.length;
+  const wasLive = current.live;
   useEffect(() => {
     pos.current = Math.max(pos.current, shownLength);
-    if (!canAnimate || shownLength >= target.length) return;
+    if (!canAnimate || shownLength >= target.length || (!streaming && !wasLive)) return;
     let frame = 0;
     let last = performance.now();
     const step = () => {
@@ -117,7 +120,7 @@ export function useSmoothText(
     };
     frame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame);
-  }, [canAnimate, freshMs, shownLength, streaming, target]);
+  }, [canAnimate, freshMs, shownLength, streaming, target, wasLive]);
 
   return { text: current.shown, freshFrom: current.freshFrom, live: current.live };
 }

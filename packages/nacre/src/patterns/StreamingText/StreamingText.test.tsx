@@ -27,6 +27,13 @@ describe('StreamingText', () => {
     await waitFor(() => expect(root).toHaveTextContent('Hello there, world'));
   });
 
+  it('shows text that grows without ever being live (history catching up) at once', () => {
+    const { container, rerender } = renderNacre(<StreamingText text="Written " />);
+    rerender(<StreamingText text="Written last week, replayed." />);
+    expect(container).toHaveTextContent('Written last week, replayed.');
+    expect(container.querySelector('[data-nc-fresh]')).toBeNull();
+  });
+
   it('shows replaced text as is', async () => {
     const { container, rerender } = renderNacre(<StreamingText text="abc" />);
     rerender(<StreamingText text="xyz" />);
