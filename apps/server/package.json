@@ -1,0 +1,29 @@
+{
+  "name": "@conch/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Conch gateway \u2014 bridges the web app to the local Claude Code install.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@conch/protocol": "workspace:*",
+    "fastify": "^5.12.5",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@conch/eslint-config": "workspace:*",
+    "@conch/tsconfig": "workspace:*",
+    "@types/node": "^24.0.0",
+    "eslint": "^9.39.0",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.2",
+    "globals": "^17.12.0"
+  }
+}

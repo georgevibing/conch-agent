@@ -1,0 +1,25 @@
+{
+  "name": "@conch/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Typed, validated wire protocol between the Conch web app and gateway.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@conch/eslint-config": "workspace:*",
+    "@conch/tsconfig": "workspace:*",
+    "eslint": "^9.39.0",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.2"
+  }
+}
