@@ -10,7 +10,12 @@ test('guides installation and notices when the provider appears', async ({ page 
   await card.getByRole('button', { name: 'How to install' }).click();
 
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByText('curl -fsSL https://claude.ai/install.sh | bash')).toBeVisible();
+  // The installer for the computer Conch runs on.
+  const installer =
+    process.platform === 'win32'
+      ? 'irm https://claude.ai/install.ps1 | iex'
+      : 'curl -fsSL https://claude.ai/install.sh | bash';
+  await expect(dialog.getByText(installer)).toBeVisible();
   await expect(dialog.getByRole('link', { name: /Setup guide/ })).toHaveAttribute(
     'href',
     /code\.claude\.com/,

@@ -15,7 +15,9 @@ test('create from an idea, run it, and read the result', async ({ page }) => {
 
   await page.getByRole('button', { name: /Morning briefing/ }).click();
   const editor = page.getByRole('dialog', { name: 'New routine' });
-  await expect(editor.getByText('Every weekday at 7:30 AM').first()).toBeVisible();
+  // Conch words the schedule in its own computer's locale: "7:30 AM", or "7:30" where
+  // clocks run to 24 hours.
+  await expect(editor.getByText(/^Every weekday at 7:30( AM)?$/).first()).toBeVisible();
   await editor.getByRole('button', { name: 'Turn on' }).click();
 
   await expect(page).toHaveURL(/\/routines\/r_/);

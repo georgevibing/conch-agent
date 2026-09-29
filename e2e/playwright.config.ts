@@ -39,6 +39,8 @@ export default defineConfig({
   use: {
     ...devices['Desktop Chrome'],
     channel: 'chrome',
+    // The specs read dates and times as en-US; don't inherit the machine's locale.
+    locale: 'en-US',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
@@ -48,8 +50,9 @@ export default defineConfig({
     use: { baseURL: `http://localhost:${s.port}` },
   })),
   webServer: Object.values(scenarios).map((s) => ({
-    // Run tsx directly (not via pnpm) so Playwright's shutdown signal reaches the server.
-    command: './node_modules/.bin/tsx src/main.ts',
+    // Node itself (not pnpm or tsx's CLI) so Playwright's shutdown signal reaches the
+    // server; Windows runs this through cmd.exe, which can't start `./node_modules/.bin/tsx`.
+    command: 'node --import tsx src/main.ts',
     cwd: join(root, 'apps/server'),
     url: `http://localhost:${s.port}/api/health`,
     reuseExistingServer: false,
