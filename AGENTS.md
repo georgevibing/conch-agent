@@ -13,15 +13,15 @@ own design system. See [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ## Routing — where to go for what
 
-| If your task involves…                                    | Read / work in                                                                                              |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Any UI component, token, animation, theming, Storybook    | [`packages/nacre/AGENTS.md`](./packages/nacre/AGENTS.md) → [`docs/design/NACRE.md`](./docs/design/NACRE.md) |
-| The web app (routes, state, data fetching, chat screens)  | `apps/web/` + [ARCHITECTURE.md § Web app](./ARCHITECTURE.md#web-app-appsweb)                                |
-| The gateway / Claude Code integration / permissions       | `apps/server/` + [ARCHITECTURE.md § Gateway](./ARCHITECTURE.md#gateway-appsserver)                          |
-| Wire protocol between web and gateway                     | `packages/protocol/` + [ARCHITECTURE.md § Protocol](./ARCHITECTURE.md#wire-protocol-packagesprotocol)       |
-| Lint / TS config shared across packages                   | `packages/eslint-config/`, `packages/tsconfig/`                                                             |
-| A decision that changes architecture or adds a dependency | Write an ADR in [`docs/adr/`](./docs/adr/) first                                                            |
-| Security, auth, exposing the gateway beyond localhost     | [ARCHITECTURE.md § Security](./ARCHITECTURE.md#security-model) — treat as high-risk                         |
+| If your task involves…                                    | Read / work in                                                                                                                                                                                    |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Any UI component, token, animation, theming, Storybook    | [`packages/nacre/AGENTS.md`](./packages/nacre/AGENTS.md) → [`docs/design/NACRE.md`](./docs/design/NACRE.md)                                                                                       |
+| The web app (routes, state, data fetching, chat screens)  | `apps/web/` + [ARCHITECTURE.md § Web app](./ARCHITECTURE.md#web-app-appsweb)                                                                                                                      |
+| The gateway / Claude Code integration / permissions       | `apps/server/` + [ARCHITECTURE.md § Gateway](./ARCHITECTURE.md#gateway-appsserver)                                                                                                                |
+| Wire protocol between web and gateway                     | `packages/protocol/` + [ARCHITECTURE.md § Protocol](./ARCHITECTURE.md#wire-protocol-packagesprotocol)                                                                                             |
+| Lint / TS config shared across packages                   | `packages/eslint-config/`, `packages/tsconfig/`                                                                                                                                                   |
+| A decision that changes architecture or adds a dependency | Write an ADR in [`docs/adr/`](./docs/adr/) first                                                                                                                                                  |
+| Security, auth, exposing the gateway beyond localhost     | [§ Security engineering](#security-engineering) below → [ARCHITECTURE.md § Security](./ARCHITECTURE.md#security-model) → [ADR 0008](./docs/adr/0008-access-and-hardening.md) — treat as high-risk |
 
 **Rule of thumb:** UI goes in Nacre _first_. If an app screen needs a visual element
 that doesn't exist, build it as a Nacre primitive or pattern (with a story), then use
@@ -58,6 +58,8 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
 | `pnpm e2e`                                                                  | Builds the web app and runs Playwright journeys against the gateway + mock engine                    |
 | `pnpm dev:mock`                                                             | Dev servers with the scripted mock engine (no Claude usage)                                          |
 | `pnpm start`                                                                | Build and run Conch for real at http://localhost:4317                                                |
+| `pnpm start:network`                                                        | Same, reachable from your network (sign-in required; prefer Tailscale)                               |
+| `pnpm conch <command>`                                                      | Sign-in from the terminal: `status`, `password`, `key`, `pair`, `reset` … (`pnpm conch help`)        |
 | `pnpm --filter @conch/nacre test -- src/components/Button`                  | Tests for one component                                                                              |
 | `pnpm a11y [--filter=button]`                                               | axe (incl. colour contrast) on every story, light + dark, in real Chrome (Storybook must be running) |
 | `node scripts/snap.mjs <story-id> [--mode=dark] [--hover=css] [--clip=css]` | Screenshot a story for visual QA (Storybook must be running)                                         |
@@ -82,12 +84,55 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
 8. **Don't edit generated or vendored files** (`pnpm-lock.yaml` by hand, `dist/`,
    `storybook-static/`).
 
+## Security engineering
+
+Conch runs commands **as the user**, and a prompt-injected agent is part of the
+threat model. Hold every change to the bar of a FAANG security review:
+
+1. **Research before you build.** For anything touching auth, sessions, crypto,
+   parsing untrusted input, the agent's powers, or network exposure, read the
+   current primary sources first:
+   - OWASP ASVS 5.0 and the OWASP Cheat Sheets (Authentication, Session
+     Management, Password Storage, CSRF, CSP);
+   - NIST SP 800-63B-4;
+   - the Fetch Metadata / resource-isolation guidance;
+   - recent academic work on LLM agents, for example indirect prompt injection
+     (Greshake et al., 2023), markdown/image exfiltration and tool-use escalation.
+
+   Cite what you followed in the commit message or ADR. When the sources disagree
+   or have moved on, follow the newest standard and say so.
+
+2. **Threat-model the change.** Ask who can reach it: a web page, another
+   localhost port, the LAN, a proxy, another OS user, or the agent itself.
+   Loopback alone is not trust (proxies), hostname alone is not origin (ports), and
+   the agent's own tool calls are untrusted input.
+3. **Never roll your own crypto.** Use `node:crypto` (CSPRNG, scrypt,
+   `timingSafeEqual`) and reuse `apps/server/src/auth/secrets.ts`. Store hashes of
+   secrets, never the secrets. Compare in constant time.
+4. **Secure by default, safe to misconfigure.** New features start locked down.
+   An unsafe choice must be explicit, explained in plain words, and surfaced by the
+   security checkup (`auth/checkup.ts`). Add a check whenever you add a risky
+   option.
+5. **Secrets never travel in URLs** (fragments only for one-time codes), logs,
+   error messages, the agent's environment, or responses after creation. Show a
+   secret once.
+6. **Validate at every edge.** Zod on both sides, `Id`/`CommandName` for anything
+   that becomes a path, and `safeJoin` for every file path.
+7. **The agent can't raise its own privileges.** Anything that grants trust,
+   enables automation, or persists permissions needs a human action in the UI.
+8. **Test the attack, not just the feature.** Add regression tests for each abuse
+   case (traversal, cross-origin, replay, brute force, escalation). See
+   `apps/server/src/auth/auth.test.ts` and `e2e/security.spec.ts`.
+9. **Warn people in their words.** Every security message says what could happen
+   and what to do next, never jargon alone.
+
 ## Definition of done
 
 - [ ] `pnpm check` passes
 - [ ] New/changed UI has stories covering its states, and screenshots were reviewed
 - [ ] New behaviour has tests (unit for logic, play/axe for components)
 - [ ] Docs updated where behaviour or architecture changed (this file, ARCHITECTURE.md, NACRE.md, an ADR)
+- [ ] Security-relevant? Threat-modelled, abuse cases tested, checkup updated, sources cited
 
 <!-- BEGIN:turborepo-agent-rules -->
 

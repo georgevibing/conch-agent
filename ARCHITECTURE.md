@@ -167,20 +167,55 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
 ## Security model
 
 The gateway can read and write files and run commands on the host **as the user**.
-Treat it like an SSH server.
+Treat it like an SSH server. Full design: [ADR 0008](./docs/adr/0008-access-and-hardening.md);
+user guide: [docs/SECURITY.md](./docs/SECURITY.md).
 
-- Binds `127.0.0.1` by default. Binding elsewhere requires `CONCH_ALLOW_REMOTE=1`
-  **and** a `CONCH_TOKEN` (16+ chars); the browser presents it once via `?token=` and
-  receives an `HttpOnly`, `SameSite=Strict` cookie. Prefer an SSH tunnel or Tailscale
-  over a public port.
-- **DNS-rebinding guard:** requests are answered only when `Host` is loopback,
-  `CONCH_ALLOWED_HOSTS`, or the configured remote host.
-- **Cross-site guard:** WebSocket upgrades and all non-GET requests carrying an
-  `Origin` must come from an allowed host, so a web page can't drive the agent.
-- Tool permissions are never auto-approved by the gateway (except Conch's own memory
-  tools, whose effects are shown inline); "Always allow" is scoped to the conversation.
-- Secrets (API keys) live in `~/.conch/secrets.json` (0600) and are never returned to
-  the browser. No telemetry.
+- **Who gets in** (`apps/server/src/security.ts`, `auth/`). The owner chooses
+  _password_ (scrypt, NIST SP 800-63B-4 rules), _access keys_ (`conch_…`, 256-bit,
+  hashed, revocable) or _no sign-in_. With no sign-in, only genuinely local requests
+  are served: loopback socket **and** loopback `Host` **and** no proxy headers.
+  Everything else gets `401 setup-required`. Credentials, sessions and pairing codes
+  live hashed in `~/.conch/access.json` (0600).
+- **Sessions:** a fresh random cookie per sign-in (`HttpOnly; SameSite=Strict`,
+  `__Host-…; Secure` over HTTPS), expiring after 30 days or 7 idle days, listed and
+  revocable per device. Revoking one closes its WebSocket at once. Sensitive changes
+  need a password or key from the last 10 minutes. Failed sign-ins back off per
+  address and globally, and local sign-in is never locked out.
+- **Pairing:** one-time, 10-minute codes, passed in the URL _fragment_
+  (`/#pair=…`) as a QR code. `pnpm conch` covers every operation from the host,
+  including recovery (`pnpm conch reset`).
+- **Browser guards:**
+  - `Host` allowlist (DNS rebinding), with loopback names, `CONCH_ALLOWED_HOSTS`,
+    this machine's own addresses when listening on the network, and its Tailscale
+    name;
+  - Fetch Metadata;
+  - `Origin` must equal the request's own host **and port**;
+  - JSON-only bodies;
+  - auth decided on the matched route;
+  - strict CSP (no remote scripts or images, `frame-ancestors 'none'`), plus
+    nosniff, no-referrer, COOP/CORP and no-store on the API.
+- **Agent containment:**
+  - `CONCH_*` variables never reach the agent;
+  - the agent can draft routines but can't enable them or grant trust, and
+    rewriting an active routine pauses it;
+  - unattended runs get no routine tools, and their permission prompts expire;
+  - "Always allow" lasts for the conversation only and is never written to
+    Claude Code's settings;
+  - memories are injected as facts, not instructions.
+- **Memory:** at most 50 conversations are held in memory; idle ones are dropped and reloaded from disk.
+- **Storage:** `~/.conch` is tightened to 0700/0600 at start-up, and every store
+  builds paths with `safeJoin`. All wire ids are `Id` (no dots or slashes).
+- **Logs** never contain query strings, headers or bodies. There is no telemetry.
+- **Checkup:** `auth/checkup.ts` turns the configuration into plain-language
+  warnings, shown in Settings → Security, at start-up and in `pnpm conch status`.
+
+Known limits:
+
+- With sign-in off, other OS users on the same machine can reach loopback. The
+  checkup suggests a password.
+- The agent can read `ANTHROPIC_API_KEY`, which it needs.
+- Claude Code loads the workspace's own `.claude/` settings; the checkup warns when they add hooks, auto-allowed tools or MCP servers.
+- Breached-password checks use a local blocklist only.
 
 ## Quality gates
 

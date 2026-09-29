@@ -36,6 +36,10 @@ pnpm storybook      # explore Nacre at http://localhost:6006
 
 Requires Node ≥ 24. Claude Code is optional to start — Conch will walk you through it.
 
+**On your phone, safely:** choose a password in **Settings → Security**, then scan
+the **Add a device** QR code. [docs/SECURITY.md](./docs/SECURITY.md) explains it in
+two minutes (Tailscale recommended; `pnpm conch reset` if you forget).
+
 ## Layout
 
 | Path                | What                                          |
@@ -49,6 +53,7 @@ Requires Node ≥ 24. Claude Code is optional to start — Conch will walk you t
 
 - [AGENTS.md](./AGENTS.md) — how to work in this repo (humans and AI agents)
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — system design and security model
+- [docs/SECURITY.md](./docs/SECURITY.md) — signing in, phones, recovery, warnings
 - [docs/design/NACRE.md](./docs/design/NACRE.md) — the design language
 - [docs/adr](./docs/adr) — decision records
 
