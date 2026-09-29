@@ -52,6 +52,9 @@ export function Root() {
       <Route path="/c/:conversationId" element={<Shell />} />
       <Route path="/routines" element={<Shell />} />
       <Route path="/routines/:routineId" element={<Shell />} />
+      <Route path="/skills" element={<Shell />} />
+      <Route path="/skills/new" element={<Shell />} />
+      <Route path="/skills/:skillId" element={<Shell />} />
       <Route path="/integrations" element={<Shell />} />
       <Route path="/integrations/:integrationId" element={<Shell />} />
       <Route path="*" element={<Shell />} />

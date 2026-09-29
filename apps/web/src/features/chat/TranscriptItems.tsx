@@ -6,6 +6,7 @@ import {
   Diff,
   InlineCode,
   Message,
+  SkillUsed,
   Stack,
   Surface,
   Text,
@@ -18,6 +19,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { Brain, Check, ShieldQuestion, Undo2, X } from 'lucide-react';
 import { createContext, useContext, useState, type ReactNode } from 'react';
+import { useNavigate } from 'react-router';
 
 import { api } from '../../api/client';
 import { keys } from '../../api/queries';
@@ -330,6 +332,21 @@ export function MemoryPill({ item }: { item: Of<'memory'> }) {
   );
 }
 
+/** Which skill shaped this reply; opens the skill. */
+export function SkillUsedLine({ item }: { item: Of<'skill'> }) {
+  const navigate = useNavigate();
+  return (
+    <div className={styles.skillUsed}>
+      <SkillUsed
+        name={item.name}
+        title={item.title}
+        by={item.by}
+        onOpen={() => void navigate(`/skills/${encodeURIComponent(item.skillId)}`)}
+      />
+    </div>
+  );
+}
+
 export function TurnEnd({ item, onRetry }: { item: Of<'turn-end'>; onRetry?: () => void }) {
   if (item.outcome === 'interrupted') {
     return <div className={styles.stopped}>Stopped</div>;
@@ -347,7 +364,7 @@ export function TurnEnd({ item, onRetry }: { item: Of<'turn-end'>; onRetry?: () 
           )
         }
       >
-        {item.error ?? 'Something went wrong while Claude was working.'}
+        {item.error ?? 'Something went wrong while working on that.'}
       </Callout>
     );
   }

@@ -5,6 +5,7 @@ import {
   CopyButton,
   Dialog,
   Field,
+  Heading,
   Input,
   IntegrationHandshake,
   ProviderCaution,
@@ -16,8 +17,8 @@ import {
   type HandshakePhase,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { ExternalLink } from 'lucide-react';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 
 import { api } from '../../api/client';
 import { useLiveStore } from '../../live/store';
@@ -267,7 +268,7 @@ function KeyForm({
   );
 }
 
-/** What's true once it works, and how to make it the one in use. */
+/** What's true once it works, and how to make it the default for new chats. */
 function Connected({ provider }: { provider: Provider }) {
   const use = useUseProvider();
   const check = useCheckProvider();
@@ -309,7 +310,7 @@ function Connected({ provider }: { provider: Provider }) {
           <Button
             loading={use.isPending}
             onClick={() => use.mutate(provider.id)}
-          >{`Use ${provider.name}`}</Button>
+          >{`Make ${provider.name} the default`}</Button>
         )}
         <Button
           variant="surface"
@@ -323,23 +324,8 @@ function Connected({ provider }: { provider: Provider }) {
   );
 }
 
-export interface ConnectProviderDialogProps {
-  provider?: Provider;
-  onePassword: ProvidersList['onePassword'];
-  onOpenChange: (open: boolean) => void;
-}
-
-/**
- * One dialog for every way a provider connects: install it, sign in to it, or
- * give it a key. It watches the provider while it's open, so a program
- * installed in a terminal — or a sign-in finished in another window — moves the
- * dialog on by itself.
- */
-export function ConnectProviderDialog({
-  provider,
-  onePassword,
-  onOpenChange,
-}: ConnectProviderDialogProps) {
+/** Keep an eye on a provider while it's in front of you. */
+function useProviderWatch(provider: Provider | undefined) {
   const client = useQueryClient();
   const setLogin = useLiveStore((s) => s.setLogin);
 
@@ -359,13 +345,116 @@ export function ConnectProviderDialog({
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [provider, client]);
 
-  const state = provider?.status.state;
-  // While this dialog is open and the provider isn't working yet, keep looking.
-  useWatchProvider(provider?.id, Boolean(provider) && state !== 'ready');
+  // While the provider isn't working yet, keep looking.
+  useWatchProvider(provider?.id, Boolean(provider) && provider?.status.state !== 'ready');
+}
 
-  // It just started working: let the handshake land, then get out of the way.
-  // A dialog opened on a provider that was already connected stays put — you
-  // opened it to look at the details.
+const titleOf = (provider: Provider) =>
+  provider.status.state === 'ready' ? `${provider.name} is connected` : `Connect ${provider.name}`;
+
+/** Every way a provider connects — install it, sign in, or give it a key — and what's true once it does. */
+function ProviderBody({
+  provider,
+  onePassword,
+}: {
+  provider: Provider;
+  onePassword: ProvidersList['onePassword'];
+}) {
+  const state = provider.status.state;
+  return (
+    <Stack gap={5}>
+      {state === 'error' && provider.status.message && (
+        <Callout tone="danger" title={`${provider.name} didn’t answer`}>
+          {provider.status.message}
+        </Callout>
+      )}
+      {state === 'ready' ? (
+        <Connected provider={provider} />
+      ) : state === 'not-installed' ? (
+        <Install provider={provider} />
+      ) : provider.connect === 'key' ? (
+        <KeyForm provider={provider} onePassword={onePassword} />
+      ) : (
+        <SignInProgram provider={provider} />
+      )}
+      {provider.limits.map((limit) => (
+        <ProviderCaution key={limit}>{limit}</ProviderCaution>
+      ))}
+    </Stack>
+  );
+}
+
+/**
+ * One provider, in place of the list it was opened from (Settings → Providers):
+ * no dialog on top of a dialog. It watches the provider while it's open, and
+ * stays until you go back — even after it connects.
+ */
+export function ProviderDetail({
+  provider,
+  onePassword,
+  onBack,
+}: {
+  provider: Provider;
+  onePassword: ProvidersList['onePassword'];
+  onBack: () => void;
+}) {
+  useProviderWatch(provider);
+  const titleId = useId();
+  const backRef = useRef<HTMLButtonElement>(null);
+  // Arriving here was your own click: focus lands where going back is.
+  useEffect(() => {
+    backRef.current?.focus({ preventScroll: true, focusVisible: false } as FocusOptions);
+  }, []);
+  return (
+    <section aria-labelledby={titleId} className={styles.detail}>
+      <Button
+        ref={backRef}
+        variant="ghost"
+        size="sm"
+        leadingIcon={<ArrowLeft />}
+        onClick={onBack}
+        className={styles.back}
+      >
+        Providers
+      </Button>
+      <Stack gap={3} className={styles.detailHeader}>
+        <IntegrationHandshake
+          name={provider.name}
+          brand={provider.status.engine}
+          color={provider.color}
+          phase={phaseOf(provider, false)}
+        />
+        <Heading level={3} size="xl" id={titleId}>
+          {titleOf(provider)}
+        </Heading>
+        <Text tone="muted">{provider.description}</Text>
+      </Stack>
+      <ProviderBody provider={provider} onePassword={onePassword} />
+    </section>
+  );
+}
+
+export interface ConnectProviderDialogProps {
+  provider?: Provider;
+  onePassword: ProvidersList['onePassword'];
+  onOpenChange: (open: boolean) => void;
+}
+
+/**
+ * The same, as a dialog, for first run — where there's no Settings to drill
+ * into. Once the provider starts working, the handshake lands and the dialog
+ * gets out of the way so the welcome can carry on.
+ */
+export function ConnectProviderDialog({
+  provider,
+  onePassword,
+  onOpenChange,
+}: ConnectProviderDialogProps) {
+  useProviderWatch(provider);
+  const state = provider?.status.state;
+
+  // It just started working: let the handshake land, then close. A dialog
+  // opened on a provider that was already connected stays put.
   const wasReady = useRef(state === 'ready');
   useEffect(() => {
     if (!provider) {
@@ -393,31 +482,11 @@ export function ConnectProviderDialog({
                 color={provider.color}
                 phase={phaseOf(provider, false)}
               />
-              <Dialog.Title>
-                {state === 'ready' ? `${provider.name} is connected` : `Connect ${provider.name}`}
-              </Dialog.Title>
+              <Dialog.Title>{titleOf(provider)}</Dialog.Title>
               <Dialog.Description>{provider.description}</Dialog.Description>
             </Dialog.Header>
             <Dialog.Body>
-              <Stack gap={5}>
-                {state === 'error' && provider.status.message && (
-                  <Callout tone="danger" title={`${provider.name} didn’t answer`}>
-                    {provider.status.message}
-                  </Callout>
-                )}
-                {state === 'ready' ? (
-                  <Connected provider={provider} />
-                ) : state === 'not-installed' ? (
-                  <Install provider={provider} />
-                ) : provider.connect === 'key' ? (
-                  <KeyForm provider={provider} onePassword={onePassword} />
-                ) : (
-                  <SignInProgram provider={provider} />
-                )}
-                {provider.limits.map((limit) => (
-                  <ProviderCaution key={limit}>{limit}</ProviderCaution>
-                ))}
-              </Stack>
+              <ProviderBody provider={provider} onePassword={onePassword} />
             </Dialog.Body>
           </>
         )}

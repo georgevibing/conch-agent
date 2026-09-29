@@ -77,6 +77,8 @@ export class ClaudeCodeEngine implements Engine {
   readonly label = 'Claude Code';
   /** Claude Code maps this to Haiku on every provider (or ANTHROPIC_DEFAULT_HAIKU_MODEL). */
   readonly smallModel = 'haiku';
+  /** It loads `~/.claude/skills` by itself, whatever Conch says. */
+  readonly skillSources = ['claude'] as const;
   /**
    * Claude Code runs MCP servers itself, and brings the connectors from your
    * Claude account (Gmail, Calendar, Drive, Slack…) when you sign in with it.

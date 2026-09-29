@@ -113,6 +113,25 @@
     min-inline-size: 0;
   }
 
+  /* One folded group per provider under "From your providers". */
+  .providerGroup {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .providerGroup:last-of-type {
+    border-block-end: 1px solid var(--nc-border-subtle);
+  }
+
+  .providerTrigger {
+    inline-size: 100%;
+    padding-block: var(--nc-space-3);
+  }
+
+  .providerName {
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
   /* ── Connect dialog ─────────────────────────────────────────────── */
   .connectHeader {
     align-items: center;

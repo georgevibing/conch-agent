@@ -110,6 +110,45 @@ describe('ProviderService', () => {
     expect(events.some((event) => event.type === 'engine.status')).toBe(true);
   });
 
+  it('offers every connected provider at once, the default first', async () => {
+    const { providers, keys } = await harness();
+    // Only Claude Code is connected: OpenRouter and the Anthropic API have no key yet.
+    expect((await providers.ready()).map((e) => e.id)).toEqual(['claude-code']);
+    await keys.save('openrouter', 'sk-or-v1-0123456789abcd');
+    await keys.save('anthropic-api', 'sk-ant-0123456789');
+    await providers.use('openrouter');
+    expect((await providers.ready()).map((e) => e.id)).toEqual([
+      'openrouter',
+      'claude-code',
+      'anthropic-api',
+    ]);
+    const catalog = await providers.models();
+    expect(catalog.default).toBe('openrouter');
+    expect(catalog.providers.map((p) => p.engine)).toEqual([
+      'openrouter',
+      'claude-code',
+      'anthropic-api',
+    ]);
+    // A conversation's choice wins; an unknown or hidden one falls back to the default.
+    expect(providers.engineFor('claude-code').id).toBe('claude-code');
+    expect(providers.engineFor(undefined).id).toBe('openrouter');
+    expect(providers.engineFor('mock').id).toBe('openrouter');
+  });
+
+  it('says why a connected provider has no models, instead of hiding it', async () => {
+    const { providers, engines } = await harness();
+    const claude = engines.get('claude-code') as FakeEngine;
+    claude.capabilities = async () => {
+      throw new Error('Claude Code couldn’t start.');
+    };
+    const catalog = await providers.models();
+    expect(catalog.providers[0]).toMatchObject({
+      engine: 'claude-code',
+      models: [],
+      message: 'Claude Code couldn’t start.',
+    });
+  });
+
   it('refuses to switch when CONCH_ENGINE pins the choice, and says why', async () => {
     const { providers } = await harness({ pinned: 'mock' });
     const list = await providers.list();

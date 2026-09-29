@@ -6,11 +6,13 @@ Nested `AGENTS.md` files override this one for their subtree.
 
 ## What Conch is
 
-A self-hosted web shell for a coding agent of your choosing. A small Node gateway
-runs on your own machine, drives the provider you connected — [Claude
+A self-hosted web shell for the coding agents and models of your choosing. A small
+Node gateway runs on your own machine, drives every provider you connected — [Claude
 Code](https://code.claude.com) through the Claude Agent SDK, another installed CLI,
-or a model API — and streams the conversation to a React web app built on **Nacre**,
-our own design system. See [ARCHITECTURE.md](./ARCHITECTURE.md).
+or a model API — all at once, from one model picker, and streams the conversation to
+a React web app built on **Nacre**, our own design system. Integrations and skills
+belong to Conch, so they work with every provider. See
+[ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ## Routing — where to go for what
 
@@ -22,7 +24,9 @@ our own design system. See [ARCHITECTURE.md](./ARCHITECTURE.md).
 | Wire protocol between web and gateway                     | `packages/protocol/` + [ARCHITECTURE.md § Protocol](./ARCHITECTURE.md#wire-protocol-packagesprotocol)                                                                                             |
 | Lint / TS config shared across packages                   | `packages/eslint-config/`, `packages/tsconfig/`                                                                                                                                                   |
 | Integrations (apps/MCP servers, OAuth, the catalog)       | `apps/server/src/integrations/` + [ADR 0009](./docs/adr/0009-integrations.md) — security-relevant                                                                                                 |
-| Providers (which engine runs, connecting them, keys)      | `apps/server/src/providers/`, `apps/server/src/secrets/` + [ADR 0010](./docs/adr/0010-providers.md) — security-relevant                                                                           |
+| Providers (which engine runs, connecting them, keys)      | `apps/server/src/providers/`, `apps/server/src/secrets/` + [ADR 0010](./docs/adr/0010-providers.md), [ADR 0012](./docs/adr/0012-every-provider-at-once.md) — security-relevant                    |
+| Skills (SKILL.md, other agents' folders, `use_skill`)     | `apps/server/src/skills/` + [ADR 0013](./docs/adr/0013-skills.md) — security-relevant                                                                                                             |
+| What ⌘K can find by name                                  | `apps/web/src/features/palette/` (`findables.tsx`) — see working agreement 10                                                                                                                     |
 | A decision that changes architecture or adds a dependency | Write an ADR in [`docs/adr/`](./docs/adr/) first                                                                                                                                                  |
 | Security, auth, exposing the gateway beyond localhost     | [§ Security engineering](#security-engineering) below → [ARCHITECTURE.md § Security](./ARCHITECTURE.md#security-model) → [ADR 0008](./docs/adr/0008-access-and-hardening.md) — treat as high-risk |
 
@@ -86,9 +90,16 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
 7. **Inclusive language** in code, comments and docs (primary/replica, allowlist/denylist).
 8. **Don't edit generated or vendored files** (`pnpm-lock.yaml` by hand, `dist/`,
    `storybook-static/`).
-9. **Design for every provider, not just Claude Code.** Conch will drive other
-   engines (Codex CLI, OpenRouter, the Anthropic API, local models). Every feature
-   must work for all of them, or degrade on purpose:
+9. **Design for every provider, not just Claude Code.** Conch drives several
+   engines at once (Claude Code, Codex CLI, OpenRouter, the Anthropic API, local
+   models next), and one conversation can move between them. Every feature must
+   work for all of them, or degrade on purpose:
+   - Never assume one active engine. The engine for a turn is the conversation's
+     (`TurnOptions.engine`); the default provider only decides where new chats
+     start. Ask `providers.engineFor(id)` or `providers.ready()`, not `engine()`.
+   - What the user sets up — integrations, skills, memory, routines — belongs to
+     Conch and reaches every provider. What a provider brings by itself is shown
+     apart, and says it only works with that provider.
    - Put engine-specific behaviour behind the `Engine` interface
      (`apps/server/src/engines/types.ts`), as a declared capability. Features ask
      the engine what it can do (e.g. `engine.integrations.mode`, `usage?`,
@@ -103,6 +114,14 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
      an explanation. It never breaks.
    - The mock engine is the second provider: it takes the other path where one
      exists (it's a "bridge" engine for integrations), so both paths are tested.
+10. **If a person can find it by name, ⌘K finds it.** The palette is the one box
+    for everything: chats and messages, and every other thing a person can open,
+    use or change by name — skills, models from every provider, integrations,
+    routines, pages, settings sections and actions. When you add a new kind of
+    thing or a new page, register it in `apps/web/src/features/palette/findables.tsx`
+    (with the words people would type) in the same change, and extend
+    `Palette.test.tsx`. Choosing it does the obvious thing: open it, or use it
+    right there (a skill goes into the composer, a model applies to the chat).
 
 ## Security engineering
 

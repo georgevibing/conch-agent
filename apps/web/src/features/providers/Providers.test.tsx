@@ -18,12 +18,12 @@ function render() {
 }
 
 describe('Providers settings', () => {
-  it('shows every provider, which one is in use, and what each one needs', async () => {
+  it('shows every provider, which is the default, and what each one needs', async () => {
     mockFetch(routes());
     render();
 
     const claude = await screen.findByRole('article', { name: 'Claude Code' });
-    expect(claude).toHaveTextContent('In use');
+    expect(claude).toHaveTextContent('Default');
     expect(claude).toHaveTextContent('Claude Max · you@example.com');
     expect(within(claude).getByRole('button', { name: 'Check again' })).toBeInTheDocument();
 
@@ -36,7 +36,7 @@ describe('Providers settings', () => {
     expect(within(openrouter).getByRole('button', { name: 'Connect' })).toBeInTheDocument();
   });
 
-  it('switches the provider in use', async () => {
+  it('changes the default provider', async () => {
     const second = provider({
       id: 'anthropic-api',
       name: 'Anthropic API',
@@ -65,12 +65,12 @@ describe('Providers settings', () => {
     render();
 
     const card = await screen.findByRole('article', { name: 'Anthropic API' });
-    await userEvent.click(within(card).getByRole('button', { name: 'Use this' }));
+    await userEvent.click(within(card).getByRole('button', { name: 'Make default' }));
     expect(calls.find((call) => call.path === '/api/providers/anthropic-api/use')?.method).toBe(
       'POST',
     );
     expect(await screen.findByRole('article', { name: 'Anthropic API' })).toHaveTextContent(
-      'In use',
+      'Default',
     );
   });
 
@@ -96,7 +96,7 @@ describe('Providers settings', () => {
 
     const card = await screen.findByRole('article', { name: 'OpenRouter' });
     await userEvent.click(within(card).getByRole('button', { name: 'Connect' }));
-    const dialog = await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('region', { name: /^Connect / });
     expect(within(dialog).getByRole('heading', { name: 'Connect OpenRouter' })).toBeInTheDocument();
     // It can make a key for you, so that's offered first.
     expect(
@@ -115,6 +115,12 @@ describe('Providers settings', () => {
     expect(sent?.path).toBe('/api/providers/openrouter/key');
     expect(sent?.body).toEqual({ value: 'sk-or-v1-0123456789abc' });
     expect(await screen.findByRole('heading', { name: 'OpenRouter is connected' })).toBeVisible();
+    // It opened in place of the list, not in a dialog on top — and it stays until you go back.
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 1800));
+    expect(screen.getByRole('heading', { name: 'OpenRouter is connected' })).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: 'Providers' }));
+    expect(await screen.findByRole('article', { name: 'OpenRouter' })).toBeInTheDocument();
   });
 
   it('offers 1Password and says what’s missing when it isn’t installed', async () => {
@@ -123,7 +129,7 @@ describe('Providers settings', () => {
 
     const card = await screen.findByRole('article', { name: 'OpenRouter' });
     await userEvent.click(within(card).getByRole('button', { name: 'Connect' }));
-    const dialog = await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('region', { name: /^Connect / });
     await userEvent.click(within(dialog).getByRole('radio', { name: '1Password' }));
     expect(
       within(dialog).getByText(
@@ -139,7 +145,7 @@ describe('Providers settings', () => {
 
     const card = await screen.findByRole('article', { name: 'Codex' });
     await userEvent.click(within(card).getByRole('button', { name: 'How to install' }));
-    const dialog = await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('region', { name: /^Connect / });
     expect(within(dialog).getByText('npm install -g @openai/codex')).toBeInTheDocument();
     expect(within(dialog).getByText('Waiting for Codex…')).toBeInTheDocument();
     // What it can't do is said before you connect, not discovered later.

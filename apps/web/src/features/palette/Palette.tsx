@@ -27,6 +27,7 @@ import {
   SquarePen,
   Sun,
   TextSearch,
+  WandSparkles,
 } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router';
@@ -36,6 +37,7 @@ import { useUi } from '../../app/ui';
 import { relativeTime } from '../../lib/time';
 import { fuzzyFilter } from '../search/fuzzy';
 import { useSearchPreview, useSearchResults } from '../search/useSearch';
+import { useFindables } from './findables';
 import styles from './Palette.module.css';
 
 interface Action {
@@ -160,7 +162,8 @@ function roleIcon(role: SearchRole) {
 /**
  * ⌘K — one box for everything. Type and you get, instantly: matching chat
  * titles (fuzzy), matching messages from every conversation (full-text,
- * typo-tolerant), and actions. A live preview shows the hit in context;
+ * typo-tolerant), and everything else worth finding by name — skills, models
+ * from every provider, integrations, routines, pages and settings — and actions. A live preview shows the hit in context;
  * Enter opens the chat scrolled to that exact message, with every match lit.
  */
 export function Palette() {
@@ -181,6 +184,7 @@ export function Palette() {
 
   const q = query.trim();
   const search = useSearchResults(q, open);
+  const findables = useFindables(open ? q : '', currentId);
 
   const onOpenChange = (next: boolean) => {
     setOpen(next);
@@ -204,6 +208,13 @@ export function Palette() {
       shortcut: 'mod+shift+o',
       keywords: 'start conversation',
       run: () => void navigate('/'),
+    },
+    {
+      id: 'new-skill',
+      label: 'New skill',
+      icon: <WandSparkles />,
+      keywords: 'new skill create',
+      run: () => void navigate('/skills/new'),
     },
     {
       id: 'settings',
@@ -270,21 +281,29 @@ export function Palette() {
   // Results arrive while you type; until you move the selection yourself it
   // stays on the best result rather than whatever rendered first.
   const firstHit = groups[0]?.hits[0];
+  const firstFound = findables[0]?.items[0];
   const first = recent[0]
     ? value.chat(recent[0].id)
     : titles[0]
       ? value.chat(titles[0].item.id)
-      : firstHit
-        ? value.hit(firstHit.conversationId, firstHit.anchor)
-        : q && currentId
-          ? value.action('find-here')
-          : matchedActions[0]
-            ? value.action(matchedActions[0].id)
-            : '';
+      : firstFound
+        ? value.action(firstFound.id)
+        : firstHit
+          ? value.hit(firstHit.conversationId, firstHit.anchor)
+          : q && currentId
+            ? value.action('find-here')
+            : matchedActions[0]
+              ? value.action(matchedActions[0].id)
+              : '';
   const active = navigated && selected ? selected : first;
 
   const nothing =
-    q.length > 0 && !search.pending && !titles.length && !groups.length && !matchedActions.length;
+    q.length > 0 &&
+    !search.pending &&
+    !titles.length &&
+    !groups.length &&
+    !matchedActions.length &&
+    !findables.length;
   const messageCount = search.data?.total ?? 0;
 
   return (
@@ -292,7 +311,7 @@ export function Palette() {
       open={open}
       onOpenChange={onOpenChange}
       title="Search"
-      placeholder="Search chats and messages…"
+      placeholder="Search chats, skills, models, apps…"
       search={query}
       onSearchChange={(next) => {
         setQuery(next);
@@ -377,6 +396,23 @@ export function Palette() {
           ))}
         </CommandPalette.Group>
       )}
+
+      {findables.map((group) => (
+        <CommandPalette.Group key={group.heading} heading={group.heading}>
+          {group.items.map((item) => (
+            <CommandPalette.Item
+              key={item.id}
+              value={value.action(item.id)}
+              icon={item.icon}
+              hint={item.hint}
+              description={item.description}
+              onSelect={run(item.run)}
+            >
+              {item.ranges ? <Highlight text={item.label} ranges={item.ranges} /> : item.label}
+            </CommandPalette.Item>
+          ))}
+        </CommandPalette.Group>
+      ))}
 
       {groups.length > 0 && (
         <CommandPalette.Group heading={fuzzy ? 'Close matches' : 'Messages'}>

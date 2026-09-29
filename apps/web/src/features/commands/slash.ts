@@ -1,4 +1,4 @@
-import type { CustomCommand, EngineCommand } from '@conch/protocol';
+import type { CustomCommand, EngineCommand, Skill } from '@conch/protocol';
 
 /** `/name rest…` → `{ name, args }`; anything else → undefined. */
 export function parseSlash(text: string): { name: string; args: string } | undefined {
@@ -29,6 +29,7 @@ export type BuiltinAction =
   | 'new'
   | 'remember'
   | 'routines'
+  | 'skills'
   | 'memory'
   | 'settings'
   | 'commands'
@@ -50,7 +51,7 @@ export const builtins: Builtin[] = [
   {
     name: 'effort',
     action: 'effort',
-    description: 'How hard Claude thinks',
+    description: 'How hard the model thinks',
     argumentHint: '[auto…max]',
     aliases: ['think'],
   },
@@ -58,7 +59,7 @@ export const builtins: Builtin[] = [
   {
     name: 'mode',
     action: 'mode',
-    description: 'How much Claude can do without asking',
+    description: 'How much it can do without asking',
     aliases: ['trust', 'permissions'],
   },
   { name: 'new', action: 'new', description: 'Start a new chat', aliases: ['clear'] },
@@ -75,6 +76,7 @@ export const builtins: Builtin[] = [
     description: 'Things Conch does on a schedule',
     aliases: ['schedule', 'cron'],
   },
+  { name: 'skills', action: 'skills', description: 'Things Conch knows how to do' },
   { name: 'commands', action: 'commands', description: 'Create your own commands' },
   { name: 'usage', action: 'usage', description: 'See how much usage you have left' },
   { name: 'settings', action: 'settings', description: 'Open settings' },
@@ -85,14 +87,19 @@ export const builtins: Builtin[] = [
 export type ResolvedCommand =
   | { kind: 'builtin'; builtin: Builtin; args: string }
   | { kind: 'custom'; command: CustomCommand; args: string }
+  | { kind: 'skill'; skill: Skill; args: string }
   | { kind: 'engine'; command: EngineCommand; args: string }
   | { kind: 'unknown'; name: string };
 
-/** Work out what a `/…` message means. Conch commands win, then yours, then Claude Code's. */
+/**
+ * Work out what a `/…` message means. Conch's commands win, then yours, then
+ * your skills, then the provider's own.
+ */
 export function resolveSlash(
   text: string,
   custom: CustomCommand[],
   engine: EngineCommand[],
+  skills: Skill[] = [],
 ): ResolvedCommand | undefined {
   const parsed = parseSlash(text);
   if (!parsed || !parsed.name) return undefined;
@@ -100,6 +107,8 @@ export function resolveSlash(
   if (builtin) return { kind: 'builtin', builtin, args: parsed.args };
   const mine = custom.find((c) => c.name === parsed.name);
   if (mine) return { kind: 'custom', command: mine, args: parsed.args };
+  const skill = skills.find((s) => s.name.toLowerCase() === parsed.name);
+  if (skill) return { kind: 'skill', skill, args: parsed.args };
   const theirs = engine.find((c) => c.name.toLowerCase() === parsed.name);
   if (theirs) return { kind: 'engine', command: theirs, args: parsed.args };
   return { kind: 'unknown', name: parsed.name };

@@ -1,14 +1,17 @@
 /**
- * Integrations — the apps and services Claude can use on your behalf.
+ * Integrations — the apps and services your assistant can use on your behalf.
  *
  * Every integration is an MCP server. Conch keeps a small catalog of
- * well-known ones (one click, no config files), lets you add any other by
- * URL or command, and shows what Claude Code already has set up on its own.
+ * well-known ones (one click, no config files) and lets you add any other by
+ * URL or command. They belong to Conch, so every provider can use them; what a
+ * provider has set up on its own is listed separately.
  *
  * Secrets (tokens, OAuth credentials) never appear in these schemas: the
  * browser sends them once, and the gateway only ever says whether one is saved.
  */
 import { z } from 'zod';
+
+import { EngineId } from './common';
 
 /** How you sign in to an integration. */
 export const IntegrationAuth = z.enum([
@@ -196,9 +199,17 @@ export const Integration = z.object({
 });
 export type Integration = z.infer<typeof Integration>;
 
-/** An MCP server Claude Code loads by itself (its own settings, claude.ai, plugins). */
+/**
+ * An MCP server a provider loads by itself (its own settings, its account's
+ * connectors, plugins). It only works when that provider answers — unlike
+ * integrations connected in Conch, which every provider gets.
+ */
 export const ExternalIntegration = z.object({
   name: z.string(),
+  /** The provider that brings it. */
+  provider: EngineId,
+  /** "Claude Code" */
+  providerName: z.string(),
   /** `engine`: the engine's own settings; `account`: the provider account's connectors. */
   source: z.enum(['engine', 'project', 'account', 'plugin', 'other']),
   state: z.enum(['ok', 'needs-auth', 'error', 'off', 'checking']),
@@ -212,12 +223,13 @@ export const ExternalIntegration = z.object({
 export type ExternalIntegration = z.infer<typeof ExternalIntegration>;
 
 /**
- * What the active engine can do with integrations. Every engine gets them:
+ * What one connected provider does with integrations. Every provider gets them:
  * `native` engines (Claude Code, Codex CLI) load MCP servers themselves;
  * `bridge` engines (plain APIs such as OpenRouter) get their tools from
  * Conch, which connects to the servers on their behalf.
  */
 export const IntegrationProvider = z.object({
+  id: EngineId,
   /** "Claude Code", "Codex", "OpenRouter"… */
   engine: z.string(),
   mode: z.enum(['native', 'bridge']),
@@ -242,13 +254,14 @@ export type IntegrationProvider = z.infer<typeof IntegrationProvider>;
 export const IntegrationsList = z.object({
   catalog: z.array(CatalogEntry),
   integrations: z.array(Integration),
-  provider: IntegrationProvider,
+  /** Every connected provider — integrations connected in Conch work with all of them. */
+  providers: z.array(IntegrationProvider),
 });
 export type IntegrationsList = z.infer<typeof IntegrationsList>;
 
 export const ExternalList = z.object({
   servers: z.array(ExternalIntegration),
-  /** Why the list is empty or partial (e.g. Claude Code isn't signed in). */
+  /** Why the list is empty or partial (e.g. a provider couldn't be asked). */
   message: z.string().optional(),
   checkedAt: z.number(),
 });

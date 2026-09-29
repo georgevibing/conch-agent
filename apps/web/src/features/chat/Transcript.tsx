@@ -8,6 +8,7 @@ import {
   Arrival,
   AssistantPlaceholder,
   MemoryPill,
+  SkillUsedLine,
   PermissionCard,
   ToolItem,
   TurnEnd,
@@ -122,6 +123,7 @@ export function Transcript({
     !placeholder &&
     ((last?.kind === 'tool' && last.status !== 'running' && last.status !== 'pending') ||
       last?.kind === 'memory' ||
+      last?.kind === 'skill' ||
       last?.kind === 'routine' ||
       last?.kind === 'integration-issue' ||
       (last?.kind === 'permission' && Boolean(last.decision)) ||
@@ -161,6 +163,7 @@ export function Transcript({
               />
             )}
             {block.item?.kind === 'memory' && <MemoryPill item={block.item} />}
+            {block.item?.kind === 'skill' && <SkillUsedLine item={block.item} />}
             {block.item?.kind === 'routine' && (
               <RoutineChatCard
                 routineId={block.item.routineId}

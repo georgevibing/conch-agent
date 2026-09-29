@@ -15,7 +15,7 @@ import { useState } from 'react';
 import { useAppState, useUpdateSettings } from '../../api/queries';
 import { Section, SaveStatus } from '../settings/Section';
 import { useAutosave } from '../settings/useAutosave';
-import { ConnectProviderDialog } from './ConnectProviderDialog';
+import { ProviderDetail } from './ConnectProviderDialog';
 import styles from './Providers.module.css';
 import { useCheckProvider, useClearProviderKey, useProviders, useUseProvider } from './queries';
 
@@ -28,7 +28,7 @@ function metaOf(provider: Provider): string {
   return parts.filter(Boolean).join(' · ') || 'Connected';
 }
 
-/** Broken and unconnected first — the things you might want to act on. */
+/** The default first, then the others that are connected, then the rest. */
 function order(a: Provider, b: Provider) {
   const rank = (p: Provider) => (p.active ? 0 : p.status.state === 'ready' ? 1 : 2);
   return rank(a) - rank(b);
@@ -61,11 +61,23 @@ export function ProvidersTab({
   const providers = data?.providers ?? [];
   const open = providers.find((provider) => provider.id === connecting);
 
+  // One provider opens in place of the list — never a dialog over Settings.
+  if (open) {
+    return (
+      <ProviderDetail
+        key={open.id}
+        provider={open}
+        onePassword={data?.onePassword ?? { available: false }}
+        onBack={() => setConnecting(undefined)}
+      />
+    );
+  }
+
   return (
     <Stack gap={8}>
       <Section
         title="Providers"
-        description={`Where ${assistant}’s intelligence comes from. One provider is in use; the others stay connected and ready.`}
+        description={`Where ${assistant}’s intelligence comes from. Every provider you connect shows up in the model picker, so you can switch per chat — new chats start with your default.`}
       >
         <Stack gap={3}>
           {data?.pinned && (
@@ -106,9 +118,9 @@ export function ProvidersTab({
                   }
                   highlights={provider.highlights}
                   action={
-                    ready && !provider.active
+                    ready && !provider.active && !data?.pinned
                       ? {
-                          label: 'Use this',
+                          label: 'Make default',
                           onClick: () => use.mutate(provider.id),
                           loading: busy,
                         }
@@ -140,8 +152,8 @@ export function ProvidersTab({
             })
           )}
           <Text size="xs" tone="subtle">
-            Keys stay on this computer (or in 1Password) and are never shown again. Switching
-            provider only changes new messages — your chats stay where they are.
+            Keys stay on this computer (or in 1Password) and are never shown again. Changing the
+            model or provider in a chat carries the conversation over — nothing is lost.
           </Text>
         </Stack>
       </Section>
@@ -166,12 +178,6 @@ export function ProvidersTab({
           </Field.Description>
         </Field>
       </Section>
-
-      <ConnectProviderDialog
-        provider={open}
-        onePassword={data?.onePassword ?? { available: false }}
-        onOpenChange={(next) => !next && setConnecting(undefined)}
-      />
 
       <AlertDialog.Root
         open={Boolean(removing)}

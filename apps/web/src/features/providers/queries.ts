@@ -12,7 +12,7 @@ export const providerKeys = {
 };
 
 /**
- * Switching provider changes the engine status, the model list and the limits.
+ * Changing the default provider changes the engine status, the model list and the limits.
  * Rather than guess, put the fresh status where it's displayed and let the rest
  * be read again.
  */
@@ -71,7 +71,7 @@ export function useUseProvider() {
   return useMutation({
     mutationFn: (id: EngineId) => providersApi.use(id),
     onSuccess: (list) => applyList(client, list),
-    onError: (error) => toast.error(errorText(error, 'Couldn’t switch provider.')),
+    onError: (error) => toast.error(errorText(error, 'Couldn’t change the default provider.')),
   });
 }
 

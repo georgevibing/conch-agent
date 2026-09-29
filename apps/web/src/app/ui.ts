@@ -38,6 +38,9 @@ interface UiState {
   picker: Picker;
   /** Model/effort/mode chosen for a new chat before its first message. */
   draftOptions: TurnOptions;
+  /** Words to put in the open chat's composer (e.g. `/weekly-review ` from ⌘K). */
+  composerText: string | null;
+  setComposerText(text: string | null): void;
   setPicker(picker: Picker): void;
   setDraftOptions(options: TurnOptions): void;
   toggleSidebar(): void;
@@ -62,6 +65,8 @@ export const useUi = create<UiState>((set) => ({
   usageOpen: false,
   picker: null,
   draftOptions: {},
+  composerText: null,
+  setComposerText: (composerText) => set({ composerText }),
   setPicker: (picker) => set({ picker }),
   setDraftOptions: (draftOptions) => set({ draftOptions }),
   toggleSidebar: () =>

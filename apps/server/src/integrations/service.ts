@@ -109,7 +109,11 @@ interface ProbeOptions {
 export interface IntegrationServiceDeps {
   home: string;
   emit: (event: ServerEvent) => void;
-  engine: () => Engine;
+  /**
+   * Every connected provider, the default first. Integrations connected in
+   * Conch go to all of them; each may also bring servers of its own.
+   */
+  engines: () => Promise<Engine[]>;
   /** Where local integrations start (the workspace). */
   cwd: () => Promise<string>;
   /** Overridable for tests. */
@@ -156,25 +160,33 @@ export class IntegrationService {
 
   async list(): Promise<IntegrationsList> {
     const items = await this.store.all();
-    const engine = this.deps.engine();
-    const status = await engine.detect().catch(() => undefined);
-    const account = engine.integrations.account;
-    const accountReady = account && status ? account.ready(status) : undefined;
+    const engines = await this.deps.engines().catch(() => []);
+    const providers = await Promise.all(
+      engines.map(async (engine) => {
+        const status = await engine.detect().catch(() => undefined);
+        const account = engine.integrations.account;
+        const accountReady = account && status ? account.ready(status) : undefined;
+        return {
+          id: engine.id,
+          engine: engine.label,
+          mode: engine.integrations.mode,
+          hasOwnServers: Boolean(engine.mcpStatus),
+          account: account && {
+            label: account.label,
+            url: account.url,
+            ready: accountReady?.ready ?? false,
+            hint: accountReady?.hint,
+          },
+        };
+      }),
+    );
     return {
-      // Account connectors only exist on engines that have them.
-      catalog: publicCatalog().filter((c) => c.auth !== 'account' || account),
+      // Services only a provider's own account can reach are shown when one of them has it.
+      catalog: publicCatalog().filter(
+        (c) => c.auth !== 'account' || providers.some((p) => p.account),
+      ),
       integrations: items.map((item) => publicView(this.#live(item))),
-      provider: {
-        engine: engine.label,
-        mode: engine.integrations.mode,
-        hasOwnServers: Boolean(engine.mcpStatus),
-        account: account && {
-          label: account.label,
-          url: account.url,
-          ready: accountReady?.ready ?? false,
-          hint: accountReady?.hint,
-        },
-      },
+      providers,
     };
   }
 
@@ -196,21 +208,29 @@ export class IntegrationService {
     };
   }
 
-  // ── External (the engine's own servers) ─────────────────────────────────
+  // ── External (servers a provider brings by itself) ──────────────────────
 
   async external(force = false): Promise<ExternalList> {
     if (!force && this.#external && Date.now() - this.#external.checkedAt < 60_000)
       return this.#external;
-    const engine = this.deps.engine();
-    if (!engine.mcpStatus) return { servers: [], checkedAt: Date.now() };
+    const engines = (await this.deps.engines().catch(() => [])).filter((e) => e.mcpStatus);
+    const lists = await Promise.all(engines.map((engine) => this.#externalOf(engine)));
+    this.#external = {
+      servers: lists.flatMap((l) => l.servers),
+      message: lists.flatMap((l) => (l.message ? [l.message] : [])).join(' ') || undefined,
+      checkedAt: Date.now(),
+    };
+    return this.#external;
+  }
+
+  async #externalOf(engine: Engine): Promise<{ servers: ExternalIntegration[]; message?: string }> {
     let statuses: EngineMcpStatus[];
     try {
-      statuses = await engine.mcpStatus();
+      statuses = (await engine.mcpStatus?.()) ?? [];
     } catch (error) {
       return {
         servers: [],
         message: `Couldn’t ask ${engine.label} what else it has: ${(error as Error).message}`,
-        checkedAt: Date.now(),
       };
     }
     const seen = new Set<string>();
@@ -238,6 +258,8 @@ export class IntegrationService {
           : (engine.integrations.signInHint ?? `Sign in to it from ${engine.label}.`);
       return {
         name,
+        provider: engine.id,
+        providerName: engine.label,
         source,
         state,
         message:
@@ -251,12 +273,7 @@ export class IntegrationService {
         catalogId: matchCatalog(name, s.url),
       };
     });
-    this.#external = {
-      servers,
-
-      checkedAt: Date.now(),
-    };
-    return this.#external;
+    return { servers };
   }
 
   // ── Create / update / remove ────────────────────────────────────────────

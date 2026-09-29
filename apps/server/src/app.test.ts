@@ -52,6 +52,76 @@ describe('gateway HTTP', () => {
     });
   });
 
+  it('lists every connected provider’s models for the picker', async () => {
+    const { app } = await setup();
+    close = () => app.close();
+    const catalog = (await app.inject('/api/models')).json();
+    expect(catalog.default).toBe('mock');
+    expect(catalog.providers).toHaveLength(1);
+    expect(catalog.providers[0]).toMatchObject({ engine: 'mock', label: 'Claude Code' });
+    expect(catalog.providers[0].models.length).toBeGreaterThan(0);
+    const one = await app.inject('/api/capabilities?engine=mock');
+    expect(one.json().engine).toBe('mock');
+    expect((await app.inject('/api/capabilities?engine=nope')).statusCode).toBe(400);
+  });
+
+  it('creates, drafts, edits and removes skills, and refuses paths', async () => {
+    const { app, home } = await setup();
+    close = () => app.close();
+    expect((await app.inject('/api/skills')).json()).toMatchObject({ skills: [] });
+
+    const draft = await app.inject({
+      method: 'POST',
+      url: '/api/skills/draft',
+      payload: { instructions: 'Summarise invoices from my inbox every month.' },
+    });
+    expect(draft.json()).toMatchObject({
+      title: 'Summarise invoices',
+      name: 'summarise-invoices',
+      generated: true,
+    });
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/skills',
+      payload: { instructions: 'Summarise invoices from my inbox every month.' },
+    });
+    expect(created.statusCode).toBe(200);
+    const skill = created.json();
+    expect(skill).toMatchObject({ id: 'summarise-invoices', mode: 'auto', editable: true });
+    expect(
+      await readFile(join(home, 'skills', 'summarise-invoices', 'SKILL.md'), 'utf8'),
+    ).toContain('name: summarise-invoices');
+
+    const patched = await app.inject({
+      method: 'PATCH',
+      url: '/api/skills/summarise-invoices',
+      payload: { description: 'Totals the month’s invoices. Use when asked about invoices.' },
+    });
+    expect(patched.json().description).toBe(
+      'Totals the month’s invoices. Use when asked about invoices.',
+    );
+    expect(
+      (
+        await app.inject({
+          method: 'PATCH',
+          url: '/api/skills/summarise-invoices',
+          payload: { name: 'Bad Name' },
+        })
+      ).statusCode,
+    ).toBe(400);
+
+    for (const url of ['/api/skills/..%2F..%2Fsettings', '/api/skills/a.b', '/api/skills/nope']) {
+      expect((await app.inject(url)).statusCode).toBe(404);
+    }
+    expect(
+      (await app.inject({ method: 'DELETE', url: '/api/skills/summarise-invoices' })).json(),
+    ).toEqual({
+      ok: true,
+    });
+    expect((await app.inject('/api/skills')).json().skills).toEqual([]);
+  });
+
   it('lists providers, and refuses a made-up one', async () => {
     const { app } = await setup();
     close = () => app.close();

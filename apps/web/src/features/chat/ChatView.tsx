@@ -67,12 +67,12 @@ function EngineIssue({ status, issue }: { status?: EngineStatus; issue?: string 
   if (!status || status.state === 'ready') return null;
   const title =
     status.state === 'not-installed'
-      ? 'Claude Code isn’t installed'
+      ? `${status.label} isn’t installed`
       : status.state === 'signed-out'
-        ? 'Claude Code needs you to sign in'
+        ? `${status.label} needs you to sign in`
         : status.state === 'checking'
-          ? 'Checking Claude Code…'
-          : 'Claude Code isn’t responding';
+          ? `Checking ${status.label}…`
+          : `${status.label} isn’t responding`;
   return (
     <Callout
       tone="warning"
@@ -111,6 +111,24 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   const [sentId, setSentId] = useState<string>();
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const columnRef = useRef<HTMLDivElement>(null);
+
+  // Words handed over from elsewhere (⌘K's "use this skill") land in the composer.
+  useEffect(() => {
+    const take = () => {
+      const text = useUi.getState().composerText;
+      if (text === null) return;
+      useUi.getState().setComposerText(null);
+      setDraft(text);
+      composerRef.current?.focus();
+    };
+    // Words may be waiting already (the chat opened because of them).
+    const timer = setTimeout(take, 0);
+    const off = useUi.subscribe(take);
+    return () => {
+      clearTimeout(timer);
+      off();
+    };
+  }, []);
 
   // A rejected message comes back to the composer instead of vanishing.
   useEffect(
@@ -162,6 +180,9 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   };
 
   const slash = useSlashCommands({ draft, setDraft, send, turn });
+  const chosenReady = Boolean(
+    turn.catalog?.providers.some((p) => p.engine === turn.options.engine),
+  );
 
   const workspaceName = useMemo(
     () => app?.workspace.split(/[\\/]/).filter(Boolean).at(-1) ?? 'workspace',
@@ -170,7 +191,8 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
 
   const composer = (
     <div className={styles.composerWrap}>
-      <EngineIssue status={engine} issue={engineIssue} />
+      {/* Another connected provider can answer while the default one is away. */}
+      <EngineIssue status={chosenReady ? undefined : engine} issue={engineIssue} />
       <UsageComposerNotice />
       {view.notice && running && (
         <Callout tone="info" title="Still trying…" className={styles.issue}>
@@ -195,7 +217,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
         label={`Message ${name}`}
         toolbar={
           <>
-            {engine?.state === 'ready' && <ComposerControls turn={turn} />}
+            {(engine?.state === 'ready' || chosenReady) && <ComposerControls turn={turn} />}
             <Tooltip content={app?.workspace ?? ''}>
               <ComposerChip
                 icon={<Folder />}

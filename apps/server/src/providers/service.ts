@@ -1,14 +1,17 @@
 /**
- * Providers — connecting them, switching between them, and saying how they are.
+ * Providers — connecting them, choosing the default, and saying how they are.
  *
- * Conch drives one engine at a time. Which one is a *preference*, not an
- * environment variable, so it can be changed from Settings and remembered. An
- * operator who sets `CONCH_ENGINE` pins the choice: the UI then says so instead
- * of offering a switch that wouldn't take.
+ * Every connected provider is available at once: the model picker lists all of
+ * their models and a conversation remembers which one answers (ADR 0012). The
+ * *default* — what a new chat starts with — is a preference, not an
+ * environment variable. An operator who sets `CONCH_ENGINE` pins it: that
+ * provider is then the only one, and the UI says so.
  */
 import type {
   EngineId,
+  ModelCatalog,
   Provider,
+  ProviderModels,
   ProvidersList,
   SavedSecret,
   ServerEvent,
@@ -24,6 +27,8 @@ import { canSignIn, ProviderSignIns, type SignInDisplay } from './oauth';
 
 /** Detection talks to other programs and other people's servers; don't hang on it. */
 const DETECT_TIMEOUT_MS = 30_000;
+/** Listing models can mean starting a CLI; one slow provider mustn't hold up the picker. */
+const MODELS_TIMEOUT_MS = 20_000;
 
 export class ProviderError extends Error {
   constructor(
@@ -41,7 +46,7 @@ export interface ProviderServiceDeps {
   /** `CONCH_ENGINE`, when the operator set it. */
   pinned?: EngineId;
   emit: (event: ServerEvent) => void;
-  /** Called after the active provider changes, so limits and models are re-read. */
+  /** Called after the default provider changes, so limits and models are re-read. */
   onSwitch?: () => void;
 }
 
@@ -87,10 +92,92 @@ export class ProviderService {
     return { name: copy?.name ?? id, asksFirst: copy?.asksFirst ?? true };
   }
 
-  /** The engine every turn goes through. */
+  /**
+   * For the security checkup: any connected provider can answer a chat now,
+   * so the one that can't ask before each step is the one to warn about.
+   */
+  async checkupCopy(): Promise<{ name: string; asksFirst: boolean }> {
+    const ready = await this.ready().catch(() => []);
+    const silent = ready
+      .map((engine) => PROVIDER_COPY.get(engine.id))
+      .find((copy) => copy && copy.asksFirst === false);
+    return silent ? { name: silent.name, asksFirst: false } : this.activeCopy();
+  }
+
+  /** The default provider: new chats, routines without a choice, and usage limits. */
   engine(): Engine {
     const engines = this.deps.engines;
     return engines.get(this.activeIdNow()) ?? (engines.get('claude-code') as Engine);
+  }
+
+  /**
+   * The engine for a turn: the one the conversation chose, else the default.
+   * A pinned provider is the only one, whatever a conversation remembers.
+   */
+  engineFor(id: EngineId | undefined): Engine {
+    if (this.deps.pinned || !id) return this.engine();
+    return (
+      (this.#listed(this.activeIdNow()).includes(id) && this.deps.engines.get(id)) || this.engine()
+    );
+  }
+
+  /** Providers worth showing: the pin alone, else every real one (the test double only as the default). */
+  #listed(active: EngineId): EngineId[] {
+    if (this.deps.pinned) return [this.deps.pinned];
+    return PROVIDER_ORDER.filter((id) => {
+      const copy = PROVIDER_COPY.get(id);
+      if (!copy || !this.deps.engines.has(id)) return false;
+      // The test double is only interesting when Conch is running on it.
+      return !copy.internal || id === active;
+    });
+  }
+
+  /**
+   * Every connected provider, the default first. Detection is cached by each
+   * engine, so this is cheap to call per page.
+   */
+  async ready(): Promise<Engine[]> {
+    const active = await this.load();
+    const ids = this.#listed(active).sort((a, b) => Number(b === active) - Number(a === active));
+    const engines = ids.flatMap((id) => {
+      const engine = this.deps.engines.get(id);
+      return engine ? [engine] : [];
+    });
+    const states = await Promise.all(engines.map((engine) => this.#detect(engine)));
+    return engines.filter((_, i) => states[i]?.state === 'ready');
+  }
+
+  /** What every connected provider offers, for the model picker. */
+  async models(options: { force?: boolean } = {}): Promise<ModelCatalog> {
+    const active = await this.load();
+    const engines = await this.ready();
+    const providers = await Promise.all(
+      engines.map(async (engine): Promise<ProviderModels> => {
+        try {
+          const capabilities = await Promise.race([
+            engine.capabilities({ force: options.force }),
+            new Promise<never>((_, reject) =>
+              setTimeout(
+                () => reject(new Error(`${engine.label} didn’t list its models in time.`)),
+                MODELS_TIMEOUT_MS,
+              ).unref?.(),
+            ),
+          ]);
+          // The id a choice is saved under is the provider's, whatever a stand-in calls itself.
+          return { ...capabilities, engine: engine.id };
+        } catch (error) {
+          return {
+            engine: engine.id,
+            label: engine.label,
+            models: [],
+            commands: [],
+            permissionModes: ['default'],
+            message: (error as Error).message || `${engine.label} couldn’t list its models.`,
+          };
+        }
+      }),
+    );
+    return { default: active, providers };
   }
 
   #engineOrThrow(id: EngineId): Engine {
@@ -104,14 +191,7 @@ export class ProviderService {
     const active = await this.load();
     // A pinned provider is the only one worth showing: you can't switch, and
     // detecting the rest would only offer choices that wouldn't take.
-    const ids = this.deps.pinned
-      ? [this.deps.pinned]
-      : PROVIDER_ORDER.filter((id) => {
-          const copy = PROVIDER_COPY.get(id);
-          if (!copy || !this.deps.engines.has(id)) return false;
-          // The test double is only interesting when Conch is running on it.
-          return !copy.internal || id === active;
-        });
+    const ids = this.#listed(active);
     const providers = await Promise.all(
       ids.map((id: EngineId) => this.#describe(id, active, options)),
     );
@@ -120,7 +200,7 @@ export class ProviderService {
       providers,
       onePassword: await this.deps.keys.vault.onePassword.state(),
       pinned: this.deps.pinned
-        ? `Conch was started with CONCH_ENGINE=${this.deps.pinned}, so the provider is fixed.`
+        ? `Conch was started with CONCH_ENGINE=${this.deps.pinned}, so it’s the only provider.`
         : undefined,
     };
   }
@@ -190,7 +270,7 @@ export class ProviderService {
     }
   }
 
-  /** Make `id` the provider new conversations use. */
+  /** Make `id` the provider new chats start with. */
   async use(id: EngineId): Promise<ProvidersList> {
     if (this.deps.pinned && this.deps.pinned !== id)
       throw new ProviderError(

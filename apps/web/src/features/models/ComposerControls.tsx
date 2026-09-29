@@ -1,11 +1,15 @@
 import type { EffortChoice, PermissionMode } from '@conch/protocol';
-import { ModelPicker, ModePicker, type ModelProvider } from '@conch/nacre';
+import { ModelPicker, ModePicker } from '@conch/nacre';
 
 import { useUi } from '../../app/ui';
-import { availableModes, effortOptions, isSecondaryModel, modelLabel } from './catalog';
-import type { useTurnOptions } from './useTurnOptions';
+import { fuzzyMatch } from '../search/fuzzy';
+import { availableModes, effortOptions, pickerProviders } from './catalog';
+import { modelKey, type useTurnOptions } from './useTurnOptions';
 
-/** The model chip and the mode chip that live in the composer's toolbar. */
+/**
+ * The model chip and the mode chip that live in the composer's toolbar. The
+ * model chip lists every connected provider's models, searchable by name.
+ */
 export function ComposerControls({
   turn,
   disabled,
@@ -15,28 +19,17 @@ export function ComposerControls({
 }) {
   const picker = useUi((s) => s.picker);
   const setPicker = useUi((s) => s.setPicker);
-  const { capabilities, options, model } = turn;
-
-  const providers: ModelProvider[] = [
-    {
-      id: 'claude-code',
-      label: 'Claude Code',
-      logo: 'claude',
-      models: (capabilities?.models ?? []).map((m) => ({
-        id: m.id,
-        ...modelLabel(m.label),
-        description: m.description,
-        secondary: isSecondaryModel(m),
-      })),
-    },
-  ];
+  const { catalog, capabilities, options, model } = turn;
+  const providers = pickerProviders(catalog?.providers ?? [], catalog?.default, modelKey);
+  const selected = options.engine ? modelKey(options.engine, model?.id ?? options.model) : '';
 
   return (
     <>
       <ModelPicker
         providers={providers}
-        model={model?.id ?? options.model}
-        onModelChange={(id) => turn.set({ model: id })}
+        model={selected}
+        onModelChange={turn.choose}
+        match={fuzzyMatch}
         effort={options.effort}
         efforts={effortOptions(model)}
         onEffortChange={(effort) => turn.set({ effort: effort as EffortChoice })}

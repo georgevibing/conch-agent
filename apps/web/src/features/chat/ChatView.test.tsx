@@ -102,4 +102,69 @@ describe('ChatView', () => {
     );
     await waitFor(() => expect(box).toHaveValue('Are you there?'));
   });
+
+  it('picks a model from any connected provider, found by name, for the next chat', async () => {
+    const model = (id: string, label: string) => ({
+      id,
+      label,
+      description: '',
+      efforts: [],
+      supportsFastMode: false,
+      supportsAutoMode: false,
+    });
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/models': () => ({
+        default: 'claude-code',
+        providers: [
+          {
+            engine: 'claude-code',
+            label: 'Claude Code',
+            models: [
+              model('default', 'Default (recommended)'),
+              model('opus', 'Opus 5.5'),
+              model('sonnet', 'Sonnet 5.5'),
+              model('haiku', 'Haiku 4.5'),
+              model('fable', 'Fable 5.1'),
+            ],
+            commands: [],
+            permissionModes: ['default', 'acceptEdits', 'plan', 'bypassPermissions'],
+          },
+          {
+            engine: 'openrouter',
+            label: 'OpenRouter',
+            models: [
+              model('openai/gpt-5.2', 'OpenAI: GPT-5.2'),
+              model('qwen/qwen3-coder', 'Qwen: Qwen3 Coder'),
+              model('deepseek/deepseek-v3.2', 'DeepSeek: DeepSeek V3.2'),
+              model('moonshotai/kimi-k2.5', 'MoonshotAI: Kimi K2.5'),
+            ],
+            commands: [],
+            permissionModes: ['default'],
+          },
+        ],
+      }),
+    });
+    renderApp(<ChatView />);
+    await userEvent.click(await screen.findByRole('button', { name: /Model: Default/ }));
+    // Both providers, one list.
+    expect(await screen.findByRole('group', { name: /^Claude Code/ })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /^OpenRouter/ })).toBeInTheDocument();
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search models' }), 'qwen');
+    await userEvent.keyboard('{Enter}');
+    expect(
+      await screen.findByRole('button', { name: 'Model: Qwen: Qwen3 Coder (OpenRouter)' }),
+    ).toBeInTheDocument();
+
+    await userEvent.type(screen.getByRole('textbox', { name: 'Message Conch' }), 'Hi{Enter}');
+    await waitFor(() =>
+      expect(FakeSocket.last?.sent).toContainEqual(
+        expect.objectContaining({
+          type: 'conversation.send',
+          options: { engine: 'openrouter', model: 'qwen/qwen3-coder' },
+        }),
+      ),
+    );
+  });
 });

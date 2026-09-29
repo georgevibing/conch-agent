@@ -35,6 +35,7 @@ import { dayGroup, type DayGroup } from '../../lib/time';
 import { useAutoFocus } from '../../lib/useAutoFocus';
 import { IntegrationsLink } from '../integrations/IntegrationsLink';
 import { RoutinesLink } from '../routines/RoutinesLink';
+import { SkillsLink } from '../skills/SkillsLink';
 import styles from './Sidebar.module.css';
 
 function RenameField({
@@ -247,6 +248,7 @@ export function Sidebar({
           <Kbd keys="mod+k" size="sm" aria-hidden />
         </Button>
         <RoutinesLink onNavigate={onNavigate} />
+        <SkillsLink onNavigate={onNavigate} />
         <IntegrationsLink onNavigate={onNavigate} />
       </div>
       <ScrollArea className={styles.scroll}>

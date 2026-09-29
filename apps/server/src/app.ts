@@ -10,6 +10,8 @@ import {
   CommandName,
   CreateIntegrationBody,
   CreateMemoryBody,
+  CreateSkillBody,
+  DraftSkillBody,
   Id,
   LoginCodeBody,
   PROTOCOL_VERSION,
@@ -26,6 +28,7 @@ import {
   UpdateIntegrationBody,
   UpdateMemoryBody,
   UpdateSettingsBody,
+  UpdateSkillBody,
   UsageBudgetBody,
   type ServerEvent,
 } from '@conch/protocol';
@@ -39,6 +42,7 @@ import { preview } from './routines/schedule';
 import { RoutineError } from './routines/service';
 import { registerAuthRoutes } from './auth/routes';
 import { ProviderError } from './providers/service';
+import { SkillError } from './skills/store';
 import { registerSecurity } from './security';
 import { SERVER_VERSION, type Services } from './services';
 
@@ -80,6 +84,10 @@ function sendError(reply: FastifyReply, error: unknown) {
   }
   if (error instanceof IntegrationError) {
     const status = { 'not-found': 404, invalid: 400, unavailable: 503 }[error.code];
+    return reply.code(status).send({ error: error.code, message: error.message });
+  }
+  if (error instanceof SkillError) {
+    const status = { 'not-found': 404, invalid: 400, 'read-only': 409 }[error.code];
     return reply.code(status).send({ error: error.code, message: error.message });
   }
   if (error instanceof RoutineError) {
@@ -156,6 +164,15 @@ export async function buildApp(services: Services) {
   app.patch('/api/settings', async (request, reply) => {
     const body = parse(UpdateSettingsBody, request.body, reply);
     if (!body) return;
+    // A new default provider goes through the provider service, which knows about pins.
+    const engine = body.preferences?.engine;
+    if (engine) {
+      try {
+        await services.providers.use(engine);
+      } catch (error) {
+        return sendError(reply, error);
+      }
+    }
     await services.settings.update(body);
     return appState();
   });
@@ -265,15 +282,27 @@ export async function buildApp(services: Services) {
     }
   });
 
-  app.get<{ Querystring: { refresh?: string } }>('/api/capabilities', async (request, reply) => {
-    try {
-      return await services.capabilities(request.query.refresh === '1');
-    } catch (error) {
-      return reply
-        .code(503)
-        .send({ error: 'engine-unavailable', message: (error as Error).message });
-    }
-  });
+  // Every connected provider's models at once, for the picker (ADR 0012).
+  app.get<{ Querystring: { refresh?: string } }>('/api/models', (request) =>
+    services.models(request.query.refresh === '1'),
+  );
+
+  // One provider's offer: the default's, or `?engine=` for another.
+  app.get<{ Querystring: { refresh?: string; engine?: string } }>(
+    '/api/capabilities',
+    async (request, reply) => {
+      const { engine, refresh } = request.query;
+      const id = engine === undefined ? undefined : providerId({ id: engine }, reply);
+      if (engine !== undefined && !id) return;
+      try {
+        return await services.capabilities(refresh === '1', id);
+      } catch (error) {
+        return reply
+          .code(503)
+          .send({ error: 'engine-unavailable', message: (error as Error).message });
+      }
+    },
+  );
 
   // ── Usage limits ───────────────────────────────────────────────────────
   app.get<{ Querystring: { refresh?: string } }>('/api/usage', (request) =>
@@ -404,6 +433,38 @@ export async function buildApp(services: Services) {
       await services.integrations.check(request.params.id);
       return services.integrations.get(request.params.id);
     }),
+  );
+
+  // ── Skills ─────────────────────────────────────────────────────────────
+  app.get<{ Querystring: { refresh?: string } }>('/api/skills', (request) =>
+    services.skills.list(request.query.refresh === '1'),
+  );
+  app.post('/api/skills/draft', async (request, reply) => {
+    const body = parse(DraftSkillBody, request.body, reply);
+    if (!body) return;
+    return services.skills.draft(body.instructions);
+  });
+  app.post('/api/skills', async (request, reply) => {
+    const body = parse(CreateSkillBody, request.body, reply);
+    if (!body) return;
+    return guarded(reply, () => services.skills.create(body));
+  });
+  app.get<{ Params: { id: string } }>('/api/skills/:id', (request, reply) =>
+    guarded(reply, () => services.skills.detail(request.params.id)),
+  );
+  app.patch<{ Params: { id: string } }>('/api/skills/:id', async (request, reply) => {
+    const body = parse(UpdateSkillBody, request.body, reply);
+    if (!body) return;
+    return guarded(reply, () => services.skills.update(request.params.id, body));
+  });
+  app.delete<{ Params: { id: string } }>('/api/skills/:id', (request, reply) =>
+    guarded(reply, async () => {
+      await services.skills.remove(request.params.id);
+      return { ok: true };
+    }),
+  );
+  app.post<{ Params: { id: string } }>('/api/skills/:id/copy', (request, reply) =>
+    guarded(reply, () => services.skills.copy(request.params.id)),
   );
 
   /**

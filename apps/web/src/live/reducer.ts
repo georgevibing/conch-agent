@@ -1,6 +1,7 @@
 import type {
   ConversationEvent,
   ConversationStatus,
+  EngineId,
   ToolStatus,
   TurnOptions,
   Usage,
@@ -62,11 +63,22 @@ export type TranscriptItem =
       message: string;
     }
   | {
+      kind: 'skill';
+      id: string;
+      skillId: string;
+      name: string;
+      title: string;
+      by: 'user' | 'assistant';
+    }
+  | {
       kind: 'turn-end';
       id: string;
       outcome: 'success' | 'interrupted' | 'error';
       error?: string;
       usage?: Usage;
+      /** Which provider answered, and with which model. */
+      engine?: EngineId;
+      model?: string;
     };
 
 export interface ConversationView {
@@ -274,6 +286,8 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             outcome: event.outcome,
             error: event.error,
             usage: event.usage,
+            engine: event.engine,
+            model: event.model,
           },
         ],
       };
@@ -307,6 +321,21 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         ],
       };
     }
+    case 'skill.used':
+      return {
+        ...base,
+        items: [
+          ...items,
+          {
+            kind: 'skill',
+            id: `skill-${event.seq}`,
+            skillId: event.skillId,
+            name: event.name,
+            title: event.title,
+            by: event.by,
+          },
+        ],
+      };
     case 'routine':
       return {
         ...base,

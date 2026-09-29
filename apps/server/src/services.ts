@@ -1,6 +1,6 @@
 import { join, resolve } from 'node:path';
 
-import type { EngineId, LoginState, ServerEvent } from '@conch/protocol';
+import type { EngineId, LoginState, ServerEvent, SkillSource } from '@conch/protocol';
 
 import { AccessStore } from './auth/store';
 import { Gatekeeper } from './security';
@@ -26,6 +26,8 @@ import { SearchIndex } from './search/index';
 import { SearchIndexer } from './search/indexer';
 import { RoutineStore } from './routines/store';
 import { SettingsStore } from './settings/store';
+import { SkillService } from './skills/service';
+import { externalRoots, SkillStore } from './skills/store';
 import { UsageService } from './usage/service';
 
 export { SERVER_VERSION } from './version';
@@ -63,6 +65,8 @@ export class Services {
   readonly providers: ProviderService;
   readonly usage: UsageService;
   readonly integrations: IntegrationService;
+  /** Skills: Conch's own, and those in other agents' folders (ADR 0013). */
+  readonly skills: SkillService;
   /** The pretend SaaS vendor used with the mock engine. */
   readonly mockVendor?: MockVendor;
   /** Full-text search over every conversation; absent if the index can't be opened. */
@@ -113,25 +117,43 @@ export class Services {
     this.integrations = new IntegrationService({
       home: config.CONCH_HOME,
       emit: (event) => this.broadcast.emit(event),
-      engine: () => this.engine(),
+      engines: () => this.providers.ready(),
       cwd: () => this.settings.workspace(),
       blueprints: this.mockVendor && mockBlueprints(this.mockVendor),
+    });
+    // Other agents' skill folders are read unless turned off; test runs (the mock engine) don't look.
+    const skillSources =
+      config.CONCH_SKILL_SOURCES ?? (config.CONCH_ENGINE === 'mock' ? 'off' : 'auto');
+    this.skills = new SkillService({
+      store: new SkillStore(
+        config.CONCH_HOME,
+        skillSources === 'auto' ? externalRoots() : [],
+        () => this.#nativeSkillSources,
+      ),
+      engines: () => this.providers.ready(),
+      emit: (event) => this.broadcast.emit(event),
+      onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
     });
     const conversationStore = new ConversationStore(join(config.CONCH_HOME, 'conversations'));
     this.conversations = new ConversationManager({
       store: conversationStore,
       settings: this.settings,
       memory: this.memory,
-      engine: () => this.engine(),
+      engine: (id) => this.providers.engineFor(id),
       // An engine that can't run Conch's own tools is never offered them.
-      tools: (ctx) => (this.engine().hostTools === false ? [] : this.routines.tools(ctx)),
-      context: async () =>
+      tools: (ctx) =>
+        ctx.engine.hostTools === false
+          ? []
+          : [...this.routines.tools(ctx), ...this.skills.tools(ctx)],
+      context: async (engine) =>
         [
-          this.engine().hostTools === false ? '' : await this.routines.promptSection(),
+          engine.hostTools === false ? '' : await this.routines.promptSection(),
+          await this.skills.promptSection(engine).catch(() => ''),
           await this.integrations.promptSection(),
         ]
           .filter(Boolean)
           .join('\n\n'),
+      expand: (text) => this.skills.expand(text),
       integrations: this.integrations,
       // A spend that can't be saved is lost, not fatal: an unhandled rejection would stop Conch.
       onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
@@ -139,7 +161,7 @@ export class Services {
     this.routines = new RoutineService({
       store: new RoutineStore(join(config.CONCH_HOME, 'routines')),
       conversations: this.conversations,
-      engine: () => this.engine(),
+      engine: (id) => this.providers.engineFor(id),
       emit: (event) => this.broadcast.emit(event),
     });
     this.conversations.events.on((event) => this.broadcast.emit(event));
@@ -160,9 +182,26 @@ export class Services {
     this.search = openSearch(config, conversationStore, this.conversations);
   }
 
-  /** The provider every turn goes through: your choice, or `CONCH_ENGINE` when it's set. */
+  /** The default provider: your choice, or `CONCH_ENGINE` when it's set. */
   engine(): Engine {
     return this.providers.engine();
+  }
+
+  /**
+   * Skill folders a provider reads by itself, and who that is. Every listed
+   * provider counts, not only connected ones: the answer must be quick, and a
+   * provider that isn't connected isn't reading anything.
+   */
+  get #nativeSkillSources(): Map<SkillSource, string> {
+    const map = new Map<SkillSource, string>();
+    for (const engine of this.engines.values())
+      for (const source of engine.skillSources ?? []) map.set(source, engine.label);
+    return map;
+  }
+
+  /** What every connected provider offers, for the model picker. */
+  models(force = false) {
+    return this.providers.models({ force });
   }
 
   /** Read the remembered provider before the first request arrives. */
@@ -180,8 +219,11 @@ export class Services {
     return status;
   }
 
-  capabilities(force = false) {
-    return this.engine().capabilities({ force });
+  /** One provider's models, commands and modes: the default's unless another is named. */
+  async capabilities(force = false, id?: EngineId) {
+    const engine = this.providers.engineFor(id);
+    // Saved choices name the provider, whatever a stand-in calls itself.
+    return { ...(await engine.capabilities({ force })), engine: engine.id };
   }
 
   get login() {

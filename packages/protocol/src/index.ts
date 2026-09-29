@@ -7,8 +7,8 @@
  */
 import { z } from 'zod';
 
-import { EffortChoice, Id, PermissionMode, TurnOptions, Usage } from './common';
-import { EngineId, EngineStatus, LoginState } from './engine';
+import { EffortChoice, EngineId, Id, PermissionMode, TurnOptions, Usage } from './common';
+import { EngineStatus, LoginState } from './engine';
 import { Integration } from './integrations';
 import { Routine, RoutineRun } from './routines';
 import { UsageSnapshot } from './usage';
@@ -20,9 +20,10 @@ export * from './common';
 export * from './providers';
 export * from './routines';
 export * from './search';
+export * from './skills';
 export * from './usage';
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 /** A user-defined slash command: a reusable prompt. `{{input}}` is replaced by what follows the command. */
 export const CommandName = z
@@ -69,12 +70,13 @@ export type Profile = z.infer<typeof Profile>;
 export const Preferences = z.object({
   /** Folder Claude works in. Defaults to the Conch workspace. */
   workspace: z.string().max(4096).optional(),
+  /** The provider new chats start with. Every connected provider can be picked (ADR 0012). */
   engine: EngineId.default('claude-code'),
   /** Let the agent save memories on its own (it always tells you). */
   autoMemory: z.boolean().default(true),
   /** Name new conversations with a small, cheap model instead of their first line. */
   autoTitle: z.boolean().default(true),
-  /** Default model for new conversations; unset = the engine's own default. */
+  /** Default model for new chats — one of the default provider's; unset = its own default. */
   model: z.string().max(200).optional(),
   effort: EffortChoice.default('auto'),
   fastMode: z.boolean().default(false),
@@ -251,8 +253,21 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     outcome: z.enum(['success', 'interrupted', 'error']),
     usage: Usage.optional(),
     error: z.string().optional(),
+    /** Which provider answered, and with which model when it said. */
+    engine: EngineId.optional(),
+    model: z.string().optional(),
   }),
   z.object({ ...logged, type: z.literal('title'), title: z.string() }),
+  /** A skill was used in this turn — asked for by name, or picked by the assistant. */
+  z.object({
+    ...logged,
+    type: z.literal('skill.used'),
+    skillId: z.string(),
+    name: z.string(),
+    title: z.string(),
+    /** `user`: you asked for it (`/name`); `assistant`: it matched the request. */
+    by: z.enum(['user', 'assistant']),
+  }),
   z.object({
     ...logged,
     type: z.literal('notice'),
@@ -351,6 +366,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('routine.run'), run: RoutineRun }),
   z.object({ type: z.literal('integration.changed'), integration: Integration }),
   z.object({ type: z.literal('integration.deleted'), integrationId: z.string() }),
+  /** A skill was added, changed or removed (here, or in one of the folders Conch reads). */
+  z.object({ type: z.literal('skills.changed') }),
   /** Remaining usage changed (a turn finished, a window reset, the provider warned). */
   z.object({ type: z.literal('usage.changed'), usage: UsageSnapshot }),
   z.object({ type: z.literal('pong') }),

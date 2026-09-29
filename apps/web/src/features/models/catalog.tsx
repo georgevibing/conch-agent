@@ -1,10 +1,17 @@
-import type { EffortChoice, ModelInfo, PermissionMode } from '@conch/protocol';
+import type {
+  EffortChoice,
+  EngineId,
+  ModelInfo,
+  PermissionMode,
+  ProviderModels,
+} from '@conch/protocol';
+import type { ModelProvider, ProviderId } from '@conch/nacre';
 import { Eye, FilePen, Hand, ShieldCheck, Zap } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 /** Plain-language names for effort levels. */
 export const effortLabels: Record<EffortChoice, { label: string; description: string }> = {
-  auto: { label: 'Auto', description: 'Claude decides how long to think' },
+  auto: { label: 'Auto', description: 'The model decides how long to think' },
   low: { label: 'Low', description: 'Quick answers for simple things' },
   medium: { label: 'Medium', description: 'A balance of speed and care' },
   high: { label: 'High', description: 'Careful thinking for real work' },
@@ -25,12 +32,12 @@ export interface ModeInfo {
   tone: 'default' | 'caution' | 'danger';
 }
 
-/** Claude Code's permission modes, named for what they mean to a person. */
+/** Permission modes, named for what they mean to a person. Providers say which they honour. */
 export const modes: ModeInfo[] = [
   {
     value: 'default',
     label: 'Ask first',
-    description: 'Claude asks before editing files or running commands.',
+    description: 'Asks before editing files or running commands.',
     icon: <Hand />,
     tone: 'default',
   },
@@ -51,7 +58,7 @@ export const modes: ModeInfo[] = [
   {
     value: 'plan',
     label: 'Plan only',
-    description: 'Claude reads and plans but doesn’t change anything.',
+    description: 'Reads and plans but doesn’t change anything.',
     icon: <Eye />,
     tone: 'default',
   },
@@ -59,7 +66,7 @@ export const modes: ModeInfo[] = [
     value: 'bypassPermissions',
     label: 'Full trust',
     description:
-      'Claude can do anything without asking — and a web page or file it reads could trick it. Only in a folder you can afford to lose.',
+      'Can do anything without asking — and a web page or file it reads could trick it. Only in a folder you can afford to lose.',
     icon: <Zap />,
     tone: 'danger',
   },
@@ -91,4 +98,48 @@ export function modelLabel(label: string): { label: string; badge?: string } {
  */
 export function isSecondaryModel(model: ModelInfo): boolean {
   return /previous|legacy|older|deprecated/i.test(model.description) || /\b1M\b/i.test(model.label);
+}
+
+/** The mark each provider wears in the picker. */
+export const providerLogos: Record<EngineId, ProviderId> = {
+  'claude-code': 'claude',
+  'anthropic-api': 'claude',
+  'codex-cli': 'openai',
+  openrouter: 'openrouter',
+  mock: 'claude',
+};
+
+/** A provider with a long list (OpenRouter) opens on its first few; search finds the rest. */
+const FEATURED = 6;
+
+/**
+ * Every connected provider as the model picker shows it, the default first.
+ * Choices are keyed `engine|model` (see `modelKey`) so two providers can
+ * offer a model with the same id.
+ */
+export function pickerProviders(
+  providers: ProviderModels[],
+  defaultEngine: EngineId | undefined,
+  key: (engine: string, model: string) => string,
+): ModelProvider[] {
+  const many = providers.length > 1;
+  return providers.map((provider) => {
+    const long = provider.models.length > FEATURED * 2;
+    return {
+      id: provider.engine,
+      label: provider.label,
+      logo: providerLogos[provider.engine],
+      note: many && provider.engine === defaultEngine ? 'Default' : undefined,
+      message:
+        provider.message ??
+        (provider.models.length ? undefined : `${provider.label} didn’t list any models.`),
+      models: provider.models.map((m, i) => ({
+        id: key(provider.engine, m.id),
+        ...modelLabel(m.label),
+        description: m.description,
+        keywords: `${m.id} ${provider.label}`,
+        secondary: isSecondaryModel(m) || (long && i >= FEATURED),
+      })),
+    };
+  });
 }

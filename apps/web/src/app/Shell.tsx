@@ -11,6 +11,9 @@ import { IntegrationsView } from '../features/integrations/IntegrationsView';
 import { Palette } from '../features/palette/Palette';
 import { RoutineDetailView } from '../features/routines/RoutineDetailView';
 import { RoutinesView } from '../features/routines/RoutinesView';
+import { NewSkill } from '../features/skills/NewSkill';
+import { SkillDetailView } from '../features/skills/SkillDetailView';
+import { SkillsView } from '../features/skills/SkillsView';
 import { Settings } from '../features/settings/Settings';
 import { Sidebar } from '../features/sidebar/Sidebar';
 import { UsageIndicator } from '../features/usage/UsageIndicator';
@@ -34,11 +37,12 @@ function Reconnecting() {
 }
 
 export function Shell() {
-  const { conversationId, routineId, integrationId } = useParams();
+  const { conversationId, routineId, integrationId, skillId } = useParams();
   const navigate = useNavigate();
   const path = useLocation().pathname;
   const routinesArea = path.startsWith('/routines');
   const integrationsArea = path.startsWith('/integrations');
+  const skillsArea = path.startsWith('/skills');
 
   // Toasts and notifications raised outside the router ask us to navigate.
   useEffect(() => {
@@ -59,7 +63,9 @@ export function Shell() {
     ? 'Routines'
     : integrationsArea
       ? 'Integrations'
-      : (current?.title ?? (conversationId ? '' : 'New chat'));
+      : skillsArea
+        ? 'Skills'
+        : (current?.title ?? (conversationId ? '' : 'New chat'));
 
   useEffect(() => {
     document.title = current ? `${current.title} · Conch` : 'Conch';
@@ -112,7 +118,9 @@ export function Shell() {
             )
           )}
           <Text as="div" weight="medium" className={styles.title}>
-            <LiveTitle pending={!routinesArea && !integrationsArea && current?.titling}>
+            <LiveTitle
+              pending={!routinesArea && !integrationsArea && !skillsArea && current?.titling}
+            >
               {title}
             </LiveTitle>
           </Text>
@@ -129,7 +137,15 @@ export function Shell() {
           <EnginePill />
         </header>
         <Reconnecting />
-        {integrationsArea ? (
+        {skillsArea ? (
+          path === '/skills/new' ? (
+            <NewSkill />
+          ) : skillId ? (
+            <SkillDetailView key={skillId} skillId={skillId} />
+          ) : (
+            <SkillsView />
+          )
+        ) : integrationsArea ? (
           integrationId ? (
             <IntegrationDetailView key={integrationId} integrationId={integrationId} />
           ) : (

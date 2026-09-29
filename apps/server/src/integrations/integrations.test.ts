@@ -34,7 +34,7 @@ async function setup(options: { realCatalog?: boolean } = {}) {
   const service = new IntegrationService({
     home,
     emit: (event) => events.push(event),
-    engine: () => new MockEngine(),
+    engines: async () => [new MockEngine()],
     cwd: async () => home,
     manualChecks: true,
     blueprints: (id) => {

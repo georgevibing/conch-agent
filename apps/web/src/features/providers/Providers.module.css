@@ -95,3 +95,22 @@
     background: var(--nc-canvas);
   }
 }
+
+@layer nacre.components {
+  /* ── One provider, opened in place of the list ──────────────────── */
+  .detail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-5);
+    animation: nc-surface-in var(--nc-duration-base) var(--nc-ease-out) both;
+  }
+
+  .back {
+    align-self: flex-start;
+    margin-inline-start: calc(var(--nc-space-2) * -1);
+  }
+
+  .detailHeader {
+    align-items: flex-start;
+  }
+}

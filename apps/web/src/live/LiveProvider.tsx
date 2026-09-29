@@ -6,6 +6,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode }
 import { keys, setEngineStatus } from '../api/queries';
 import { applyIntegrationEvent } from '../features/integrations/queries';
 import { applyRoutineEvent } from '../features/routines/queries';
+import { skillKeys } from '../features/skills/queries';
 import { LiveSocket, socketUrl } from './socket';
 import { NEW, useLiveStore } from './store';
 
@@ -84,7 +85,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           break;
         case 'engine.status':
           setEngineStatus(client, event.status);
-          // Signing in or switching accounts can change which models exist.
+          // Signing in or switching accounts changes which models (and providers) exist.
           void client.invalidateQueries({ queryKey: keys.capabilities });
           if (event.status.state === 'ready') live.setEngineIssue(undefined);
           break;
@@ -104,7 +105,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
             live.setEngineIssue(event.message);
             void client.invalidateQueries({ queryKey: keys.engine });
           } else if (event.code === 'busy') {
-            toast('Claude is still replying', {
+            toast('Still replying', {
               description: 'Wait for it to finish, or press Esc to stop.',
             });
           } else {
@@ -112,6 +113,9 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           }
           break;
         }
+        case 'skills.changed':
+          void client.invalidateQueries({ queryKey: skillKeys.all });
+          break;
         case 'integration.changed':
         case 'integration.deleted':
           applyIntegrationEvent(client, event);

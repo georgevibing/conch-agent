@@ -32,6 +32,12 @@ const Env = z.object({
   /** Explicit path to the Claude Code executable. */
   CONCH_CLAUDE_PATH: z.string().optional(),
   CONCH_CODEX_PATH: z.string().optional(),
+  /**
+   * `auto` lists skills from other agents' folders too (`~/.agents/skills`,
+   * `~/.claude/skills`, OpenClaw, Hermes); `off` only Conch's own. Unset: `auto`,
+   * except with the mock engine, whose test runs shouldn't see your skills.
+   */
+  CONCH_SKILL_SOURCES: z.enum(['auto', 'off']).optional(),
   /** Built web app to serve at `/`. */
   CONCH_WEB_DIST: z.string().optional(),
   CONCH_OPEN: z

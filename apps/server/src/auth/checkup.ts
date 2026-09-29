@@ -79,7 +79,7 @@ export interface CheckupInput {
   workspaceRules?: string[];
   /** Integrations that act without asking. */
   trustedIntegrations?: string[];
-  /** The provider in use, and whether Conch can ask you before each step with it. */
+  /** A connected provider, and whether Conch can ask you before each step with it (the one that can't, if any). */
   provider?: { name: string; asksFirst: boolean };
 }
 
@@ -187,7 +187,7 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       id: 'provider-prompts',
       level: 'warn',
       title: `${name} can’t ask you before each step`,
-      detail: `${name} decides inside its own sandbox, so Conch can only choose how much it may touch — it can’t show you each command first. Keep it to reading only, or switch provider, if that matters to you.`,
+      detail: `${name} decides inside its own sandbox, so Conch can only choose how much it may touch — it can’t show you each command first. When you chat with one of its models, keep it to reading only — or pick a model from another provider — if that matters to you.`,
     });
   }
 

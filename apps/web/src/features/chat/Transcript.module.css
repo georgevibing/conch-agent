@@ -151,6 +151,12 @@
     color: light-dark(oklch(0.55 0.13 var(--nc-success-h)), oklch(0.75 0.13 var(--nc-success-h)));
   }
 
+  /* Aligned with the assistant's text, like the memory pill. */
+  .skillUsed {
+    display: flex;
+    margin-inline-start: 2.75rem;
+  }
+
   .memory {
     display: inline-flex;
     align-items: center;
@@ -210,7 +216,8 @@
 
     .permission,
     .resolved,
-    .memory {
+    .memory,
+    .skillUsed {
       margin-inline-start: 0;
     }
 

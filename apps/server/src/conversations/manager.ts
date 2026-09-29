@@ -3,6 +3,8 @@ import type {
   ConversationEventInput,
   ConversationStatus,
   ConversationSummary,
+  EngineId,
+  Preferences,
   ServerEvent,
   TurnOptions,
   Usage,
@@ -24,6 +26,7 @@ import { buildSystemAppend } from '../memory/prompt';
 import type { MemoryStore } from '../memory/store';
 import { memoryTools } from '../memory/tools';
 import type { SettingsStore } from '../settings/store';
+import { handoff } from './handoff';
 import type { ConversationRecord, ConversationStore } from './store';
 import { summarizeToolUse, titleFrom } from './summarize';
 import { generateTitle } from './title';
@@ -88,12 +91,25 @@ export interface TurnIntegrationsProvider {
   markUsed(toolName: string): Promise<void>;
 }
 
-/** Tools every conversation gets from other parts of Conch (e.g. routines). */
+/** Tools every conversation gets from other parts of Conch (e.g. routines, skills). */
 export type ToolProvider = (ctx: {
   conversationId: string;
   /** Add an event to the conversation's log (e.g. an inline routine card). */
   append: (event: ConversationEventInput) => void;
+  /** The provider answering this turn. */
+  engine: Engine;
 }) => HostTool[];
+
+/**
+ * Turns a message that asks for something by name (`/weekly-review …`) into
+ * the prompt the provider gets. The message itself is logged as typed.
+ */
+export type MessageExpander = (
+  text: string,
+  engine: Engine,
+) => Promise<
+  { prompt: string; skill?: { skillId: string; name: string; title: string } } | undefined
+>;
 
 interface Live {
   record: ConversationRecord;
@@ -139,10 +155,12 @@ export class ConversationManager {
       store: ConversationStore;
       settings: SettingsStore;
       memory: MemoryStore;
-      engine: () => Engine;
+      /** The provider for a turn: the one a conversation chose, else the default. */
+      engine: (id?: EngineId) => Engine;
       tools?: ToolProvider;
-      /** Extra system-prompt context for every turn (e.g. the user's routines). */
-      context?: () => Promise<string>;
+      /** Extra system-prompt context for every turn (e.g. the user's routines and skills). */
+      context?: (engine: Engine) => Promise<string>;
+      expand?: MessageExpander;
       /** Money spent outside a turn (naming a chat), for the usage ledger. */
       onSpend?: (usage: Usage) => void;
       integrations?: TurnIntegrationsProvider;
@@ -191,24 +209,28 @@ export class ConversationManager {
     text: string;
     options?: TurnOptions;
   }) {
-    const engine = this.deps.engine();
+    const existing = input.conversationId ? await this.#get(input.conversationId) : undefined;
+    if (existing?.abort)
+      throw new ConversationError('busy', 'Still replying to your last message.');
+    // Whichever provider the conversation (or this message) chose answers.
+    const engine = this.deps.engine(input.options?.engine ?? existing?.record.options.engine);
     const status = await engine.detect();
     if (status.state !== 'ready') {
       throw new ConversationError(
         'engine-unavailable',
         status.state === 'not-installed'
-          ? "Claude Code isn't installed yet."
+          ? `${engine.label} isn't installed yet.`
           : status.state === 'signed-out'
-            ? 'Claude Code is signed out.'
-            : (status.message ?? 'Claude Code is unavailable.'),
+            ? `${engine.label} is signed out.`
+            : (status.message ?? `${engine.label} is unavailable.`),
       );
     }
+    const expanded = await this.deps.expand?.(input.text, engine).catch(() => undefined);
 
     let live: Live;
     let autoTitle = false;
-    if (input.conversationId) {
-      live = await this.#get(input.conversationId);
-      if (live.abort) throw new ConversationError('busy', 'Claude is still replying.');
+    if (existing) {
+      live = existing;
       if (input.options) this.#applyOptions(live, input.options);
     } else {
       const now = Date.now();
@@ -241,11 +263,12 @@ export class ConversationManager {
       messageId: input.clientMessageId,
       text: input.text,
     });
+    if (expanded?.skill) this.#append(live, { type: 'skill.used', ...expanded.skill, by: 'user' });
     live.record = { ...live.record, preview: input.text.slice(0, 140), updatedAt: Date.now() };
     live.abort = new AbortController();
     this.#setStatus(live, 'running');
     await this.#persist(live);
-    void this.#runTurn(live, engine, input.text);
+    void this.#runTurn(live, engine, expanded?.prompt ?? input.text);
     if (autoTitle) void this.#autoTitle(live, engine, input.text);
     return summary(live.record);
   }
@@ -285,7 +308,8 @@ export class ConversationManager {
     origin: NonNullable<ConversationRecord['origin']>;
     extras: TurnExtras;
   }): Promise<{ conversationId: string; result: Promise<TurnResult> }> {
-    const engine = this.deps.engine();
+    const engine = this.deps.engine(input.options?.engine);
+    const expanded = await this.deps.expand?.(input.text, engine).catch(() => undefined);
     const now = Date.now();
     const record: ConversationRecord = {
       id: newId('c'),
@@ -309,11 +333,15 @@ export class ConversationManager {
     await this.deps.store.upsert(record);
     this.events.emit({ type: 'conversation.updated', conversation: summary(record) });
     this.#append(live, { type: 'user.message', messageId: newId('u'), text: input.text });
+    if (expanded?.skill) this.#append(live, { type: 'skill.used', ...expanded.skill, by: 'user' });
     live.abort = new AbortController();
     live.extras = input.extras;
     this.#setStatus(live, 'running');
     await this.#persist(live);
-    return { conversationId: record.id, result: this.#runTurn(live, engine, input.text) };
+    return {
+      conversationId: record.id,
+      result: this.#runTurn(live, engine, expanded?.prompt ?? input.text),
+    };
   }
 
   /** Change a conversation's model/effort/mode without sending a message. */
@@ -379,11 +407,21 @@ export class ConversationManager {
       // something hostile must not be able to reschedule or rewrite routines.
       ...(extras
         ? []
-        : (this.deps.tools?.({ conversationId, append: (event) => this.#append(live, event) }) ??
-          [])),
+        : (this.deps.tools?.({
+            conversationId,
+            append: (event) => this.#append(live, event),
+            engine,
+          }) ?? [])),
       ...(extras?.tools ?? []),
     );
-    const resolved = resolveOptions(live.record.options, settings.preferences);
+    // The default provider is the pinned one when there's a pin, whatever the preference says.
+    const defaults = { ...settings.preferences, engine: this.deps.engine().id };
+    const resolved = resolveOptions(live.record.options, defaults, engine.id);
+    // This provider's own session, and whatever it missed while others answered.
+    const session = live.record.sessions?.[engine.id];
+    const asked = live.events.findLast((e) => e.type === 'user.message')?.seq ?? live.seq;
+    const missed = handoff(live.events, { afterSeq: session?.seq ?? -1, beforeSeq: asked });
+    let answeredWith: string | undefined;
     if (extras?.permissionMode) resolved.permissionMode = extras.permissionMode;
     const integrations = this.deps.integrations;
     const appendIssue = (issue: IntegrationIssueInput) =>
@@ -465,8 +503,8 @@ export class ConversationManager {
 
       const stream = engine.runTurn({
         conversationId,
-        prompt,
-        resumeId: live.record.resumeId,
+        prompt: missed ? `${missed}\n\n${prompt}` : prompt,
+        resumeId: session?.resumeId,
         systemAppend: [
           buildSystemAppend({
             persona: settings.persona,
@@ -475,7 +513,7 @@ export class ConversationManager {
             autoMemory: settings.preferences.autoMemory,
             tools: engine.hostTools !== false,
           }),
-          await this.deps.context?.(),
+          await this.deps.context?.(engine),
           extras?.systemExtra,
         ]
           .filter(Boolean)
@@ -493,7 +531,16 @@ export class ConversationManager {
       for await (const event of stream) {
         switch (event.type) {
           case 'session':
-            live.record = { ...live.record, resumeId: event.resumeId };
+            answeredWith = event.model ?? answeredWith;
+            live.record = {
+              ...live.record,
+              engine: engine.id,
+              resumeId: undefined,
+              sessions: {
+                ...live.record.sessions,
+                [engine.id]: { resumeId: event.resumeId, seq: live.seq - 1 },
+              },
+            };
             break;
           case 'text':
             if (event.messageId !== finalMessageId) {
@@ -594,11 +641,20 @@ export class ConversationManager {
           usage: completed?.usage,
           error:
             outcome === 'error'
-              ? (completed?.error ?? 'Claude Code stopped unexpectedly.')
+              ? (completed?.error ?? `${engine.label} stopped unexpectedly.`)
               : undefined,
+          engine: engine.id,
+          ...((answeredWith ?? resolved.model) && { model: answeredWith ?? resolved.model }),
         },
         tail,
       );
+      // Everything up to here is part of this provider's session now.
+      const own = live.record.sessions?.[engine.id];
+      if (own)
+        live.record = {
+          ...live.record,
+          sessions: { ...live.record.sessions, [engine.id]: { ...own, seq: live.seq - 1 } },
+        };
       await closeBridge?.();
       live.abort = undefined;
       live.permissions.clear();
@@ -648,11 +704,11 @@ export class ConversationManager {
       this.#live.set(id, cached);
       return cached;
     }
-    const record = await this.deps.store.get(id);
-    if (!record) throw new ConversationError('not-found', 'Conversation not found.');
+    const stored = await this.deps.store.get(id);
+    if (!stored) throw new ConversationError('not-found', 'Conversation not found.');
     const events = await this.deps.store.events(id);
     const live: Live = {
-      record,
+      record: upgrade(stored, events.at(-1)?.seq ?? -1),
       events,
       seq: (events.at(-1)?.seq ?? -1) + 1,
       permissions: new Map(),
@@ -699,17 +755,52 @@ function clean(options: TurnOptions): TurnOptions {
   ) as TurnOptions;
 }
 
+/**
+ * A conversation from before every provider was available at once (ADR 0012):
+ * its one session belongs to the provider it recorded, and so does its model.
+ */
+export function upgrade(record: ConversationRecord, lastSeq: number): ConversationRecord {
+  let next = record;
+  if (record.resumeId && !record.sessions) {
+    next = {
+      ...next,
+      resumeId: undefined,
+      sessions: { [record.engine]: { resumeId: record.resumeId, seq: lastSeq } },
+    };
+  }
+  if (record.options?.model && !record.options.engine) {
+    next = { ...next, options: { ...record.options, engine: record.engine } };
+  }
+  return next;
+}
+
+/**
+ * This turn's choices: the conversation's own over the user's defaults. A
+ * model only means something to the provider it belongs to, so the default
+ * model applies only when the default provider answers.
+ */
 export function resolveOptions(
   options: TurnOptions | undefined,
-  defaults: {
+  defaults: Pick<Preferences, 'effort' | 'fastMode' | 'permissionMode'> & {
     model?: string;
-    effort: ResolvedOptions['effort'];
-    fastMode: boolean;
-    permissionMode: ResolvedOptions['permissionMode'];
+    engine?: EngineId;
   },
+  /** The provider answering; omit when there's only one. */
+  engine?: EngineId,
 ): ResolvedOptions {
+  const chosen = options?.engine ?? defaults.engine;
+  const model =
+    engine === undefined
+      ? (options?.model ?? defaults.model)
+      : options?.model
+        ? chosen === undefined || chosen === engine
+          ? options.model
+          : undefined
+        : engine === (defaults.engine ?? engine)
+          ? defaults.model
+          : undefined;
   return {
-    model: options?.model ?? defaults.model,
+    model,
     effort: options?.effort ?? defaults.effort,
     fastMode: options?.fastMode ?? defaults.fastMode,
     permissionMode: options?.permissionMode ?? defaults.permissionMode,

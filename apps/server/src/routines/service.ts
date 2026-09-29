@@ -4,6 +4,7 @@ import {
   type RoutineTrust,
   Schedule,
   type ConversationEventInput,
+  type EngineId,
   type PermissionMode,
   type RoutineDetail,
   type RoutineRun,
@@ -57,7 +58,8 @@ export class RoutineService {
     private readonly deps: {
       store: RoutineStore;
       conversations: ConversationManager;
-      engine: () => Engine;
+      /** The provider a routine's options name, else the default. */
+      engine: (id?: EngineId) => Engine;
       emit: (event: ServerEvent) => void;
       now?: () => number;
     },
@@ -238,14 +240,15 @@ export class RoutineService {
       return undefined;
     }
 
-    const status = await this.deps.engine().detect();
+    const engine = this.deps.engine(routine.options.engine);
+    const status = await engine.detect();
     if (status.state !== 'ready') {
       const reason =
         status.state === 'signed-out'
-          ? 'Claude Code was signed out, so this didn’t run.'
+          ? `${engine.label} was signed out, so this didn’t run.`
           : status.state === 'not-installed'
-            ? 'Claude Code isn’t installed, so this didn’t run.'
-            : 'Claude Code wasn’t available, so this didn’t run.';
+            ? `${engine.label} isn’t installed, so this didn’t run.`
+            : `${engine.label} wasn’t available, so this didn’t run.`;
       const run = await this.#record(routine, {
         trigger,
         status: 'failed',

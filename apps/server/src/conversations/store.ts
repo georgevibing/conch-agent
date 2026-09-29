@@ -5,10 +5,21 @@ import { ConversationEvent, type ConversationSummary, type EngineId } from '@con
 
 import { Mutex, readJson, safeJoin, writeFileAtomic, writeJson } from '../lib/fs';
 
+/** One provider's own session within a conversation. */
+export interface EngineSession {
+  /** Engine-native id to resume (Claude Code's session UUID, Codex's thread, a transcript name). */
+  resumeId: string;
+  /** The last event this session has seen; anything later is handed over when it next answers. */
+  seq: number;
+}
+
 export interface ConversationRecord extends ConversationSummary {
+  /** The provider that answered last. */
   engine: EngineId;
-  /** Engine-native session id used to resume (Claude Code session UUID). */
+  /** Before ADR 0012: the session of `engine`. Read into `sessions` when loaded. */
   resumeId?: string;
+  /** Each provider keeps its own session; none can read another's (ADR 0012). */
+  sessions?: Partial<Record<EngineId, EngineSession>>;
 }
 
 /**

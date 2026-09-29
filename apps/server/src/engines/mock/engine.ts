@@ -282,6 +282,24 @@ export class MockEngine implements Engine {
   async complete(input: CompletionInput): Promise<Completion> {
     this.completions.push(input.model);
     await sleep(1400 * this.#speed, input.signal);
+    // A skill to name and describe: answer in the shape Conch asks for.
+    const skill = /<instructions>\n([\s\S]*)\n<\/instructions>/.exec(input.prompt)?.[1];
+    if (skill !== undefined) {
+      if (/draft-fail/i.test(skill)) throw new Error('Mock completion failed.');
+      const [first = 'Tidy', second = 'things'] = skill
+        .replace(/[^\p{L}\p{N}\s'-]/gu, ' ')
+        .split(/\s+/)
+        .filter((w) => w.length > 3 && !STOPWORDS.has(w.toLowerCase()));
+      const title = `${first.charAt(0).toUpperCase()}${first.slice(1).toLowerCase()} ${second.toLowerCase()}`;
+      return {
+        text: JSON.stringify({
+          title,
+          does: `Handles ${title.toLowerCase()} the way you described`,
+          when: `Use when you ask about ${second.toLowerCase()}`,
+        }),
+        usage: { inputTokens: 300, outputTokens: 40, costUsd: 0.0004 },
+      };
+    }
     const message = /<message>\n([\s\S]*)\n<\/message>/.exec(input.prompt)?.[1] ?? input.prompt;
     if (/title-fail/i.test(message)) throw new Error('Mock completion failed.');
     const usage = { inputTokens: 120, outputTokens: 8, costUsd: 0.0002 };

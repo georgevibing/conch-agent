@@ -1,5 +1,5 @@
 import type { CommandItem } from '@conch/nacre';
-import { toast, useCommandMenu, useNacreTheme } from '@conch/nacre';
+import { SkillIcon, toast, useCommandMenu, useNacreTheme } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Brain,
@@ -11,6 +11,7 @@ import {
   Repeat,
   SquareSlash,
   Sparkles,
+  WandSparkles,
   Zap,
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
@@ -20,7 +21,8 @@ import { api } from '../../api/client';
 import { keys, useCommands } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { effortLabels, modelLabel, modes } from '../models/catalog';
-import type { useTurnOptions } from '../models/useTurnOptions';
+import { modelKey, type useTurnOptions } from '../models/useTurnOptions';
+import { usableSkills, useSkills } from '../skills/queries';
 import {
   builtins,
   expandCustom,
@@ -38,6 +40,7 @@ const builtinIcons: Partial<Record<BuiltinAction, ReactNode>> = {
   new: <Plus />,
   remember: <Brain />,
   routines: <Repeat />,
+  skills: <WandSparkles />,
   memory: <Brain />,
   commands: <SquareSlash />,
   settings: <Settings />,
@@ -58,6 +61,8 @@ export function useSlashCommands(options: {
   const { draft, setDraft, send, turn } = options;
   const [dismissed, setDismissed] = useState(false);
   const { data: custom = [] } = useCommands();
+  const { data: skillList } = useSkills();
+  const skills = usableSkills(skillList);
   const engineCommands = turn.capabilities?.commands ?? [];
   const ui = useUi();
   const theme = useNacreTheme();
@@ -81,6 +86,16 @@ export function useSlashCommands(options: {
       argumentHint: c.prompt.includes('{{input}}') ? 'text' : undefined,
       group: 'Your commands',
     })),
+    ...skills.map((skill) => ({
+      id: `skill:${skill.id}`,
+      name: skill.name,
+      description: skill.description,
+      keywords: [skill.title],
+      // Anything typed after the name becomes what the skill works on.
+      argumentHint: 'details',
+      group: 'Skills',
+      icon: <SkillIcon name={skill.name} title={skill.title} size="sm" />,
+    })),
     // Plain commands first; plugin commands ("plugin:skill") after, so /review beats
     // "some-plugin:code-reviews" when both match.
     ...[...engineCommands]
@@ -92,7 +107,7 @@ export function useSlashCommands(options: {
         description: c.description.replace(/^\([^)]*\)\s*/, ''),
         keywords: c.name.includes(':') ? [c.name.split(':').at(-1) ?? c.name] : undefined,
         argumentHint: c.argumentHint || undefined,
-        group: 'Claude Code',
+        group: turn.capabilities?.label ?? 'Your provider',
       })),
   ];
 
@@ -102,15 +117,23 @@ export function useSlashCommands(options: {
       case 'model': {
         if (!args) return ui.setPicker('model');
         const q = args.toLowerCase();
-        const match = turn.capabilities?.models.find(
-          (m) => m.id.toLowerCase() === q || m.label.toLowerCase().includes(q),
+        // Every connected provider's models; the current provider's first.
+        const providers = [...(turn.catalog?.providers ?? [])].sort(
+          (a, b) =>
+            Number(b.engine === turn.options.engine) - Number(a.engine === turn.options.engine),
         );
+        const all = providers.flatMap((p) => p.models.map((m) => ({ provider: p, model: m })));
+        const match =
+          all.find(({ model: m }) => m.id.toLowerCase() === q) ??
+          all.find(({ model: m }) => m.label.toLowerCase().includes(q));
         if (!match) {
           toast(`No model matches “${args}”`, { description: 'Pick one from the list instead.' });
           return ui.setPicker('model');
         }
-        turn.set({ model: match.id });
-        return toast.success(`Using ${modelLabel(match.label).label}`);
+        turn.choose(modelKey(match.provider.engine, match.model.id));
+        return toast.success(`Using ${modelLabel(match.model.label).label}`, {
+          description: providers.length > 1 ? match.provider.label : undefined,
+        });
       }
       case 'effort': {
         const effort = parseEffortArg(args);
@@ -165,6 +188,8 @@ export function useSlashCommands(options: {
         return ui.openSettings('memory');
       case 'routines':
         return void navigate('/routines');
+      case 'skills':
+        return void navigate('/skills');
       case 'commands':
         return ui.openSettings('commands');
       case 'usage':
@@ -181,7 +206,7 @@ export function useSlashCommands(options: {
 
   /** Handle a submitted message that starts with "/". Returns true if consumed. */
   const submit = (text: string): boolean => {
-    const resolved = resolveSlash(text, custom, engineCommands);
+    const resolved = resolveSlash(text, custom, engineCommands, skills);
     if (!resolved) return false;
     switch (resolved.kind) {
       case 'builtin':
@@ -191,8 +216,12 @@ export function useSlashCommands(options: {
       case 'custom':
         send(expandCustom(resolved.command, resolved.args));
         return true;
+      case 'skill':
+        // The gateway expands it into the skill's instructions, for any provider.
+        send(text.trim());
+        return true;
       case 'engine':
-        // Claude Code understands its own slash commands in the prompt.
+        // The provider understands its own slash commands in the prompt.
         send(text.trim());
         return true;
       case 'unknown':

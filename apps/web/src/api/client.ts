@@ -11,6 +11,8 @@ import {
   EngineStatus,
   Memory,
   type MemoryKind,
+  ModelCatalog,
+  type EngineId,
   SearchPreview,
   SearchResults,
   type UpdateSettingsBody,
@@ -112,8 +114,15 @@ export const api = {
   setBudget: (budget: number | null) =>
     request(UsageSnapshot, '/api/usage/budget', { method: 'PUT', body: { budget } }),
 
-  capabilities: (refresh = false) =>
-    request(Capabilities, `/api/capabilities${refresh ? '?refresh=1' : ''}`),
+  capabilities: (refresh = false, engine?: EngineId) => {
+    const params = new URLSearchParams();
+    if (refresh) params.set('refresh', '1');
+    if (engine) params.set('engine', engine);
+    const query = params.toString();
+    return request(Capabilities, `/api/capabilities${query ? `?${query}` : ''}`);
+  },
+  /** Every connected provider's models at once, for the picker. */
+  models: (refresh = false) => request(ModelCatalog, `/api/models${refresh ? '?refresh=1' : ''}`),
 
   commands: () => request(z.array(CustomCommand), '/api/commands'),
   saveCommand: (command: { name: string; description: string; prompt: string }) =>

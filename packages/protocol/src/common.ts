@@ -7,6 +7,13 @@ import { z } from 'zod';
  */
 export const Id = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/, 'Invalid id.');
 
+/**
+ * Engines Conch can drive — the providers behind the model picker. Every
+ * connected one is available at once (ADR 0012); `mock` is the test double.
+ */
+export const EngineId = z.enum(['claude-code', 'codex-cli', 'anthropic-api', 'openrouter', 'mock']);
+export type EngineId = z.infer<typeof EngineId>;
+
 /** How hard the model thinks. `auto` lets the model decide (engine default). */
 export const EffortChoice = z.enum(['auto', 'low', 'medium', 'high', 'xhigh', 'max']);
 export type EffortChoice = z.infer<typeof EffortChoice>;
@@ -27,6 +34,9 @@ export type PermissionMode = z.infer<typeof PermissionMode>;
 
 /** Per-conversation choices; anything unset falls back to the user's defaults. */
 export const TurnOptions = z.object({
+  /** The provider that answers. Unset = the default provider (`preferences.engine`). */
+  engine: EngineId.optional(),
+  /** One of that provider's models. Unset = the provider's own default. */
   model: z.string().max(200).optional(),
   effort: EffortChoice.optional(),
   fastMode: z.boolean().optional(),

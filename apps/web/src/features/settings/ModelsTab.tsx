@@ -2,9 +2,9 @@ import type { EffortChoice, PermissionMode } from '@conch/protocol';
 import {
   AlertDialog,
   Field,
+  ModelPicker,
   RadioGroup,
   SegmentedControl,
-  Select,
   Skeleton,
   Stack,
   Switch,
@@ -12,43 +12,47 @@ import {
 } from '@conch/nacre';
 import { useState } from 'react';
 
-import { useAppState, useCapabilities, useUpdateSettings } from '../../api/queries';
-import { availableModes, effortOptions, isSecondaryModel } from '../models/catalog';
-import { findModel } from '../models/useTurnOptions';
+import { useAppState, useModels, useUpdateSettings } from '../../api/queries';
+import { availableModes, effortOptions, pickerProviders } from '../models/catalog';
+import { findModel, modelKey, parseModelKey } from '../models/useTurnOptions';
+import { fuzzyMatch } from '../search/fuzzy';
 import { Section } from './Section';
 import styles from './Settings.module.css';
 
 /** Defaults for every new chat. Each chat can still change them from the composer. */
 export function ModelsTab() {
   const { data: app } = useAppState();
-  const ready = app?.engine.state === 'ready';
-  const { data: caps, isLoading } = useCapabilities(ready);
+  const { data: catalog, isLoading } = useModels(Boolean(app));
   const update = useUpdateSettings();
   const [confirmTrust, setConfirmTrust] = useState(false);
+  const [picking, setPicking] = useState(false);
 
   const prefs = app?.preferences;
-  const modelId = prefs?.model ?? 'default';
-  const model = findModel(caps, modelId);
+  const assistant = app?.persona.name ?? 'Conch';
+  // The default provider's offer; the default model is one of its models.
+  const caps =
+    catalog?.providers.find((p) => p.engine === catalog.default) ?? catalog?.providers[0];
+  const ready = Boolean(caps);
+  const model = findModel(caps, prefs?.model ?? 'default');
   const efforts = effortOptions(model);
   const save = (preferences: Parameters<typeof update.mutate>[0]['preferences']) =>
     update.mutate({ preferences });
 
-  if (!ready) {
+  if (!ready && !isLoading) {
     return (
-      <Section title="Models & modes" description="Connect Claude Code to choose models.">
-        <Text tone="muted">Once Claude Code is connected, its models appear here.</Text>
+      <Section title="Models & modes" description="Connect a provider to choose models.">
+        <Text tone="muted">
+          Once a provider is connected (Settings → Providers), its models appear here.
+        </Text>
       </Section>
     );
   }
-
-  const primary = caps?.models.filter((m) => !isSecondaryModel(m)) ?? [];
-  const secondary = caps?.models.filter(isSecondaryModel) ?? [];
 
   return (
     <Stack gap={8}>
       <Section
         title="Models & modes"
-        description="What every new chat starts with. You can change them for a single chat from the message box, or type /model."
+        description="What every new chat starts with. Any chat can switch to another model — from any connected provider — from the message box, or with /model."
       >
         {isLoading || !caps ? (
           <Stack gap={3}>
@@ -58,29 +62,34 @@ export function ModelsTab() {
         ) : (
           <Stack gap={6}>
             <Field>
-              <Field.Label>Default model</Field.Label>
-              <Select
-                value={modelId}
-                onValueChange={(id) => save({ model: id })}
-                aria-label="Default model"
-              >
-                <Select.Group label="Claude Code">
-                  {primary.map((m) => (
-                    <Select.Item key={m.id} value={m.id} description={m.description}>
-                      {m.label}
-                    </Select.Item>
-                  ))}
-                </Select.Group>
-                {secondary.length > 0 && (
-                  <Select.Group label="More models">
-                    {secondary.map((m) => (
-                      <Select.Item key={m.id} value={m.id} description={m.description}>
-                        {m.label}
-                      </Select.Item>
-                    ))}
-                  </Select.Group>
-                )}
-              </Select>
+              <Field.Label id="default-model">Default model</Field.Label>
+              <div>
+                <ModelPicker
+                  modelOnly
+                  side="bottom"
+                  providers={pickerProviders(catalog?.providers ?? [], catalog?.default, modelKey)}
+                  model={caps && model ? modelKey(caps.engine, model.id) : ''}
+                  onModelChange={(key) => {
+                    const choice = parseModelKey(key);
+                    if (choice) save({ engine: choice.engine, model: choice.model });
+                    setPicking(false);
+                  }}
+                  match={fuzzyMatch}
+                  open={picking}
+                  onOpenChange={setPicking}
+                  effort="auto"
+                  efforts={[]}
+                  onEffortChange={() => {}}
+                  fastMode={false}
+                  fastModeAvailable={false}
+                  onFastModeChange={() => {}}
+                  isDefault
+                />
+              </div>
+              <Field.Description>
+                Every connected provider’s models, searchable. Choosing one from another provider
+                makes that provider the default too.
+              </Field.Description>
             </Field>
 
             {efforts.length > 0 && (
@@ -122,15 +131,15 @@ export function ModelsTab() {
               checked={prefs?.autoTitle ?? true}
               onCheckedChange={(autoTitle) => save({ autoTitle })}
               label="Name new chats automatically"
-              description="A small, fast model (Haiku where your account has it) titles each new chat from its first message — usually a fraction of a cent."
+              description="A small, fast model from the chat’s own provider titles each new chat from its first message — usually a fraction of a cent."
             />
           </Stack>
         )}
       </Section>
 
       <Section
-        title="How much Claude can do on its own"
-        description="Claude always shows what it’s doing. This decides when it stops to ask you first."
+        title={`How much ${assistant} can do on its own`}
+        description={`${assistant} always shows what it’s doing. This decides when it stops to ask you first.`}
       >
         <RadioGroup
           variant="card"
@@ -157,7 +166,7 @@ export function ModelsTab() {
         <AlertDialog.Content tone="danger">
           <AlertDialog.Title>Start every chat in Full trust?</AlertDialog.Title>
           <AlertDialog.Description>
-            Claude will edit files and run commands on this computer without asking first. Only
+            {assistant} will edit files and run commands on this computer without asking first. Only
             choose this if you’re comfortable with that for every new chat.
           </AlertDialog.Description>
           <AlertDialog.Footer>

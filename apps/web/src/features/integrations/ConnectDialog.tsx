@@ -101,21 +101,39 @@ export function TryIt({
 export function ConnectDialog({
   entry,
   onOpenChange,
+  onAlternative,
 }: {
   entry: CatalogEntry | undefined;
   onOpenChange: (open: boolean) => void;
+  /** Switch to another catalog entry (e.g. Zapier, to reach a service with every model). */
+  onAlternative?: (catalogId: string) => void;
 }) {
   const open = Boolean(entry);
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content size="md" aria-describedby={undefined}>
-        {entry && <ConnectFlow key={entry.id} entry={entry} onClose={() => onOpenChange(false)} />}
+        {entry && (
+          <ConnectFlow
+            key={entry.id}
+            entry={entry}
+            onClose={() => onOpenChange(false)}
+            onAlternative={onAlternative}
+          />
+        )}
       </Dialog.Content>
     </Dialog.Root>
   );
 }
 
-function ConnectFlow({ entry, onClose }: { entry: CatalogEntry; onClose: () => void }) {
+function ConnectFlow({
+  entry,
+  onClose,
+  onAlternative,
+}: {
+  entry: CatalogEntry;
+  onClose: () => void;
+  onAlternative?: (catalogId: string) => void;
+}) {
   const client = useQueryClient();
   const navigate = useNavigate();
   const signIn = useSignIn();
@@ -126,7 +144,11 @@ function ConnectFlow({ entry, onClose }: { entry: CatalogEntry; onClose: () => v
   const [values, setValues] = useState<Record<string, string>>({});
   const current = data?.integrations.find((i) => i.id === startedId);
   const assistant = useAssistantName();
-  const account = data?.provider.account;
+  // The provider whose own account brings services that only admit approved apps.
+  const accountProvider = data?.providers.find((p) => p.account);
+  const account = accountProvider?.account;
+  const zapier = data?.catalog.find((c) => c.id === 'zapier');
+  const zapierConnected = data?.integrations.some((i) => i.catalogId === 'zapier');
   const viaAccount = entry.auth === 'account';
   const external = useExternal(viaAccount);
   const found = viaAccount ? accountConnected(external.data?.servers, entry) : undefined;
@@ -231,7 +253,17 @@ function ConnectFlow({ entry, onClose }: { entry: CatalogEntry; onClose: () => v
             )}
           </Stack>
         ) : viaAccount ? (
-          <AccountSteps entry={entry} account={account} found={found?.state} />
+          <AccountSteps
+            entry={entry}
+            account={account}
+            provider={accountProvider?.engine}
+            found={found?.state}
+            alternative={
+              zapier && !zapierConnected && onAlternative
+                ? () => onAlternative(zapier.id)
+                : undefined
+            }
+          />
         ) : (
           <Stack gap={5}>
             <AccessList entry={entry} />
@@ -444,11 +476,17 @@ function TokenForm({
 function AccountSteps({
   entry,
   account,
+  provider,
   found,
+  alternative,
 }: {
   entry: CatalogEntry;
   account?: IntegrationProvider['account'];
+  /** The provider that brings it ("Claude Code"). */
+  provider?: string;
   found?: string;
+  /** Connect a service that reaches it for every model instead (Zapier). */
+  alternative?: () => void;
 }) {
   const where = account?.label ?? 'your AI provider’s account';
   return (
@@ -478,6 +516,24 @@ function AccountSteps({
         </Callout>
       )}
       {account && !account.ready && account.hint && <Callout tone="info">{account.hint}</Callout>}
+      {provider && (
+        <Callout
+          tone="info"
+          title={`Only with ${provider} models`}
+          action={
+            alternative && (
+              <Button size="sm" variant="surface" onClick={alternative}>
+                Connect Zapier
+              </Button>
+            )
+          }
+        >
+          {entry.name} comes through {where}, so other models you pick can’t reach it.
+          {alternative
+            ? ` To use ${entry.name} with every model, connect it through Zapier instead.`
+            : ''}
+        </Callout>
+      )}
     </Stack>
   );
 }

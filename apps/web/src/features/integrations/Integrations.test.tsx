@@ -67,6 +67,7 @@ const integration = (patch: Partial<Integration>): Integration => ({
 });
 
 const provider = {
+  id: 'claude-code' as const,
   engine: 'Claude Code',
   mode: 'native' as const,
   hasOwnServers: true,
@@ -78,7 +79,16 @@ const provider = {
 };
 
 const external: ExternalList = {
-  servers: [{ name: 'filesystem', source: 'engine', state: 'ok', toolCount: 11 }],
+  servers: [
+    {
+      name: 'filesystem',
+      provider: 'claude-code',
+      providerName: 'Claude Code',
+      source: 'engine',
+      state: 'ok',
+      toolCount: 11,
+    },
+  ],
   checkedAt: 1,
 };
 
@@ -98,7 +108,7 @@ describe('Integrations page', () => {
     mockFetch({
       'GET /api/integrations': () => ({
         catalog,
-        provider,
+        providers: [provider],
         integrations: [integration({}), broken],
       }),
       'GET /api/integrations/external': () => external,
@@ -119,6 +129,8 @@ describe('Integrations page', () => {
     const add = screen.getByRole('region', { name: 'Add another app' });
     expect(within(add).queryByRole('button', { name: 'Notion' })).toBeNull();
     expect(within(add).getByRole('button', { name: 'GitHub' })).toBeInTheDocument();
+    // What a provider set up by itself is folded away under its name.
+    await userEvent.click(await screen.findByRole('button', { name: /Claude Code/ }));
     expect(await screen.findByText('filesystem')).toBeInTheDocument();
   });
 
@@ -126,7 +138,7 @@ describe('Integrations page', () => {
     mockFetch({
       'GET /api/integrations': () => ({
         catalog,
-        provider,
+        providers: [provider],
         integrations: [
           integration({
             health: { state: 'error', message: 'Notion is having problems.', action: 'retry' },
@@ -144,7 +156,7 @@ describe('Integrations page', () => {
 
   it('connects with a token, checking its shape first', async () => {
     const calls = mockFetch({
-      'GET /api/integrations': () => ({ catalog, provider, integrations: [] }),
+      'GET /api/integrations': () => ({ catalog, providers: [provider], integrations: [] }),
       'GET /api/integrations/external': () => external,
       'POST /api/integrations': () => ({
         integration: integration({
@@ -182,7 +194,7 @@ describe('Integrations page', () => {
       health: { state: 'connecting', message: 'Waiting for you to sign in.' },
     });
     const calls = mockFetch({
-      'GET /api/integrations': () => ({ catalog, provider, integrations: [] }),
+      'GET /api/integrations': () => ({ catalog, providers: [provider], integrations: [] }),
       'GET /api/integrations/external': () => external,
       'POST /api/integrations': () => ({
         integration: pending,
@@ -211,7 +223,7 @@ describe('Integrations page', () => {
       vi.fn(() => popup),
     );
     mockFetch({
-      'GET /api/integrations': () => ({ catalog, provider, integrations: [] }),
+      'GET /api/integrations': () => ({ catalog, providers: [provider], integrations: [] }),
       'GET /api/integrations/external': () => external,
       'POST /api/integrations': () => ({
         integration: integration({ health: { state: 'connecting' } }),
@@ -223,6 +235,58 @@ describe('Integrations page', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Continue with Notion' }));
     await waitFor(() => expect(popup.close).toHaveBeenCalled());
     expect(popup.location.href).toBe('');
+  });
+});
+
+describe('Integrations belong to Conch, not to a provider', () => {
+  it('never shows a service only one provider can reach as connected, and offers to bring one into Conch', async () => {
+    const openrouter = {
+      id: 'openrouter' as const,
+      engine: 'OpenRouter',
+      mode: 'bridge' as const,
+      hasOwnServers: false,
+    };
+    mockFetch({
+      'GET /api/integrations': () => ({
+        catalog,
+        providers: [provider, openrouter],
+        integrations: [],
+      }),
+      'GET /api/integrations/external': () => ({
+        servers: [
+          {
+            name: 'Gmail',
+            provider: 'claude-code',
+            providerName: 'Claude Code',
+            source: 'account',
+            state: 'ok',
+            toolCount: 6,
+            catalogId: 'gmail',
+          },
+          {
+            name: 'linear',
+            provider: 'claude-code',
+            providerName: 'Claude Code',
+            source: 'plugin',
+            plugin: 'engineering',
+            state: 'needs-auth',
+            toolCount: 0,
+            catalogId: 'linear',
+          },
+        ],
+        checkedAt: 1,
+      }),
+    });
+    renderApp(<IntegrationsView />, { route: '/integrations' });
+    expect(await screen.findByText(/with every model you pick/)).toBeInTheDocument();
+    const gmail = await screen.findByRole('button', { name: 'Gmail' });
+    const tile = gmail.closest('article') as HTMLElement;
+    expect(await within(tile).findByText('Only with Claude Code models')).toBeInTheDocument();
+    expect(within(tile).queryByLabelText(/connected/i)).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: /Claude Code.*1 server/ }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Use with every model' }));
+    expect(await screen.findByRole('dialog', { name: 'Connect Linear' })).toBeInTheDocument();
   });
 });
 

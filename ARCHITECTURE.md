@@ -1,10 +1,13 @@
 # Architecture
 
-Conch is a **local-first shell around an agent of your choosing**. Out of the box it
-drives the Claude Code installation (and its authentication, settings, MCP servers,
-hooks and CLAUDE.md files) that already exists on the host machine; it can equally
-drive another agent on that machine, or a model you hold a key for. Which one is a
-setting, not a rebuild — see [ADR 0010](./docs/adr/0010-providers.md).
+Conch is a **local-first shell around the agents of your choosing**. Out of the box
+it drives the Claude Code installation (and its authentication, settings, MCP
+servers, hooks and CLAUDE.md files) that already exists on the host machine; it
+equally drives another agent on that machine, or a model you hold a key for — all
+of them at once. Every connected provider's models are in one picker, and a
+conversation can move between them without losing its thread
+([ADR 0010](./docs/adr/0010-providers.md), [ADR 0012](./docs/adr/0012-every-provider-at-once.md)).
+Integrations and skills belong to Conch, so every provider gets them.
 
 ```
 ┌────────────────────────── Browser ──────────────────────────┐
@@ -98,18 +101,39 @@ src/
   wired to inline permission prompts.
 - Child processes get a scrubbed environment: variables describing a _parent_ Claude
   Code session are removed so Conch works when launched from inside Claude Code.
-- **Models, thinking and modes.** `GET /api/capabilities` asks the engine what it
-  offers. For Claude Code, Conch opens a session with an input stream that never sends
-  anything, reads `supportedModels()` / `supportedCommands()` from the handshake and
-  closes it — no API call, cached for 10 minutes. Each conversation stores its own
-  `TurnOptions` (model, effort, fast mode, permission mode); unset keys fall back to
-  `preferences`. Turns pass them to the SDK as `model`, `effort`, `settings.fastMode`
-  and `permissionMode`.
-- **Slash commands.** Three sources, resolved in this order: Conch's own commands
-  (`/model`, `/effort`, `/mode`, `/fast`, `/new`, `/remember`, … — handled in the web
-  app, never sent to the model), your commands (`~/.conch/commands/<name>.md`, a
-  reusable prompt where `{{input}}` is replaced), and Claude Code's commands and
-  skills (sent as-is; Claude Code interprets them).
+- **Models, thinking and modes.** `GET /api/models` returns every connected
+  provider's models, commands and permission modes at once (`ModelCatalog`);
+  `GET /api/capabilities[?engine=]` answers for one. For Claude Code, Conch opens a
+  session with an input stream that never sends anything, reads `supportedModels()` /
+  `supportedCommands()` from the handshake and closes it — no API call, cached for 10
+  minutes. Each conversation stores its own `TurnOptions` (provider, model, effort,
+  fast mode, permission mode); unset keys fall back to `preferences`, and the default
+  model only applies to the default provider. Turns pass them to the SDK as `model`,
+  `effort`, `settings.fastMode` and `permissionMode`.
+- **Every provider at once** ([ADR 0012](./docs/adr/0012-every-provider-at-once.md)).
+  The engine for a turn is the conversation's (`providers.engineFor(options.engine)`).
+  Each engine keeps its own session in `ConversationRecord.sessions[engine]` with the
+  last event it saw; when a conversation moves to another provider, that provider
+  resumes its own session and is handed the transcript it missed
+  (`conversations/handoff.ts`, newest first within 60,000 characters). `turn.completed`
+  says which provider and model answered.
+- **Slash commands.** Four sources, resolved in this order: Conch's own commands
+  (`/model`, `/effort`, `/mode`, `/fast`, `/new`, `/remember`, `/skills`, … — handled
+  in the web app, never sent to the model), your commands
+  (`~/.conch/commands/<name>.md`, a reusable prompt where `{{input}}` is replaced),
+  your skills (`/name`, expanded by the gateway into the skill's instructions, so it
+  works with every provider and in routines), and the provider's own commands (sent
+  as-is).
+- **Skills** (`skills/`, [ADR 0013](./docs/adr/0013-skills.md)): Agent Skills folders
+  (`<name>/SKILL.md`, the format Claude Code, Codex, OpenClaw and Hermes share).
+  Conch's own live in `~/.conch/skills/`; skills in `~/.agents/skills`,
+  `~/.claude/skills`, `~/.openclaw/skills` and `~/.hermes/skills` are listed
+  read-only and start Off. `frontmatter.ts` reads and rewrites only the keys Conch
+  owns, so other products' metadata survives. `POST /api/skills/draft` writes a title
+  and a ≤160-character description on the default provider's cheapest model.
+  Automatic skills are listed as `<available_skills>` in the system prompt and loaded
+  with the `use_skill` host tool (or read from their path by engines without host
+  tools); `skill.used` shows it in the chat.
 - **Routines** (`routines/`): structured schedules (croner for calendar maths,
   cronstrue for custom cron), a 30-second clock with single catch-up after downtime,
   and runs executed as ordinary conversations via `ConversationManager.start()` with a
@@ -120,15 +144,19 @@ src/
   (one-click OAuth, tokens, local programs) or adds by address/command. The service
   keeps health (probe → plain-language state + one fix action), refreshes tokens
   (single-flight), pins tool definitions, and applies per-integration / per-tool
-  policies in `requestPermission`. Engines declare `integrations.mode`: `native`
+  policies in `requestPermission`. Integrations belong to Conch and go to every
+  provider. Engines declare `integrations.mode`: `native`
   engines get servers over stdin (`setMcpServers`, never argv), `bridge` engines get
-  `bridgedTools` from Conch's own MCP client. OAuth callback: `GET /oauth/callback`.
+  `bridgedTools` from Conch's own MCP client. Servers a provider configured itself
+  are listed per provider (`ExternalIntegration.provider`) and only work with it.
+  OAuth callback: `GET /oauth/callback`.
   Outbound requests pass the SSRF guard (`integrations/net.ts`). See
   [ADR 0009](./docs/adr/0009-integrations.md).
 - **Providers** (`providers/`): the engines you can connect, each with the words for
-  its card (`providers/catalog.ts`) and its live `EngineStatus`. The active one is
-  `preferences.engine`, so switching is a click and nothing restarts; `CONCH_ENGINE`
-  pins the choice and the UI says so. A provider's key is written, read and described
+  its card (`providers/catalog.ts`) and its live `EngineStatus`. Every connected one
+  is available at once (`providers.ready()`); the default for new chats is
+  `preferences.engine`; `CONCH_ENGINE` pins it (and makes it the only one) and the UI
+  says so. A provider's key is written, read and described
   in one place (`providers/keys.ts`) and lives either in `~/.conch/secrets.json`
   (0600) or in 1Password as an `op://` reference resolved by `op read` when a turn
   needs it — never to draw a page, so nobody gets a surprise fingerprint prompt.
@@ -163,7 +191,8 @@ src/
 - Local data lives in `~/.conch/` (`CONCH_HOME`): `settings.json`, `secrets.json`
   (the API key and a key per provider, or a 1Password reference to one),
   `memory/*.md`, `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `search.db`,
-  `integrations.json` + `integrations.secrets.json`, `api-sessions/<id>.json` (the
+  `integrations.json` + `integrations.secrets.json`, `skills/<name>/SKILL.md` +
+  `skills.json` (modes for skills Conch doesn't own), `api-sessions/<id>.json` (the
   transcript a plain model API needs, since it keeps no session of its own),
   `workspace/` (default cwd).
 
@@ -181,22 +210,37 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   `ToolCall`, permission requests → inline approval cards, memory saves → inline pills
   with undo.
 - **Providers.** Settings → Providers is one card per provider: what it is, whether
-  it's connected, and one button — "Use this", "Connect", or "How to install" with
-  the command to copy while Conch watches for the program to appear. One dialog
-  covers every path, including a key field that also takes a 1Password reference.
-  First run asks which provider to use instead of assuming Claude Code.
-- **Integrations.** `/integrations` shows what's connected (broken first, each with its
-  one fix), a catalog with bundled logos, and what the engine has set up itself;
+  it's connected, and one button — "Make default", "Connect", or "How to install" with
+  the command to copy while Conch watches for the program to appear. The default wears
+  a quiet badge; every connected provider is in the model picker. Connect and Details
+  open the provider in place of the list, with a way back — never a dialog on top
+  of Settings — and it covers every path, including a key field that also takes a
+  1Password reference. First run asks which provider to start with instead of
+  assuming Claude Code (there, the same content is a dialog).
+- **Integrations.** `/integrations` shows what's connected in Conch (broken first,
+  each with its one fix) and a catalog with bundled logos — never counting a service
+  only one provider's account reaches as connected. "From your providers" folds away
+  what each provider set up itself, with "Use with every model" where Conch can
+  connect the same service; `/integrations?connect=<id>` opens a connect dialog;
   `/integrations/:id` has the policy, per-tool Allow · Ask · Off and the connection.
   Connecting opens a dialog whose handshake animates through waiting → connected /
   failed; OAuth runs in a popup that lands on `/integrations/done`. Broken
   integrations show inline in chats (`integration.issue`) and as a sidebar count.
+- **Skills.** `/skills` lists yours and those found in other agents' folders (with
+  a switch each, and fuzzy search); `/skills/new` is one text box — as you pause,
+  the title and description are written for you (Nacre `SkillCard` shimmers, then
+  writes them in) and stay editable; `/skills/:id` edits it (autosaved), chooses
+  Automatically · When I ask · Off, copies someone else's skill to edit, or tries it
+  in a chat. Skills are in the `/` menu and in ⌘K.
 - **Search.** ⌘K (or Search in the sidebar) is one box for everything: fuzzy chat
-  titles (client-side), full-text message hits from every conversation, and actions,
-  with a live preview of the selected hit. Enter opens the chat at that message with
-  find-in-chat (⌘F, ⌘G / ⇧⌘G) already showing every match.
-- The composer toolbar carries a `ModelPicker` (provider-grouped models, thinking
-  effort, fast mode, "make default") and a `ModePicker` (Ask first · Auto · Edit freely ·
+  titles (client-side), full-text message hits from every conversation, and — from
+  `palette/findables.tsx` — skills (into the composer), models from every provider
+  (applied to the chat), integrations, routines, pages and settings sections, plus
+  actions, with a live preview of the selected hit. Enter opens the chat at that
+  message with find-in-chat (⌘F, ⌘G / ⇧⌘G) already showing every match.
+- The composer toolbar carries a `ModelPicker` (every connected provider's models,
+  grouped and searchable — type anywhere in the list — plus thinking effort, fast
+  mode, "make default") and a `ModePicker` (Ask first · Auto · Edit freely ·
   Plan only · Full trust). A `UsageMeter` in the header shows what's left of your
   tightest limit, and a `UsageNotice` appears above the composer when it runs low.
   Typing `/` opens a `CommandMenu`; `/model` and `/mode` open the

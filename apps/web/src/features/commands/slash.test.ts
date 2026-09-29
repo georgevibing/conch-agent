@@ -54,4 +54,31 @@ describe('slash commands', () => {
     expect(parseEffortArg('extra')).toBe('xhigh');
     expect(parseEffortArg('banana')).toBeUndefined();
   });
+
+  it('finds your skills after your commands and before the provider’s', () => {
+    const skill = {
+      id: 'compact',
+      name: 'compact',
+      title: 'Compact',
+      description: 'Squeezes things.',
+      source: 'conch' as const,
+      sourceLabel: 'Conch',
+      editable: true,
+      mode: 'auto' as const,
+      path: '/x',
+      files: [],
+      updatedAt: 0,
+    };
+    expect(resolveSlash('/compact tighter', custom, engine, [skill])).toMatchObject({
+      kind: 'skill',
+      skill: { name: 'compact' },
+      args: 'tighter',
+    });
+    expect(resolveSlash('/compact', custom, engine, [])).toMatchObject({ kind: 'engine' });
+    expect(resolveSlash('/explain', custom, engine, [{ ...skill, name: 'explain' }])).toMatchObject(
+      {
+        kind: 'custom',
+      },
+    );
+  });
 });

@@ -6,6 +6,7 @@ import type {
   LoginMethod,
   LoginState,
   PermissionMode,
+  SkillSource,
   ExtraUsage,
   ToolStatus,
   Usage,
@@ -199,6 +200,11 @@ export interface Engine {
    * can't do.
    */
   readonly hostTools?: boolean;
+  /**
+   * Skill folders the engine reads by itself (Claude Code reads
+   * `~/.claude/skills`). Conch doesn't list those skills to it a second time.
+   */
+  readonly skillSources?: readonly SkillSource[];
   /** MCP servers the engine loads by itself, and whether they work. */
   mcpStatus?(): Promise<EngineMcpStatus[]>;
   /** Subscribe to live limit hints emitted while turns run. */

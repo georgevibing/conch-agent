@@ -6,14 +6,7 @@
  */
 import { z } from 'zod';
 
-import { EffortChoice, PermissionMode } from './common';
-
-/**
- * Engines Conch can drive. Only `claude-code` ships today; the rest are
- * reserved so the data model, settings and UI never need a migration.
- */
-export const EngineId = z.enum(['claude-code', 'codex-cli', 'anthropic-api', 'openrouter', 'mock']);
-export type EngineId = z.infer<typeof EngineId>;
+import { EffortChoice, EngineId, PermissionMode } from './common';
 
 export const EngineState = z.enum([
   /** Detection in progress. */
@@ -135,3 +128,21 @@ export const Capabilities = z.object({
   permissionModes: z.array(PermissionMode),
 });
 export type Capabilities = z.infer<typeof Capabilities>;
+
+/** One provider's offer in the model picker: its capabilities, and why they're empty if they are. */
+export const ProviderModels = Capabilities.extend({
+  /** Set when the provider is connected but couldn't list its models right now. */
+  message: z.string().optional(),
+});
+export type ProviderModels = z.infer<typeof ProviderModels>;
+
+/**
+ * Every connected provider's models at once (ADR 0012). Providers that aren't
+ * connected aren't listed: the picker only offers what would work.
+ */
+export const ModelCatalog = z.object({
+  /** The provider new chats start with (`preferences.engine`). */
+  default: EngineId,
+  providers: z.array(ProviderModels),
+});
+export type ModelCatalog = z.infer<typeof ModelCatalog>;

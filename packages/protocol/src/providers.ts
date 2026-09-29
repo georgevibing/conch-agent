@@ -3,8 +3,9 @@
  *
  * A provider is one engine you can connect: a program already on this computer
  * (Claude Code, Codex) or a service you hold a key for (OpenRouter, the
- * Anthropic API). Conch uses one at a time and remembers the others, so
- * switching is one click and nothing has to be set up twice.
+ * Anthropic API). Every connected provider is available at once — the model
+ * picker lists all of their models — and one is the default for new chats
+ * (ADR 0012).
  *
  * Keys never appear in these schemas. The browser sends one once; afterwards it
  * only learns that a key is saved, where it's kept, and its last four
@@ -12,7 +13,8 @@
  */
 import { z } from 'zod';
 
-import { EngineId, EngineStatus, InstallHint } from './engine';
+import { EngineId } from './common';
+import { EngineStatus, InstallHint } from './engine';
 
 /** How you connect a provider. */
 export const ProviderConnect = z.enum([
@@ -75,7 +77,7 @@ export const Provider = z.object({
   connect: ProviderConnect,
   /** Live detection: installed? signed in? which account? */
   status: EngineStatus,
-  /** In use for new conversations. Exactly one provider is. */
+  /** The default for new chats. Exactly one provider is; every ready one can be picked. */
   active: z.boolean(),
   /** Ready to be used or switched to right now. */
   ready: z.boolean(),
@@ -115,7 +117,7 @@ export const OnePasswordStatus = z.object({
 export type OnePasswordStatus = z.infer<typeof OnePasswordStatus>;
 
 export const ProvidersList = z.object({
-  /** The provider new conversations use. */
+  /** The provider new chats start with. */
   active: EngineId,
   providers: z.array(Provider),
   onePassword: OnePasswordStatus,
@@ -152,6 +154,6 @@ export type ProviderKeyBody = z.infer<typeof ProviderKeyBody>;
 export const ProviderSignIn = z.object({ authorizeUrl: z.string() });
 export type ProviderSignIn = z.infer<typeof ProviderSignIn>;
 
-/** Which provider new conversations should use. */
+/** Which provider new chats should start with. */
 export const UseProviderBody = z.object({ id: EngineId });
 export type UseProviderBody = z.infer<typeof UseProviderBody>;

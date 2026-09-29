@@ -1,0 +1,229 @@
+import type {
+  ConversationEventInput,
+  CreateSkillBody,
+  ServerEvent,
+  SkillDetail,
+  SkillDraft,
+  SkillsList,
+  UpdateSkillBody,
+  Usage,
+} from '@conch/protocol';
+import { z } from 'zod';
+
+import type { Engine, HostTool } from '../engines/types';
+import { draftSkill } from './draft';
+import { slugify } from './draft';
+import { publicSkill, SkillError, type LoadedSkill, type SkillStore } from './store';
+
+/** What the prompt may spend listing skills; the rest are still usable by name. */
+const PROMPT_BUDGET = 8_000;
+
+export interface SkillServiceDeps {
+  store: SkillStore;
+  /** The providers that could write a title and description, the default first. */
+  engines: () => Promise<Engine[]>;
+  emit: (event: ServerEvent) => void;
+  /** Money spent writing titles and descriptions, for the usage ledger. */
+  onSpend?: (usage: Usage) => void;
+}
+
+/**
+ * Skills (ADR 0013): the list, writing one from a paragraph, and how every
+ * provider gets to use them — listed in the prompt, loaded with `use_skill`,
+ * or asked for by name with `/name`.
+ */
+export class SkillService {
+  constructor(private readonly deps: SkillServiceDeps) {}
+
+  get store() {
+    return this.deps.store;
+  }
+
+  async list(fresh = false): Promise<SkillsList> {
+    const { skills, sources } = await this.deps.store.list({ fresh });
+    return { skills: skills.map(publicSkill), sources };
+  }
+
+  detail(id: string): Promise<SkillDetail> {
+    return this.deps.store.detail(id);
+  }
+
+  /** A title, name and description for these instructions. Never fails. */
+  async draft(instructions: string, signal?: AbortSignal): Promise<SkillDraft> {
+    const engines = await this.deps.engines().catch(() => []);
+    const engine = engines.find((e) => e.complete);
+    const { draft, usage } = await draftSkill(engine, instructions, signal);
+    if (usage) this.deps.onSpend?.(usage);
+    return { ...draft, name: await this.deps.store.freeName(slugify(draft.title)) };
+  }
+
+  async create(body: CreateSkillBody): Promise<SkillDetail> {
+    const needsDraft = !body.title || !body.description;
+    const draft = needsDraft ? await this.draft(body.instructions) : undefined;
+    const title = body.title ?? draft?.title ?? 'New skill';
+    const name = await this.deps.store.freeName(body.name ?? slugify(title));
+    const skill = await this.deps.store.create({
+      name,
+      title,
+      description: body.description ?? draft?.description ?? title,
+      instructions: body.instructions,
+      mode: body.mode,
+    });
+    this.#changed();
+    return this.deps.store.detail(skill.id);
+  }
+
+  async update(id: string, body: UpdateSkillBody): Promise<SkillDetail> {
+    const skill = await this.deps.store.update(id, body);
+    this.#changed();
+    return this.deps.store.detail(skill.id);
+  }
+
+  async remove(id: string) {
+    await this.deps.store.remove(id);
+    this.#changed();
+  }
+
+  async copy(id: string): Promise<SkillDetail> {
+    const skill = await this.deps.store.copy(id);
+    this.#changed();
+    return this.deps.store.detail(skill.id);
+  }
+
+  #changed() {
+    this.deps.emit({ type: 'skills.changed' });
+  }
+
+  // ── Using skills in a conversation ──────────────────────────────────────
+
+  /** Skills this provider should be told about: on "Automatically", working, and not ones it loads itself. */
+  async #offered(engine: Engine): Promise<LoadedSkill[]> {
+    const { skills } = await this.deps.store.list();
+    const native = new Set(engine.skillSources ?? []);
+    return skills.filter((s) => s.mode === 'auto' && !s.problem && !native.has(s.source));
+  }
+
+  /** The system-prompt section listing skills, in the `<available_skills>` shape other agents use. */
+  async promptSection(engine: Engine): Promise<string> {
+    const skills = await this.#offered(engine);
+    if (!skills.length) return '';
+    const tools = engine.hostTools !== false;
+    const entries: string[] = [];
+    let used = 0;
+    for (const skill of skills) {
+      const entry = [
+        '<skill>',
+        `<name>${xml(skill.name)}</name>`,
+        `<description>${xml(skill.description)}</description>`,
+        ...(tools ? [] : [`<location>${xml(skill.file)}</location>`]),
+        '</skill>',
+      ].join('');
+      if (used + entry.length > PROMPT_BUDGET) break;
+      entries.push(entry);
+      used += entry.length;
+    }
+    return [
+      '## Skills',
+      'The user saved these skills: instructions for particular kinds of task.',
+      tools
+        ? 'When a request clearly matches one, call use_skill with its name before you start, then follow what it returns. It lists any files the skill has; read one by passing its path as `file`.'
+        : 'When a request clearly matches one, read its SKILL.md at the location given before you start, then follow it. Paths in it are relative to that folder.',
+      'Only use a skill when it fits the request, and don’t mention skills otherwise.',
+      '<available_skills>',
+      ...entries,
+      '</available_skills>',
+      ...(entries.length < skills.length
+        ? [
+            `${skills.length - entries.length} more skills didn’t fit here; the user can ask for them by name.`,
+          ]
+        : []),
+    ].join('\n');
+  }
+
+  /** `use_skill`, bound to one conversation so the chat can show which skill was used. */
+  tools(ctx: {
+    conversationId: string;
+    append: (event: ConversationEventInput) => void;
+  }): HostTool[] {
+    const shown = new Set<string>();
+    const useSkill: HostTool<{ name: z.ZodString; file: z.ZodOptional<z.ZodString> }> = {
+      name: 'use_skill',
+      description:
+        'Load one of the user’s saved skills — instructions for a kind of task — by name, before you start on a request it matches. Returns the instructions to follow and the files the skill has. Pass `file` (a path it lists) to read one of those files.',
+      input: {
+        name: z.string().min(1).max(100),
+        file: z.string().min(1).max(300).optional(),
+      },
+      run: async ({ name, file }) => {
+        const skill = await this.deps.store.byName(name);
+        if (!skill) return `There's no skill called “${name}” that you can use.`;
+        try {
+          if (file) return await this.deps.store.resource(skill, file);
+          const instructions = await this.deps.store.instructions(skill);
+          if (!shown.has(skill.id)) {
+            shown.add(skill.id);
+            ctx.append({
+              type: 'skill.used',
+              skillId: skill.id,
+              name: skill.name,
+              title: skill.title,
+              by: 'assistant',
+            });
+          }
+          return [
+            `<skill name="${xml(skill.name)}" folder="${xml(skill.path)}">`,
+            instructions,
+            '</skill>',
+            ...(skill.files.length
+              ? [`Files in this skill (relative to its folder): ${skill.files.join(', ')}`]
+              : []),
+          ].join('\n');
+        } catch (error) {
+          return error instanceof SkillError ? error.message : 'That skill couldn’t be read.';
+        }
+      },
+    };
+    return [useSkill as HostTool];
+  }
+
+  /**
+   * `/weekly-review plan for Tuesday` → the skill's instructions and what was
+   * typed after the name. Anything that isn't a usable skill's name is left
+   * alone (Conch's own commands never reach the gateway; the provider's do).
+   */
+  async expand(
+    text: string,
+  ): Promise<
+    { prompt: string; skill: { skillId: string; name: string; title: string } } | undefined
+  > {
+    const match = /^\/([a-z0-9][a-z0-9-]{0,63})(?:\s+([\s\S]*))?$/i.exec(text.trim());
+    if (!match?.[1]) return undefined;
+    const skill = await this.deps.store.byName(match[1]);
+    if (!skill) return undefined;
+    const instructions = await this.deps.store.instructions(skill);
+    const request = match[2]?.trim();
+    return {
+      prompt: [
+        `<skill name="${xml(skill.name)}" title="${xml(skill.title)}" folder="${xml(skill.path)}">`,
+        instructions,
+        ...(skill.files.length
+          ? [`Files in this skill (relative to its folder): ${skill.files.join(', ')}`]
+          : []),
+        '</skill>',
+        '',
+        request
+          ? `The user asked you to use the “${skill.title}” skill above for this:\n\n${request}`
+          : `The user asked you to use the “${skill.title}” skill above. Follow it now.`,
+      ].join('\n'),
+      skill: { skillId: skill.id, name: skill.name, title: skill.title },
+    };
+  }
+}
+
+function xml(text: string): string {
+  return text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}

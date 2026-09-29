@@ -9,6 +9,8 @@ export const keys = {
   conversations: ['conversations'] as const,
   memories: ['memories'] as const,
   capabilities: ['capabilities'] as const,
+  /** Under `capabilities`, so anything that refreshes one refreshes both. */
+  models: ['capabilities', 'models'] as const,
   commands: ['commands'] as const,
   usage: ['usage'] as const,
   auth: ['auth'] as const,
@@ -84,6 +86,19 @@ export function useUsage(enabled = true) {
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
     refetchOnWindowFocus: true,
+    enabled,
+  });
+}
+
+/**
+ * Every connected provider's models, for the picker (ADR 0012). Kept a while:
+ * the gateway caches the lists too, and connecting or switching refreshes it.
+ */
+export function useModels(enabled = true) {
+  return useQuery({
+    queryKey: keys.models,
+    queryFn: () => api.models(),
+    staleTime: 10 * 60_000,
     enabled,
   });
 }
