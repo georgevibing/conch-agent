@@ -2,17 +2,11 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
+import { nacreCssModules } from './vite.shared';
+
 export default defineConfig({
   plugins: [react()],
-  css: {
-    modules: {
-      localsConvention: 'camelCaseOnly',
-      generateScopedName: (name, filename) => {
-        const component = filename.split('/').pop()?.split('.')[0] ?? 'nc';
-        return `nc-${component}-${name}`;
-      },
-    },
-  },
+  css: { modules: nacreCssModules },
   test: {
     environment: 'jsdom',
     globals: false,
