@@ -151,7 +151,7 @@ function CommandPaletteRoot({
               />
               <Kbd keys="esc" size="sm" aria-hidden />
             </div>
-            <Command.List className={styles.list}>
+            <Command.List className={styles.list} aria-busy={loading || undefined}>
               <SelectionGlide />
               {loading && <Command.Loading className={styles.loading}>Searching…</Command.Loading>}
               {!loading && <Command.Empty className={styles.empty}>{empty}</Command.Empty>}

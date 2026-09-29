@@ -29,7 +29,7 @@ export const Basic: Story = {
           Context
         </Button>
       </Popover.Trigger>
-      <Popover.Content style={{ inlineSize: 280 }}>
+      <Popover.Content aria-label="Context window" style={{ inlineSize: 280 }}>
         <Stack gap={2}>
           <Text size="sm" weight="semibold">
             Context window
@@ -52,7 +52,7 @@ function ContextPopover({ defaultOpen }: { defaultOpen?: boolean }) {
           42% context
         </Button>
       </Popover.Trigger>
-      <Popover.Content align="start" style={{ inlineSize: 300 }}>
+      <Popover.Content aria-label="Session details" align="start" style={{ inlineSize: 300 }}>
         <Stack gap={3}>
           <Stack gap={1}>
             <Text size="sm" weight="semibold">
@@ -121,7 +121,7 @@ export const Sides: Story = {
           <Popover.Trigger asChild>
             <Button variant="surface">{side}</Button>
           </Popover.Trigger>
-          <Popover.Content side={side}>
+          <Popover.Content aria-label="Popover placement" side={side}>
             <Text size="sm">Opens {side}</Text>
           </Popover.Content>
         </Popover.Root>

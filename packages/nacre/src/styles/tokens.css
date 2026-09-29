@@ -132,11 +132,11 @@
       oklch(0.51 calc(var(--nc-accent-c) * 0.76) var(--nc-accent-h))
     );
     --nc-accent-9: light-dark(
-      oklch(0.6 var(--nc-accent-c) var(--nc-accent-h)),
+      oklch(0.575 var(--nc-accent-c) var(--nc-accent-h)),
       oklch(0.68 var(--nc-accent-c) var(--nc-accent-h))
     );
     --nc-accent-10: light-dark(
-      oklch(0.555 var(--nc-accent-c) var(--nc-accent-h)),
+      oklch(0.53 var(--nc-accent-c) var(--nc-accent-h)),
       oklch(0.725 calc(var(--nc-accent-c) * 0.95) var(--nc-accent-h))
     );
     --nc-accent-11: light-dark(
@@ -182,8 +182,8 @@
     --nc-text: var(--nc-gray-12);
     --nc-text-muted: var(--nc-gray-11);
     --nc-text-subtle: light-dark(
-      oklch(0.56 var(--nc-neutral-c) var(--nc-neutral-h)),
-      oklch(0.64 var(--nc-neutral-c) var(--nc-neutral-h))
+      oklch(0.525 var(--nc-neutral-c) var(--nc-neutral-h)),
+      oklch(0.68 var(--nc-neutral-c) var(--nc-neutral-h))
     );
     --nc-text-disabled: var(--nc-gray-8);
     --nc-text-inverse: var(--nc-gray-1);

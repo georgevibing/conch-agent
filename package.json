@@ -17,9 +17,11 @@
     "build-storybook": "pnpm --filter @conch/nacre build-storybook",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "pnpm format:check && turbo run lint typecheck test"
+    "check": "pnpm format:check && turbo run lint typecheck test",
+    "a11y": "node scripts/a11y-sweep.mjs"
   },
   "devDependencies": {
+    "axe-core": "^4.13.0",
     "playwright": "^1.63.0",
     "prettier": "^3.9.9",
     "turbo": "^2.11.5",
