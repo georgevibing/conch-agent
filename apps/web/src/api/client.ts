@@ -6,6 +6,8 @@ import {
   EngineStatus,
   Memory,
   type MemoryKind,
+  SearchPreview,
+  SearchResults,
   type UpdateSettingsBody,
 } from '@conch/protocol';
 import { z } from 'zod';
@@ -23,16 +25,18 @@ export class ApiError extends Error {
 export async function request<T extends z.ZodType>(
   schema: T,
   path: string,
-  init?: { method?: string; body?: unknown },
+  init?: { method?: string; body?: unknown; signal?: AbortSignal },
 ): Promise<z.infer<T>> {
   let response: Response;
   try {
     response = await fetch(path, {
       method: init?.method ?? 'GET',
+      signal: init?.signal,
       headers: init?.body !== undefined ? { 'content-type': 'application/json' } : undefined,
       body: init?.body !== undefined ? JSON.stringify(init.body) : undefined,
     });
-  } catch {
+  } catch (error) {
+    if (init?.signal?.aborted) throw error;
     throw new ApiError(0, 'offline', "Can't reach Conch. Is the gateway running?");
   }
   const text = await response.text();
@@ -85,4 +89,19 @@ export const api = {
   renameConversation: (id: string, title: string) =>
     request(Ok, `/api/conversations/${id}`, { method: 'PATCH', body: { title } }),
   deleteConversation: (id: string) => request(Ok, `/api/conversations/${id}`, { method: 'DELETE' }),
+
+  search: (q: string, options: { in?: string; limit?: number; signal?: AbortSignal } = {}) => {
+    const params = new URLSearchParams({ q });
+    if (options.in) params.set('in', options.in);
+    if (options.limit) params.set('limit', String(options.limit));
+    return request(SearchResults, `/api/search?${params}`, { signal: options.signal });
+  },
+  searchPreview: (
+    input: { conversationId: string; anchor?: string; q?: string },
+    signal?: AbortSignal,
+  ) => {
+    const params = new URLSearchParams({ conversationId: input.conversationId, q: input.q ?? '' });
+    if (input.anchor) params.set('anchor', input.anchor);
+    return request(SearchPreview, `/api/search/preview?${params}`, { signal });
+  },
 };

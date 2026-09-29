@@ -1,5 +1,5 @@
 import { MessageList, ThinkingIndicator } from '@conch/nacre';
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, type ReactNode, type Ref } from 'react';
 
 import type { ConversationView, TranscriptItem } from '../../live/reducer';
 import {
@@ -21,6 +21,10 @@ export interface TranscriptProps {
   onRespond: (permissionId: string, decision: 'allow' | 'allow-always' | 'deny') => void;
   onRetry: () => void;
   footer?: ReactNode;
+  /** Layered over the scrolling log (find bar, match rail). */
+  overlay?: ReactNode;
+  /** The column holding every message (what find-in-chat searches). */
+  columnRef?: Ref<HTMLDivElement>;
 }
 
 interface Block {
@@ -51,6 +55,8 @@ export function Transcript({
   onRespond,
   onRetry,
   footer,
+  overlay,
+  columnRef,
   routineRun,
 }: TranscriptProps & {
   /** This conversation is a routine run: its first message is the routine's instruction. */
@@ -78,8 +84,8 @@ export function Transcript({
     last?.kind !== 'tool';
 
   return (
-    <MessageList className={styles.list} aria-label="Conversation">
-      <div className={styles.column}>
+    <MessageList className={styles.list} aria-label="Conversation" overlay={overlay}>
+      <div ref={columnRef} className={styles.column}>
         {blocks(items).map((block) => (
           <Fragment key={block.key}>
             {block.tools && (

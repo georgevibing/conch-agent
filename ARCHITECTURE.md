@@ -112,8 +112,12 @@ src/
   See [ADR 0006](./docs/adr/0006-routines.md).
 - API retries from the engine surface as live `notice` events ("Retrying in 4s…"),
   so a stalled provider is never a silent spinner.
+- **Search.** `search/` keeps a SQLite FTS5 (trigram) index of every message in
+  `~/.conch/search.db`, fed by the conversation event stream and caught up on start;
+  `GET /api/search` ranks and groups hits with snippets, `GET /api/search/preview`
+  shows one in context. See [ADR 0007 — Search](./docs/adr/0007-search.md).
 - Local data lives in `~/.conch/` (`CONCH_HOME`): `settings.json`, `secrets.json`,
-  `memory/*.md`, `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`), `conversations/index.json` + `<id>.jsonl`,
+  `memory/*.md`, `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`), `conversations/index.json` + `<id>.jsonl`, `search.db`,
   `workspace/` (default cwd).
 
 See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
@@ -129,6 +133,10 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
 - Assistant output: markdown → Nacre `Prose`, fenced code → `CodeBlock`, tool calls →
   `ToolCall`, permission requests → inline approval cards, memory saves → inline pills
   with undo.
+- **Search.** ⌘K (or Search in the sidebar) is one box for everything: fuzzy chat
+  titles (client-side), full-text message hits from every conversation, and actions,
+  with a live preview of the selected hit. Enter opens the chat at that message with
+  find-in-chat (⌘F, ⌘G / ⇧⌘G) already showing every match.
 - The composer toolbar carries a `ModelPicker` (provider-grouped models, thinking
   effort, fast mode, "make default") and a `ModePicker` (Ask first · Auto · Edit freely ·
   Plan only · Full trust). Typing `/` opens a `CommandMenu`; `/model` and `/mode` open the

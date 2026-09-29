@@ -1,0 +1,48 @@
+@layer nacre.components {
+  .status {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .keys {
+    gap: var(--nc-space-1);
+  }
+
+  .empty {
+    text-align: center;
+    line-height: var(--nc-leading-relaxed);
+  }
+
+  .tips {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--nc-space-4);
+    block-size: 100%;
+    padding: var(--nc-space-6) var(--nc-space-5);
+  }
+
+  .tipList {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    margin: 0 auto;
+    padding: 0;
+    list-style: none;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .tipList > li {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .nowrap {
+    white-space: nowrap;
+  }
+}

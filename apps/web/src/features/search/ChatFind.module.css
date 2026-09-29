@@ -1,0 +1,16 @@
+@layer nacre.components {
+  .dock {
+    position: absolute;
+    inset-block-start: var(--nc-space-3);
+    inset-inline-end: var(--nc-space-5);
+    z-index: var(--nc-z-sticky);
+  }
+
+  @media (max-width: 820px) {
+    .dock {
+      inset-inline: var(--nc-space-3);
+      display: flex;
+      justify-content: center;
+    }
+  }
+}

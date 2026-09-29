@@ -6,6 +6,7 @@ import {
   DropdownMenu,
   IconButton,
   Input,
+  Kbd,
   Pearl,
   ScrollArea,
   Text,
@@ -14,7 +15,15 @@ import {
   Tooltip,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { MoreHorizontal, PanelLeftClose, Pencil, Settings, SquarePen, Trash2 } from 'lucide-react';
+import {
+  MoreHorizontal,
+  PanelLeftClose,
+  Pencil,
+  Search,
+  Settings,
+  SquarePen,
+  Trash2,
+} from 'lucide-react';
 import { useState } from 'react';
 import { NavLink, useNavigate, useParams } from 'react-router';
 
@@ -180,6 +189,7 @@ export function Sidebar({
   const { data: app } = useAppState();
   const toggleSidebar = useUi((s) => s.toggleSidebar);
   const openSettings = useUi((s) => s.openSettings);
+  const setPalette = useUi((s) => s.setPalette);
   const navigate = useNavigate();
 
   const groups = new Map<DayGroup, ConversationSummary[]>();
@@ -221,6 +231,19 @@ export function Sidebar({
             New chat
           </Button>
         </Tooltip>
+        <Button
+          variant="ghost"
+          block
+          leadingIcon={<Search />}
+          onClick={() => {
+            onNavigate?.();
+            setPalette(true);
+          }}
+          className={cx(styles.newChatButton, styles.searchButton)}
+        >
+          Search
+          <Kbd keys="mod+k" size="sm" aria-hidden />
+        </Button>
         <RoutinesLink onNavigate={onNavigate} />
       </div>
       <ScrollArea className={styles.scroll}>

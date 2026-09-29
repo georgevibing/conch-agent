@@ -70,7 +70,7 @@ test('first run to first conversation', async ({ page, request }) => {
     .getByRole('option', { name: /remember about me/ })
     .first()
     .click();
-  await expect(page.getByRole('dialog').getByText(/espresso/)).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Memories' }).getByText(/espresso/)).toBeVisible();
 });
 
 test('a running reply can be stopped', async ({ page }) => {

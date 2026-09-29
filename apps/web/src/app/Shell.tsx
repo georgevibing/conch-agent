@@ -1,5 +1,5 @@
 import { IconButton, Sheet, Spinner, Text, useMediaQuery } from '@conch/nacre';
-import { Menu, PanelLeftOpen } from 'lucide-react';
+import { Menu, PanelLeftOpen, TextSearch } from 'lucide-react';
 import { useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 
@@ -43,6 +43,8 @@ export function Shell() {
   const { data: conversations } = useConversations();
   const narrow = useMediaQuery('(max-width: 820px)');
   const { sidebarOpen, toggleSidebar, mobileSidebarOpen, setMobileSidebar, openSettings } = useUi();
+  const openFind = useUi((s) => s.openFind);
+  const setPalette = useUi((s) => s.setPalette);
 
   const current = conversations?.find((c) => c.id === conversationId);
   const title = routinesArea ? 'Routines' : (current?.title ?? (conversationId ? '' : 'New chat'));
@@ -54,6 +56,12 @@ export function Shell() {
   useHotkey('mod+shift+o', () => void navigate('/'));
   useHotkey('mod+b', () => (narrow ? setMobileSidebar(!mobileSidebarOpen) : toggleSidebar()));
   useHotkey('mod+,', () => openSettings());
+  // ⌘F finds in the open chat (seeded with any selected text); elsewhere it searches everything.
+  useHotkey('mod+f', () => {
+    const selected = window.getSelection()?.toString().trim().split('\n')[0]?.slice(0, 200);
+    if (conversationId) openFind(conversationId, selected || undefined);
+    else setPalette(true);
+  });
 
   const showSidebar = !narrow && sidebarOpen;
 
@@ -94,6 +102,15 @@ export function Shell() {
           <Text as="span" weight="medium" truncate className={styles.title}>
             {title}
           </Text>
+          {conversationId && (
+            <IconButton
+              label="Find in chat"
+              shortcut="mod+f"
+              onClick={() => openFind(conversationId)}
+            >
+              <TextSearch />
+            </IconButton>
+          )}
           <EnginePill />
         </header>
         <Reconnecting />

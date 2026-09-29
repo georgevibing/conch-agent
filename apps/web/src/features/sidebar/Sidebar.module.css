@@ -31,6 +31,9 @@
   }
 
   .newChat {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
     padding: var(--nc-space-1) var(--nc-space-3) var(--nc-space-3);
   }
 
@@ -40,6 +43,14 @@
 
   .newChatButton > span:nth-child(2) {
     flex: 1;
+  }
+
+  /* The ⌘K hint sits at the far end of the label, inside the button. */
+  .searchButton > span:nth-child(2) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
   }
 
   .scroll {

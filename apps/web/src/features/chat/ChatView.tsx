@@ -23,6 +23,7 @@ import { NEW, useLiveStore } from '../../live/store';
 import { useSlashCommands } from '../commands/useSlashCommands';
 import { RunBanner } from '../routines/RunBanner';
 import { ComposerControls } from '../models/ComposerControls';
+import { ChatFind } from '../search/ChatFind';
 import { useTurnOptions } from '../models/useTurnOptions';
 import styles from './ChatView.module.css';
 import { Transcript } from './Transcript';
@@ -84,6 +85,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   const [draft, setDraft] = useState('');
   const [sentId, setSentId] = useState<string>();
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const columnRef = useRef<HTMLDivElement>(null);
 
   // A rejected message comes back to the composer instead of vanishing.
   useEffect(
@@ -115,6 +117,8 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   }, [conversationId, sentId, created, navigate]);
 
   useEffect(() => {
+    // Arriving from search, the find field has focus; don't take it away.
+    if (conversationId && useUi.getState().find?.conversationId === conversationId) return;
     composerRef.current?.focus();
   }, [conversationId]);
 
@@ -222,7 +226,17 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
       <RunBanner conversationId={conversationId} />
       <Transcript
         view={view}
+        columnRef={columnRef}
         routineRun={isRoutineRun}
+        overlay={
+          conversationId && (
+            <ChatFind
+              conversationId={conversationId}
+              root={columnRef}
+              onClose={() => composerRef.current?.focus()}
+            />
+          )
+        }
         pending={pending}
         name={name}
         onRespond={(permissionId, decision) =>

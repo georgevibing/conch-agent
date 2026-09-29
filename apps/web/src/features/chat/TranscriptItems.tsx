@@ -31,6 +31,7 @@ export function UserMessage({ item }: { item: Of<'user'> }) {
   return (
     <Message
       from="user"
+      data-anchor={item.id}
       timestamp={new Date(item.at)}
       data-pending={item.pending || undefined}
       className={styles.user}
@@ -52,7 +53,11 @@ export function AssistantMessage({ item, name }: { item: Of<'assistant'>; name: 
   if (!item.text && !item.thinking) return null;
   if (item.continuation) {
     return (
-      <div className={styles.continuation} data-streaming={streaming || undefined}>
+      <div
+        className={styles.continuation}
+        data-anchor={item.messageId}
+        data-streaming={streaming || undefined}
+      >
         {item.thinking && !item.text && (
           <Text size="sm" tone="subtle">
             {thoughtFor(item)}
@@ -65,6 +70,7 @@ export function AssistantMessage({ item, name }: { item: Of<'assistant'>; name: 
   return (
     <Message
       from="assistant"
+      data-anchor={item.messageId}
       author={name}
       timestamp={new Date(item.startedAt)}
       status={streaming ? 'streaming' : 'complete'}
@@ -101,6 +107,7 @@ export function ToolItem({ item }: { item: Of<'tool'> }) {
   const stopped = item.status === 'error' && item.output === 'Stopped.';
   return (
     <ToolCall
+      data-anchor={item.id}
       name={item.name}
       summary={toolSummary(item.name, item.input)}
       status={stopped ? 'cancelled' : toolStatus[item.status]}
