@@ -1,0 +1,65 @@
+@layer nacre.base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :where([data-nacre-root]) {
+    font-family: var(--nc-font-sans);
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-regular);
+    line-height: var(--nc-leading-normal);
+    font-feature-settings: 'ss01', 'cv11';
+    font-optical-sizing: auto;
+    color: var(--nc-text);
+    background-color: var(--nc-canvas);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  :where([data-nacre-root]) ::selection {
+    background-color: var(--nc-selection);
+  }
+
+  :where([data-nacre-root]) :focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  :where([data-nacre-root]) :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Thin, calm scrollbars that tint with the theme. */
+  :where([data-nacre-root]) {
+    scrollbar-color: var(--nc-gray-7) transparent;
+    scrollbar-width: thin;
+  }
+
+  :where([data-nacre-root]) :is(h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd) {
+    margin: 0;
+  }
+
+  :where([data-nacre-root]) :is(button, input, textarea, select) {
+    font: inherit;
+    color: inherit;
+    letter-spacing: inherit;
+  }
+
+  :where([data-nacre-root]) :is(img, svg, video, canvas) {
+    display: block;
+    max-width: 100%;
+  }
+
+  :where([data-nacre-root]) svg {
+    flex-shrink: 0;
+  }
+}

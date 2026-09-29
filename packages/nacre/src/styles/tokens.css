@@ -1,0 +1,526 @@
+/*
+ * Nacre design tokens.
+ *
+ * Every colour is authored in OKLCH and derived from a handful of knobs so that
+ * themes can be re-tinted at runtime with a single custom property:
+ *
+ *   --nc-accent-h / --nc-accent-c    accent hue + chroma
+ *   --nc-neutral-h / --nc-neutral-c  neutral tint hue + chroma
+ *   --nc-lustre                      intensity of the iridescent sheen (0–1)
+ *
+ * Light/dark values are expressed with `light-dark()` and resolved by the
+ * `color-scheme` set on the themed root (see NacreProvider).
+ */
+
+@property --nc-bloom {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
+@property --nc-angle {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 0deg;
+}
+
+@property --nc-rim-near {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --nc-sheen {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@layer nacre.tokens {
+  :root,
+  [data-nacre-theme] {
+    color-scheme: light dark;
+
+    /* ── Knobs ───────────────────────────────────────────────────────── */
+    --nc-accent-h: 42;
+    --nc-accent-c: 0.145;
+    --nc-neutral-h: 60;
+    --nc-neutral-c: 0.008;
+    --nc-lustre: 1;
+
+    /* ── Neutral scale (12 steps, Radix-style semantics) ─────────────── */
+    --nc-gray-1: light-dark(
+      oklch(0.991 calc(var(--nc-neutral-c) * 0.4) var(--nc-neutral-h)),
+      oklch(0.155 calc(var(--nc-neutral-c) * 1.3) var(--nc-neutral-h))
+    );
+    --nc-gray-2: light-dark(
+      oklch(0.978 calc(var(--nc-neutral-c) * 0.6) var(--nc-neutral-h)),
+      oklch(0.185 calc(var(--nc-neutral-c) * 1.3) var(--nc-neutral-h))
+    );
+    --nc-gray-3: light-dark(
+      oklch(0.952 var(--nc-neutral-c) var(--nc-neutral-h)),
+      oklch(0.225 calc(var(--nc-neutral-c) * 1.3) var(--nc-neutral-h))
+    );
+    --nc-gray-4: light-dark(
+      oklch(0.93 var(--nc-neutral-c) var(--nc-neutral-h)),
+      oklch(0.255 calc(var(--nc-neutral-c) * 1.3) var(--nc-neutral-h))
+    );
+    --nc-gray-5: light-dark(
+      oklch(0.905 var(--nc-neutral-c) var(--nc-neutral-h)),
+      oklch(0.285 calc(var(--nc-neutral-c) * 1.3) var(--nc-neutral-h))
+    );
+    --nc-gray-6: light-dark(
+      oklch(0.878 var(--nc-neutral-c) var(--nc-neutral-h)),
+      oklch(0.32 calc(var(--nc-neutral-c) * 1.3) var(--nc-neutral-h))
+    );
+    --nc-gray-7: light-dark(
+      oklch(0.835 var(--nc-neutral-c) var(--nc-neutral-h)),
+      oklch(0.37 calc(var(--nc-neutral-c) * 1.2) var(--nc-neutral-h))
+    );
+    --nc-gray-8: light-dark(
+      oklch(0.76 var(--nc-neutral-c) var(--nc-neutral-h)),
+      oklch(0.45 var(--nc-neutral-c) var(--nc-neutral-h))
+    );
+    --nc-gray-9: light-dark(
+      oklch(0.62 var(--nc-neutral-c) var(--nc-neutral-h)),
+      oklch(0.56 var(--nc-neutral-c) var(--nc-neutral-h))
+    );
+    --nc-gray-10: light-dark(
+      oklch(0.57 var(--nc-neutral-c) var(--nc-neutral-h)),
+      oklch(0.62 var(--nc-neutral-c) var(--nc-neutral-h))
+    );
+    --nc-gray-11: light-dark(
+      oklch(0.475 var(--nc-neutral-c) var(--nc-neutral-h)),
+      oklch(0.76 calc(var(--nc-neutral-c) * 0.8) var(--nc-neutral-h))
+    );
+    --nc-gray-12: light-dark(
+      oklch(0.22 calc(var(--nc-neutral-c) * 1.2) var(--nc-neutral-h)),
+      oklch(0.945 calc(var(--nc-neutral-c) * 0.5) var(--nc-neutral-h))
+    );
+
+    /* ── Accent scale ────────────────────────────────────────────────── */
+    --nc-accent-1: light-dark(
+      oklch(0.99 calc(var(--nc-accent-c) * 0.03) var(--nc-accent-h)),
+      oklch(0.17 calc(var(--nc-accent-c) * 0.1) var(--nc-accent-h))
+    );
+    --nc-accent-2: light-dark(
+      oklch(0.975 calc(var(--nc-accent-c) * 0.09) var(--nc-accent-h)),
+      oklch(0.2 calc(var(--nc-accent-c) * 0.16) var(--nc-accent-h))
+    );
+    --nc-accent-3: light-dark(
+      oklch(0.95 calc(var(--nc-accent-c) * 0.19) var(--nc-accent-h)),
+      oklch(0.245 calc(var(--nc-accent-c) * 0.3) var(--nc-accent-h))
+    );
+    --nc-accent-4: light-dark(
+      oklch(0.925 calc(var(--nc-accent-c) * 0.28) var(--nc-accent-h)),
+      oklch(0.28 calc(var(--nc-accent-c) * 0.4) var(--nc-accent-h))
+    );
+    --nc-accent-5: light-dark(
+      oklch(0.895 calc(var(--nc-accent-c) * 0.36) var(--nc-accent-h)),
+      oklch(0.315 calc(var(--nc-accent-c) * 0.48) var(--nc-accent-h))
+    );
+    --nc-accent-6: light-dark(
+      oklch(0.86 calc(var(--nc-accent-c) * 0.44) var(--nc-accent-h)),
+      oklch(0.36 calc(var(--nc-accent-c) * 0.55) var(--nc-accent-h))
+    );
+    --nc-accent-7: light-dark(
+      oklch(0.81 calc(var(--nc-accent-c) * 0.54) var(--nc-accent-h)),
+      oklch(0.42 calc(var(--nc-accent-c) * 0.64) var(--nc-accent-h))
+    );
+    --nc-accent-8: light-dark(
+      oklch(0.74 calc(var(--nc-accent-c) * 0.7) var(--nc-accent-h)),
+      oklch(0.51 calc(var(--nc-accent-c) * 0.76) var(--nc-accent-h))
+    );
+    --nc-accent-9: light-dark(
+      oklch(0.6 var(--nc-accent-c) var(--nc-accent-h)),
+      oklch(0.68 var(--nc-accent-c) var(--nc-accent-h))
+    );
+    --nc-accent-10: light-dark(
+      oklch(0.555 var(--nc-accent-c) var(--nc-accent-h)),
+      oklch(0.725 calc(var(--nc-accent-c) * 0.95) var(--nc-accent-h))
+    );
+    --nc-accent-11: light-dark(
+      oklch(0.5 calc(var(--nc-accent-c) * 0.9) var(--nc-accent-h)),
+      oklch(0.8 calc(var(--nc-accent-c) * 0.72) var(--nc-accent-h))
+    );
+    --nc-accent-12: light-dark(
+      oklch(0.3 calc(var(--nc-accent-c) * 0.5) var(--nc-accent-h)),
+      oklch(0.93 calc(var(--nc-accent-c) * 0.28) var(--nc-accent-h))
+    );
+    --nc-accent-contrast: light-dark(
+      oklch(0.995 0.005 var(--nc-accent-h)),
+      oklch(0.17 calc(var(--nc-accent-c) * 0.3) var(--nc-accent-h))
+    );
+
+    /* ── Status hues ─────────────────────────────────────────────────── */
+    --nc-danger-h: 20;
+    --nc-success-h: 152;
+    --nc-warning-h: 75;
+    --nc-info-h: 245;
+
+    /* ── Semantic surfaces ───────────────────────────────────────────── */
+    --nc-canvas: var(--nc-gray-1);
+    --nc-canvas-raised: var(--nc-gray-2);
+    --nc-surface: light-dark(
+      oklch(1 0 0),
+      oklch(0.205 calc(var(--nc-neutral-c) * 1.3) var(--nc-neutral-h))
+    );
+    --nc-surface-hi: light-dark(
+      oklch(1 0 0),
+      oklch(0.235 calc(var(--nc-neutral-c) * 1.3) var(--nc-neutral-h))
+    );
+    --nc-surface-overlay: light-dark(
+      oklch(0.998 0.002 var(--nc-neutral-h)),
+      oklch(0.225 calc(var(--nc-neutral-c) * 1.3) var(--nc-neutral-h))
+    );
+    --nc-surface-sunken: light-dark(
+      oklch(0.968 calc(var(--nc-neutral-c) * 0.8) var(--nc-neutral-h)),
+      oklch(0.17 calc(var(--nc-neutral-c) * 1.3) var(--nc-neutral-h))
+    );
+    --nc-surface-inverse: var(--nc-gray-12);
+
+    --nc-text: var(--nc-gray-12);
+    --nc-text-muted: var(--nc-gray-11);
+    --nc-text-subtle: light-dark(
+      oklch(0.56 var(--nc-neutral-c) var(--nc-neutral-h)),
+      oklch(0.64 var(--nc-neutral-c) var(--nc-neutral-h))
+    );
+    --nc-text-disabled: var(--nc-gray-8);
+    --nc-text-inverse: var(--nc-gray-1);
+    --nc-text-accent: var(--nc-accent-11);
+
+    --nc-border-subtle: light-dark(
+      oklch(0.2 var(--nc-neutral-c) var(--nc-neutral-h) / 0.07),
+      oklch(1 0 0 / 0.06)
+    );
+    --nc-border: light-dark(
+      oklch(0.2 var(--nc-neutral-c) var(--nc-neutral-h) / 0.11),
+      oklch(1 0 0 / 0.1)
+    );
+    --nc-border-strong: light-dark(
+      oklch(0.2 var(--nc-neutral-c) var(--nc-neutral-h) / 0.2),
+      oklch(1 0 0 / 0.18)
+    );
+    --nc-ring: var(--nc-accent-9);
+    --nc-selection: color-mix(in oklch, var(--nc-accent-9) 26%, transparent);
+
+    /* Translucent tints for hover/press washes on any surface. */
+    --nc-wash-1: light-dark(oklch(0.25 0.01 var(--nc-neutral-h) / 0.035), oklch(1 0 0 / 0.04));
+    --nc-wash-2: light-dark(oklch(0.25 0.01 var(--nc-neutral-h) / 0.065), oklch(1 0 0 / 0.07));
+    --nc-wash-3: light-dark(oklch(0.25 0.01 var(--nc-neutral-h) / 0.1), oklch(1 0 0 / 0.11));
+
+    /* ── Pearl spectrum (the Lustre palette) ─────────────────────────────
+     * Low-chroma hues that read as mother-of-pearl: an accent-tinted pearl,
+     * then aqua, periwinkle, lilac and rose. Gradients interpolate in Oklab,
+     * so neighbouring hues pass through a pearly near-white rather than mud.
+     */
+    --nc-pearl-1: light-dark(
+      oklch(0.88 0.075 var(--nc-accent-h)),
+      oklch(0.74 0.1 var(--nc-accent-h) / 0.75)
+    );
+    --nc-pearl-2: light-dark(oklch(0.9 0.06 200), oklch(0.74 0.09 200 / 0.75));
+    --nc-pearl-3: light-dark(oklch(0.86 0.07 265), oklch(0.7 0.11 265 / 0.75));
+    --nc-pearl-4: light-dark(oklch(0.87 0.07 310), oklch(0.72 0.1 310 / 0.75));
+    --nc-pearl-5: light-dark(oklch(0.89 0.06 355), oklch(0.74 0.09 355 / 0.75));
+    --nc-pearl-spectrum:
+      var(--nc-pearl-1), var(--nc-pearl-2), var(--nc-pearl-3), var(--nc-pearl-4), var(--nc-pearl-5),
+      var(--nc-pearl-1);
+
+    /* ── Typography ──────────────────────────────────────────────────── */
+    --nc-font-sans:
+      'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --nc-font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+    --nc-font-display: 'Instrument Serif', ui-serif, 'New York', Georgia, serif;
+
+    --nc-text-2xs: 0.6875rem; /* 11 */
+    --nc-text-xs: 0.75rem; /* 12 */
+    --nc-text-sm: 0.8125rem; /* 13 */
+    --nc-text-md: 0.875rem; /* 14 */
+    --nc-text-lg: 1rem; /* 16 */
+    --nc-text-xl: 1.1875rem; /* 19 */
+    --nc-text-2xl: 1.5rem; /* 24 */
+    --nc-text-3xl: 1.875rem; /* 30 */
+    --nc-text-4xl: 2.5rem; /* 40 */
+    --nc-text-5xl: 3.25rem; /* 52 */
+
+    --nc-leading-tight: 1.2;
+    --nc-leading-snug: 1.35;
+    --nc-leading-normal: 1.5;
+    --nc-leading-relaxed: 1.65;
+
+    --nc-weight-regular: 420;
+    --nc-weight-medium: 520;
+    --nc-weight-semibold: 600;
+    --nc-weight-bold: 680;
+
+    /* ── Space (4px grid) ────────────────────────────────────────────── */
+    --nc-space-0: 0;
+    --nc-space-px: 1px;
+    --nc-space-0-5: 0.125rem;
+    --nc-space-1: 0.25rem;
+    --nc-space-1-5: 0.375rem;
+    --nc-space-2: 0.5rem;
+    --nc-space-2-5: 0.625rem;
+    --nc-space-3: 0.75rem;
+    --nc-space-3-5: 0.875rem;
+    --nc-space-4: 1rem;
+    --nc-space-5: 1.25rem;
+    --nc-space-6: 1.5rem;
+    --nc-space-8: 2rem;
+    --nc-space-10: 2.5rem;
+    --nc-space-12: 3rem;
+    --nc-space-16: 4rem;
+
+    /* ── Control sizing ──────────────────────────────────────────────── */
+    --nc-control-xs: 1.5rem; /* 24 */
+    --nc-control-sm: 1.875rem; /* 30 */
+    --nc-control-md: 2.25rem; /* 36 */
+    --nc-control-lg: 2.75rem; /* 44 — meets touch target guidance */
+
+    /* ── Radius ──────────────────────────────────────────────────────────
+     * `--nc-radius-scale` lets themes go sharper or rounder globally.
+     */
+    --nc-radius-scale: 1;
+    --nc-radius-xs: calc(4px * var(--nc-radius-scale));
+    --nc-radius-sm: calc(7px * var(--nc-radius-scale));
+    --nc-radius-md: calc(10px * var(--nc-radius-scale));
+    --nc-radius-lg: calc(14px * var(--nc-radius-scale));
+    --nc-radius-xl: calc(20px * var(--nc-radius-scale));
+    --nc-radius-2xl: calc(28px * var(--nc-radius-scale));
+    --nc-radius-full: 9999px;
+    --nc-corner-shape: round;
+
+    /* ── Elevation ───────────────────────────────────────────────────────
+     * Layered like nacre platelets: several tight, tinted shadows stacked
+     * with one broad ambient shadow, plus a porcelain top-edge highlight.
+     */
+    --nc-shadow-color: light-dark(
+      oklch(0.3 calc(var(--nc-neutral-c) * 3) var(--nc-neutral-h)),
+      oklch(0.05 0.01 var(--nc-neutral-h))
+    );
+    --nc-glaze: light-dark(oklch(1 0 0 / 0.9), oklch(1 0 0 / 0.07));
+    --nc-glaze-edge: inset 0 1px 0 0 var(--nc-glaze);
+
+    --nc-elevation-0: 0 0 0 0 transparent;
+    --nc-elevation-1:
+      0 0.5px 1px 0 color-mix(in oklch, var(--nc-shadow-color) 10%, transparent),
+      0 1px 2px -1px color-mix(in oklch, var(--nc-shadow-color) 10%, transparent);
+    --nc-elevation-2:
+      0 0.5px 1px 0 color-mix(in oklch, var(--nc-shadow-color) 8%, transparent),
+      0 2px 4px -1px color-mix(in oklch, var(--nc-shadow-color) 8%, transparent),
+      0 6px 14px -4px color-mix(in oklch, var(--nc-shadow-color) 10%, transparent);
+    --nc-elevation-3:
+      0 0.5px 1px 0 color-mix(in oklch, var(--nc-shadow-color) 8%, transparent),
+      0 4px 8px -2px color-mix(in oklch, var(--nc-shadow-color) 8%, transparent),
+      0 14px 28px -8px color-mix(in oklch, var(--nc-shadow-color) 16%, transparent);
+    --nc-elevation-4:
+      0 0.5px 1px 0 color-mix(in oklch, var(--nc-shadow-color) 10%, transparent),
+      0 8px 16px -4px color-mix(in oklch, var(--nc-shadow-color) 10%, transparent),
+      0 28px 56px -12px color-mix(in oklch, var(--nc-shadow-color) 24%, transparent);
+
+    /* ── Motion ──────────────────────────────────────────────────────────
+     * Springs are baked into CSS `linear()` curves (generated from damped
+     * spring physics) so pure-CSS transitions feel physical.
+     */
+    --nc-duration-instant: 90ms;
+    --nc-duration-fast: 160ms;
+    --nc-duration-base: 240ms;
+    --nc-duration-slow: 380ms;
+    --nc-duration-slower: 560ms;
+
+    --nc-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --nc-ease-in: cubic-bezier(0.55, 0, 0.75, 0.2);
+    --nc-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+    --nc-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+    /* stiffness 400 / damping 30 — controls, toggles, press states */
+    --nc-spring-snappy: linear(
+      0,
+      0.018,
+      0.065,
+      0.1319,
+      0.2113,
+      0.2972,
+      0.3849,
+      0.4711,
+      0.5531,
+      0.6292,
+      0.6983,
+      0.7599,
+      0.8138,
+      0.8602,
+      0.8993,
+      0.9318,
+      0.9582,
+      0.9792,
+      0.9955,
+      1.0078,
+      1.0166,
+      1.0225,
+      1.0262,
+      1.028,
+      1.0284,
+      1.0277,
+      1.0262,
+      1.0242,
+      1.0219,
+      1.0195,
+      1.017,
+      1.0146,
+      1.0123,
+      1.0101,
+      1.0082,
+      1.0065,
+      1.005,
+      1.0037,
+      1.0027,
+      1.0018,
+      1
+    );
+    --nc-spring-snappy-duration: 400ms;
+    /* stiffness 170 / damping 20 — surfaces entering, layout shifts */
+    --nc-spring-soft: linear(
+      0,
+      0.0187,
+      0.0674,
+      0.1362,
+      0.2173,
+      0.3045,
+      0.393,
+      0.4794,
+      0.5611,
+      0.6365,
+      0.7045,
+      0.7648,
+      0.8173,
+      0.8622,
+      0.8999,
+      0.9311,
+      0.9563,
+      0.9763,
+      0.9918,
+      1.0034,
+      1.0118,
+      1.0175,
+      1.021,
+      1.0229,
+      1.0234,
+      1.023,
+      1.0218,
+      1.0202,
+      1.0183,
+      1.0163,
+      1.0142,
+      1.0122,
+      1.0103,
+      1.0085,
+      1.0069,
+      1.0055,
+      1.0043,
+      1.0032,
+      1.0023,
+      1.0016,
+      1
+    );
+    --nc-spring-soft-duration: 620ms;
+    /* stiffness 260 / damping 16 — playful confirmations (switch thumb, check) */
+    --nc-spring-bouncy: linear(
+      0,
+      0.0451,
+      0.1597,
+      0.3154,
+      0.4876,
+      0.6572,
+      0.8103,
+      0.9384,
+      1.0371,
+      1.106,
+      1.1472,
+      1.1647,
+      1.1633,
+      1.1484,
+      1.1247,
+      1.0968,
+      1.0681,
+      1.0414,
+      1.0183,
+      0.9999,
+      0.9865,
+      0.9778,
+      0.9734,
+      0.9725,
+      0.9741,
+      0.9776,
+      0.982,
+      0.9868,
+      0.9914,
+      0.9955,
+      0.9989,
+      1.0014,
+      1.0032,
+      1.0042,
+      1.0046,
+      1.0045,
+      1.004,
+      1.0033,
+      1.0025,
+      1.0017,
+      1
+    );
+    --nc-spring-bouncy-duration: 780ms;
+
+    /* ── Z-index ─────────────────────────────────────────────────────── */
+    --nc-z-base: 0;
+    --nc-z-sticky: 100;
+    --nc-z-overlay: 1000;
+    --nc-z-modal: 1100;
+    --nc-z-popover: 1200;
+    --nc-z-toast: 1300;
+    --nc-z-tooltip: 1400;
+  }
+
+  /* Explicit schemes. `system` inherits `color-scheme: light dark`. */
+  [data-nacre-mode='light'] {
+    color-scheme: light;
+  }
+  [data-nacre-mode='dark'] {
+    color-scheme: dark;
+  }
+
+  /* Continuous (squircle) corners where supported — an Apple-grade detail
+     that makes every radius feel softer without looking bigger. */
+  @supports (corner-shape: squircle) {
+    :root,
+    [data-nacre-theme] {
+      --nc-corner-shape: squircle;
+      --nc-radius-sm: calc(10px * var(--nc-radius-scale));
+      --nc-radius-md: calc(15px * var(--nc-radius-scale));
+      --nc-radius-lg: calc(21px * var(--nc-radius-scale));
+      --nc-radius-xl: calc(30px * var(--nc-radius-scale));
+      --nc-radius-2xl: calc(40px * var(--nc-radius-scale));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :root,
+    [data-nacre-theme] {
+      --nc-duration-fast: 1ms;
+      --nc-duration-base: 1ms;
+      --nc-duration-slow: 1ms;
+      --nc-duration-slower: 1ms;
+      --nc-spring-snappy-duration: 1ms;
+      --nc-spring-soft-duration: 1ms;
+      --nc-spring-bouncy-duration: 1ms;
+    }
+  }
+
+  [data-nacre-motion='reduced'] {
+    --nc-duration-fast: 1ms;
+    --nc-duration-base: 1ms;
+    --nc-duration-slow: 1ms;
+    --nc-duration-slower: 1ms;
+    --nc-spring-snappy-duration: 1ms;
+    --nc-spring-soft-duration: 1ms;
+    --nc-spring-bouncy-duration: 1ms;
+  }
+}

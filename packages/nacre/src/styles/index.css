@@ -1,0 +1,13 @@
+/* Layer order — later layers win. Consumers can add `@layer app` after. */
+@layer nacre.tokens, nacre.base, nacre.lustre, nacre.components, nacre.utilities;
+
+@import '@fontsource-variable/geist/wght.css';
+@import '@fontsource-variable/geist-mono/wght.css';
+@import '@fontsource/instrument-serif/400.css';
+@import '@fontsource/instrument-serif/400-italic.css';
+
+@import './tokens.css';
+@import './base.css';
+@import './motion.css';
+@import './lustre.css';
+@import './utilities.css';

@@ -1,0 +1,146 @@
+/*
+ * Lustre — Nacre's signature material.
+ *
+ * Instead of frosted glass, Nacre surfaces are opaque "glazed porcelain" whose
+ * edges and faces carry a thin-film iridescence, like the inside of a shell.
+ * The effect has three layers, all painted with pseudo-elements so they never
+ * affect layout or hit-testing:
+ *
+ *   ::before  Rim   – a 1px pearl edge whose hues rotate toward the pointer.
+ *   ::after   Sheen – a soft iridescent spotlight that follows the pointer,
+ *                     plus a "tide ring" that ripples out from each press.
+ *
+ * The pointer position, angle and press bloom are written as custom properties
+ * by a single delegated listener (see `lustre/installLustre.ts`), so components
+ * opt in with nothing more than a `data-lustre` attribute.
+ *
+ * Tuning knobs (set per component):
+ *   --nc-rim-rest     rim opacity when idle            (default 0)
+ *   --nc-rim-hover    rim opacity near the pointer     (default 0.9)
+ *   --nc-sheen-size   radius of the spotlight          (default 120px)
+ *   --nc-sheen-hover  spotlight strength when hovered  (default 0.55)
+ *   --nc-sheen-blend  blend mode of the sheen          (default normal)
+ */
+
+@layer nacre.lustre {
+  [data-lustre] {
+    --nc-mx: 50%;
+    --nc-my: 50%;
+    --nc-px: 50%;
+    --nc-py: 50%;
+    --nc-angle: 0deg;
+    --nc-rim-rest: 0;
+    --nc-rim-hover: 0.9;
+    --nc-sheen-size: 120px;
+    --nc-sheen-hover: 0.55;
+    --nc-sheen-blend: normal;
+    --nc-rim-near: var(--nc-rim-rest);
+    --nc-sheen: 0;
+
+    position: relative;
+    isolation: isolate;
+    transition:
+      --nc-rim-near var(--nc-duration-slow) var(--nc-ease-out),
+      --nc-sheen var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  [data-lustre]::before,
+  [data-lustre]::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    corner-shape: inherit;
+    pointer-events: none;
+  }
+
+  /* Rim */
+  [data-lustre]::before {
+    padding: 1px;
+    background: conic-gradient(from var(--nc-angle) at 50% 50%, var(--nc-pearl-spectrum));
+    mask:
+      radial-gradient(
+          circle calc(var(--nc-sheen-size) * 1.6) at var(--nc-mx) var(--nc-my),
+          rgb(0 0 0 / var(--nc-rim-near)) 0%,
+          rgb(0 0 0 / var(--nc-rim-rest)) 100%
+        )
+        border-box,
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0) border-box;
+    mask-composite: intersect, exclude, add;
+    opacity: var(--nc-lustre);
+  }
+
+  /* Sheen + tide ring */
+  [data-lustre]::after {
+    background: linear-gradient(calc(var(--nc-angle) + 90deg), var(--nc-pearl-spectrum));
+    mask:
+      radial-gradient(
+        circle var(--nc-sheen-size) at var(--nc-mx) var(--nc-my),
+        rgb(0 0 0 / var(--nc-sheen)) 0%,
+        rgb(0 0 0 / calc(var(--nc-sheen) * 0.35)) 45%,
+        transparent 100%
+      ),
+      radial-gradient(
+        circle calc(var(--nc-bloom) * var(--nc-sheen-size) * 2.4) at var(--nc-px) var(--nc-py),
+        transparent 55%,
+        rgb(0 0 0 / calc((1 - var(--nc-bloom)) * 0.9)) 88%,
+        transparent 100%
+      );
+    mask-composite: add;
+    mix-blend-mode: var(--nc-sheen-blend);
+    opacity: var(--nc-lustre);
+  }
+
+  @media (hover: hover) {
+    [data-lustre]:hover {
+      --nc-rim-near: var(--nc-rim-hover);
+      --nc-sheen: var(--nc-sheen-hover);
+    }
+  }
+
+  [data-lustre]:focus-visible {
+    --nc-rim-near: var(--nc-rim-hover);
+  }
+
+  [data-lustre][data-disabled],
+  [data-lustre]:disabled {
+    --nc-rim-near: var(--nc-rim-rest);
+    --nc-sheen: 0;
+  }
+
+  /*
+   * Ambient swirl — for surfaces that are "alive", e.g. the composer while the
+   * agent is working. The rim becomes a slowly orbiting band of pearl light.
+   */
+  [data-lustre][data-lustre-ambient] {
+    --nc-rim-near: 1;
+    --nc-mx: 50%;
+    --nc-my: 50%;
+    animation: nc-lustre-orbit 6s linear infinite;
+  }
+
+  [data-lustre][data-lustre-ambient]::before {
+    padding: 1.5px;
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0) border-box;
+    mask-composite: exclude;
+  }
+
+  @keyframes nc-lustre-orbit {
+    to {
+      --nc-angle: 360deg;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-lustre][data-lustre-ambient] {
+      animation: none;
+    }
+  }
+  [data-nacre-motion='reduced'] [data-lustre][data-lustre-ambient] {
+    animation: none;
+  }
+}

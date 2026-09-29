@@ -1,0 +1,5 @@
+pnpm-lock.yaml
+dist
+storybook-static
+coverage
+.turbo

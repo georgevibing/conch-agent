@@ -1,0 +1,25 @@
+@layer nacre.components {
+  .iconButton {
+    --btn-px: 0;
+    inline-size: var(--btn-h);
+    padding: 0;
+  }
+
+  .iconButton[data-shape='circle'] {
+    --btn-radius: var(--nc-radius-full);
+  }
+
+  .iconButton > span {
+    margin: 0;
+  }
+
+  .iconButton[data-size='sm'] {
+    --btn-icon: 0.9375rem;
+  }
+  .iconButton[data-size='md'] {
+    --btn-icon: 1.0625rem;
+  }
+  .iconButton[data-size='lg'] {
+    --btn-icon: 1.25rem;
+  }
+}

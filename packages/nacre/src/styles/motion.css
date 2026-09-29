@@ -1,0 +1,90 @@
+/*
+ * Shared keyframes. Overlay primitives drive these from Radix's
+ * `data-state` / `data-side` attributes so enter + exit are pure CSS.
+ *
+ * Signature entrance — "surfacing": content rises a few pixels out of a soft
+ * focus, like something coming up through water. Exit is quicker and simpler
+ * (never make people wait for something to leave).
+ */
+@layer nacre.base {
+  @keyframes nc-surface-in {
+    from {
+      opacity: 0;
+      transform: translate(var(--nc-enter-x, 0), var(--nc-enter-y, 4px)) scale(0.97);
+      filter: blur(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+      filter: blur(0);
+    }
+  }
+
+  @keyframes nc-surface-out {
+    from {
+      opacity: 1;
+      transform: none;
+      filter: blur(0);
+    }
+    to {
+      opacity: 0;
+      transform: translate(var(--nc-exit-x, 0), var(--nc-exit-y, 2px)) scale(0.98);
+      filter: blur(2px);
+    }
+  }
+
+  @keyframes nc-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes nc-fade-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes nc-veil-in {
+    from {
+      opacity: 0;
+      backdrop-filter: saturate(100%);
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes nc-shimmer {
+    from {
+      background-position: 150% 0;
+    }
+    to {
+      background-position: -50% 0;
+    }
+  }
+
+  @keyframes nc-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes nc-breathe {
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(0.86);
+      opacity: 0.7;
+    }
+  }
+}

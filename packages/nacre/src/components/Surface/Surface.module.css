@@ -1,0 +1,120 @@
+@layer nacre.components {
+  .surface {
+    --surface-bg: var(--nc-surface);
+    --surface-glaze: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    --surface-border: var(--nc-border-subtle);
+    --surface-shadow: var(--nc-elevation-0);
+    --nc-rim-rest: 0.22;
+    --nc-rim-hover: 0.85;
+    --nc-sheen-size: 260px;
+    --nc-sheen-hover: 0.22;
+
+    position: relative;
+    corner-shape: var(--nc-corner-shape);
+    background: var(--surface-glaze);
+    color: var(--nc-text);
+    box-shadow:
+      inset 0 0 0 1px var(--surface-border),
+      var(--surface-shadow);
+    transition:
+      box-shadow var(--nc-duration-slow) var(--nc-ease-out),
+      transform var(--nc-spring-soft-duration) var(--nc-spring-soft),
+      --nc-rim-near var(--nc-duration-slower) var(--nc-ease-out),
+      --nc-sheen var(--nc-duration-slower) var(--nc-ease-out);
+  }
+
+  .surface[data-variant='raised'] {
+    --surface-shadow: var(--nc-glaze-edge), var(--elev);
+  }
+  .surface[data-variant='flat'] {
+    --surface-shadow: var(--nc-glaze-edge);
+  }
+  .surface[data-variant='sunken'] {
+    --surface-glaze: var(--nc-surface-sunken);
+    --surface-border: var(--nc-border-subtle);
+    --surface-shadow: inset 0 1px 2px 0 var(--nc-wash-2);
+    --nc-rim-rest: 0;
+  }
+  .surface[data-variant='outline'] {
+    --surface-glaze: transparent;
+    --surface-border: var(--nc-border);
+  }
+
+  .surface[data-elevation='0'] {
+    --elev: var(--nc-elevation-0);
+  }
+  .surface[data-elevation='1'] {
+    --elev: var(--nc-elevation-1);
+  }
+  .surface[data-elevation='2'] {
+    --elev: var(--nc-elevation-2);
+  }
+  .surface[data-elevation='3'] {
+    --elev: var(--nc-elevation-3);
+  }
+  .surface[data-elevation='4'] {
+    --elev: var(--nc-elevation-4);
+  }
+
+  .surface[data-interactive] {
+    cursor: pointer;
+  }
+
+  @media (hover: hover) {
+    .surface[data-interactive]:hover {
+      --elev: var(--nc-elevation-3);
+      transform: translateY(-1px);
+    }
+  }
+
+  .surface[data-interactive]:active {
+    transform: translateY(0) scale(0.995);
+    transition-duration: var(--nc-duration-fast);
+  }
+
+  .surface[data-interactive]:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  /* ── Card ─────────────────────────────────────────────────────────── */
+  .card {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cardInset {
+    gap: var(--nc-space-4);
+    padding: var(--nc-space-5);
+  }
+
+  .cardHeader {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+  }
+
+  .cardTitle {
+    margin: 0;
+    font-size: var(--nc-text-lg);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: -0.012em;
+    line-height: var(--nc-leading-snug);
+  }
+
+  .cardDescription {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+    line-height: var(--nc-leading-normal);
+    text-wrap: pretty;
+  }
+
+  .cardFooter {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--nc-space-2);
+    padding-block-start: var(--nc-space-1);
+  }
+}

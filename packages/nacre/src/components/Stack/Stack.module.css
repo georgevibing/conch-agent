@@ -1,0 +1,13 @@
+@layer nacre.components {
+  .stack {
+    display: flex;
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .stack[data-inline] {
+    display: inline-flex;
+  }
+}

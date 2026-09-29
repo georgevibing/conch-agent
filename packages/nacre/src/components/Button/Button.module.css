@@ -1,0 +1,271 @@
+@layer nacre.components {
+  .button {
+    /* Local knobs — every variant only reassigns these. */
+    --btn-h: var(--nc-control-md);
+    --btn-px: var(--nc-space-3-5);
+    --btn-gap: var(--nc-space-2);
+    --btn-radius: var(--nc-radius-md);
+    --btn-font: var(--nc-text-md);
+    --btn-icon: 1rem;
+    --btn-bg: var(--nc-surface);
+    --btn-bg-hover: var(--btn-bg);
+    --btn-bg-active: var(--btn-bg-hover);
+    --btn-fg: var(--nc-text);
+    --btn-border: transparent;
+    --btn-shadow: var(--nc-elevation-0);
+    --btn-shadow-hover: var(--btn-shadow);
+    --btn-glaze: linear-gradient(transparent, transparent);
+
+    --nc-sheen-size: 70px;
+    --nc-sheen-hover: 0.6;
+    --nc-rim-hover: 0.75;
+
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--btn-gap);
+    block-size: var(--btn-h);
+    min-inline-size: var(--btn-h);
+    padding-inline: var(--btn-px);
+    margin: 0;
+    border: 0;
+    border-radius: var(--btn-radius);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--btn-glaze), var(--btn-bg);
+    color: var(--btn-fg);
+    box-shadow:
+      inset 0 0 0 1px var(--btn-border),
+      var(--btn-shadow);
+    font-family: inherit;
+    font-size: var(--btn-font);
+    font-weight: var(--nc-weight-medium);
+    line-height: 1;
+    letter-spacing: -0.006em;
+    white-space: nowrap;
+    text-decoration: none;
+    cursor: pointer;
+    user-select: none;
+    touch-action: manipulation;
+    outline-offset: 2px;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      box-shadow var(--nc-duration-base) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy),
+      outline-offset var(--nc-duration-fast) var(--nc-ease-out),
+      --nc-rim-near var(--nc-duration-slow) var(--nc-ease-out),
+      --nc-sheen var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .button:hover:not(:disabled, [data-loading]) {
+      background: var(--btn-glaze), var(--btn-bg-hover);
+      box-shadow:
+        inset 0 0 0 1px var(--btn-border),
+        var(--btn-shadow-hover);
+    }
+  }
+
+  .button:active:not(:disabled, [data-loading]) {
+    background: var(--btn-glaze), var(--btn-bg-active);
+    transform: scale(0.975);
+    transition-duration:
+      var(--nc-duration-instant), var(--nc-duration-instant), var(--nc-duration-instant), 120ms,
+      var(--nc-duration-fast), var(--nc-duration-slow), var(--nc-duration-slow);
+    transition-timing-function: var(--nc-ease-out);
+  }
+
+  .button:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .button:disabled,
+  .button[data-disabled] {
+    cursor: not-allowed;
+    opacity: 0.45;
+    box-shadow: inset 0 0 0 1px var(--btn-border);
+  }
+
+  .button[data-loading] {
+    cursor: progress;
+  }
+
+  .button[data-block] {
+    display: flex;
+    inline-size: 100%;
+  }
+
+  .label {
+    display: inline-flex;
+    align-items: center;
+    padding-block: 0.1em;
+  }
+
+  .icon {
+    display: inline-grid;
+    place-items: center;
+    inline-size: var(--btn-icon);
+    block-size: var(--btn-icon);
+    margin-inline: -0.125rem;
+  }
+
+  .icon > svg {
+    inline-size: 100%;
+    block-size: 100%;
+    stroke-width: 1.85;
+  }
+
+  /* ── Sizes ─────────────────────────────────────────────────────────── */
+  .button[data-size='sm'] {
+    --btn-h: var(--nc-control-sm);
+    --btn-px: var(--nc-space-2-5);
+    --btn-gap: var(--nc-space-1-5);
+    --btn-radius: var(--nc-radius-sm);
+    --btn-font: var(--nc-text-sm);
+    --btn-icon: 0.875rem;
+    --nc-sheen-size: 56px;
+  }
+
+  .button[data-size='lg'] {
+    --btn-h: var(--nc-control-lg);
+    --btn-px: var(--nc-space-5);
+    --btn-gap: var(--nc-space-2-5);
+    --btn-radius: var(--nc-radius-lg);
+    --btn-font: var(--nc-text-lg);
+    --btn-icon: 1.125rem;
+    --nc-sheen-size: 96px;
+  }
+
+  /* ── Solid ─────────────────────────────────────────────────────────── *
+   * Glazed: a faint top-lit gradient + an inner highlight make the fill
+   * read as a solid, tactile object. Shadows are tinted by the fill colour.
+   */
+  .button[data-variant='solid'] {
+    --tone-9: var(--nc-accent-9);
+    --tone-10: var(--nc-accent-10);
+    --btn-bg: var(--tone-9);
+    --btn-bg-hover: var(--tone-10);
+    --btn-fg: var(--nc-accent-contrast);
+    --btn-glaze: linear-gradient(
+      180deg,
+      oklch(1 0 0 / 0.16) 0%,
+      oklch(1 0 0 / 0.04) 50%,
+      oklch(0 0 0 / 0.04) 100%
+    );
+    --btn-border: color-mix(in oklch, var(--tone-9), black 12%);
+    --btn-shadow:
+      inset 0 1px 0 0 oklch(1 0 0 / 0.22),
+      0 1px 2px -0.5px color-mix(in oklch, var(--tone-9) 50%, transparent),
+      0 3px 8px -3px color-mix(in oklch, var(--tone-9) 55%, transparent);
+    --btn-shadow-hover:
+      inset 0 1px 0 0 oklch(1 0 0 / 0.26),
+      0 2px 3px -1px color-mix(in oklch, var(--tone-9) 50%, transparent),
+      0 6px 16px -5px color-mix(in oklch, var(--tone-9) 70%, transparent);
+    --nc-sheen-blend: soft-light;
+    --nc-sheen-hover: 0.85;
+    --nc-rim-hover: 0;
+    text-shadow: 0 0.5px 0 oklch(0 0 0 / 0.08);
+  }
+
+  .button[data-variant='solid'][data-tone='neutral'] {
+    --tone-9: var(--nc-gray-12);
+    --tone-10: color-mix(in oklch, var(--nc-gray-12), var(--nc-gray-1) 12%);
+    --btn-fg: var(--nc-gray-1);
+    --btn-border: var(--nc-gray-12);
+    --btn-shadow:
+      inset 0 1px 0 0 oklch(1 0 0 / 0.14), 0 1px 2px -0.5px oklch(0 0 0 / 0.25),
+      0 3px 8px -3px oklch(0 0 0 / 0.3);
+    --btn-shadow-hover:
+      inset 0 1px 0 0 oklch(1 0 0 / 0.18), 0 2px 3px -1px oklch(0 0 0 / 0.25),
+      0 6px 16px -5px oklch(0 0 0 / 0.4);
+    --nc-sheen-blend: normal;
+    --nc-sheen-hover: 0.28;
+  }
+
+  .button[data-variant='solid'][data-tone='danger'] {
+    --tone-9: light-dark(oklch(0.58 0.2 var(--nc-danger-h)), oklch(0.64 0.19 var(--nc-danger-h)));
+    --tone-10: light-dark(oklch(0.54 0.2 var(--nc-danger-h)), oklch(0.69 0.18 var(--nc-danger-h)));
+    --btn-fg: oklch(0.99 0.01 var(--nc-danger-h));
+  }
+
+  /* ── Soft ──────────────────────────────────────────────────────────── */
+  .button[data-variant='soft'] {
+    --btn-bg: var(--nc-accent-3);
+    --btn-bg-hover: var(--nc-accent-4);
+    --btn-bg-active: var(--nc-accent-5);
+    --btn-fg: var(--nc-accent-11);
+    --nc-sheen-hover: 0.4;
+  }
+
+  .button[data-variant='soft'][data-tone='neutral'] {
+    --btn-bg: var(--nc-gray-3);
+    --btn-bg-hover: var(--nc-gray-4);
+    --btn-bg-active: var(--nc-gray-5);
+    --btn-fg: var(--nc-text);
+  }
+
+  .button[data-variant='soft'][data-tone='danger'] {
+    --btn-bg: light-dark(oklch(0.955 0.03 var(--nc-danger-h)), oklch(0.26 0.06 var(--nc-danger-h)));
+    --btn-bg-hover: light-dark(
+      oklch(0.93 0.045 var(--nc-danger-h)),
+      oklch(0.3 0.075 var(--nc-danger-h))
+    );
+    --btn-bg-active: light-dark(
+      oklch(0.905 0.06 var(--nc-danger-h)),
+      oklch(0.34 0.09 var(--nc-danger-h))
+    );
+    --btn-fg: light-dark(oklch(0.5 0.18 var(--nc-danger-h)), oklch(0.8 0.12 var(--nc-danger-h)));
+  }
+
+  /* ── Surface (the default secondary) ───────────────────────────────── */
+  .button[data-variant='surface'] {
+    --btn-bg: var(--nc-surface);
+    --btn-bg-hover: var(--nc-surface-hi);
+    --btn-bg-active: var(--nc-gray-3);
+    --btn-fg: var(--nc-text);
+    --btn-border: var(--nc-border);
+    --btn-glaze: linear-gradient(180deg, transparent 40%, var(--nc-wash-1) 100%);
+    --btn-shadow: var(--nc-glaze-edge), var(--nc-elevation-1);
+    --btn-shadow-hover: var(--nc-glaze-edge), var(--nc-elevation-2);
+    --nc-rim-hover: 1;
+    --nc-sheen-hover: 0.32;
+  }
+
+  .button[data-variant='surface'][data-tone='accent'] {
+    --btn-fg: var(--nc-accent-11);
+  }
+
+  .button[data-variant='surface'][data-tone='danger'] {
+    --btn-fg: light-dark(oklch(0.52 0.18 var(--nc-danger-h)), oklch(0.78 0.13 var(--nc-danger-h)));
+  }
+
+  /* ── Ghost ─────────────────────────────────────────────────────────── */
+  .button[data-variant='ghost'] {
+    --btn-bg: transparent;
+    --btn-bg-hover: var(--nc-wash-2);
+    --btn-bg-active: var(--nc-wash-3);
+    --btn-fg: var(--nc-text-muted);
+    --nc-sheen-hover: 0.25;
+    --nc-rim-hover: 0;
+  }
+
+  @media (hover: hover) {
+    .button[data-variant='ghost']:hover:not(:disabled) {
+      color: var(--nc-text);
+    }
+  }
+
+  .button[data-variant='ghost'][data-tone='accent'] {
+    --btn-fg: var(--nc-accent-11);
+    --btn-bg-hover: color-mix(in oklch, var(--nc-accent-9) 10%, transparent);
+    --btn-bg-active: color-mix(in oklch, var(--nc-accent-9) 16%, transparent);
+  }
+
+  .button[data-variant='ghost'][data-tone='danger'] {
+    --btn-fg: light-dark(oklch(0.52 0.18 var(--nc-danger-h)), oklch(0.78 0.13 var(--nc-danger-h)));
+    --btn-bg-hover: color-mix(in oklch, oklch(0.6 0.2 var(--nc-danger-h)) 10%, transparent);
+    --btn-bg-active: color-mix(in oklch, oklch(0.6 0.2 var(--nc-danger-h)) 16%, transparent);
+  }
+}

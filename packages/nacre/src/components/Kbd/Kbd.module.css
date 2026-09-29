@@ -1,0 +1,42 @@
+@layer nacre.components {
+  .kbd {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-family: var(--nc-font-sans);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-medium);
+    line-height: 1;
+    vertical-align: middle;
+  }
+
+  .key {
+    display: inline-grid;
+    place-items: center;
+    min-inline-size: 1.25rem;
+    block-size: 1.25rem;
+    padding-inline: 0.3rem;
+    border-radius: var(--nc-radius-xs);
+    corner-shape: var(--nc-corner-shape);
+    font: inherit;
+    color: var(--nc-text-muted);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-gray-2));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border),
+      inset 0 -1px 0 0 var(--nc-border),
+      0 1px 0 0 var(--nc-wash-1);
+  }
+
+  .kbd[data-size='sm'] .key {
+    min-inline-size: 1rem;
+    block-size: 1rem;
+    padding-inline: 0.2rem;
+    font-size: 0.625rem;
+  }
+
+  .kbd[data-inverse] .key {
+    color: color-mix(in oklch, var(--nc-text-inverse) 72%, transparent);
+    background: color-mix(in oklch, var(--nc-text-inverse) 12%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--nc-text-inverse) 10%, transparent);
+  }
+}
