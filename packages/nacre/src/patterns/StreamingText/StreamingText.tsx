@@ -1,7 +1,8 @@
-import { useState, type ComponentProps } from 'react';
+import type { ComponentProps } from 'react';
 
 import { cx } from '../../utils/cx';
 import styles from './StreamingText.module.css';
+import { useSmoothText } from './useSmoothText';
 
 export interface StreamingTextProps extends Omit<ComponentProps<'span'>, 'children' | 'ref'> {
   /** The full text received so far. Append to it as chunks arrive. */
@@ -11,48 +12,10 @@ export interface StreamingTextProps extends Omit<ComponentProps<'span'>, 'childr
   as?: 'span' | 'p' | 'div';
 }
 
-interface Segment {
-  id: number;
-  text: string;
-  /** Settled segments are merged and no longer animate. */
-  settled?: boolean;
-}
-
-interface State {
-  text: string;
-  segments: Segment[];
-  nextId: number;
-}
-
-/** Keep the DOM small on long streams: merge all but the freshest chunks. */
-const LIVE_SEGMENTS = 24;
-
-function advance(prev: State, text: string): State {
-  if (!text.startsWith(prev.text) || prev.text === '') {
-    // Replaced (or first render): show everything at once, no animation.
-    return {
-      text,
-      segments: text ? [{ id: prev.nextId, text, settled: true }] : [],
-      nextId: prev.nextId + 1,
-    };
-  }
-  const delta = text.slice(prev.text.length);
-  let segments = [...prev.segments, { id: prev.nextId, text: delta }];
-  if (segments.length > LIVE_SEGMENTS * 2) {
-    const cut = segments.length - LIVE_SEGMENTS;
-    const merged = segments
-      .slice(0, cut)
-      .map((s) => s.text)
-      .join('');
-    segments = [{ id: segments[0]?.id ?? 0, text: merged, settled: true }, ...segments.slice(cut)];
-  }
-  return { text, segments, nextId: prev.nextId + 1 };
-}
-
 /**
- * Renders text that arrives incrementally. Each new chunk surfaces with a
- * brief fade + de-blur so streaming feels fluid rather than jittery. Motion
- * collapses to an instant reveal under reduced-motion.
+ * Renders text that arrives incrementally. However bursty the stream, words
+ * flow out at an even pace and each one settles in (a soft de-blur that dries
+ * from the accent to the text colour). Reduced motion shows text instantly.
  */
 export function StreamingText({
   text,
@@ -61,24 +24,21 @@ export function StreamingText({
   className,
   ...props
 }: StreamingTextProps) {
-  const [state, setState] = useState<State>(() =>
-    advance({ text: '', segments: [], nextId: 0 }, text),
-  );
-  // Derive segments during render (React's "adjust state on prop change").
-  let current = state;
-  if (text !== state.text) {
-    current = advance(state, text);
-    setState(current);
-  }
+  const smooth = useSmoothText(text, { streaming });
+  const shown = smooth.text;
+  const freshFrom = smooth.freshFrom ?? shown.length;
+  const fresh = [...shown.slice(freshFrom).matchAll(/\s+|\S+\s*/g)];
+  const typing = streaming || shown.length < text.length;
 
   return (
-    <Comp data-streaming={streaming || undefined} className={cx(styles.root, className)} {...props}>
-      {current.segments.map((segment) => (
-        <span key={segment.id} className={segment.settled ? undefined : styles.chunk}>
-          {segment.text}
+    <Comp data-streaming={typing || undefined} className={cx(styles.root, className)} {...props}>
+      {shown.slice(0, freshFrom)}
+      {fresh.map((m) => (
+        <span key={freshFrom + m.index} data-nc-fresh="">
+          {m[0]}
         </span>
       ))}
-      {streaming && <span className={styles.caret} aria-hidden />}
+      {typing && <span className={styles.caret} aria-hidden />}
     </Comp>
   );
 }

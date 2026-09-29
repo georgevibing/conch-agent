@@ -14,7 +14,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Incrementally arriving text. Each chunk surfaces with a short fade and de-blur; the caret is a breathing pearl. Under reduced motion everything appears instantly.',
+          'Incrementally arriving text. However bursty the stream, words flow out at an even pace (useSmoothText) and each settles in — a soft de-blur that dries from the accent to the text colour. The caret is a breathing pearl. Under reduced motion everything appears instantly.',
       },
     },
   },

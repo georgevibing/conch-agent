@@ -88,3 +88,37 @@
     }
   }
 }
+
+/*
+ * "Settle" — how streamed words arrive. A fresh word surfaces out of a soft
+ * blur, still carrying a hint of the accent like wet ink, and dries to the
+ * text colour. Applied by `revealWords` / `useSmoothText` via `data-nc-fresh`;
+ * it plays once, on mount.
+ */
+@layer nacre.base {
+  @keyframes nc-settle {
+    from {
+      opacity: 0;
+      filter: blur(0.16em);
+      color: var(--nc-accent-11);
+    }
+    35% {
+      opacity: 1;
+      filter: blur(0);
+    }
+  }
+
+  [data-nc-fresh] {
+    animation: nc-settle 640ms var(--nc-ease-out) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-nc-fresh] {
+      animation: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] [data-nc-fresh] {
+    animation: none;
+  }
+}

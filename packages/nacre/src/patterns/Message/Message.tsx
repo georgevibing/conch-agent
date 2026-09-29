@@ -1,5 +1,5 @@
 import { AlertCircle, RotateCcw } from 'lucide-react';
-import { useId, type ComponentProps, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ComponentProps, type ReactNode } from 'react';
 
 import { Button } from '../../components/Button';
 import { cx } from '../../utils/cx';
@@ -21,6 +21,8 @@ export interface MessageProps extends Omit<ComponentProps<'article'>, 'children'
   /** `hover` (default) reveals actions on hover/focus; `always` keeps them visible. */
   actionsVisibility?: 'hover' | 'always';
   status?: MessageStatus;
+  /** Play the "surfacing" entrance on mount (turn off when it replaces a placeholder in place). */
+  entrance?: boolean;
   /** Error description shown when `status="error"`. */
   error?: ReactNode;
   onRetry?: () => void;
@@ -37,22 +39,40 @@ function Timestamp({ value }: { value: Date | string }) {
   );
 }
 
-/** The assistant's mark: a small glazed tile with a pearl rim. */
+/**
+ * The assistant's mark: a small glazed tile with a pearl rim. While `active`,
+ * the conch spiral draws itself from the centre out, flows away and grows
+ * again — a shell forming — as the rim's light orbits. When work finishes a
+ * single ring of light passes around it.
+ */
 export function MessageMark({
   active,
   className,
   ...props
 }: ComponentProps<'span'> & { active?: boolean }) {
+  const [landed, setLanded] = useState(false);
+  const [wasActive, setWasActive] = useState(active);
+  if (Boolean(active) !== Boolean(wasActive)) {
+    setWasActive(active);
+    if (!active) setLanded(true);
+  }
+  useEffect(() => {
+    if (!landed) return;
+    const id = setTimeout(() => setLanded(false), 1200);
+    return () => clearTimeout(id);
+  }, [landed]);
   return (
     <span
       aria-hidden
       data-active={active || undefined}
+      data-landed={landed || undefined}
       className={cx(styles.mark, className)}
       {...props}
     >
       <svg viewBox="3.5 3.5 17 17" className={styles.markGlyph}>
         {/* Conch's mark: a shell spiral of growing quarter-arcs (a golden spiral). */}
         <path
+          pathLength={1}
           d="M12 12a1.5 1.5 0 0 1 1.5 1.5a3 3 0 0 1-3 3a4.5 4.5 0 0 1-4.5-4.5a6 6 0 0 1 6-6a7.5 7.5 0 0 1 7.5 7.5"
           transform="translate(0 -1.5)"
         />
@@ -75,6 +95,7 @@ export function Message({
   actions,
   actionsVisibility = 'hover',
   status = 'complete',
+  entrance = true,
   error,
   onRetry,
   className,
@@ -139,6 +160,7 @@ export function Message({
       aria-busy={status === 'streaming' || undefined}
       data-from={from}
       data-status={status}
+      data-entrance={entrance ? undefined : 'none'}
       className={cx(styles.message, className)}
       {...props}
     >

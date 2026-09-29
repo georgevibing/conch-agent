@@ -89,7 +89,27 @@ porcelain.
 Springs are real damped-spring curves baked into CSS `linear()`; the same physics are
 exported for JS as `springs` from `@conch/nacre` for the `motion` library. Keyframes:
 `nc-surface-in` / `nc-surface-out` (rise + un-blur), `nc-fade-*`, `nc-shimmer`,
-`nc-breathe`, `nc-spin`. All durations collapse to ~0 under reduced motion.
+`nc-breathe`, `nc-spin`, `nc-settle`. All durations collapse to ~0 under reduced motion.
+
+### Waiting and arriving (chat)
+
+The wait before an answer should feel like progress, not a spinner, and the answer
+should flow, never stutter.
+
+- **Anticipation** (`ThinkingIndicator`). Verbs picked for the request ("Tracing the
+  problem" for a bug, "Finding the words" for an email) take turns. Each one surfaces
+  letter by letter while a slow tide of colour washes across it, and three pearls rise
+  in place of an ellipsis. While the model reasons, the newest words of that reasoning
+  drift past underneath in italic serif. The verb comes from the clock, so a remount
+  continues where the last one left off. Screen readers hear one stable label.
+- **The mark** (`MessageMark`). While working, the conch spiral draws itself from the
+  centre, flows away and grows again. When the answer lands, one ring of light passes
+  around the rim.
+- **Arrival** (`useSmoothText` + `revealWords`). Bursty deltas are paced into an even
+  flow of _whole words_, at a speed proportional to the backlog. Each fresh word
+  _settles_ (`[data-nc-fresh]` → `nc-settle`): it un-blurs and dries from the accent
+  to the text colour, like wet ink. Half-arrived Markdown is closed so raw `**` never
+  flashes. The wait holds its place and the reply replaces it in place, with no jump.
 
 ## Interaction checklist (every interactive component)
 

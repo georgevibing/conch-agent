@@ -7,18 +7,30 @@
 @layer nacre.components {
   .root {
     --orb: 0.875rem;
-    display: inline-flex;
-    align-items: center;
-    gap: var(--nc-space-2);
-    min-block-size: var(--nc-control-sm);
+    --tide: 2.8s;
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
     font-size: var(--nc-text-md);
     color: var(--nc-text-muted);
   }
 
   .root[data-size='sm'] {
     --orb: 0.75rem;
-    gap: var(--nc-space-1-5);
     font-size: var(--nc-text-sm);
+  }
+
+  .line {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-block-size: 1.5rem;
+    min-inline-size: 0;
+  }
+
+  .root[data-size='sm'] .line {
+    gap: var(--nc-space-1-5);
   }
 
   /* ── Orb: a tiny pearl with light swirling inside it ──────────────── */
@@ -91,36 +103,113 @@
     }
   }
 
-  /* ── Label: a band of pearl light sweeps across the text ─────────── */
+  /* ── Verb: letters surface one by one, then a tide of colour washes over ── */
   .label {
+    display: inline-grid;
     font-weight: var(--nc-weight-medium);
-    color: transparent;
-    background: linear-gradient(
-        100deg,
-        var(--nc-text-muted) 0%,
-        var(--nc-text-muted) 38%,
-        var(--nc-text) 46%,
-        var(--nc-accent-11) 50%,
-        var(--nc-text) 54%,
-        var(--nc-text-muted) 62%,
-        var(--nc-text-muted) 100%
-      )
-      0 0 / 250% 100%;
-    background-clip: text;
-    -webkit-background-clip: text;
-    animation: shimmer 2.2s var(--nc-ease-in-out) infinite;
+    letter-spacing: -0.005em;
+    white-space: nowrap;
   }
 
-  .label::after {
-    content: '…';
+  .word {
+    grid-area: 1 / 1;
   }
 
-  @keyframes shimmer {
+  .ch {
+    display: inline-block;
+    white-space: pre;
+    animation:
+      letter-in 560ms var(--nc-spring-soft) calc(var(--i) * 26ms) both,
+      tide var(--tide) var(--nc-ease-in-out) calc(700ms + var(--i) * 55ms) infinite;
+  }
+
+  .word[data-settled] .ch {
+    animation: tide var(--tide) var(--nc-ease-in-out) calc(var(--i) * 55ms) infinite;
+  }
+
+  .word[data-leaving] .ch {
+    animation: letter-out 300ms var(--nc-ease-in) calc(var(--i) * 12ms) both;
+  }
+
+  @keyframes letter-in {
     from {
-      background-position: 100% 0;
+      opacity: 0;
+      transform: translateY(0.5em) rotate(4deg);
+      filter: blur(3px);
     }
     to {
-      background-position: 0% 0;
+      opacity: 1;
+      transform: none;
+      filter: blur(0);
+    }
+  }
+
+  @keyframes letter-out {
+    to {
+      opacity: 0;
+      transform: translateY(-0.45em);
+      filter: blur(3px);
+    }
+  }
+
+  @keyframes tide {
+    0%,
+    100% {
+      color: var(--nc-text-muted);
+    }
+    18% {
+      color: var(--nc-accent-11);
+    }
+    36% {
+      color: var(--nc-text);
+    }
+    54% {
+      color: var(--nc-text-muted);
+    }
+  }
+
+  /* ── Bubbles: three pearls rising, in place of a flat ellipsis ─────── */
+  .bubbles {
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 0.16em;
+    block-size: 0.9em;
+    margin-inline-start: calc(var(--nc-space-1) * -1);
+    flex-shrink: 0;
+  }
+
+  .bubbles i {
+    inline-size: 0.24em;
+    block-size: 0.24em;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 35% 30%, oklch(1 0 0 / 0.9) 0 18%, transparent 55%),
+      var(--nc-accent-9);
+    opacity: 0.35;
+    animation: bubble 1.5s var(--nc-ease-in-out) infinite;
+  }
+
+  .bubbles i:nth-child(2) {
+    animation-delay: 0.16s;
+  }
+
+  .bubbles i:nth-child(3) {
+    animation-delay: 0.32s;
+  }
+
+  @keyframes bubble {
+    0%,
+    100% {
+      transform: translateY(0) scale(0.8);
+      opacity: 0.3;
+    }
+    40% {
+      transform: translateY(-0.42em) scale(1);
+      opacity: 0.95;
+    }
+    70% {
+      transform: translateY(-0.2em) scale(0.9);
+      opacity: 0.5;
     }
   }
 
@@ -133,28 +222,58 @@
   }
 
   .elapsed {
+    margin-inline-start: var(--nc-space-1);
     font-size: 0.86em;
     font-variant-numeric: tabular-nums;
     color: var(--nc-text-subtle);
+    animation: nc-fade-in var(--nc-duration-slower) var(--nc-ease-out) both;
+  }
+
+  /* ── Trail: the newest words of the model's reasoning drift past ──── */
+  .trail {
+    display: flex;
+    justify-content: flex-end;
+    inline-size: fit-content;
+    max-inline-size: min(36rem, 100%);
+    overflow: hidden;
+    white-space: nowrap;
+    font-family: var(--nc-font-display);
+    font-style: italic;
+    font-size: 1.06em;
+    line-height: 1.5;
+    color: var(--nc-text-subtle);
+    animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) both;
+  }
+
+  .trail[data-overflow] {
+    mask-image: linear-gradient(to right, transparent, #000 40%);
+  }
+
+  .trailText {
+    flex-shrink: 0;
   }
 
   @media (prefers-reduced-motion: reduce) {
     .core,
     .orb::before,
-    .label {
+    .ch,
+    .bubbles i {
       animation: none;
     }
-    .label {
-      color: var(--nc-text-muted);
+    .word[data-leaving] {
+      display: none;
+    }
+    .bubbles i {
+      opacity: 0.6;
     }
   }
 
-  :global([data-nacre-motion='reduced']) :is(.core, .label),
+  :global([data-nacre-motion='reduced']) :is(.core, .ch, .bubbles i),
   :global([data-nacre-motion='reduced']) .orb::before {
     animation: none;
   }
 
-  :global([data-nacre-motion='reduced']) .label {
-    color: var(--nc-text-muted);
+  :global([data-nacre-motion='reduced']) .word[data-leaving] {
+    display: none;
   }
 }

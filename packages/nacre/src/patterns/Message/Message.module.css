@@ -102,8 +102,29 @@
     animation: mark-orbit 3s linear infinite;
   }
 
+  .message[data-entrance='none'] {
+    animation: none;
+  }
+
+  .mark[data-active] .markGlyph path {
+    stroke-dasharray: 1 1;
+    animation: glyph-grow 2.8s var(--nc-ease-in-out) infinite;
+  }
+
   .mark[data-active] .markGlyph {
-    animation: glyph-turn 3s var(--nc-ease-in-out) infinite;
+    animation: glyph-sway 2.8s var(--nc-ease-in-out) infinite;
+  }
+
+  /* One ring of light as the answer lands. */
+  .mark[data-landed]::after {
+    opacity: var(--nc-lustre);
+    animation:
+      mark-orbit 1.1s var(--nc-ease-out) both,
+      nc-fade-out 1.1s var(--nc-ease-in) both;
+  }
+
+  .mark[data-landed] .markGlyph {
+    animation: glyph-land 700ms var(--nc-spring-bouncy) both;
   }
 
   .markGlyph {
@@ -122,15 +143,36 @@
     }
   }
 
-  @keyframes glyph-turn {
+  /* The spiral grows from its centre, holds, then flows out from the centre. */
+  @keyframes glyph-grow {
     0% {
-      transform: rotate(0deg) scale(1);
+      stroke-dashoffset: 1;
     }
-    50% {
-      transform: rotate(90deg) scale(0.86);
+    48%,
+    62% {
+      stroke-dashoffset: 0;
     }
     100% {
-      transform: rotate(180deg) scale(1);
+      stroke-dashoffset: -0.999;
+    }
+  }
+
+  @keyframes glyph-sway {
+    0%,
+    100% {
+      transform: rotate(-10deg) scale(0.94);
+    }
+    55% {
+      transform: rotate(8deg) scale(1.04);
+    }
+  }
+
+  @keyframes glyph-land {
+    from {
+      transform: scale(0.8);
+    }
+    to {
+      transform: none;
     }
   }
 
@@ -304,7 +346,10 @@
       animation: none;
     }
     .mark[data-active]::after,
+    .mark[data-landed]::after,
     .mark[data-active] .markGlyph,
+    .mark[data-active] .markGlyph path,
+    .mark[data-landed] .markGlyph,
     .content[data-streaming] *::after,
     .content[data-streaming]::after {
       animation: none;
@@ -313,7 +358,8 @@
 
   :global([data-nacre-motion='reduced']) .message,
   :global([data-nacre-motion='reduced']) .mark::after,
-  :global([data-nacre-motion='reduced']) .markGlyph {
+  :global([data-nacre-motion='reduced']) .markGlyph,
+  :global([data-nacre-motion='reduced']) .markGlyph path {
     animation: none;
   }
 }
