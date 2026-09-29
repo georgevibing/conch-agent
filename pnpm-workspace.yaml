@@ -32,3 +32,6 @@ minimumReleaseAgeExclude:
   - '@anthropic-ai/sdk@0.129.0'
   - '@modelcontextprotocol/sdk@1.31.0'
 strictPeerDependencies: false
+# Scripts use POSIX syntax (`VAR=${VAR:-1} cmd`); cmd.exe can't run it, so run
+# every script through pnpm's cross-platform shell instead.
+shellEmulator: true
