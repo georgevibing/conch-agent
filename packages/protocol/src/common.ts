@@ -1,6 +1,12 @@
 /** Schemas shared by conversations and routines. */
 import { z } from 'zod';
 
+/**
+ * Any id that crosses the wire (`c_1a2b3c4d5e6f`, `perm_…`). No dots or slashes,
+ * so an id can never become a path outside the folder it names a file in.
+ */
+export const Id = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/, 'Invalid id.');
+
 /** How hard the model thinks. `auto` lets the model decide (engine default). */
 export const EffortChoice = z.enum(['auto', 'low', 'medium', 'high', 'xhigh', 'max']);
 export type EffortChoice = z.infer<typeof EffortChoice>;

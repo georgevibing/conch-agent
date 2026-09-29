@@ -7,10 +7,11 @@
  */
 import { z } from 'zod';
 
-import { EffortChoice, PermissionMode, TurnOptions, Usage } from './common';
+import { EffortChoice, Id, PermissionMode, TurnOptions, Usage } from './common';
 import { Routine, RoutineRun } from './routines';
 import { UsageSnapshot } from './usage';
 
+export * from './access';
 export * from './common';
 export * from './routines';
 export * from './search';
@@ -103,7 +104,15 @@ export const LoginState = z.object({
 export type LoginState = z.infer<typeof LoginState>;
 
 export const StartLoginBody = z.object({ method: LoginMethod.default('subscription') });
-export const LoginCodeBody = z.object({ code: z.string().min(1).max(4096) });
+export const LoginCodeBody = z.object({
+  // Written to the CLI's stdin: a line break would smuggle in extra input.
+  code: z
+    .string()
+    .trim()
+    .min(1)
+    .max(4096)
+    .regex(/^[^\r\n]+$/, 'The code should be a single line.'),
+});
 export const ApiKeyBody = z.object({ apiKey: z.string().min(10).max(512) });
 
 // ── Models, thinking and modes ──────────────────────────────────────────────
@@ -401,7 +410,7 @@ export const ClientCommand = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('conversation.send'),
     /** Omit to start a new conversation. */
-    conversationId: z.string().optional(),
+    conversationId: Id.optional(),
     /** Client-generated id so the UI can reconcile optimistic messages. */
     clientMessageId: z.string().min(1).max(128),
     text: z.string().trim().min(1).max(200_000),
@@ -410,20 +419,20 @@ export const ClientCommand = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('conversation.configure'),
-    conversationId: z.string(),
+    conversationId: Id,
     options: TurnOptions,
   }),
   z.object({
     type: z.literal('conversation.subscribe'),
-    conversationId: z.string(),
+    conversationId: Id,
     afterSeq: z.number().int().optional(),
   }),
-  z.object({ type: z.literal('conversation.unsubscribe'), conversationId: z.string() }),
-  z.object({ type: z.literal('conversation.interrupt'), conversationId: z.string() }),
+  z.object({ type: z.literal('conversation.unsubscribe'), conversationId: Id }),
+  z.object({ type: z.literal('conversation.interrupt'), conversationId: Id }),
   z.object({
     type: z.literal('permission.respond'),
-    conversationId: z.string(),
-    permissionId: z.string(),
+    conversationId: Id,
+    permissionId: Id,
     decision: z.enum(['allow', 'allow-always', 'deny']),
   }),
   z.object({ type: z.literal('ping') }),
