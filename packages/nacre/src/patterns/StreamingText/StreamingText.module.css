@@ -1,0 +1,71 @@
+@layer nacre.components {
+  .root {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+  }
+
+  .chunk {
+    animation: token-in var(--nc-duration-slower) var(--nc-ease-out) both;
+  }
+
+  @keyframes token-in {
+    from {
+      opacity: 0;
+      filter: blur(3px);
+    }
+    40% {
+      opacity: 0.7;
+    }
+    to {
+      opacity: 1;
+      filter: blur(0);
+    }
+  }
+
+  /* A slim pearl caret that breathes rather than blinks. */
+  .caret {
+    display: inline-block;
+    inline-size: 0.5em;
+    block-size: 0.5em;
+    margin-inline-start: 0.2em;
+    border-radius: 50%;
+    vertical-align: 0.05em;
+    background: conic-gradient(from var(--nc-angle, 0deg), var(--nc-pearl-spectrum));
+    box-shadow: 0 0 0.6em 0 color-mix(in oklch, var(--nc-accent-9) 45%, transparent);
+    animation:
+      caret-breathe 1.4s var(--nc-ease-in-out) infinite,
+      caret-spin 3s linear infinite;
+  }
+
+  @keyframes caret-breathe {
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(0.72);
+      opacity: 0.55;
+    }
+  }
+
+  @keyframes caret-spin {
+    to {
+      --nc-angle: 360deg;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chunk {
+      animation: none;
+    }
+    .caret {
+      animation: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .chunk,
+  :global([data-nacre-motion='reduced']) .caret {
+    animation: none;
+  }
+}

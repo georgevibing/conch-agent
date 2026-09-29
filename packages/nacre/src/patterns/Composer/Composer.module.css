@@ -1,0 +1,319 @@
+@layer nacre.components {
+  /* The frame hosts the halo so it can sit *behind* the opaque surface. */
+  .frame {
+    --cmp-radius: var(--nc-radius-xl);
+    --cmp-line: 1.5rem;
+    position: relative;
+    isolation: isolate;
+    min-inline-size: 0;
+  }
+
+  .glow {
+    position: absolute;
+    inset: 6px 4%;
+    z-index: -1;
+    border-radius: var(--cmp-radius);
+    background: conic-gradient(from var(--nc-angle), var(--nc-pearl-spectrum));
+    filter: blur(18px);
+    opacity: 0;
+    transform: scale(0.96);
+    transition:
+      opacity var(--nc-duration-slower) var(--nc-ease-out),
+      transform var(--nc-spring-soft-duration) var(--nc-spring-soft);
+    pointer-events: none;
+  }
+
+  .frame[data-running] {
+    animation: frame-orbit 6s linear infinite;
+  }
+
+  .frame[data-running] .glow {
+    opacity: calc(var(--nc-lustre) * 0.55);
+    transform: none;
+  }
+
+  @keyframes frame-orbit {
+    to {
+      --nc-angle: 360deg;
+    }
+  }
+
+  /* ── Surface ──────────────────────────────────────────────────────── */
+  .surface {
+    --nc-rim-rest: 0;
+    --nc-rim-hover: 0.55;
+    --nc-sheen-hover: 0.08;
+    --nc-sheen-size: 320px;
+
+    display: flex;
+    flex-direction: column;
+    border-radius: var(--cmp-radius);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-2);
+    cursor: text;
+    transition:
+      box-shadow var(--nc-duration-base) var(--nc-ease-out),
+      --nc-rim-near var(--nc-duration-slow) var(--nc-ease-out),
+      --nc-sheen var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .surface:focus-within {
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--nc-accent-9) 55%, var(--nc-border)),
+      var(--nc-glaze-edge),
+      0 0 0 4px color-mix(in oklch, var(--nc-accent-9) 14%, transparent),
+      var(--nc-elevation-3);
+  }
+
+  .frame[data-running] .surface {
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-3);
+  }
+
+  .frame[data-disabled] .surface {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  /* ── Text field ───────────────────────────────────────────────────── */
+  .textarea {
+    display: block;
+    inline-size: 100%;
+    margin: 0;
+    padding: var(--nc-space-3) var(--nc-space-4) var(--nc-space-1);
+    border: 0;
+    outline: none;
+    resize: none;
+    background: transparent;
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-text-lg);
+    line-height: var(--cmp-line);
+    letter-spacing: -0.006em;
+    scrollbar-width: thin;
+    transition: height var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .textarea::placeholder {
+    color: var(--nc-text-subtle);
+    opacity: 1;
+    transition: opacity var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .textarea:focus::placeholder {
+    opacity: 0.7;
+  }
+
+  .textarea:disabled {
+    cursor: not-allowed;
+  }
+
+  /* ── Footer ───────────────────────────────────────────────────────── */
+  .footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-1-5) var(--nc-space-2) var(--nc-space-2);
+    min-block-size: calc(var(--nc-control-sm) + var(--nc-space-3));
+  }
+
+  .toolbar,
+  .end {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+  }
+
+  .end {
+    margin-inline-start: auto;
+    flex-shrink: 0;
+  }
+
+  .hint {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    margin-inline-end: var(--nc-space-1-5);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateX(4px);
+    transition:
+      opacity var(--nc-duration-base) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+    pointer-events: none;
+  }
+
+  .surface:focus-within .hint,
+  .frame[data-running] .hint {
+    opacity: 1;
+    transform: none;
+  }
+
+  @media (max-width: 40rem) {
+    .hint {
+      display: none;
+    }
+  }
+
+  /* ── Send ⇄ Stop ──────────────────────────────────────────────────── */
+  .end .send[data-mode] {
+    --btn-icon: 1rem;
+  }
+
+  .sendIcons {
+    display: grid;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .sendIcons > svg {
+    grid-area: 1 / 1;
+    inline-size: 100%;
+    block-size: 100%;
+    transition:
+      opacity var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy),
+      filter var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .arrow {
+    stroke-width: 2.4;
+  }
+
+  .stop {
+    fill: currentColor;
+    stroke-width: 0;
+    transform: scale(0.35) rotate(-45deg);
+    opacity: 0;
+    filter: blur(2px);
+    padding: 0.15rem;
+    border-radius: 3px;
+  }
+
+  .send[data-mode='stop'] .arrow {
+    transform: translateY(-60%) scale(0.6);
+    opacity: 0;
+    filter: blur(2px);
+  }
+
+  .send[data-mode='stop'] .stop {
+    transform: none;
+    opacity: 1;
+    filter: none;
+  }
+
+  /* Disabled send: quiet, not faded-out accent. */
+  .end .send[data-mode='send']:disabled {
+    opacity: 1;
+    --btn-bg: var(--nc-gray-4);
+    --btn-fg: var(--nc-text-disabled);
+    --btn-border: transparent;
+    --btn-glaze: linear-gradient(transparent, transparent);
+    box-shadow: none;
+    text-shadow: none;
+  }
+
+  /* ── Attachments ──────────────────────────────────────────────────── */
+  .attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-3) var(--nc-space-3) 0;
+  }
+
+  .attachment {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    max-inline-size: 16rem;
+    padding: var(--nc-space-1) var(--nc-space-1) var(--nc-space-1) var(--nc-space-1);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    animation: chip-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  @keyframes chip-in {
+    from {
+      opacity: 0;
+      transform: scale(0.92);
+      filter: blur(2px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+      filter: none;
+    }
+  }
+
+  .attachmentThumb {
+    display: inline-grid;
+    place-items: center;
+    inline-size: 2rem;
+    block-size: 2rem;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    color: var(--nc-accent-11);
+    background: var(--nc-accent-3);
+  }
+
+  .attachmentThumb > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .attachmentThumb > img {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  .attachmentText {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    line-height: var(--nc-leading-snug);
+  }
+
+  .attachmentName {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .attachmentMeta {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .attachment .attachmentRemove[data-size] {
+    --btn-h: 1.5rem;
+    --btn-icon: 0.75rem;
+    margin-inline-start: auto;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .frame[data-running] {
+      animation: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .frame[data-running] {
+    animation: none;
+  }
+}

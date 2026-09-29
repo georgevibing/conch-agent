@@ -62,3 +62,6 @@ export * from './components/Kbd';
 export * from './components/Badge';
 export * from './components/Avatar';
 export * from './components/EmptyState';
+
+// Chat patterns
+export * from './patterns';

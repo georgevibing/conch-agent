@@ -1,15 +1,7 @@
 {
   "extends": "@conch/tsconfig/react.json",
   "compilerOptions": {
-    "types": [
-      "vite/client",
-      "node"
-    ]
+    "types": ["vite/client", "node"]
   },
-  "include": [
-    "src",
-    ".storybook",
-    "vite.config.ts",
-    "vite.shared.ts"
-  ]
+  "include": ["src", ".storybook", "vite.config.ts", "vite.shared.ts"]
 }

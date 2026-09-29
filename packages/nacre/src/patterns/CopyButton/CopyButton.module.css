@@ -1,0 +1,41 @@
+@layer nacre.components {
+  .icons {
+    position: relative;
+    display: grid;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .icons > svg {
+    grid-area: 1 / 1;
+    inline-size: 100%;
+    block-size: 100%;
+    transition:
+      opacity var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy),
+      filter var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .check {
+    opacity: 0;
+    transform: scale(0.4) rotate(-30deg);
+    filter: blur(2px);
+    color: light-dark(oklch(0.52 0.13 var(--nc-success-h)), oklch(0.8 0.13 var(--nc-success-h)));
+  }
+
+  .copyButton[data-copied] .copy {
+    opacity: 0;
+    transform: scale(0.5);
+    filter: blur(2px);
+  }
+
+  .copyButton[data-copied] .check {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+
+  .copyButton[data-copied] .check {
+    stroke-width: 2.4;
+  }
+}

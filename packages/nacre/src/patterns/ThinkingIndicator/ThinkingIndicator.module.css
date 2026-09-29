@@ -1,0 +1,160 @@
+@property --orb-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@layer nacre.components {
+  .root {
+    --orb: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-block-size: var(--nc-control-sm);
+    font-size: var(--nc-text-md);
+    color: var(--nc-text-muted);
+  }
+
+  .root[data-size='sm'] {
+    --orb: 0.75rem;
+    gap: var(--nc-space-1-5);
+    font-size: var(--nc-text-sm);
+  }
+
+  /* ── Orb: a tiny pearl with light swirling inside it ──────────────── */
+  .orb {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    inline-size: var(--orb);
+    block-size: var(--orb);
+    flex-shrink: 0;
+  }
+
+  .orb::before {
+    /* halo */
+    content: '';
+    position: absolute;
+    inset: -45%;
+    border-radius: 50%;
+    background: radial-gradient(
+      closest-side,
+      color-mix(in oklch, var(--nc-accent-9) 32%, transparent),
+      transparent
+    );
+    animation: halo 2.4s var(--nc-ease-in-out) infinite;
+    opacity: calc(0.4 + var(--nc-lustre) * 0.6);
+  }
+
+  .core {
+    position: relative;
+    inline-size: 100%;
+    block-size: 100%;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 32% 28%, oklch(1 0 0 / 0.95) 0 12%, transparent 46%),
+      conic-gradient(from var(--orb-angle, 0deg), var(--nc-pearl-spectrum)), var(--nc-accent-9);
+    box-shadow:
+      inset 0 -1px 2px 0 color-mix(in oklch, var(--nc-accent-9) 55%, transparent),
+      inset 0 0 0 0.5px oklch(1 0 0 / 0.5),
+      0 1px 3px -1px color-mix(in oklch, var(--nc-accent-9) 60%, transparent);
+    animation:
+      swirl 2.6s linear infinite,
+      pulse 2.4s var(--nc-ease-in-out) infinite;
+  }
+
+  @keyframes swirl {
+    to {
+      --orb-angle: 360deg;
+    }
+  }
+
+  @keyframes pulse {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(0.84);
+    }
+  }
+
+  @keyframes halo {
+    0%,
+    100% {
+      transform: scale(0.8);
+      opacity: 0.5;
+    }
+    50% {
+      transform: scale(1.15);
+      opacity: 1;
+    }
+  }
+
+  /* ── Label: a band of pearl light sweeps across the text ─────────── */
+  .label {
+    font-weight: var(--nc-weight-medium);
+    color: transparent;
+    background: linear-gradient(
+        100deg,
+        var(--nc-text-muted) 0%,
+        var(--nc-text-muted) 38%,
+        var(--nc-text) 46%,
+        var(--nc-accent-11) 50%,
+        var(--nc-text) 54%,
+        var(--nc-text-muted) 62%,
+        var(--nc-text-muted) 100%
+      )
+      0 0 / 250% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    animation: shimmer 2.2s var(--nc-ease-in-out) infinite;
+  }
+
+  .label::after {
+    content: '…';
+  }
+
+  @keyframes shimmer {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: 0% 0;
+    }
+  }
+
+  .detail {
+    color: var(--nc-text-subtle);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    min-inline-size: 0;
+  }
+
+  .elapsed {
+    font-size: 0.86em;
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-subtle);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .core,
+    .orb::before,
+    .label {
+      animation: none;
+    }
+    .label {
+      color: var(--nc-text-muted);
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) :is(.core, .label),
+  :global([data-nacre-motion='reduced']) .orb::before {
+    animation: none;
+  }
+
+  :global([data-nacre-motion='reduced']) .label {
+    color: var(--nc-text-muted);
+  }
+}

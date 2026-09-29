@@ -1,0 +1,277 @@
+@layer nacre.components {
+  .root {
+    /* Syntax palette — mapped from Shiki's CSS-variables theme onto Nacre.
+       Keywords follow the accent, so code re-tints with the theme. */
+    --shiki-foreground: var(--nc-text);
+    --shiki-background: transparent;
+    --shiki-token-keyword: var(--nc-accent-11);
+    --shiki-token-constant: light-dark(oklch(0.5 0.15 300), oklch(0.8 0.1 300));
+    --shiki-token-string: light-dark(oklch(0.5 0.11 150), oklch(0.8 0.11 150));
+    --shiki-token-string-expression: light-dark(oklch(0.5 0.1 185), oklch(0.8 0.09 185));
+    --shiki-token-function: light-dark(oklch(0.5 0.14 255), oklch(0.8 0.1 255));
+    --shiki-token-parameter: light-dark(oklch(0.55 0.12 60), oklch(0.82 0.1 70));
+    --shiki-token-punctuation: var(--nc-text-subtle);
+    --shiki-token-comment: var(--nc-text-subtle);
+    --shiki-token-link: var(--nc-accent-11);
+    --shiki-token-inserted: light-dark(
+      oklch(0.5 0.13 var(--nc-success-h)),
+      oklch(0.8 0.13 var(--nc-success-h))
+    );
+    --shiki-token-deleted: light-dark(
+      oklch(0.52 0.18 var(--nc-danger-h)),
+      oklch(0.78 0.13 var(--nc-danger-h))
+    );
+    --shiki-token-changed: light-dark(
+      oklch(0.55 0.12 var(--nc-warning-h)),
+      oklch(0.82 0.12 var(--nc-warning-h))
+    );
+    --shiki-ansi-black: var(--nc-gray-12);
+    --shiki-ansi-red: var(--shiki-token-deleted);
+    --shiki-ansi-green: var(--shiki-token-inserted);
+    --shiki-ansi-yellow: var(--shiki-token-changed);
+    --shiki-ansi-blue: var(--shiki-token-function);
+    --shiki-ansi-magenta: var(--shiki-token-constant);
+    --shiki-ansi-cyan: var(--shiki-token-string-expression);
+    --shiki-ansi-white: var(--nc-gray-1);
+
+    --code-font: 0.8125rem;
+    --code-leading: 1.65;
+    --code-pad-x: var(--nc-space-4);
+    --code-pad-y: var(--nc-space-3);
+
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    margin: 0;
+    color: var(--nc-text);
+  }
+
+  .root[data-variant='card'] {
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    overflow: hidden;
+  }
+
+  /* ── Header ─────────────────────────────────────────────────────── */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+    min-block-size: 2.375rem;
+    padding-inline: var(--nc-space-3) var(--nc-space-1-5);
+    border-block-end: 1px solid var(--nc-border-subtle);
+    background: linear-gradient(180deg, var(--nc-wash-1), transparent);
+  }
+
+  .label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-muted);
+    letter-spacing: 0.005em;
+  }
+
+  .label > span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .filename {
+    font-family: var(--nc-font-mono);
+    font-weight: var(--nc-weight-regular);
+    color: var(--nc-text);
+  }
+
+  .labelIcon {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .actions {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-0-5);
+  }
+
+  /* Actions recede until the block is hovered or focused. */
+  @media (hover: hover) {
+    .actions > :not([data-active]) {
+      opacity: 0.6;
+      transition: opacity var(--nc-duration-base) var(--nc-ease-out);
+    }
+    .root:hover .actions > *,
+    .root:focus-within .actions > * {
+      opacity: 1;
+    }
+  }
+
+  .wrapToggle[data-active] {
+    --btn-fg: var(--nc-accent-11);
+    --btn-bg: color-mix(in oklch, var(--nc-accent-9) 12%, transparent);
+  }
+
+  /* ── Body ───────────────────────────────────────────────────────── */
+  .viewport {
+    overflow: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    border-radius: inherit;
+    interpolate-size: allow-keywords;
+    transition: max-block-size var(--nc-duration-slower) var(--nc-ease-out);
+  }
+
+  .root[data-variant='card'] .viewport {
+    border-radius: 0;
+  }
+
+  .viewport:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  .root[data-collapsed] .viewport {
+    max-block-size: calc(
+      var(--visible-lines) * var(--code-font) * var(--code-leading) + var(--code-pad-y) * 2
+    );
+    overflow-y: hidden;
+    mask-image: linear-gradient(180deg, #000 calc(100% - 3.5rem), transparent);
+  }
+
+  .pre {
+    margin: 0;
+    padding: var(--code-pad-y) 0;
+    min-inline-size: max-content;
+    font-family: var(--nc-font-mono);
+    font-size: var(--code-font);
+    line-height: var(--code-leading);
+    font-variant-ligatures: none;
+    tab-size: 2;
+    color: var(--shiki-foreground);
+  }
+
+  .root[data-wrap] .pre {
+    min-inline-size: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .code {
+    display: block;
+    font: inherit;
+  }
+
+  .line {
+    display: block;
+    position: relative;
+    padding-inline: var(--code-pad-x);
+    counter-increment: nc-line;
+  }
+
+  .root[data-line-numbers] .line {
+    padding-inline-start: calc(var(--code-pad-x) + var(--gutter) + 1.5ch);
+  }
+
+  .root[data-line-numbers] .line::before {
+    content: counter(nc-line);
+    position: absolute;
+    inset-inline-start: 0;
+    inline-size: calc(var(--code-pad-x) + var(--gutter) - 0.25ch);
+    text-align: end;
+    color: var(--nc-text-subtle);
+    opacity: 0.6;
+    font-variant-numeric: tabular-nums;
+    user-select: none;
+  }
+
+  .line[data-highlighted] {
+    background: linear-gradient(
+      90deg,
+      color-mix(in oklch, var(--nc-accent-9) 14%, transparent),
+      color-mix(in oklch, var(--nc-accent-9) 6%, transparent)
+    );
+    box-shadow: inset 2px 0 0 0 var(--nc-accent-9);
+  }
+
+  .line[data-highlighted]::before {
+    color: var(--nc-accent-11);
+    opacity: 1;
+  }
+
+  /* ── Expander ───────────────────────────────────────────────────── */
+  .expander {
+    display: flex;
+    justify-content: center;
+    padding: var(--nc-space-1-5);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .root[data-collapsed] .expander {
+    border-block-start-color: transparent;
+    margin-block-start: -0.25rem;
+  }
+
+  .expandButton {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    block-size: var(--nc-control-xs);
+    padding-inline: var(--nc-space-3);
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: transparent;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .expandButton:hover {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+  }
+
+  .expandButton:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .expandIcon {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .expandButton[aria-expanded='true'] .expandIcon {
+    transform: rotate(180deg);
+  }
+
+  /* ── Inline code ────────────────────────────────────────────────── */
+  .inline {
+    padding: 0.12em 0.38em;
+    border-radius: var(--nc-radius-xs);
+    corner-shape: var(--nc-corner-shape);
+    font-family: var(--nc-font-mono);
+    font-size: 0.88em;
+    font-variant-ligatures: none;
+    color: var(--nc-text);
+    background: var(--nc-gray-3);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    overflow-wrap: anywhere;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+}

@@ -1,0 +1,305 @@
+@layer nacre.components {
+  .prose {
+    --prose-size: var(--nc-text-md);
+    --prose-leading: 1.7;
+    --prose-flow: 0.9em;
+
+    font-size: var(--prose-size);
+    line-height: var(--prose-leading);
+    color: var(--nc-text);
+    overflow-wrap: break-word;
+    min-inline-size: 0;
+  }
+
+  .prose[data-size='sm'] {
+    --prose-size: var(--nc-text-sm);
+    --prose-leading: 1.65;
+  }
+
+  .prose[data-size='lg'] {
+    --prose-size: var(--nc-text-lg);
+    --prose-leading: 1.72;
+  }
+
+  .prose[data-measure] {
+    max-inline-size: 68ch;
+  }
+
+  /* Vertical rhythm: space between siblings, never above the first child. */
+  .prose > * {
+    margin-block: 0;
+  }
+
+  .prose > * + * {
+    margin-block-start: var(--prose-flow);
+  }
+
+  .prose :where(p) {
+    text-wrap: pretty;
+  }
+
+  /* ── Headings ─────────────────────────────────────────────────────── */
+  .prose :where(h1, h2, h3, h4, h5, h6) {
+    margin: 0;
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    text-wrap: balance;
+    color: var(--nc-text);
+  }
+
+  .prose > :where(h1, h2, h3, h4) + * {
+    margin-block-start: 0.5em;
+  }
+
+  .prose > * + :where(h1, h2) {
+    margin-block-start: 1.6em;
+  }
+
+  .prose > * + :where(h3, h4, h5, h6) {
+    margin-block-start: 1.35em;
+  }
+
+  .prose :where(h1) {
+    font-size: 1.6em;
+    letter-spacing: -0.022em;
+    line-height: var(--nc-leading-tight);
+  }
+  .prose :where(h2) {
+    font-size: 1.3em;
+    letter-spacing: -0.016em;
+  }
+  .prose :where(h3) {
+    font-size: 1.1em;
+    letter-spacing: -0.01em;
+  }
+  .prose :where(h4, h5, h6) {
+    font-size: 1em;
+  }
+
+  /* ── Inline ───────────────────────────────────────────────────────── */
+  .prose :where(strong, b) {
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .prose :where(a) {
+    color: var(--nc-text-accent);
+    text-decoration-line: underline;
+    text-decoration-thickness: 1px;
+    text-decoration-color: color-mix(in oklch, currentColor 35%, transparent);
+    text-underline-offset: 0.22em;
+    border-radius: var(--nc-radius-xs);
+    transition:
+      text-decoration-color var(--nc-duration-fast) var(--nc-ease-out),
+      text-underline-offset var(--nc-duration-base) var(--nc-spring-snappy);
+  }
+
+  @media (hover: hover) {
+    .prose :where(a):hover {
+      text-decoration-color: currentColor;
+      text-underline-offset: 0.16em;
+    }
+  }
+
+  .prose :where(a):focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .prose :where(:not(pre) > code) {
+    padding: 0.12em 0.38em;
+    border-radius: var(--nc-radius-xs);
+    corner-shape: var(--nc-corner-shape);
+    font-family: var(--nc-font-mono);
+    font-size: 0.86em;
+    font-variant-ligatures: none;
+    background: var(--nc-gray-3);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    overflow-wrap: anywhere;
+  }
+
+  .prose :where(a code) {
+    color: inherit;
+  }
+
+  .prose :where(mark) {
+    padding-inline: 0.15em;
+    border-radius: var(--nc-radius-xs);
+    color: inherit;
+    background: color-mix(in oklch, var(--nc-accent-9) 20%, transparent);
+  }
+
+  .prose :where(kbd) {
+    padding: 0.08em 0.4em;
+    border-radius: var(--nc-radius-xs);
+    font-family: var(--nc-font-sans);
+    font-size: 0.8em;
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-muted);
+    background: var(--nc-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border),
+      inset 0 -1px 0 0 var(--nc-border);
+  }
+
+  .prose :where(small) {
+    font-size: 0.86em;
+    color: var(--nc-text-muted);
+  }
+
+  /* ── Lists ────────────────────────────────────────────────────────── */
+  .prose :where(ul, ol) {
+    padding-inline-start: 1.5em;
+  }
+
+  .prose :where(li) {
+    padding-inline-start: 0.25em;
+  }
+
+  .prose :where(li + li),
+  .prose :where(li > ul, li > ol) {
+    margin-block-start: 0.35em;
+  }
+
+  .prose :where(ul > li)::marker {
+    color: var(--nc-text-subtle);
+    font-size: 0.9em;
+  }
+
+  .prose :where(ol > li)::marker {
+    color: var(--nc-text-subtle);
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .prose :where(li > p) {
+    margin: 0;
+  }
+
+  .prose :where(ul:has(> li > input[type='checkbox'])) {
+    list-style: none;
+    padding-inline-start: 0.25em;
+  }
+
+  .prose :where(li > input[type='checkbox']) {
+    margin: 0 0.5em 0 0;
+    accent-color: var(--nc-accent-9);
+    vertical-align: -0.1em;
+  }
+
+  /* ── Blockquote — a pearl rule instead of a flat bar ────────────────── */
+  .prose :where(blockquote) {
+    position: relative;
+    padding-inline-start: 1.1em;
+    color: var(--nc-text-muted);
+  }
+
+  .prose :where(blockquote)::before {
+    content: '';
+    position: absolute;
+    inset-block: 0.2em;
+    inset-inline-start: 0;
+    inline-size: 3px;
+    border-radius: var(--nc-radius-full);
+    background: linear-gradient(180deg, var(--nc-pearl-spectrum));
+    opacity: calc(0.5 + var(--nc-lustre) * 0.5);
+  }
+
+  .prose :where(blockquote > * + *) {
+    margin-block-start: 0.6em;
+  }
+
+  /* ── Rule ─────────────────────────────────────────────────────────── */
+  .prose :where(hr) {
+    block-size: 1px;
+    border: 0;
+    margin-block: 1.8em;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--nc-border-strong) 20%,
+      var(--nc-border-strong) 80%,
+      transparent
+    );
+  }
+
+  /* ── Tables ───────────────────────────────────────────────────────── */
+  .prose :where(table) {
+    display: block;
+    inline-size: max-content;
+    max-inline-size: 100%;
+    overflow-x: auto;
+    border-collapse: separate;
+    border-spacing: 0;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    box-shadow: inset 0 0 0 1px var(--nc-border);
+    font-size: 0.93em;
+    line-height: var(--nc-leading-normal);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .prose :where(th, td) {
+    padding: 0.5em 0.9em;
+    text-align: start;
+    vertical-align: top;
+    border-block-end: 1px solid var(--nc-border-subtle);
+  }
+
+  .prose :where(th) {
+    font-weight: var(--nc-weight-semibold);
+    font-size: 0.92em;
+    color: var(--nc-text-muted);
+    background: var(--nc-wash-1);
+    border-block-end-color: var(--nc-border);
+  }
+
+  .prose :where(tbody tr:last-child td) {
+    border-block-end: 0;
+  }
+
+  @media (hover: hover) {
+    .prose :where(tbody tr):hover {
+      background: var(--nc-wash-1);
+    }
+  }
+
+  /* ── Media & code ─────────────────────────────────────────────────── */
+  .prose :where(img, video) {
+    border-radius: var(--nc-radius-md);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .prose :where(figcaption) {
+    margin-block-start: 0.5em;
+    font-size: 0.86em;
+    color: var(--nc-text-subtle);
+  }
+
+  /* Raw <pre> from Markdown (a CodeBlock is preferred and styles itself). */
+  .prose :where(pre:not([data-language])) {
+    padding: 0.85em 1em;
+    overflow-x: auto;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    font-family: var(--nc-font-mono);
+    font-size: 0.88em;
+    line-height: 1.65;
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .prose > :where(figure, pre, table) {
+    margin-block: 1.1em;
+  }
+
+  .prose > :first-child {
+    margin-block-start: 0;
+  }
+
+  .prose > :last-child {
+    margin-block-end: 0;
+  }
+}
