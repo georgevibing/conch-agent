@@ -12,6 +12,7 @@ import { Routine, RoutineRun } from './routines';
 
 export * from './common';
 export * from './routines';
+export * from './search';
 
 export const PROTOCOL_VERSION = 3;
 

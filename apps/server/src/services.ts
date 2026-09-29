@@ -12,6 +12,8 @@ import type { Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
 import { MemoryStore } from './memory/store';
 import { RoutineService } from './routines/service';
+import { SearchIndex } from './search/index';
+import { SearchIndexer } from './search/indexer';
 import { RoutineStore } from './routines/store';
 import { SettingsStore } from './settings/store';
 
@@ -26,6 +28,8 @@ export class Services {
   readonly routines: RoutineService;
   readonly conversations: ConversationManager;
   readonly engines: Map<EngineId, Engine>;
+  /** Full-text search over every conversation; absent if the index can't be opened. */
+  readonly search?: { index: SearchIndex; indexer: SearchIndexer };
   #login?: { handle: LoginHandle; state: LoginState };
 
   constructor(readonly config: Config) {
@@ -45,8 +49,9 @@ export class Services {
         }),
       ],
     ]);
+    const conversationStore = new ConversationStore(join(config.CONCH_HOME, 'conversations'));
     this.conversations = new ConversationManager({
-      store: new ConversationStore(join(config.CONCH_HOME, 'conversations')),
+      store: conversationStore,
       settings: this.settings,
       memory: this.memory,
       engine: () => this.engine(),
@@ -61,6 +66,7 @@ export class Services {
     });
     this.conversations.events.on((event) => this.broadcast.emit(event));
     this.memory.changed.on(() => this.broadcast.emit({ type: 'memory.changed' }));
+    this.search = openSearch(config, conversationStore, this.conversations);
   }
 
   /** The active engine. Only Claude Code (and the mock) exist today; others fall back. */
@@ -109,5 +115,31 @@ export class Services {
     if (!engine.setApiKey) throw new Error(`${engine.label} doesn't accept API keys.`);
     await engine.setApiKey(apiKey);
     return this.engineStatus(true);
+  }
+}
+
+/** The search index is derived data: if it can't be opened, Conch runs without search. */
+function openSearch(
+  config: Config,
+  store: ConversationStore,
+  conversations: ConversationManager,
+): Services['search'] {
+  try {
+    const index = new SearchIndex(join(config.CONCH_HOME, 'search.db'));
+    const indexer = new SearchIndexer(
+      index,
+      {
+        list: () => store.list(),
+        events: (id) => store.events(id),
+        detail: (id) => conversations.detail(id),
+      },
+      (error) => console.error('[search]', error),
+    );
+    conversations.events.on((event) => indexer.onEvent(event));
+    void indexer.start();
+    return { index, indexer };
+  } catch (error) {
+    console.error('[search] index unavailable:', error);
+    return undefined;
   }
 }

@@ -12,9 +12,11 @@ import {
   PROTOCOL_VERSION,
   CreateRoutineBody,
   RenameConversationBody,
-  SaveCommandBody,
   SchedulePreviewBody,
   UpdateRoutineBody,
+  SaveCommandBody,
+  SearchPreviewQuery,
+  SearchQuery,
   StartLoginBody,
   UpdateMemoryBody,
   UpdateSettingsBody,
@@ -215,6 +217,28 @@ export async function buildApp(services: Services) {
     return removed
       ? { ok: true }
       : reply.code(404).send({ error: 'not-found', message: 'Memory not found.' });
+  });
+
+  // ── Search ─────────────────────────────────────────────────────────────
+  const searchUnavailable = (reply: FastifyReply) =>
+    reply.code(503).send({ error: 'search-unavailable', message: 'Search isn’t available.' });
+  app.get('/api/search', async (request, reply) => {
+    const query = parse(SearchQuery, request.query, reply);
+    if (!query) return;
+    if (!services.search) return searchUnavailable(reply);
+    // A search right after start-up waits for the catch-up rather than missing results.
+    await services.search.indexer.ready;
+    return services.search.index.search(query.q, { in: query.in, limit: query.limit });
+  });
+  app.get('/api/search/preview', async (request, reply) => {
+    const query = parse(SearchPreviewQuery, request.query, reply);
+    if (!query) return;
+    if (!services.search) return searchUnavailable(reply);
+    await services.search.indexer.ready;
+    const preview = services.search.index.preview(query.conversationId, query.anchor, query.q);
+    return (
+      preview ?? reply.code(404).send({ error: 'not-found', message: 'Conversation not found.' })
+    );
   });
 
   // ── Conversations ──────────────────────────────────────────────────────
