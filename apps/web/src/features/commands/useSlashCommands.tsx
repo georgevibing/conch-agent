@@ -7,6 +7,7 @@ import {
   Moon,
   Plus,
   Settings,
+  Repeat,
   Shield,
   SquareSlash,
   Sparkles,
@@ -36,6 +37,7 @@ const builtinIcons: Partial<Record<BuiltinAction, ReactNode>> = {
   mode: <Shield />,
   new: <Plus />,
   remember: <Brain />,
+  routines: <Repeat />,
   memory: <Brain />,
   commands: <SquareSlash />,
   settings: <Settings />,
@@ -157,6 +159,8 @@ export function useSlashCommands(options: {
         });
       case 'memory':
         return ui.openSettings('memory');
+      case 'routines':
+        return void navigate('/routines');
       case 'commands':
         return ui.openSettings('commands');
       case 'settings':

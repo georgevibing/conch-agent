@@ -28,6 +28,7 @@ export type BuiltinAction =
   | 'mode'
   | 'new'
   | 'remember'
+  | 'routines'
   | 'memory'
   | 'settings'
   | 'commands'
@@ -67,6 +68,12 @@ export const builtins: Builtin[] = [
     argumentHint: '<something about you>',
   },
   { name: 'memory', action: 'memory', description: 'See what Conch remembers' },
+  {
+    name: 'routines',
+    action: 'routines',
+    description: 'Things Conch does on a schedule',
+    aliases: ['schedule', 'cron'],
+  },
   { name: 'commands', action: 'commands', description: 'Create your own commands' },
   { name: 'settings', action: 'settings', description: 'Open settings' },
   { name: 'theme', action: 'theme', description: 'Switch between light and dark' },

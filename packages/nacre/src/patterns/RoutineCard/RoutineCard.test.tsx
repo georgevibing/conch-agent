@@ -27,7 +27,7 @@ describe('RoutineCard (list)', () => {
       />,
     );
     expect(screen.getByText('Weekdays at 7:30 AM')).toBeInTheDocument();
-    expect(screen.getByText('Next tomorrow at 8:00 AM')).toBeInTheDocument();
+    expect(screen.getByText('Next run tomorrow at 8:00 AM')).toBeInTheDocument();
     expect(screen.getByText(/Sent your briefing\./)).toBeInTheDocument();
     await expectAccessible(container);
   });

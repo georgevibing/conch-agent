@@ -23,6 +23,7 @@ import { keys, useAppState, useConversations } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { dayGroup, type DayGroup } from '../../lib/time';
 import { useAutoFocus } from '../../lib/useAutoFocus';
+import { RoutinesLink } from '../routines/RoutinesLink';
 import styles from './Sidebar.module.css';
 
 function RenameField({
@@ -182,7 +183,8 @@ export function Sidebar({
   const navigate = useNavigate();
 
   const groups = new Map<DayGroup, ConversationSummary[]>();
-  for (const c of conversations ?? []) {
+  // Routine runs live under Routines, not in your chat list.
+  for (const c of (conversations ?? []).filter((c) => !c.origin)) {
     const g = dayGroup(c.updatedAt);
     groups.set(g, [...(groups.get(g) ?? []), c]);
   }
@@ -219,6 +221,7 @@ export function Sidebar({
             New chat
           </Button>
         </Tooltip>
+        <RoutinesLink onNavigate={onNavigate} />
       </div>
       <ScrollArea className={styles.scroll}>
         {!isPending && (conversations?.length ?? 0) === 0 && (

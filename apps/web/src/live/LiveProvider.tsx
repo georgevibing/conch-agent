@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
 
 import { keys, setEngineStatus } from '../api/queries';
+import { applyRoutineEvent } from '../features/routines/queries';
 import { LiveSocket, socketUrl } from './socket';
 import { NEW, useLiveStore } from './store';
 
@@ -107,6 +108,14 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           }
           break;
         }
+        case 'routine.changed':
+        case 'routine.deleted':
+        case 'routine.run':
+          // LiveProvider sits outside the router; the Shell performs navigations.
+          applyRoutineEvent(client, event, (to) =>
+            window.dispatchEvent(new CustomEvent('conch:navigate', { detail: to })),
+          );
+          break;
         default:
           break;
       }

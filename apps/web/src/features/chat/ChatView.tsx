@@ -14,13 +14,14 @@ import { Folder } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 
-import { useAppState } from '../../api/queries';
+import { useAppState, useConversations } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { greeting } from '../../lib/time';
 import { useLive } from '../../live/LiveProvider';
 import { emptyView, lastUserText } from '../../live/reducer';
 import { NEW, useLiveStore } from '../../live/store';
 import { useSlashCommands } from '../commands/useSlashCommands';
+import { RunBanner } from '../routines/RunBanner';
 import { ComposerControls } from '../models/ComposerControls';
 import { useTurnOptions } from '../models/useTurnOptions';
 import styles from './ChatView.module.css';
@@ -118,6 +119,9 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   }, [conversationId]);
 
   const turn = useTurnOptions(conversationId);
+  const isRoutineRun = Boolean(
+    useConversations().data?.find((c) => c.id === conversationId)?.origin,
+  );
 
   const send = (text: string) => {
     const trimmed = text.trim();
@@ -215,8 +219,10 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
 
   return (
     <div className={styles.chat}>
+      <RunBanner conversationId={conversationId} />
       <Transcript
         view={view}
+        routineRun={isRoutineRun}
         pending={pending}
         name={name}
         onRespond={(permissionId, decision) =>

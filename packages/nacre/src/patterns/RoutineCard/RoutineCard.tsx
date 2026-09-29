@@ -229,7 +229,7 @@ export function RoutineCard({
                 : status === 'draft'
                   ? 'Not turned on yet'
                   : nextText
-                    ? `Next ${nextText}`
+                    ? `Next run ${nextText}`
                     : null}
           </span>
         </p>

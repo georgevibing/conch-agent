@@ -20,7 +20,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T extends z.ZodType>(
+export async function request<T extends z.ZodType>(
   schema: T,
   path: string,
   init?: { method?: string; body?: unknown },

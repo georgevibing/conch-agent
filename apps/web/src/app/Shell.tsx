@@ -1,12 +1,14 @@
 import { IconButton, Sheet, Spinner, Text, useMediaQuery } from '@conch/nacre';
 import { Menu, PanelLeftOpen } from 'lucide-react';
 import { useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useLocation, useNavigate, useParams } from 'react-router';
 
 import { useConversations } from '../api/queries';
 import { ChatView } from '../features/chat/ChatView';
 import { EnginePill } from '../features/engine/EnginePill';
 import { Palette } from '../features/palette/Palette';
+import { RoutineDetailView } from '../features/routines/RoutineDetailView';
+import { RoutinesView } from '../features/routines/RoutinesView';
 import { Settings } from '../features/settings/Settings';
 import { Sidebar } from '../features/sidebar/Sidebar';
 import { useLiveStore } from '../live/store';
@@ -28,14 +30,22 @@ function Reconnecting() {
 }
 
 export function Shell() {
-  const { conversationId } = useParams();
+  const { conversationId, routineId } = useParams();
   const navigate = useNavigate();
+  const routinesArea = useLocation().pathname.startsWith('/routines');
+
+  // Toasts and notifications raised outside the router ask us to navigate.
+  useEffect(() => {
+    const go = (e: Event) => void navigate((e as CustomEvent<string>).detail);
+    window.addEventListener('conch:navigate', go);
+    return () => window.removeEventListener('conch:navigate', go);
+  }, [navigate]);
   const { data: conversations } = useConversations();
   const narrow = useMediaQuery('(max-width: 820px)');
   const { sidebarOpen, toggleSidebar, mobileSidebarOpen, setMobileSidebar, openSettings } = useUi();
 
   const current = conversations?.find((c) => c.id === conversationId);
-  const title = current?.title ?? (conversationId ? '' : 'New chat');
+  const title = routinesArea ? 'Routines' : (current?.title ?? (conversationId ? '' : 'New chat'));
 
   useEffect(() => {
     document.title = current ? `${current.title} · Conch` : 'Conch';
@@ -87,7 +97,15 @@ export function Shell() {
           <EnginePill />
         </header>
         <Reconnecting />
-        <ChatView key={conversationId ?? 'new'} conversationId={conversationId} />
+        {routinesArea ? (
+          routineId ? (
+            <RoutineDetailView key={routineId} routineId={routineId} />
+          ) : (
+            <RoutinesView />
+          )
+        ) : (
+          <ChatView key={conversationId ?? 'new'} conversationId={conversationId} />
+        )}
       </main>
       <Settings />
       <Palette />

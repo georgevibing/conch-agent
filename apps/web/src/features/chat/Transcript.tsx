@@ -10,6 +10,8 @@ import {
   TurnEnd,
   UserMessage,
 } from './TranscriptItems';
+import { RoutineChatCard } from '../routines/RoutineChatCard';
+import { RoutineInstruction } from '../routines/RunBanner';
 import styles from './Transcript.module.css';
 
 export interface TranscriptProps {
@@ -42,7 +44,19 @@ function blocks(items: TranscriptItem[]): Block[] {
   return out;
 }
 
-export function Transcript({ view, pending, name, onRespond, onRetry, footer }: TranscriptProps) {
+export function Transcript({
+  view,
+  pending,
+  name,
+  onRespond,
+  onRetry,
+  footer,
+  routineRun,
+}: TranscriptProps & {
+  /** This conversation is a routine run: its first message is the routine's instruction. */
+  routineRun?: boolean;
+}) {
+  const firstUserId = routineRun ? view.items.find((i) => i.kind === 'user')?.id : undefined;
   const running = view.status === 'running' || view.status === 'awaiting-permission';
   const items: TranscriptItem[] = [
     ...view.items,
@@ -75,7 +89,12 @@ export function Transcript({ view, pending, name, onRespond, onRetry, footer }: 
                 ))}
               </div>
             )}
-            {block.item?.kind === 'user' && <UserMessage item={block.item} />}
+            {block.item?.kind === 'user' &&
+              (block.item.id === firstUserId ? (
+                <RoutineInstruction text={block.item.text} />
+              ) : (
+                <UserMessage item={block.item} />
+              ))}
             {block.item?.kind === 'assistant' && <AssistantMessage item={block.item} name={name} />}
             {block.item?.kind === 'permission' && (
               <PermissionCard
@@ -85,6 +104,13 @@ export function Transcript({ view, pending, name, onRespond, onRetry, footer }: 
               />
             )}
             {block.item?.kind === 'memory' && <MemoryPill item={block.item} />}
+            {block.item?.kind === 'routine' && (
+              <RoutineChatCard
+                routineId={block.item.routineId}
+                title={block.item.title}
+                action={block.item.action}
+              />
+            )}
             {block.item?.kind === 'turn-end' && (
               <TurnEnd
                 item={block.item}

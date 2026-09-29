@@ -401,6 +401,15 @@ export class RoutineService {
         trust: RoutineTrust.optional(),
       },
       run: async (args) => {
+        // Never quietly create a second copy of something the user already has.
+        const wanted = tidyTitle((args as { title: string }).title).toLowerCase();
+        const existing = (await this.list()).find(
+          (r) => r.status !== 'completed' && r.title.toLowerCase() === wanted,
+        );
+        if (existing) {
+          card(existing, 'updated');
+          return `The user already has a routine called “${existing.title}” [${existing.id}] — ${existing.scheduleText}, ${existing.status}. Don’t create a duplicate: tell them it exists and offer to change it with update_routine (or ask if they want a second, differently named one).`;
+        }
         try {
           const routine = await this.create(
             {
