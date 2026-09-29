@@ -1,0 +1,19 @@
+@layer nacre.components {
+  .qr {
+    display: block;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    box-shadow:
+      0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-1);
+  }
+
+  /* Fixed colours on purpose: cameras need dark modules on a light field. */
+  .paper {
+    fill: oklch(0.995 0 0);
+  }
+
+  .ink {
+    fill: oklch(0.2 0.01 var(--nc-neutral-h));
+  }
+}

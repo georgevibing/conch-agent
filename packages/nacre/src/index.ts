@@ -25,6 +25,7 @@ export * from './components/IconButton';
 // Forms
 export * from './components/Field';
 export * from './components/Input';
+export * from './components/PasswordInput';
 export * from './components/Textarea';
 export * from './components/Checkbox';
 export * from './components/Switch';
@@ -55,6 +56,7 @@ export * from './components/Pearl';
 export * from './components/Progress';
 export * from './components/Skeleton';
 export * from './components/Callout';
+export * from './components/StrengthMeter';
 export * from './components/Toast';
 
 // Display
@@ -64,6 +66,7 @@ export * from './components/LiveTitle';
 export * from './components/Badge';
 export * from './components/Avatar';
 export * from './components/EmptyState';
+export * from './components/QRCode';
 
 // Chat patterns
 export * from './patterns';

@@ -17,3 +17,4 @@ export * from './RunTimeline';
 export * from './FindBar';
 export * from './SearchPreview';
 export * from './Usage';
+export * from './Security';

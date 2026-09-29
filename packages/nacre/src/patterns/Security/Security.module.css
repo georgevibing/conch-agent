@@ -1,0 +1,285 @@
+@layer nacre.components {
+  /* Level knobs shared by the checkup and its rows. Colour always travels with words. */
+  .checkup,
+  .check {
+    --lvl-fg: var(--nc-text-subtle);
+    --lvl-icon: var(--nc-text-subtle);
+  }
+
+  .checkup[data-level='ok'],
+  .check[data-level='ok'] {
+    --lvl-icon: light-dark(
+      oklch(0.58 0.14 var(--nc-success-h)),
+      oklch(0.74 0.14 var(--nc-success-h))
+    );
+    --lvl-fg: light-dark(
+      oklch(0.46 0.12 var(--nc-success-h)),
+      oklch(0.82 0.12 var(--nc-success-h))
+    );
+  }
+  .check[data-level='info'] {
+    --lvl-icon: light-dark(oklch(0.58 0.13 var(--nc-info-h)), oklch(0.74 0.12 var(--nc-info-h)));
+  }
+  .checkup[data-level='warn'],
+  .check[data-level='warn'] {
+    --lvl-icon: light-dark(
+      oklch(0.66 0.15 var(--nc-warning-h)),
+      oklch(0.8 0.14 var(--nc-warning-h))
+    );
+    --lvl-fg: light-dark(oklch(0.5 0.12 60), oklch(0.85 0.12 var(--nc-warning-h)));
+  }
+  .checkup[data-level='danger'],
+  .check[data-level='danger'] {
+    --lvl-icon: light-dark(oklch(0.58 0.2 var(--nc-danger-h)), oklch(0.7 0.18 var(--nc-danger-h)));
+    --lvl-fg: light-dark(oklch(0.5 0.18 var(--nc-danger-h)), oklch(0.8 0.12 var(--nc-danger-h)));
+  }
+
+  /* ── Checkup ──────────────────────────────────────────────────────── */
+  .checkup {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge);
+  }
+
+  .checkupHead {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+  }
+
+  .checkupIcon,
+  .checkIcon,
+  .revealIcon,
+  .deviceIcon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
+
+  .checkupIcon {
+    color: var(--lvl-icon);
+  }
+
+  .checkupIcon > svg {
+    inline-size: 1.375rem;
+    block-size: 1.375rem;
+  }
+
+  .checkupTitle {
+    margin: 0;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--lvl-fg);
+    letter-spacing: -0.005em;
+  }
+
+  .checks {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .check {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2-5);
+  }
+
+  .check:not([data-level='ok']) + .check[data-level='ok'] {
+    padding-block-start: var(--nc-space-2-5);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .checkIcon {
+    block-size: calc(var(--nc-text-sm) * var(--nc-leading-normal));
+    color: var(--lvl-icon);
+  }
+
+  .checkIcon > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .checkBody {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .checkTitle {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .check[data-level='ok'] .checkTitle {
+    font-weight: var(--nc-weight-regular);
+    color: var(--nc-text-muted);
+  }
+
+  .checkDetail {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  .command {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    align-self: flex-start;
+    max-inline-size: 100%;
+    padding-inline: var(--nc-space-2-5) var(--nc-space-0-5);
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-surface-sunken);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+  }
+
+  .command > code {
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .checkAction {
+    flex-shrink: 0;
+    align-self: center;
+  }
+
+  /* ── Secret reveal ────────────────────────────────────────────────── */
+  .reveal {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-accent-2), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-accent-6),
+      var(--nc-glaze-edge);
+    animation: nc-surface-in var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .revealHead {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .revealIcon {
+    color: var(--nc-accent-11);
+  }
+
+  .revealIcon > svg {
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+  }
+
+  .revealTitle {
+    margin: 0;
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .secretRow {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-2-5) var(--nc-space-2) var(--nc-space-2-5) var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .secret {
+    flex: 1;
+    min-inline-size: 0;
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+    overflow-wrap: anywhere;
+    user-select: all;
+  }
+
+  .revealNote {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  /* ── Devices ──────────────────────────────────────────────────────── */
+  .devices {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .device {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    padding-block: var(--nc-space-2-5);
+  }
+
+  .device + .device {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .deviceIcon {
+    inline-size: 2rem;
+    block-size: 2rem;
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-surface-sunken);
+    color: var(--nc-text-muted);
+  }
+
+  .deviceIcon > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .deviceBody {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .deviceName {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .deviceMeta,
+  .devicesEmpty {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+}
