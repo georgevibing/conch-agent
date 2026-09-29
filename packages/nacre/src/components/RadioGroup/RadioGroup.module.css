@@ -29,8 +29,10 @@
     display: inline-grid;
     place-items: center;
     flex-shrink: 0;
-    inline-size: var(--size);
-    block-size: var(--size);
+    /* Whole, even pixels for ring and dot, so the dot sits dead centre at any
+       root font size instead of blurring across half-pixels. */
+    inline-size: round(var(--size), 2px);
+    block-size: round(var(--size), 2px);
     padding: 0;
     margin: 0;
     border: 0;
@@ -83,11 +85,12 @@
 
   .dot {
     display: block;
-    inline-size: calc(var(--size) * 0.36);
-    block-size: calc(var(--size) * 0.36);
+    inline-size: round(calc(var(--size) * 0.36), 2px);
+    block-size: round(calc(var(--size) * 0.36), 2px);
     border-radius: 50%;
     background: var(--nc-accent-contrast);
-    box-shadow: 0 0.5px 1px 0 oklch(0 0 0 / 0.2);
+    /* Symmetric, so it doesn't read as sitting low. */
+    box-shadow: 0 0 1px 0 oklch(0 0 0 / 0.25);
     transform: scale(0);
     transition: transform var(--nc-duration-fast) var(--nc-ease-in);
   }
