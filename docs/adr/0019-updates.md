@@ -72,8 +72,14 @@ Conch itself: that restarts, so it always asks.
    or no pnpm. It also waits while a chat is working, so nothing is cut short.
 2. **Remember HEAD**, then fetch.
 3. **Move forward only**, to exactly the upstream commit that was checked:
-   `git merge --ff-only <sha>`. This is `git pull --ff-only` without a second
-   fetch, so what "What's new" listed is what arrives.
+   `git merge --ff-only --no-overwrite-ignore <sha>`. The check reads
+   `@{upstream}` once, as a commit, and the counts, "What's new" and the
+   merge all use that one commit: a fetch landing in between (the daily
+   check, a terminal) can't change what arrives, so what "What's new" listed
+   is what arrives. `--no-overwrite-ignore` keeps a file git ignores (a
+   `.env`, your own notes) from being replaced by one the new version adds:
+   git stops instead, and Conch refuses in plain words, naming the file to
+   move.
 4. `pnpm install --frozen-lockfile` ("Installing", with pnpm's own progress).
 5. `pnpm --filter @conch/web build` ("Getting the new look ready").
 6. **Restart.** Under `pnpm start`'s supervisor, `restart()`: the page shows
