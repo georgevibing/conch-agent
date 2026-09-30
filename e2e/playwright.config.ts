@@ -21,6 +21,7 @@ const scenarios = {
   terminal: { port: 4390, env: { CONCH_MOCK_STATE: 'ready' } },
   recovery: { port: 4388, env: { CONCH_MOCK_STATE: 'ready' } },
   attachments: { port: 4389, env: { CONCH_MOCK_STATE: 'ready' } },
+  suggest: { port: 4383, env: { CONCH_MOCK_STATE: 'ready' } },
   security: {
     port: 4397,
     env: { CONCH_MOCK_STATE: 'ready', CONCH_ALLOWED_HOSTS: 'studio-mac.tail1234.ts.net' },
@@ -33,6 +34,18 @@ const scenarios = {
 } as const;
 
 const root = join(import.meta.dirname, '..');
+
+/**
+ * `--project x` runs only x, so only x's gateway starts: other sessions may be
+ * using the other ports. The browser journeys depend on every other project.
+ */
+function chosen(): Set<string> | undefined {
+  const names = process.argv.flatMap((arg, i, all) =>
+    arg === '--project' ? [all[i + 1] ?? ''] : arg.startsWith('--project=') ? [arg.slice(10)] : [],
+  );
+  return names.length && !names.includes('browser') ? new Set(names) : undefined;
+}
+const only = chosen();
 
 export default defineConfig({
   testDir: '.',
@@ -58,21 +71,23 @@ export default defineConfig({
     dependencies:
       name === 'browser' ? Object.keys(scenarios).filter((other) => other !== 'browser') : [],
   })),
-  webServer: Object.values(scenarios).map((s) => ({
-    // Node itself (not pnpm or tsx's CLI) so Playwright's shutdown signal reaches the
-    // server; Windows runs this through cmd.exe, which can't start `./node_modules/.bin/tsx`.
-    command: 'node --import tsx src/main.ts',
-    cwd: join(root, 'apps/server'),
-    url: `http://localhost:${s.port}/api/health`,
-    reuseExistingServer: false,
-    env: {
-      ...s.env,
-      CONCH_ENGINE: 'mock',
-      CONCH_MOCK_SPEED: '0.25',
-      CONCH_PORT: String(s.port),
-      CONCH_HOME: mkdtempSync(join(tmpdir(), 'conch-e2e-')),
-      CONCH_WEB_DIST: join(root, 'apps/web/dist'),
-      CONCH_LOG_LEVEL: 'warn',
-    },
-  })),
+  webServer: Object.entries(scenarios)
+    .filter(([name]) => !only || only.has(name))
+    .map(([, s]) => ({
+      // Node itself (not pnpm or tsx's CLI) so Playwright's shutdown signal reaches the
+      // server; Windows runs this through cmd.exe, which can't start `./node_modules/.bin/tsx`.
+      command: 'node --import tsx src/main.ts',
+      cwd: join(root, 'apps/server'),
+      url: `http://localhost:${s.port}/api/health`,
+      reuseExistingServer: false,
+      env: {
+        ...s.env,
+        CONCH_ENGINE: 'mock',
+        CONCH_MOCK_SPEED: '0.25',
+        CONCH_PORT: String(s.port),
+        CONCH_HOME: mkdtempSync(join(tmpdir(), 'conch-e2e-')),
+        CONCH_WEB_DIST: join(root, 'apps/web/dist'),
+        CONCH_LOG_LEVEL: 'warn',
+      },
+    })),
 });
