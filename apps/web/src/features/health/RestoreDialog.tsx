@@ -36,7 +36,7 @@ export function markRestoring(): void {
 
 type Step =
   | { kind: 'checking'; name: string; progress: number }
-  | { kind: 'failed'; message: string }
+  | { kind: 'failed'; message: string; code?: string }
   | { kind: 'preview'; backup: BackupSummary }
   | { kind: 'restart'; message: string };
 
@@ -117,6 +117,7 @@ function RestoreFlow({
         setStep({
           kind: 'failed',
           message: failure instanceof ApiError ? failure.message : 'Couldn’t read that file.',
+          ...(failure instanceof ApiError && { code: failure.code }),
         });
       },
     );
@@ -200,7 +201,10 @@ function RestoreFlow({
           )}
           {step.kind === 'failed' && (
             <Callout tone="danger" title={step.message} live="assertive">
-              Choose a Conch backup: a file that ends in .conchbackup.
+              {/* Low disk space or a file too big says what to do in its own words. */}
+              {step.code === 'no-space' || step.code === 'too-big'
+                ? undefined
+                : 'Choose a Conch backup: a file that ends in .conchbackup.'}
             </Callout>
           )}
           {step.kind === 'restart' && (

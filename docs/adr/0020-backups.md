@@ -167,8 +167,10 @@ Validation Cheat Sheets, and the “Zip Slip” research (Snyk, 2018):
 - **Uploads** reuse the attachments road (ADR 0017): raw
   `application/octet-stream`, which a cross-site form can't send without a
   preflight, behind the gateway's Origin, Fetch-Metadata and sign-in checks.
-  An upload that isn't restored from is thrown away, and any left behind are
-  swept after an hour.
+  One is refused before a byte lands when the disk can't hold it with a
+  gigabyte to spare (restoring it needs room too), and cut off if it grows
+  past that while it arrives. An upload that isn't restored from is thrown
+  away, and any left behind are swept after an hour.
 - **Errors** are sentences a person can act on; nothing on the page ever
   holds a path or a system error.
 

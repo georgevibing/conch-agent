@@ -120,10 +120,23 @@ export function BackupSection() {
     }
   };
 
+  // Restarting cuts everyone off, so it asks that it's you if it's been a while.
   const finishPending = async () => {
-    markRestoring();
-    const message = await restartConch('Restoring your Conch…').catch(() => undefined);
-    if (message) toast(message);
+    try {
+      let message: string | undefined;
+      const done = await guard(async () => {
+        message = await restartConch('Restoring your Conch…');
+      });
+      if (!done) return;
+      if (message) toast(message);
+      else markRestoring();
+    } catch (failure) {
+      toast(
+        failure instanceof ApiError
+          ? failure.message
+          : 'Conch couldn’t restart just now. Try again in a moment.',
+      );
+    }
   };
 
   const cancelPending = async () => {

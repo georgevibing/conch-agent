@@ -229,6 +229,89 @@ describe('Settings → Health → Updates', () => {
     expect(calls.some((c) => c.method === 'POST' && c.path === '/api/gateway/restart')).toBe(true);
   });
 
+  it('asks you to confirm it’s you before restarting, when it’s been a while', async () => {
+    const user = userEvent.setup();
+    let verified = false;
+    const calls = mockFetch({
+      'GET /api/updates': () => status({}, { restartNeeded: true }),
+      'GET /api/auth': () => ({
+        method: 'password',
+        signedIn: true,
+        setupRequired: false,
+        secure: true,
+      }),
+      'GET /api/health': () => ({
+        ok: true,
+        serverVersion: '0.2.0',
+        protocolVersion: 7,
+        bootId: 'boot-1',
+      }),
+      'POST /api/gateway/restart': () =>
+        verified
+          ? { ok: true }
+          : new Response(
+              JSON.stringify({
+                error: 'verify-required',
+                message: 'Confirm it’s you to restart Conch.',
+              }),
+              { status: 403 },
+            ),
+      'POST /api/access/verify': () => {
+        verified = true;
+        return {
+          method: 'password',
+          username: 'ada',
+          suggestedUsername: 'ada',
+          keys: [],
+          sessions: [],
+          checkup: [],
+          exposure: 'local',
+          port: 4317,
+          urls: [],
+          verified: true,
+        };
+      },
+    });
+    renderApp(<UpdatesSection />);
+    const card = await screen.findByRole('region', { name: 'Restart Conch to finish' });
+    await user.click(within(card).getByRole('button', { name: 'Restart Conch' }));
+    const confirm = await screen.findByRole('dialog', { name: 'Confirm it’s you' });
+    await user.type(within(confirm).getByLabelText('Password'), 'purple otters juggle at dawn');
+    await user.click(within(confirm).getByRole('button', { name: 'Confirm' }));
+    await waitFor(() => expect(useUi.getState().restarting?.title).toBe('Updating Conch…'));
+    expect(calls.filter((c) => c.path === '/api/gateway/restart')).toHaveLength(2);
+  });
+
+  it('says so, and doesn’t restart, while a chat is working', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/updates': () => status({}, { restartNeeded: true }),
+      'GET /api/health': () => ({
+        ok: true,
+        serverVersion: '0.2.0',
+        protocolVersion: 7,
+        bootId: 'boot-1',
+      }),
+      'POST /api/gateway/restart': () =>
+        new Response(
+          JSON.stringify({
+            error: 'busy',
+            message: 'A chat is still working. Wait for it to finish, then restart Conch.',
+          }),
+          { status: 409 },
+        ),
+    });
+    renderApp(<UpdatesSection />);
+    const card = await screen.findByRole('region', { name: 'Restart Conch to finish' });
+    await user.click(within(card).getByRole('button', { name: 'Restart Conch' }));
+    expect(
+      await screen.findByText(
+        'A chat is still working. Wait for it to finish, then restart Conch.',
+      ),
+    ).toBeInTheDocument();
+    expect(useUi.getState().restarting).toBeUndefined();
+  });
+
   it('offers the update rather than a restart when something newer waits', async () => {
     mockFetch({ 'GET /api/updates': () => status({}, { ...ready, restartNeeded: true }) });
     renderApp(<UpdatesSection />);

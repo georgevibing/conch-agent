@@ -359,6 +359,22 @@ describe('restoring', () => {
     expect(within(dialog).getByRole('button', { name: 'Choose another file' })).toBeInTheDocument();
   });
 
+  it('says there isn’t room for a file, without calling it the wrong kind', async () => {
+    const user = userEvent.setup();
+    const { ApiError } = await import('../../api/client');
+    const message =
+      'There isn’t enough free space on this computer to restore that backup. Free up some space, then try again.';
+    upload.mockRejectedValue(new ApiError(507, 'no-space', message));
+    routes(status());
+    const { container } = renderApp(<BackupSection />);
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!input) throw new Error('no file input');
+    await user.upload(input, new File(['x'], 'b.conchbackup'));
+    const dialog = await screen.findByRole('dialog', { name: 'Restore from a file' });
+    expect(await within(dialog).findByText(message)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/ends in \.conchbackup/)).toBeNull();
+  });
+
   it('offers Undo after a restore, through the same preview', async () => {
     const user = userEvent.setup();
     const undo = backup({
@@ -416,6 +432,50 @@ describe('restoring', () => {
         body: undefined,
       }),
     );
+  });
+
+  it('asks you to confirm it’s you before restarting to finish, when it’s been a while', async () => {
+    const user = userEvent.setup();
+    let verified = false;
+    const calls = routes(status({ pending: { kind: 'uploaded', createdAt: Date.now() - HOUR } }), {
+      'GET /api/auth': () => ({ ...auth, method: 'password' }),
+      'POST /api/gateway/restart': () =>
+        verified
+          ? { ok: true }
+          : new Response(
+              JSON.stringify({
+                error: 'verify-required',
+                message: 'Confirm it’s you to restart Conch.',
+              }),
+              { status: 403 },
+            ),
+      'POST /api/access/verify': () => {
+        verified = true;
+        return {
+          method: 'password',
+          username: 'ada',
+          suggestedUsername: 'ada',
+          keys: [],
+          sessions: [],
+          checkup: [],
+          exposure: 'local',
+          port: 4317,
+          urls: [],
+          verified: true,
+        };
+      },
+    });
+    renderApp(<BackupSection />);
+    await user.click(await screen.findByRole('button', { name: 'Restart now' }));
+    const confirm = await screen.findByRole('dialog', { name: 'Confirm it’s you' });
+    await user.type(within(confirm).getByLabelText('Password'), 'purple otters juggle at dawn');
+    await user.click(within(confirm).getByRole('button', { name: 'Confirm' }));
+    await waitFor(() =>
+      expect(useUi.getState().restarting).toEqual({ title: 'Restoring your Conch…', from: 'b1' }),
+    );
+    expect(calls.filter((c) => c.path === '/api/gateway/restart')).toHaveLength(2);
+    expect(sessionStorage.getItem('conch.restoring')).not.toBeNull();
+    sessionStorage.removeItem('conch.restoring');
   });
 
   it('says how to finish by hand where Conch can’t start itself again', async () => {

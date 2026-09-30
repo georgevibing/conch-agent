@@ -20,7 +20,6 @@ import { useUi } from '../../app/ui';
 import { relativeTime } from '../../lib/time';
 import { Section } from '../settings/Section';
 import { followRestart, updatesWaiting, useUpdateActions, useUpdates } from '../updates/queries';
-import { restartConch } from './restart';
 
 const DAY = 86_400_000;
 /** "What's new" lists a few lines; the rest are "and N more". */
@@ -210,11 +209,7 @@ export function UpdatesSection() {
     card.offer === 'restart' ? (
       <Button
         leadingIcon={<RotateCcw />}
-        onClick={() =>
-          void restartConch('Updating Conch…')
-            .then(setRestartNote)
-            .catch(() => setRestartNote('Conch couldn’t restart just now. Try again in a moment.'))
-        }
+        onClick={() => void actions.restart('Updating Conch…').then(setRestartNote)}
       >
         Restart Conch
       </Button>

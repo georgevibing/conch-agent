@@ -353,7 +353,9 @@ src/
 
 - **Conch keeps itself running** (`supervisor.ts`). `pnpm start` runs the gateway
   as a child with `CONCH_SUPERVISED=1`. Exit code 75 means "start me again"
-  (`POST /api/gateway/restart`, after an update or a restore); any other exit is a
+  (`POST /api/gateway/restart`, after an update or a restore: it cuts every
+  device off, so it needs a recent password or key and waits while a chat is
+  working); any other exit is a
   crash, restarted after 1 s, 3 s, 10 s, then 30 s, and given up after five crashes
   in ten minutes. A restart after a crash leaves a note in "Fixed on its own".
   `/api/health` carries the run's `bootId` and whether it's `restartable`; the web

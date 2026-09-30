@@ -375,7 +375,9 @@ describe('guards', () => {
     });
     expect(huge.statusCode).toBe(413);
     await expect(
-      g.services.backups.receive(Readable.from([Buffer.alloc(600), Buffer.alloc(600)]), 1000),
+      g.services.backups.receive(Readable.from([Buffer.alloc(600), Buffer.alloc(600)]), {
+        maxBytes: 1000,
+      }),
     ).rejects.toMatchObject({ code: 'too-big' });
 
     const json400 = await g.app.inject({
@@ -386,6 +388,46 @@ describe('guards', () => {
     expect(json400.statusCode).toBe(415);
     for (const id of ['..%2F..%2Fsettings', 'auto-1.x', 'nope'])
       expect([404, 400]).toContain((await g.app.inject(`/api/backups/${id}`)).statusCode);
+  });
+
+  it('refuses an upload the disk can’t hold with a gigabyte to spare, before and while it arrives', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-backup-space-'));
+    let free = 1.5 * 1024 ** 3;
+    const backups = new BackupService({
+      home,
+      conchVersion: '0.0.0-test',
+      busy: () => false,
+      lastActivity: () => 0,
+      emit: () => undefined,
+      freeBytes: async () => free,
+    });
+    const refused = { code: 'no-space', message: expect.stringMatching(/enough free space/) };
+    // 600 MB said, 1.5 GB free: not a gigabyte to spare. Nothing is read or written.
+    let pulled = 0;
+    const body = (async function* () {
+      pulled++;
+      yield Buffer.alloc(10);
+    })();
+    await expect(backups.receive(body, { size: 600 * 1024 ** 2 })).rejects.toMatchObject(refused);
+    expect(pulled).toBe(0);
+    // A file that says nothing about its size is cut off once it passes the room there is.
+    free = 1024 ** 3 + 1000;
+    await expect(
+      backups.receive(Readable.from([Buffer.alloc(600), Buffer.alloc(600)])),
+    ).rejects.toMatchObject(refused);
+    expect(await readdir(backups.dir)).toEqual([]);
+    await rm(home, { recursive: true, force: true });
+  });
+
+  it('passes the size an upload says it is on to the space check', async () => {
+    const g = await open();
+    const receive = vi
+      .spyOn(g.services.backups, 'receive')
+      .mockRejectedValue(new BackupError('no-space', 'There isn’t enough free space.'));
+    const res = await upload(g.app, Buffer.from('x'.repeat(2048)));
+    expect(res.statusCode).toBe(507);
+    expect(json(res).error).toBe('no-space');
+    expect(receive).toHaveBeenCalledWith(expect.anything(), { size: 2048 });
   });
 
   it('won’t restore while a chat is working, and leaves everything as it was', async () => {

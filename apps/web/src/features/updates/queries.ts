@@ -2,8 +2,10 @@ import type { UpdatesStatus } from '@conch/protocol';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { ApiError } from '../../api/client';
 import { useUi } from '../../app/ui';
 import { useAuth } from '../auth/useAuth';
+import { restartConch } from '../health/restart';
 import { useVerify } from '../auth/useVerify';
 import { errorText } from '../integrations/queries';
 import { updateKeys, updatesApi } from './api';
@@ -82,7 +84,28 @@ export function useUpdateActions() {
     }
   };
 
+  /**
+   * Start Conch again, confirming it's you first if it's been a while.
+   * Returns a sentence to show instead when it didn't (a chat is working,
+   * or Conch can't restart itself here).
+   */
+  const restart = async (title: string): Promise<string | undefined> => {
+    let note: string | undefined;
+    try {
+      await guard(async () => {
+        note = await restartConch(title);
+      });
+    } catch (e) {
+      note =
+        e instanceof ApiError && e.code === 'busy'
+          ? e.message
+          : 'Conch couldn’t restart just now. Try again in a moment.';
+    }
+    return note;
+  };
+
   return {
+    restart,
     check: () => run('check', updatesApi.check),
     updateConch: () => run('conch', updatesApi.updateConch),
     updateAll: () => run('all', updatesApi.updateAll),

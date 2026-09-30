@@ -190,15 +190,29 @@ export async function buildApp(services: Services) {
     bootId: BOOT_ID,
     restartable: restartable(),
   }));
-  /** Start Conch again, when it can (after an update or a restore). */
-  app.post('/api/gateway/restart', (_request, reply) =>
-    restart()
+  /**
+   * Start Conch again, when it can (after an update or a restore). It cuts
+   * off every device's connection and anything running, so it needs a recent
+   * password or key (sudo mode, like the update and restore that lead here),
+   * and waits while a chat is working rather than cut it short.
+   */
+  app.post('/api/gateway/restart', (request, reply) => {
+    if (!gate.verified(request.access))
+      return reply
+        .code(403)
+        .send({ error: 'verify-required', message: 'Confirm it’s you to restart Conch.' });
+    if (services.conversations.busy())
+      return reply.code(409).send({
+        error: 'busy',
+        message: 'A chat is still working. Wait for it to finish, then restart Conch.',
+      });
+    return restart()
       ? reply.code(202).send({ ok: true })
       : reply.code(409).send({
           error: 'not-restartable',
           message: 'Conch can’t restart itself here. Stop it (Ctrl+C) and run pnpm start again.',
-        }),
-  );
+        });
+  });
   app.get('/api/state', appState);
   /** What Conch fixed on its own, newest first. */
   app.get('/api/healed', async () => ({ notes: await services.healed.list() }));

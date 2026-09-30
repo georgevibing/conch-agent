@@ -51,6 +51,8 @@ const TRANSIENT_MS = 60 * 60_000;
 const UNDO_OFFER_MS = 24 * 60 * 60_000;
 /** Room left free on the disk besides the backup itself. */
 const SPARE_BYTES = 64 * 1024 * 1024;
+/** Room left free besides a file uploaded to restore from: restoring it needs space too. */
+const UPLOAD_SPARE_BYTES = 1024 ** 3;
 
 const PREFIX: Record<BackupKind, string> = {
   automatic: 'auto',
@@ -372,13 +374,24 @@ export class BackupService {
   /**
    * A file you chose to restore from, streamed to disk as it arrives and
    * refused past the size limit. It's checked (the header) before it's kept.
+   * Refused before a byte lands when the disk can't hold it and a gigabyte
+   * more (`size`: what the upload says it is), and cut off if it grows past
+   * that while it arrives.
    */
   async receive(
     body: Readable | AsyncIterable<Buffer>,
-    maxBytes: number = BACKUP_LIMITS.maxArchiveBytes,
+    options: { maxBytes?: number; size?: number } = {},
   ): Promise<BackupSummary> {
+    const maxBytes = options.maxBytes ?? BACKUP_LIMITS.maxArchiveBytes;
     await mkdir(this.dir, { recursive: true, mode: 0o700 });
     await this.#sweep();
+    const free = await (this.deps.freeBytes ?? diskFree)(this.dir);
+    const noSpace = () =>
+      new BackupError(
+        'no-space',
+        'There isn’t enough free space on this computer to restore that backup. Free up some space, then try again.',
+      );
+    if (free !== undefined && free < (options.size ?? 0) + UPLOAD_SPARE_BYTES) throw noSpace();
     const id = this.#newId('uploaded', this.#now, new Set());
     const path = this.pathOf(id);
     const tmp = `${path}.tmp`;
@@ -388,6 +401,7 @@ export class BackupService {
         received += chunk.length;
         if (received > maxBytes)
           done(new BackupError('too-big', 'That file is over 2 GB, too big to be a Conch backup.'));
+        else if (free !== undefined && received + UPLOAD_SPARE_BYTES > free) done(noSpace());
         else done(null, chunk);
       },
     });
