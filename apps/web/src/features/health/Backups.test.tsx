@@ -107,6 +107,16 @@ describe('Settings → Health → Backups', () => {
     ).toBeInTheDocument();
   });
 
+  it('says once when the first backup comes, not again under it', async () => {
+    routes(status({ backups: [], lastAutomaticAt: undefined }));
+    renderApp(<BackupSection />);
+    expect(
+      await screen.findByText('The first backup is made soon, while Conch isn’t busy.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('None yet.')).toBeInTheDocument();
+    expect(screen.getAllByText(/made soon/)).toHaveLength(1);
+  });
+
   it('says why the last backup didn’t happen, calmly', async () => {
     routes(status({ problem: 'There isn’t enough free space on this computer for a backup.' }));
     renderApp(<BackupSection />);

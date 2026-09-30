@@ -127,9 +127,10 @@ describe('BackupList', () => {
     await expectAccessible(container);
   });
 
-  it('says so when there are none yet', () => {
+  it('says so briefly when there are none yet (the overview says when the first comes)', () => {
     renderNacre(<BackupList backups={[]} />);
-    expect(screen.getByText(/first one is made soon/)).toBeInTheDocument();
+    expect(screen.getByText('None yet.')).toBeInTheDocument();
+    expect(screen.queryByText(/made soon/)).toBeNull();
   });
 });
 

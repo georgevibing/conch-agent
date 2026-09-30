@@ -296,6 +296,33 @@ export const BackUpWithKeys: Story = {
   render: () => <BackUpNow secrets typed="seven lemons sail past the harbour" />,
 };
 
+/**
+ * The first day: the overview says when the first backup comes, so the empty
+ * list below says only that there are none yet — nothing twice.
+ */
+export const SectionBeforeTheFirst: Story = {
+  parameters: { layout: 'padded' },
+  render: () => (
+    <div style={{ maxInlineSize: 640 }}>
+      <Stack gap={4}>
+        <BackupOverview
+          automatic
+          onAutomaticChange={() => undefined}
+          detail="The first backup is made soon, while Conch isn’t busy."
+        >
+          <Button size="sm" leadingIcon={<Download />}>
+            Back up now
+          </Button>
+          <Button size="sm" variant="surface" leadingIcon={<Upload />}>
+            Restore from a file…
+          </Button>
+        </BackupOverview>
+        <BackupList backups={[]} />
+      </Stack>
+    </div>
+  ),
+};
+
 /** Settings → Health → Backups, put together. */
 export const Section: Story = {
   parameters: { layout: 'padded' },

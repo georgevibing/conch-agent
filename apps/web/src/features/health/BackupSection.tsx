@@ -237,11 +237,8 @@ export function BackupSection() {
                 if (backup) setRestore({ id: `${backup.id}-${Date.now()}`, backup });
               }}
               onDownload={(item) => downloadBackup(item.id)}
-              empty={
-                status?.automatic === false
-                  ? 'No backups on this computer.'
-                  : 'No backups yet. The first one is made soon, while Conch isn’t busy.'
-              }
+              // The card above already says when the first one is made.
+              empty={status?.automatic === false ? 'None on this computer.' : 'None yet.'}
             />
           </div>
         )}
