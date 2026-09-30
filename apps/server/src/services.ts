@@ -17,6 +17,7 @@ import { MockEngine } from './engines/mock/engine';
 import type { Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
 import { Healed } from './lib/healed';
+import type { Heal } from './lib/recover';
 import { ProviderKeys } from './providers/keys';
 import { ProviderService } from './providers/service';
 import { SecretVault } from './secrets/vault';
@@ -84,8 +85,10 @@ export class Services {
     this.healed = new Healed(config.CONCH_HOME, (note) =>
       this.broadcast.emit({ type: 'healed', note }),
     );
-    this.settings = new SettingsStore(config.CONCH_HOME);
-    this.access = new AccessStore(config.CONCH_HOME);
+    /** Every store that repairs itself says so here (AGENTS.md agreement 11). */
+    const heal: Heal = (area, message) => void this.healed.note(area, message);
+    this.settings = new SettingsStore(config.CONCH_HOME, heal);
+    this.access = new AccessStore(config.CONCH_HOME, heal);
     this.gate = new Gatekeeper(config, this.access);
     this.memory = new MemoryStore(join(config.CONCH_HOME, 'memory'));
     this.commands = new CommandStore(join(config.CONCH_HOME, 'commands'));
@@ -126,6 +129,7 @@ export class Services {
     this.mockVendor = config.CONCH_ENGINE === 'mock' ? new MockVendor() : undefined;
     this.integrations = new IntegrationService({
       home: config.CONCH_HOME,
+      heal,
       emit: (event) => this.broadcast.emit(event),
       engines: () => this.providers.ready(),
       cwd: () => this.settings.workspace(),
@@ -139,6 +143,7 @@ export class Services {
         config.CONCH_HOME,
         skillSources === 'auto' ? externalRoots() : [],
         () => this.#nativeSkillSources,
+        heal,
       ),
       engines: () => this.providers.ready(),
       emit: (event) => this.broadcast.emit(event),
@@ -146,6 +151,7 @@ export class Services {
     });
     this.terminal = new TerminalService({
       home: config.CONCH_HOME,
+      heal,
       workspace: () => this.settings.workspace(),
       emit: (event) => this.broadcast.emit(event),
     });
@@ -153,11 +159,12 @@ export class Services {
     this.gate.signedOut.on((ids) => this.terminal.endOwnedBy(ids.map((id) => `session:${id}`)));
     this.browser = new BrowserService({
       home: config.CONCH_HOME,
+      heal,
       gatewayPort: config.CONCH_PORT,
       workspace: () => this.settings.workspace(),
       emit: (event) => this.broadcast.emit(event),
     });
-    const conversationStore = new ConversationStore(join(config.CONCH_HOME, 'conversations'));
+    const conversationStore = new ConversationStore(join(config.CONCH_HOME, 'conversations'), heal);
     this.conversations = new ConversationManager({
       store: conversationStore,
       settings: this.settings,
@@ -183,7 +190,7 @@ export class Services {
       onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
     });
     this.routines = new RoutineService({
-      store: new RoutineStore(join(config.CONCH_HOME, 'routines')),
+      store: new RoutineStore(join(config.CONCH_HOME, 'routines'), heal),
       conversations: this.conversations,
       engine: (id) => this.providers.engineFor(id),
       emit: (event) => this.broadcast.emit(event),
@@ -196,6 +203,7 @@ export class Services {
     this.memory.changed.on(() => this.broadcast.emit({ type: 'memory.changed' }));
     this.usage = new UsageService({
       home: config.CONCH_HOME,
+      heal,
       engine: () => this.engine(),
       history: () => turnCosts(conversationStore),
     });

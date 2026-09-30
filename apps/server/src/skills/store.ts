@@ -13,7 +13,8 @@ import {
 } from '@conch/protocol';
 import { z } from 'zod';
 
-import { Mutex, readJson, safeJoin, writeFileAtomic, writeJson } from '../lib/fs';
+import { Mutex, safeJoin, writeFileAtomic, writeJson } from '../lib/fs';
+import { readStore, type Heal } from '../lib/recover';
 import { humanize, slugify } from './draft';
 import {
   joinSkill,
@@ -127,6 +128,7 @@ export class SkillStore {
     private readonly external: SkillRoot[] = [],
     /** Folders a connected provider reads by itself, and who that is. */
     private readonly nativelyLoaded: () => Map<SkillSource, string> = () => new Map(),
+    private readonly heal?: Heal,
   ) {
     this.dir = join(home, 'skills');
     this.#modesPath = join(home, 'skills.json');
@@ -477,9 +479,21 @@ export class SkillStore {
     };
   }
 
+  /**
+   * Choices made in Conch. A damaged file goes back to each skill's own
+   * default: off for other agents' skills, so nothing new starts loading.
+   */
   async #modes(): Promise<Record<string, SkillMode>> {
-    const parsed = ModesFile.safeParse((await readJson(this.#modesPath)) ?? {});
-    return parsed.success ? parsed.data.modes : {};
+    const read = await readStore(this.#modesPath, ModesFile, {
+      onRepair: (state) =>
+        this.heal?.(
+          'skills',
+          state === 'salvaged'
+            ? 'Some of your choices of which skills are on couldn’t be read, so Conch kept a copy and reset just those.'
+            : 'Your choices of which skills are on couldn’t be read, so Conch kept a copy and went back to each skill’s default.',
+        ),
+    });
+    return read.value.modes;
   }
 
   async #setMode(id: string, mode: SkillMode | undefined) {

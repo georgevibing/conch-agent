@@ -17,6 +17,7 @@ import {
 
 import type { Engine, EngineMcpServer, EngineMcpStatus } from '../engines/types';
 import { newId } from '../lib/ids';
+import type { Heal } from '../lib/recover';
 import { KNOWN_NEEDS } from '../setup/known';
 import { type NeedSpec, Setup } from '../setup/needs';
 import {
@@ -112,6 +113,8 @@ interface ProbeOptions {
 export interface IntegrationServiceDeps {
   home: string;
   emit: (event: ServerEvent) => void;
+  /** Note a repair, e.g. a damaged `integrations.json` set aside. */
+  heal?: Heal;
   /**
    * Every connected provider, the default first. Integrations connected in
    * Conch go to all of them; each may also bring servers of its own.
@@ -148,7 +151,7 @@ export class IntegrationService {
   readonly setup: Setup;
 
   constructor(private readonly deps: IntegrationServiceDeps) {
-    this.store = new IntegrationStore(deps.home);
+    this.store = new IntegrationStore(deps.home, deps.heal);
     this.oauth = new OAuthFlows(this.store, deps.fetchFor ?? ((reach) => guardedFetch(reach)));
     this.setup = deps.setup ?? new Setup(KNOWN_NEEDS);
   }

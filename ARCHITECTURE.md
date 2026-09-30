@@ -264,6 +264,12 @@ src/
   `browser.json` (browser settings, sites you always allow) + `browser/profile/` +
   `browser/shots/`, `terminal.json` (terminal settings; terminals themselves are never
   written to disk), `workspace/` (default cwd).
+- **Damaged files heal** (`lib/recover.ts`). A JSON store that won't parse or match
+  its schema is kept as `<name>.broken-<time>.json` (newest two), what still reads
+  carries on, the rest takes its (careful) default, and one note lands in "Fixed on
+  its own". The chat list is rebuilt from the logs, the spending record from past
+  turns, and a routine that won't read is set aside whole, never run half-read.
+  `access.json` is the exception: see Security.
 
 See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
 [ADR 0004 — Engines](./docs/adr/0004-engines.md).
@@ -330,7 +336,9 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
   hashed, revocable) or _no sign-in_. With no sign-in, only genuinely local requests
   are served: loopback socket **and** loopback `Host` **and** no proxy headers.
   Everything else gets `401 setup-required`. Credentials, sessions and pairing codes
-  live hashed in `~/.conch/access.json` (0600).
+  live hashed in `~/.conch/access.json` (0600). A damaged `access.json` never reads
+  as "no sign-in": sign-in locks (this computer included) until `pnpm conch reset`,
+  keeping a copy. Only unreadable sessions and pairing codes are dropped.
 - **Sessions:** a fresh random cookie per sign-in (`HttpOnly; SameSite=Strict`,
   `__Host-…; Secure` over HTTPS), expiring after 30 days or 7 idle days, listed and
   revocable per device. Revoking one closes its WebSocket at once. Sensitive changes

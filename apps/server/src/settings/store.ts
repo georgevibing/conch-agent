@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { Persona, Preferences, Profile, type UpdateSettingsBody } from '@conch/protocol';
 import { z } from 'zod';
 
-import { Mutex, readJson, writeJson } from '../lib/fs';
+import { Mutex, writeJson } from '../lib/fs';
+import { readStore, type Heal } from '../lib/recover';
 import { StoredSecret } from '../secrets/vault';
 
 const SettingsFile = z.object({
@@ -31,13 +32,21 @@ export type Secrets = z.infer<typeof SecretsFile>;
  * `~/.conch/settings.json` — personality, profile and preferences (safe to
  * read and edit by hand). Secrets live separately in `secrets.json`, mode 0600,
  * and are never sent to the browser.
+ *
+ * A file that won't read is kept as `<name>.broken-<time>.json` and whatever
+ * is still valid carries on (`readStore`). Going back to a default is safe for
+ * both: every preference's default is the careful one (ask before acting), and
+ * a lost key only means asking for it again, never more access.
  */
 export class SettingsStore {
   #mutex = new Mutex();
-  #cache?: Settings;
+  #cache?: Promise<Settings>;
   readonly workspaceDefault: string;
 
-  constructor(private readonly home: string) {
+  constructor(
+    private readonly home: string,
+    private readonly heal?: Heal,
+  ) {
     this.workspaceDefault = join(home, 'workspace');
   }
 
@@ -49,8 +58,23 @@ export class SettingsStore {
     return join(this.home, 'secrets.json');
   }
 
-  async get(): Promise<Settings> {
-    this.#cache ??= SettingsFile.parse((await readJson(this.#path)) ?? {});
+  get(): Promise<Settings> {
+    this.#cache ??= readStore(this.#path, SettingsFile, {
+      onRepair: (state) =>
+        this.heal?.(
+          'settings',
+          state === 'salvaged'
+            ? 'Part of your settings file couldn’t be read, so Conch kept a copy and reset just that part.'
+            : 'Your settings file couldn’t be read, so Conch kept a copy and went back to the defaults.',
+        ),
+    }).then(
+      (read) => read.value,
+      (error: unknown) => {
+        // Unreadable for a moment (a virus scan on Windows): try again next time.
+        this.#cache = undefined;
+        throw error;
+      },
+    );
     return this.#cache;
   }
 
@@ -65,7 +89,7 @@ export class SettingsStore {
         preferences: { ...current.preferences, ...patch.preferences },
       });
       await writeJson(this.#path, next);
-      this.#cache = next;
+      this.#cache = Promise.resolve(next);
       return next;
     });
   }
@@ -79,7 +103,16 @@ export class SettingsStore {
   }
 
   async secrets(): Promise<Secrets> {
-    return SecretsFile.parse((await readJson(this.#secretsPath)) ?? {});
+    const read = await readStore(this.#secretsPath, SecretsFile, {
+      onRepair: (state) =>
+        this.heal?.(
+          'secrets',
+          state === 'salvaged'
+            ? 'One of your saved provider keys couldn’t be read, so Conch kept a copy and carried on with the rest.'
+            : 'Your saved provider keys couldn’t be read, so Conch kept a copy and started a new list.',
+        ),
+    });
+    return read.value;
   }
 
   setSecrets(patch: Partial<Secrets>): Promise<void> {

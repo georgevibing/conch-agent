@@ -46,6 +46,10 @@
     display: contents;
   }
 
+  .command {
+    align-self: stretch;
+  }
+
   .help {
     display: inline-flex;
     align-items: center;

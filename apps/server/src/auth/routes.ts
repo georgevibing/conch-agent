@@ -95,6 +95,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
       checkup: checkup({
         config: services.config,
         access: file,
+        accessLocked: await store.locked(),
         permissionMode: preferences.permissionMode,
         secure: gate.isSecure(request),
         homeProblems: services.homeProblems,

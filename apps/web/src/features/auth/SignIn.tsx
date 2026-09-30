@@ -2,6 +2,7 @@ import { looksLikeAccessKey, type AuthStatus } from '@conch/protocol';
 import {
   Button,
   Callout,
+  CodeBlock,
   Collapsible,
   Field,
   Heading,
@@ -63,6 +64,37 @@ export function SignIn({ status, notice }: { status: AuthStatus; notice?: string
     e.preventDefault();
     void submit();
   };
+
+  // Who may sign in couldn't be read: the way back in is on the computer itself.
+  if (status.locked) {
+    return (
+      <main className={styles.root}>
+        <div className={styles.glow} aria-hidden />
+        <Stack gap={5} align="center" className={styles.card}>
+          <Pearl size="lg" state="idle" label={null} />
+          <Heading level={1} display size="4xl" align="center">
+            Locked to keep it safe
+          </Heading>
+          <Text tone="muted" align="center">
+            Conch couldn’t read who may sign in, so it locked itself rather than let anyone in. On
+            the computer running Conch, open a terminal in the Conch folder and run:
+          </Text>
+          <CodeBlock language="bash" code="pnpm conch reset" className={styles.command} />
+          <Text size="sm" tone="muted" align="center">
+            Then open Conch on that computer and choose a new password in{' '}
+            <strong>Settings → Security</strong>.
+          </Text>
+          <Button
+            variant="surface"
+            leadingIcon={<RotateCw />}
+            onClick={() => void client.invalidateQueries({ queryKey: keys.auth })}
+          >
+            I’ve done it — try again
+          </Button>
+        </Stack>
+      </main>
+    );
+  }
 
   if (status.setupRequired) {
     return (

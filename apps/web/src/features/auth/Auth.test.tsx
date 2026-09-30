@@ -104,6 +104,15 @@ describe('SignIn', () => {
     expect(screen.getByText('This connection isn’t encrypted')).toBeInTheDocument();
   });
 
+  it('explains the way back in when sign-in is locked, and offers no password box', async () => {
+    mockFetch({});
+    renderApp(<SignIn status={status({ locked: true })} />);
+    expect(screen.getByRole('heading', { name: 'Locked to keep it safe' })).toBeInTheDocument();
+    expect(screen.getByText('pnpm conch reset')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Password', { selector: 'input' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'I’ve done it — try again' })).toBeInTheDocument();
+  });
+
   it('explains what to do when sign-in isn’t set up yet', () => {
     mockFetch({});
     renderApp(<SignIn status={status({ method: 'none', setupRequired: true })} />);

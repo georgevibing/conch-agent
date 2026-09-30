@@ -3,7 +3,8 @@ import { join } from 'node:path';
 import { BrowserSettings, BrowserSite, type UpdateBrowserSettingsBody } from '@conch/protocol';
 import { z } from 'zod';
 
-import { Mutex, readJson, writeJson } from '../lib/fs';
+import { Mutex, writeJson } from '../lib/fs';
+import { readStore, type Heal } from '../lib/recover';
 
 const BrowserFile = z.object({
   version: z.literal(1).default(1),
@@ -19,12 +20,19 @@ const BrowserFile = z.object({
 });
 type BrowserFile = z.infer<typeof BrowserFile>;
 
-/** `~/.conch/browser.json`: the browser's settings and the sites you trust. */
+/**
+ * `~/.conch/browser.json`: the browser's settings and the sites you trust. A
+ * damaged file is kept aside and whatever still reads carries on; the rest
+ * goes back to the careful defaults (no local pages, no trusted sites).
+ */
 export class BrowserStore {
   #mutex = new Mutex();
-  #cache?: BrowserFile;
+  #cache?: Promise<BrowserFile>;
 
-  constructor(private readonly home: string) {}
+  constructor(
+    private readonly home: string,
+    private readonly heal?: Heal,
+  ) {}
 
   get #path() {
     return join(this.home, 'browser.json');
@@ -40,18 +48,29 @@ export class BrowserStore {
     return join(this.home, 'browser', 'shots');
   }
 
-  async #read(): Promise<BrowserFile> {
-    if (!this.#cache) {
-      const raw = await readJson(this.#path).catch(() => undefined);
-      const parsed = BrowserFile.safeParse(raw ?? {});
-      // A damaged file shouldn't take the browser down: start from defaults.
-      this.#cache = parsed.success ? parsed.data : BrowserFile.parse({});
-    }
+  #read(): Promise<BrowserFile> {
+    // A damaged file shouldn't take the browser down.
+    this.#cache ??= readStore(this.#path, BrowserFile, {
+      onRepair: (state) =>
+        this.heal?.(
+          'browser',
+          state === 'salvaged'
+            ? 'Part of the browser settings couldn’t be read, so Conch kept a copy and reset just that part.'
+            : 'The browser settings couldn’t be read, so Conch kept a copy and went back to the defaults.',
+        ),
+    }).then(
+      (read) => read.value,
+      // Unreadable for a moment (another program has it open): the defaults, and try again later.
+      () => {
+        this.#cache = undefined;
+        return BrowserFile.parse({});
+      },
+    );
     return this.#cache;
   }
 
   #write(next: BrowserFile): Promise<void> {
-    this.#cache = next;
+    this.#cache = Promise.resolve(next);
     return writeJson(this.#path, next);
   }
 

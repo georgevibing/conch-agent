@@ -34,6 +34,7 @@ console.warn(`\n  🐚  Conch is listening at ${url}\n`);
 const findings = checkup({
   config,
   access: await services.access.get(),
+  accessLocked: await services.access.locked(),
   permissionMode: (await services.settings.get()).preferences.permissionMode,
   secure: exposure(config) === 'local',
   homeProblems: services.homeProblems,

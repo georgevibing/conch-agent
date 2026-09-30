@@ -4,6 +4,7 @@ import { Routine, RoutineRun } from '@conch/protocol';
 import { z } from 'zod';
 
 import { Mutex, safeJoin, writeFileAtomic } from '../lib/fs';
+import { isBrokenCopy, setAside, type Heal } from '../lib/recover';
 
 /** What's on disk: the routine minus fields the server computes, plus scheduler bookkeeping. */
 export const StoredRoutine = Routine.omit({
@@ -24,13 +25,20 @@ const MAX_RUNS = 200;
 /**
  * `~/.conch/routines/<id>.json` for each routine and `<id>.runs.jsonl` for its
  * history — plain files you can read, back up or delete.
+ *
+ * A routine file that won't read is set aside whole (`<id>.broken-<time>.json`)
+ * rather than patched: a routine runs by itself, and one with a guessed
+ * schedule or prompt would do something you never asked for.
  */
 export class RoutineStore {
   #mutex = new Mutex();
-  #routines?: Map<string, StoredRoutine>;
+  #routines?: Promise<Map<string, StoredRoutine>>;
   #runs = new Map<string, RoutineRun[]>();
 
-  constructor(private readonly dir: string) {}
+  constructor(
+    private readonly dir: string,
+    private readonly heal?: Heal,
+  ) {}
 
   async all(): Promise<StoredRoutine[]> {
     return [...(await this.#load()).values()];
@@ -68,8 +76,9 @@ export class RoutineStore {
       runs = [];
       try {
         const text = await readFile(safeJoin(this.dir, `${routineId}.runs.jsonl`), 'utf8');
+        // A line that won't read is skipped, not the whole history.
         for (const line of text.split('\n').filter(Boolean)) {
-          const parsed = RoutineRun.safeParse(JSON.parse(line));
+          const parsed = RoutineRun.safeParse(parseLine(line));
           if (parsed.success) runs.push(parsed.data);
         }
       } catch (error) {
@@ -97,26 +106,67 @@ export class RoutineStore {
     });
   }
 
-  async #load(): Promise<Map<string, StoredRoutine>> {
-    if (this.#routines) return this.#routines;
+  #load(): Promise<Map<string, StoredRoutine>> {
+    this.#routines ??= this.#read().catch((error: unknown) => {
+      this.#routines = undefined;
+      throw error;
+    });
+    return this.#routines;
+  }
+
+  async #read(): Promise<Map<string, StoredRoutine>> {
     const map = new Map<string, StoredRoutine>();
     let files: string[] = [];
     try {
-      files = (await readdir(this.dir)).filter((f) => f.endsWith('.json'));
+      files = (await readdir(this.dir)).filter((f) => f.endsWith('.json') && !isBrokenCopy(f));
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
     for (const file of files) {
+      const path = safeJoin(this.dir, file);
+      let bytes: Buffer;
       try {
-        const parsed = StoredRoutine.safeParse(
-          JSON.parse(await readFile(safeJoin(this.dir, file), 'utf8')),
-        );
-        if (parsed.success) map.set(parsed.data.id, parsed.data);
+        bytes = await readFile(path);
       } catch {
-        // A hand-edited file that no longer parses is skipped, not fatal.
+        continue; // Gone, or held open for a moment: it's read next time.
       }
+      const raw = parseLine(bytes.toString('utf8'));
+      const parsed = StoredRoutine.safeParse(raw);
+      if (parsed.success) {
+        map.set(parsed.data.id, parsed.data);
+        continue;
+      }
+      await this.#setAside(path, bytes, raw);
     }
-    this.#routines = map;
     return map;
+  }
+
+  /** Keep a routine that won't read out of the way, where it can't run, and say so once. */
+  async #setAside(path: string, bytes: Buffer, raw: unknown) {
+    try {
+      const aside = await setAside(path, { bytes });
+      if (!aside.fresh) return;
+      await rm(path, { force: true });
+      const title =
+        typeof raw === 'object' && raw !== null && 'title' in raw && typeof raw.title === 'string'
+          ? raw.title.trim().slice(0, 80)
+          : '';
+      this.heal?.(
+        'routines',
+        title
+          ? `The routine “${title}” couldn’t be read, so Conch set it aside instead of running it wrong.`
+          : 'A routine couldn’t be read, so Conch set it aside instead of running it wrong.',
+      );
+    } catch {
+      // Couldn't move it: it's skipped (never run) and tried again next start.
+    }
+  }
+}
+
+function parseLine(line: string): unknown {
+  try {
+    return JSON.parse(line);
+  } catch {
+    return undefined;
   }
 }

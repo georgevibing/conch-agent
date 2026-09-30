@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app';
 import { loadConfig } from '../config';
 import { Services } from '../services';
+import { AccessStore } from './store';
 
 // Password hashing is deliberately slow (scrypt, N=2^17); shared CI runners need headroom.
 vi.setConfig({ testTimeout: 20_000 });
@@ -303,6 +304,123 @@ describe('pairing links', () => {
     const sessions = (await app.inject({ url: '/api/access', headers: { cookie } })).json()
       .sessions;
     expect(sessions.map((s: { via: string }) => s.via).sort()).toEqual(['pairing', 'setup']);
+  });
+});
+
+describe('a damaged access.json', () => {
+  /** The store re-reads the file when it changes, checking at most twice a second. */
+  const noticed = () => new Promise((resolve) => setTimeout(resolve, 600));
+  const damage = (home: string, text = '{"method": "password", "passwordHa') =>
+    writeFile(join(home, 'access.json'), text);
+  const kept = async (home: string) =>
+    (await readdir(home)).filter((n) => n.startsWith('access.broken-'));
+
+  it('locks sign-in instead of opening it, even for this computer', async () => {
+    const { app, home, services } = await setup();
+    const cookie = await withPassword(app);
+    await damage(home);
+    await noticed();
+
+    // Never read as "no sign-in": this computer would walk straight in.
+    expect((await app.inject('/api/state')).statusCode).toBe(401);
+    expect((await app.inject({ url: '/api/state', headers: { cookie } })).statusCode).toBe(401);
+    expect((await remote(app, '/api/state')).json().error).toBe('unauthorized');
+    expect((await app.inject('/api/auth')).json()).toMatchObject({
+      signedIn: false,
+      setupRequired: false,
+      locked: true,
+    });
+    const signIn = await app.inject({
+      method: 'POST',
+      url: '/api/auth/sign-in',
+      payload: { with: 'password', username: 'ada', password: PASSWORD },
+    });
+    expect(signIn.statusCode).toBe(401);
+
+    // The damaged file stays (a restart stays locked) and a copy is kept, noted once.
+    expect(await readFile(join(home, 'access.json'), 'utf8')).toContain('passwordHa');
+    expect(await kept(home)).toHaveLength(1);
+    await vi.waitFor(async () =>
+      expect((await services.healed.list()).map((n) => n.area)).toEqual(['access']),
+    );
+
+    // Nothing but a fresh start may write over it.
+    await expect(services.access.createPairing()).rejects.toMatchObject({ code: 'locked' });
+    expect(await readFile(join(home, 'access.json'), 'utf8')).toContain('passwordHa');
+  });
+
+  it('stays locked after a restart, and `pnpm conch reset` is the way back in', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-auth-'));
+    await damage(home, '');
+    const first = await setup({ CONCH_HOME: home });
+    expect((await first.app.inject('/api/state')).statusCode).toBe(401);
+    await first.app.close();
+
+    const { app } = await setup({ CONCH_HOME: home });
+    expect((await app.inject('/api/auth')).json().locked).toBe(true);
+    expect((await app.inject('/api/access')).statusCode).toBe(401);
+
+    // What `pnpm conch reset` does, from this computer's terminal.
+    const cli = new AccessStore(home);
+    expect(await cli.locked()).toBe(true);
+    await cli.disable();
+    await noticed();
+    expect((await app.inject('/api/state')).statusCode).toBe(200);
+    expect((await app.inject('/api/auth')).json()).not.toHaveProperty('locked');
+    expect(await kept(home)).toHaveLength(1);
+  });
+
+  it('never fills in a missing method as “no sign-in”', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-auth-'));
+    await damage(home, JSON.stringify({ username: 'ada', passwordHash: 'scrypt$x', keys: 'oops' }));
+    const { app } = await setup({ CONCH_HOME: home });
+    expect((await app.inject('/api/state')).statusCode).toBe(401);
+    expect((await app.inject('/api/auth')).json()).toMatchObject({ locked: true });
+  });
+
+  it('only drops signed-in devices it can’t read, and keeps who may sign in', async () => {
+    const { app, home, services } = await setup();
+    const cookie = await withPassword(app);
+    const file = JSON.parse(await readFile(join(home, 'access.json'), 'utf8'));
+    file.sessions.push({ id: 's_bad', hash: 42 });
+    await writeFile(join(home, 'access.json'), JSON.stringify(file));
+    await noticed();
+    expect((await app.inject({ url: '/api/state', headers: { cookie } })).statusCode).toBe(200);
+    expect((await app.inject('/api/state')).statusCode).toBe(401);
+    expect(await services.access.locked()).toBe(false);
+    expect(await kept(home)).toHaveLength(1);
+    await vi.waitFor(async () =>
+      expect((await services.healed.list())[0]?.message).toMatch(/sign in again/),
+    );
+  });
+
+  it('still lets in whoever holds the CONCH_TOKEN that started Conch', async () => {
+    const token = 'env-token-0123456789abcdef';
+    const home = await mkdtemp(join(tmpdir(), 'conch-auth-'));
+    await damage(home);
+    const { app } = await setup({ CONCH_HOME: home, CONCH_TOKEN: token });
+    expect((await app.inject('/api/state')).statusCode).toBe(401);
+    const bearer = await app.inject({
+      url: '/api/state',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(bearer.statusCode).toBe(200);
+  });
+
+  it('shows up in the security checkup with the one command that fixes it', async () => {
+    const token = 'env-token-0123456789abcdef';
+    const home = await mkdtemp(join(tmpdir(), 'conch-auth-'));
+    await damage(home);
+    const { app } = await setup({ CONCH_HOME: home, CONCH_TOKEN: token });
+    const { checkup } = (
+      await app.inject({ url: '/api/access', headers: { authorization: `Bearer ${token}` } })
+    ).json();
+    expect(checkup[0]).toMatchObject({
+      id: 'sign-in',
+      level: 'danger',
+      title: 'Sign-in is locked',
+      command: 'pnpm conch reset',
+    });
   });
 });
 
