@@ -1,11 +1,12 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
 import { fakeProgram } from '../test/fakeProgram';
-import { launch, onWindowsPath, run } from './proc';
+import { launch, onWindowsPath, presentSync, run } from './proc';
 
 const ECHO_ARGS = 'process.stdout.write(JSON.stringify(process.argv.slice(2)));';
 
@@ -99,5 +100,31 @@ describe.runIf(process.platform === 'win32')('Windows batch-file shims', () => {
     expect(onWindowsPath('node.exe', process.env)).toBe(true);
     expect(onWindowsPath(process.execPath, process.env)).toBe(true);
     expect(onWindowsPath('definitely-not-installed-xyz', process.env)).toBe(false);
+  });
+
+  // 1Password, winget and Store Python install as app execution aliases, which
+  // `existsSync` can't see. Conch once said “Couldn’t find 1password-mcp” with it right there.
+  it('finds app execution aliases, like the one winget installs as', (ctx) => {
+    const aliases = join(process.env.LOCALAPPDATA ?? '', 'Microsoft', 'WindowsApps');
+    if (!presentSync(join(aliases, 'winget.exe'))) return ctx.skip();
+    expect(existsSync(join(aliases, 'winget.exe'))).toBe(false);
+    expect(onWindowsPath('winget', process.env)).toBe(true);
+  });
+});
+
+describe('presentSync', () => {
+  it('counts a link whose target can’t be opened, as an app alias is', async (ctx) => {
+    const dir = await mkdtemp(join(tmpdir(), 'conch-link-'));
+    const link = join(dir, 'tool.exe');
+    try {
+      await symlink(join(dir, 'locked', 'tool.exe'), link, 'file');
+    } catch (error) {
+      // Windows only lets developers make links.
+      if ((error as NodeJS.ErrnoException).code === 'EPERM') return ctx.skip();
+      throw error;
+    }
+    expect(existsSync(link)).toBe(false);
+    expect(presentSync(link)).toBe(true);
+    expect(presentSync(join(dir, 'nothing.exe'))).toBe(false);
   });
 });

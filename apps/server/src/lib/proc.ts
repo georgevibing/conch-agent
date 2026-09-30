@@ -7,7 +7,7 @@
  * credential) never reaches a process the agent can influence.
  */
 import { execFile } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import { access, constants } from 'node:fs/promises';
 import { homedir, platform } from 'node:os';
 import { basename, delimiter, dirname, extname, join, resolve } from 'node:path';
@@ -61,6 +61,22 @@ export function programFile(file: string | undefined): string | undefined {
 }
 
 /**
+ * Whether there's a file at `path`, including Windows app execution aliases:
+ * the `WindowsApps\name.exe` links that Store and MSIX apps (1Password,
+ * winget, Python) put on `PATH`. Following one lands in a folder only
+ * Windows may open, so `existsSync` says no; the link itself is there, and
+ * starting it works.
+ */
+export function presentSync(path: string): boolean {
+  if (existsSync(path)) return true;
+  try {
+    return lstatSync(path, { throwIfNoEntry: false }) !== undefined;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Whether Windows would find `command` the way `cmd.exe` does: as a path, or in
  * the working folder or on `PATH`, with one of `PATHEXT`'s extensions.
  */
@@ -77,7 +93,7 @@ export function onWindowsPath(
   const dirs = /[\\/]/.test(command)
     ? [cwd]
     : [cwd, ...(variable('PATH') ?? '').split(delimiter).filter(Boolean)];
-  return dirs.some((dir) => names.some((name) => existsSync(resolve(dir, name))));
+  return dirs.some((dir) => names.some((name) => presentSync(resolve(dir, name))));
 }
 
 /**
