@@ -72,6 +72,14 @@ export interface IntegrationSuggestion {
   via?: string;
 }
 
+/** What a message is about that isn't connected: what to offer, and what the assistant can't see. */
+export interface TurnSuggestions {
+  /** Cards to show (not offered in this conversation before, not muted). */
+  offers: IntegrationSuggestion[];
+  /** Every app the message was about that isn't connected, offered or not, by name. */
+  unseen: string[];
+}
+
 /** Offers per message, at most: one card is a suggestion, three are a sales pitch. */
 const MAX_SUGGESTIONS = 2;
 /**
@@ -986,17 +994,19 @@ export class IntegrationService {
    * its own servers), that's retired, or that's in `skip` (offered already in
    * this conversation, or muted). A service only a provider's account can
    * reach goes through Zapier when this provider has no account connectors.
+   * `unseen` names them all, skipped or not, so the assistant never pretends.
    */
   async suggest(
     text: string,
     engine: Engine,
     skip: ReadonlySet<string> = new Set(),
-  ): Promise<IntegrationSuggestion[]> {
+  ): Promise<TurnSuggestions> {
+    const none: TurnSuggestions = { offers: [], unseen: [] };
     const cued = cuedApps(
       text,
-      [...CATALOG.values()].filter((item) => !item.retired && !skip.has(item.id)),
+      [...CATALOG.values()].filter((item) => !item.retired),
     );
-    if (!cued.length) return [];
+    if (!cued.length) return none;
     const mine = new Set(
       (await this.store.all()).flatMap((i) => {
         const id =
@@ -1006,10 +1016,10 @@ export class IntegrationService {
       }),
     );
     const open = cued.filter((item) => !mine.has(item.id));
-    if (!open.length) return [];
+    if (!open.length) return none;
     // Not knowing what the provider has would risk telling it it can't see an app it can.
     const reached = await this.#reachedBy(engine);
-    if (!reached) return [];
+    if (!reached) return none;
     const account = await this.#accountReady(engine);
     const zapier = CATALOG.get('zapier');
     const suggestions: IntegrationSuggestion[] = [];
@@ -1026,7 +1036,10 @@ export class IntegrationService {
       else if (zapier && !zapier.retired && !mine.has(zapier.id))
         suggestions.push({ ...offer, via: zapier.id });
     }
-    return suggestions.slice(0, MAX_SUGGESTIONS);
+    return {
+      offers: suggestions.filter((s) => !skip.has(s.catalogId)).slice(0, MAX_SUGGESTIONS),
+      unseen: suggestions.map((s) => s.name),
+    };
   }
 
   /**

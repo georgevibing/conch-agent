@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import type { Capabilities, ConversationEvent, EngineStatus } from '@conch/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
-import { ConversationManager, offeredPrompt } from '../conversations/manager';
+import { ConversationManager, notConnectedPrompt } from '../conversations/manager';
 import { ConversationStore } from '../conversations/store';
 import { MockEngine } from '../engines/mock/engine';
 import type {
@@ -102,8 +102,9 @@ async function connected(
   );
 }
 
-const ids = (list: { catalogId: string; via?: string }[]) =>
-  list.map((s) => (s.via ? `${s.catalogId} via ${s.via}` : s.catalogId));
+const ids = (found: { offers: { catalogId: string; via?: string }[] }) =>
+  found.offers.map((s) => (s.via ? `${s.catalogId} via ${s.via}` : s.catalogId));
+const nothing = { offers: [], unseen: [] };
 
 describe('what gets suggested', () => {
   it('offers an app the message is about, with what the card shows', async () => {
@@ -112,14 +113,17 @@ describe('what gets suggested', () => {
       'what’s assigned to me in Linear this week?',
       new MockEngine(),
     );
-    expect(found).toEqual([
-      {
-        catalogId: 'linear',
-        name: 'Linear',
-        description: 'Find, create and update issues and projects.',
-        color: '#5E6AD2',
-      },
-    ]);
+    expect(found).toEqual({
+      offers: [
+        {
+          catalogId: 'linear',
+          name: 'Linear',
+          description: 'Find, create and update issues and projects.',
+          color: '#5E6AD2',
+        },
+      ],
+      unseen: ['Linear'],
+    });
   });
 
   it('never offers one that’s connected in Conch, in any state, or added by hand', async () => {
@@ -142,14 +146,14 @@ describe('what gets suggested', () => {
         'what’s in Linear, my Notion page, the errors in Sentry and my Canva designs?',
         engine,
       ),
-    ).toEqual([]);
+    ).toEqual(nothing);
   });
 
   it('never offers what the provider’s own account already reaches', async () => {
     // The mock's account has Google Calendar connected, and Gmail signed out.
     const engine = new MockEngine();
     const { integrations } = await service(engine);
-    expect(await integrations.suggest('what’s on my calendar tomorrow?', engine)).toEqual([]);
+    expect(await integrations.suggest('what’s on my calendar tomorrow?', engine)).toEqual(nothing);
     expect(ids(await integrations.suggest('what did I miss in my inbox?', engine))).toEqual([
       'gmail',
     ]);
@@ -169,11 +173,11 @@ describe('what gets suggested', () => {
   it('says nothing when the provider can’t say what it has', async () => {
     const broken = new FakeEngine({ mode: 'native' }, () => Promise.reject(new Error('down')));
     const one = await service(broken);
-    expect(await one.integrations.suggest('check my Linear inbox', broken)).toEqual([]);
+    expect(await one.integrations.suggest('check my Linear inbox', broken)).toEqual(nothing);
 
     const slow = new FakeEngine({ mode: 'native' }, () => new Promise(() => {}));
     const two = await service(slow);
-    expect(await two.integrations.suggest('check my Linear inbox', slow)).toEqual([]);
+    expect(await two.integrations.suggest('check my Linear inbox', slow)).toEqual(nothing);
   });
 
   it('offers Zapier for an account-only app when the provider has no account connectors', async () => {
@@ -184,7 +188,7 @@ describe('what gets suggested', () => {
     ]);
     // With Zapier connected, it may reach Gmail already: don't offer anything.
     await connected(integrations, { name: 'Zapier', catalogId: 'zapier' });
-    expect(await integrations.suggest('check my Gmail inbox', engine)).toEqual([]);
+    expect(await integrations.suggest('check my Gmail inbox', engine)).toEqual(nothing);
   });
 
   it('leaves out what was offered already or muted, and never more than two', async () => {
@@ -192,21 +196,23 @@ describe('what gets suggested', () => {
     const { integrations } = await service(engine);
     const text = 'move the Jira tickets into Linear, then post a summary to Slack and Notion';
     expect(ids(await integrations.suggest(text, engine))).toEqual(['atlassian', 'linear']);
-    expect(ids(await integrations.suggest(text, engine, new Set(['atlassian', 'linear'])))).toEqual(
-      ['slack via zapier', 'notion'],
-    );
+    const later = await integrations.suggest(text, engine, new Set(['atlassian', 'linear']));
+    expect(ids(later)).toEqual(['slack via zapier', 'notion']);
+    // What isn't offered again is still named as unseen: the assistant must not pretend.
+    expect(later.unseen).toEqual(['Jira & Confluence', 'Linear', 'Slack', 'Notion']);
   });
 
   it('tells the assistant plainly, in a few lines, for every provider', () => {
-    expect(offeredPrompt([])).toBe('');
-    const one = offeredPrompt([{ name: 'Linear' }]);
-    expect(one).toMatch(/Linear isn’t connected/);
-    expect(one).toMatch(/Don’t pretend to have Linear data/);
-    expect(one).not.toMatch(/Claude|Codex/);
-    expect(one.split('\n').length).toBeLessThanOrEqual(3);
-    expect(offeredPrompt([{ name: 'Linear' }, { name: 'Notion' }])).toMatch(
-      /Linear and Notion aren’t connected/,
-    );
+    expect(notConnectedPrompt([])).toBe('');
+    const offered = notConnectedPrompt(['Linear'], ['Linear']);
+    expect(offered).toMatch(/Linear isn’t connected/);
+    expect(offered).toMatch(/a button in the chat to connect Linear/);
+    expect(offered).toMatch(/Don’t pretend to have Linear data/);
+    expect(offered).not.toMatch(/Claude|Codex/);
+    expect(offered.split('\n').length).toBeLessThanOrEqual(3);
+    const quiet = notConnectedPrompt(['Linear', 'Notion']);
+    expect(quiet).toMatch(/Linear and Notion aren’t connected/);
+    expect(quiet).not.toMatch(/button/);
   });
 });
 
@@ -264,20 +270,23 @@ describe('the conversation', () => {
 
     await say('and what about Linear next week?', id);
     expect(await offers(id)).toHaveLength(1);
-    // Only the turn that offered it is told.
-    expect(engine.turns[1]?.systemAppend).not.toMatch(/Not connected yet/);
+    // Not offered again, but still told it can't see Linear.
+    expect(engine.turns[1]?.systemAppend).toMatch(/Linear isn’t connected/);
+    expect(engine.turns[1]?.systemAppend).not.toMatch(/button/);
   });
 
   it('says nothing about an app once it’s connected', async () => {
-    const { integrations, say, offers } = await chat();
+    const { integrations, engine, say, offers } = await chat();
     await connected(integrations, { name: 'Linear', catalogId: 'linear' });
     expect(await offers(await say('what’s assigned to me in Linear?'))).toEqual([]);
+    expect(engine.turns[0]?.systemAppend).not.toMatch(/Not connected yet/);
   });
 
   it('never offers an app that was muted', async () => {
     const { engine, say, offers } = await chat({ muted: ['linear'] });
     expect(await offers(await say('what’s assigned to me in Linear?'))).toEqual([]);
-    expect(engine.turns[0]?.systemAppend).not.toMatch(/Not connected yet/);
+    expect(engine.turns[0]?.systemAppend).toMatch(/Linear isn’t connected/);
+    expect(engine.turns[0]?.systemAppend).not.toMatch(/button/);
   });
 
   it('keeps the offer, and “Not now”, through a reload', async () => {
@@ -301,8 +310,8 @@ describe('the conversation', () => {
     expect(await offers(id)).toHaveLength(1);
   });
 
-  it('never offers anything in an unattended run', async () => {
-    const { manager, offers } = await chat();
+  it('never offers anything in an unattended run, but still says what it can’t see', async () => {
+    const { manager, engine, offers } = await chat();
     const run = await manager.start({
       title: 'Morning check',
       text: 'what’s assigned to me in Linear today?',
@@ -311,6 +320,8 @@ describe('the conversation', () => {
     });
     await run.result;
     expect(await offers(run.conversationId)).toEqual([]);
+    expect(engine.turns[0]?.systemAppend).toMatch(/Linear isn’t connected/);
+    expect(engine.turns[0]?.systemAppend).not.toMatch(/button/);
   });
 
   it('reads only what the person typed', async () => {
