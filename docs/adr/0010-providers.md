@@ -134,7 +134,8 @@ either — what a provider can actually do is the provider's own sentence.
 ### 1Password as an integration, too
 
 The catalog gains **1Password**: the Environments MCP server (`1password-mcp`,
-shipped with the desktop app, stdio only, macOS and Linux). It manages
+shipped with the desktop app, stdio only; on Windows too, as an app alias. See
+ADR 0016, which also installs the app when it's missing). It manages
 Environments and variable _names_; by explicit 1Password design it never returns
 a secret value to a client, and the entry says so. Enabling it takes two
 toggles in the 1Password app, which the dialog lists as steps.

@@ -34,6 +34,7 @@ working agreement 11: _fix it before you ask_.
 | Skills (SKILL.md, other agents' folders, `use_skill`)           | `apps/server/src/skills/` + [ADR 0013](./docs/adr/0013-skills.md) — security-relevant                                                                                                             |
 | The browser (live view, takeover, per-site permissions)         | `apps/server/src/browser/`, `apps/web/src/features/browser/`, `packages/nacre/src/patterns/Browser/` + [ADR 0014](./docs/adr/0014-browser.md) — security-relevant                                 |
 | The terminal (shells on the host, the drawer, who may open one) | `apps/server/src/terminal/`, `apps/web/src/features/terminal/`, `packages/nacre/src/patterns/Terminal/` + [ADR 0015](./docs/adr/0015-terminal.md) — security-relevant                             |
+| Something a feature needs installed (apps, CLIs, runtimes)      | `apps/server/src/setup/`, Nacre `SetupChecklist` + [ADR 0016](./docs/adr/0016-getting-what-a-feature-needs.md) — security-relevant                                                                |
 | What ⌘K can find by name                                        | `apps/web/src/features/palette/` (`findables.tsx`) — see working agreement 10                                                                                                                     |
 | A decision that changes architecture or adds a dependency       | Write an ADR in [`docs/adr/`](./docs/adr/) first                                                                                                                                                  |
 | Security, auth, exposing the gateway beyond localhost           | [§ Security engineering](#security-engineering) below → [ARCHITECTURE.md § Security](./ARCHITECTURE.md#security-model) → [ADR 0008](./docs/adr/0008-access-and-hardening.md) — treat as high-risk |
@@ -147,6 +148,24 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
       Chromium, relaunches after a crash and reopens each chat's page, and
       declines cookie banners.
 
+    - **Offer to get what's missing.** When a feature needs something outside Conch
+      (an app, a CLI, a runtime), don't report it missing. Declare it as a _need_
+      (`apps/server/src/setup/known.ts`, ADR 0016), and the UI turns it into one
+      button:
+      - **Find it where it really lives** before saying it's missing: `PATH` as the
+        OS sees it (Windows app aliases in `WindowsApps` fail `existsSync`; use
+        `presentSync`/`findExecutable`), macOS app bundles, the folders installers
+        use. Run what you found by its full path.
+      - **Install it for them** when a package manager can do it without an
+        administrator (winget, Homebrew, npm into a user prefix). Offer it as
+        “Install X”, show the exact command, show progress, then carry on to the
+        thing they asked for. No second press.
+      - **Link to it** when only a person can install it (`sudo`, an app store,
+        a licence). Then watch: poll while missing, and look again on window focus.
+      - **Point at the switch** when it's installed but turned off in another app:
+        name the setting, offer “Open <app>”, and check again when they come back.
+      - A card says what's missing in a few words (“Needs the 1Password app.”) with
+        **Finish setup**, never a program name and **Try again**.
     - **Say what you fixed, quietly.** Record each repair as a plain "fixed on its
       own" note (e.g. `BrowserStatus.healed`), shown as reassurance, never as an
       error or a toast that demands attention.
@@ -225,6 +244,7 @@ threat model. Hold every change to the bar of a FAANG security review:
 - [ ] Docs updated where behaviour or architecture changed (this file, ARCHITECTURE.md, NACRE.md, an ADR)
 - [ ] Security-relevant? Threat-modelled, abuse cases tested, checkup updated, sources cited
 - [ ] Fails well (working agreement 11)? Foreseeable failures heal themselves or end in one plain next step, and the healing paths are tested
+- [ ] Needs something outside Conch? It's declared as a need that Conch finds, installs or links to, and notices when it arrives. It's never a “Couldn't find X” message.
 
 <!-- BEGIN:turborepo-agent-rules -->
 

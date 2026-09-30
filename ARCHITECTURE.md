@@ -95,6 +95,7 @@ src/
     mock/                     scripted engine for UI work and E2E tests
   providers/                  the words for each engine, connecting them, switching, keys
   secrets/                    where a key lives: this computer, or 1Password (`op read`)
+  setup/                      what features need from this computer; find, install, open
 ```
 
 - Each turn calls `query()` from the Claude Agent SDK with `resume` (the Claude Code
@@ -155,6 +156,12 @@ src/
   OAuth callback: `GET /oauth/callback`.
   Outbound requests pass the SSRF guard (`integrations/net.ts`). See
   [ADR 0009](./docs/adr/0009-integrations.md).
+- **Setup** (`setup/`): what a feature needs from this computer (an app, a program)
+  and getting it. A need finds itself where it really lives (`PATH`, Windows app
+  aliases, macOS app bundles), installs itself through winget/Homebrew with
+  progress when a person presses Install (sudo mode), or links to its download.
+  Catalog entries list `needs`, and health says `action: 'setup'` until they're
+  here. See [ADR 0016](./docs/adr/0016-getting-what-a-feature-needs.md).
 - **Providers** (`providers/`): the engines you can connect, each with the words for
   its card (`providers/catalog.ts`) and its live `EngineStatus`. Every connected one
   is available at once (`providers.ready()`); the default for new chats is
@@ -286,7 +293,10 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   connect the same service; `/integrations?connect=<id>` opens a connect dialog;
   `/integrations/:id` has the policy, per-tool Allow · Ask · Off and the connection.
   Connecting opens a dialog whose handshake animates through waiting → connected /
-  failed; OAuth runs in a popup that lands on `/integrations/done`. Broken
+  failed; OAuth runs in a popup that lands on `/integrations/done`. Apps that run on
+  this computer show a `SetupChecklist` of what they need, with the next step as the
+  main button (Install → Open → Connect); `/integrations?setup=<id>` (a card's
+  “Finish setup”) reopens it for one already added. Broken
   integrations show inline in chats (`integration.issue`) and as a sidebar count.
 - **Skills.** `/skills` lists yours and those found in other agents' folders (with
   a switch each, and fuzzy search); `/skills/new` is one text box — as you pause,
