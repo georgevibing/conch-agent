@@ -8,6 +8,7 @@ import {
   type IntegrationsList,
   IntegrationUrl,
   POLICY_LABELS,
+  type Readiness,
   type ServerEvent,
   ServerName,
   toolDecision,
@@ -16,6 +17,8 @@ import {
 
 import type { Engine, EngineMcpServer, EngineMcpStatus } from '../engines/types';
 import { newId } from '../lib/ids';
+import { KNOWN_NEEDS } from '../setup/known';
+import { type NeedSpec, Setup } from '../setup/needs';
 import {
   type Blueprint,
   CATALOG,
@@ -123,6 +126,8 @@ export interface IntegrationServiceDeps {
   manualChecks?: boolean;
   /** Point catalog entries somewhere else (the mock vendor in `pnpm dev:mock` and E2E). */
   blueprints?: (catalogId: string) => Blueprint | undefined;
+  /** Finds and installs what local integrations need; tests and the mock vendor pass their own. */
+  setup?: Setup;
 }
 
 /**
@@ -140,10 +145,12 @@ export class IntegrationService {
   #checking = new Map<string, Promise<StoredIntegration | undefined>>();
   #timer?: NodeJS.Timeout;
   #external?: ExternalList;
+  readonly setup: Setup;
 
   constructor(private readonly deps: IntegrationServiceDeps) {
     this.store = new IntegrationStore(deps.home);
     this.oauth = new OAuthFlows(this.store, deps.fetchFor ?? ((reach) => guardedFetch(reach)));
+    this.setup = deps.setup ?? new Setup(KNOWN_NEEDS);
   }
 
   start() {
@@ -274,6 +281,80 @@ export class IntegrationService {
       };
     });
     return { servers };
+  }
+
+  // ── What local integrations need from this computer (ADR 0016) ──────────
+
+  #needs(entry: ResolvedCatalogItem): NeedSpec[] {
+    // Pointed somewhere else (the mock vendor): what runs is Conch's own.
+    if (this.deps.blueprints?.(entry.id)) return [];
+    return (entry.needs ?? []).flatMap((id) => this.setup.spec(id) ?? []);
+  }
+
+  #entry(catalogId: string): ResolvedCatalogItem {
+    const entry = CATALOG.get(catalogId);
+    if (!entry) throw new IntegrationError('not-found', 'Unknown integration.');
+    return entry;
+  }
+
+  #need(catalogId: string, needId: string): { entry: ResolvedCatalogItem; spec: NeedSpec } {
+    const entry = this.#entry(catalogId);
+    const spec = this.#needs(entry).find((n) => n.id === needId);
+    if (!spec) throw new IntegrationError('not-found', `${entry.name} doesn’t need that.`);
+    return { entry, spec };
+  }
+
+  /** What a catalog entry needs from this computer, and whether it's all here. */
+  async readiness(catalogId: string): Promise<Readiness> {
+    return this.setup.readiness(this.#needs(this.#entry(catalogId)));
+  }
+
+  /**
+   * Install one of an entry's needs, after a person pressed the button. When it
+   * lands, any integration waiting on it is checked again, so its card heals
+   * by itself.
+   */
+  async installNeed(catalogId: string, needId: string): Promise<Readiness> {
+    const { entry, spec } = this.#need(catalogId, needId);
+    try {
+      await this.setup.install(spec);
+    } catch (error) {
+      throw new IntegrationError('unavailable', (error as Error).message);
+    }
+    void this.setup.settled(spec.id).then(() => this.#recheck(entry.id));
+    return this.readiness(catalogId);
+  }
+
+  /** Open the app a need belongs to, so a person can flip a switch in it. */
+  async openNeed(catalogId: string, needId: string): Promise<Readiness> {
+    const { spec } = this.#need(catalogId, needId);
+    try {
+      await this.setup.open(spec);
+    } catch (error) {
+      throw new IntegrationError('unavailable', (error as Error).message);
+    }
+    return this.readiness(catalogId);
+  }
+
+  async #recheck(catalogId: string) {
+    for (const item of await this.store.all())
+      if (item.catalogId === catalogId && item.enabled)
+        await this.check(item.id).catch(() => undefined);
+  }
+
+  /** Health for an integration that's waiting on something this computer doesn't have. */
+  async #waiting(item: StoredIntegration): Promise<IntegrationHealth | undefined> {
+    const entry = item.catalogId ? CATALOG.get(item.catalogId) : undefined;
+    const needs = entry ? this.#needs(entry) : [];
+    if (!needs.length) return undefined;
+    const readiness = await this.setup.readiness(needs);
+    const need = readiness.needs.find((n) => n.state !== 'ready');
+    if (!need) return undefined;
+    const base = { state: 'error' as const, checkedAt: Date.now(), okAt: item.health.okAt };
+    if (need.state === 'unsupported')
+      return { ...base, message: 'Not available on this computer.' };
+    if (need.state === 'installing') return { ...base, message: 'Installing…', action: 'setup' };
+    return { ...base, message: `Needs ${need.name.replace(/^The /, 'the ')}.`, action: 'setup' };
   }
 
   // ── Create / update / remove ────────────────────────────────────────────
@@ -570,6 +651,9 @@ export class IntegrationService {
       const marked = await this.#setHealth(id, { ...item.health, state: 'checking' });
       if (marked) this.#emit(marked);
     }
+    // Missing something it needs: say what, rather than trying to start it.
+    const waiting = await this.#waiting(item);
+    if (waiting) return this.#setHealth(id, waiting);
     let resolved: { server: EngineMcpServer; secrets: string[]; reach: Reach };
     try {
       resolved = await this.#resolve(item);
@@ -587,6 +671,7 @@ export class IntegrationService {
     });
     if (!result.ok) {
       if (result.unauthorized && item.auth === 'oauth') await this.oauth.invalidate(id);
+      const entry = item.catalogId ? CATALOG.get(item.catalogId) : undefined;
       const health =
         result.unauthorized && item.auth === 'token'
           ? {
@@ -596,7 +681,10 @@ export class IntegrationService {
                 : 'That token wasn’t accepted. Check you copied all of it, and that it’s allowed to read.',
               action: 'edit' as const,
             }
-          : result.health;
+          : // Everything it needs is here, yet it didn't start: a switch in its app is likely off.
+            entry?.switchedOff && !/timed? ?out/i.test(result.health.detail ?? '')
+            ? { ...result.health, message: entry.switchedOff, action: 'setup' as const }
+            : result.health;
       return this.#setHealth(id, { ...health, okAt: item.health.okAt });
     }
     const now = Date.now();
@@ -813,8 +901,15 @@ export class IntegrationService {
       const env: Record<string, string> = {};
       for (const [key, value] of Object.entries(stored.values))
         if (key.startsWith('env:')) env[key.slice(4)] = value;
+      // Wherever the program really is: inside a macOS app bundle, say, which isn't on PATH.
+      const entry = item.catalogId ? CATALOG.get(item.catalogId) : undefined;
+      const program =
+        entry?.program && !this.deps.blueprints?.(entry.id)
+          ? this.setup.spec(entry.program)
+          : undefined;
+      const command = (program && (await this.setup.path(program))) ?? item.transport.command;
       return {
-        server: { type: 'stdio', command: item.transport.command, args: item.transport.args, env },
+        server: { type: 'stdio', command, args: item.transport.args, env },
         secrets: Object.values(env),
         reach: 'private',
       };

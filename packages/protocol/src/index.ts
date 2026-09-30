@@ -22,6 +22,7 @@ export * from './common';
 export * from './providers';
 export * from './routines';
 export * from './search';
+export * from './setup';
 export * from './skills';
 export * from './terminal';
 export * from './usage';

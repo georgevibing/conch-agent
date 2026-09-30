@@ -440,6 +440,29 @@ export async function buildApp(services: Services) {
       return services.integrations.get(request.params.id);
     }),
   );
+  // What a catalog entry needs from this computer (ADR 0016). Installing
+  // software runs a package manager as you, so it needs a recent password or key.
+  app.get<{ Params: { catalogId: string } }>(
+    '/api/integrations/catalog/:catalogId/needs',
+    (request, reply) =>
+      guarded(reply, () => services.integrations.readiness(request.params.catalogId)),
+  );
+  app.post<{ Params: { catalogId: string; needId: string } }>(
+    '/api/integrations/catalog/:catalogId/needs/:needId/install',
+    (request, reply) => {
+      if (verifyRequired(request, reply)) return;
+      return guarded(reply, () =>
+        services.integrations.installNeed(request.params.catalogId, request.params.needId),
+      );
+    },
+  );
+  app.post<{ Params: { catalogId: string; needId: string } }>(
+    '/api/integrations/catalog/:catalogId/needs/:needId/open',
+    (request, reply) =>
+      guarded(reply, () =>
+        services.integrations.openNeed(request.params.catalogId, request.params.needId),
+      ),
+  );
 
   // ── Skills ─────────────────────────────────────────────────────────────
   app.get<{ Querystring: { refresh?: string } }>('/api/skills', (request) =>

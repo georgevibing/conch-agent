@@ -141,8 +141,12 @@ export const HealthState = z.enum([
 ]);
 export type HealthState = z.infer<typeof HealthState>;
 
-/** What the user can do about a problem — the UI renders it as one button. */
-export const HealthAction = z.enum(['reconnect', 'edit', 'retry', 'turn-on']);
+/**
+ * What the user can do about a problem — the UI renders it as one button.
+ * `setup`: something it needs isn't on this computer yet, or is switched off;
+ * the connect dialog shows what, and offers to get it.
+ */
+export const HealthAction = z.enum(['reconnect', 'edit', 'retry', 'turn-on', 'setup']);
 export type HealthAction = z.infer<typeof HealthAction>;
 
 export const IntegrationHealth = z.object({

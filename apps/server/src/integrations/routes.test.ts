@@ -161,6 +161,14 @@ describe('integrations over HTTP', () => {
       payload: { policy: 'trust' },
     });
     expect(trust.json().error).toBe('verify-required');
+    // Installing software runs a package manager as you.
+    const install = await app.inject({
+      method: 'POST',
+      url: '/api/integrations/catalog/1password/needs/1password-app/install',
+      headers: { cookie },
+      payload: {},
+    });
+    expect(install.json().error).toBe('verify-required');
     // Everyday changes don't ask.
     const ask = await app.inject({
       method: 'PATCH',

@@ -15,6 +15,15 @@ export interface CatalogItem extends z.input<typeof CatalogEntry> {
    * already-connected ones keep working.
    */
   retired?: boolean;
+  /** What it needs from this computer (`setup/known.ts`), in order. */
+  needs?: string[];
+  /** The need whose path is the program to start, wherever it was found. */
+  program?: string;
+  /**
+   * Everything it needs is here, yet it won't start: most likely a switch in
+   * another app is off. Said on its card; `steps` say where the switch is.
+   */
+  switchedOff?: string;
 }
 
 /**
@@ -207,19 +216,20 @@ const raw: CatalogItem[] = [
     id: '1password',
     name: '1Password',
     tagline: 'Environments and variables',
-    description:
-      'Look after the Environments you keep in 1Password — the names of your variables, and new ones you ask for. It never hands over a secret value, by design: 1Password answers with names only.',
+    description: 'Manage your 1Password Environments by name. Secret values never leave 1Password.',
     category: 'developer',
     auth: 'none',
     local: true,
     color: '#145FE4',
     homepage: 'https://www.1password.dev/environments/mcp-server/',
-    requires: 'The 1Password app, with its MCP server turned on',
     command: '1password-mcp',
+    needs: ['1password-app', '1password-mcp'],
+    program: '1password-mcp',
+    switchedOff: 'Turn on the MCP server in 1Password.',
     steps: [
-      'In the 1Password app, open Settings → Labs and turn on “Enable local MCP server”.',
+      'In 1Password, open Settings → Labs and turn on “Enable local MCP server”.',
       'In Settings → Developer, turn on “Integrate with MCP clients”.',
-      'Connect here. 1Password will ask you to approve it the first time, and again when it locks.',
+      '1Password asks you to approve Conch the first time, and again after it locks.',
     ],
     examples: [
       'Which Environments do I have?',
@@ -339,15 +349,22 @@ const raw: CatalogItem[] = [
   },
 ];
 
-export type ResolvedCatalogItem = CatalogEntry &
-  Pick<CatalogItem, 'blueprint' | 'tokenField' | 'retired'>;
+/** What stays on the gateway: never part of `publicCatalog()`. */
+type ServerOnly = 'blueprint' | 'tokenField' | 'retired' | 'needs' | 'program' | 'switchedOff';
 
-const items: ResolvedCatalogItem[] = raw.map(({ blueprint, tokenField, retired, ...entry }) => ({
-  ...CatalogEntry.parse(entry),
-  blueprint,
-  tokenField,
-  retired,
-}));
+export type ResolvedCatalogItem = CatalogEntry & Pick<CatalogItem, ServerOnly>;
+
+const items: ResolvedCatalogItem[] = raw.map(
+  ({ blueprint, tokenField, retired, needs, program, switchedOff, ...entry }) => ({
+    ...CatalogEntry.parse(entry),
+    blueprint,
+    tokenField,
+    retired,
+    needs,
+    program,
+    switchedOff,
+  }),
+);
 
 export const CATALOG: ReadonlyMap<string, ResolvedCatalogItem> = new Map(
   items.map((i) => [i.id, i]),
@@ -357,7 +374,17 @@ export const CATALOG: ReadonlyMap<string, ResolvedCatalogItem> = new Map(
 export function publicCatalog(): CatalogEntry[] {
   return items
     .filter((item) => !item.retired)
-    .map(({ blueprint: _b, tokenField: _t, retired: _r, ...entry }) => entry);
+    .map(
+      ({
+        blueprint: _b,
+        tokenField: _t,
+        retired: _r,
+        needs: _n,
+        program: _p,
+        switchedOff: _s,
+        ...entry
+      }) => entry,
+    );
 }
 
 /** Guess which catalog entry an MCP server someone else configured is, for its logo. */

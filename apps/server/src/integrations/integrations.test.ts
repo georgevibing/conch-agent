@@ -3,11 +3,14 @@ import { mkdtemp, readFile } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import type { ServerEvent } from '@conch/protocol';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { MockEngine } from '../engines/mock/engine';
+import { type NeedSpec, Setup } from '../setup/needs';
+import { fakeProgram } from '../test/fakeProgram';
 import { CATALOG } from './catalog';
 import { MockVendor } from './mock/vendor';
 import { checkEndpoint, EndpointError, guardedFetch } from './net';
@@ -28,7 +31,7 @@ beforeAll(async () => {
 });
 afterAll(() => vendor.stop());
 
-async function setup(options: { realCatalog?: boolean } = {}) {
+async function setup(options: { realCatalog?: boolean; needs?: Setup } = {}) {
   const home = await mkdtemp(join(tmpdir(), 'conch-int-'));
   const events: ServerEvent[] = [];
   const service = new IntegrationService({
@@ -37,6 +40,7 @@ async function setup(options: { realCatalog?: boolean } = {}) {
     engines: async () => [new MockEngine()],
     cwd: async () => home,
     manualChecks: true,
+    setup: options.needs,
     blueprints: (id) => {
       if (options.realCatalog) return undefined;
       const entry = CATALOG.get(id);
@@ -322,6 +326,90 @@ describe('broken integrations', () => {
     expect(issues).toEqual([
       expect.objectContaining({ integrationId: notion.id, name: 'Notion', state: 'needs-auth' }),
     ]);
+  });
+});
+
+describe('integrations that need something on this computer', () => {
+  /** 1Password as Conch sees it: an app to install with winget, and the server that comes with it. */
+  async function onePassword(serverScript: string) {
+    const dir = await mkdtemp(join(tmpdir(), 'conch-needs-'));
+    const program = await fakeProgram(dir, 'fake-1password-mcp', serverScript);
+    const found: Record<string, string | undefined> = {};
+    const app: NeedSpec = {
+      id: '1password-app',
+      name: 'The 1Password app',
+      short: '1Password',
+      find: () => Promise.resolve(found['1password-app']),
+      install: { win32: { manager: 'winget', args: ['-e', 'setTimeout(() => {}, 150)'] } },
+      opens: '1password-app',
+    };
+    const mcp: NeedSpec = {
+      id: '1password-mcp',
+      name: '1Password’s MCP server',
+      short: '1Password’s MCP server',
+      find: () => Promise.resolve(found['1password-mcp']),
+      comesWith: '1password-app',
+      opens: '1password-app',
+    };
+    const needs = new Setup(
+      new Map([
+        [app.id, app],
+        [mcp.id, mcp],
+      ]),
+      { platform: 'win32', manager: () => Promise.resolve(node) },
+    );
+    const { service } = await setup({ realCatalog: true, needs });
+    return { service, found, program };
+  }
+
+  const serveFixture = `import(${JSON.stringify(pathToFileURL(fixture).href)});`;
+
+  it('says what’s missing instead of trying to start it, and heals once it’s installed', async () => {
+    const { service, found, program } = await onePassword(serveFixture);
+    const created = await service.create({ catalogId: '1password', values: {} }, REDIRECT);
+    expect(created.integration.health).toMatchObject({
+      state: 'error',
+      message: 'Needs the 1Password app.',
+      action: 'setup',
+    });
+
+    const before = await service.readiness('1password');
+    expect(before.ready).toBe(false);
+    expect(before.needs[0]).toMatchObject({
+      state: 'missing',
+      install: { label: 'Install 1Password' },
+    });
+
+    const during = await service.installNeed('1password', '1password-app');
+    expect(during.needs.map((n) => n.state)).toEqual(['installing', 'installing']);
+    found['1password-app'] = 'C:\\1Password.exe';
+    found['1password-mcp'] = program;
+
+    // Conch looks again by itself when the install lands, and starts the program where it found it.
+    await vi.waitFor(
+      async () => expect((await service.get(created.integration.id)).health.state).toBe('ok'),
+      { timeout: 15_000 },
+    );
+    expect((await service.get(created.integration.id)).tools.length).toBeGreaterThan(0);
+  });
+
+  it('points at the switch in the app when everything’s here but it won’t start', async () => {
+    const { service, found, program } = await onePassword('process.exitCode = 1;');
+    found['1password-app'] = 'C:\\1Password.exe';
+    found['1password-mcp'] = program;
+    const created = await service.create({ catalogId: '1password', values: {} }, REDIRECT);
+    expect(created.integration.health).toMatchObject({
+      state: 'error',
+      message: 'Turn on the MCP server in 1Password.',
+      action: 'setup',
+    });
+  });
+
+  it('only installs or opens what that integration needs', async () => {
+    const { service } = await onePassword(serveFixture);
+    await expect(service.installNeed('notion', '1password-app')).rejects.toThrow(/doesn’t need/);
+    await expect(service.openNeed('1password', 'something-else')).rejects.toThrow(/doesn’t need/);
+    await expect(service.readiness('nope')).rejects.toThrow(/Unknown/);
   });
 });
 
