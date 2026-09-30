@@ -1,5 +1,5 @@
 import { Heading, Stack, Text } from '@conch/nacre';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 
 import styles from './Settings.module.css';
 import type { useAutosave } from './useAutosave';
@@ -30,14 +30,17 @@ export function Section({
   description,
   status,
   children,
+  ref,
 }: {
   title: string;
   description?: ReactNode;
   status?: ReactNode;
   children: ReactNode;
+  /** To bring the section into view (e.g. from a checkup fix). */
+  ref?: Ref<HTMLElement>;
 }) {
   return (
-    <section className={styles.section}>
+    <section className={styles.section} ref={ref}>
       <div className={styles.sectionHead}>
         <Stack gap={0.5}>
           <Heading level={3} size="lg">

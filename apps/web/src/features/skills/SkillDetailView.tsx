@@ -15,21 +15,31 @@ import {
   Input,
   SegmentedControl,
   SkillIcon,
+  SkillProblem,
   skillModeLabels,
   Skeleton,
   Stack,
   Text,
   Textarea,
   toast,
+  type SkillProblemFix,
 } from '@conch/nacre';
 import { ArrowLeft, Copy, MessageSquare, SearchX, Sparkles, Trash2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
 import { SaveStatus } from '../settings/Section';
-import { useAutosave } from '../settings/useAutosave';
+import { useAutosaveState } from '../settings/useAutosave';
 import { skillsApi } from './api';
-import { errorText, useCopySkill, useRemoveSkill, useSkill, useUpdateSkill } from './queries';
+import {
+  errorText,
+  skillKeys,
+  useCopySkill,
+  useRemoveSkill,
+  useSkill,
+  useUpdateSkill,
+} from './queries';
 import styles from './Skills.module.css';
 
 export function SkillDetailView({ skillId }: { skillId: string }) {
@@ -61,6 +71,7 @@ export function SkillDetailView({ skillId }: { skillId: string }) {
 
 function SkillPage({ skill }: { skill: SkillDetail }) {
   const navigate = useNavigate();
+  const client = useQueryClient();
   const update = useUpdateSkill();
   const copy = useCopySkill();
   const remove = useRemoveSkill();
@@ -74,7 +85,7 @@ function SkillPage({ skill }: { skill: SkillDetail }) {
   const [rewriting, setRewriting] = useState(false);
   const nameCheck = SkillName.safeParse(name);
 
-  const status = useAutosave(
+  const { status, settle } = useAutosaveState(
     fields,
     (next) =>
       update.mutateAsync({
@@ -116,6 +127,45 @@ function SkillPage({ skill }: { skill: SkillDetail }) {
 
   const setMode = (mode: SkillMode) => update.mutate({ id: skill.id, patch: { mode } });
   const tryIt = () => void navigate('/', { state: { draft: `/${skill.name} ` } });
+
+  const makeCopy = () =>
+    copy.mutateAsync(skill.id).then((copied) => {
+      toast.success('Copied into Conch', { description: 'This copy is yours to change.' });
+      void navigate(`/skills/${encodeURIComponent(copied.id)}`);
+    });
+
+  /** Read the folders again, for a file that couldn't be read a moment ago. */
+  const lookAgain = async () => {
+    await skillsApi.list(true).catch(() => undefined);
+    const fresh = await client
+      .fetchQuery({ queryKey: skillKeys.one(skill.id), queryFn: () => skillsApi.get(skill.id) })
+      .catch(() => undefined);
+    void client.invalidateQueries({ queryKey: skillKeys.all });
+    if (fresh?.problem) toast('Still the same', { description: fresh.problem });
+  };
+
+  // A broken skill offers the one thing that fixes it (working agreement 11).
+  const describable =
+    skill.problemKind === 'no-description' || skill.problemKind === 'no-front-matter';
+  const problemFix: SkillProblemFix | undefined = !skill.problem
+    ? undefined
+    : describable && skill.editable
+      ? {
+          kind: 'describe',
+          maxLength: SKILL_DESCRIPTION_MAX,
+          onDraft: () => skillsApi.describe(skill.id),
+          onSave: async (description) => {
+            await update.mutateAsync({ id: skill.id, patch: { description } });
+            // Into the form below too, without saving it a second time.
+            const next = { ...fields, description };
+            settle(next);
+            setFields(next);
+            toast.success('Description saved', { description: 'The skill is ready to use.' });
+          },
+        }
+      : describable
+        ? { kind: 'copy', owner: skill.sourceLabel, onCopy: makeCopy }
+        : { kind: 'check', onCheck: lookAgain };
 
   return (
     <div className={`${styles.page} ${styles.narrow}`}>
@@ -161,21 +211,13 @@ function SkillPage({ skill }: { skill: SkillDetail }) {
         >
           Try it in a chat
         </Button>
-        {!skill.editable && (
+        {/* A broken one offers its copy below, with the reason. */}
+        {!skill.editable && problemFix?.kind !== 'copy' && (
           <Button
             variant="surface"
             leadingIcon={<Copy />}
             loading={copy.isPending}
-            onClick={() =>
-              copy.mutate(skill.id, {
-                onSuccess: (copied) => {
-                  toast.success('Copied into Conch', {
-                    description: 'This copy is yours to change.',
-                  });
-                  void navigate(`/skills/${encodeURIComponent(copied.id)}`);
-                },
-              })
-            }
+            onClick={() => void makeCopy().catch(() => undefined)}
           >
             Make a copy to edit
           </Button>
@@ -192,12 +234,8 @@ function SkillPage({ skill }: { skill: SkillDetail }) {
         )}
       </Stack>
 
-      {skill.problem && (
-        <Callout tone="warning" title="This skill can’t be used yet">
-          {skill.problem}
-        </Callout>
-      )}
-      {!skill.editable && (
+      {skill.problem && problemFix && <SkillProblem problem={skill.problem} fix={problemFix} />}
+      {!skill.editable && problemFix?.kind !== 'copy' && (
         <Callout tone="info" title={`From ${skill.sourceLabel}`}>
           Conch reads this folder but never changes it. Skills found in other apps start off — read
           it below, then choose when to use it.

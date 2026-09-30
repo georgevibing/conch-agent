@@ -136,8 +136,12 @@ src/
   `~/.claude/skills`, `~/.openclaw/skills` and `~/.hermes/skills` are listed
   read-only and start Off. `frontmatter.ts` reads and rewrites only the keys Conch
   owns, so other products' metadata survives. `POST /api/skills/draft` writes a title
-  and a ≤160-character description on the default provider's cheapest model.
-  Automatic skills are listed as `<available_skills>` in the system prompt and loaded
+  and a ≤160-character description on the default provider's cheapest model. A
+  skill with a problem says which (`problemKind`); for one of yours that lacks a
+  description, `POST /api/skills/:id/describe` drafts one from its own words (the
+  first sentence when no model is connected) for the person to check and save —
+  only the front matter changes. Other apps' skills are refused (409) and offer a
+  copy instead. Automatic skills are listed as `<available_skills>` in the system prompt and loaded
   with the `use_skill` host tool (or read from their path by engines without host
   tools); `skill.used` shows it in the chat.
 - **Routines** (`routines/`): structured schedules (croner for calendar maths,
@@ -322,7 +326,9 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   the title and description are written for you (Nacre `SkillCard` shimmers, then
   writes them in) and stay editable; `/skills/:id` edits it (autosaved), chooses
   Automatically · When I ask · Off, copies someone else's skill to edit, or tries it
-  in a chat. Skills are in the `/` menu and in ⌘K.
+  in a chat. A broken skill shows Nacre `SkillProblem` with its one fix: “Write the
+  description for me”, “Make a copy I can edit”, or “Look again”. Skills are in the
+  `/` menu and in ⌘K.
 - **Search.** ⌘K (or Search in the sidebar) is one box for everything: fuzzy chat
   titles (client-side), full-text message hits from every conversation, and — from
   `palette/findables.tsx` — skills (into the composer), models from every provider
@@ -396,13 +402,20 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
 - **Logs** never contain query strings, headers or bodies. There is no telemetry.
 - **Checkup:** `auth/checkup.ts` turns the configuration into plain-language
   warnings, shown in Settings → Security, at start-up and in `pnpm conch status`.
+  Every warning carries one fix (`CheckupFix`): `open` a named place in the app
+  (a closed list, never a URL), or `act` — `POST /api/access/fix` runs one of
+  `CheckupAction` (`auth/fixes.ts`). Actions only take trust away (back to
+  asking, off, private; work-folder rules are renamed, never deleted) and keep
+  the verification their own route asks for; nothing that grants trust is ever
+  one click from the checkup. Only the route imports them; no agent tool can.
+  When only a person can fix it, the warning shows the one line to copy.
 
 Known limits:
 
 - With sign-in off, other OS users on the same machine can reach loopback. The
   checkup suggests a password.
 - The agent can read `ANTHROPIC_API_KEY`, which it needs.
-- Claude Code loads the workspace's own `.claude/` settings; the checkup warns when they add hooks, auto-allowed tools or MCP servers.
+- Claude Code loads the workspace's own `.claude/` settings; the checkup warns when they add hooks, auto-allowed tools or MCP servers, and can set those files aside.
 - Breached-password checks use a local blocklist only.
 - The browser: a site you allowed could still inject instructions that steer the
   agent within that site, or leak what it read through the addresses it opens.

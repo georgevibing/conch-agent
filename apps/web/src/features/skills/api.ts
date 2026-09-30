@@ -1,4 +1,5 @@
 import {
+  SkillDescriptionDraft,
   SkillDetail,
   SkillDraft,
   SkillsList,
@@ -24,5 +25,8 @@ export const skillsApi = {
   update: (id: string, body: UpdateSkillBody) =>
     request(SkillDetail, path(id), { method: 'PATCH', body }),
   remove: (id: string) => request(Ok, path(id), { method: 'DELETE' }),
+  /** A description for one of your skills that has none, written from its own words. */
+  describe: (id: string) =>
+    request(SkillDescriptionDraft, `${path(id)}/describe`, { method: 'POST', body: {} }),
   copy: (id: string) => request(SkillDetail, `${path(id)}/copy`, { method: 'POST', body: {} }),
 };

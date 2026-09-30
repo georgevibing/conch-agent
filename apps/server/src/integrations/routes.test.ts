@@ -214,7 +214,25 @@ describe('integrations over HTTP', () => {
     });
     const { checkup } = (await app.inject('/api/access')).json();
     const item = checkup.find((c: { id: string }) => c.id === 'trusted-integrations');
-    expect(item).toMatchObject({ level: 'warn', title: 'GitHub acts without asking' });
+    expect(item).toMatchObject({
+      level: 'warn',
+      title: 'GitHub acts without asking',
+      fix: { kind: 'act', action: 'integrations-ask', label: 'Ask before changes' },
+    });
+
+    // One click takes it back to asking — no password needed to take trust away.
+    const fixed = await app.inject({
+      method: 'POST',
+      url: '/api/access/fix',
+      payload: { action: 'integrations-ask' },
+    });
+    expect(fixed.statusCode).toBe(200);
+    expect(fixed.json().done).toBe('GitHub asks before changes now.');
+    expect(fixed.json().access.checkup.map((c: { id: string }) => c.id)).not.toContain(
+      'trusted-integrations',
+    );
+    const after = await app.inject(`/api/integrations/${created.json().integration.id}`);
+    expect(after.json().policy).toBe('ask-writes');
   });
 
   it('lets a conversation use an integration, and asks before it changes things', async () => {

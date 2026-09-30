@@ -12,6 +12,7 @@ import {
   CreateIntegrationBody,
   CreateMemoryBody,
   CreateSkillBody,
+  DescribeSkillBody,
   DraftSkillBody,
   Id,
   LoginCodeBody,
@@ -535,6 +536,11 @@ export async function buildApp(services: Services) {
   app.post<{ Params: { id: string } }>('/api/skills/:id/copy', (request, reply) =>
     guarded(reply, () => services.skills.copy(request.params.id)),
   );
+  /** A description for one of your skills that has none, to look over before saving it. */
+  app.post<{ Params: { id: string } }>('/api/skills/:id/describe', (request, reply) => {
+    if (!parse(DescribeSkillBody, request.body ?? {}, reply)) return;
+    return guarded(reply, () => services.skills.describe(request.params.id));
+  });
 
   /**
    * A provider sends you back here after making a key for you. Like the

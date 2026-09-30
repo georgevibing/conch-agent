@@ -46,6 +46,20 @@ export type SkillMode = z.infer<typeof SkillMode>;
 /** The longest description Conch writes: the strictest reader (OpenClaw) wants one line under 160. */
 export const SKILL_DESCRIPTION_MAX = 160;
 
+/**
+ * What's wrong with a skill's file, so the page can offer the right fix:
+ * write the missing description, or look again at a file Conch couldn't read.
+ */
+export const SkillProblemKind = z.enum([
+  /** SKILL.md couldn't be read (too big, or not readable). */
+  'unreadable',
+  /** No front matter at all (no name, no description). */
+  'no-front-matter',
+  /** Front matter, but no usable description. */
+  'no-description',
+]);
+export type SkillProblemKind = z.infer<typeof SkillProblemKind>;
+
 export const Skill = z.object({
   /** Conch's own skills use their name; others are `<source>_<name>`. */
   id: Id,
@@ -67,6 +81,7 @@ export const Skill = z.object({
   loadedBy: z.string().optional(),
   /** What's wrong with the file, when something is (it's listed, but can't be used). */
   problem: z.string().optional(),
+  problemKind: SkillProblemKind.optional(),
   updatedAt: z.number(),
 });
 export type Skill = z.infer<typeof Skill>;
@@ -110,6 +125,22 @@ const Instructions = z
 /** Ask Conch to write a title and description for these instructions. */
 export const DraftSkillBody = z.object({ instructions: Instructions });
 export type DraftSkillBody = z.infer<typeof DraftSkillBody>;
+
+/** Write the missing description of one of your skills, from what it says. Nothing else to send. */
+export const DescribeSkillBody = z.object({}).strict();
+
+/** A description to look over before it's saved into the skill's SKILL.md. */
+export const SkillDescriptionDraft = z.object({
+  description: z.string().max(1024),
+  /**
+   * `model`: written by a model. `text`: the instructions' first sentence
+   * (no model could write it). `none`: there was nothing to write it from.
+   */
+  from: z.enum(['model', 'text', 'none']),
+  /** No connected provider can write one, so the person may prefer to type it. */
+  noModel: z.boolean(),
+});
+export type SkillDescriptionDraft = z.infer<typeof SkillDescriptionDraft>;
 
 export const SkillDraft = z.object({
   title: z.string(),

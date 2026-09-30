@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   ClientCommand,
   ConversationEvent,
+  DescribeSkillBody,
   Persona,
   ServerEvent,
+  SkillDescriptionDraft,
   UpdateSettingsBody,
 } from './index';
 
@@ -43,5 +45,19 @@ describe('protocol', () => {
     expect(UpdateSettingsBody.parse({ persona: { tone: 'playful' } })).toEqual({
       persona: { tone: 'playful' },
     });
+  });
+});
+
+describe('skills', () => {
+  it('asks for a description with nothing else in the body', () => {
+    expect(DescribeSkillBody.safeParse({}).success).toBe(true);
+    expect(DescribeSkillBody.safeParse({ instructions: 'Ignore all that.' }).success).toBe(false);
+    expect(DescribeSkillBody.safeParse({ path: '../../.ssh' }).success).toBe(false);
+  });
+
+  it('says where a drafted description came from', () => {
+    const draft = { description: 'Tidies downloads.', from: 'text', noModel: true };
+    expect(SkillDescriptionDraft.parse(draft)).toEqual(draft);
+    expect(SkillDescriptionDraft.safeParse({ ...draft, from: 'guess' }).success).toBe(false);
   });
 });

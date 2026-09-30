@@ -5,7 +5,7 @@ import { Stack } from '../../components/Stack';
 import { DeviceList } from './DeviceList';
 import { SecretReveal } from './SecretReveal';
 import { SecurityCheckup } from './SecurityCheckup';
-import { checkupItems, devices } from './fixtures';
+import { checkupItems, checkupWithFixes, devices } from './fixtures';
 
 const meta = {
   title: 'Patterns/Security/SecurityCheckup',
@@ -15,7 +15,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The building blocks of Settings → Security. Every warning says what the risk is in plain words and how to fix it — a command to copy or a button to press.',
+          'The building blocks of Settings → Security. Every warning says what the risk is in plain words and offers one way to fix it: a button that makes the change (only ever towards asking, off or private), a button that takes you where to decide, or — when only a person can do it — one line to copy. A fix shows progress while it runs; once it works, the finding goes away.',
       },
     },
   },
@@ -30,7 +30,11 @@ export const Playground: Story = {};
 
 export const AllGood: Story = { args: { items: checkupItems.filter((i) => i.level === 'ok') } };
 
-export const WithAction: Story = {
+/** Each finding's one fix: `act` makes the change here, `open` (with an arrow) goes where to decide. */
+export const WithFixes: Story = { args: { items: checkupWithFixes } };
+
+/** Any other control, when a single fix button isn't the right shape. */
+export const WithCustomAction: Story = {
   args: {
     items: [
       {
@@ -59,7 +63,7 @@ export const Devices: Story = {
 export const Composed: Story = {
   render: () => (
     <Stack gap={6}>
-      <SecurityCheckup items={checkupItems} />
+      <SecurityCheckup items={checkupWithFixes} />
       <DeviceList devices={devices} onSignOut={() => undefined} />
     </Stack>
   ),

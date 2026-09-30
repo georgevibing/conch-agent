@@ -2,6 +2,8 @@ import {
   AccessSettings,
   AppState,
   AuthStatus,
+  type CheckupAction,
+  CheckupFixResult,
   CreatedKey,
   PairingCode,
   type SignInBody,
@@ -96,6 +98,9 @@ export const api = {
       method: 'DELETE',
     }),
   revokeOtherSessions: () => request(AccessSettings, '/api/access/sessions', { method: 'DELETE' }),
+  /** A checkup finding's one-click fix; returns what changed and the checkup without it. */
+  fixCheckup: (action: CheckupAction) =>
+    request(CheckupFixResult, '/api/access/fix', { method: 'POST', body: { action } }),
 
   state: () => request(AppState, '/api/state'),
   healed: () => request(HealLog, '/api/healed'),

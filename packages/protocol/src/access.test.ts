@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  CheckupFixBody,
+  CheckupItem,
   PASSWORD_MIN,
   SignInBody,
   checkPassword,
@@ -89,5 +91,41 @@ describe('wire hygiene', () => {
   it('sign-in bodies are discriminated', () => {
     expect(SignInBody.safeParse({ with: 'key', key: 'conch_x' }).success).toBe(true);
     expect(SignInBody.safeParse({ with: 'password', password: 'x' }).success).toBe(false);
+  });
+});
+
+describe('checkup fixes', () => {
+  it('run only actions the gateway knows, and nothing else in the body', () => {
+    expect(CheckupFixBody.safeParse({ action: 'ask-first' }).success).toBe(true);
+    for (const bad of [
+      { action: 'grant-full-trust' },
+      { action: 'ASK-FIRST' },
+      { action: '__proto__' },
+      { action: 'ask-first', value: 'bypassPermissions' },
+      { action: ['ask-first'] },
+      {},
+    ])
+      expect(CheckupFixBody.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+  });
+
+  it('offer a place to go or an action to run, never a free-form link', () => {
+    const item = { id: 'x', level: 'warn', title: 'T', detail: 'D' };
+    expect(
+      CheckupItem.safeParse({ ...item, fix: { kind: 'open', label: 'Review', place: 'keys' } })
+        .success,
+    ).toBe(true);
+    expect(
+      CheckupItem.safeParse({
+        ...item,
+        fix: { kind: 'act', label: 'Turn off', action: 'secure-files' },
+      }).success,
+    ).toBe(true);
+    for (const fix of [
+      { kind: 'open', label: 'Go', place: 'https://evil.example' },
+      { kind: 'open', label: 'Go', place: '/integrations' },
+      { kind: 'link', label: 'Go', href: 'https://evil.example' },
+      { kind: 'act', label: '', action: 'secure-files' },
+    ])
+      expect(CheckupItem.safeParse({ ...item, fix }).success, JSON.stringify(fix)).toBe(false);
   });
 });

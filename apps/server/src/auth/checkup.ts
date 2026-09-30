@@ -1,13 +1,12 @@
-import { chmod, readFile, readdir, stat } from 'node:fs/promises';
+import { chmod, lstat, readFile, readdir, rename, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import type { CheckupItem, PermissionMode } from '@conch/protocol';
+import { isStaleKey, type CheckupItem, type PermissionMode } from '@conch/protocol';
 
 import type { Config } from '../config';
 import { exposure } from './network';
 import type { AccessFile } from './store';
-
-const DAY = 24 * 60 * 60 * 1000;
 
 /**
  * `~/.conch` holds every conversation, memory and credential hash. Make sure
@@ -34,17 +33,37 @@ export async function secureHome(home: string): Promise<string[]> {
   return problems;
 }
 
+/** A file in the work folder that gives the agent powers, and which. */
+export interface WorkspaceRuleFile {
+  /** Relative to the work folder, with forward slashes: `.claude/settings.json`. */
+  file: string;
+  rules: string[];
+}
+
+/** The only files Claude Code reads rules from in a work folder. Fixed names: never from input. */
+const RULE_FILES = ['.claude/settings.json', '.claude/settings.local.json', '.mcp.json'] as const;
+
 /**
  * Claude Code applies a folder's own `.claude/settings*.json`: hooks run
  * commands automatically, `permissions.allow` skips prompts, and MCP servers
  * add tools. Fine in your own project; risky in a downloaded one.
  */
-export async function workspaceRules(workspace: string): Promise<string[]> {
-  const found = new Set<string>();
-  for (const file of ['settings.json', 'settings.local.json']) {
+export async function workspaceRuleFiles(workspace: string): Promise<WorkspaceRuleFile[]> {
+  const out: WorkspaceRuleFile[] = [];
+  for (const file of RULE_FILES) {
+    const path = join(workspace, ...file.split('/'));
+    if (file === '.mcp.json') {
+      try {
+        await stat(path);
+        out.push({ file, rules: ['extra tool servers'] });
+      } catch {
+        // none
+      }
+      continue;
+    }
     let json: unknown;
     try {
-      json = JSON.parse(await readFile(join(workspace, '.claude', file), 'utf8'));
+      json = JSON.parse(await readFile(path, 'utf8'));
     } catch {
       continue;
     }
@@ -54,17 +73,81 @@ export async function workspaceRules(workspace: string): Promise<string[]> {
       mcpServers?: object;
       enableAllProjectMcpServers?: boolean;
     };
-    if (settings.hooks && Object.keys(settings.hooks).length) found.add('hooks that run commands');
-    if (settings.permissions?.allow?.length) found.add('tools allowed without asking');
-    if (settings.mcpServers || settings.enableAllProjectMcpServers) found.add('extra tool servers');
+    const rules: string[] = [];
+    if (settings.hooks && Object.keys(settings.hooks).length) rules.push('hooks that run commands');
+    if (settings.permissions?.allow?.length) rules.push('tools allowed without asking');
+    if (settings.mcpServers || settings.enableAllProjectMcpServers)
+      rules.push('extra tool servers');
+    if (rules.length) out.push({ file, rules });
   }
-  try {
-    await stat(join(workspace, '.mcp.json'));
-    found.add('extra tool servers');
-  } catch {
-    // none
+  return out;
+}
+
+/** What the work folder's own rules allow, in words (for the checkup). */
+export async function workspaceRules(workspace: string): Promise<string[]> {
+  return [...new Set((await workspaceRuleFiles(workspace)).flatMap((f) => f.rules))];
+}
+
+/**
+ * Turn the work folder's own rules off by renaming each file that grants
+ * powers to `<name>.off` (or `.off-2`, …) — never deleting it, so the person
+ * can rename it back. Returns the new names, relative to the folder.
+ */
+export async function setAsideWorkspaceRules(workspace: string): Promise<string[]> {
+  const moved: string[] = [];
+  for (const { file } of await workspaceRuleFiles(workspace)) {
+    const from = join(workspace, ...file.split('/'));
+    let to = `${from}.off`;
+    for (
+      let n = 2;
+      await lstat(to).then(
+        () => true,
+        () => false,
+      );
+      n++
+    )
+      to = `${from}.off-${n}`;
+    await rename(from, to);
+    moved.push(`${file}${to.slice(from.length)}`);
   }
-  return [...found];
+  return moved;
+}
+
+/** Shell start-up files that could set `CONCH_TOKEN`, relative to your home folder. */
+const PROFILES = [
+  '.zshrc',
+  '.zprofile',
+  '.zshenv',
+  '.bashrc',
+  '.bash_profile',
+  '.profile',
+  '.config/fish/config.fish',
+];
+
+/**
+ * Where `CONCH_TOKEN` is set, so the checkup can show the one line that
+ * removes it: the shell start-up file that mentions it, if one does. Only
+ * the file's name leaves this function, never what's in it.
+ */
+export async function findTokenProfile(home = homedir()): Promise<string | undefined> {
+  for (const profile of PROFILES) {
+    try {
+      const text = await readFile(join(home, ...profile.split('/')), 'utf8');
+      if (/^\s*(?:export\s+|set\s+-gx\s+|set\s+-x\s+)?CONCH_TOKEN[=\s]/m.test(text))
+        return `~/${profile}`;
+    } catch {
+      // not there
+    }
+  }
+  return undefined;
+}
+
+/** The one line that stops `CONCH_TOKEN` being set, for this computer. */
+export function removeTokenCommand(platform: NodeJS.Platform, profile?: string): string {
+  if (platform === 'win32')
+    return `[Environment]::SetEnvironmentVariable('CONCH_TOKEN', $null, 'User')`;
+  // `-i.bak` works with both GNU and BSD (macOS) sed, and keeps a copy.
+  return profile ? `sed -i.bak '/CONCH_TOKEN/d' ${profile}` : 'unset CONCH_TOKEN';
 }
 
 export interface CheckupInput {
@@ -85,6 +168,10 @@ export interface CheckupInput {
   browserLocal?: boolean;
   /** A connected provider, and whether Conch can ask you before each step with it (the one that can't, if any). */
   provider?: { name: string; asksFirst: boolean };
+  /** The shell start-up file that sets `CONCH_TOKEN`, from `findTokenProfile`. */
+  tokenProfile?: string;
+  /** Defaults to this computer's. */
+  platform?: NodeJS.Platform;
 }
 
 /**
@@ -102,7 +189,8 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       level: 'danger',
       title: 'Conch is running as the administrator (root)',
       detail:
-        'Anything the assistant does has full control of this computer. Start Conch as your normal user instead.',
+        'Anything the assistant does has full control of this computer. Stop Conch, then start it again from your own account, without sudo:',
+      command: 'pnpm start',
     });
   }
 
@@ -115,6 +203,7 @@ export function checkup(input: CheckupInput): CheckupItem[] {
             title: 'Other devices can’t get in yet',
             detail:
               'Conch is listening on your network, but nobody can sign in until you choose a password or access key. Until then, only this computer can use it.',
+            fix: { kind: 'open', label: 'Choose a password', place: 'sign-in' },
           }
         : {
             id: 'sign-in',
@@ -122,6 +211,7 @@ export function checkup(input: CheckupInput): CheckupItem[] {
             title: 'No sign-in on this computer',
             detail:
               'Only this computer can open Conch. If other people use this computer, add a password so they can’t use your assistant or open a terminal as you.',
+            fix: { kind: 'open', label: 'Add a password', place: 'sign-in' },
           },
     );
   } else {
@@ -142,6 +232,7 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       detail:
         'Conch is reachable over plain HTTP, so anyone on the same Wi-Fi could read your conversations — and your password as you sign in. Use Tailscale for an encrypted connection instead.',
       command: `tailscale serve --bg ${config.CONCH_PORT}`,
+      fix: { kind: 'open', label: 'Show me how', place: 'reach' },
     });
   } else {
     items.push({
@@ -157,13 +248,27 @@ export function checkup(input: CheckupInput): CheckupItem[] {
   }
 
   if (config.CONCH_TOKEN) {
-    items.push({
-      id: 'env-token',
-      level: 'warn',
-      title: 'An access key is set in CONCH_TOKEN',
-      detail:
-        'Keys in environment variables end up in shell history and crash reports, and can’t be revoked one device at a time. Create an access key here instead, then remove CONCH_TOKEN.',
-    });
+    const why =
+      'Keys in environment variables end up in shell history and crash reports, and can’t be revoked one device at a time.';
+    const command = removeTokenCommand(input.platform ?? process.platform, input.tokenProfile);
+    items.push(
+      access.method === 'none'
+        ? {
+            id: 'env-token',
+            level: 'warn',
+            title: 'An access key is set in CONCH_TOKEN',
+            detail: `${why} Create an access key here first, then remove CONCH_TOKEN and restart Conch:`,
+            command,
+            fix: { kind: 'open', label: 'Create a key', place: 'keys' },
+          }
+        : {
+            id: 'env-token',
+            level: 'warn',
+            title: 'An access key is set in CONCH_TOKEN',
+            detail: `${why} Your own sign-in already protects Conch, so remove CONCH_TOKEN and restart Conch:`,
+            command,
+          },
+    );
   }
 
   if (input.permissionMode === 'bypassPermissions') {
@@ -172,7 +277,8 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       level: 'warn',
       title: 'New chats never ask before acting',
       detail:
-        '“Full trust” lets the assistant run any command and change any file without asking. A web page or file it reads could trick it. Choose “Ask first” or “Auto” in Settings → Models & modes.',
+        '“Full trust” lets the assistant run any command and change any file without asking. A web page or file it reads could trick it. Go back to asking first — or choose “Auto” in Settings › Models & modes.',
+      fix: { kind: 'act', label: 'Ask first', action: 'ask-first' },
     });
   }
 
@@ -181,7 +287,8 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       id: 'workspace-rules',
       level: 'warn',
       title: 'Your work folder has its own Claude Code rules',
-      detail: `It sets ${input.workspaceRules.join(', ')}. They apply to every chat and routine there. Keep them only if you wrote them — a downloaded project could use them to act without asking.`,
+      detail: `It sets ${input.workspaceRules.join(', ')}. They apply to every chat and routine there. Keep them only if you wrote them — a downloaded project could use them to act without asking. Turning them off renames the files, so you can bring them back.`,
+      fix: { kind: 'act', label: 'Turn them off', action: 'workspace-rules-off' },
     });
   }
 
@@ -192,16 +299,19 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       level: 'warn',
       title: `${name} can’t ask you before each step`,
       detail: `${name} decides inside its own sandbox, so Conch can only choose how much it may touch — it can’t show you each command first. When you chat with one of its models, keep it to reading only — or pick a model from another provider — if that matters to you.`,
+      fix: { kind: 'open', label: 'Review', place: 'models' },
     });
   }
 
   if (input.trustedIntegrations?.length) {
     const names = input.trustedIntegrations;
+    const one = names.length === 1;
     items.push({
       id: 'trusted-integrations',
       level: 'warn',
-      title: `${names.length === 1 ? `${names[0]} acts` : `${names.length} integrations act`} without asking`,
-      detail: `${names.join(', ')} can send, change and delete things on your behalf without checking with you. An email or page the assistant reads could trick it into doing that. In Integrations, choose “Ask before changes” instead.`,
+      title: `${one ? `${names[0]} acts` : `${names.length} integrations act`} without asking`,
+      detail: `${names.join(', ')} can send, change and delete things on your behalf without checking with you. An email or page the assistant reads could trick it into doing that. Have ${one ? 'it' : 'them'} ask you before changes instead.`,
+      fix: { kind: 'act', label: 'Ask before changes', action: 'integrations-ask' },
     });
   }
 
@@ -211,7 +321,8 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       level: 'warn',
       title: 'Other devices can open a terminal',
       detail:
-        'Anyone signed in on another device can run any command on this computer, after confirming it’s you. If you don’t use terminals away from this computer, turn off “From other devices” in Settings › Terminal.',
+        'Anyone signed in on another device can run any command on this computer, after confirming it’s you. If you don’t use terminals away from this computer, turn it off.',
+      fix: { kind: 'act', label: 'Turn off', action: 'terminal-remote-off' },
     });
   }
 
@@ -221,17 +332,19 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       level: 'warn',
       title: 'The browser can open local apps',
       detail:
-        'The assistant’s browser can reach pages on this computer and your network, like a router or a dev server. A web page it visits could try to use them too. Conch itself stays out of reach. If you don’t need it, turn off “Open local apps” in Settings › Browser.',
+        'The assistant’s browser can reach pages on this computer and your network, like a router or a dev server. A web page it visits could try to use them too. Conch itself stays out of reach. If you don’t need it, turn it off.',
+      fix: { kind: 'act', label: 'Turn off', action: 'browser-local-off' },
     });
   }
 
-  const stale = access.keys.filter((k) => Date.now() - (k.lastUsedAt ?? k.createdAt) > 90 * DAY);
+  const stale = access.keys.filter((k) => isStaleKey(k));
   if (stale.length) {
     items.push({
       id: 'stale-keys',
       level: 'info',
       title: `${stale.length === 1 ? 'An access key hasn’t' : `${stale.length} access keys haven’t`} been used in 90 days`,
       detail: 'Revoke keys you no longer need, so a lost device can’t get back in.',
+      fix: { kind: 'open', label: 'Review keys', place: 'keys' },
     });
   }
 
@@ -240,8 +353,9 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       id: 'files',
       level: 'danger',
       title: 'Other people on this computer may read your Conch files',
-      detail: `Conch couldn’t restrict access to: ${input.homeProblems.join(', ')}.`,
+      detail: `Conch couldn’t restrict access to: ${input.homeProblems.join(', ')}. If making them private doesn’t work, run:`,
       command: `chmod -R go-rwx ${config.CONCH_HOME}`,
+      fix: { kind: 'act', label: 'Make them private', action: 'secure-files' },
     });
   }
 

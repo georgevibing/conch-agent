@@ -71,6 +71,16 @@ export const AccessKeyInfo = z.object({
 });
 export type AccessKeyInfo = z.infer<typeof AccessKeyInfo>;
 
+/** A key nobody has used for this long is worth revoking (the checkup says so). */
+export const STALE_KEY_DAYS = 90;
+
+export function isStaleKey(
+  key: { createdAt: number; lastUsedAt?: number | undefined },
+  now = Date.now(),
+): boolean {
+  return now - (key.lastUsedAt ?? key.createdAt) > STALE_KEY_DAYS * 24 * 60 * 60 * 1000;
+}
+
 /** Returned exactly once, when the key is created. */
 export const CreatedKey = z.object({ key: z.string(), info: AccessKeyInfo });
 export type CreatedKey = z.infer<typeof CreatedKey>;
@@ -94,16 +104,68 @@ export type SessionInfo = z.infer<typeof SessionInfo>;
 export const CheckLevel = z.enum(['ok', 'info', 'warn', 'danger']);
 export type CheckLevel = z.infer<typeof CheckLevel>;
 
+/**
+ * Where a finding's fix can take you. A closed list: the gateway names a
+ * place, the web app knows how to get there, and nothing else is reachable.
+ */
+export const CheckupPlace = z.enum([
+  /** Settings › Security › How you sign in. */
+  'sign-in',
+  /** Settings › Security › the access keys (making one, or revoking old ones). */
+  'keys',
+  /** Settings › Security › Use Conch on your phone (Tailscale). */
+  'reach',
+  /** Settings › Models & modes, where new chats' mode is chosen. */
+  'models',
+]);
+export type CheckupPlace = z.infer<typeof CheckupPlace>;
+
+/**
+ * A change the gateway makes for you, in one click. Every action only takes
+ * trust away (back to asking, off, or private); none can grant it, so a
+ * finding can never become a shortcut to a riskier setting.
+ */
+export const CheckupAction = z.enum([
+  /** New chats: Full trust → Ask first. */
+  'ask-first',
+  /** Integrations on “Don’t ask” → “Ask before changes”. */
+  'integrations-ask',
+  /** The agent's browser stops opening pages on this computer and your network. */
+  'browser-local-off',
+  /** Other devices can no longer open a terminal. */
+  'terminal-remote-off',
+  /** The work folder's own Claude Code rules are set aside (renamed, never deleted). */
+  'workspace-rules-off',
+  /** `~/.conch` is made readable by you alone. */
+  'secure-files',
+]);
+export type CheckupAction = z.infer<typeof CheckupAction>;
+
+const FixLabel = z.string().min(1).max(40);
+
+/** The one button a finding offers: go somewhere, or have the gateway fix it. */
+export const CheckupFix = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('open'), label: FixLabel, place: CheckupPlace }),
+  z.object({ kind: z.literal('act'), label: FixLabel, action: CheckupAction }),
+]);
+export type CheckupFix = z.infer<typeof CheckupFix>;
+
 /** One line of the security checkup. */
 export const CheckupItem = z.object({
   id: z.string(),
   level: CheckLevel,
   title: z.string(),
   detail: z.string(),
-  /** A terminal command that fixes it, if there is one. */
+  /** A terminal command that fixes it, when only a person can (one line to copy). */
   command: z.string().optional(),
+  /** The button that fixes it, when Conch can help. */
+  fix: CheckupFix.optional(),
 });
 export type CheckupItem = z.infer<typeof CheckupItem>;
+
+/** Run a finding's `act` fix. Unknown actions are refused. */
+export const CheckupFixBody = z.object({ action: CheckupAction }).strict();
+export type CheckupFixBody = z.infer<typeof CheckupFixBody>;
 
 export const AccessSettings = z.object({
   method: AccessMethod,
@@ -123,6 +185,10 @@ export const AccessSettings = z.object({
   verified: z.boolean(),
 });
 export type AccessSettings = z.infer<typeof AccessSettings>;
+
+/** A fix ran: what changed, in a few plain words, and the checkup without it. */
+export const CheckupFixResult = z.object({ done: z.string(), access: AccessSettings });
+export type CheckupFixResult = z.infer<typeof CheckupFixResult>;
 
 /** A one-time link that signs a new device in. Put the code in the URL *fragment*. */
 export const PairingCode = z.object({ code: z.string(), expiresAt: z.number() });

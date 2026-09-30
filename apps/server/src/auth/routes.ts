@@ -2,6 +2,7 @@ import { userInfo } from 'node:os';
 
 import {
   AccessSettings,
+  CheckupFixBody,
   CreateKeyBody,
   Id,
   SetPasswordBody,
@@ -14,7 +15,8 @@ import type { z } from 'zod';
 
 import type { Gatekeeper } from '../security';
 import type { Services } from '../services';
-import { checkup, workspaceRules } from './checkup';
+import { checkup, findTokenProfile, workspaceRules } from './checkup';
+import { FixError, runFix } from './fixes';
 import { exposure } from './network';
 import { AccessError } from './store';
 
@@ -104,6 +106,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
         browserLocal: (await services.browser.store.settings()).allowLocal,
         terminalRemote: (await services.terminal.settings()).allowRemote,
         provider: await services.providers.checkupCopy(),
+        ...(services.config.CONCH_TOKEN && { tokenProfile: await findTokenProfile() }),
       }),
       exposure: exposure(services.config),
       port: services.config.CONCH_PORT,
@@ -181,6 +184,28 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
       if (request.access?.kind === 'session') request.access.session.verifiedAt = Date.now();
     }
     return settings(request);
+  });
+
+  /**
+   * A checkup finding's one-click fix. Only the actions in `CheckupAction` run,
+   * each only takes trust away, and each keeps the verification its own
+   * settings route asks for. Returns the checkup without the finding.
+   */
+  app.post('/api/access/fix', async (request, reply) => {
+    const body = parse(CheckupFixBody, request.body, reply);
+    if (!body) return;
+    try {
+      const done = await runFix(services, body.action, {
+        local: gate.isLocal(request),
+        verified: gate.verified(request.access),
+      });
+      return { done, access: await settings(request) };
+    } catch (error) {
+      if (!(error instanceof FixError)) throw error;
+      return reply
+        .code(error.code === 'verify-required' ? 403 : 409)
+        .send({ error: error.code, message: error.message });
+    }
   });
 
   app.put('/api/access/password', async (request, reply) => {
