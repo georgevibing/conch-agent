@@ -61,7 +61,7 @@ const settingsPlaces: { tab: SettingsTab; label: string; keywords: string; icon:
   {
     tab: 'security',
     label: 'Security',
-    keywords: 'password keys devices sign in',
+    keywords: 'password keys devices sign in checkup health fixed repairs healed',
     icon: <ShieldCheck />,
   },
   {

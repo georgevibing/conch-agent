@@ -167,6 +167,8 @@ export async function buildApp(services: Services) {
     protocolVersion: PROTOCOL_VERSION,
   }));
   app.get('/api/state', appState);
+  /** What Conch fixed on its own, newest first. */
+  app.get('/api/healed', async () => ({ notes: await services.healed.list() }));
   app.patch('/api/settings', async (request, reply) => {
     const body = parse(UpdateSettingsBody, request.body, reply);
     if (!body) return;

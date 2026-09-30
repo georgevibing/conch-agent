@@ -9,6 +9,7 @@ import {
   ConversationSummary,
   CustomCommand,
   EngineStatus,
+  HealLog,
   Memory,
   type MemoryKind,
   ModelCatalog,
@@ -97,6 +98,7 @@ export const api = {
   revokeOtherSessions: () => request(AccessSettings, '/api/access/sessions', { method: 'DELETE' }),
 
   state: () => request(AppState, '/api/state'),
+  healed: () => request(HealLog, '/api/healed'),
   updateSettings: (body: UpdateSettingsBody) =>
     request(AppState, '/api/settings', { method: 'PATCH', body }),
 

@@ -15,7 +15,13 @@ export const keys = {
   usage: ['usage'] as const,
   auth: ['auth'] as const,
   access: ['access'] as const,
+  healed: ['healed'] as const,
 };
+
+/** What Conch fixed on its own, newest first; kept fresh by the `healed` event. */
+export function useHealed() {
+  return useQuery({ queryKey: keys.healed, queryFn: api.healed, staleTime: 60_000 });
+}
 
 export function useAppState() {
   return useQuery({ queryKey: keys.state, queryFn: api.state, staleTime: 30_000 });

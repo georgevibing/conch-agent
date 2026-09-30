@@ -16,6 +16,7 @@ import { CodexEngine } from './engines/codex/engine';
 import { MockEngine } from './engines/mock/engine';
 import type { Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
+import { Healed } from './lib/healed';
 import { ProviderKeys } from './providers/keys';
 import { ProviderService } from './providers/service';
 import { SecretVault } from './secrets/vault';
@@ -50,6 +51,8 @@ async function turnCosts(store: ConversationStore) {
 /** Everything the HTTP layer needs, wired once. Tests build this with a temp home. */
 export class Services {
   readonly broadcast = new Emitter<ServerEvent>();
+  /** What Conch fixed on its own, for the quiet list in Settings. */
+  readonly healed: Healed;
   readonly settings: SettingsStore;
   /** Who may sign in (`~/.conch/access.json`). */
   readonly access: AccessStore;
@@ -78,6 +81,9 @@ export class Services {
   #login?: { handle: LoginHandle; state: LoginState };
 
   constructor(readonly config: Config) {
+    this.healed = new Healed(config.CONCH_HOME, (note) =>
+      this.broadcast.emit({ type: 'healed', note }),
+    );
     this.settings = new SettingsStore(config.CONCH_HOME);
     this.access = new AccessStore(config.CONCH_HOME);
     this.gate = new Gatekeeper(config, this.access);

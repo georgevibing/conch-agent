@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { BrowserHandoff, BrowserPermission, BrowserStatus, BrowserStep } from './browser';
 import { EffortChoice, EngineId, Id, PermissionMode, TurnOptions, Usage } from './common';
 import { EngineStatus, LoginState } from './engine';
+import { HealNote } from './healed';
 import { Integration } from './integrations';
 import { Routine, RoutineRun } from './routines';
 import { UsageSnapshot } from './usage';
@@ -17,6 +18,7 @@ import { UsageSnapshot } from './usage';
 export * from './access';
 export * from './browser';
 export * from './engine';
+export * from './healed';
 export * from './integrations';
 export * from './common';
 export * from './providers';
@@ -384,6 +386,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('terminal.changed') }),
   /** The browser started, stopped, is installing (with progress), healed itself or needs you. */
   z.object({ type: z.literal('browser.status'), status: BrowserStatus }),
+  /** Conch fixed something on its own: a quiet note, never an alert. */
+  z.object({ type: z.literal('healed'), note: HealNote }),
   z.object({ type: z.literal('pong') }),
   z.object({
     type: z.literal('error'),

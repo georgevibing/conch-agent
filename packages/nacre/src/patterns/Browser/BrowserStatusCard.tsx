@@ -1,10 +1,11 @@
-import { Sparkles, Wrench } from 'lucide-react';
+import { Wrench } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 
 import { Button } from '../../components/Button';
 import { Pearl, type PearlState } from '../../components/Pearl';
 import { Progress } from '../../components/Progress';
 import { cx } from '../../utils/cx';
+import { ago, HealedNotes } from '../Healed/HealedNotes';
 import styles from './Browser.module.css';
 
 export type BrowserStatusPhase =
@@ -27,15 +28,6 @@ export interface BrowserStatusCardProps extends ComponentProps<'div'> {
   formatTime?: (at: number) => string;
   /** Extra content under the status (e.g. which browser to use). */
   children?: ReactNode;
-}
-
-function ago(at: number, now = Date.now()): string {
-  const minutes = Math.round((now - at) / 60_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} h ago`;
-  return `${Math.round(hours / 24)} d ago`;
 }
 
 const pearl: Record<BrowserStatusPhase, PearlState> = {
@@ -126,21 +118,7 @@ export function BrowserStatusCard({
         </div>
       )}
       {children}
-      {healed.length > 0 && (
-        <div className={styles.healed}>
-          <p className={styles.healedTitle}>
-            <Sparkles aria-hidden /> Fixed on its own
-          </p>
-          <ul>
-            {healed.slice(0, 4).map((note) => (
-              <li key={`${note.at}-${note.message}`}>
-                <span>{note.message}</span>
-                <time dateTime={new Date(note.at).toISOString()}>{formatTime(note.at)}</time>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <HealedNotes notes={healed} formatTime={formatTime} className={styles.healed} />
     </div>
   );
 }

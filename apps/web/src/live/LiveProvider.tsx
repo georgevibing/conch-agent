@@ -1,4 +1,4 @@
-import type { ConversationSummary, TurnOptions } from '@conch/protocol';
+import type { ConversationSummary, HealLog, TurnOptions } from '@conch/protocol';
 import { toast } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
@@ -123,6 +123,12 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           break;
         case 'skills.changed':
           void client.invalidateQueries({ queryKey: skillKeys.all });
+          break;
+        case 'healed':
+          // Quiet on purpose: it only updates the list in Settings, never a toast.
+          client.setQueryData<HealLog>(keys.healed, (log) =>
+            log ? { notes: [event.note, ...log.notes.filter((n) => n.id !== event.note.id)] } : log,
+          );
           break;
         case 'integration.changed':
         case 'integration.deleted':
