@@ -37,6 +37,10 @@ working agreement 11: _fix it before you ask_.
 | Something a feature needs installed (apps, CLIs, runtimes)      | `apps/server/src/setup/`, Nacre `SetupChecklist` + [ADR 0016](./docs/adr/0016-getting-what-a-feature-needs.md) — security-relevant                                                                |
 | Attachments (long pastes, files, pictures, drop, previews)      | `apps/server/src/attachments/`, `apps/web/src/features/chat/`, Nacre `Attachments` + [ADR 0017](./docs/adr/0017-attachments.md) — security-relevant                                               |
 | What ⌘K can find by name                                        | `apps/web/src/features/palette/` (`findables.tsx`) — see working agreement 10                                                                                                                     |
+| Repair everything (the whole-Conch checkup, Settings → Health)  | `apps/server/src/doctor/` (`checks.ts`), `apps/web/src/features/health/`, Nacre `RepairPanel` — see working agreement 12                                                                          |
+| Offline, usage limits, who answers a turn                       | `Services.route`, `apps/server/src/network/`, `ConversationManager` + [ADR 0018](./docs/adr/0018-offline-and-limits.md)                                                                           |
+| Updates, backups, connect-from-chat, the model on this computer | `apps/server/src/updates/`, `backup/`, `integrations/cues.ts`, `local/` + ADRs 0019–0022 — see working agreement 12                                                                               |
+| Conch restarting itself, surviving a crash                      | `apps/server/src/supervisor.ts`, `lib/lifecycle.ts` (`restart()`), web `features/health/restart.ts`                                                                                               |
 | A decision that changes architecture or adds a dependency       | Write an ADR in [`docs/adr/`](./docs/adr/) first                                                                                                                                                  |
 | Security, auth, exposing the gateway beyond localhost           | [§ Security engineering](#security-engineering) below → [ARCHITECTURE.md § Security](./ARCHITECTURE.md#security-model) → [ADR 0008](./docs/adr/0008-access-and-hardening.md) — treat as high-risk |
 
@@ -178,7 +182,7 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
       is ready, or opening 1Password — from the turn's `problem`.
     - **Say what you fixed, quietly.** Record each repair with
       `services.healed.note(area, message)`: one plain sentence, shown under
-      Settings → Security → “Fixed on its own” as reassurance, never as an error
+      Settings → Health → “Fixed on its own” as reassurance, never as an error
       or a toast that demands attention.
     - **Ask only what matters.**
       - Ask about spending, sending, publishing or deleting; about changes that
@@ -200,6 +204,27 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
       another way before it tells the person.
     - **Test the healing, not just the happy path.** Every self-repair gets a test:
       the stale lock, the crash, the fallback, the retry.
+
+12. **Every new part joins the features that cover all of Conch.** Some features
+    are about everything Conch is: **Repair everything** looks at every part,
+    **backups** carry every file you’d miss, **updates** watch every program
+    Conch relies on, **connect-from-chat** knows every app in the catalog, and
+    **offline and limits** route around every provider. They only stay whole if
+    each new part plugs itself in — in the same change, without being asked:
+
+    | You’re adding…                                                                     | Also, in the same change                                                                                                                                                                                                                                                                                                                                                                                        |
+    | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | Anything with state that can go wrong (a service, a connection, a store, a daemon) | A `DoctorCheck` in `apps/server/src/doctor/checks.ts` (`registerCoreChecks`), or the subsystem's own `doctor.ts` registered from `Services`. With `repair: false` it only looks; with `repair: true` it applies the safe fixes and says `fixed`. What only a person can do is `needs-you` with one `action` (`open` a settings place, `need` to install, or a `command` to copy). Tested like `checks.test.ts`. |
+    | A file or folder under `CONCH_HOME`                                                | A rule in `apps/server/src/backup/manifest.ts` (ADR 0020): `kept` (with its group), `secret` (only in a passphrase-locked backup), `derived` (rebuilt, never backed up) or `outside`. `manifest.test.ts` fails on any file no rule covers.                                                                                                                                                                      |
+    | A program, app or runtime Conch runs or relies on                                  | A need in `apps/server/src/setup/known.ts` (ADR 0016) with `version` (how to read the installed one), `latest` (where the newest is announced) and its `update` recipe — then Updates (ADR 0019) watches it and offers the one-click update.                                                                                                                                                                    |
+    | An app in the integrations catalog                                                 | Its `cues` (`integrations/cues.ts`, ADR 0021): the precise phrases that only mean that app, and the ones that mean something else. A false offer is worse than none; `{ match: [] }` is allowed and honest.                                                                                                                                                                                                     |
+    | A provider                                                                         | `Engine.local = true` if it runs on this computer (offline answers, ADR 0018/0022). Its failures classified as a `TurnProblem` (`limit`, `unavailable`, `signed-out`…) so a limit or an outage routes to your fallback instead of a dead end. Its readiness shows in `providersCheck`.                                                                                                                          |
+    | A failure another provider could answer                                            | `ConversationManager.#answer`'s retry condition and `Services.route` (ADR 0018). Not a failure the person must fix (`signed-out`, `key-locked`): that keeps its own card.                                                                                                                                                                                                                                       |
+    | Something a person can open or do by name                                          | Working agreement 10 (⌘K).                                                                                                                                                                                                                                                                                                                                                                                      |
+
+    If a new part fits no row but is still something you’d want back on a new
+    computer, or would want to know is broken, it belongs in one of these
+    features: extend the feature (and this table) rather than leave the part out.
 
 ## Security engineering
 
@@ -256,6 +281,7 @@ threat model. Hold every change to the bar of a FAANG security review:
 - [ ] Security-relevant? Threat-modelled, abuse cases tested, checkup updated, sources cited
 - [ ] Fails well (working agreement 11)? Foreseeable failures heal themselves or end in one plain next step, and the healing paths are tested
 - [ ] Needs something outside Conch? It's declared as a need that Conch finds, installs or links to, and notices when it arrives. It's never a “Couldn't find X” message.
+- [ ] Joined the whole-Conch features (working agreement 12)? A Repair everything check, a backup rule for new files, `version`/`latest` for new programs, `cues` for new catalog apps, `local` and `TurnProblem` for new providers.
 
 <!-- BEGIN:turborepo-agent-rules -->
 

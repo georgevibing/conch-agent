@@ -99,6 +99,10 @@ src/
   secrets/                    where a key lives: this computer, or 1Password (`op read`)
   setup/                      what features need from this computer; find, install, update, open
   lib/healed.ts               "fixed on its own" notes (~/.conch/healed.json, `healed` event)
+  lib/lifecycle.ts            this run's `BOOT_ID`; `restart()` (exit 75, the supervisor starts it again)
+  start.ts, supervisor.ts     `pnpm start` runs Conch as a child it restarts (on request, or after a crash)
+  doctor/                     Repair everything: every part's `DoctorCheck`, run at once (`doctor.report`)
+  network/watch.ts            online or not (`network.status`); offline routing (ADR 0018)
   lib/path.ts                 the PATH as it is now (Windows registry), refreshed before lookups
 ```
 
@@ -304,6 +308,28 @@ src/
   its own". The chat list is rebuilt from the logs, the spending record from past
   turns, and a routine that won't read is set aside whole, never run half-read.
   `access.json` is the exception: see Security.
+
+- **Conch keeps itself running** (`supervisor.ts`). `pnpm start` runs the gateway
+  as a child with `CONCH_SUPERVISED=1`. Exit code 75 means "start me again"
+  (`POST /api/gateway/restart`, after an update or a restore); any other exit is a
+  crash, restarted after 1 s, 3 s, 10 s, then 30 s, and given up after five crashes
+  in ten minutes. A restart after a crash leaves a note in "Fixed on its own".
+  `/api/health` carries the run's `bootId` and whether it's `restartable`; the web
+  app shows a calm "Starting again…" screen and reloads when the `bootId` changes.
+- **Repair everything** (`doctor/`). Each part registers a `DoctorCheck {id,
+group, title, run({ repair, signal })}` (working agreement 12). `GET /api/doctor`
+  returns the last report, `POST /api/doctor/check` looks, `POST /api/doctor/repair`
+  looks and fixes what's safe. Checks run at once with a 30 s timeout each; items
+  stream in as `checking` → a result over `doctor.report`, and every `fixed` item
+  becomes a heal note. A check that throws becomes "Conch couldn't check this",
+  never a broken report.
+- **Offline and at a limit** ([ADR 0018](./docs/adr/0018-offline-and-limits.md)).
+  `Services.route(engine, { failed? })` decides who answers each turn: the chat's
+  provider, the model on this computer while offline (`Engine.local`,
+  `preferences.offlineFallback`), your pick at a usage limit
+  (`preferences.limitFallback`), or nobody yet — the message is held
+  (`turn.held`) and goes when `NetworkWatch` sees the internet again. Another
+  provider answering is one `turn.routed` line.
 
 See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
 [ADR 0004 — Engines](./docs/adr/0004-engines.md).
