@@ -66,7 +66,8 @@ const settingsPlaces: {
   {
     tab: 'models',
     label: 'Models & modes',
-    keywords: 'default model thinking effort permissions',
+    keywords:
+      'default model thinking effort permissions suggestions suggest connect apps offers muted',
     icon: <Gauge />,
   },
   {

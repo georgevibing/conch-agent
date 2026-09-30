@@ -155,6 +155,7 @@ export function appState(patch: Partial<AppState> = {}): AppState {
       fastMode: false,
       permissionMode: 'default',
       offlineFallback: true,
+      mutedSuggestions: [],
     },
     engine: baseEngine,
     workspace: '/home/ada/.conch/workspace',

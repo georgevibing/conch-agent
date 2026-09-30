@@ -23,6 +23,25 @@
     animation-delay: 0s !important;
   }
 
+  /* An offer to connect an app belongs to the reply above it: lined up with its
+     words, a little closer than the next message. On “Not now” it folds away,
+     and the gap it sat in closes with it. */
+  .suggestion {
+    margin-block-start: calc(var(--nc-space-3) * -1);
+    margin-inline-start: 2.75rem;
+    transition: margin-block-start var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .suggestion[data-state='dismissed'] {
+    margin-block-start: calc(var(--nc-space-6) * -1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .suggestion {
+      transition: none;
+    }
+  }
+
   .user[data-pending] {
     opacity: 0.72;
   }
@@ -236,7 +255,8 @@
     .resolved,
     .memory,
     .aside,
-    .skillUsed {
+    .skillUsed,
+    .suggestion {
       margin-inline-start: 0;
     }
 

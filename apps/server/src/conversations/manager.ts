@@ -143,8 +143,54 @@ export interface IntegrationIssueInput {
   message: string;
 }
 
+/** An app the chat offers to connect, as a conversation shows it. */
+export interface IntegrationSuggestionInput {
+  catalogId: string;
+  name: string;
+  description: string;
+  color?: string;
+  via?: string;
+}
+
+/**
+ * For a turn about apps that aren't connected: the assistant can't see them
+ * and must not act as if it could. When the chat just offered to connect them,
+ * it says so, so the reply doesn't explain how. Short, and the same for every
+ * provider.
+ */
+export function notConnectedPrompt(
+  unseen: readonly string[],
+  offered: readonly string[] = [],
+): string {
+  if (!unseen.length) return '';
+  const names = unseen.join(' and ');
+  const one = unseen.length === 1;
+  return [
+    '## Not connected yet',
+    `${names} ${one ? 'isn’t' : 'aren’t'} connected, so you can’t see anything in ${one ? 'it' : 'them'}.${
+      offered.length
+        ? ` Conch has just shown the user a button in the chat to connect ${offered.join(' and ')}.`
+        : ''
+    }`,
+    `Don’t pretend to have ${names} data, and don’t guess at it. Answer what you can without it, then say that once ${names} ${one ? 'is' : 'are'} connected you’ll be able to help with that part. ${
+      offered.length
+        ? 'Don’t explain how to connect it: the button does that.'
+        : 'They can connect it from Integrations in the sidebar.'
+    }`,
+  ].join('\n');
+}
+
 /** Integrations (MCP servers the user connected in Conch), as turns see them. */
 export interface TurnIntegrationsProvider {
+  /**
+   * Catalog apps the person's words are clearly about that aren't connected
+   * (connect-from-chat), leaving out the ids in `skip`.
+   */
+  suggest?(
+    text: string,
+    engine: Engine,
+    skip: ReadonlySet<string>,
+  ): Promise<{ offers: IntegrationSuggestionInput[]; unseen: string[] }>;
   forTurn(prompt: string): Promise<{
     servers: Record<string, EngineMcpServer>;
     disallowedTools: string[];
@@ -775,7 +821,12 @@ export class ConversationManager {
 
     try {
       // Only the person's words count as asking for an app, not what they pasted.
-      const loaded = await integrations?.forTurn(said).catch(() => undefined);
+      const [loaded, apps] = await Promise.all([
+        integrations?.forTurn(said).catch(() => undefined),
+        this.#offers(live, engine, settings.preferences.mutedSuggestions),
+      ]);
+      for (const offer of apps.offers)
+        this.#append(live, { type: 'integration.suggestion', ...offer });
       for (const issue of loaded?.issues ?? []) appendIssue(issue);
       // Engines that can't run MCP servers get the tools through Conch instead.
       const bridged =
@@ -819,6 +870,10 @@ export class ConversationManager {
             tools: engine.hostTools !== false,
           }),
           await this.deps.context?.(engine),
+          notConnectedPrompt(
+            apps.unseen,
+            apps.offers.map((o) => o.name),
+          ),
           extras?.systemExtra,
         ]
           .filter(Boolean)
@@ -985,6 +1040,50 @@ export class ConversationManager {
       ...(heldProblem && { problem: heldProblem }),
       finalText,
     };
+  }
+
+  /**
+   * The apps this turn is about that aren't connected, and which of them to
+   * offer: read from the words the person typed (not a pasted file or a
+   * skill's instructions), each offered at most once per conversation, never
+   * one they muted, and never in an unattended run — nobody is there to press
+   * the button, though the assistant is still told what it can't see.
+   */
+  async #offers(
+    live: Live,
+    engine: Engine,
+    muted: readonly string[],
+  ): Promise<{ offers: IntegrationSuggestionInput[]; unseen: string[] }> {
+    const none = { offers: [], unseen: [] };
+    const integrations = this.deps.integrations;
+    if (!integrations?.suggest) return none;
+    const typed = live.events.findLast((e) => e.type === 'user.message')?.text;
+    if (!typed?.trim()) return none;
+    const offered = live.events.flatMap((e) =>
+      e.type === 'integration.suggestion' ? [e.catalogId] : [],
+    );
+    const found = await integrations
+      .suggest(typed, engine, new Set([...muted, ...offered]))
+      .catch(() => none);
+    const unattended = Boolean(live.extras || live.record.origin);
+    return unattended ? { offers: [], unseen: found.unseen } : found;
+  }
+
+  /** “Not now”: put an offer away for the rest of this conversation. */
+  async dismissSuggestion(id: string, catalogId: string) {
+    const live = await this.#get(id);
+    const offered = live.events.some(
+      (e) => e.type === 'integration.suggestion' && e.catalogId === catalogId,
+    );
+    const dismissed = live.events.some(
+      (e) => e.type === 'integration.suggestion.dismissed' && e.catalogId === catalogId,
+    );
+    if (!offered)
+      throw new ConversationError('not-found', 'That wasn’t offered in this conversation.');
+    if (dismissed) return;
+    this.#append(live, { type: 'integration.suggestion.dismissed', catalogId });
+    // A running turn saves the log when it ends; writing it now as well could race.
+    if (!live.abort) await this.#persist(live);
   }
 
   /** Append to the log and broadcast — or, if `defer` is given, collect for later broadcast. */

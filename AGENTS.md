@@ -48,6 +48,10 @@ working agreement 11: _fix it before you ask_.
 that doesn't exist, build it as a Nacre primitive or pattern (with a story), then use
 it. Apps must not contain bespoke styling beyond layout.
 
+- **A new catalog entry must declare `cues`** (`integrations/catalog.ts`: precise
+  phrases only, plus rows in `cues.test.ts`). Connect-from-chat then offers it in any
+  chat that asks for it, for every provider, with no other change ([ADR 0021](./docs/adr/0021-connect-from-chat.md)).
+
 ## Repo map
 
 ```

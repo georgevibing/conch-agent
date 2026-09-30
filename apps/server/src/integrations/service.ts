@@ -30,6 +30,7 @@ import {
 } from './catalog';
 import { type Bridge, openBridge } from './bridge';
 import { needFor, nodeFallback } from './commands';
+import { cuedApps } from './cues';
 import { checkEndpoint, EndpointError, guardedFetch, type Reach, reachOf } from './net';
 import { type FlowDisplay, NeedsAuthError, OAuthFlows, TransientAuthError } from './oauth';
 import { probe as realProbe, type ProbeResult, scrub } from './probe';
@@ -59,6 +60,34 @@ export interface TurnIntegrations {
   /** Integrations that were skipped this turn because they need you. */
   issues: IntegrationIssue[];
 }
+
+/** An app a message was clearly about that isn't connected: the chat offers to connect it. */
+export interface IntegrationSuggestion {
+  catalogId: string;
+  name: string;
+  /** What it would let the assistant do. */
+  description: string;
+  color?: string;
+  /** Connected through this catalog entry instead (Zapier), when the provider can't reach it. */
+  via?: string;
+}
+
+/** What a message is about that isn't connected: what to offer, and what the assistant can't see. */
+export interface TurnSuggestions {
+  /** Cards to show (not offered in this conversation before, not muted). */
+  offers: IntegrationSuggestion[];
+  /** Every app the message was about that isn't connected, offered or not, by name. */
+  unseen: string[];
+}
+
+/** Offers per message, at most: one card is a suggestion, three are a sales pitch. */
+const MAX_SUGGESTIONS = 2;
+/**
+ * How long a turn waits to learn what the provider reaches by itself. The
+ * answer is usually cached; when it isn't, the look carries on in the
+ * background and nothing is suggested this time (a wrong offer is worse).
+ */
+const PROVIDER_WAIT_MS = 2_500;
 
 const CHECK_EVERY_MS = 30 * 60_000;
 /** When a check fails for a reason that passes (offline, a restart): look again, then less often. */
@@ -160,6 +189,8 @@ export interface IntegrationServiceDeps {
   onHeal?: (message: string) => void;
   /** How long to wait before each retry; tests shorten it. Unset with `manualChecks`: no retries. */
   retryAfterMs?: number[];
+  /** How long a turn waits to learn what the provider reaches by itself; tests shorten it. */
+  providerWaitMs?: number;
 }
 
 /**
@@ -952,6 +983,93 @@ export class IntegrationService {
       }
     }
     return { servers, disallowedTools, issues };
+  }
+
+  // ── Connect from the chat ───────────────────────────────────────────────
+
+  /**
+   * The catalog apps a message is clearly about (`cues.ts`) that the person
+   * could connect now. Never one that's connected in Conch (in any state),
+   * that the provider answering reaches by itself (its account's connectors or
+   * its own servers), that's retired, or that's in `skip` (offered already in
+   * this conversation, or muted). A service only a provider's account can
+   * reach goes through Zapier when this provider has no account connectors.
+   * `unseen` names them all, skipped or not, so the assistant never pretends.
+   */
+  async suggest(
+    text: string,
+    engine: Engine,
+    skip: ReadonlySet<string> = new Set(),
+  ): Promise<TurnSuggestions> {
+    const none: TurnSuggestions = { offers: [], unseen: [] };
+    const cued = cuedApps(
+      text,
+      [...CATALOG.values()].filter((item) => !item.retired),
+    );
+    if (!cued.length) return none;
+    const mine = new Set(
+      (await this.store.all()).flatMap((i) => {
+        const id =
+          i.catalogId ??
+          matchCatalog(i.name, i.transport.type === 'http' ? i.transport.url : undefined);
+        return id ? [id] : [];
+      }),
+    );
+    const open = cued.filter((item) => !mine.has(item.id));
+    if (!open.length) return none;
+    // Not knowing what the provider has would risk telling it it can't see an app it can.
+    const reached = await this.#reachedBy(engine);
+    if (!reached) return none;
+    const account = await this.#accountReady(engine);
+    const zapier = CATALOG.get('zapier');
+    const suggestions: IntegrationSuggestion[] = [];
+    for (const item of open) {
+      if (reached.has(item.id)) continue;
+      const offer: IntegrationSuggestion = {
+        catalogId: item.id,
+        name: item.name,
+        description: item.description,
+        ...(item.color && { color: item.color }),
+      };
+      if (item.auth !== 'account' || account) suggestions.push(offer);
+      // Zapier might reach it already, with whatever actions were picked there.
+      else if (zapier && !zapier.retired && !mine.has(zapier.id))
+        suggestions.push({ ...offer, via: zapier.id });
+    }
+    return {
+      offers: suggestions.filter((s) => !skip.has(s.catalogId)).slice(0, MAX_SUGGESTIONS),
+      unseen: suggestions.map((s) => s.name),
+    };
+  }
+
+  /**
+   * The catalog apps this provider reaches by itself right now, or `undefined`
+   * when it can't say in time (the look goes on, and is cached for next time).
+   */
+  async #reachedBy(engine: Engine): Promise<Set<string> | undefined> {
+    if (!engine.mcpStatus) return new Set();
+    let timer: NodeJS.Timeout | undefined;
+    const late = new Promise<undefined>((resolve) => {
+      timer = setTimeout(() => resolve(undefined), this.deps.providerWaitMs ?? PROVIDER_WAIT_MS);
+      timer.unref();
+    });
+    try {
+      const found = await Promise.race([this.#externalOf(engine, new Set()), late]);
+      if (!found || found.message) return undefined;
+      return new Set(
+        found.servers.flatMap((s) => (s.state === 'ok' && s.catalogId ? [s.catalogId] : [])),
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Whether this provider's own account connectors work with how it's signed in. */
+  async #accountReady(engine: Engine): Promise<boolean> {
+    const account = engine.integrations.account;
+    if (!account) return false;
+    const status = await engine.detect().catch(() => undefined);
+    return status ? account.ready(status).ready : false;
   }
 
   /**

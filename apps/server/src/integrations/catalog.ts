@@ -1,6 +1,8 @@
 import { CatalogEntry } from '@conch/protocol';
 import type { z } from 'zod';
 
+import { type Cues, named } from './cues';
+
 /** How a catalog entry turns into an MCP server, given what the user typed. */
 export type Blueprint =
   | { type: 'http'; url: string | ((values: Record<string, string>) => string) }
@@ -24,6 +26,11 @@ export interface CatalogItem extends z.input<typeof CatalogEntry> {
    * another app is off. Said on its card; `steps` say where the switch is.
    */
   switchedOff?: string;
+  /**
+   * How to tell a message is about this app, so the chat can offer to connect
+   * it (`cues.ts`). Every entry declares them: precise ones, or none at all.
+   */
+  cues: Cues;
 }
 
 /**
@@ -50,6 +57,16 @@ const raw: CatalogItem[] = [
     ],
     access: ['Search and read the pages you share with it', 'Create and edit pages (asks first)'],
     blueprint: { type: 'http', url: 'https://mcp.notion.com/mcp' },
+    cues: {
+      match: [
+        named('Notion'),
+        /\bnotion\s+(?:pages?|docs?|documents?|databases?|dbs?|workspaces?|wiki|templates?|boards?|tables?|dashboards?|calendar|teamspaces?|ai|account|notes|sidebar|inbox)\b/i,
+        /\b(?:in|into|to|from|on)\s+(?:my\s+|our\s+)?notion\b/i,
+      ],
+      // “The notion of…”, “a notion that…”.
+      not: [/\bnotions?\s+(?:of|that|about|is|was|seems|behind)\b/gi],
+      links: [/\bnotion\.so\/[\w-]/i],
+    },
   },
   {
     id: 'gmail',
@@ -63,6 +80,24 @@ const raw: CatalogItem[] = [
     featured: true,
     examples: ['What did I miss in my inbox today?', 'Draft a reply to the latest email from Sam'],
     access: ['Read and search email', 'Create drafts'],
+    cues: {
+      match: [
+        /\bmy\s+(?:g-?mail|e-?mail\s+inbox|inbox)\b/i,
+        /\b(?:in|from|check|search|open|through)\s+(?:my\s+)?g-?mail\b/i,
+        /\bg-?mail\s+(?:inbox|threads?|messages?|e-?mails?|labels?|drafts?|search)\b/i,
+        // “Check my email”, but not “check my email for typos”.
+        /\b(?:check|search|scan|go\s+through|look\s+(?:in|through)|summari[sz]e|triage|clean\s+up)\s+(?:my\s+|our\s+)?(?:inbox|mail|e-?mails?)\b(?!\s+(?:for|draft|copy|text|signature|template|address|tone|below|above|here|before|again)\b)/i,
+        /\bunread\s+(?:e-?mails?|mail)\b/i,
+        /\b(?:latest|last|newest|recent|most\s+recent)\s+e-?mails?\s+(?:from|about|with)\b/i,
+        /\be-?mails?\s+(?:I|we)\s+(?:got|received|missed)\b/i,
+      ],
+      // Another app's inbox (“my inbox in Linear”).
+      not: [
+        /\binbox\s+(?:in|on)\s+(?!g-?mail\b)\p{L}+/giu,
+        /\b(?:linear|slack|notion|github|jira|zendesk|intercom|front|asana|todoist)\s+inbox\b/gi,
+      ],
+      links: [/\bmail\.google\.com\b/i],
+    },
   },
   {
     id: 'google-calendar',
@@ -76,6 +111,22 @@ const raw: CatalogItem[] = [
     featured: true,
     examples: ['What’s on my calendar tomorrow?', 'When am I free for an hour this week?'],
     access: ['See your events', 'Create and change events (asks first)'],
+    cues: {
+      match: [
+        /\bgoogle\s+cal(?:endar)?\b/i,
+        /\bg-?cal\b/i,
+        /\b(?:my|our)\s+(?:google\s+|work\s+)?calendars?\b/i,
+        /\b(?:am|are)\s+(?:I|we)\s+(?:free|busy|available)\s+(?:on|at|this|next|tomorrow|today|tonight|in\s+the|for\s+(?:an?|\d)|between|before|after|later)\b/i,
+        /\bmy\s+(?:meetings|schedule|agenda|appointments|events)\s+(?:for\s+)?(?:today|tomorrow|tonight|this\s+(?:week|morning|afternoon|evening)|next\s+week|on\s+(?:mon|tues?|wed(?:nes)?|thu(?:rs)?|fri|sat(?:ur)?|sun)(?:day)?)\b/i,
+        /\bcalendar\s+(?:invites?|invitations?)\b/i,
+      ],
+      // Calendars that aren't yours to open, and the one you're building.
+      not: [
+        /\bcalendars?\s+(?:components?|views?|widgets?|apps?|ui|librar(?:y|ies)|lib|pickers?|grids?|pages?|screens?|features?|modules?|code|files?|implementations?|designs?|mockups?|years?|months?|days?|systems?)\b/gi,
+        /\b(?:gregorian|julian|lunar|advent|academic|fiscal|school|liturgical|hebrew|jewish|chinese|mayan|islamic|hijri|perpetual|wall|desk|content|editorial|release|marketing|social\s+media|publishing|tide|garden(?:ing)?|planting)\s+calendars?\b/gi,
+      ],
+      links: [/\bcalendar\.google\.com\b/i],
+    },
   },
   {
     id: 'google-drive',
@@ -88,6 +139,21 @@ const raw: CatalogItem[] = [
     homepage: 'https://drive.google.com',
     examples: ['Find the budget spreadsheet and summarise it'],
     access: ['Search and read your files'],
+    cues: {
+      match: [
+        /\bgoogle\s+drive\b/i,
+        /\bg-?drive\b/i,
+        /\b(?:my|our|the|this|that)\s+google\s+(?:docs?|sheets?|spreadsheets?|slides?|slide\s+decks?|forms?)\b/i,
+        /\bgoogle\s+(?:docs?|sheets?|spreadsheets?|slides?)\s+(?:called|named|titled|about|with|from|for)\b/i,
+        // “My Drive”, “the shared Drive”, capital D: lowercase is usually a disk or a
+        // commute, and “in Drive” alone may be the film.
+        /\b(?:[Mm]y|our|shared|team)\s+Drive\b(?!\s+(?:mode|train|shaft|thru|through|way|Street|St\b|Road|Rd\b|Avenue))/,
+      ],
+      not: [
+        /\b(?:hard|usb|flash|c:|d:|e:|external|disk|thumb|test|network|solid[\s-]state|ssd|hdd|optical|cd|dvd|tape|zip|floppy|sex|long|short|scenic|road|country|boot|system|shared\s+network)\s+drives?\b/gi,
+      ],
+      links: [/\b(?:drive|docs|sheets|slides)\.google\.com\b/i],
+    },
   },
   {
     id: 'slack',
@@ -100,6 +166,25 @@ const raw: CatalogItem[] = [
     homepage: 'https://slack.com',
     examples: ['Catch me up on #general since yesterday'],
     access: ['Read channels you’re in', 'Send messages (asks first)'],
+    cues: {
+      match: [
+        named('Slack'),
+        /\bslack\s+(?:channels?|messages?|threads?|dms?|workspaces?|huddles?|canvas(?:es)?|notifications?|conversations?|posts?|chats?|history|status|reminders?|mentions?)\b/i,
+        /\b(?:on|in|to|into|from|via|through|over)\s+(?:our\s+|my\s+|the\s+team\s+)?slack\b/i,
+        /\b(?:my|our)\s+slack\b/i,
+      ],
+      // Slack in the rope, cutting someone some slack, slacking off.
+      not: [
+        /\b(?:cut(?:ting|s)?|give|giving|gave|show(?:ing)?)\s+(?:(?:me|him|her|them|us|you)\s+)?(?:some\s+|a\s+little\s+|a\s+bit\s+of\s+|more\s+|less\s+)?slack\b/gi,
+        /\b(?:take|takes|took|taking|pick|picks|picked|picking)\s+up\s+(?:the\s+|some\s+)?slack\b/gi,
+        /\bslack(?:ing|ed|er|ers|ness|ly|s)\b/gi,
+        // Building for Slack is coding.
+        /\bslack\s+(?:bots?|apps?|bolt)\b/gi,
+        /\bslack\s+(?:off|in\s+the|in\s+(?:my|your|our|their)|jaw(?:ed)?|tide|water|season|variables?|time|line|lines|rope|wire|chain|key|period|adjuster|cable)\b/gi,
+        /\b(?:enough|little|much|any|no)\s+slack\b(?!\s+(?:channels?|messages?|threads?|dms?|workspaces?|notifications?))/gi,
+      ],
+      links: [/\b[\w-]+\.slack\.com\/(?:archives|client|messages)\b/i],
+    },
   },
   {
     id: 'github',
@@ -137,6 +222,17 @@ const raw: CatalogItem[] = [
       'Open issues and pull requests, if the token allows it',
     ],
     blueprint: { type: 'http', url: 'https://api.githubcopilot.com/mcp/' },
+    cues: {
+      match: [
+        /\bgithub\s+(?:issues?|pull\s+requests?|prs?|notifications?|discussions?|inbox|projects?|review\s+requests?|stars?|gists?|milestones?)\b/i,
+        /\b(?:issues?|pull\s+requests?|prs?|notifications?|reviews?|review\s+requests?|repos?|repositories|discussions?|stars?|assigned\s+to\s+me|waiting\s+(?:on|for)\s+(?:me|my\s+review))\s+(?:on|in|from)\s+(?:my\s+|our\s+)?github\b/i,
+        /\bmy\s+github\s+(?:notifications?|issues?|prs?|pull\s+requests?|repos?|repositories|stars?|inbox|reviews?)\b/i,
+      ],
+      // Pushing and cloning are the agent's own job, and these are products, not your data.
+      not: [
+        /\bgithub\s+(?:actions?|pages|copilot|desktop|cli|codespaces?|enterprise|sponsors?|workflows?|marketplace|apps?)\b/gi,
+      ],
+    },
   },
   {
     id: 'linear',
@@ -151,6 +247,24 @@ const raw: CatalogItem[] = [
     examples: ['What’s assigned to me this cycle?', 'File a bug for what we just found'],
     access: ['Read issues, projects and comments', 'Create and update issues (asks first)'],
     blueprint: { type: 'http', url: 'https://mcp.linear.app/mcp' },
+    cues: {
+      match: [
+        named('Linear'),
+        /\blinear\s+(?:issues?|tickets?|cycles?|backlog|triage|inbox|workspace|roadmap|milestones?|initiatives?|sub-?issues?|sprints?)\b/i,
+        /\bLinear\s+(?:projects?|tasks?|views?|teams?|boards?|labels?|bugs?|comments?|docs?|account|updates?|notifications?)\b/,
+        /\b(?:issues?|tickets?|bugs?|tasks?|cycles?|backlog|projects?|sprints?|stories|epics?|assigned\s+to\s+me|waiting\s+for\s+me|triage)\s+(?:in|on|from|into|to)\s+(?:my\s+|our\s+)?linear\b/i,
+        // Lowercase only where nothing mathematical can follow: “move it to linear.”
+        /\b(?:in|on|from|into|to)\s+(?:my\s+|our\s+)?linear(?=\s*(?:[?.!;]|$)|\s+(?:this|today|tomorrow|yesterday|right\s+now|now|please|pls|so|since|until|before|after|last|next|for\s+me)\b)/i,
+      ],
+      // Linear algebra, linear time, non-linear, Linear B…
+      not: [
+        /\b(?:non-?|bi-?|multi-?|piecewise\s+|log-?)linear\b/gi,
+        /\blinear(?:ly)?\s+(?:algebra|regressions?|models?|equations?|functions?|time|scale|search|programming|combinations?|independen(?:ce|t)|maps?|mappings?|transformations?|operators?|systems?|interpolation|progressions?|growth|relationships?|relations?|correlations?|feet|foot|metres?|meters?|inch(?:es)?|yards?|motion|momentum|velocity|acceleration|narratives?|story|storyline|plot|gameplay|layouts?|gradients?|fashion|order|sequences?|b|tv|television|actuators?|guides?|bearings?|amplifiers?|regulators?|circuits?|dependence|approximations?|classifiers?|layers?|probing|congruences?|differential|logic|perspective|thinking|spaces?|subspaces?|terms|form|units|dimensions?|density|expansion|trends?|decay|rate|slope|light|technology|tape|polari[sz]ation|accelerators?|span|least|kernel|filters?|codes?|optimi[sz]ation|elasticity|dependency|increase|decrease|way|manner)\b/gi,
+      ],
+      links: [
+        /\blinear\.app\/[\w-]+\/(?:issue|project|view|team|cycle|initiative|inbox|my-issues|document)\//i,
+      ],
+    },
   },
   {
     id: 'atlassian',
@@ -164,6 +278,18 @@ const raw: CatalogItem[] = [
     examples: ['Summarise the tickets in the current sprint', 'Find the onboarding page'],
     access: ['Read issues and pages you can see', 'Create and edit them (asks first)'],
     blueprint: { type: 'http', url: 'https://mcp.atlassian.com/v1/mcp' },
+    cues: {
+      match: [
+        /\bjira\s+(?:tickets?|issues?|boards?|sprints?|epics?|stories|backlog|projects?|filters?|queues?|dashboards?|tasks?|bugs?|comments?|cards?)\b/i,
+        /\b(?:in|on|from|into|to)\s+(?:my\s+|our\s+|the\s+)?jira\b/i,
+        /\bmy\s+jira\b/i,
+        /\bconfluence\s+(?:pages?|spaces?|wiki|docs?|documentation|articles?|site|search)\b/i,
+        /\b(?:in|on|from|into|to)\s+(?:my\s+|our\s+|the\s+)?Confluence\b/,
+      ],
+      // Where two rivers meet.
+      not: [/\bconfluences?\s+of\b/gi],
+      links: [/\b[\w-]+\.atlassian\.net\/(?:browse|jira|wiki|secure)\b/i],
+    },
   },
   {
     id: 'zapier',
@@ -177,6 +303,14 @@ const raw: CatalogItem[] = [
     examples: ['Add a row to my expenses sheet', 'Send the summary to my team in Teams'],
     access: ['Only the actions you enable in Zapier'],
     blueprint: { type: 'http', url: 'https://mcp.zapier.com/api/mcp/mcp' },
+    cues: {
+      match: [
+        /\b(?:in|on|with|via|using|through|from|to|into)\s+(?:my\s+)?zapier\b/i,
+        /\bmy\s+(?:zapier|zaps)\b/i,
+        /\bzapier\s+(?:zaps?|actions?|account|automations?|workflows?|tables?|interfaces?|mcp|chatbots?|agents?)\b/i,
+        /(?<=\b(?:a|my|the|this|that|new|existing)\s+)Zaps?\b/,
+      ],
+    },
   },
   {
     id: 'canva',
@@ -190,6 +324,14 @@ const raw: CatalogItem[] = [
     examples: ['Make an Instagram post announcing our open day'],
     access: ['See your designs', 'Create designs (asks first)'],
     blueprint: { type: 'http', url: 'https://mcp.canva.com/mcp' },
+    cues: {
+      match: [
+        /\b(?:in|on|into|to|from|with|using|via)\s+(?:my\s+)?canva\b/i,
+        /\b(?:my|a)\s+canva\b/i,
+        /\bcanva\s+(?:designs?|templates?|presentations?|posts?|decks?|slides?|docs?|whiteboards?|account|projects?|brand\s+kits?|folders?|graphics?|flyers?|logos?|videos?|banners?|thumbnails?|stories)\b/i,
+      ],
+      links: [/\bcanva\.com\/design\//i],
+    },
   },
   {
     id: 'browser',
@@ -211,6 +353,8 @@ const raw: CatalogItem[] = [
     blueprint: { type: 'stdio', command: 'npx', args: ['-y', '@playwright/mcp@latest'] },
     // Conch has a browser of its own now (ADR 0014): nothing to install, and it asks per site.
     retired: true,
+    // Retired: never suggested.
+    cues: { match: [] },
   },
   {
     id: '1password',
@@ -241,6 +385,15 @@ const raw: CatalogItem[] = [
       'Never reads the secret values themselves',
     ],
     blueprint: { type: 'stdio', command: '1password-mcp', args: [] },
+    cues: {
+      // Only Environments: that's what this one manages (not passwords).
+      match: [
+        /\b1\s?password\s+environments?\b/i,
+        /\benvironments?\s+(?:in|from|on|to)\s+(?:my\s+)?1\s?password\b/i,
+        /\b1\s?password\b[^.?!\n]{0,40}\benvironments?\b/i,
+        /\b(?:env(?:ironment)?\s+variables?|environments?)\b[^.?!\n]{0,40}\b1\s?password\b/i,
+      ],
+    },
   },
   {
     id: 'home-assistant',
@@ -281,6 +434,11 @@ const raw: CatalogItem[] = [
       type: 'http',
       url: (values) => `${(values.url ?? '').replace(/\/+$/, '')}/api/mcp`,
     },
+    cues: {
+      // Title case: “a home assistant” in lowercase is any gadget.
+      match: [/\bHome\s+Assistant\b/, /\bhome-?assistant\b(?!\s)/i],
+      links: [/\bhomeassistant\.local\b/i],
+    },
   },
   {
     id: 'sentry',
@@ -294,6 +452,17 @@ const raw: CatalogItem[] = [
     examples: ['What are the top new errors this week?'],
     access: ['Read issues, events and projects', 'Update issues (asks first)'],
     blueprint: { type: 'http', url: 'https://mcp.sentry.dev/mcp' },
+    cues: {
+      match: [
+        /\bsentry\s+(?:errors?|issues?|events?|alerts?|projects?|dashboard|traces?|releases?|reports?|crash(?:es)?|exceptions?|performance|replays?|logs?)\b/i,
+        /\b(?:errors?|issues?|exceptions?|crash(?:es)?|events?|alerts?|traces?|replays?)\s+(?:in|on|from)\s+(?:my\s+|our\s+)?sentry\b/i,
+        /\b(?:in|on|from)\s+(?:my\s+|our\s+)?Sentry\b/,
+        /\bmy\s+sentry\b/i,
+      ],
+      // A guard, and a car's camera mode.
+      not: [/\bsentry\s+(?:mode|gun|guns|duty|post|posts|box|turret|towers?)\b/gi],
+      links: [/\bsentry\.io\/(?:organizations|issues)\//i],
+    },
   },
   {
     id: 'vercel',
@@ -307,6 +476,14 @@ const raw: CatalogItem[] = [
     examples: ['Why did my last deployment fail?'],
     access: ['Read projects, deployments and logs'],
     blueprint: { type: 'http', url: 'https://mcp.vercel.com' },
+    cues: {
+      // Deploying is the agent's job; these read what already happened.
+      match: [
+        /\bvercel\s+(?:deployments?|deploys?|logs?|builds?|projects?|dashboard|domains?|previews?|env(?:ironment)?\s+variables?|analytics)\b/i,
+        /\b(?:deployments?|deploys?|builds?|logs?|previews?|domains?|projects?)\s+(?:on|in|from)\s+(?:my\s+|our\s+)?vercel\b/i,
+        /\bmy\s+vercel\b/i,
+      ],
+    },
   },
   {
     id: 'supabase',
@@ -320,6 +497,16 @@ const raw: CatalogItem[] = [
     examples: ['How many sign-ups did we get yesterday?'],
     access: ['Read your projects and data', 'Run queries and change schemas (asks first)'],
     blueprint: { type: 'http', url: 'https://mcp.supabase.com/mcp' },
+    cues: {
+      match: [
+        /\bsupabase\s+(?:projects?|database|db|tables?|dashboard|logs?|storage|buckets?|users|edge\s+functions?|migrations?|schema|rows?|data|instance|branch(?:es)?)\b/i,
+        /\b(?:tables?|rows?|data(?:base)?|db|users|sign-?ups?|records|buckets?|logs?)\b[^.?!\n]{0,40}\b(?:in|on|from)\s+(?:my\s+|our\s+)?supabase\b/i,
+        /\bmy\s+supabase\b/i,
+      ],
+      // Package names in code talk.
+      not: [/@?supabase[-/][\w./-]+/gi],
+      links: [/\bsupabase\.com\/dashboard\//i],
+    },
   },
   {
     id: 'cloudflare',
@@ -333,6 +520,14 @@ const raw: CatalogItem[] = [
     examples: ['Which DNS records point at the old server?'],
     access: ['Read your account', 'Make changes (asks first)'],
     blueprint: { type: 'http', url: 'https://mcp.cloudflare.com/mcp' },
+    cues: {
+      match: [
+        /\bmy\s+cloudflare\b/i,
+        /\bcloudflare\s+(?:dns\s+(?:records?|settings|zones?)|dashboard|account|zones?|analytics|logs?|page\s+rules|waf|firewall\s+rules)\b/i,
+        /\b(?:dns|records?|domains?|zones?|rules?|redirects?|ssl|settings|analytics|traffic|cache)\b[^.?!\n]{0,40}\b(?:in|on|from|at)\s+(?:my\s+|our\s+)?cloudflare\b/i,
+      ],
+      links: [/\bdash\.cloudflare\.com\b/i],
+    },
   },
   {
     id: 'stripe',
@@ -346,16 +541,29 @@ const raw: CatalogItem[] = [
     examples: ['How much did we take this month?', 'Refund the last payment from this customer'],
     access: ['Read payments and customers', 'Create refunds and invoices (asks first)'],
     blueprint: { type: 'http', url: 'https://mcp.stripe.com' },
+    cues: {
+      match: [
+        /\bstripe\s+(?:payments?|customers?|charges?|subscriptions?|invoices?|refunds?|payouts?|balance|revenue|dashboard|account|disputes?|transactions?|mrr|sales|coupons?)\b/i,
+        /\b(?:payments?|customers?|charges?|subscriptions?|invoices?|refunds?|payouts?|revenue|balance|disputes?|transactions?|sales|mrr|subscribers)\b[^.?!\n]{0,40}\b(?:in|on|from)\s+(?:my\s+|our\s+)?stripe\b/i,
+        /\bmy\s+stripe\b/i,
+      ],
+      // Building Stripe into an app is coding, not looking at your account.
+      not: [
+        /\b(?:integrat\w*|implement\w*|add(?:ing)?|set(?:ting)?\s+up|build(?:ing)?|wir(?:e|ing)\s+up|hook(?:ing)?\s+up|install(?:ing)?)\s+(?:with\s+)?stripe(?:\s+(?:payments?|checkout|billing|subscriptions?|elements|webhooks?|connect|sdk|api))?\b/gi,
+      ],
+      links: [/\bdashboard\.stripe\.com\b/i],
+    },
   },
 ];
 
 /** What stays on the gateway: never part of `publicCatalog()`. */
-type ServerOnly = 'blueprint' | 'tokenField' | 'retired' | 'needs' | 'program' | 'switchedOff';
+type ServerOnly =
+  'blueprint' | 'tokenField' | 'retired' | 'needs' | 'program' | 'switchedOff' | 'cues';
 
 export type ResolvedCatalogItem = CatalogEntry & Pick<CatalogItem, ServerOnly>;
 
 const items: ResolvedCatalogItem[] = raw.map(
-  ({ blueprint, tokenField, retired, needs, program, switchedOff, ...entry }) => ({
+  ({ blueprint, tokenField, retired, needs, program, switchedOff, cues, ...entry }) => ({
     ...CatalogEntry.parse(entry),
     blueprint,
     tokenField,
@@ -363,6 +571,7 @@ const items: ResolvedCatalogItem[] = raw.map(
     needs,
     program,
     switchedOff,
+    cues,
   }),
 );
 
@@ -382,6 +591,7 @@ export function publicCatalog(): CatalogEntry[] {
         needs: _n,
         program: _p,
         switchedOff: _s,
+        cues: _c,
         ...entry
       }) => entry,
     );

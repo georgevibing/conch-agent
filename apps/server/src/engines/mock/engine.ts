@@ -440,6 +440,22 @@ export class MockEngine implements Engine {
         return;
       }
 
+      // Asked about an app that isn't connected (Conch offered to connect it):
+      // say so, the way the prompt asks a real model to, instead of making it up.
+      const unseen = /## Not connected yet\n(.+?) (?:isn’t|aren’t) connected/.exec(
+        input.systemAppend,
+      )?.[1];
+      if (unseen) {
+        const honest = `I can’t see your ${unseen} yet, so I won’t guess at what’s in it. Once ${unseen} is connected, I can look that up for you.`;
+        for (const chunk of bursts(honest)) {
+          await wait(chunk.pause);
+          yield { type: 'text', messageId, delta: chunk.text };
+        }
+        yield { type: 'message-done', messageId };
+        yield { type: 'done', outcome: 'success' };
+        return;
+      }
+
       const { model = 'default', effort, fastMode, permissionMode } = input.options;
       const setup = `*${model} · ${effort} effort${fastMode ? ' · fast' : ''} · ${permissionMode}*`;
       if (/^\/\w/.test(input.prompt)) {

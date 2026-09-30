@@ -48,6 +48,44 @@ describe('protocol', () => {
   });
 });
 
+describe('connect from chat', () => {
+  const logged = { conversationId: 'c1', seq: 4, at: 1 };
+
+  it('carries what the card needs, and nothing that could become a path', () => {
+    const offer = {
+      ...logged,
+      type: 'integration.suggestion',
+      catalogId: 'linear',
+      name: 'Linear',
+      description: 'Find, create and update issues and projects.',
+      color: '#5E6AD2',
+    };
+    expect(ConversationEvent.parse(offer)).toEqual(offer);
+    expect(ConversationEvent.parse({ ...offer, via: 'zapier' })).toMatchObject({ via: 'zapier' });
+    for (const catalogId of ['../linear', 'Linear', '', 'linear/1'])
+      expect(ConversationEvent.safeParse({ ...offer, catalogId }).success).toBe(false);
+    expect(ConversationEvent.safeParse({ ...offer, color: 'red; x' }).success).toBe(false);
+    expect(
+      ConversationEvent.parse({
+        ...logged,
+        type: 'integration.suggestion.dismissed',
+        catalogId: 'linear',
+      }),
+    ).toMatchObject({ catalogId: 'linear' });
+  });
+
+  it('remembers each muted app once', () => {
+    expect(
+      UpdateSettingsBody.parse({
+        preferences: { mutedSuggestions: ['linear', 'notion', 'linear'] },
+      }).preferences?.mutedSuggestions,
+    ).toEqual(['linear', 'notion']);
+    expect(
+      UpdateSettingsBody.safeParse({ preferences: { mutedSuggestions: ['../etc'] } }).success,
+    ).toBe(false);
+  });
+});
+
 describe('skills', () => {
   it('asks for a description with nothing else in the body', () => {
     expect(DescribeSkillBody.safeParse({}).success).toBe(true);

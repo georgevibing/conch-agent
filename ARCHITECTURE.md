@@ -168,6 +168,8 @@ src/
   OAuth callback: `GET /oauth/callback`.
   Outbound requests pass the SSRF guard (`integrations/net.ts`). See
   [ADR 0009](./docs/adr/0009-integrations.md).
+- **Connect from the chat** ([ADR 0021](./docs/adr/0021-connect-from-chat.md)). Before a turn, `IntegrationService.suggest` reads the person's words for catalog `cues` (`integrations/cues.ts`) and appends `integration.suggestion` once per app per conversation — never for what's connected, what the provider reaches itself, retired or muted apps — and the prompt says the app isn't connected.
+  The web shows Nacre `IntegrationSuggestionCard` under the reply, with the connect dialog in place and Ask again; “Not now” is `integration.suggestion.dismissed`, “Don’t suggest” is `preferences.mutedSuggestions`.
 - **Setup** (`setup/`): what a feature needs from this computer (an app, a program)
   and getting it. A need finds itself where it really lives (`PATH`, Windows app
   aliases, macOS app bundles), installs itself through winget/Homebrew with
