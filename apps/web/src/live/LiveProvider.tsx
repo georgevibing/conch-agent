@@ -10,6 +10,8 @@ import { applyIntegrationEvent } from '../features/integrations/queries';
 import { healthKeys } from '../features/health/api';
 import { applyRoutineEvent } from '../features/routines/queries';
 import { skillKeys } from '../features/skills/queries';
+import { updateKeys } from '../features/updates/api';
+import { followRestart } from '../features/updates/queries';
 import { LiveSocket, socketUrl } from './socket';
 import { NEW, useLiveStore } from './store';
 
@@ -132,6 +134,12 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           break;
         case 'doctor.report':
           client.setQueryData(healthKeys.doctor, event.report);
+          break;
+        case 'updates.changed':
+          // Quiet: a dot and a line in Settings, never a toast. Conch's own
+          // update ends on the restart screen, then a reload onto the new version.
+          client.setQueryData(updateKeys.status, event.status);
+          followRestart(event.status);
           break;
         case 'healed':
           // Quiet on purpose: it only updates the list in Settings, never a toast.

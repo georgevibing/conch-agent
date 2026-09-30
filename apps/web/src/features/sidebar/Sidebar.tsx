@@ -36,6 +36,7 @@ import { useAutoFocus } from '../../lib/useAutoFocus';
 import { IntegrationsLink } from '../integrations/IntegrationsLink';
 import { RoutinesLink } from '../routines/RoutinesLink';
 import { SkillsLink } from '../skills/SkillsLink';
+import { updatesWaiting, useUpdates } from '../updates/queries';
 import styles from './Sidebar.module.css';
 
 function RenameField({
@@ -194,6 +195,8 @@ export function Sidebar({
   const openSettings = useUi((s) => s.openSettings);
   const setPalette = useUi((s) => s.setPalette);
   const navigate = useNavigate();
+  // Updates wait quietly: a dot on Settings, never a toast.
+  const updates = updatesWaiting(useUpdates().data);
 
   const groups = new Map<DayGroup, ConversationSummary[]>();
   // Routine runs live under Routines, not in your chat list.
@@ -279,7 +282,13 @@ export function Sidebar({
           <Avatar size="sm" name={app?.profile.name || 'You'} />
           <span className={styles.meName}>{app?.profile.name || 'You'}</span>
         </button>
-        <IconButton size="sm" label="Settings" shortcut="mod+," onClick={() => openSettings()}>
+        <IconButton
+          size="sm"
+          label="Settings"
+          shortcut="mod+,"
+          dot={updates ? 'Update available' : undefined}
+          onClick={() => openSettings()}
+        >
           <Settings />
         </IconButton>
       </div>

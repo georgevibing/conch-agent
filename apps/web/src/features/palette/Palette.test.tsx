@@ -361,4 +361,43 @@ describe('Palette search', () => {
     await user.click(await screen.findByRole('option', { name: /Attach files/ }));
     expect(useUi.getState().attachRequest).toBe(before + 1);
   });
+
+  it('checks for updates, and offers “Update Conch” only when one is ready', async () => {
+    const user = userEvent.setup();
+    let behind = 0;
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'GET /api/updates': () => ({
+        conch: {
+          checkable: true,
+          version: '0.2.0',
+          behind,
+          improvements: behind,
+          whatsNew: [],
+          restartNeeded: false,
+        },
+        programs: [],
+        checking: false,
+        auto: false,
+        restartable: true,
+      }),
+    });
+    const { client } = renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'upgrade');
+    expect(await screen.findByRole('option', { name: /Check for updates/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Update Conch/ })).toBeNull();
+    await user.click(screen.getByRole('option', { name: /Check for updates/ }));
+    expect(useUi.getState()).toMatchObject({ settings: 'health', settingsFocus: 'check-updates' });
+
+    behind = 3;
+    await act(() => client.invalidateQueries({ queryKey: ['updates'] }));
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'update conch');
+    await user.click(await screen.findByRole('option', { name: /Update Conch/ }));
+    expect(useUi.getState()).toMatchObject({ settings: 'health', settingsFocus: 'update-conch' });
+    useUi.setState({ settings: null, settingsFocus: undefined });
+  });
 });
