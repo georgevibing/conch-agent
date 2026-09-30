@@ -63,6 +63,11 @@
     gap: var(--nc-space-4);
   }
 
+  /* What sits beside a section's title (Saved, Check now) keeps its size on a phone. */
+  .sectionStatus {
+    flex-shrink: 0;
+  }
+
   .saved {
     flex-shrink: 0;
     margin-inline-end: var(--nc-space-8);

@@ -52,7 +52,7 @@ export function Section({
             </Text>
           )}
         </Stack>
-        {status}
+        {status && <div className={styles.sectionStatus}>{status}</div>}
       </div>
       {children}
     </section>
