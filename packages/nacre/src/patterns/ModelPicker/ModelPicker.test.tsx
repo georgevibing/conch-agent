@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { expectAccessible, renderNacre } from '../../test/render';
-import { claudeCode, connectedProviders, efforts } from './fixtures';
+import { claudeCode, connectedProviders, efforts, onThisComputer } from './fixtures';
 import { matchWords, ModelPicker, type ModelPickerProps } from './ModelPicker';
 import { ProviderLogo } from './ProviderLogo';
 
@@ -112,6 +112,38 @@ describe('ProviderLogo', () => {
     );
     expect(container.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
     expect(screen.getByRole('img', { name: 'OpenAI' })).toBeInTheDocument();
+  });
+
+  it('draws a model on this computer as the computer', () => {
+    renderNacre(<ProviderLogo provider="local" title="On this computer" />);
+    const logo = screen.getByRole('img', { name: 'On this computer' });
+    expect(logo).toHaveAttribute('data-provider', 'local');
+    expect(logo.querySelector('rect')).not.toBeNull();
+  });
+});
+
+describe('ModelPicker with a model on this computer', () => {
+  it('lists local models under their own provider, and picks one', async () => {
+    const onModelChange = vi.fn();
+    const { container } = setup({
+      providers: [claudeCode, onThisComputer],
+      model: 'opus',
+      onModelChange,
+      open: true,
+    });
+    const group = screen.getByRole('group', { name: 'On this computer' });
+    expect(
+      within(group)
+        .getAllByRole('radio')
+        .map((r) => r.textContent),
+    ).toEqual([
+      expect.stringContaining('Qwen3.5 9B'),
+      expect.stringContaining('Qwen3 4B'),
+      expect.stringContaining('Gemma3 1B'),
+    ]);
+    await userEvent.click(within(group).getByRole('radio', { name: /Qwen3 4B/ }));
+    expect(onModelChange).toHaveBeenCalledWith('qwen3:4b-instruct');
+    await expectAccessible(container);
   });
 });
 

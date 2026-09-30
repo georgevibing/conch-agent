@@ -55,6 +55,24 @@ describe('ProviderCard', () => {
     );
   });
 
+  it('says its state in its own words when the usual ones don’t fit', async () => {
+    const { container } = renderNacre(
+      <ProviderCard
+        name="On this computer"
+        brand="ollama"
+        color="#2F6B5E"
+        tagline="Private, free, and works offline"
+        state="not-installed"
+        stateLabel="Needs a model"
+        message="Get a model to start chatting."
+      />,
+    );
+    const card = screen.getByRole('article', { name: 'On this computer' });
+    expect(card).toHaveTextContent('Needs a model. Get a model to start chatting.');
+    expect(card).not.toHaveTextContent('Not on this computer');
+    await expectAccessible(container);
+  });
+
   it('hides what it is good at once it is connected', () => {
     const highlights = ['Every model in one list'];
     const { rerender } = renderNacre(

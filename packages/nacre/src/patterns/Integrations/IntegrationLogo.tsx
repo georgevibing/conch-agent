@@ -1,4 +1,4 @@
-import { Globe, Hash, Plug } from 'lucide-react';
+import { Globe, Hash, Laptop, Plug } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 
 import { cx } from '../../utils/cx';
@@ -28,6 +28,8 @@ export interface IntegrationLogoProps extends Omit<ComponentProps<'span'>, 'chil
 const glyphs: Record<string, ReactNode> = {
   browser: <Globe />,
   slack: <Hash />,
+  // A model on this computer: the computer is the point, not the program running it.
+  ollama: <Laptop />,
 };
 
 /** A stable hue per name, so a custom integration always gets the same tile. */
