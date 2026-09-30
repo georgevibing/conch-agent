@@ -119,3 +119,32 @@ export const Vertical: Story = {
     </Surface>
   ),
 };
+
+/** Something waits in a tab (an update): a quiet dot, read out with the label. */
+export const WithDot: Story = {
+  args: { orientation: 'vertical', defaultValue: 'chat' },
+  render: (args) => (
+    <Surface padding={3} radius="xl" style={{ inlineSize: 560 }}>
+      <Tabs {...args}>
+        <Tabs.List aria-label="Settings sections" style={{ minInlineSize: 160 }}>
+          {panels.map((p, i) => (
+            <Tabs.Trigger
+              key={p.value}
+              value={p.value}
+              icon={p.icon}
+              dot={i === 1 ? 'Update available' : undefined}
+              style={{ justifyContent: 'flex-start' }}
+            >
+              {p.label}
+            </Tabs.Trigger>
+          ))}
+        </Tabs.List>
+        {panels.map((p) => (
+          <Tabs.Content key={p.value} value={p.value} style={{ padding: 'var(--nc-space-2)' }}>
+            <Text tone="muted">{p.body}</Text>
+          </Tabs.Content>
+        ))}
+      </Tabs>
+    </Surface>
+  ),
+};

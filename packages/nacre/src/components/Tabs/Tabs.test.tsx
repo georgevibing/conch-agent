@@ -63,4 +63,21 @@ describe('Tabs', () => {
     expect(onValueChange).toHaveBeenCalledWith('b');
     expect(screen.getByRole('tab', { name: 'Alpha' })).toHaveAttribute('aria-selected', 'true');
   });
+
+  it('says what waits behind a tab’s dot', async () => {
+    const { container } = renderNacre(
+      <Tabs defaultValue="a">
+        <Tabs.List aria-label="Settings sections">
+          <Tabs.Trigger value="a">Personality</Tabs.Trigger>
+          <Tabs.Trigger value="b" dot="Update available">
+            Health
+          </Tabs.Trigger>
+        </Tabs.List>
+        <Tabs.Content value="a">A</Tabs.Content>
+        <Tabs.Content value="b">B</Tabs.Content>
+      </Tabs>,
+    );
+    expect(screen.getByRole('tab', { name: 'Health, Update available' })).toBeInTheDocument();
+    await expectAccessible(container);
+  });
 });

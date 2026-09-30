@@ -86,9 +86,14 @@ export interface TabsTriggerProps extends ComponentProps<typeof TabsPrimitive.Tr
   icon?: ReactNode;
   /** Trailing count or badge. */
   meta?: ReactNode;
+  /**
+   * A small dot after the label: something waits in this tab (an update).
+   * The words are read with the label, so it never relies on colour alone.
+   */
+  dot?: string;
 }
 
-function TabsTrigger({ value, icon, meta, className, children, ...props }: TabsTriggerProps) {
+function TabsTrigger({ value, icon, meta, dot, className, children, ...props }: TabsTriggerProps) {
   const ctx = useTabsContext('Trigger');
   const active = ctx.value === value;
   return (
@@ -108,6 +113,12 @@ function TabsTrigger({ value, icon, meta, className, children, ...props }: TabsT
         </span>
       )}
       <span className={styles.label}>{children}</span>
+      {dot && (
+        <>
+          <span className={styles.dot} aria-hidden />
+          <span className="nc-visually-hidden">, {dot}</span>
+        </>
+      )}
       {meta != null && <span className={styles.meta}>{meta}</span>}
     </TabsPrimitive.Trigger>
   );
