@@ -144,9 +144,11 @@ describe('Palette search', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Keep typing to search messages');
     expect(calls.some((c) => c.path.startsWith('/api/search?'))).toBe(false);
     await user.type(box, 'qx');
-    expect(
-      await screen.findByText(/Nothing matches “zzqx”/, {}, { timeout: 4000 }),
-    ).toBeInTheDocument();
+    // The list re-renders as results settle: look again each time, rather than
+    // holding on to a node that a later render may replace.
+    await waitFor(() => expect(screen.getByText(/Nothing matches “zzqx”/)).toBeInTheDocument(), {
+      timeout: 4000,
+    });
   });
 
   it('says search is catching up while its index rebuilds, not that nothing matches', async () => {

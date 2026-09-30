@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ConchCheckout,
@@ -91,6 +91,10 @@ const steps = () => {
   const seen: UpdateProgressReport[] = [];
   return { seen, onProgress: (p: UpdateProgressReport) => seen.push(p) };
 };
+
+// These drive real git against temporary repositories: dozens of processes per
+// test, which is slow on Windows while the rest of the suite runs alongside.
+vi.setConfig({ testTimeout: 60_000 });
 
 describe('checking for Conch’s own updates', () => {
   it('says it’s up to date when nothing new is upstream', async () => {
