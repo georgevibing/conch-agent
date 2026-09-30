@@ -20,6 +20,8 @@ import { UsageIndicator } from '../features/usage/UsageIndicator';
 import { useLiveStore } from '../live/store';
 import styles from './Shell.module.css';
 import { BrowserToggle } from '../features/browser/BrowserToggle';
+import { TerminalDock } from '../features/terminal/TerminalDock';
+import { TerminalToggle } from '../features/terminal/TerminalToggle';
 import { useProviderSignInResult } from '../features/providers/useSignInResult';
 import { useUi } from './ui';
 import { useHotkey } from './useHotkey';
@@ -57,6 +59,7 @@ export function Shell() {
   const narrow = useMediaQuery('(max-width: 820px)');
   const { sidebarOpen, toggleSidebar, mobileSidebarOpen, setMobileSidebar, openSettings } = useUi();
   const openFind = useUi((s) => s.openFind);
+  const terminalMax = useUi((s) => s.terminalOpen && s.terminalMax);
   const setPalette = useUi((s) => s.setPalette);
 
   const current = conversations?.find((c) => c.id === conversationId);
@@ -127,6 +130,7 @@ export function Shell() {
           </Text>
           <UsageIndicator />
           {conversationId && <BrowserToggle conversationId={conversationId} />}
+          <TerminalToggle />
           {conversationId && (
             <IconButton
               label="Find in chat"
@@ -139,29 +143,33 @@ export function Shell() {
           <EnginePill />
         </header>
         <Reconnecting />
-        {skillsArea ? (
-          path === '/skills/new' ? (
-            <NewSkill />
-          ) : skillId ? (
-            <SkillDetailView key={skillId} skillId={skillId} />
+        {/* The page; it steps aside while the terminal fills the screen. */}
+        <div className={styles.area} data-covered={terminalMax || undefined}>
+          {skillsArea ? (
+            path === '/skills/new' ? (
+              <NewSkill />
+            ) : skillId ? (
+              <SkillDetailView key={skillId} skillId={skillId} />
+            ) : (
+              <SkillsView />
+            )
+          ) : integrationsArea ? (
+            integrationId ? (
+              <IntegrationDetailView key={integrationId} integrationId={integrationId} />
+            ) : (
+              <IntegrationsView />
+            )
+          ) : routinesArea ? (
+            routineId ? (
+              <RoutineDetailView key={routineId} routineId={routineId} />
+            ) : (
+              <RoutinesView />
+            )
           ) : (
-            <SkillsView />
-          )
-        ) : integrationsArea ? (
-          integrationId ? (
-            <IntegrationDetailView key={integrationId} integrationId={integrationId} />
-          ) : (
-            <IntegrationsView />
-          )
-        ) : routinesArea ? (
-          routineId ? (
-            <RoutineDetailView key={routineId} routineId={routineId} />
-          ) : (
-            <RoutinesView />
-          )
-        ) : (
-          <ChatView key={conversationId ?? 'new'} conversationId={conversationId} />
-        )}
+            <ChatView key={conversationId ?? 'new'} conversationId={conversationId} />
+          )}
+        </div>
+        <TerminalDock />
       </main>
       <Settings />
       <Palette />

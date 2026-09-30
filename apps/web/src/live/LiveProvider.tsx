@@ -5,6 +5,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode }
 
 import { keys, setEngineStatus } from '../api/queries';
 import { browserKeys } from '../features/browser/queries';
+import { terminalKeys } from '../features/terminal/queries';
 import { applyIntegrationEvent } from '../features/integrations/queries';
 import { applyRoutineEvent } from '../features/routines/queries';
 import { skillKeys } from '../features/skills/queries';
@@ -114,6 +115,9 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           }
           break;
         }
+        case 'terminal.changed':
+          void client.invalidateQueries({ queryKey: terminalKeys.status });
+          break;
         case 'browser.status':
           client.setQueryData(browserKeys.status, event.status);
           break;

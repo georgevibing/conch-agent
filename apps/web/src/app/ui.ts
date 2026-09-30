@@ -11,6 +11,7 @@ export type SettingsTab =
   | 'security'
   | 'providers'
   | 'browser'
+  | 'terminal'
   | 'appearance';
 
 /** Which composer picker is open (so `/model` and `/mode` can open them). */
@@ -62,10 +63,35 @@ interface UiState {
   openBrowser(conversationId: string): void;
   closeBrowser(): void;
   setBrowserWidth(width: number): void;
+  /** The terminal drawer is open. */
+  terminalOpen: boolean;
+  /** Its height in pixels (remembered), and whether it fills the screen. */
+  terminalHeight: number;
+  terminalMax: boolean;
+  /** The terminal in view. */
+  terminalActive: string | null;
+  /** Text to type into the terminal ("Run in terminal"): never with Enter. */
+  terminalPaste: string | null;
+  /** Bumped to ask the drawer for a new terminal. */
+  terminalNew: number;
+  setTerminalOpen(open: boolean): void;
+  toggleTerminal(): void;
+  setTerminalHeight(height: number): void;
+  setTerminalMax(max: boolean): void;
+  setTerminalActive(id: string | null): void;
+  pasteInTerminal(text: string | null): void;
+  newTerminal(): void;
 }
 
 const SIDEBAR_KEY = 'conch.sidebar';
 const BROWSER_WIDTH_KEY = 'conch.browserWidth';
+const TERMINAL_HEIGHT_KEY = 'conch.terminalHeight';
+
+function storedHeight(): number {
+  const value =
+    typeof localStorage === 'undefined' ? NaN : Number(localStorage.getItem(TERMINAL_HEIGHT_KEY));
+  return Number.isFinite(value) && value >= 160 ? value : 300;
+}
 
 function storedWidth(): number {
   const value =
@@ -135,6 +161,27 @@ export const useUi = create<UiState>((set) => ({
           }
         : s,
     ),
+  terminalOpen: false,
+  terminalHeight: storedHeight(),
+  terminalMax: false,
+  terminalActive: null,
+  terminalPaste: null,
+  terminalNew: 0,
+  setTerminalOpen: (terminalOpen) => set({ terminalOpen, paletteOpen: false }),
+  toggleTerminal: () => set((s) => ({ terminalOpen: !s.terminalOpen, paletteOpen: false })),
+  setTerminalHeight: (terminalHeight) => {
+    try {
+      localStorage.setItem(TERMINAL_HEIGHT_KEY, String(Math.round(terminalHeight)));
+    } catch {
+      // Private windows: the height just isn't remembered.
+    }
+    set({ terminalHeight });
+  },
+  setTerminalMax: (terminalMax) => set({ terminalMax }),
+  setTerminalActive: (terminalActive) => set({ terminalActive }),
+  pasteInTerminal: (terminalPaste) =>
+    set(terminalPaste === null ? { terminalPaste } : { terminalPaste, terminalOpen: true }),
+  newTerminal: () => set((s) => ({ terminalNew: s.terminalNew + 1, terminalOpen: true })),
   setBrowserWidth: (browserWidth) => {
     try {
       localStorage.setItem(BROWSER_WIDTH_KEY, String(Math.round(browserWidth)));

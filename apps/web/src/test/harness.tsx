@@ -182,7 +182,7 @@ export function mockFetch(routes: Record<string, (body: unknown) => unknown>) {
 export function renderApp(ui: ReactElement, { route = '/' } = {}) {
   vi.stubGlobal('WebSocket', FakeSocket);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const view = render(
     <NacreProvider scope="local">
       <QueryClientProvider client={client}>
         <LiveProvider url="ws://test/ws">
@@ -191,4 +191,5 @@ export function renderApp(ui: ReactElement, { route = '/' } = {}) {
       </QueryClientProvider>
     </NacreProvider>,
   );
+  return { ...view, client };
 }

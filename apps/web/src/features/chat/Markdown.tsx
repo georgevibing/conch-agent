@@ -3,6 +3,7 @@ import { isValidElement, memo, useMemo, type ReactElement, type ReactNode } from
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+import { isShellCode, RunInTerminal } from '../terminal/TerminalToggle';
 import { closeOpenMarkdown, splitBlocks } from './stream';
 
 const components: Components = {
@@ -12,7 +13,15 @@ const components: Components = {
     const props = (child as ReactElement<{ className?: string; children?: ReactNode }>).props;
     const language = /language-([\w+-]+)/.exec(props.className ?? '')?.[1];
     const code = String(props.children ?? '').replace(/\n$/, '');
-    return <CodeBlock code={code} language={language} maxLines={40} />;
+    // Commands can go straight into your terminal (typed, not run: Enter is yours).
+    return (
+      <CodeBlock
+        code={code}
+        language={language}
+        maxLines={40}
+        actions={isShellCode(language) ? <RunInTerminal code={code} /> : undefined}
+      />
+    );
   },
   code({ children }) {
     return <InlineCode>{children}</InlineCode>;

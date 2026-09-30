@@ -39,7 +39,13 @@ back exactly where they were.
   whatever is still running.
 - **In Conch's colours.** The ANSI palette, cursor and selection come from Nacre
   tokens (light and dark), in Geist Mono. It uses the GPU renderer where it can, and
-  falls back to the DOM renderer, invisibly, where it can't.
+  falls back to the DOM renderer, invisibly, where it can't: when the WebGL context
+  is lost, or when the GPU canvas comes out at CSS rather than device pixels on a
+  high-density screen (seen with emulated scaling), which would show the text at
+  twice its size.
+- **Off means out of the way.** With terminals turned off, the header button and
+  the ⌘K commands go. The shortcut still opens the panel, to say it's off, and on
+  this computer offers **Turn it on** in one click.
 - **It works with the assistant, never behind your back.**
   - Select output and **Ask** puts it in the composer with your question.
   - Shell code blocks in replies get **Run in terminal**: it types the command and

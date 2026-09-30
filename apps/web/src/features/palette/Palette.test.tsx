@@ -1,4 +1,4 @@
-import type { SearchPreview, SearchResults } from '@conch/protocol';
+import type { SearchPreview, SearchResults, TerminalStatus } from '@conch/protocol';
 import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useLocation } from 'react-router';
@@ -10,7 +10,7 @@ import { Palette } from './Palette';
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  useUi.setState({ paletteOpen: false, find: null });
+  useUi.setState({ paletteOpen: false, find: null, terminalOpen: false });
 });
 
 const conversation = (id: string, title: string, updatedAt = Date.now()) => ({
@@ -243,5 +243,49 @@ describe('Palette search', () => {
     expect(await screen.findByRole('option', { name: /Settings: Browser/ })).toBeInTheDocument();
     await user.keyboard('{Enter}');
     await waitFor(() => expect(useUi.getState().settings).toBe('browser'));
+  });
+
+  it('opens the terminal by the words people use for it, and hides it while it’s off', async () => {
+    const user = userEvent.setup();
+    const terminal = (enabled: boolean): TerminalStatus => ({
+      available: enabled,
+      unavailable: enabled ? undefined : 'Turned off in Settings › Terminal.',
+      backend: 'pty',
+      settings: {
+        enabled,
+        allowRemote: false,
+        shell: 'auto',
+        fontSize: 13,
+        cursorBlink: true,
+        screenReader: false,
+      },
+      shells: [],
+      terminals: [],
+      remote: false,
+      healed: [],
+    });
+    let enabled = true;
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'GET /api/terminal': () => terminal(enabled),
+    });
+    const { client } = renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'shell');
+    expect(await screen.findByRole('option', { name: /Show the terminal/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Settings: Terminal/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('option', { name: /Show the terminal/ }));
+    expect(useUi.getState().terminalOpen).toBe(true);
+
+    // Turned off, only its settings answer (that's where it turns back on).
+    enabled = false;
+    await act(() => client.invalidateQueries({ queryKey: ['terminal'] }));
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'terminal');
+    expect(await screen.findByRole('option', { name: /Settings: Terminal/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Show the terminal/ })).toBeNull();
+    expect(screen.queryByRole('option', { name: /New terminal/ })).toBeNull();
   });
 });

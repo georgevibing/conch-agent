@@ -8,6 +8,7 @@ import {
   Gauge,
   Globe,
   Palette as PaletteIcon,
+  SquareTerminal,
   Plus,
   Repeat,
   ShieldCheck,
@@ -26,6 +27,7 @@ import { modelKey, useTurnOptions } from '../models/useTurnOptions';
 import { useRoutines } from '../routines/queries';
 import { fuzzyFilter, type FuzzyMatch } from '../search/fuzzy';
 import { useSkills } from '../skills/queries';
+import { useTerminalStatus } from '../terminal/queries';
 
 /** Something ⌘K can find and act on that isn't a chat or a message. */
 export interface Findable {
@@ -75,6 +77,12 @@ const settingsPlaces: { tab: SettingsTab; label: string; keywords: string; icon:
     icon: <Globe />,
   },
   {
+    tab: 'terminal',
+    label: 'Terminal',
+    keywords: 'shell console command line powershell bash zsh remote devices',
+    icon: <SquareTerminal />,
+  },
+  {
     tab: 'appearance',
     label: 'Appearance',
     keywords: 'theme dark light colour',
@@ -121,10 +129,13 @@ export function useFindables(query: string, conversationId: string | undefined):
   const openSettings = useUi((s) => s.openSettings);
   const setComposerText = useUi((s) => s.setComposerText);
   const openBrowser = useUi((s) => s.openBrowser);
+  const toggleTerminal = useUi((s) => s.setTerminalOpen);
+  const newTerminal = useUi((s) => s.newTerminal);
   const turn = useTurnOptions(conversationId);
   const { data: skills } = useSkills();
   const { data: integrations } = useIntegrations();
   const { data: routines } = useRoutines();
+  const { data: terminal } = useTerminalStatus();
   const q = query.trim();
   if (!q) return [];
 
@@ -285,6 +296,25 @@ export function useFindables(query: string, conversationId: string | undefined):
           },
         ]
       : []),
+    // Turned off in Settings, the terminal stays out of the way here too.
+    ...(terminal?.settings.enabled === false
+      ? []
+      : [
+          {
+            id: 'terminal',
+            label: 'Show the terminal',
+            keywords: 'shell console command line cli',
+            icon: <SquareTerminal />,
+            run: () => toggleTerminal(true),
+          },
+          {
+            id: 'new-terminal',
+            label: 'New terminal',
+            keywords: 'shell console open another',
+            icon: <SquareTerminal />,
+            run: () => newTerminal(),
+          },
+        ]),
     ...settingsPlaces.map((p) => ({
       id: `settings-${p.tab}`,
       label: `Settings: ${p.label}`,

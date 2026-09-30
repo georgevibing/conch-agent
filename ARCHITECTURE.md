@@ -222,6 +222,28 @@ src/
 /api/browser/repair`, `POST /api/browser/wipe`, `POST /api/browser/:id/control`
     (hand back from the transcript), and `GET /api/browser/shots/:id/:shot`.
     `browser.status` is broadcast on every change, install progress included.
+- **The terminal** (`terminal/`, [ADR 0015](./docs/adr/0015-terminal.md)).
+  - **Backends** (`backend.ts`). `node-pty` where it loads, else a small Python PTY
+    bridge (POSIX), else a basic pipe-backed shell. `shells.ts` finds the shells
+    installed (PowerShell 7, Windows PowerShell, Command Prompt, Git Bash; `$SHELL`,
+    zsh, bash, fish, sh), each with its "no profile" arguments.
+  - **Sessions** (`session.ts`). Output is batched (6 ms) and kept as 2 MB of
+    scrollback in memory, replayed on attach. A viewer that falls 4 MB behind pauses
+    the shell. The OSC title becomes the tab's name. A shell that exits non-zero within
+    2.5 s is `endedEarly`, and the app offers to start it without the profile.
+  - **Who may open one** (`service.ts`). Local requests, yes. Other devices only
+    with `allowRemote` on, and a verification from the last 10 minutes for every
+    open and attach. Terminals are owned by the session or key that opened them.
+    Signing that out (`Gatekeeper.signedOut`) or revoking the key ends them.
+  - **Socket.** `POST /api/terminal/:id/ticket` hands out a one-time, 60 s,
+    owner-bound ticket. `/api/terminal/live?ticket=` redeems it (1008 without one).
+    Input (≤ 64 KB) and resizes (clamped) are Zod-validated. Sign-in is re-checked
+    while it's open.
+  - **REST.** `GET /api/terminal` (status, shells, terminals), `PATCH
+/api/terminal/settings`, `POST /api/terminal`, `DELETE /api/terminal/:id`.
+    `terminal.changed` is broadcast on every change.
+  - **Limits.** 12 terminals. One nobody watched and that printed nothing for 24 h
+    is ended, and an ended one is forgotten after 10 minutes.
 - **Search.** `search/` keeps a SQLite FTS5 (trigram) index of every message in
   `~/.conch/search.db`, fed by the conversation event stream and caught up on start;
   `GET /api/search` ranks and groups hits with snippets, `GET /api/search/preview`
@@ -233,7 +255,8 @@ src/
   `skills.json` (modes for skills Conch doesn't own), `api-sessions/<id>.json` (the
   transcript a plain model API needs, since it keeps no session of its own),
   `browser.json` (browser settings, sites you always allow) + `browser/profile/` +
-  `browser/shots/`, `workspace/` (default cwd).
+  `browser/shots/`, `terminal.json` (terminal settings; terminals themselves are never
+  written to disk), `workspace/` (default cwd).
 
 See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
 [ADR 0004 — Engines](./docs/adr/0004-engines.md).
@@ -332,6 +355,12 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
     private addresses need "Open local apps" (recent verification, and flagged by
     the checkup). It asks per site and for anything high-stakes, and the model
     never sees secret fields: you type them after a handoff.
+  - the agent has no way into your terminals, and a shell's environment has no
+    `CONCH_*` variables.
+- **Terminal guards:** other devices need `allowRemote` (itself behind recent
+  verification, and flagged by the checkup) plus a fresh verification per open and
+  attach; one-time owner-bound socket tickets; sign-out and key revocation end the
+  terminals they opened; input and output are never logged.
 - **Memory:** at most 50 conversations are held in memory; idle ones are dropped and reloaded from disk.
 - **Storage:** `~/.conch` is tightened to 0700/0600 at start-up, and every store
   builds paths with `safeJoin`. All wire ids are `Id` (no dots or slashes).

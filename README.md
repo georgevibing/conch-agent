@@ -19,6 +19,12 @@ time. It asks before it acts on a new site or does anything significant, and han
 you the keyboard for passwords, which it never sees. See
 [docs/BROWSER.md](./docs/BROWSER.md).
 
+**A terminal, a keystroke away.** <kbd>Ctrl</kbd> + <kbd>`</kbd> opens a real shell
+on the computer Conch runs on, in Conch's own colours. It keeps running while it's
+hidden, and "Run in terminal" on the assistant's commands types them in for you to
+check. Other devices can't open one unless you allow it. See
+[docs/TERMINAL.md](./docs/TERMINAL.md).
+
 ## Quick start
 
 ```bash
@@ -63,6 +69,7 @@ For an authenticated HTTPS reverse proxy, see [docs/REVERSE_PROXY.md](./docs/REV
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — system design and security model
 - [docs/SECURITY.md](./docs/SECURITY.md) — signing in, phones, recovery, warnings
 - [docs/BROWSER.md](./docs/BROWSER.md) — the browser: watching, taking over, what it asks
+- [docs/TERMINAL.md](./docs/TERMINAL.md) — the terminal: shortcuts, the assistant, other devices
 - [docs/design/NACRE.md](./docs/design/NACRE.md) — the design language
 - [docs/adr](./docs/adr) — decision records
 

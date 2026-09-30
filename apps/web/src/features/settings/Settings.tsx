@@ -31,6 +31,7 @@ import {
   Gauge,
   Globe,
   Monitor,
+  SquareTerminal,
   Moon,
   Palette,
   Plus,
@@ -50,6 +51,7 @@ import { relativeTime } from '../../lib/time';
 import { useAutoFocus } from '../../lib/useAutoFocus';
 import { SecurityTab } from '../auth/SecurityTab';
 import { BrowserSettings } from '../browser/BrowserSettings';
+import { TerminalSettings } from '../terminal/TerminalSettings';
 import { toneOptions } from '../onboarding/tones';
 import { ProvidersTab } from '../providers/ProvidersTab';
 import { UsageTab } from '../usage/UsageTab';
@@ -423,6 +425,7 @@ const tabs: { value: SettingsTab; label: string; icon: ReactNode }[] = [
   { value: 'security', label: 'Security', icon: <ShieldCheck /> },
   { value: 'providers', label: 'Providers', icon: <Cpu /> },
   { value: 'browser', label: 'Browser', icon: <Globe /> },
+  { value: 'terminal', label: 'Terminal', icon: <SquareTerminal /> },
   { value: 'appearance', label: 'Appearance', icon: <Palette /> },
 ];
 
@@ -484,6 +487,9 @@ export function Settings() {
               </Tabs.Content>
               <Tabs.Content value="browser">
                 <BrowserSettings />
+              </Tabs.Content>
+              <Tabs.Content value="terminal">
+                <TerminalSettings />
               </Tabs.Content>
               <Tabs.Content value="appearance">
                 <AppearanceTab />

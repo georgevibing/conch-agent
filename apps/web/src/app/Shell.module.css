@@ -37,6 +37,18 @@
     min-block-size: 0;
   }
 
+  .area {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+    min-block-size: 0;
+  }
+
+  .area[data-covered] {
+    display: none;
+  }
+
   .header {
     display: flex;
     align-items: center;
