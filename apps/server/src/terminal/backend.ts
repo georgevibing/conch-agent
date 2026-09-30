@@ -1,6 +1,8 @@
 import { spawn, spawnSync } from 'node:child_process';
+import { accessSync, chmodSync, constants, existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { platform } from 'node:os';
+import { arch, platform } from 'node:os';
+import { dirname, join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import type { Readable, Writable } from 'node:stream';
 
@@ -56,8 +58,46 @@ interface NodePty {
 
 const require = createRequire(import.meta.url);
 
-function nodePty(): PtyBackend {
+/**
+ * node-pty starts shells on macOS and Linux through a small `spawn-helper`
+ * program, and some installs unpack it without its execute bit (node-pty 1.1
+ * prebuilds through pnpm do), so every terminal fails with "posix_spawnp
+ * failed". Give the bit back. Returns false when it's still not runnable.
+ */
+export function ensureSpawnHelper(
+  root: string,
+  heal: (message: string) => void,
+  system = `${platform()}-${arch()}`,
+): boolean {
+  if (system.startsWith('win32')) return true;
+  const candidates = [
+    join(root, 'prebuilds', system, 'spawn-helper'),
+    join(root, 'build', 'Release', 'spawn-helper'),
+  ].filter((file) => existsSync(file));
+  let ok = true;
+  for (const file of candidates) {
+    try {
+      accessSync(file, constants.X_OK);
+      continue;
+    } catch {
+      // Not runnable: fix it below.
+    }
+    try {
+      chmodSync(file, 0o755);
+      accessSync(file, constants.X_OK);
+      heal('The terminal’s helper program had lost permission to run, so Conch gave it back.');
+    } catch {
+      ok = false;
+    }
+  }
+  return ok;
+}
+
+function nodePty(heal: (message: string) => void = () => {}): PtyBackend {
   const pty = require('node-pty') as NodePty;
+  const root = dirname(require.resolve('node-pty/package.json'));
+  // A helper that can't run means no shell can start: fall back instead.
+  if (!ensureSpawnHelper(root, heal)) throw new Error('node-pty spawn-helper is not runnable');
   return {
     kind: 'pty',
     spawn: (file, args, options) => {
@@ -246,7 +286,7 @@ function findPython(): string | undefined {
 /** The best way to run terminals here, noting when it had to fall back. */
 export function loadBackend(heal: (message: string) => void): PtyBackend {
   try {
-    return nodePty();
+    return nodePty(heal);
   } catch {
     // The native module didn't load (no prebuild for this system, or the build failed).
   }
