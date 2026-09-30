@@ -46,6 +46,16 @@ export interface RepairPanelProps extends Omit<ComponentProps<'section'>, 'title
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+/** Within a group, what needs you comes first. */
+const rank: Record<RepairState, number> = {
+  'needs-you': 0,
+  warning: 1,
+  fixed: 2,
+  checking: 3,
+  ok: 4,
+  off: 5,
+};
+
 const icon: Record<RepairState, ReactNode> = {
   checking: <Spinner size="xs" label={null} />,
   ok: <Check />,
@@ -165,6 +175,7 @@ export function RepairPanel({
               <ul className={styles.rows}>
                 {items
                   .filter((i) => i.group === group)
+                  .sort((a, b) => rank[a.state] - rank[b.state])
                   .map((item) => (
                     <li key={item.id} className={styles.row} data-state={item.state}>
                       <span className={styles.icon} aria-hidden>

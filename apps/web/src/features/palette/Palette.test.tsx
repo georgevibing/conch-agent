@@ -285,6 +285,14 @@ describe('Palette search', () => {
     await user.type(screen.getByRole('combobox'), 'providers');
     expect(await screen.findByRole('option', { name: /Settings: Providers/ })).toBeInTheDocument();
 
+    // Something's broken: "repair" (or "fix") finds the one button for everything.
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'fix');
+    expect(await screen.findByRole('option', { name: /Repair everything/ })).toBeInTheDocument();
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'backup');
+    expect(await screen.findByRole('option', { name: /Settings: Health/ })).toBeInTheDocument();
+
     // Keywords count by whole-word prefix, not scattered letters.
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'forget');

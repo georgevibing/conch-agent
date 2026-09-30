@@ -18,11 +18,13 @@ import {
   SquareSlash,
   User,
   WandSparkles,
+  Wrench,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
 import { useUi, type SettingsTab } from '../../app/ui';
+import { doctorApi } from '../health/api';
 import { useIntegrations } from '../integrations/queries';
 import { modelLabel, providerLogos } from '../models/catalog';
 import { modelKey, useTurnOptions } from '../models/useTurnOptions';
@@ -331,6 +333,17 @@ export function useFindables(query: string, conversationId: string | undefined):
             run: () => newTerminal(),
           },
         ]),
+    {
+      id: 'repair',
+      label: 'Repair everything',
+      keywords: 'fix broken doctor check health not working help',
+      icon: <Wrench />,
+      // Starts at once; the Health tab shows it filling in.
+      run: () => {
+        void doctorApi.repair().catch(() => undefined);
+        openSettings('health');
+      },
+    },
     ...settingsPlaces.map((p) => ({
       id: `settings-${p.tab}`,
       label: `Settings: ${p.label}`,
