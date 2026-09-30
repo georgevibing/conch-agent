@@ -22,3 +22,4 @@ export * from './Integrations';
 export * from './Providers';
 export * from './Skills';
 export * from './Browser';
+export * from './Terminal';

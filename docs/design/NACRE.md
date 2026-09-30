@@ -133,6 +133,32 @@ assistant's presence, and it wears the pearl:
 The screen is a `<button>` (take over) with a hidden `<textarea>` for the keys, so it
 stays within jsx-a11y strict and works with input methods and phone keyboards.
 
+### The terminal
+
+The terminal is a tool you reach for, so it is plain, quick and quiet. It is a drawer
+from the bottom of the main area, never a page or a modal. The chat above keeps its
+place.
+
+- **Its own palette.** `--nc-term-bg`, `--nc-term-fg`, `--nc-term-cursor`,
+  `--nc-term-selection` and the 16 ANSI colours (`--nc-term-black…bright-white`) are
+  tokens with `light-dark()` values. They're tuned so every colour is readable on
+  the terminal background in both themes: light mode's "white" is a mid grey, and
+  yellow is ochre. The cursor is the accent. xterm.js reads the tokens as computed
+  colours and repaints when the theme or accent changes.
+- **Type.** Geist Mono at 13 px (Settings offers 12 to 17), line height 1.2, a
+  2 px bar cursor.
+- **Tabs, not chrome.** A tab is an icon and a name. A shell that printed something
+  while you weren't looking shows a small thinking pearl, and an ended one shows an
+  "ended" badge. The close × is for pointers only; keyboards use <kbd>Delete</kbd>
+  on the tab, or **Close this terminal**.
+- **Notices, not dead ends.** Connecting, ended, "turned off" and "not on this
+  device" are one centred card on the terminal's own background, with at most one
+  solid button (the likely next step).
+- **Touch.** On coarse pointers, a key row (Esc, Tab, Ctrl, arrows) sits under the
+  screen. Ctrl is a toggle that applies to the next key.
+- **The seam.** A horizontal `ResizeHandle` (`axis="y"`) sits on the drawer's top
+  edge, so dragging it or using the arrow keys resizes the terminal.
+
 ## Interaction checklist (every interactive component)
 
 - [ ] Hover: subtle fill/shadow change, Lustre where appropriate, `@media (hover: hover)` only

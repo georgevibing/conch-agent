@@ -33,6 +33,30 @@
     block-size: 3.5rem;
   }
 
+  /* Above a drawer: a wide, short seam. */
+  .handle[data-axis='y'] {
+    inline-size: auto;
+    block-size: var(--nc-space-2);
+    cursor: row-resize;
+  }
+
+  .handle[data-axis='y'] .grip {
+    inline-size: 2.5rem;
+    block-size: 4px;
+  }
+
+  @media (hover: hover) {
+    .handle[data-axis='y']:hover .grip {
+      inline-size: 3.5rem;
+      block-size: 4px;
+    }
+  }
+
+  .handle[data-axis='y'][data-dragging] .grip {
+    inline-size: 3.5rem;
+    block-size: 4px;
+  }
+
   .handle:focus-visible .grip {
     outline: 2px solid var(--nc-ring);
     outline-offset: 2px;

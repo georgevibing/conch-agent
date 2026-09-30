@@ -226,6 +226,32 @@
       var(--nc-pearl-1), var(--nc-pearl-2), var(--nc-pearl-3), var(--nc-pearl-4), var(--nc-pearl-5),
       var(--nc-pearl-1);
 
+    /* ── Terminal (ANSI) ─────────────────────────────────────────────────
+     * The 16 colours programs print in, tuned to sit on the terminal's
+     * surface in both modes: readable, a little muted, never neon. In light
+     * mode "white" is a mid grey, so text printed in it can still be read.
+     */
+    --nc-term-bg: var(--nc-surface-sunken);
+    --nc-term-fg: var(--nc-text);
+    --nc-term-cursor: var(--nc-accent-9);
+    --nc-term-selection: color-mix(in oklch, var(--nc-accent-9) 32%, transparent);
+    --nc-term-black: light-dark(oklch(0.3 0.012 60), oklch(0.38 0.012 60));
+    --nc-term-red: light-dark(oklch(0.53 0.17 25), oklch(0.72 0.14 25));
+    --nc-term-green: light-dark(oklch(0.5 0.12 150), oklch(0.77 0.12 150));
+    --nc-term-yellow: light-dark(oklch(0.56 0.11 80), oklch(0.84 0.12 88));
+    --nc-term-blue: light-dark(oklch(0.5 0.14 255), oklch(0.74 0.11 255));
+    --nc-term-magenta: light-dark(oklch(0.52 0.15 330), oklch(0.76 0.12 330));
+    --nc-term-cyan: light-dark(oklch(0.53 0.1 205), oklch(0.79 0.09 205));
+    --nc-term-white: light-dark(oklch(0.52 0.01 60), oklch(0.86 0.01 60));
+    --nc-term-bright-black: light-dark(oklch(0.46 0.01 60), oklch(0.56 0.012 60));
+    --nc-term-bright-red: light-dark(oklch(0.58 0.19 25), oklch(0.78 0.14 25));
+    --nc-term-bright-green: light-dark(oklch(0.55 0.13 150), oklch(0.83 0.13 150));
+    --nc-term-bright-yellow: light-dark(oklch(0.6 0.12 80), oklch(0.9 0.12 90));
+    --nc-term-bright-blue: light-dark(oklch(0.55 0.15 255), oklch(0.8 0.11 255));
+    --nc-term-bright-magenta: light-dark(oklch(0.57 0.16 330), oklch(0.82 0.12 330));
+    --nc-term-bright-cyan: light-dark(oklch(0.58 0.1 205), oklch(0.85 0.09 205));
+    --nc-term-bright-white: light-dark(oklch(0.34 0.01 60), oklch(0.97 0.005 60));
+
     /* ── Typography ──────────────────────────────────────────────────── */
     --nc-font-sans:
       'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;

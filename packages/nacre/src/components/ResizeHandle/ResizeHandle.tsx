@@ -27,6 +27,11 @@ export interface ResizeHandleProps extends Omit<
   label: string;
   /** Pixels per arrow-key press (Shift: ×4). */
   step?: number;
+  /**
+   * `x`: a vertical seam between side-by-side panes (drag left/right).
+   * `y`: a horizontal seam above a drawer (drag up/down).
+   */
+  axis?: 'x' | 'y';
 }
 
 /**
@@ -43,10 +48,13 @@ export function ResizeHandle({
   grows = 'start',
   label,
   step = 24,
+  axis = 'x',
   className,
   ...props
 }: ResizeHandleProps) {
-  const drag = useRef<{ x: number; value: number } | null>(null);
+  const drag = useRef<{ at: number; value: number } | null>(null);
+  const at = (event: PointerEvent<HTMLDivElement>) =>
+    axis === 'x' ? event.clientX : event.clientY;
   const [dragging, setDragging] = useState(false);
   const clamp = (n: number) => Math.min(max, Math.max(min, Math.round(n)));
   const sign = grows === 'start' ? -1 : 1;
@@ -55,12 +63,12 @@ export function ResizeHandle({
     if (event.button !== 0) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    drag.current = { x: event.clientX, value };
+    drag.current = { at: at(event), value };
     setDragging(true);
   };
   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
     if (!drag.current) return;
-    onValueChange(clamp(drag.current.value + sign * (event.clientX - drag.current.x)));
+    onValueChange(clamp(drag.current.value + sign * (at(event) - drag.current.at)));
   };
   const onPointerUp = () => {
     drag.current = null;
@@ -68,9 +76,10 @@ export function ResizeHandle({
   };
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const by = event.shiftKey ? step * 4 : step;
+    const [back, forward] = axis === 'x' ? ['ArrowLeft', 'ArrowRight'] : ['ArrowUp', 'ArrowDown'];
     const keys: Record<string, number> = {
-      ArrowLeft: value - sign * by,
-      ArrowRight: value + sign * by,
+      [back]: value - sign * by,
+      [forward]: value + sign * by,
       Home: min,
       End: max,
     };
@@ -83,14 +92,15 @@ export function ResizeHandle({
   return (
     <div
       role="slider"
-      aria-orientation="horizontal"
-      aria-valuetext={`${Math.round(value)} pixels wide`}
+      aria-orientation={axis === 'x' ? 'horizontal' : 'vertical'}
+      aria-valuetext={`${Math.round(value)} pixels ${axis === 'x' ? 'wide' : 'tall'}`}
       aria-label={label}
       aria-valuenow={Math.round(value)}
       aria-valuemin={min}
       aria-valuemax={max}
       tabIndex={0}
       className={cx(styles.handle, className)}
+      data-axis={axis}
       data-dragging={dragging || undefined}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}

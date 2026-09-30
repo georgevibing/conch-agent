@@ -42,4 +42,27 @@ describe('ResizeHandle', () => {
     fireEvent.pointerMove(handle, { clientX: 100 });
     expect(onValueChange).toHaveBeenLastCalledWith(600);
   });
+
+  it('resizes a drawer from above with up and down', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    renderNacre(
+      <ResizeHandle
+        axis="y"
+        label="Resize the terminal"
+        value={300}
+        min={160}
+        max={700}
+        onValueChange={onValueChange}
+      />,
+    );
+    const handle = screen.getByRole('slider', { name: 'Resize the terminal' });
+    expect(handle).toHaveAttribute('aria-orientation', 'vertical');
+    handle.focus();
+    await user.keyboard('{ArrowUp}');
+    expect(onValueChange).toHaveBeenLastCalledWith(324);
+    fireEvent.pointerDown(handle, { button: 0, clientY: 500 });
+    fireEvent.pointerMove(handle, { clientY: 400 });
+    expect(onValueChange).toHaveBeenLastCalledWith(400);
+  });
 });

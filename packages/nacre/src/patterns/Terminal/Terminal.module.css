@@ -1,0 +1,386 @@
+@layer nacre.components {
+  /* ── Panel ─────────────────────────────────────────────────────────── */
+  .panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    min-block-size: 0;
+    block-size: 100%;
+    background: var(--nc-term-bg);
+    border-block-start: 1px solid var(--nc-border-subtle);
+    box-shadow: 0 -1px 0 color-mix(in oklch, var(--nc-surface-hi) 60%, transparent) inset;
+    animation: term-surface var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  @keyframes term-surface {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .tabsRoot {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-block-size: 0;
+  }
+
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    min-block-size: calc(var(--nc-control-sm) + var(--nc-space-2));
+    padding: var(--nc-space-1) var(--nc-space-2) var(--nc-space-1) var(--nc-space-3);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    border-block-end: 1px solid var(--nc-border-subtle);
+  }
+
+  .tabs {
+    display: flex;
+    flex: 0 1 auto;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .tab {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    max-inline-size: 16rem;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    color: var(--nc-text-muted);
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .tab[data-active] {
+    background: var(--nc-term-bg);
+    color: var(--nc-text);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  @media (hover: hover) {
+    .tab:not([data-active]):hover {
+      background: var(--nc-wash-1);
+      color: var(--nc-text);
+    }
+  }
+
+  .tabTrigger {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+    block-size: var(--nc-control-sm);
+    margin: 0;
+    padding-inline: var(--nc-space-2) var(--nc-space-1);
+    border: 0;
+    border-radius: inherit;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    cursor: pointer;
+  }
+
+  .tabTrigger:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -1px;
+  }
+
+  .tabIcon {
+    display: inline-grid;
+    flex-shrink: 0;
+    place-items: center;
+  }
+
+  .tabIcon > svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .tab[data-active] .tabIcon > svg {
+    color: var(--nc-accent-10);
+  }
+
+  .tabTitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* New output in a tab you're not looking at: one small pearl. */
+  .activity {
+    flex-shrink: 0;
+    inline-size: 6px;
+    block-size: 6px;
+    border-radius: 50%;
+    background: conic-gradient(from var(--nc-angle), var(--nc-pearl-spectrum));
+    box-shadow: 0 0 6px color-mix(in oklch, var(--nc-pearl-3) 60%, transparent);
+    animation: term-glint 3s linear infinite;
+  }
+
+  @keyframes term-glint {
+    to {
+      --nc-angle: 360deg;
+    }
+  }
+
+  .tabEnded {
+    flex-shrink: 0;
+    padding-inline: var(--nc-space-1);
+    border-radius: var(--nc-radius-xs);
+    background: var(--nc-wash-2);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-2xs);
+  }
+
+  .tab[data-status='exited'] .tabTitle {
+    color: var(--nc-text-subtle);
+  }
+
+  .tabClose {
+    appearance: none;
+    display: inline-grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    margin-inline-end: var(--nc-space-1);
+    padding: 0;
+    border: 0;
+    border-radius: var(--nc-radius-xs);
+    background: none;
+    color: var(--nc-text-subtle);
+    cursor: pointer;
+    opacity: 0;
+    transition:
+      opacity var(--nc-duration-fast) var(--nc-ease-out),
+      background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .tabClose > svg {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  .tab[data-active] .tabClose {
+    opacity: 1;
+  }
+
+  @media (hover: hover) {
+    .tab:hover .tabClose {
+      opacity: 1;
+    }
+
+    .tabClose:hover {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+  }
+
+  @media (hover: none) {
+    .tabClose {
+      opacity: 1;
+    }
+  }
+
+  .new {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+  }
+
+  .barEnd {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--nc-space-0-5);
+    margin-inline-start: auto;
+  }
+
+  /* ── Body and screen ───────────────────────────────────────────────── */
+  .body {
+    position: relative;
+    flex: 1;
+    min-block-size: 0;
+  }
+
+  .content {
+    position: absolute;
+    inset: 0;
+    outline: none;
+  }
+
+  .content[hidden] {
+    display: block;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .view {
+    position: relative;
+    inline-size: 100%;
+    block-size: 100%;
+    padding: var(--nc-space-2) var(--nc-space-1) var(--nc-space-1) var(--nc-space-3);
+    background: var(--nc-term-bg);
+  }
+
+  .screen {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  /* xterm's own chrome, in Nacre's materials. */
+  .screen :global(.xterm) {
+    block-size: 100%;
+  }
+
+  .screen :global(.xterm-viewport) {
+    background-color: transparent !important;
+    scrollbar-width: thin;
+    scrollbar-color: var(--nc-border-strong) transparent;
+  }
+
+  .screen :global(.xterm:focus) {
+    outline: none;
+  }
+
+  .empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--nc-space-2);
+    block-size: 100%;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+  }
+
+  .empty p {
+    margin: 0;
+  }
+
+  .emptyIcon {
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    color: var(--nc-text-subtle);
+  }
+
+  /* ── Notices over the screen ───────────────────────────────────────── */
+  .notice {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: var(--nc-space-4);
+    background: color-mix(in oklch, var(--nc-term-bg) 72%, transparent);
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .noticeCard {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--nc-space-2);
+    max-inline-size: 26rem;
+    padding: var(--nc-space-4) var(--nc-space-5);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-3);
+    text-align: center;
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .noticeTitle {
+    margin: 0;
+    color: var(--nc-text);
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  .noticeDetail {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    text-wrap: pretty;
+  }
+
+  .noticeActions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--nc-space-2);
+    margin-block-start: var(--nc-space-1);
+  }
+
+  /* ── Keys for touch screens ────────────────────────────────────────── */
+  .keys {
+    display: flex;
+    gap: var(--nc-space-1);
+    padding: var(--nc-space-1-5) var(--nc-space-2);
+    overflow-x: auto;
+    background: var(--nc-surface);
+    border-block-start: 1px solid var(--nc-border-subtle);
+    scrollbar-width: none;
+  }
+
+  .key {
+    appearance: none;
+    flex-shrink: 0;
+    min-inline-size: 2.75rem;
+    block-size: 2.25rem;
+    margin: 0;
+    padding-inline: var(--nc-space-2);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text);
+    font: inherit;
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-sm);
+    touch-action: manipulation;
+  }
+
+  .key[aria-pressed='true'] {
+    background: var(--nc-accent-9);
+    color: var(--nc-accent-contrast);
+  }
+
+  .key:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 1px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .panel,
+    .activity {
+      animation: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .panel,
+  :global([data-nacre-motion='reduced']) .activity {
+    animation: none;
+  }
+}

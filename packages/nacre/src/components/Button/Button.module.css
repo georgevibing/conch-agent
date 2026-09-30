@@ -257,6 +257,13 @@
     }
   }
 
+  /* A toggle that's on (a panel it opens is showing) keeps a quiet wash. */
+  .button[data-variant='ghost'][aria-pressed='true'] {
+    --btn-bg: var(--nc-wash-2);
+    --btn-bg-hover: var(--nc-wash-3);
+    color: var(--nc-text);
+  }
+
   .button[data-variant='ghost'][data-tone='accent'] {
     --btn-fg: var(--nc-accent-11);
     --btn-bg-hover: color-mix(in oklch, var(--nc-accent-9) 10%, transparent);
