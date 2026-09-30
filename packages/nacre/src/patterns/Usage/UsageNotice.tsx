@@ -22,6 +22,11 @@ export interface UsageNoticeProps extends Omit<ComponentProps<'div'>, 'children'
   /** Makes the notice a button that opens the usage details. */
   onOpen?: () => void;
   onDismiss?: () => void;
+  /**
+   * Who answers while this one is at its limit (Settings: "At a usage limit"),
+   * by name. Said only once the limit is reached.
+   */
+  carryOn?: string;
   locale?: string;
   timeZone?: string;
 }
@@ -77,16 +82,20 @@ export function UsageNotice({
   now,
   onOpen,
   onDismiss,
+  carryOn,
   locale,
   timeZone,
   className,
   ...props
 }: UsageNoticeProps) {
   const current = useNow(30_000, now);
-  const text = usageNoticeText(value, current, locale, timeZone);
-  if (!text) return null;
+  const said = usageNoticeText(value, current, locale, timeZone);
+  if (!said) return null;
   const head = headline(value);
   const severity = value.blocked ? 'exhausted' : head.severity;
+  // At the limit with someone to carry on, the question is answered anyway: say by whom.
+  const text =
+    carryOn && severity === 'exhausted' ? `${said} · ${carryOn} answers until then` : said;
 
   const content = (
     <>

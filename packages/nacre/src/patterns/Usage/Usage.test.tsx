@@ -177,6 +177,15 @@ describe('UsageNotice', () => {
     await expectAccessible(container);
   });
 
+  it('says who carries on once a limit is reached, and only then', () => {
+    const { rerender } = renderNacre(
+      <UsageNotice value={planExhausted} now={usageNow} carryOn="OpenRouter" {...tz} />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('OpenRouter answers until then');
+    rerender(<UsageNotice value={planWarning} now={usageNow} carryOn="OpenRouter" />);
+    expect(screen.getByRole('status')).not.toHaveTextContent('OpenRouter');
+  });
+
   it('opens details and dismisses', async () => {
     const onOpen = vi.fn();
     const onDismiss = vi.fn();

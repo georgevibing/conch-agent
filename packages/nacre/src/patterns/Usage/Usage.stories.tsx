@@ -195,6 +195,13 @@ export const NoticeStates: Story = {
         onOpen={() => {}}
         onDismiss={() => {}}
       />
+      <UsageNotice
+        value={usageFixtures.planExhausted}
+        now={usageNow}
+        carryOn="OpenRouter"
+        onOpen={() => {}}
+        onDismiss={() => {}}
+      />
       <UsageNotice value={usageFixtures.meteredCritical} now={usageNow} onDismiss={() => {}} />
       <UsageNotice value={usageFixtures.meteredOverBudget} now={usageNow} onOpen={() => {}} />
       <Text size="xs" tone="subtle">
