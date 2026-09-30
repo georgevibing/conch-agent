@@ -195,8 +195,13 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
       <EngineIssue status={chosenReady ? undefined : engine} issue={engineIssue} />
       <UsageComposerNotice />
       {view.notice && running && (
-        <Callout tone="info" title="Still trying…" className={styles.issue}>
-          {view.notice}
+        // Only a retry is "still trying"; anything else is just a note.
+        <Callout
+          tone="info"
+          title={view.notice.code === 'retry' ? 'Still trying…' : undefined}
+          className={styles.issue}
+        >
+          {view.notice.message}
         </Callout>
       )}
       <Composer

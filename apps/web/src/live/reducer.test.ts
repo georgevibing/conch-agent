@@ -124,7 +124,8 @@ describe('transcript reducer', () => {
       e(1, { type: 'notice', code: 'retry', message: 'Retrying in 2s' }),
       e(2, { type: 'options', options: { effort: 'high' } }),
     ]);
-    expect(view.notice).toBe('Retrying in 2s');
+    // The code travels with it: only a retry is "still trying".
+    expect(view.notice).toEqual({ code: 'retry', message: 'Retrying in 2s' });
     expect(view.options).toEqual({ effort: 'high' });
     view = reduce(
       view,

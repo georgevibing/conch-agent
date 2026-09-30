@@ -89,7 +89,7 @@ export interface ConversationView {
   /** Start of the currently running turn (for elapsed timers). */
   turnStartedAt?: number;
   /** A live, transient notice from the engine (e.g. "retrying…"); clears when progress resumes. */
-  notice?: string;
+  notice?: { code: string; message: string };
   /** The conversation's model/effort/mode overrides, as last seen in the log. */
   options?: TurnOptions;
 }
@@ -295,7 +295,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
     case 'title':
       return { ...base, title: event.title };
     case 'notice':
-      return { ...base, notice: event.message };
+      return { ...base, notice: { code: event.code, message: event.message } };
     case 'options':
       return { ...base, options: event.options };
     case 'integration.issue': {
