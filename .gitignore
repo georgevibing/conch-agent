@@ -13,3 +13,6 @@ coverage/
 /.artifacts/
 test-results/
 playwright-report/
+
+# Git worktrees for parallel work (e.g. an agent on a feature branch).
+/.worktrees/

@@ -3,3 +3,6 @@ dist
 storybook-static
 coverage
 .turbo
+
+# Other checkouts of this repo (git worktrees) format themselves.
+.worktrees
