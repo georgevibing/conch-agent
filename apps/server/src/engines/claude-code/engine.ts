@@ -447,9 +447,13 @@ export class ClaudeCodeEngine implements Engine {
       name: 'conch',
       version: '1.0.0',
       tools: input.tools.map((t) =>
-        tool(t.name, t.description, t.input, async (args) => ({
-          content: sdkContent(await t.run(args)),
-        })),
+        tool(
+          t.name,
+          t.description,
+          t.input,
+          async (args) => ({ content: sdkContent(await t.run(args)) }),
+          { alwaysLoad: t.alwaysLoad, searchHint: t.searchHint },
+        ),
       ),
     });
 

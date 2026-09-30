@@ -34,6 +34,13 @@ export interface HostTool<Shape extends z.ZodRawShape = z.ZodRawShape> {
   description: string;
   input: Shape;
   run(args: z.infer<z.ZodObject<Shape>>): Promise<string | HostToolResult>;
+  /**
+   * Load it into the model's context up front, for engines that otherwise defer
+   * tools until searched for (Claude Code). For the few tools a task starts with.
+   */
+  alwaysLoad?: boolean;
+  /** Words that find it when tools are searched for. */
+  searchHint?: string;
 }
 
 /** A host tool's result as plain text, for engines (and logs) that only take text. */

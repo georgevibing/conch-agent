@@ -169,3 +169,36 @@ describe('browser cards in the transcript', () => {
     );
   });
 });
+
+describe('browsing across an answered question', () => {
+  it('keeps one trail, with the answer under it', () => {
+    const view = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'Search Wikipedia' },
+        step('s1', 'done', 'Opened wikipedia.org'),
+        {
+          type: 'permission.requested',
+          permissionId: 'p1',
+          toolName: 'browser_site',
+          input: {},
+          summary: 'use wikipedia.org',
+          browser: {
+            kind: 'site',
+            site: 'wikipedia.org',
+            url: 'https://wikipedia.org',
+            title: 'Wikipedia',
+            action: 'Click “Search”',
+          },
+        },
+        { type: 'permission.resolved', permissionId: 'p1', decision: 'allow' },
+        step('s2', 'done', 'Clicked “Search”'),
+      ),
+    );
+    show(view);
+    expect(screen.getAllByRole('button', { name: /^Browsed / })).toHaveLength(1);
+    expect(
+      screen.getByRole('button', { name: /Browsed booking\.com · 2 steps/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Allowed on wikipedia.org in this chat')).toBeInTheDocument();
+  });
+});

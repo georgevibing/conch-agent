@@ -60,7 +60,12 @@ function blocks(items: TranscriptItem[]): Block[] {
       if (last?.tools) last.tools.push(item);
       else out.push({ key: `tools-${item.id}`, tools: [item], at });
     } else if (item.kind === 'browser') {
+      // Once a site question is answered, browsing goes on in the same trail
+      // (the answer shows under it), rather than starting a new one.
+      const before = out.at(-2);
+      const answered = last?.item?.kind === 'permission' && last.item.browser && last.item.decision;
       if (last?.browser) last.browser.push(item);
+      else if (answered && before?.browser) before.browser.push(item);
       else out.push({ key: `browser-${item.id}`, browser: [item], at });
     } else {
       out.push({ key: `${item.kind}-${item.id}`, item, at });

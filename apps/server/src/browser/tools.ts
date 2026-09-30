@@ -643,7 +643,7 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
       ),
   };
 
-  return [
+  const all = [
     open,
     read,
     click,
@@ -656,4 +656,8 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
     wait,
     handOff,
   ] as HostTool[];
+  for (const t of all) t.searchHint = 'browser web page website';
+  // A browsing task starts with these, so they're there without a tool search first.
+  for (const t of [open, read, click, type] as HostTool[]) t.alwaysLoad = true;
+  return all;
 }
