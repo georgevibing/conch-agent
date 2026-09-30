@@ -260,6 +260,30 @@ export function computerCheck(services: Services): DoctorCheck {
   };
 }
 
+export function networkCheck(services: Services): DoctorCheck {
+  return {
+    id: 'network',
+    group: COMPUTER,
+    title: 'Internet',
+    async run() {
+      const { online } = await services.network.check();
+      if (online) return [{ id: 'network', group: COMPUTER, title: 'Internet', state: 'ok', message: 'Online.' }];
+      const local = await services.localReady();
+      return [
+        {
+          id: 'network',
+          group: COMPUTER,
+          title: 'Internet',
+          state: 'warning',
+          message: local
+            ? `Offline. ${local.label} answers from this computer until you’re back.`
+            : 'Offline. Messages wait, and go by themselves when you’re back.',
+        },
+      ];
+    },
+  };
+}
+
 export function routinesCheck(services: Services): DoctorCheck {
   return {
     id: 'routines',
@@ -293,6 +317,7 @@ export function registerCoreChecks(services: Services) {
     integrationsCheck(services),
     browserCheck(services),
     searchCheck(services),
+    networkCheck(services),
     computerCheck(services),
     routinesCheck(services),
   ])

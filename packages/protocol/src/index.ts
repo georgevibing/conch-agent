@@ -99,8 +99,26 @@ export const Preferences = z.object({
   effort: EffortChoice.default('auto'),
   fastMode: z.boolean().default(false),
   permissionMode: PermissionMode.default('default'),
+  /**
+   * Offline, answer with a model on this computer (a `local` provider) instead
+   * of holding messages until the internet is back. Only matters once one is set up.
+   */
+  offlineFallback: z.boolean().default(true),
+  /**
+   * When a provider reaches its usage limit, carry on with this one until it
+   * resets. Unset: wait (the chat offers another provider, but never switches by itself).
+   */
+  limitFallback: EngineId.optional(),
 });
 export type Preferences = z.infer<typeof Preferences>;
+
+/** Whether Conch can reach the internet (it checks now and then, and when a provider stops answering). */
+export const NetworkStatus = z.object({
+  online: z.boolean(),
+  /** When it last changed. */
+  since: z.number().optional(),
+});
+export type NetworkStatus = z.infer<typeof NetworkStatus>;
 
 // ── Memory ──────────────────────────────────────────────────────────────────
 
@@ -156,6 +174,8 @@ export const AppState = z.object({
   preferences: Preferences,
   engine: EngineStatus,
   workspace: z.string(),
+  /** Whether Conch can reach the internet right now. */
+  network: NetworkStatus.default({ online: true }),
 });
 export type AppState = z.infer<typeof AppState>;
 
@@ -183,12 +203,19 @@ export const UpdateSettingsBody = z.object({
       effort: EffortChoice,
       fastMode: z.boolean(),
       permissionMode: PermissionMode,
+      offlineFallback: z.boolean(),
+      /** `null` goes back to waiting for the limit to reset. */
+      limitFallback: EngineId.nullable(),
     })
     .partial()
     .optional(),
   onboarded: z.boolean().optional(),
 });
 export type UpdateSettingsBody = z.infer<typeof UpdateSettingsBody>;
+
+/** Send a message that's waiting for the internet now — optionally with another provider. */
+export const ReleaseTurnBody = z.object({ engine: EngineId.optional() }).strict();
+export type ReleaseTurnBody = z.infer<typeof ReleaseTurnBody>;
 
 // ── Conversations ───────────────────────────────────────────────────────────
 
@@ -327,6 +354,21 @@ export const ConversationEvent = z.discriminatedUnion('type', [
   /** The agent handed the browser to you (sign in, a captcha) — and later, that you handed it back. */
   z.object({ ...logged, type: z.literal('browser.handoff'), handoff: BrowserHandoff }),
   /** The agent created or changed a routine from this chat; rendered as an inline card. */
+  /**
+   * Offline: the message waits here and goes by itself when the internet is
+   * back (or now, with a model on this computer).
+   */
+  z.object({ ...logged, type: z.literal('turn.held'), reason: z.literal('offline') }),
+  /** This turn was answered by another provider than the chat's, and why. */
+  z.object({
+    ...logged,
+    type: z.literal('turn.routed'),
+    from: EngineId,
+    to: EngineId,
+    reason: z.enum(['offline', 'limit']),
+    /** One plain sentence: "Claude Code's limit resets at 15:00, so OpenRouter answered." */
+    message: z.string(),
+  }),
   z.object({
     ...logged,
     type: z.literal('routine'),
@@ -431,6 +473,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('terminal.changed') }),
   /** The browser started, stopped, is installing (with progress), healed itself or needs you. */
   z.object({ type: z.literal('browser.status'), status: BrowserStatus }),
+  /** Conch went offline, or came back. */
+  z.object({ type: z.literal('network.status'), network: NetworkStatus }),
   /** Repair everything: the report as it fills in. */
   z.object({ type: z.literal('doctor.report'), report: DoctorReport }),
   /** Conch fixed something on its own: a quiet note, never an alert. */

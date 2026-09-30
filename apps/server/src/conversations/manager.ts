@@ -96,8 +96,31 @@ export interface TurnResult {
   outcome: 'success' | 'interrupted' | 'error';
   usage?: Usage;
   error?: string;
+  /** Why it failed, when Conch can tell. */
+  problem?: TurnProblem;
   /** Text of the last assistant message in the turn. */
   finalText: string;
+}
+
+/**
+ * Who answers a turn (ADR 0018): the chat's own provider, another one (the
+ * model on this computer while offline; your pick when a limit is reached),
+ * or nobody yet — offline, the message waits and goes when the internet's back.
+ */
+export type TurnRoute =
+  | {
+      kind: 'use';
+      engine: Engine;
+      /** Set when it isn't the chat's own provider: why, in one sentence. */
+      routed?: { reason: 'offline' | 'limit'; message: string };
+    }
+  | { kind: 'hold' };
+
+/** A message waiting for the internet. */
+interface Held {
+  engine: EngineId;
+  prompt: string;
+  attachments: readonly Attachment[];
 }
 
 /** An integration that isn't working, as a conversation shows it. */
@@ -224,6 +247,8 @@ async function honouredModes(engine: Engine): Promise<PermissionMode[] | undefin
  */
 export class ConversationManager {
   readonly events = new Emitter<ServerEvent>();
+  /** Messages waiting for the internet, by conversation. */
+  #held = new Map<string, Held>();
   #live = new Map<string, Live>();
 
   constructor(
@@ -236,6 +261,11 @@ export class ConversationManager {
       tools?: ToolProvider;
       /** Extra system-prompt context for every turn (e.g. the user's routines and skills). */
       context?: (engine: Engine) => Promise<string>;
+      /**
+       * Who answers: the chat's provider, another, or nobody yet (offline). Asked
+       * before a turn, and again after one fails for a limit or an outage.
+       */
+      route?: (engine: Engine, context: { failed?: TurnProblem }) => Promise<TurnRoute>;
       expand?: MessageExpander;
       /** Money spent outside a turn (naming a chat), for the usage ledger. */
       onSpend?: (usage: Usage) => void;
@@ -298,8 +328,14 @@ export class ConversationManager {
     const existing = input.conversationId ? await this.#get(input.conversationId) : undefined;
     if (existing?.abort)
       throw new ConversationError('busy', 'Still replying to your last message.');
-    // Whichever provider the conversation (or this message) chose answers.
-    const engine = this.deps.engine(input.options?.engine ?? existing?.record.options.engine);
+    // Whichever provider the conversation (or this message) chose answers —
+    // unless it's offline or at its limit, and something else can (ADR 0018).
+    const chosen = this.deps.engine(input.options?.engine ?? existing?.record.options.engine);
+    const route = (await this.deps.route?.(chosen, {}).catch(() => undefined)) ?? {
+      kind: 'use' as const,
+      engine: chosen,
+    };
+    const engine = route.kind === 'use' ? route.engine : chosen;
     const status = await engine.detect();
     if (status.state !== 'ready') {
       throw new ConversationError(
@@ -361,10 +397,21 @@ export class ConversationManager {
     });
     if (expanded?.skill) this.#append(live, { type: 'skill.used', ...expanded.skill, by: 'user' });
     live.record = { ...live.record, preview: said.slice(0, 140), updatedAt: Date.now() };
+    const prompt = expanded?.prompt ?? input.text;
+    if (route.kind === 'hold') {
+      // Offline, and nothing on this computer answers: it waits, and goes by itself.
+      this.#held.set(live.record.id, { engine: engine.id, prompt, attachments });
+      this.#append(live, { type: 'turn.held', reason: 'offline' });
+      await this.#persist(live);
+      if (autoTitle) void this.#autoTitle(live, engine, titleSource(input.text, attachments));
+      return summary(live.record);
+    }
+    if (route.routed)
+      this.#append(live, { type: 'turn.routed', from: chosen.id, to: engine.id, ...route.routed });
     live.abort = new AbortController();
     this.#setStatus(live, 'running');
     await this.#persist(live);
-    void this.#runTurn(live, engine, expanded?.prompt ?? input.text, attachments);
+    void this.#answer(live, engine, prompt, attachments);
     if (autoTitle) void this.#autoTitle(live, engine, titleSource(input.text, attachments));
     return summary(live.record);
   }
@@ -471,6 +518,82 @@ export class ConversationManager {
     pending.resolve(decision);
   }
 
+  /** Messages that were waiting for the internet go now, in the order they were sent. */
+  async releaseHeld(): Promise<number> {
+    let released = 0;
+    for (const id of [...this.#held.keys()])
+      if (await this.release(id).catch(() => false)) released++;
+    return released;
+  }
+
+  /**
+   * Send a waiting message now: when the internet's back, or with another
+   * provider (the model on this computer) if you'd rather not wait. A message
+   * held before Conch restarted is picked up from the chat itself.
+   */
+  async release(id: string, engineId?: EngineId): Promise<boolean> {
+    const live = await this.#get(id);
+    if (live.abort) return false;
+    const held = this.#held.get(id) ?? heldFromLog(live.events);
+    if (!held) return false;
+    const chosen = this.deps.engine(engineId ?? held.engine);
+    const route = engineId
+      ? { kind: 'use' as const, engine: chosen }
+      : ((await this.deps.route?.(chosen, {}).catch(() => undefined)) ?? {
+          kind: 'use' as const,
+          engine: chosen,
+        });
+    if (route.kind === 'hold') return false;
+    this.#held.delete(id);
+    const from = this.deps.engine(held.engine);
+    if (route.engine.id !== from.id)
+      this.#append(live, {
+        type: 'turn.routed',
+        from: from.id,
+        to: route.engine.id,
+        reason: route.kind === 'use' && route.routed ? route.routed.reason : 'offline',
+        message:
+          route.routed?.message ??
+          `You were offline, so ${route.engine.label} on this computer answered.`,
+      });
+    live.abort = new AbortController();
+    this.#setStatus(live, 'running');
+    await this.#persist(live);
+    void this.#answer(live, route.engine, held.prompt, held.attachments);
+    return true;
+  }
+
+  /**
+   * One answer, and one second chance: a turn that failed for a limit or an
+   * outage is asked again of whoever can answer now — your pick at a limit, the
+   * model on this computer offline — or waits for the internet.
+   */
+  async #answer(
+    live: Live,
+    engine: Engine,
+    prompt: string,
+    attachments: readonly Attachment[],
+  ): Promise<TurnResult> {
+    const result = await this.#runTurn(live, engine, prompt, attachments);
+    const { problem } = result;
+    if (result.outcome !== 'error' || (problem !== 'limit' && problem !== 'unavailable'))
+      return result;
+    const next = await this.deps.route?.(engine, { failed: problem }).catch(() => undefined);
+    if (!next || live.abort) return result;
+    if (next.kind === 'hold') {
+      this.#held.set(live.record.id, { engine: engine.id, prompt, attachments });
+      this.#append(live, { type: 'turn.held', reason: 'offline' });
+      await this.#persist(live);
+      return result;
+    }
+    if (next.engine.id === engine.id || !next.routed) return result;
+    this.#append(live, { type: 'turn.routed', from: engine.id, to: next.engine.id, ...next.routed });
+    live.abort = new AbortController();
+    this.#setStatus(live, 'running');
+    await this.#persist(live);
+    return this.#runTurn(live, next.engine, prompt, attachments);
+  }
+
   async #runTurn(
     live: Live,
     engine: Engine,
@@ -484,6 +607,7 @@ export class ConversationManager {
     const started = new Map<string, number>();
     let outcome: 'success' | 'interrupted' | 'error' = 'success';
     let completed: { usage?: Usage; error?: string; problem?: TurnProblem } | undefined;
+    let heldProblem: TurnProblem | undefined;
     const extras = live.extras;
     let finalText = '';
     let finalMessageId: string | undefined;
@@ -792,10 +916,10 @@ export class ConversationManager {
         }
       }
       // Why it failed decides what the chat offers: sign in, another provider, 1Password.
-      const problem =
+      const problem = (heldProblem =
         outcome === 'error'
           ? (completed?.problem ?? (await turnProblem(engine, completed?.error)))
-          : undefined;
+          : undefined);
       this.#append(
         live,
         {
@@ -831,7 +955,13 @@ export class ConversationManager {
       live.extras?.onStatus?.(status);
       live.extras = undefined;
     }
-    return { outcome, usage: completed?.usage, error: completed?.error, finalText };
+    return {
+      outcome,
+      usage: completed?.usage,
+      error: completed?.error,
+      ...(heldProblem && { problem: heldProblem }),
+      finalText,
+    };
   }
 
   /** Append to the log and broadcast — or, if `defer` is given, collect for later broadcast. */
@@ -975,4 +1105,23 @@ export function resolveOptions(
 function titleSource(text: string, attachments: readonly Attachment[]): string {
   if (text.trim()) return text;
   return attachments.map((a) => (a.pasted ? 'Pasted text' : a.name)).join(', ');
+}
+
+/**
+ * The message a chat is waiting to send, read from its log: the last message
+ * you sent, when nothing has answered it since (held before a restart).
+ */
+function heldFromLog(events: readonly ConversationEvent[]): Held | undefined {
+  const last = events.findLastIndex((e) => e.type === 'turn.held');
+  if (last === -1) return undefined;
+  if (events.slice(last + 1).some((e) => e.type === 'assistant.delta' || e.type === 'turn.completed'))
+    return undefined;
+  const said = events.slice(0, last).findLast((e) => e.type === 'user.message');
+  if (said?.type !== 'user.message') return undefined;
+  const engine = events.findLast((e) => e.type === 'turn.completed');
+  return {
+    engine: (engine?.type === 'turn.completed' && engine.engine) || 'claude-code',
+    prompt: said.text,
+    attachments: said.attachments ?? [],
+  };
 }

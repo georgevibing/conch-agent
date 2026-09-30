@@ -441,6 +441,98 @@ describe('gateway WebSocket', () => {
     expect(summary?.options).toEqual({ fastMode: true, permissionMode: 'plan' });
   });
 
+  it('offline, a message waits and goes by itself when the internet is back', async () => {
+    const { app, services } = await setup();
+    close = () => app.close();
+    const offline = await app.inject({
+      method: 'POST',
+      url: '/api/mock/network',
+      payload: { online: false },
+    });
+    expect(offline.json()).toMatchObject({ online: false });
+    expect((await app.inject('/api/state')).json().network).toMatchObject({ online: false });
+
+    const convo = await services.conversations.send({
+      clientMessageId: 'u1',
+      text: 'hello offline',
+    });
+    const waiting = (await services.conversations.detail(convo.id)).events;
+    expect(waiting.at(-1)).toMatchObject({ type: 'turn.held', reason: 'offline' });
+    // Asking it to go while still offline says so, and it keeps waiting.
+    const early = await app.inject({
+      method: 'POST',
+      url: `/api/conversations/${convo.id}/release`,
+      payload: {},
+    });
+    expect(early.statusCode).toBe(409);
+
+    // Back online: it goes by itself, and Conch leaves a note that it did.
+    await app.inject({ method: 'POST', url: '/api/mock/network', payload: { online: true } });
+    await vi.waitFor(
+      async () => {
+        const events = (await services.conversations.detail(convo.id)).events;
+        expect(events.some((e) => e.type === 'turn.completed' && e.outcome === 'success')).toBe(
+          true,
+        );
+      },
+      { timeout: 5000 },
+    );
+    await vi.waitFor(async () => {
+      const notes = await services.healed.list();
+      expect(notes.some((n) => n.message.includes('waiting message went'))).toBe(true);
+    });
+  });
+
+  it('at a limit, your pick answers — only when you chose one and it’s ready', async () => {
+    const { app, services } = await setup();
+    close = () => app.close();
+    const mock = services.engine();
+    const other = {
+      ...mock,
+      id: 'openrouter' as const,
+      label: 'OpenRouter',
+      detect: async () => ({
+        ...(await mock.detect()),
+        engine: 'openrouter' as const,
+        state: 'ready' as const,
+      }),
+    };
+    vi.spyOn(services.providers, 'engineFor').mockImplementation((id) =>
+      id === 'openrouter' ? other : mock,
+    );
+
+    // No pick: the limit stands.
+    expect(await services.route(mock, { failed: 'limit' })).toEqual({ kind: 'use', engine: mock });
+
+    await services.settings.update({ preferences: { limitFallback: 'openrouter' } });
+    const routed = await services.route(mock, { failed: 'limit' });
+    expect(routed).toMatchObject({
+      kind: 'use',
+      engine: { id: 'openrouter' },
+      routed: {
+        reason: 'limit',
+        message: 'Claude Code reached its limit for now, so OpenRouter answered.',
+      },
+    });
+    // Not at a limit: the chat's own provider answers.
+    expect(await services.route(mock, {})).toEqual({ kind: 'use', engine: mock });
+
+    // Cleared (null), it's off again.
+    await services.settings.update({ preferences: { limitFallback: null } });
+    expect((await services.settings.get()).preferences.limitFallback).toBeUndefined();
+  });
+
+  it('only pretends to be offline in mock mode', async () => {
+    const { app } = await setup({ CONCH_ENGINE: 'claude-code' });
+    close = () => app.close();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/mock/network',
+      payload: { online: false },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
   it('refuses to send when the engine is not ready', async () => {
     process.env.CONCH_MOCK_STATE = 'signed-out';
     const { app } = await setup();

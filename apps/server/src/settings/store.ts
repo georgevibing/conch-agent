@@ -86,7 +86,7 @@ export class SettingsStore {
         ...(patch.onboarded !== undefined && { onboarded: patch.onboarded }),
         persona: { ...current.persona, ...patch.persona },
         profile: { ...current.profile, ...patch.profile },
-        preferences: { ...current.preferences, ...patch.preferences },
+        preferences: withoutNulls({ ...current.preferences, ...patch.preferences }),
       });
       await writeJson(this.#path, next);
       this.#cache = Promise.resolve(next);
@@ -148,4 +148,11 @@ export class SettingsStore {
       await writeJson(this.#secretsPath, next);
     });
   }
+}
+
+/** A `null` in a patch clears the setting (e.g. `limitFallback: null`: wait for the limit again). */
+function withoutNulls<T extends object>(value: T): { [K in keyof T]: Exclude<T[K], null> } {
+  return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== null)) as {
+    [K in keyof T]: Exclude<T[K], null>;
+  };
 }

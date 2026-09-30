@@ -1,6 +1,6 @@
 import { join, resolve } from 'node:path';
 
-import type { EngineId, LoginState, ServerEvent, SkillSource } from '@conch/protocol';
+import type { EngineId, LoginState, ServerEvent, SkillSource, TurnProblem } from '@conch/protocol';
 
 import { AttachmentStore } from './attachments/store';
 import { AccessStore } from './auth/store';
@@ -9,7 +9,7 @@ import { TerminalService } from './terminal/service';
 import { Gatekeeper } from './security';
 import type { Config } from './config';
 import { CommandStore } from './commands/store';
-import { ConversationManager } from './conversations/manager';
+import { ConversationManager, type TurnRoute } from './conversations/manager';
 import { ConversationStore } from './conversations/store';
 import { anthropicApiVariant, ApiEngine, openrouterVariant } from './engines/api';
 import { ClaudeCodeEngine } from './engines/claude-code/engine';
@@ -19,6 +19,7 @@ import type { Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
 import { registerCoreChecks } from './doctor/checks';
 import { Doctor } from './doctor/service';
+import { NetworkWatch } from './network/watch';
 import { Healed } from './lib/healed';
 import type { Heal } from './lib/recover';
 import { KNOWN_NEEDS } from './setup/known';
@@ -62,6 +63,8 @@ export class Services {
   readonly setup: Setup;
   /** Repair everything: every part's check, run at once (see `doctor/`). */
   readonly doctor: Doctor;
+  /** Whether Conch can reach the internet (ADR 0018). */
+  readonly network: NetworkWatch;
   readonly settings: SettingsStore;
   /** Who may sign in (`~/.conch/access.json`). */
   readonly access: AccessStore;
@@ -97,6 +100,9 @@ export class Services {
       this.broadcast.emit({ type: 'healed', note }),
     );
     this.setup = new Setup(KNOWN_NEEDS);
+    this.network = new NetworkWatch({
+      emit: (network) => this.broadcast.emit({ type: 'network.status', network }),
+    });
     this.doctor = new Doctor({
       emit: (report) => this.broadcast.emit({ type: 'doctor.report', report }),
       onHeal: (message) => void this.healed.note('gateway', message),
@@ -197,6 +203,7 @@ export class Services {
       settings: this.settings,
       memory: this.memory,
       engine: (id) => this.providers.engineFor(id),
+      route: (engine, context) => this.route(engine, context),
       // An engine that can't run Conch's own tools is never offered them.
       tools: (ctx) =>
         ctx.engine.hostTools === false
@@ -258,6 +265,19 @@ export class Services {
     this.search.open();
     // Repair everything looks at every part of Conch (see `doctor/checks.ts`).
     registerCoreChecks(this);
+    // Back online: whatever waited goes now, in order.
+    this.network.onChange((status) => {
+      if (!status.online) return;
+      void this.conversations.releaseHeld().then((sent) => {
+        if (sent)
+          void this.healed.note(
+            'gateway',
+            sent === 1
+              ? 'You were offline for a while; your waiting message went when you were back.'
+              : `You were offline for a while; your ${sent} waiting messages went when you were back.`,
+          );
+      });
+    });
   }
 
   /** The default provider: your choice, or `CONCH_ENGINE` when it's set. */
@@ -285,6 +305,7 @@ export class Services {
   /** Read the remembered provider before the first request arrives. */
   async start() {
     await this.providers.load();
+    this.network.start();
     // Uploads nobody sent (a closed tab, a dropped draft) are cleared on start and hourly.
     void this.attachments.sweep().catch(() => undefined);
     this.#sweeper ??= setInterval(
@@ -297,6 +318,63 @@ export class Services {
   stop() {
     clearInterval(this.#sweeper);
     this.#sweeper = undefined;
+    this.network.stop();
+  }
+
+  /** A provider on this computer that's ready to answer, for when the internet isn't there. */
+  async localReady(): Promise<Engine | undefined> {
+    for (const engine of this.engines.values()) {
+      if (!engine.local) continue;
+      if ((await engine.detect().catch(() => undefined))?.state === 'ready') return engine;
+    }
+    return undefined;
+  }
+
+  /**
+   * Who answers a turn (ADR 0018). Offline, the model on this computer answers
+   * (if you let it) or the message waits for the internet; at a usage limit,
+   * your pick carries on until it resets. Otherwise, the chat's own provider.
+   */
+  async route(engine: Engine, context: { failed?: TurnProblem }): Promise<TurnRoute> {
+    const { preferences } = await this.settings.get();
+    if (!engine.local) {
+      // A provider that stopped answering is the moment to look again.
+      const online =
+        context.failed === 'unavailable' ? (await this.network.check()).online : this.network.online;
+      if (!online) {
+        const local = preferences.offlineFallback ? await this.localReady() : undefined;
+        return local
+          ? {
+              kind: 'use',
+              engine: local,
+              routed: {
+                reason: 'offline',
+                message: `You’re offline, so ${local.label} answered from this computer.`,
+              },
+            }
+          : { kind: 'hold' };
+      }
+    }
+    const fallback = preferences.limitFallback;
+    if (fallback && fallback !== engine.id) {
+      const usage =
+        engine.id === this.engine().id ? await this.usage.snapshot().catch(() => undefined) : undefined;
+      if (context.failed === 'limit' || usage?.blocked) {
+        const other = this.providers.engineFor(fallback);
+        if ((await other.detect().catch(() => undefined))?.state === 'ready') {
+          const until = usage?.blocked?.until;
+          return {
+            kind: 'use',
+            engine: other,
+            routed: {
+              reason: 'limit',
+              message: `${engine.label} reached its limit${until ? ` until ${clock(until)}` : ' for now'}, so ${other.label} answered.`,
+            },
+          };
+        }
+      }
+    }
+    return { kind: 'use', engine };
   }
 
   /**
@@ -384,4 +462,10 @@ function mockBlueprints(vendor: MockVendor) {
       return { type: 'stdio', command: process.execPath, args: [fixture] };
     return { type: 'http', url: () => vendor.url(id) };
   };
+}
+
+/** "15:00" in this computer's time: when a limit resets. */
+function clock(at: number): string {
+  const d = new Date(at);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }

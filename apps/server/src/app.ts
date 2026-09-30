@@ -21,6 +21,7 @@ import {
   CreateRoutineBody,
   EngineId,
   ProviderKeyBody,
+  ReleaseTurnBody,
   RenameConversationBody,
   SchedulePreviewBody,
   UpdateRoutineBody,
@@ -166,6 +167,7 @@ export async function buildApp(services: Services) {
       preferences: settings.preferences,
       engine: await services.engineStatus(),
       workspace: await services.settings.workspace(),
+      network: services.network.status,
     });
   };
 
@@ -713,6 +715,27 @@ export async function buildApp(services: Services) {
     await services.conversations.remove(request.params.id);
     return { ok: true };
   });
+  /** A message waiting for the internet goes now (with another provider, if named). */
+  app.post<{ Params: { id: string } }>('/api/conversations/:id/release', async (request, reply) => {
+    const body = parse(ReleaseTurnBody, request.body ?? {}, reply);
+    if (!body) return;
+    try {
+      const sent = await services.conversations.release(request.params.id, body.engine);
+      return sent
+        ? { ok: true }
+        : reply
+            .code(409)
+            .send({ error: 'offline', message: 'You’re still offline. It goes when you’re back.' });
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  // Tests and demos (mock mode only): pretend the internet is gone, or back.
+  if (services.config.CONCH_ENGINE === 'mock')
+    app.post<{ Body: { online?: unknown } }>('/api/mock/network', (request) => {
+      services.network.simulate(request.body?.online === true);
+      return services.network.status;
+    });
 
   // ── Live stream ────────────────────────────────────────────────────────
   app.get('/ws', { websocket: true }, (socket, request) => {
