@@ -98,6 +98,7 @@ src/
   providers/                  the words for each engine, connecting them, switching, keys
   secrets/                    where a key lives: this computer, or 1Password (`op read`)
   setup/                      what features need from this computer; find, install, update, open
+  updates/                    daily quiet checks, one-click updates, Conch updating its own checkout
   lib/healed.ts               "fixed on its own" notes (~/.conch/healed.json, `healed` event)
   lib/path.ts                 the PATH as it is now (Windows registry), refreshed before lookups
 ```
@@ -175,6 +176,18 @@ src/
   which need fixes them (`fix`, `need`). Claude Code falls back to the copy the
   Agent SDK ships when none is installed or the installed one is broken. See
   [ADR 0016](./docs/adr/0016-getting-what-a-feature-needs.md).
+- **Updates** (`updates/`, [ADR 0019](./docs/adr/0019-updates.md)). Once a day in
+  the background (never in the first minute) Conch fetches its checkout's upstream
+  without ever prompting, and asks each need with `version` + `latest` for the newest
+  version where it came from (npm registry, `winget show`, `brew info --json=v2`),
+  caching the answers in `~/.conch/updates.json`. Programs update one at a time
+  through `Setup.update` (automatically at night if you opt in). Conch's own update
+  refuses over local changes, a missing upstream or a merge, fast-forwards to the
+  checked commit, runs `pnpm install --frozen-lockfile` and the web build, then
+  `restart()`s; a failed step goes back (`reset --keep`, reinstall, rebuild). Routes
+  under `/api/updates` (updating and turning automation on need sudo mode);
+  `updates.changed` is pushed live. Repair everything's `updates` check lists what
+  waits.
 - **Healing** (`lib/healed.ts`): every self-repair leaves one plain note —
   integrations that came back, a renewed sign-in, Claude Code's fallback, a held
   routine that ran once its provider was back. Integrations retry failures that
@@ -286,7 +299,8 @@ src/
   `integrations.json` + `integrations.secrets.json`, `skills/<name>/SKILL.md` +
   `skills.json` (modes for skills Conch doesn't own), `api-sessions/<id>.json` (the
   transcript a plain model API needs, since it keeps no session of its own),
-  `browser.json` (browser settings, sites you always allow) + `browser/profile/` +
+  `updates.json` (what the last look for updates found, and automatic updates on or
+  off), `browser.json` (browser settings, sites you always allow) + `browser/profile/` +
   `browser/shots/`, `terminal.json` (terminal settings; terminals themselves are never
   written to disk), `gateway.json` (where it's listening, while it runs), `workspace/`
   (default cwd).
@@ -355,6 +369,12 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   in a chat. A broken skill shows Nacre `SkillProblem` with its one fix: “Write the
   description for me”, “Make a copy I can edit”, or “Look again”. Skills are in the
   `/` menu and in ⌘K.
+- **Updates.** Settings → Health → Updates is Nacre `SoftwareUpdate` for Conch
+  ("An update is ready · 9 improvements", What's new, Update Conch, real step
+  progress, then the calm restart screen and a reload back onto Health) and
+  `ProgramUpdates` for the programs it uses. The only signals are a dot on the
+  sidebar's Settings button and the Health tab, and an "Update available" line in
+  Health; ⌘K has "Check for updates" and "Update Conch".
 - **Search.** ⌘K (or Search in the sidebar) is one box for everything: fuzzy chat
   titles (client-side), full-text message hits from every conversation, and — from
   `palette/findables.tsx` — skills (into the composer), models from every provider
