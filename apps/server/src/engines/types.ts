@@ -113,9 +113,29 @@ export interface EngineMcpStatus {
   url?: string;
 }
 
+/** What an engine does with attachments (ADR 0017). Text always reaches every engine inline. */
+export interface EngineAttachments {
+  /** It can look at images sent with the message (`TurnInput.images`). */
+  images: boolean;
+  /** It can open files on this computer by path, with its own tools. */
+  files: boolean;
+}
+
+/** An image sent with the message, for engines that can see. */
+export interface TurnImage {
+  name: string;
+  mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
+  /** Base64, no data-URL prefix. */
+  data: string;
+}
+
 export interface TurnInput {
   conversationId: string;
   prompt: string;
+  /** Images attached to this message, only for engines with `attachments.images`. */
+  images?: TurnImage[];
+  /** Folders holding this conversation's attachments, for engines with `attachments.files`. */
+  readableDirs?: string[];
   /** Engine-native session to continue, from a previous turn's `session` event. */
   resumeId?: string;
   /** Appended to the engine's own system prompt. */
@@ -222,6 +242,8 @@ export interface Engine {
   usage?(options?: { force?: boolean }): Promise<EngineUsage>;
   /** How this engine uses integrations. */
   readonly integrations: EngineIntegrations;
+  /** What it can do with attachments. Absent means text only. */
+  readonly attachments?: EngineAttachments;
   /**
    * Whether the engine can run Conch's own tools (`TurnInput.tools`: memory,
    * routines). Absent means yes. An engine that says `false` is never told

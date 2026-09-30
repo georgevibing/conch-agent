@@ -164,11 +164,16 @@ export class ProviderService {
             ),
           ]);
           // The id a choice is saved under is the provider's, whatever a stand-in calls itself.
-          return { ...capabilities, engine: engine.id };
+          return {
+            ...capabilities,
+            engine: engine.id,
+            ...(engine.attachments && { attachments: engine.attachments }),
+          };
         } catch (error) {
           return {
             engine: engine.id,
             label: engine.label,
+            ...(engine.attachments && { attachments: engine.attachments }),
             models: [],
             commands: [],
             permissionModes: ['default'],

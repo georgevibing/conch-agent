@@ -17,7 +17,7 @@
 import { severityFor } from '@conch/protocol';
 import { z } from 'zod';
 
-import type { Completion, EngineUsage } from '../types';
+import type { Completion, EngineUsage, TurnImage } from '../types';
 import { sseEvents } from './sse';
 import {
   ApiError,
@@ -80,6 +80,7 @@ const ModelEntry = z.object({
   /** USD per token, as strings. */
   pricing: z.object({ prompt: z.string().nullish(), completion: z.string().nullish() }).nullish(),
   supported_parameters: z.array(z.string()).nullish(),
+  architecture: z.object({ input_modalities: z.array(z.string()).nullish() }).nullish(),
   reasoning: z
     .object({
       mandatory: z.boolean().nullish(),
@@ -362,6 +363,10 @@ export class OpenRouterWire implements Wire {
         efforts: knownEfforts(entry.reasoning?.supported_efforts ?? undefined),
         supportsFastMode: false,
         supportsAutoMode: false,
+        // Only when OpenRouter says: a model it lists without modalities isn't assumed blind.
+        ...(entry.architecture?.input_modalities && {
+          images: entry.architecture.input_modalities.includes('image'),
+        }),
       },
       tools,
       thinking: Boolean(entry.reasoning),
@@ -372,8 +377,18 @@ export class OpenRouterWire implements Wire {
     return pickSmallModel([...this.#models.keys()]);
   }
 
-  userMessage(content: string): WireMessage {
-    return { role: 'user', content };
+  userMessage(content: string, images?: readonly TurnImage[]): WireMessage {
+    if (!images?.length) return { role: 'user', content };
+    return {
+      role: 'user',
+      content: [
+        ...images.map((image) => ({
+          type: 'image_url',
+          image_url: { url: `data:${image.mimeType};base64,${image.data}` },
+        })),
+        { type: 'text', text: content },
+      ],
+    };
   }
 
   toolResults(results: ToolResult[]): WireMessage[] {

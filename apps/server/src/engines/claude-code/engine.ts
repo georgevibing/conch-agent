@@ -112,6 +112,8 @@ export class ClaudeCodeEngine implements Engine {
             },
     },
   };
+  /** Claude sees images, and Claude Code opens files (PDFs, spreadsheets…) with its own tools. */
+  readonly attachments = { images: true, files: true };
   #cache?: { status: EngineStatus; at: number };
   #inflight?: Promise<EngineStatus>;
   #capabilities?: { value: Capabilities; at: number };
@@ -479,7 +481,18 @@ export class ClaudeCodeEngine implements Engine {
       await connected;
       yield {
         type: 'user',
-        message: { role: 'user', content: input.prompt },
+        message: {
+          role: 'user',
+          content: input.images?.length
+            ? [
+                ...input.images.map((image) => ({
+                  type: 'image' as const,
+                  source: { type: 'base64' as const, media_type: image.mimeType, data: image.data },
+                })),
+                { type: 'text' as const, text: input.prompt },
+              ]
+            : input.prompt,
+        },
         parent_tool_use_id: null,
       } as SDKUserMessage;
     }
@@ -491,6 +504,8 @@ export class ClaudeCodeEngine implements Engine {
         prompt: prompt(),
         options: {
           cwd: input.cwd,
+          // Attachments live in Conch's folder, not the workspace; let Claude Code read them.
+          ...(input.readableDirs?.length && { additionalDirectories: input.readableDirs }),
           resume: input.resumeId,
           pathToClaudeCodeExecutable: programFile(status.executablePath),
           env: childEnv({ ANTHROPIC_API_KEY: anthropicApiKey }),

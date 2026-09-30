@@ -18,7 +18,7 @@
  */
 import { z } from 'zod';
 
-import type { Completion } from '../types';
+import type { Completion, TurnImage } from '../types';
 import { sseEvents } from './sse';
 import { defaultHome } from './session';
 import {
@@ -278,8 +278,18 @@ export class AnthropicWire implements Wire {
     return pickSmallModel([...this.#models.keys()]);
   }
 
-  userMessage(content: string): WireMessage {
-    return { role: 'user', content };
+  userMessage(content: string, images?: readonly TurnImage[]): WireMessage {
+    if (!images?.length) return { role: 'user', content };
+    return {
+      role: 'user',
+      content: [
+        ...images.map((image) => ({
+          type: 'image',
+          source: { type: 'base64', media_type: image.mimeType, data: image.data },
+        })),
+        { type: 'text', text: content },
+      ],
+    };
   }
 
   /** Every result for one assistant turn goes back in a single user message. */

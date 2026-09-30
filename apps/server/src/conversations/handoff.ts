@@ -17,7 +17,10 @@ function transcript(events: readonly ConversationEvent[], afterSeq: number, befo
   for (const event of events) {
     if (event.seq <= afterSeq || event.seq >= beforeSeq) continue;
     if (event.type === 'user.message') {
-      lines.push({ speaker: 'User', text: event.text });
+      // Attachments aren't handed over, only named: the message that needs one can be resent.
+      const names = (event.attachments ?? []).map((a) => a.name);
+      const attached = names.length ? `[Attached: ${names.join(', ')}]` : '';
+      lines.push({ speaker: 'User', text: [event.text, attached].filter(Boolean).join('\n') });
     } else if (event.type === 'assistant.delta' && event.kind === 'text') {
       let line = replies.get(event.messageId);
       if (!line) {

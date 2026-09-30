@@ -164,6 +164,8 @@ export class ApiEngine implements Engine {
     signInHint:
       'Conch connects these apps itself — add them, and sign in to them, in Settings → Integrations.',
   };
+  /** Models that can see get images; none of these can open files on this computer. */
+  readonly attachments = { images: true, files: false };
   /** Only for providers that publish limits; Conch tracks spend for the rest. */
   readonly usage?: (options?: { force?: boolean }) => Promise<EngineUsage>;
   #sessions: TranscriptStore;
@@ -438,7 +440,17 @@ export class ApiEngine implements Engine {
       if (!resuming) yield { type: 'session', resumeId: sessionId, model };
 
       const messages: WireMessage[] = resuming ? await this.#sessions.load(resuming, this.id) : [];
-      messages.push(this.variant.wire.userMessage(input.prompt));
+      // A model the provider says is blind gets a note instead of pictures it would refuse.
+      const blind =
+        input.images?.length &&
+        (await this.capabilities()).models.find((m) => m.id === model)?.images === false;
+      messages.push(
+        blind
+          ? this.variant.wire.userMessage(
+              `${input.prompt}\n\n[The images named above couldn't be shown: ${model} can't see images. If the message depends on them, say so.]`,
+            )
+          : this.variant.wire.userMessage(input.prompt, input.images),
+      );
       const tools = buildTools(input);
       const specs = [...tools.values()].map((tool) => tool.spec);
       // Conch's browser is the one way out to the web; the note mustn't deny it when it's there.

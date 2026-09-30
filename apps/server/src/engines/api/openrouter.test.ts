@@ -383,3 +383,38 @@ describe('the OpenRouter variant', () => {
     expect(variant.wire.usage).toBeDefined();
   });
 });
+
+describe('OpenRouter attachments', () => {
+  it('sends images as data URLs before the words, and knows which models can see', async () => {
+    const { wire: or } = wire(() =>
+      jsonResponse({
+        data: [
+          {
+            id: 'a/vision',
+            supported_parameters: ['tools'],
+            architecture: { input_modalities: ['text', 'image'] },
+          },
+          {
+            id: 'a/blind',
+            supported_parameters: ['tools'],
+            architecture: { input_modalities: ['text'] },
+          },
+          { id: 'a/unsaid', supported_parameters: ['tools'] },
+        ],
+      }),
+    );
+    const models = await or.models({ key: KEY });
+    expect(models.map((m) => m.info.images)).toEqual([true, false, undefined]);
+
+    expect(or.userMessage('hi')).toEqual({ role: 'user', content: 'hi' });
+    expect(
+      or.userMessage('what is this?', [{ name: 'a.png', mimeType: 'image/png', data: 'QUJD' }]),
+    ).toEqual({
+      role: 'user',
+      content: [
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,QUJD' } },
+        { type: 'text', text: 'what is this?' },
+      ],
+    });
+  });
+});

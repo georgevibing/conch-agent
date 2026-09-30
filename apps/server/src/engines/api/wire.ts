@@ -14,7 +14,7 @@
 import type { EffortChoice } from '@conch/protocol';
 import type { z } from 'zod';
 
-import type { Completion, EngineUsage } from '../types';
+import type { Completion, EngineUsage, TurnImage } from '../types';
 import {
   ApiError,
   type FetchLike,
@@ -47,8 +47,8 @@ export interface Wire {
   complete(request: WireCompletion): Promise<Completion>;
   /** Limits the provider publishes. Omitted where it publishes none. */
   usage?(input: { key: string; signal?: AbortSignal }): Promise<EngineUsage>;
-  /** The user's prompt, in this provider's message shape. */
-  userMessage(text: string): WireMessage;
+  /** The user's prompt (and any images sent with it), in this provider's message shape. */
+  userMessage(text: string, images?: readonly TurnImage[]): WireMessage;
   /** Tool answers, in this provider's message shape. */
   toolResults(results: ToolResult[]): WireMessage[];
   /** A small, cheap model from the last list the provider gave us, if it has one. */

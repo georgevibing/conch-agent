@@ -14,7 +14,8 @@
  *   with every secret carried in the child's environment. Nothing that would
  *   show up in `ps` is ever put on the command line.
  */
-import { spawn } from 'node:child_process';
+import { type ChildProcessByStdio, spawn } from 'node:child_process';
+import type { Readable, Writable } from 'node:stream';
 
 import {
   EffortChoice,
@@ -410,6 +411,16 @@ export interface TurnArgs {
 }
 
 /**
+ * Longest prompt put on the command line. Past it (a long paste, an attached
+ * CSV) the prompt goes on stdin as `-`: Linux refuses any single argument over
+ * 128 KiB, and argv is visible to other users on the machine in `ps`.
+ */
+export const ARGV_PROMPT_MAX = 32 * 1024;
+
+/** Whether a prompt is sent on stdin rather than as an argument. */
+export const promptOnStdin = (prompt: string) => Buffer.byteLength(prompt) > ARGV_PROMPT_MAX;
+
+/**
  * The command line for one turn. The prompt goes last, and a prompt that starts
  * with a dash is separated with `--` so it can never be read as an option.
  *
@@ -425,6 +436,10 @@ export function turnArgs(options: TurnArgs): string[] {
     args.push('-c', `model_reasoning_effort=${toml(options.effort)}`);
   }
   args.push(...(options.overrides ?? []));
+  if (promptOnStdin(options.prompt)) {
+    args.push('-');
+    return args;
+  }
   if (options.prompt.startsWith('-')) args.push('--');
   args.push(options.prompt);
   return args;
@@ -486,6 +501,11 @@ export class CodexEngine implements Engine {
    * Saying so keeps them out of the prompt instead of promising them.
    */
   readonly hostTools = false;
+  /**
+   * `codex exec resume` takes no images on its command line, so images go by
+   * path like every other file: Codex reads them (and looks at them) itself.
+   */
+  readonly attachments = { images: false, files: true };
   #cache?: { status: EngineStatus; at: number };
   #inflight?: Promise<EngineStatus>;
   #capabilities?: { value: Capabilities; at: number };
@@ -635,8 +655,9 @@ export class CodexEngine implements Engine {
       yield { type: 'notice', code: 'sandbox', message: sandboxNotice(sandbox) };
     }
 
+    const prompt = promptFor(input, this.#briefings.get(input.conversationId));
     const args = turnArgs({
-      prompt: promptFor(input, this.#briefings.get(input.conversationId)),
+      prompt,
       resumeId: input.resumeId,
       sandbox,
       model: input.options.model,
@@ -650,9 +671,13 @@ export class CodexEngine implements Engine {
     const child = spawn(command, [...prefix, ...args], {
       cwd: input.cwd,
       env: agentEnv({ CODEX_API_KEY: await this.#apiKey(), ...mcp.env }),
-      // Codex exec reads nothing from stdin; leaving it open would only risk a hang.
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+      // Stdin carries a long prompt and is then closed; otherwise it's never open, so it can't hang.
+      stdio: [promptOnStdin(prompt) ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+    }) as ChildProcessByStdio<Writable | null, Readable, Readable>;
+    if (child.stdin) {
+      child.stdin.on('error', () => undefined);
+      child.stdin.end(prompt);
+    }
 
     const translator = new Translator();
     const queue: EngineEvent[] = [];

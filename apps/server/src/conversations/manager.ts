@@ -1,4 +1,5 @@
 import type {
+  Attachment,
   BrowserPermission,
   ConversationEvent,
   ConversationEventInput,
@@ -22,6 +23,8 @@ import type {
   PermissionDecision,
   ResolvedOptions,
 } from '../engines/types';
+import { forTurn as attachmentsForTurn } from '../attachments/prompt';
+import type { AttachmentStore } from '../attachments/store';
 import { Emitter } from '../lib/emitter';
 import { newId } from '../lib/ids';
 import { buildSystemAppend } from '../memory/prompt';
@@ -237,6 +240,8 @@ export class ConversationManager {
       /** Money spent outside a turn (naming a chat), for the usage ledger. */
       onSpend?: (usage: Usage) => void;
       integrations?: TurnIntegrationsProvider;
+      /** Where uploaded files and long pastes are kept (ADR 0017). */
+      attachments?: AttachmentStore;
     },
   ) {}
 
@@ -266,7 +271,13 @@ export class ConversationManager {
     live?.abort?.abort();
     live?.titling?.abort();
     this.#live.delete(id);
+    // What was attached here goes too, unless another conversation sent it as well.
+    const events = live?.events ?? (await this.deps.store.events(id).catch(() => []));
+    const attached = events.flatMap((e) =>
+      e.type === 'user.message' ? (e.attachments ?? []).map((a) => a.id) : [],
+    );
     await this.deps.store.remove(id);
+    if (attached.length) await this.deps.attachments?.forget(id, attached).catch(() => undefined);
     this.events.emit({ type: 'conversation.deleted', conversationId: id });
   }
 
@@ -280,6 +291,8 @@ export class ConversationManager {
     conversationId?: string;
     clientMessageId: string;
     text: string;
+    /** Ids of uploaded attachments, in order. */
+    attachments?: readonly string[];
     options?: TurnOptions;
   }) {
     const existing = input.conversationId ? await this.#get(input.conversationId) : undefined;
@@ -298,7 +311,16 @@ export class ConversationManager {
             : (status.message ?? `${engine.label} is unavailable.`),
       );
     }
-    const expanded = await this.deps.expand?.(input.text, engine).catch(() => undefined);
+    const expanded = input.text
+      ? await this.deps.expand?.(input.text, engine).catch(() => undefined)
+      : undefined;
+    // Claimed before anything is created, so a missing file never leaves an empty chat behind.
+    const id = existing?.record.id ?? newId('c');
+    const attachments = input.attachments?.length
+      ? ((await this.deps.attachments?.claim(input.attachments, id)) ?? [])
+      : [];
+    // A message that's only attachments is titled and previewed after the first of them.
+    const said = input.text || attachments.map((a) => a.name).join(', ');
 
     let live: Live;
     let autoTitle = false;
@@ -310,10 +332,10 @@ export class ConversationManager {
       const { preferences } = await this.deps.settings.get();
       autoTitle = preferences.autoTitle && Boolean(engine.complete);
       const record: ConversationRecord = {
-        id: newId('c'),
+        id,
         // The first line is shown straight away and kept if no better title comes.
-        title: titleFrom(input.text),
-        preview: input.text.slice(0, 140),
+        title: titleFrom(said),
+        preview: said.slice(0, 140),
         createdAt: now,
         updatedAt: now,
         status: 'idle',
@@ -335,14 +357,15 @@ export class ConversationManager {
       type: 'user.message',
       messageId: input.clientMessageId,
       text: input.text,
+      ...(attachments.length && { attachments }),
     });
     if (expanded?.skill) this.#append(live, { type: 'skill.used', ...expanded.skill, by: 'user' });
-    live.record = { ...live.record, preview: input.text.slice(0, 140), updatedAt: Date.now() };
+    live.record = { ...live.record, preview: said.slice(0, 140), updatedAt: Date.now() };
     live.abort = new AbortController();
     this.#setStatus(live, 'running');
     await this.#persist(live);
-    void this.#runTurn(live, engine, expanded?.prompt ?? input.text);
-    if (autoTitle) void this.#autoTitle(live, engine, input.text);
+    void this.#runTurn(live, engine, expanded?.prompt ?? input.text, attachments);
+    if (autoTitle) void this.#autoTitle(live, engine, titleSource(input.text, attachments));
     return summary(live.record);
   }
 
@@ -448,7 +471,12 @@ export class ConversationManager {
     pending.resolve(decision);
   }
 
-  async #runTurn(live: Live, engine: Engine, prompt: string): Promise<TurnResult> {
+  async #runTurn(
+    live: Live,
+    engine: Engine,
+    said: string,
+    attachments: readonly Attachment[] = [],
+  ): Promise<TurnResult> {
     const abort = live.abort ?? new AbortController();
     const conversationId = live.record.id;
     const settings = await this.deps.settings.get();
@@ -572,8 +600,35 @@ export class ConversationManager {
       );
     };
 
+    // Attachments go in front of the words, as each provider can take them (ADR 0017).
+    const can = engine.attachments ?? { images: false, files: false };
+    const store = this.deps.attachments;
+    const attached =
+      store && attachments.length
+        ? await attachmentsForTurn(store, attachments, can).catch(() => undefined)
+        : undefined;
+    const prompt = attached?.block
+      ? said
+        ? `${attached.block}\n\n${said}`
+        : attached.block
+      : said;
+    // Files sent earlier in the chat stay readable to engines that open files.
+    const readableDirs =
+      store && can.files
+        ? [
+            ...new Set(
+              live.events.flatMap((e) =>
+                e.type === 'user.message'
+                  ? (e.attachments ?? []).map((a) => store.folder(a.id))
+                  : [],
+              ),
+            ),
+          ]
+        : [];
+
     try {
-      const loaded = await integrations?.forTurn(prompt).catch(() => undefined);
+      // Only the person's words count as asking for an app, not what they pasted.
+      const loaded = await integrations?.forTurn(said).catch(() => undefined);
       for (const issue of loaded?.issues ?? []) appendIssue(issue);
       // Engines that can't run MCP servers get the tools through Conch instead.
       const bridged =
@@ -605,6 +660,8 @@ export class ConversationManager {
       const stream = engine.runTurn({
         conversationId,
         prompt: missed ? `${missed}\n\n${prompt}` : prompt,
+        ...(attached?.images.length && { images: attached.images }),
+        ...(readableDirs.length && { readableDirs }),
         resumeId: session?.resumeId,
         systemAppend: [
           buildSystemAppend({
@@ -912,4 +969,10 @@ export function resolveOptions(
     fastMode: options?.fastMode ?? defaults.fastMode,
     permissionMode: options?.permissionMode ?? defaults.permissionMode,
   };
+}
+
+/** What a chat is named after: the words, or the names of what was attached when there are none. */
+function titleSource(text: string, attachments: readonly Attachment[]): string {
+  if (text.trim()) return text;
+  return attachments.map((a) => (a.pasted ? 'Pasted text' : a.name)).join(', ');
 }

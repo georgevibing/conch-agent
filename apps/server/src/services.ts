@@ -2,6 +2,7 @@ import { join, resolve } from 'node:path';
 
 import type { EngineId, LoginState, ServerEvent, SkillSource } from '@conch/protocol';
 
+import { AttachmentStore } from './attachments/store';
 import { AccessStore } from './auth/store';
 import { BrowserService } from './browser/service';
 import { TerminalService } from './terminal/service';
@@ -65,6 +66,8 @@ export class Services {
   homeProblems: string[] = [];
   readonly memory: MemoryStore;
   readonly commands: CommandStore;
+  /** Files and long pastes sent with messages (ADR 0017). */
+  readonly attachments: AttachmentStore;
   readonly routines: RoutineService;
   readonly conversations: ConversationManager;
   readonly browser: BrowserService;
@@ -83,6 +86,7 @@ export class Services {
   /** Full-text search over every conversation; rebuilds its index when it breaks. */
   readonly search: SearchService;
   #login?: { handle: LoginHandle; state: LoginState };
+  #sweeper?: NodeJS.Timeout;
 
   constructor(readonly config: Config) {
     this.healed = new Healed(config.CONCH_HOME, (note) =>
@@ -96,6 +100,7 @@ export class Services {
     this.gate = new Gatekeeper(config, this.access);
     this.memory = new MemoryStore(join(config.CONCH_HOME, 'memory'));
     this.commands = new CommandStore(join(config.CONCH_HOME, 'commands'));
+    this.attachments = new AttachmentStore(join(config.CONCH_HOME, 'attachments'));
     this.keys = new ProviderKeys(this.settings, new SecretVault());
     this.engines = new Map<EngineId, Engine>([
       [
@@ -200,6 +205,7 @@ export class Services {
           .join('\n\n'),
       expand: (text) => this.skills.expand(text),
       integrations: this.integrations,
+      attachments: this.attachments,
       // A spend that can't be saved is lost, not fatal: an unhandled rejection would stop Conch.
       onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
     });
@@ -269,6 +275,18 @@ export class Services {
   /** Read the remembered provider before the first request arrives. */
   async start() {
     await this.providers.load();
+    // Uploads nobody sent (a closed tab, a dropped draft) are cleared on start and hourly.
+    void this.attachments.sweep().catch(() => undefined);
+    this.#sweeper ??= setInterval(
+      () => void this.attachments.sweep().catch(() => undefined),
+      60 * 60 * 1000,
+    );
+    this.#sweeper.unref();
+  }
+
+  stop() {
+    clearInterval(this.#sweeper);
+    this.#sweeper = undefined;
   }
 
   /**
@@ -297,7 +315,11 @@ export class Services {
   async capabilities(force = false, id?: EngineId) {
     const engine = this.providers.engineFor(id);
     // Saved choices name the provider, whatever a stand-in calls itself.
-    return { ...(await engine.capabilities({ force })), engine: engine.id };
+    return {
+      ...(await engine.capabilities({ force })),
+      engine: engine.id,
+      ...(engine.attachments && { attachments: engine.attachments }),
+    };
   }
 
   get login() {

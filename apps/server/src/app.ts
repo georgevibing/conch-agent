@@ -39,6 +39,8 @@ import {
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import type { z } from 'zod';
 
+import { registerAttachmentRoutes } from './attachments/routes';
+import { AttachmentError } from './attachments/store';
 import { isLoopbackAddress } from './auth/network';
 import { ConversationError } from './conversations/manager';
 import { IntegrationError, type SignIn } from './integrations/service';
@@ -133,7 +135,9 @@ export async function buildApp(services: Services) {
   registerAuthRoutes(app, services, gate);
   registerBrowserRoutes(app, services, gate);
   registerTerminalRoutes(app, services, gate);
+  registerAttachmentRoutes(app, services.attachments);
   app.addHook('onClose', () => services.browser.stop());
+  app.addHook('onClose', async () => services.stop());
   app.addHook('onClose', async () => services.terminal.stop());
 
   // Every `:id` / `:name` in a URL is checked before any handler sees it, so
@@ -768,7 +772,12 @@ export async function buildApp(services: Services) {
             );
         }
       } catch (error) {
-        const code = error instanceof ConversationError ? error.code : 'internal';
+        const code =
+          error instanceof ConversationError
+            ? error.code
+            : error instanceof AttachmentError
+              ? 'bad-request'
+              : 'internal';
         send({
           type: 'error',
           code,

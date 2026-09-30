@@ -81,6 +81,8 @@ export class MockEngine implements Engine {
       ready: () => ({ ready: true }),
     },
   };
+  /** Sees images, can't open files: the degraded file path gets exercised too. */
+  readonly attachments = { images: true, files: false };
   #state: EngineState;
   #signedOutOnce = false;
   #speed: number;
@@ -352,7 +354,12 @@ export class MockEngine implements Engine {
       }
       await wait(700);
       // Reasoning streams in uneven clumps, like the real thing.
-      const thought = `The question is about "${input.prompt.slice(0, 48)}". Let me consider what they actually need, what they already know, and the clearest way to put it — starting with the essentials, then one concrete example.`;
+      // What the person typed, without the attachments block in front of it.
+      const said = input.prompt.replace(/^<attachments>[\s\S]*?<\/attachments>\n*/, '');
+      const attached = [...input.prompt.matchAll(/<attachment name="([^"]*)" type="([^"]*)"/g)].map(
+        (m) => `${m[1]} (${m[2]})`,
+      );
+      const thought = `The question is about "${said.slice(0, 48)}". Let me consider what they actually need, what they already know, and the clearest way to put it — starting with the essentials, then one concrete example.`;
       for (const chunk of bursts(thought)) {
         yield { type: 'thinking', messageId, delta: chunk.text };
         await wait(chunk.pause);
@@ -569,22 +576,33 @@ export class MockEngine implements Engine {
 
       const reply = rememberMatch
         ? "Got it — I'll remember that. You can see and edit everything I remember in **Settings → Memory**."
-        : [
-            `Here's a thought on **"${input.prompt.slice(0, 60)}"**.`,
-            '',
-            "I'm the mock engine, so this reply is scripted — but it streams, formats and behaves exactly like the real thing:",
-            '',
-            '- Markdown renders beautifully',
-            '- Code blocks get highlighting',
-            '',
-            '```ts',
-            'const greeting = (name: string) => `Hello, ${name}!`;',
-            '```',
-            '',
-            'Ask me to *remember* something, or to *list files*, to see memory and permissions in action.',
-            '',
-            setup,
-          ].join('\n');
+        : attached.length
+          ? [
+              `You attached ${attached.length === 1 ? 'one thing' : `${attached.length} things`}: ${attached.join(', ')}.`,
+              ...(input.images?.length
+                ? [
+                    '',
+                    `I can see ${input.images.length === 1 ? 'the image' : `${input.images.length} images`}.`,
+                  ]
+                : []),
+              ...(said.trim() ? ['', `And you said: “${said.trim().slice(0, 80)}”.`] : []),
+            ].join('\n')
+          : [
+              `Here's a thought on **"${said.slice(0, 60)}"**.`,
+              '',
+              "I'm the mock engine, so this reply is scripted — but it streams, formats and behaves exactly like the real thing:",
+              '',
+              '- Markdown renders beautifully',
+              '- Code blocks get highlighting',
+              '',
+              '```ts',
+              'const greeting = (name: string) => `Hello, ${name}!`;',
+              '```',
+              '',
+              'Ask me to *remember* something, or to *list files*, to see memory and permissions in action.',
+              '',
+              setup,
+            ].join('\n');
 
       for (const chunk of bursts(reply)) {
         await wait(chunk.pause);

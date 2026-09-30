@@ -292,6 +292,13 @@ describe('Codex arguments', () => {
     expect(turnArgs({ prompt: 'hello', sandbox: 'read-only' }).at(-1)).toBe('hello');
   });
 
+  it('sends a long prompt (a big paste) on stdin, never as one huge argument', () => {
+    const long = 'x'.repeat(200_000);
+    const args = turnArgs({ prompt: long, sandbox: 'read-only', resumeId: 'thread-1' });
+    expect(args.at(-1)).toBe('-');
+    expect(args.some((arg) => arg.length > 1000)).toBe(false);
+  });
+
   it('sends the briefing once, and again only when it changes', () => {
     expect(promptFor({ prompt: 'hi', systemAppend: '  ', resumeId: undefined })).toBe('hi');
     // A new thread always gets it.
