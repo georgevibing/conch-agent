@@ -1,5 +1,5 @@
 import { BellOff, CornerDownLeft, Undo2 } from 'lucide-react';
-import { useEffect, useId, useRef, type ComponentProps } from 'react';
+import { useCallback, useEffect, useId, useRef, type ComponentProps } from 'react';
 
 import { Button } from '../../components/Button';
 import { cx } from '../../utils/cx';
@@ -67,10 +67,19 @@ export function IntegrationSuggestionCard({
   onAskAgain,
   onGone,
   className,
+  ref,
   ...props
 }: IntegrationSuggestionCardProps) {
   const titleId = useId();
   const root = useRef<HTMLDivElement>(null);
+  const setRoot = useCallback(
+    (node: HTMLDivElement | null) => {
+      root.current = node;
+      if (typeof ref === 'function') ref(node);
+      else if (ref) ref.current = node;
+    },
+    [ref],
+  );
   const shown = useRef(state);
 
   // Focus follows the card when a change takes away the button it was on.
@@ -90,7 +99,7 @@ export function IntegrationSuggestionCard({
 
   if (state === 'muted') {
     return (
-      <div ref={root} role="status" className={cx(styles.muted, className)} {...props}>
+      <div ref={setRoot} role="status" className={cx(styles.muted, className)} {...props}>
         <BellOff aria-hidden className={styles.mutedIcon} />
         <span className={styles.mutedText}>
           {assistant} won’t suggest {name} again.
@@ -127,7 +136,7 @@ export function IntegrationSuggestionCard({
 
   return (
     <div
-      ref={root}
+      ref={setRoot}
       className={cx(styles.shell, className)}
       data-state={state}
       aria-hidden={leaving || undefined}
