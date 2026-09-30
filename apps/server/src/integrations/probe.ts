@@ -16,6 +16,7 @@ import {
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 
 import type { EngineMcpServer } from '../engines/types';
+import { refreshPath } from '../lib/path';
 import { onWindowsPath } from '../lib/proc';
 import { SERVER_VERSION } from '../version';
 import { EndpointError } from './net';
@@ -223,6 +224,8 @@ export async function connectClient(
   };
 
   if (server.type === 'stdio') {
+    // A program installed since Conch started is on the registry's PATH, not ours yet.
+    await refreshPath();
     const env = { ...getDefaultEnvironment(), ...server.env };
     // On Windows the SDK starts the command through `cmd.exe`, which reports a
     // missing program as an ordinary exit; say what actually happened.

@@ -13,6 +13,8 @@ import { homedir, platform } from 'node:os';
 import { basename, delimiter, dirname, extname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
+import { refreshPath } from './path';
+
 const exec = promisify(execFile);
 
 /** A program as Node can start it without a shell: what to run, and the arguments that go first. */
@@ -142,11 +144,15 @@ export async function isExecutable(path: string): Promise<boolean> {
 /** Where tools land when they aren't on the PATH a desktop app inherits. */
 export function commonBinDirs(): string[] {
   const home = homedir();
+  const local = process.env.LOCALAPPDATA ?? join(home, 'AppData', 'Local');
   const windows =
     platform() === 'win32'
       ? [
           join(process.env.APPDATA ?? join(home, 'AppData', 'Roaming'), 'npm'),
-          join(process.env.LOCALAPPDATA ?? join(home, 'AppData', 'Local'), 'pnpm'),
+          join(local, 'pnpm'),
+          // Where winget links the programs it installs.
+          join(local, 'Microsoft', 'WinGet', 'Links'),
+          join(process.env.ProgramFiles ?? join('C:', 'Program Files'), 'nodejs'),
         ]
       : [];
   return [
@@ -171,6 +177,8 @@ export async function findExecutable(
 ): Promise<string | undefined> {
   if (options.explicit)
     return (await isExecutable(options.explicit)) ? options.explicit : undefined;
+  // Something installed since Conch started is on the registry's PATH, not ours yet.
+  await refreshPath();
   const names = platform() === 'win32' ? [`${name}.exe`, `${name}.cmd`] : [name];
   const dirs = [
     ...(process.env.PATH ?? '').split(delimiter).filter(Boolean),
