@@ -1,0 +1,265 @@
+@layer nacre.components {
+  /* ── Conch's own update: a quiet card, the pearl as its icon ─────────── */
+  .software {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    /* A size container has no width of its own: never let a shrink-wrapping parent collapse it. */
+    min-inline-size: min(100%, 20rem);
+    container-type: inline-size;
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+  }
+
+  .icon {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+  }
+
+  .heading {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    min-inline-size: 0;
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+    text-wrap: balance;
+  }
+
+  .detail {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .action {
+    display: flex;
+    flex-shrink: 0;
+    gap: var(--nc-space-2);
+  }
+
+  .progress {
+    padding-inline-start: calc(2.5rem + var(--nc-space-3));
+  }
+
+  .notice {
+    margin-inline-start: calc(2.5rem + var(--nc-space-3));
+  }
+
+  .notice p,
+  .blocked p {
+    margin: 0;
+    text-wrap: pretty;
+  }
+
+  .notice .command {
+    margin-block-start: var(--nc-space-2);
+  }
+
+  .blocked {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    padding-inline-start: calc(2.5rem + var(--nc-space-3));
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+  }
+
+  /* A command to copy: a line per step, in the monospace of the terminal. */
+  .command {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-1);
+    max-inline-size: 100%;
+    padding: var(--nc-space-1-5) var(--nc-space-1) var(--nc-space-1-5) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text);
+  }
+
+  .command > code {
+    flex: 1;
+    min-inline-size: 0;
+    padding-block: var(--nc-space-0-5);
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  .copy {
+    flex-shrink: 0;
+  }
+
+  .whatsNew {
+    margin-inline-start: calc(2.5rem + var(--nc-space-3) - var(--nc-space-1-5));
+  }
+
+  .changes {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    padding: var(--nc-space-1) 0 var(--nc-space-1) var(--nc-space-5);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+    text-wrap: pretty;
+  }
+
+  .changes li::marker {
+    color: var(--nc-text-subtle);
+  }
+
+  .more {
+    list-style: none;
+    color: var(--nc-text-subtle);
+  }
+
+  .footnote {
+    margin: 0;
+    padding-inline-start: calc(2.5rem + var(--nc-space-3));
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  /* On a phone, the button goes under the words instead of squeezing them. */
+  @container (max-width: 26rem) {
+    .head {
+      flex-wrap: wrap;
+      row-gap: var(--nc-space-3);
+    }
+
+    .action {
+      flex-basis: 100%;
+      padding-inline-start: calc(2.5rem + var(--nc-space-3));
+    }
+
+    .progress,
+    .blocked,
+    .footnote {
+      padding-inline-start: 0;
+    }
+
+    .notice {
+      margin-inline-start: 0;
+    }
+
+    .whatsNew {
+      margin-inline-start: calc(var(--nc-space-1-5) * -1);
+    }
+  }
+
+  /* ── The programs Conch uses ───────────────────────────────────────── */
+  .programs {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .programRow + .programRow {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .program {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-2-5) var(--nc-space-3) var(--nc-space-2-5) var(--nc-space-4);
+  }
+
+  .programMain {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-3);
+    min-block-size: var(--nc-control-sm);
+  }
+
+  .programName {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .name {
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .version {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .programEnd {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .check {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+    stroke-width: 2.5;
+    color: light-dark(oklch(0.52 0.13 var(--nc-success-h)), oklch(0.8 0.12 var(--nc-success-h)));
+  }
+
+  .program[data-state='updated'] .status {
+    color: var(--nc-text-muted);
+  }
+
+  .message {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  .program[data-state='failed'] .message {
+    color: light-dark(oklch(0.5 0.17 var(--nc-danger-h)), oklch(0.78 0.13 var(--nc-danger-h)));
+  }
+}

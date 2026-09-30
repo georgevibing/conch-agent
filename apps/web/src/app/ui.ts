@@ -32,8 +32,11 @@ interface UiState {
   sidebarOpen: boolean;
   mobileSidebarOpen: boolean;
   settings: SettingsTab | null;
-  /** Conch is starting itself again (an update, a restore): the page rests until it's back. */
-  restarting?: { title: string; from?: string };
+  /**
+   * Conch is starting itself again (an update, a restore): the page rests
+   * until it's back. `reopen`: the settings tab to show again after the reload.
+   */
+  restarting?: { title: string; from?: string; reopen?: SettingsTab };
   /** Something to open inside the settings tab (a provider's page), once. */
   settingsFocus?: string;
   paletteOpen: boolean;

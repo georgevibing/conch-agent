@@ -19,6 +19,12 @@ export interface IconButtonProps extends Omit<
   /** Shortcut shown inside the tooltip. */
   shortcut?: string | string[];
   shape?: 'square' | 'circle';
+  /**
+   * A small dot in the corner: something is waiting behind this button (an
+   * update). The words are read after the label and shown in its tooltip:
+   * "Update available". Quiet on purpose — never a count, never a colour alone.
+   */
+  dot?: string;
 }
 
 /** Square icon-only button with a mandatory accessible label. */
@@ -30,6 +36,7 @@ export function IconButton({
   shortcut,
   shape = 'square',
   variant = 'ghost',
+  dot,
   className,
   loading,
   ...props
@@ -37,17 +44,28 @@ export function IconButton({
   const button = (
     <Button
       variant={variant}
-      aria-label={label}
+      aria-label={dot ? `${label}, ${dot}` : label}
       loading={loading}
       data-shape={shape}
+      data-dot={dot ? '' : undefined}
       className={cx(styles.iconButton, className)}
-      leadingIcon={children}
+      leadingIcon={
+        dot ? (
+          <>
+            {children}
+            <span className={styles.dot} aria-hidden />
+          </>
+        ) : (
+          children
+        )
+      }
       {...props}
     />
   );
   if (tooltip === false) return button;
+  const content = tooltip === true ? (dot ? `${label} · ${dot}` : label) : tooltip;
   return (
-    <Tooltip content={tooltip === true ? label : tooltip} shortcut={shortcut} side={tooltipSide}>
+    <Tooltip content={content} shortcut={shortcut} side={tooltipSide}>
       {button}
     </Tooltip>
   );

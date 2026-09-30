@@ -24,4 +24,36 @@
   .iconButton[data-size='lg'] {
     --btn-icon: 1.25rem;
   }
+
+  /* Something waits behind it: a small accent dot on the icon's shoulder,
+     ringed in the surface colour so it stays crisp over the icon's lines. */
+  .iconButton[data-dot] {
+    position: relative;
+  }
+
+  .dot {
+    --icb-dot: 0.4375rem;
+
+    position: absolute;
+    inset-block-start: calc(50% - var(--btn-icon) / 2 - var(--icb-dot) / 3);
+    inset-inline-end: calc(50% - var(--btn-icon) / 2 - var(--icb-dot) / 3);
+    inline-size: var(--icb-dot);
+    block-size: var(--icb-dot);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-9);
+    box-shadow: 0 0 0 1.5px var(--nc-canvas-raised);
+    animation: icb-dot var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  @keyframes icb-dot {
+    from {
+      transform: scale(0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dot {
+      animation: none;
+    }
+  }
 }

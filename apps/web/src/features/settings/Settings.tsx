@@ -51,6 +51,7 @@ import { useUi, type SettingsTab } from '../../app/ui';
 import { relativeTime } from '../../lib/time';
 import { useAutoFocus } from '../../lib/useAutoFocus';
 import { SecurityTab } from '../auth/SecurityTab';
+import { updatesWaiting, useUpdates } from '../updates/queries';
 import { BrowserSettings } from '../browser/BrowserSettings';
 import { HealthTab } from '../health/HealthTab';
 import { TerminalSettings } from '../terminal/TerminalSettings';
@@ -438,6 +439,7 @@ export function Settings() {
   const close = useUi((s) => s.closeSettings);
   const { data: app } = useAppState();
   const narrow = useMediaQuery('(max-width: 720px)');
+  const updates = updatesWaiting(useUpdates().data);
 
   return (
     <Dialog.Root open={tab !== null} onOpenChange={(o) => !o && close()}>
@@ -457,7 +459,12 @@ export function Settings() {
               </Text>
               <Tabs.List aria-label="Settings sections" className={styles.list}>
                 {tabs.map((t) => (
-                  <Tabs.Trigger key={t.value} value={t.value} icon={t.icon}>
+                  <Tabs.Trigger
+                    key={t.value}
+                    value={t.value}
+                    icon={t.icon}
+                    dot={t.value === 'health' && updates ? 'Update available' : undefined}
+                  >
                     {t.label}
                   </Tabs.Trigger>
                 ))}

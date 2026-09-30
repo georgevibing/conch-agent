@@ -36,6 +36,7 @@ import {
   UpdateSettingsBody,
   UpdateSkillBody,
   UsageBudgetBody,
+  UpdatesSettingsBody,
   type ServerEvent,
 } from '@conch/protocol';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
@@ -55,6 +56,7 @@ import { registerTerminalRoutes } from './terminal/routes';
 import { registerLocalRoutes } from './local/routes';
 import { ProviderError } from './providers/service';
 import { SkillError } from './skills/store';
+import { UpdatesError } from './updates/service';
 import { registerSecurity } from './security';
 import { SERVER_VERSION, type Services } from './services';
 
@@ -106,6 +108,10 @@ function sendError(reply: FastifyReply, error: unknown) {
     const status = { 'not-found': 404, invalid: 400, busy: 409, 'engine-unavailable': 503 }[
       error.code
     ];
+    return reply.code(status).send({ error: error.code, message: error.message });
+  }
+  if (error instanceof UpdatesError) {
+    const status = { 'not-found': 404, busy: 409, unavailable: 503 }[error.code];
     return reply.code(status).send({ error: error.code, message: error.message });
   }
   if (error instanceof ConversationError) {
@@ -522,6 +528,48 @@ export async function buildApp(services: Services) {
       },
     );
   }
+  // ── Updates (ADR 0019) ─────────────────────────────────────────────────
+  // Looking is free and quiet. Updating runs a package manager, or moves
+  // Conch's own folder and restarts it, so it needs a recent password or key;
+  // so does turning automatic updates on (it lets Conch install by itself).
+  // Nothing from the request becomes part of a command: a program is one of
+  // the needs Conch knows, and Conch's update takes no input at all.
+  app.get('/api/updates', () => services.updates.status());
+  app.post('/api/updates/check', async () => {
+    void services.updates.check();
+    return services.updates.status();
+  });
+  app.post('/api/updates/conch', async (request, reply) => {
+    if (verifyRequired(request, reply)) return;
+    return guarded(reply, async () => {
+      await services.updates.updateConch();
+      return services.updates.status();
+    });
+  });
+  app.post('/api/updates/programs', async (request, reply) => {
+    if (verifyRequired(request, reply)) return;
+    return guarded(reply, async () => {
+      await services.updates.updateAll();
+      return services.updates.status();
+    });
+  });
+  app.post<{ Params: { needId: string } }>(
+    '/api/updates/programs/:needId',
+    async (request, reply) => {
+      if (verifyRequired(request, reply)) return;
+      return guarded(reply, async () => {
+        await services.updates.updateProgram(request.params.needId);
+        return services.updates.status();
+      });
+    },
+  );
+  app.patch('/api/updates/settings', async (request, reply) => {
+    const body = parse(UpdatesSettingsBody, request.body, reply);
+    if (!body) return;
+    if (body.auto && verifyRequired(request, reply)) return;
+    return services.updates.setAuto(body.auto);
+  });
+
   // What a catalog entry needs from this computer (ADR 0016). Installing
   // software runs a package manager as you, so it needs a recent password or key.
   app.get<{ Params: { catalogId: string } }>(

@@ -18,10 +18,21 @@ import { agentEnv, findExecutable, launch, type Launch } from '../lib/proc';
 
 export type Platform = 'win32' | 'darwin' | 'linux';
 
-/** An install through the computer's own package manager, run as you. */
+/**
+ * An install through the computer's own package manager, run as you. An
+ * update can also be `self`: the program brings itself up to date
+ * (`claude update`), run from where it was found.
+ */
 export interface InstallRecipe {
-  manager: 'winget' | 'brew' | 'npm';
+  manager: 'winget' | 'brew' | 'npm' | 'self';
   args: string[];
+}
+
+/** Where the newest version of a program is asked for (see `updates/latest.ts`). */
+export interface LatestLookup {
+  npm(pkg: string): Promise<string | undefined>;
+  winget(id: string): Promise<string | undefined>;
+  brew(name: string, cask?: boolean): Promise<string | undefined>;
 }
 
 type Recipes = InstallRecipe | InstallRecipe[];
@@ -58,6 +69,16 @@ export interface NeedSpec {
   install?: Partial<Record<Platform, Recipes>>;
   /** How to bring the copy at `path` up to date: the same way it was installed. */
   update?: (path: string, platform: Platform) => InstallRecipe[];
+  /**
+   * The version of the copy at `path` (usually its `--version`). A need that
+   * can't say is left out of Updates.
+   */
+  version?: (path: string) => Promise<string | undefined>;
+  /**
+   * The newest version, asked of where the copy at `path` came from — the
+   * same judgement as `update` (winget, Homebrew, else npm).
+   */
+  latest?: (path: string, platform: Platform, lookup: LatestLookup) => Promise<string | undefined>;
   download?: Partial<Record<Platform, string>>;
   /** The need whose app Conch opens so you can change a setting (often itself). */
   opens?: string;
@@ -72,7 +93,7 @@ type Spawn = typeof nodeSpawn;
 export interface SetupDeps {
   platform?: Platform;
   /** Finds a package manager; tests point it at a fake. */
-  manager?: (name: InstallRecipe['manager']) => Promise<string | undefined>;
+  manager?: (name: Exclude<InstallRecipe['manager'], 'self'>) => Promise<string | undefined>;
   spawn?: Spawn;
   /** Longest an install may take. */
   timeoutMs?: number;
@@ -200,14 +221,36 @@ export class Setup {
     return this.#first(list(spec.install?.[this.platform]));
   }
 
-  async #first(recipes: InstallRecipe[]): Promise<InstallRecipe | undefined> {
-    for (const recipe of recipes) if (await this.#manager(recipe.manager)) return recipe;
+  async #first(recipes: InstallRecipe[], path?: string): Promise<InstallRecipe | undefined> {
+    for (const recipe of recipes) if (await this.#manager(recipe.manager, path)) return recipe;
     return undefined;
   }
 
-  #manager(name: InstallRecipe['manager']): Promise<string | undefined> {
+  /** The package manager to run; `self` is the program itself, at `path`. */
+  #manager(name: InstallRecipe['manager'], path?: string): Promise<string | undefined> {
+    if (name === 'self') return Promise.resolve(path);
     if (this.deps.manager) return this.deps.manager(name);
     return name === 'npm' ? ownNpm() : findExecutable(name);
+  }
+
+  /** How the copy here would be brought up to date, if Conch can do it on this computer. */
+  async #updateRecipe(
+    spec: NeedSpec,
+  ): Promise<{ recipe: InstallRecipe; path?: string } | undefined> {
+    const path = await this.path(spec);
+    const recipes = path && spec.update ? spec.update(path, this.platform) : [];
+    const recipe = (await this.#first(recipes, path)) ?? (await this.#recipe(spec));
+    return recipe && { recipe, path };
+  }
+
+  /** Conch can update it here (Updates offers the button, or a link instead). */
+  async canUpdate(spec: NeedSpec): Promise<boolean> {
+    return Boolean(await this.#updateRecipe(spec));
+  }
+
+  /** An install or update of this need is running now. */
+  busy(id: string): boolean {
+    return this.#jobs.has(id);
   }
 
   /**
@@ -225,15 +268,18 @@ export class Setup {
    * Homebrew or npm). Like `install`, it resolves once started.
    */
   async update(spec: NeedSpec): Promise<void> {
-    const path = await this.path(spec);
-    const recipes = path && spec.update ? spec.update(path, this.platform) : [];
-    const recipe = (await this.#first(recipes)) ?? (await this.#recipe(spec));
-    if (!recipe) throw new Error(`Conch can’t update ${spec.short} on this computer.`);
-    await this.#start(spec, recipe, 'update');
+    const found = await this.#updateRecipe(spec);
+    if (!found) throw new Error(`Conch can’t update ${spec.short} on this computer.`);
+    await this.#start(spec, found.recipe, 'update', found.path);
   }
 
-  async #start(spec: NeedSpec, recipe: InstallRecipe, kind: Job['kind']): Promise<void> {
-    const manager = await this.#manager(recipe.manager);
+  async #start(
+    spec: NeedSpec,
+    recipe: InstallRecipe,
+    kind: Job['kind'],
+    path?: string,
+  ): Promise<void> {
+    const manager = await this.#manager(recipe.manager, path);
     if (!manager) throw new Error(`Conch can’t ${kind} ${spec.short} on this computer.`);
     // Checked after the awaits, so two presses can't both start one.
     if (this.#jobs.has(spec.id)) return;

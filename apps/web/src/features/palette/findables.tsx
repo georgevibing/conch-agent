@@ -4,6 +4,7 @@ import {
   BatteryMedium,
   Blocks,
   Brain,
+  CircleArrowUp,
   Cpu,
   Gauge,
   Globe,
@@ -13,6 +14,7 @@ import {
   Paperclip,
   SquareTerminal,
   Plus,
+  RefreshCw,
   Repeat,
   ShieldCheck,
   Sparkles,
@@ -35,6 +37,7 @@ import { useRoutines } from '../routines/queries';
 import { fuzzyFilter, type FuzzyMatch } from '../search/fuzzy';
 import { useSkills } from '../skills/queries';
 import { useTerminalStatus } from '../terminal/queries';
+import { useUpdates } from '../updates/queries';
 
 /** Something ⌘K can find and act on that isn't a chat or a message. */
 export interface Findable {
@@ -166,6 +169,7 @@ export function useFindables(query: string, conversationId: string | undefined):
   const { data: integrations } = useIntegrations();
   const { data: routines } = useRoutines();
   const { data: terminal } = useTerminalStatus();
+  const { data: updates } = useUpdates();
   const q = query.trim();
   if (!q) return [];
 
@@ -371,6 +375,26 @@ export function useFindables(query: string, conversationId: string | undefined):
       icon: <Laptop />,
       run: () => openSettings('providers', 'ollama'),
     },
+    // Both open Settings → Health, which checks (or starts the update, asking
+    // you to confirm it's you) and shows how it goes.
+    {
+      id: 'check-updates',
+      label: 'Check for updates',
+      keywords: 'update updates upgrade new version latest software programs check',
+      icon: <RefreshCw />,
+      run: () => openSettings('health', 'check-updates'),
+    },
+    ...(updates && updates.conch.behind > 0 && !updates.conch.running
+      ? [
+          {
+            id: 'update-conch',
+            label: 'Update Conch',
+            keywords: 'update upgrade install new version latest restart',
+            icon: <CircleArrowUp />,
+            run: () => openSettings('health', 'update-conch'),
+          },
+        ]
+      : []),
     ...settingsPlaces.map((p) => ({
       id: `settings-${p.tab}${p.focus ? `-${p.focus}` : ''}`,
       label: `Settings: ${p.label}`,

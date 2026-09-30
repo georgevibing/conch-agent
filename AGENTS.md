@@ -36,6 +36,7 @@ working agreement 11: _fix it before you ask_.
 | The browser (live view, takeover, per-site permissions)         | `apps/server/src/browser/`, `apps/web/src/features/browser/`, `packages/nacre/src/patterns/Browser/` + [ADR 0014](./docs/adr/0014-browser.md) — security-relevant                                 |
 | The terminal (shells on the host, the drawer, who may open one) | `apps/server/src/terminal/`, `apps/web/src/features/terminal/`, `packages/nacre/src/patterns/Terminal/` + [ADR 0015](./docs/adr/0015-terminal.md) — security-relevant                             |
 | Something a feature needs installed (apps, CLIs, runtimes)      | `apps/server/src/setup/`, Nacre `SetupChecklist` + [ADR 0016](./docs/adr/0016-getting-what-a-feature-needs.md) — security-relevant                                                                |
+| Updates (Conch itself, the programs it uses, rollback)          | `apps/server/src/updates/`, `apps/web/src/features/health/UpdatesSection.tsx`, Nacre `SoftwareUpdate` + [ADR 0019](./docs/adr/0019-updates.md) — security-relevant                                |
 | Attachments (long pastes, files, pictures, drop, previews)      | `apps/server/src/attachments/`, `apps/web/src/features/chat/`, Nacre `Attachments` + [ADR 0017](./docs/adr/0017-attachments.md) — security-relevant                                               |
 | What ⌘K can find by name                                        | `apps/web/src/features/palette/` (`findables.tsx`) — see working agreement 10                                                                                                                     |
 | Repair everything (the whole-Conch checkup, Settings → Health)  | `apps/server/src/doctor/` (`checks.ts`), `apps/web/src/features/health/`, Nacre `RepairPanel` — see working agreement 12                                                                          |
@@ -179,6 +180,10 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
       - The pieces: a status or health carries `fix: {need, kind}` / `need`, the web
         shows `<GetIt needId=…>` (features/setup), and `Services.needLanded` re-checks
         whatever was waiting when an install lands.
+      - **A new external program Conch depends on is a need with `version` +
+        `latest` (+ `update`)** in `setup/known.ts` (`updatable({...ids})` gives all
+        three). It then shows up in Settings → Health → Updates and in Repair
+        everything by itself, and stays current (ADR 0019).
     - **Retry what passes by itself.** A failure that usually clears (a server
       restarting, a blip offline, an expired token) is retried with backoff and a
       renewal, not handed to the person as “Try again”. Only ask when the fix

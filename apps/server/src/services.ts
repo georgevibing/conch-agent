@@ -18,6 +18,7 @@ import { MockEngine } from './engines/mock/engine';
 import type { Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
 import { registerCoreChecks } from './doctor/checks';
+import { BOOT_ID, restart, restartable } from './lib/lifecycle';
 import { Doctor } from './doctor/service';
 import { NetworkWatch } from './network/watch';
 import { Healed } from './lib/healed';
@@ -38,7 +39,13 @@ import { RoutineStore } from './routines/store';
 import { SettingsStore } from './settings/store';
 import { SkillService } from './skills/service';
 import { externalRoots, SkillStore } from './skills/store';
+import { ConchCheckout, findCheckout } from './updates/conch';
+import { updatesCheck } from './updates/doctor';
+import { lookup } from './updates/latest';
+import { mockPrograms } from './updates/mock';
+import { UpdatesService } from './updates/service';
 import { UsageService } from './usage/service';
+import { SERVER_VERSION } from './version';
 
 export { SERVER_VERSION } from './version';
 
@@ -95,6 +102,8 @@ export class Services {
   readonly mockVendor?: MockVendor;
   /** Full-text search over every conversation; rebuilds its index when it breaks. */
   readonly search: SearchService;
+  /** Updates for Conch and the programs it uses (ADR 0019). */
+  readonly updates: UpdatesService;
   #login?: { handle: LoginHandle; state: LoginState };
   #sweeper?: NodeJS.Timeout;
 
@@ -297,6 +306,37 @@ export class Services {
           );
       });
     });
+    this.updates = this.#updates(config);
+    this.doctor.register(updatesCheck(this.updates));
+  }
+
+  /**
+   * Updates. The mock engine gets pretend programs, and Conch's own folder
+   * only when `CONCH_CHECKOUT` names one: a test never moves a real checkout.
+   */
+  #updates(config: Config): UpdatesService {
+    const mock = config.CONCH_ENGINE === 'mock';
+    const programs = mock
+      ? mockPrograms(config.CONCH_HOME)
+      : { specs: KNOWN_NEEDS, setup: this.setup, lookup: lookup() };
+    const root =
+      mock && !config.CONCH_CHECKOUT
+        ? undefined
+        : findCheckout(import.meta.dirname, config.CONCH_CHECKOUT);
+    return new UpdatesService({
+      home: config.CONCH_HOME,
+      ...programs,
+      conch: root ? new ConchCheckout(root) : undefined,
+      version: SERVER_VERSION,
+      bootId: BOOT_ID,
+      emit: (status) => this.broadcast.emit({ type: 'updates.changed', status }),
+      heal: (message) => void this.healed.note('updates', message),
+      busy: () => this.conversations.busy(),
+      landed: (id) => this.#recheckWaiting(id),
+      restartable,
+      restart,
+      schedule: (config.CONCH_UPDATE_CHECKS ?? (mock ? 'off' : 'auto')) === 'auto',
+    });
   }
 
   /** The default provider: your choice, or `CONCH_ENGINE` when it's set. */
@@ -332,12 +372,14 @@ export class Services {
       60 * 60 * 1000,
     );
     this.#sweeper.unref();
+    this.updates.start();
   }
 
   stop() {
     clearInterval(this.#sweeper);
     this.#sweeper = undefined;
     this.network.stop();
+    this.updates.stop();
   }
 
   /** A provider on this computer that's ready to answer, for when the internet isn't there. */
@@ -406,6 +448,12 @@ export class Services {
    * half a minute, provider detection for twenty seconds).
    */
   async needLanded(id: string): Promise<void> {
+    await this.#recheckWaiting(id);
+    // Updates reads its version again (an update from Repair or a provider's page).
+    await this.updates.landed(id);
+  }
+
+  async #recheckWaiting(id: string): Promise<void> {
     if (id === 'op') await this.keys.vault.onePassword.state({ force: true });
     // Ollama just landed: start it (quietly), so getting a model can follow straight on.
     if (id === 'ollama') await this.local.ensureRunning({ note: false });
