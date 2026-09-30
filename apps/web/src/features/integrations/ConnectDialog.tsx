@@ -12,7 +12,14 @@ import {
   type HandshakePhase,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowUpRight, Check, KeyRound, MessageSquare, RotateCw } from 'lucide-react';
+import {
+  ArrowUpRight,
+  Check,
+  CornerDownLeft,
+  KeyRound,
+  MessageSquare,
+  RotateCw,
+} from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -106,6 +113,9 @@ export function ConnectDialog({
   existingId,
   onOpenChange,
   onAlternative,
+  inChat,
+  onAskAgain,
+  onCloseAutoFocus,
 }: {
   entry: CatalogEntry | undefined;
   /** Finish setting up one that's already added (its card said “Finish setup”). */
@@ -113,11 +123,20 @@ export function ConnectDialog({
   onOpenChange: (open: boolean) => void;
   /** Switch to another catalog entry (e.g. Zapier, to reach a service with every model). */
   onAlternative?: (catalogId: string) => void;
+  /**
+   * Opened from a chat's offer to connect: once connected it offers to ask
+   * the question again, and nothing in it leads away from the chat.
+   */
+  inChat?: boolean;
+  /** Send the chat's question again (closes the dialog first). */
+  onAskAgain?: () => void;
+  /** Where focus goes when it closes (the button that opened it may be gone by then). */
+  onCloseAutoFocus?: (event: Event) => void;
 }) {
   const open = Boolean(entry);
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content size="md" aria-describedby={undefined}>
+      <Dialog.Content size="md" aria-describedby={undefined} onCloseAutoFocus={onCloseAutoFocus}>
         {entry && (
           <ConnectFlow
             key={entry.id}
@@ -125,6 +144,8 @@ export function ConnectDialog({
             existingId={existingId}
             onClose={() => onOpenChange(false)}
             onAlternative={onAlternative}
+            inChat={inChat}
+            onAskAgain={onAskAgain}
           />
         )}
       </Dialog.Content>
@@ -137,11 +158,15 @@ function ConnectFlow({
   existingId,
   onClose,
   onAlternative,
+  inChat,
+  onAskAgain,
 }: {
   entry: CatalogEntry;
   existingId?: string;
   onClose: () => void;
   onAlternative?: (catalogId: string) => void;
+  inChat?: boolean;
+  onAskAgain?: () => void;
 }) {
   const client = useQueryClient();
   const navigate = useNavigate();
@@ -271,7 +296,8 @@ function ConnectFlow({
       <Dialog.Body>
         {phase === 'connected' ? (
           <Stack gap={5}>
-            <TryIt entry={entry} onPick={tryIt} />
+            {/* In a chat, the question to try is the one just asked. */}
+            {!inChat && <TryIt entry={entry} onPick={tryIt} />}
             {current?.health.state === 'warning' && (
               <Callout tone="warning">{current.health.message}</Callout>
             )}
@@ -321,7 +347,24 @@ function ConnectFlow({
       </Dialog.Body>
 
       <Dialog.Footer className={styles.connectFooter}>
-        {phase === 'connected' ? (
+        {phase === 'connected' && inChat ? (
+          <>
+            <Button variant={onAskAgain ? 'ghost' : 'solid'} onClick={onClose}>
+              Done
+            </Button>
+            {onAskAgain && (
+              <Button
+                leadingIcon={<CornerDownLeft />}
+                onClick={() => {
+                  onClose();
+                  onAskAgain();
+                }}
+              >
+                Ask again
+              </Button>
+            )}
+          </>
+        ) : phase === 'connected' ? (
           <>
             {current && (
               <Button

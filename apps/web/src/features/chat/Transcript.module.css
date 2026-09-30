@@ -23,6 +23,21 @@
     animation-delay: 0s !important;
   }
 
+  /* “Not now”: as the offer folds away, the gap it sat in closes with it. */
+  .suggestion {
+    transition: margin-block-start var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .suggestion[data-state='dismissed'] {
+    margin-block-start: calc(var(--nc-space-6) * -1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .suggestion {
+      transition: none;
+    }
+  }
+
   .user[data-pending] {
     opacity: 0.72;
   }

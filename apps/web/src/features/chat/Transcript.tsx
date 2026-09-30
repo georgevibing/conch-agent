@@ -18,7 +18,7 @@ import {
   type Wait,
 } from './TranscriptItems';
 import { BrowserApprovalItem, BrowserTrailItem, HandoffItem } from '../browser/ChatCards';
-import { IntegrationIssue } from '../integrations/ChatBits';
+import { IntegrationIssue, IntegrationSuggestion } from '../integrations/ChatBits';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
 import { RoutineInstruction } from '../routines/RunBanner';
 import styles from './Transcript.module.css';
@@ -39,6 +39,10 @@ export interface TranscriptProps {
   columnRef?: Ref<HTMLDivElement>;
   /** For the browser's thumbnails and buttons. */
   conversationId?: string;
+  /** Send a message of yours again (an offer to connect an app: “Ask again”). */
+  onAskAgain?: (messageId: string) => void;
+  /** Give the message box focus back (something that had it went away). */
+  focusComposer?: () => void;
 }
 
 /** Tolerance for the gateway's clock running a little behind this device's. */
@@ -78,6 +82,28 @@ function blocks(items: TranscriptItem[]): Block[] {
   return out;
 }
 
+/**
+ * An offer to connect an app is logged as the turn starts, but it belongs
+ * under the reply: the answer says what it can do without the app, and the
+ * offer is right there after it. While the turn runs it waits.
+ */
+function placeSuggestions(items: TranscriptItem[], holdLast: boolean): TranscriptItem[] {
+  const out: TranscriptItem[] = [];
+  let held: TranscriptItem[] = [];
+  for (const item of items) {
+    if (item.kind === 'integration-suggestion') {
+      held.push(item);
+      continue;
+    }
+    if (item.kind === 'user' && held.length) {
+      out.push(...held);
+      held = [];
+    }
+    out.push(item);
+  }
+  return holdLast ? out : [...out, ...held];
+}
+
 function timeOf(item: TranscriptItem): number | undefined {
   if (item.kind === 'user') return item.at;
   if (item.kind === 'assistant' || item.kind === 'tool') return item.startedAt;
@@ -97,6 +123,8 @@ export function Transcript({
   columnRef,
   conversationId,
   routineRun,
+  onAskAgain,
+  focusComposer,
 }: TranscriptProps & {
   /** This conversation is a routine run: its first message is the routine's instruction. */
   routineRun?: boolean;
@@ -119,7 +147,13 @@ export function Transcript({
   ];
   // The model's hidden reasoning arrives as empty items that render nothing, so they
   // mustn't count as "something arrived" — the wait stays until there's something to see.
-  const last = items.filter((i) => !(i.kind === 'assistant' && !i.text && !i.thinking)).at(-1);
+  // Offers to connect an app wait for the reply, so they don't count either.
+  const last = items
+    .filter(
+      (i) =>
+        !(i.kind === 'assistant' && !i.text && !i.thinking) && i.kind !== 'integration-suggestion',
+    )
+    .at(-1);
   const lastErrorId = [...items].reverse().find((i) => i.kind === 'turn-end')?.id;
   const turnStart = items.findLastIndex((i) => i.kind === 'user');
   const prompt = turnStart === -1 ? '' : (items[turnStart] as { text: string }).text;
@@ -140,6 +174,8 @@ export function Transcript({
   };
   // Nothing from the assistant yet this turn: hold its place with the wait.
   const placeholder = busy && last?.kind === 'user';
+  const lastUserId = items.findLast((i) => i.kind === 'user')?.id;
+  const turnRunning = running || pending.length > 0;
   // Between steps (a tool finished, a reply paused): a quieter wait that appears only if it lingers.
   const between =
     busy &&
@@ -157,7 +193,7 @@ export function Transcript({
   return (
     <MessageList className={styles.list} aria-label="Conversation" overlay={overlay}>
       <div ref={columnRef} className={styles.column}>
-        {blocks(items).map((block) => (
+        {blocks(placeSuggestions(items, turnRunning)).map((block) => (
           <Arrival key={block.key} live={block.at >= openedAt - CLOCK_SLACK_MS}>
             {block.tools && (
               <div className={styles.tools}>
@@ -213,6 +249,20 @@ export function Transcript({
               />
             )}
             {block.item?.kind === 'integration-issue' && <IntegrationIssue item={block.item} />}
+            {block.item?.kind === 'integration-suggestion' && (
+              <IntegrationSuggestion
+                item={block.item}
+                conversationId={conversationId}
+                className={styles.suggestion}
+                onAskAgain={
+                  // Only for the latest question, and not while a reply is being written.
+                  !turnRunning && block.item.askedIn && block.item.askedIn === lastUserId
+                    ? () => onAskAgain?.((block.item as { askedIn: string }).askedIn)
+                    : undefined
+                }
+                onGone={focusComposer}
+              />
+            )}
             {block.item?.kind === 'turn-end' && (
               <TurnEnd
                 item={block.item}

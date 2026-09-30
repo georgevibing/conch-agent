@@ -86,6 +86,21 @@ export type TranscriptItem =
       message: string;
     }
   | {
+      /** An offer to connect an app the message was about (connect-from-chat). */
+      kind: 'integration-suggestion';
+      id: string;
+      catalogId: string;
+      name: string;
+      description: string;
+      color?: string;
+      /** Connected through this catalog entry instead (Zapier). */
+      via?: string;
+      /** “Not now” was pressed. */
+      dismissed: boolean;
+      /** The message that brought it up: what “Ask again” sends. */
+      askedIn?: string;
+    }
+  | {
       kind: 'skill';
       id: string;
       skillId: string;
@@ -353,6 +368,37 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
           },
         ],
       };
+    }
+    case 'integration.suggestion': {
+      if (items.some((i) => i.kind === 'integration-suggestion' && i.catalogId === event.catalogId))
+        return base;
+      const asked = items.findLast((i) => i.kind === 'user');
+      return {
+        ...base,
+        items: [
+          ...items,
+          {
+            kind: 'integration-suggestion',
+            id: `suggest-${event.catalogId}`,
+            catalogId: event.catalogId,
+            name: event.name,
+            description: event.description,
+            ...(event.color && { color: event.color }),
+            ...(event.via && { via: event.via }),
+            dismissed: false,
+            ...(asked && { askedIn: asked.id }),
+          },
+        ],
+      };
+    }
+    case 'integration.suggestion.dismissed': {
+      const updated = updateItem(
+        items,
+        'integration-suggestion',
+        `suggest-${event.catalogId}`,
+        (item) => ({ ...item, dismissed: true }),
+      );
+      return updated ? { ...base, items: updated } : base;
     }
     case 'skill.used':
       return {

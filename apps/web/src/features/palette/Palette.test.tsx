@@ -295,6 +295,13 @@ describe('Palette search', () => {
       expect(screen.queryByRole('option', { name: /Settings: Memory/ })).toBeNull(),
     );
 
+    // Where apps you muted in a chat can be suggested again.
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'suggestions');
+    expect(
+      await screen.findByRole('option', { name: /Settings: Models & modes/ }),
+    ).toBeInTheDocument();
+
     // The browser's settings answer to the words people use for it.
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'cookies');

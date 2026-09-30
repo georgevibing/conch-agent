@@ -538,6 +538,11 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
           const last = lastUserMessage(view);
           if (last) send(last.text, last.attachments);
         }}
+        onAskAgain={(messageId) => {
+          const asked = view.items.find((i) => i.kind === 'user' && i.id === messageId);
+          if (asked?.kind === 'user') send(asked.text, asked.attachments ?? []);
+        }}
+        focusComposer={() => composerRef.current?.focus()}
         recover={recover}
       />
       <div className={styles.dock}>{composer}</div>

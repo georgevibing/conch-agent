@@ -152,6 +152,13 @@ export const api = {
   renameConversation: (id: string, title: string) =>
     request(Ok, `/api/conversations/${id}`, { method: 'PATCH', body: { title } }),
   deleteConversation: (id: string) => request(Ok, `/api/conversations/${id}`, { method: 'DELETE' }),
+  /** “Not now” on an offer to connect an app, for the rest of this conversation. */
+  dismissSuggestion: (id: string, catalogId: string) =>
+    request(
+      Ok,
+      `/api/conversations/${encodeURIComponent(id)}/suggestions/${encodeURIComponent(catalogId)}/dismiss`,
+      { method: 'POST', body: {} },
+    ),
 
   search: (q: string, options: { in?: string; limit?: number; signal?: AbortSignal } = {}) => {
     const params = new URLSearchParams({ q });

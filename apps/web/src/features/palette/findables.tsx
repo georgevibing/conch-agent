@@ -55,7 +55,8 @@ const settingsPlaces: { tab: SettingsTab; label: string; keywords: string; icon:
   {
     tab: 'models',
     label: 'Models & modes',
-    keywords: 'default model thinking effort permissions',
+    keywords:
+      'default model thinking effort permissions suggestions suggest connect apps offers muted',
     icon: <Gauge />,
   },
   { tab: 'commands', label: 'Commands', keywords: 'slash prompts', icon: <SquareSlash /> },

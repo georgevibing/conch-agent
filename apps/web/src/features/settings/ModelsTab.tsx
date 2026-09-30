@@ -1,7 +1,9 @@
 import type { EffortChoice, PermissionMode } from '@conch/protocol';
 import {
   AlertDialog,
+  Button,
   Field,
+  IntegrationLogo,
   ModelPicker,
   RadioGroup,
   SegmentedControl,
@@ -13,6 +15,7 @@ import {
 import { useState } from 'react';
 
 import { useAppState, useModels, useUpdateSettings } from '../../api/queries';
+import { useIntegrations } from '../integrations/queries';
 import { availableModes, effortOptions, pickerProviders } from '../models/catalog';
 import { findModel, modelKey, parseModelKey } from '../models/useTurnOptions';
 import { fuzzyMatch } from '../search/fuzzy';
@@ -162,6 +165,12 @@ export function ModelsTab() {
         </RadioGroup>
       </Section>
 
+      <MutedSuggestions
+        assistant={assistant}
+        muted={prefs?.mutedSuggestions ?? []}
+        onChange={(mutedSuggestions) => save({ mutedSuggestions })}
+      />
+
       <AlertDialog.Root open={confirmTrust} onOpenChange={setConfirmTrust}>
         <AlertDialog.Content tone="danger">
           <AlertDialog.Title>Start every chat in Full trust?</AlertDialog.Title>
@@ -183,5 +192,76 @@ export function ModelsTab() {
         </AlertDialog.Content>
       </AlertDialog.Root>
     </Stack>
+  );
+}
+
+/** “google-calendar” → “Google Calendar”, for an app the catalog here doesn't list. */
+const titleCase = (id: string) =>
+  id
+    .split('-')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+
+/**
+ * Apps you asked the chat never to offer (“Don’t suggest Linear”), each with
+ * a way to change your mind.
+ */
+function MutedSuggestions({
+  assistant,
+  muted,
+  onChange,
+}: {
+  assistant: string;
+  muted: readonly string[];
+  onChange: (muted: string[]) => void;
+}) {
+  const { data } = useIntegrations();
+  return (
+    <Section
+      title="Offers to connect apps"
+      description={`When you ask about an app that isn’t connected, ${assistant} offers to connect it right in the chat.`}
+    >
+      {muted.length ? (
+        <ul className={styles.commandList} aria-label="Apps not suggested">
+          {muted.map((id) => {
+            const entry = data?.catalog.find((c) => c.id === id);
+            const name = entry?.name ?? titleCase(id);
+            return (
+              <li key={id} className={styles.commandRow}>
+                <Stack direction="row" gap={3} align="center" className={styles.commandText}>
+                  <IntegrationLogo
+                    brand={id}
+                    name={name}
+                    color={entry?.color}
+                    size="sm"
+                    decorative
+                  />
+                  <Stack gap={0.5}>
+                    <Text size="sm" weight="medium">
+                      {name}
+                    </Text>
+                    <Text size="xs" tone="subtle">
+                      Not suggested
+                    </Text>
+                  </Stack>
+                </Stack>
+                <Button
+                  size="sm"
+                  variant="surface"
+                  aria-label={`Suggest ${name} again`}
+                  onClick={() => onChange(muted.filter((other) => other !== id))}
+                >
+                  Suggest again
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <Text size="sm" tone="muted">
+          On for every app. Choose “Don’t suggest” on one in a chat, and it shows up here.
+        </Text>
+      )}
+    </Section>
   );
 }
