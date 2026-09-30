@@ -112,6 +112,20 @@ copy.
 - **Disconnecting** makes Conch forget the sign-in. To revoke it on the app's side
   too, remove Conch from that app's "connected apps" settings.
 
+## Backups
+
+- **Conch backs itself up every day, on this computer** (Settings → Health). Those
+  backups never hold your keys or sign-ins: they're already on this disk.
+- **A backup file you download holds your chats and memories.** Keep it somewhere
+  private. Your keys and sign-ins only go in when you choose a passphrase; they're
+  encrypted with it, and Conch can't recover a forgotten one (everything else still
+  restores). Taking them out asks you to confirm it's you.
+- **Restoring asks you to confirm it's you, and shows what comes back first.** What's
+  there now is kept, so you can undo it. Sign-in from a backup keeps the device you
+  restore from signed in and signs every other device out.
+- **Only restore backups you made.** A backup without a passphrase can't prove where
+  it came from.
+
 ## Good habits
 
 - Keep **Ask first** or **Auto** as your default mode. Use **Full trust** only in a
