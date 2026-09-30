@@ -262,12 +262,14 @@
     background: var(--nc-border);
   }
 
-  .requests,
-  .action,
-  .toggle {
+  /* What you can do, above the card's stretched open button. */
+  .controls {
     position: relative;
     z-index: 2;
+    display: flex;
     flex-shrink: 0;
+    align-items: center;
+    gap: var(--nc-space-3);
   }
 
   @media (max-width: 560px) {
@@ -279,8 +281,18 @@
       flex-basis: calc(100% - 3.5rem);
     }
 
-    .action {
-      margin-inline-start: 3.25rem;
+    /* Under the words, lined up with them; the switch keeps to the right. */
+    .controls {
+      flex-basis: 100%;
+      padding-inline-start: 3.25rem;
+    }
+
+    .controls:empty {
+      display: none;
+    }
+
+    .toggle {
+      margin-inline-start: auto;
     }
   }
 

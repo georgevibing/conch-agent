@@ -205,30 +205,32 @@ export function ChannelCard({
           {attention || state === 'off' ? (message ?? status.label) : (meta ?? status.label)}
         </p>
       </div>
-      {requests > 0 && (
-        <Badge tone="info" variant="soft" className={styles.requests}>
-          {requests === 1 ? '1 request' : `${requests} requests`}
-        </Badge>
-      )}
-      {action && (
-        <Button
-          size="sm"
-          variant={attention ? 'solid' : 'soft'}
-          onClick={action.onClick}
-          loading={action.loading}
-          className={styles.action}
-        >
-          {action.label}
-        </Button>
-      )}
-      {onToggle && (
-        <Switch
-          checked={enabled}
-          onCheckedChange={onToggle}
-          aria-label={enabled ? `Turn off ${app}` : `Turn on ${app}`}
-          className={styles.toggle}
-        />
-      )}
+      <div className={styles.controls}>
+        {requests > 0 && (
+          <Badge tone="info" variant="soft" className={styles.requests}>
+            {requests === 1 ? '1 request' : `${requests} requests`}
+          </Badge>
+        )}
+        {action && (
+          <Button
+            size="sm"
+            variant={attention ? 'solid' : 'soft'}
+            onClick={action.onClick}
+            loading={action.loading}
+            className={styles.action}
+          >
+            {action.label}
+          </Button>
+        )}
+        {onToggle && (
+          <Switch
+            checked={enabled}
+            onCheckedChange={onToggle}
+            aria-label={enabled ? `Turn off ${app}` : `Turn on ${app}`}
+            className={styles.toggle}
+          />
+        )}
+      </div>
     </article>
   );
 }
