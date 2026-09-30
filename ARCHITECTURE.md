@@ -255,6 +255,10 @@ src/
   `~/.conch/search.db`, fed by the conversation event stream and caught up on start;
   `GET /api/search` ranks and groups hits with snippets, `GET /api/search/preview`
   shows one in context. See [ADR 0007 — Search](./docs/adr/0007-search.md).
+  `search/service.ts` keeps it working: an index that won't open or breaks mid-run is
+  set aside (`search.db.broken-<time>`) and rebuilt from the logs while results say
+  `catchingUp`. That happens once per run: a second failure answers 503 until a
+  person presses Repair (`POST /api/search/repair`), never a loop.
 - Local data lives in `~/.conch/` (`CONCH_HOME`): `settings.json`, `secrets.json`
   (the API key and a key per provider, or a 1Password reference to one),
   `memory/*.md`, `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `search.db`,

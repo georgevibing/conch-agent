@@ -42,7 +42,7 @@ async function setup() {
   const app = await buildApp(services);
   cleanup = async () => {
     await app.close();
-    services.search?.index.close();
+    services.search.close();
     await rm(home, { recursive: true, force: true, maxRetries: 5 }).catch(() => undefined);
   };
   return { app, services, home };

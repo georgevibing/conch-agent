@@ -26,8 +26,7 @@ import { MockVendor } from './integrations/mock/vendor';
 import { IntegrationService } from './integrations/service';
 import { MemoryStore } from './memory/store';
 import { RoutineService } from './routines/service';
-import { SearchIndex } from './search/index';
-import { SearchIndexer } from './search/indexer';
+import { SearchService } from './search/service';
 import { RoutineStore } from './routines/store';
 import { SettingsStore } from './settings/store';
 import { SkillService } from './skills/service';
@@ -77,8 +76,8 @@ export class Services {
   readonly skills: SkillService;
   /** The pretend SaaS vendor used with the mock engine. */
   readonly mockVendor?: MockVendor;
-  /** Full-text search over every conversation; absent if the index can't be opened. */
-  readonly search?: { index: SearchIndex; indexer: SearchIndexer };
+  /** Full-text search over every conversation; rebuilds its index when it breaks. */
+  readonly search: SearchService;
   #login?: { handle: LoginHandle; state: LoginState };
 
   constructor(readonly config: Config) {
@@ -215,7 +214,18 @@ export class Services {
     });
     this.usage.start();
     void (this.mockVendor?.start() ?? Promise.resolve()).then(() => this.integrations.start());
-    this.search = openSearch(config, conversationStore, this.conversations);
+    this.search = new SearchService({
+      path: join(config.CONCH_HOME, 'search.db'),
+      source: {
+        list: () => conversationStore.list(),
+        events: (id) => conversationStore.events(id),
+        detail: (id) => this.conversations.detail(id),
+      },
+      heal,
+      log: (error) => console.error('[search]', error),
+    });
+    this.conversations.events.on((event) => this.search.onEvent(event));
+    this.search.open();
   }
 
   /** The default provider: your choice, or `CONCH_ENGINE` when it's set. */
@@ -314,30 +324,4 @@ function mockBlueprints(vendor: MockVendor) {
       return { type: 'stdio', command: process.execPath, args: [fixture] };
     return { type: 'http', url: () => vendor.url(id) };
   };
-}
-
-/** The search index is derived data: if it can't be opened, Conch runs without search. */
-function openSearch(
-  config: Config,
-  store: ConversationStore,
-  conversations: ConversationManager,
-): Services['search'] {
-  try {
-    const index = new SearchIndex(join(config.CONCH_HOME, 'search.db'));
-    const indexer = new SearchIndexer(
-      index,
-      {
-        list: () => store.list(),
-        events: (id) => store.events(id),
-        detail: (id) => conversations.detail(id),
-      },
-      (error) => console.error('[search]', error),
-    );
-    conversations.events.on((event) => indexer.onEvent(event));
-    void indexer.start();
-    return { index, indexer };
-  } catch (error) {
-    console.error('[search] index unavailable:', error);
-    return undefined;
-  }
 }

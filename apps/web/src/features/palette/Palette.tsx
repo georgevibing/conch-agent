@@ -7,11 +7,13 @@ import {
   type TextRange,
 } from '@conch/protocol';
 import {
+  Button,
   CommandPalette,
   EmptyState,
   Highlight,
   Kbd,
   SearchPreview,
+  Stack,
   useNacreTheme,
   type SearchPreviewMessage,
 } from '@conch/nacre';
@@ -28,6 +30,7 @@ import {
   Sun,
   TextSearch,
   WandSparkles,
+  Wrench,
 } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router';
@@ -305,6 +308,38 @@ export function Palette() {
     !matchedActions.length &&
     !findables.length;
   const messageCount = search.data?.total ?? 0;
+  const found = `${messageCount}${search.data?.capped ? '+' : ''} ${
+    messageCount === 1 ? 'message' : 'messages'
+  } in ${groups.length}${groups.length >= 12 ? '+' : ''} ${groups.length === 1 ? 'chat' : 'chats'}`;
+  const status =
+    q.length > 0 && q.length < 3 && !titles.length
+      ? 'Keep typing to search messages'
+      : q.length < 3
+        ? ''
+        : search.unavailable
+          ? 'Search isn’t working right now'
+          : !search.data
+            ? ''
+            : search.catchingUp
+              ? groups.length
+                ? `${found} so far, still catching up…`
+                : 'Search is catching up…'
+              : fuzzy && groups.length
+                ? `No exact matches — showing close ones`
+                : groups.length
+                  ? found
+                  : '';
+  const repair = (
+    <Button
+      size="sm"
+      variant="surface"
+      leadingIcon={<Wrench />}
+      loading={search.repairing}
+      onClick={search.repair}
+    >
+      Repair search
+    </Button>
+  );
 
   return (
     <CommandPalette
@@ -327,31 +362,36 @@ export function Palette() {
       }}
       aside={<Preview selection={parse(active)} query={q} />}
       empty={
-        nothing ? (
+        !nothing ? null : search.unavailable ? (
+          // One next step, never a dead end: rebuild it from the chats.
+          <Stack gap={3} align="center" className={styles.empty}>
+            <span>
+              Search isn’t working right now.
+              <br />
+              Repair rebuilds it from your chats.
+            </span>
+            {repair}
+          </Stack>
+        ) : search.catchingUp ? (
+          <span className={styles.empty}>
+            Search is catching up on your chats.
+            <br />
+            Results will appear in a moment.
+          </span>
+        ) : (
           <span className={styles.empty}>
             Nothing matches “{q}”.
             <br />
             Try fewer words, or part of a word.
           </span>
-        ) : null
+        )
       }
       footer={
         <>
           <span className={styles.status} role="status" aria-live="polite">
-            {q.length > 0 && q.length < 3 && !titles.length
-              ? 'Keep typing to search messages'
-              : search.data && q.length >= 3
-                ? fuzzy && groups.length
-                  ? `No exact matches — showing close ones`
-                  : groups.length
-                    ? `${messageCount}${search.data.capped ? '+' : ''} ${
-                        messageCount === 1 ? 'message' : 'messages'
-                      } in ${groups.length}${groups.length >= 12 ? '+' : ''} ${
-                        groups.length === 1 ? 'chat' : 'chats'
-                      }`
-                    : ''
-                : ''}
+            {status}
           </span>
+          {search.unavailable && !nothing && repair}
           <span aria-hidden className={styles.keys}>
             <Kbd keys={['up']} size="sm" />
             <Kbd keys={['down']} size="sm" />

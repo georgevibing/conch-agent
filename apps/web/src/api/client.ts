@@ -15,6 +15,7 @@ import {
   ModelCatalog,
   type EngineId,
   SearchPreview,
+  SearchRepairResult,
   SearchResults,
   type UpdateSettingsBody,
   UsageSnapshot,
@@ -161,4 +162,6 @@ export const api = {
     if (input.anchor) params.set('anchor', input.anchor);
     return request(SearchPreview, `/api/search/preview?${params}`, { signal });
   },
+  /** Rebuild the search index from the chats (after it broke twice). */
+  searchRepair: () => request(SearchRepairResult, '/api/search/repair', { method: 'POST' }),
 };
