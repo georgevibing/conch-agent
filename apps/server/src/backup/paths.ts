@@ -5,6 +5,8 @@ import { BACKUP_LIMITS } from '@conch/protocol';
 import { safeJoin } from '../lib/fs';
 
 const WINDOWS_RESERVED = /^(con|prn|aux|nul|com\d|lpt\d)(\.|$)/i;
+/** `PROGRA~1`: a Windows short name could stand for another file in the same folder. */
+const SHORT_NAME = /~\d+(\.[^.]*)?$/;
 // eslint-disable-next-line no-control-regex -- control characters are exactly what's refused
 const FORBIDDEN = /[\u0000-\u001f\u007f<>:"|?*\\]/;
 
@@ -13,6 +15,8 @@ const FORBIDDEN = /[\u0000-\u001f\u007f<>:"|?*\\]/;
  * only, no `.` or `..` parts, no drive letters or streams (`:`), and no name
  * Windows can't hold (`CON`, a trailing dot or space). Every file on every
  * system Conch runs on can be named this way, so nothing real is lost.
+ * Windows short names (`NOTES~1.MD`) are refused too: one could alias a
+ * sibling file.
  */
 export function validRelPath(path: string): boolean {
   if (!path || path.length > BACKUP_LIMITS.maxPath || path.startsWith('/')) return false;
@@ -25,7 +29,8 @@ export function validRelPath(path: string): boolean {
         part !== '..' &&
         !FORBIDDEN.test(part) &&
         !/[. ]$/.test(part) &&
-        !WINDOWS_RESERVED.test(part),
+        !WINDOWS_RESERVED.test(part) &&
+        !SHORT_NAME.test(part),
     );
 }
 

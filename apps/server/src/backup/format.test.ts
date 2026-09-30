@@ -201,6 +201,7 @@ describe('backing up and reading it back', () => {
       'memory/m.md.',
       'memory/m.md:stream',
       'memory/\u0000.md',
+      'skills/tidy/NOTES~1.MD',
       'x'.repeat(600),
     ])
       expect(validRelPath(bad), bad).toBe(false);
@@ -449,6 +450,17 @@ describe('formats', () => {
       code: 'older',
       message: expect.stringContaining('early Conch'),
     });
+  });
+
+  it('refuses a lock that would ask for too much memory or time', async () => {
+    const lock = {
+      kdf: { name: 'scrypt', N: 2 ** 20, r: 8, p: 1, salt: 'c2FsdA' },
+      cipher: 'aes-256-gcm',
+      nonce: 'bm9uY2U',
+      check: 'Y2hlY2s',
+    };
+    const path = await crafted([], validHeader({ secrets: { mode: 'passphrase', lock } }));
+    await expect(readHeader(path)).rejects.toMatchObject({ code: 'damaged' });
   });
 
   it('refuses a header that isn’t ours', async () => {

@@ -14,7 +14,7 @@ import {
   takenMessage,
   whoHolds,
 } from './port';
-import { Services } from './services';
+import { SERVER_VERSION, Services } from './services';
 import { RESTART_CODE } from './supervisor';
 
 const config = loadConfig();
@@ -45,7 +45,7 @@ if (choice.kind === 'taken') {
 config.CONCH_PORT = choice.port;
 
 // A restore waiting for this start goes into place before any store reads a file (ADR 0020).
-const restored = await applyPendingRestore(config.CONCH_HOME);
+const restored = await applyPendingRestore(config.CONCH_HOME, { conchVersion: SERVER_VERSION });
 if (restored.kind === 'applied') console.warn('\n  🐚  Your backup is restored.');
 if (restored.kind === 'failed')
   console.error(`\n  Conch couldn’t finish restoring your backup: ${restored.error}`);

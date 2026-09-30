@@ -13,7 +13,10 @@ import { dirname, join } from 'node:path';
 import { Id, RestoredFrom } from '@conch/protocol';
 import { z } from 'zod';
 
-import { writeJson } from '../lib/fs';
+import { BACKUP_EXTENSION } from '@conch/protocol';
+
+import { safeJoin, writeFileAtomic, writeJson } from '../lib/fs';
+import { writeBackup } from './format';
 import { classify, GROUP_DIRS, walk, type BackupGroup } from './manifest';
 import { safeJoinPath, validRelPath } from './paths';
 
@@ -147,10 +150,41 @@ export type ApplyResult =
   { kind: 'none' } | { kind: 'applied'; plan: Plan } | { kind: 'failed'; error: string };
 
 /**
+ * The Undo copy, made again from what's here right now: things may have
+ * changed since the restore was asked for (when Conch was restarted by hand
+ * later). Only on the first go; a restore cut short keeps the copy it made.
+ */
+async function refreshUndo(home: string, plan: Plan, conchVersion: string): Promise<void> {
+  if (!plan.undoId) return;
+  const marker = join(stagingDir(home), 'undo-refreshed');
+  if (
+    await stat(marker).then(
+      () => true,
+      () => false,
+    )
+  )
+    return;
+  try {
+    await writeBackup(home, safeJoin(backupsDir(home), `${plan.undoId}${BACKUP_EXTENSION}`), {
+      kind: 'before-restore',
+      groups: plan.groups.filter((g) => g !== 'secrets'),
+      ...(plan.groups.includes('secrets') && { secrets: { mode: 'local' as const } }),
+      conchVersion,
+    });
+  } catch {
+    // The copy made when the restore was asked for is still there.
+  }
+  await writeFileAtomic(marker, '');
+}
+
+/**
  * Finish a restore that's waiting, before anything else reads `home`. A
  * staging folder without a plan was never finished, so it's cleared away.
  */
-export async function applyPendingRestore(home: string): Promise<ApplyResult> {
+export async function applyPendingRestore(
+  home: string,
+  options: { conchVersion?: string } = {},
+): Promise<ApplyResult> {
   const dir = stagingDir(home);
   let raw: unknown;
   try {
@@ -171,6 +205,7 @@ export async function applyPendingRestore(home: string): Promise<ApplyResult> {
     return { kind: 'failed', error: 'The restore that was waiting couldn’t be read.' };
   }
   try {
+    await refreshUndo(home, plan.data, options.conchVersion ?? 'unknown');
     await applyPlan(home, plan.data);
   } catch (error) {
     // Left staged: the next start tries again, and gets the same result.

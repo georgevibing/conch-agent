@@ -33,15 +33,15 @@ const b64 = z.string().regex(/^[A-Za-z0-9_-]+$/);
 export const Lock = z.object({
   kdf: z.object({
     name: z.literal('scrypt'),
-    // Bounded, so a crafted header can't ask for gigabytes of memory.
+    // Bounded, so a crafted header can't ask for more than 512 MiB (128·N·r) or minutes of work.
     N: z
       .number()
       .int()
       .min(2 ** 15)
-      .max(2 ** 20)
+      .max(2 ** 18)
       .refine((n) => (n & (n - 1)) === 0, 'N must be a power of two'),
-    r: z.number().int().min(8).max(32),
-    p: z.number().int().min(1).max(4),
+    r: z.number().int().min(8).max(16),
+    p: z.number().int().min(1).max(2),
     salt: b64,
   }),
   cipher: z.literal('aes-256-gcm'),

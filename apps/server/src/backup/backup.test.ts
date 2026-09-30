@@ -445,6 +445,28 @@ describe('finishing a restore at start', () => {
     ]);
   });
 
+  it('makes the Undo copy again at start, with what changed while it waited', async () => {
+    const a = await open();
+    await useConch(a);
+    const [daily] = await a.services.backups.list();
+    await a.services.backups.restore(daily?.id ?? '');
+    // Conch keeps running until someone restarts it; meanwhile, a new memory.
+    await a.services.memory.add({ content: 'Added while the restore waited.', source: 'user' });
+    const plan = Plan.parse(
+      JSON.parse(await readFile(join(stagingDir(a.home), 'plan.json'), 'utf8')),
+    );
+    const b = (await restart(a)).g;
+    expect((await b.services.memory.list()).map((m) => m.content)).toEqual([
+      'Ada takes her tea with lemon.',
+    ]);
+    const undone = await b.services.backups.restore(plan.undoId ?? '');
+    expect(undone.kind).toBe('before-restore');
+    const c = (await restart(b)).g;
+    expect((await c.services.memory.list()).map((m) => m.content).sort()).toEqual(
+      ['Added while the restore waited.', 'Ada takes her tea with lemon.'].sort(),
+    );
+  });
+
   it('clears a staging folder that never got its plan, and does nothing else', async () => {
     const home = await mkdtemp(join(tmpdir(), 'conch-stage-'));
     await writeFile(join(home, 'settings.json'), '{}');
