@@ -4,6 +4,8 @@ packages:
 
 allowBuilds:
   esbuild: true
+  # Its install step picks the prebuilt binary for this machine (or compiles on Linux).
+  node-pty: true
 autoInstallPeers: true
 minimumReleaseAgeExclude:
   - '@typescript-eslint/eslint-plugin@8.71.0'

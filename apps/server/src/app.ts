@@ -42,6 +42,7 @@ import { preview } from './routines/schedule';
 import { RoutineError } from './routines/service';
 import { registerAuthRoutes } from './auth/routes';
 import { registerBrowserRoutes } from './browser/routes';
+import { registerTerminalRoutes } from './terminal/routes';
 import { ProviderError } from './providers/service';
 import { SkillError } from './skills/store';
 import { registerSecurity } from './security';
@@ -127,7 +128,9 @@ export async function buildApp(services: Services) {
   await app.register(fastifyWebsocket, { options: { maxPayload: 1_000_000 } });
   registerAuthRoutes(app, services, gate);
   registerBrowserRoutes(app, services, gate);
+  registerTerminalRoutes(app, services, gate);
   app.addHook('onClose', () => services.browser.stop());
+  app.addHook('onClose', async () => services.terminal.stop());
 
   // Every `:id` / `:name` in a URL is checked before any handler sees it, so
   // `..%2F..%2Fanything` can never become a path on disk.

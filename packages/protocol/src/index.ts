@@ -23,9 +23,10 @@ export * from './providers';
 export * from './routines';
 export * from './search';
 export * from './skills';
+export * from './terminal';
 export * from './usage';
 
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 /** A user-defined slash command: a reusable prompt. `{{input}}` is replaced by what follows the command. */
 export const CommandName = z
@@ -378,6 +379,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('skills.changed') }),
   /** Remaining usage changed (a turn finished, a window reset, the provider warned). */
   z.object({ type: z.literal('usage.changed'), usage: UsageSnapshot }),
+  /** Terminals were opened, closed or ended somewhere: refetch the list. */
+  z.object({ type: z.literal('terminal.changed') }),
   /** The browser started, stopped, is installing (with progress), healed itself or needs you. */
   z.object({ type: z.literal('browser.status'), status: BrowserStatus }),
   z.object({ type: z.literal('pong') }),

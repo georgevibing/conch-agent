@@ -79,6 +79,8 @@ export interface CheckupInput {
   workspaceRules?: string[];
   /** Integrations that act without asking. */
   trustedIntegrations?: string[];
+  /** Other devices may open terminals (Settings › Terminal). */
+  terminalRemote?: boolean;
   /** The agent's browser may open pages on this computer and your network (Settings › Browser). */
   browserLocal?: boolean;
   /** A connected provider, and whether Conch can ask you before each step with it (the one that can't, if any). */
@@ -119,7 +121,7 @@ export function checkup(input: CheckupInput): CheckupItem[] {
             level: 'info',
             title: 'No sign-in on this computer',
             detail:
-              'Only this computer can open Conch. If other people use this computer, add a password so they can’t use your assistant.',
+              'Only this computer can open Conch. If other people use this computer, add a password so they can’t use your assistant or open a terminal as you.',
           },
     );
   } else {
@@ -200,6 +202,16 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       level: 'warn',
       title: `${names.length === 1 ? `${names[0]} acts` : `${names.length} integrations act`} without asking`,
       detail: `${names.join(', ')} can send, change and delete things on your behalf without checking with you. An email or page the assistant reads could trick it into doing that. In Integrations, choose “Ask before changes” instead.`,
+    });
+  }
+
+  if (input.terminalRemote) {
+    items.push({
+      id: 'terminal-remote',
+      level: 'warn',
+      title: 'Other devices can open a terminal',
+      detail:
+        'Anyone signed in on another device can run any command on this computer, after confirming it’s you. If you don’t use terminals away from this computer, turn off “From other devices” in Settings › Terminal.',
     });
   }
 

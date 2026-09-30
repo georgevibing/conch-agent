@@ -4,6 +4,7 @@ import type { EngineId, LoginState, ServerEvent, SkillSource } from '@conch/prot
 
 import { AccessStore } from './auth/store';
 import { BrowserService } from './browser/service';
+import { TerminalService } from './terminal/service';
 import { Gatekeeper } from './security';
 import type { Config } from './config';
 import { CommandStore } from './commands/store';
@@ -60,6 +61,7 @@ export class Services {
   readonly routines: RoutineService;
   readonly conversations: ConversationManager;
   readonly browser: BrowserService;
+  readonly terminal: TerminalService;
   readonly engines: Map<EngineId, Engine>;
   /** Where every provider's key lives, whether that's here or in 1Password. */
   readonly keys: ProviderKeys;
@@ -136,6 +138,13 @@ export class Services {
       emit: (event) => this.broadcast.emit(event),
       onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
     });
+    this.terminal = new TerminalService({
+      home: config.CONCH_HOME,
+      workspace: () => this.settings.workspace(),
+      emit: (event) => this.broadcast.emit(event),
+    });
+    // A device that's signed out takes the terminals it opened with it.
+    this.gate.signedOut.on((ids) => this.terminal.endOwnedBy(ids.map((id) => `session:${id}`)));
     this.browser = new BrowserService({
       home: config.CONCH_HOME,
       gatewayPort: config.CONCH_PORT,

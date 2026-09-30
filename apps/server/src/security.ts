@@ -2,6 +2,7 @@ import type { AccessMethod, AuthStatus } from '@conch/protocol';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import type { Config } from './config';
+import { Emitter } from './lib/emitter';
 import { SignInLimiter } from './auth/limiter';
 import { HostPolicy, isLoopbackAddress, isLoopbackHost } from './auth/network';
 import { safeEqual } from './auth/secrets';
@@ -64,6 +65,8 @@ export class Gatekeeper {
   readonly hosts: HostPolicy;
   /** Open sockets per session, so signing a device out disconnects it at once. */
   readonly #sockets = new Map<string, Set<{ close(code?: number, reason?: string): void }>>();
+  /** Sessions just signed out, so what they started (terminals) can end with them. */
+  readonly signedOut = new Emitter<string[]>();
 
   constructor(
     readonly config: Config,
@@ -191,10 +194,12 @@ export class Gatekeeper {
 
   /** Disconnect signed-out devices right away. */
   disconnect(sessionIds: Iterable<string>): void {
-    for (const id of sessionIds) {
+    const ids = [...sessionIds];
+    for (const id of ids) {
       for (const socket of this.#sockets.get(id) ?? []) socket.close(4401, 'Signed out');
       this.#sockets.delete(id);
     }
+    if (ids.length) this.signedOut.emit(ids);
   }
 
   disconnectAll(except?: string): void {

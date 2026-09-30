@@ -41,6 +41,7 @@ const findings = checkup({
   workspaceRules: await workspaceRules(await services.settings.workspace()),
   trustedIntegrations: await services.integrations.store.trusted(),
   browserLocal: (await services.browser.store.settings()).allowLocal,
+  terminalRemote: (await services.terminal.settings()).allowRemote,
   provider: services.providers.activeCopy(),
 }).filter((item) => item.level === 'danger' || item.level === 'warn');
 for (const item of findings) {

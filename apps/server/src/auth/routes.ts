@@ -102,6 +102,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
         workspaceRules: await workspaceRules(await services.settings.workspace()),
         trustedIntegrations: await services.integrations.store.trusted(),
         browserLocal: (await services.browser.store.settings()).allowLocal,
+        terminalRemote: (await services.terminal.settings()).allowRemote,
         provider: await services.providers.checkupCopy(),
       }),
       exposure: exposure(services.config),
@@ -218,6 +219,8 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
     try {
       const ended = await store.revokeKey(id);
       gate.disconnect(ended);
+      // Terminals opened with this key (not a session) end too.
+      services.terminal.endOwnedBy([`key:${id}`]);
       if (ended.includes(currentSessionId(request) ?? ''))
         reply.header('set-cookie', gate.clearCookies());
     } catch (error) {
@@ -233,6 +236,8 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
     if (!requireVerified(request, reply)) return;
     const ended = await store.disable();
     gate.disconnect(ended);
+    // With sign-in off, other devices can't get in: nor can their terminals stay.
+    services.terminal.endWhere((s) => s.meta.openedFrom === 'another-device');
     reply.header('set-cookie', gate.clearCookies());
     return { ok: true };
   });
