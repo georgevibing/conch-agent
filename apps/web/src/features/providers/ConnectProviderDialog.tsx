@@ -344,7 +344,7 @@ function Connected({ provider }: { provider: Provider }) {
       <dl className={styles.facts}>
         {status.auth && (
           <>
-            <dt>Account</dt>
+            <dt>{provider.local ? 'Model' : 'Account'}</dt>
             <dd>{status.auth.description}</dd>
           </>
         )}
@@ -380,10 +380,9 @@ function Connected({ provider }: { provider: Provider }) {
       </dl>
       <Stack direction="row" gap={2} wrap>
         {!provider.active && (
-          <Button
-            loading={use.isPending}
-            onClick={() => use.mutate(provider.id)}
-          >{`Make ${provider.name} the default`}</Button>
+          <Button loading={use.isPending} onClick={() => use.mutate(provider.id)}>
+            {provider.local ? 'Use it for new chats' : `Make ${provider.name} the default`}
+          </Button>
         )}
         <Button
           variant="surface"

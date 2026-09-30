@@ -136,7 +136,7 @@ export const OnThisComputer: Story = {
           {...base}
           index={2}
           state="ready"
-          meta="Qwen3.5 9B and 1 more · works offline · 0.35.0"
+          meta="Qwen3.5 9B and 1 more · works offline · Ollama 0.35.0"
           action={{ label: 'Make default', onClick: () => {} }}
           secondary={{ label: 'Details', onClick: () => {} }}
         />

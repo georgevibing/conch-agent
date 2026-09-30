@@ -474,8 +474,7 @@ export function LocalSetup({ provider }: { provider: Provider }) {
             ))}
           </RadioGroup>
           <Text size="xs" tone="subtle">
-            New chats with {provider.name} use the one you pick. You can change it in any chat’s
-            model picker too.
+            Chats on this computer use the one you pick. Any chat can switch in its model picker.
           </Text>
           {active ? (
             <SetupChecklist aria-label="Getting another model">
