@@ -55,7 +55,10 @@
     pointer-events: none;
   }
 
-  /* Rim */
+  /* Rim. The border-box layers are `no-clip`: Chrome anti-aliases a clipped
+     layer's rounded edge outside the composite, so an idle rim (alpha 0) still
+     drew a faint ring round every ghost button. The pseudo-element's own
+     radius clips the paint anyway. */
   [data-lustre]::before {
     padding: 1px;
     background: conic-gradient(from var(--nc-angle) at 50% 50%, var(--nc-pearl-spectrum));
@@ -65,9 +68,9 @@
           rgb(0 0 0 / var(--nc-rim-near)) 0%,
           rgb(0 0 0 / var(--nc-rim-rest)) 100%
         )
-        border-box,
+        border-box no-clip,
       linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0) border-box;
+      linear-gradient(#000 0 0) border-box no-clip;
     mask-composite: intersect, exclude, add;
     opacity: var(--nc-lustre);
   }
