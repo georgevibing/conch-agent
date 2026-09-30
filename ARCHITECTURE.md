@@ -95,7 +95,9 @@ src/
     mock/                     scripted engine for UI work and E2E tests
   providers/                  the words for each engine, connecting them, switching, keys
   secrets/                    where a key lives: this computer, or 1Password (`op read`)
-  setup/                      what features need from this computer; find, install, open
+  setup/                      what features need from this computer; find, install, update, open
+  lib/healed.ts               "fixed on its own" notes (~/.conch/healed.json, `healed` event)
+  lib/path.ts                 the PATH as it is now (Windows registry), refreshed before lookups
 ```
 
 - Each turn calls `query()` from the Claude Agent SDK with `resume` (the Claude Code
@@ -161,7 +163,20 @@ src/
   aliases, macOS app bundles), installs itself through winget/Homebrew with
   progress when a person presses Install (sudo mode), or links to its download.
   Catalog entries list `needs`, and health says `action: 'setup'` until they're
-  here. See [ADR 0016](./docs/adr/0016-getting-what-a-feature-needs.md).
+  here. Needs also cover the provider CLIs (Claude Code, Codex), the 1Password
+  CLI, uv and Docker: `GET /api/needs/:id`, `POST /api/needs/:id/{install,update,open}`
+  (sudo mode for install/update). Provider status and integration health say
+  which need fixes them (`fix`, `need`). Claude Code falls back to the copy the
+  Agent SDK ships when none is installed or the installed one is broken. See
+  [ADR 0016](./docs/adr/0016-getting-what-a-feature-needs.md).
+- **Healing** (`lib/healed.ts`): every self-repair leaves one plain note —
+  integrations that came back, a renewed sign-in, Claude Code's fallback, a held
+  routine that ran once its provider was back. Integrations retry failures that
+  pass by themselves (30 s → 2 min → 10 min → 30 min, `health.retryAt`) and renew
+  an OAuth token once on a 401 before asking anyone to sign in; a refresh that
+  failed only because the service was unreachable is `TransientAuthError`, not
+  "sign in again". Failed turns carry `problem` (signed-out, unavailable, limit,
+  key-locked) so the chat can offer the fix.
 - **Providers** (`providers/`): the engines you can connect, each with the words for
   its card (`providers/catalog.ts`) and its live `EngineStatus`. Every connected one
   is available at once (`providers.ready()`); the default for new chats is
@@ -296,7 +311,11 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   failed; OAuth runs in a popup that lands on `/integrations/done`. Apps that run on
   this computer show a `SetupChecklist` of what they need, with the next step as the
   main button (Install → Open → Connect); `/integrations?setup=<id>` (a card's
-  “Finish setup”) reopens it for one already added. Broken
+  “Finish setup”) reopens it for one already added. "From your providers" offers
+  "Use with every model" for any provider-owned web server
+  (`POST /api/integrations/adopt`; the address stays on the gateway). A failed
+  turn's callout offers the fix for its `problem` and resends by itself after a
+  sign-in; Settings → Security lists what was "Fixed on its own". Broken
   integrations show inline in chats (`integration.issue`) and as a sidebar count.
 - **Skills.** `/skills` lists yours and those found in other agents' folders (with
   a switch each, and fuzzy search); `/skills/new` is one text box — as you pause,

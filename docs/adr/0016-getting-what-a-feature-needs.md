@@ -96,3 +96,25 @@ happens because the person pressed “Install 1Password”.
 - OWASP ASVS 5.0 V8 (authorization of sensitive operations). A step-up
   re-authentication before an action that persists privilege follows NIST SP
   800-63B-4 §2.2 (reauthentication).
+
+## Addendum — beyond integrations (2026-09-30)
+
+The same needs now serve the rest of Conch:
+
+- **Provider CLIs.** Codex (winget `OpenAI.Codex`, Homebrew, npm) and Claude Code
+  (winget `Anthropic.ClaudeCode`, the Homebrew cask, npm) install and update from
+  the provider page. Claude Code usually needs neither: the Agent SDK ships its
+  native CLI per platform, and Conch uses that copy when none is installed or
+  the installed one won't start or is too old — a path you set yourself is
+  never swapped. Updates go the way a program was installed, judged by where it
+  lives (WinGet, a Homebrew prefix, else npm).
+- **npm** runs through Conch's own Node (`npm-cli.js` beside it), so an npm
+  install works with no npm on `PATH`; programs an integration runs with Node
+  (`npx`) fall back to Conch's Node the same way.
+- **The 1Password CLI, uv and Docker** are needs too; Docker Desktop installs as
+  an administrator, so it's linked to rather than installed.
+- **A fresh `PATH`.** On Windows a running process keeps the `PATH` it started
+  with; Conch reads the registry's user and machine `PATH` before every lookup,
+  so something installed a minute ago is found without a restart.
+- `GET /api/needs/:id` and `POST /api/needs/:id/{install,update,open}` serve
+  any known need; install and update need sudo mode, and an unknown id is 404.

@@ -166,9 +166,19 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
         name the setting, offer “Open <app>”, and check again when they come back.
       - A card says what's missing in a few words (“Needs the 1Password app.”) with
         **Finish setup**, never a program name and **Try again**.
-    - **Say what you fixed, quietly.** Record each repair as a plain "fixed on its
-      own" note (e.g. `BrowserStatus.healed`), shown as reassurance, never as an
-      error or a toast that demands attention.
+      - The pieces: a status or health carries `fix: {need, kind}` / `need`, the web
+        shows `<GetIt needId=…>` (features/setup), and `Services.needLanded` re-checks
+        whatever was waiting when an install lands.
+    - **Retry what passes by itself.** A failure that usually clears (a server
+      restarting, a blip offline, an expired token) is retried with backoff and a
+      renewal, not handed to the person as “Try again”. Only ask when the fix
+      really is theirs (a revoked sign-in). A chat whose provider failed offers
+      the next best thing — sign in (then resend by itself), another provider that
+      is ready, or opening 1Password — from the turn's `problem`.
+    - **Say what you fixed, quietly.** Record each repair with
+      `services.healed.note(area, message)`: one plain sentence, shown under
+      Settings → Security → “Fixed on its own” as reassurance, never as an error
+      or a toast that demands attention.
     - **Ask only what matters.**
       - Ask about spending, sending, publishing or deleting; about changes that
         grant trust or reach; and about credentials, which the person types
