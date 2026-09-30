@@ -194,7 +194,10 @@ describe('OAuth integrations', () => {
     await vi.waitFor(async () => expect((await service.get(notion.id)).health.state).toBe('ok'), {
       timeout: 5_000,
     });
-    expect(notes).toContain('Notion wasn’t answering for a while; it’s working again.');
+    // The note is written just after the health: wait for it, not for the state.
+    await vi.waitFor(() =>
+      expect(notes).toContain('Notion wasn’t answering for a while; it’s working again.'),
+    );
     service.stop();
   });
 
