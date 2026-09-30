@@ -12,7 +12,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { mkdir, readdir, readFile, rename, rm, stat, statfs } from 'node:fs/promises';
+import { mkdir, readdir, rename, rm, stat, statfs } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Readable, Transform } from 'node:stream';
@@ -34,6 +34,7 @@ import { BackupError, NO_ROOM } from './archive';
 import { extractBackup, readHeader, writeBackup, type Header } from './format';
 import { groupsFor, walk, type BackupGroup } from './manifest';
 import { backupsDir, Journal, journalPath, Plan, stagingDir } from './restore';
+import { currentAccess, hasSignIn, signInAfterRestore, stagedAccess } from './signin';
 import { dayOf, retain, retainUndo } from './retention';
 
 /** How long nothing must have happened in a chat before a backup starts. */
@@ -556,8 +557,12 @@ export class BackupService {
           header.secrets !== undefined &&
           !(header.secrets.mode === 'passphrase' && options.skipSecrets);
         const groups = header.groups.filter((g) => g !== 'secrets' || withSecrets);
-        const files = [...extracted.files, ...extracted.secrets];
-        if (files.includes('access.json')) await this.#keepSession(staging, options.keepSessionId);
+        let files = [...extracted.files, ...extracted.secrets];
+        const keep: string[] = [];
+        if (files.includes('access.json') && (await this.#signIn(staging, options, kind))) {
+          files = files.filter((f) => f !== 'access.json');
+          keep.push('access.json');
+        }
 
         // What's here now, exactly what the restore replaces: Undo puts it back.
         await this.#roomFor(groups);
@@ -575,6 +580,7 @@ export class BackupService {
           files,
           undoId: undo.id,
           exact: kind === 'before-restore',
+          keep,
         };
         // Written last: its presence is what makes the restore pending.
         await writeJson(join(staging, 'plan.json'), plan);
@@ -589,24 +595,36 @@ export class BackupService {
   }
 
   /**
-   * Sign-in from a backup brings back who may sign in (the password, the
-   * keys) but no signed-in devices: those could be ones you signed out since.
-   * The device restoring stays signed in; every other one signs in again.
+   * Who may sign in after this restore (`signin.ts`): a Conch with sign-in
+   * set up keeps its own password, keys and signed-in devices; one without
+   * (a new computer) takes the backup's, minus any key it doesn't have, with
+   * only the device restoring signed in. Says whether sign-in stays exactly
+   * as it is here (then the staged copy goes).
    */
-  async #keepSession(staging: string, sessionId: string | undefined): Promise<void> {
+  async #signIn(
+    staging: string,
+    options: { keepSessionId?: string },
+    kind: BackupKind | undefined,
+  ): Promise<boolean> {
     const target = join(staging, 'files', 'access.json');
-    const restored = JSON.parse(await readFile(target, 'utf8')) as Record<string, unknown>;
-    let sessions: unknown[] = [];
-    if (sessionId) {
-      const current = await readJson<{ sessions?: unknown }>(
-        join(this.deps.home, 'access.json'),
-      ).catch(() => undefined);
-      const list = Array.isArray(current?.sessions) ? current.sessions : [];
-      sessions = list.filter(
-        (s) => typeof s === 'object' && s !== null && (s as { id?: unknown }).id === sessionId,
-      );
+    const incoming = await stagedAccess(target);
+    const outcome = incoming
+      ? signInAfterRestore(await currentAccess(this.deps.home), incoming, {
+          exact: kind === 'before-restore',
+          keepSessionId: options.keepSessionId,
+        })
+      : ({ kind: 'kept' } as const);
+    if (outcome.kind === 'kept') {
+      await rm(target, { force: true });
+      return true;
     }
-    await writeJson(target, { ...restored, sessions, pairings: [] });
+    await writeJson(target, outcome.file);
+    return false;
+  }
+
+  /** Sign-in stays as it is here when a backup is restored: it's set up already. */
+  async signInStays(): Promise<boolean> {
+    return hasSignIn(await currentAccess(this.deps.home));
   }
 
   /** Forget a restore that's waiting for Conch to start again. */

@@ -46,9 +46,26 @@ The non-obvious ones:
   makes a budget look further off than it is.
 - **`access.json` is a secret, credentials only.** A backup keeps the method,
   username, password hash and access-key hashes — never signed-in devices or
-  pairing codes, which could bring back a device you signed out since. A
-  restore keeps the device restoring signed in and signs every other one out,
-  as changing a password does.
+  pairing codes, which could bring back a device you signed out since.
+- **A restore never brings back a revoked credential** (`signin.ts`). Since
+  the backup was made, a key may have been revoked (a lost phone) or the
+  password changed (it leaked); restoring the old `access.json` would undo
+  that. So:
+  - **A Conch with sign-in set up keeps its own**: the password, the keys and
+    every signed-in device stay exactly as they are, whatever the backup
+    holds. The restore preview says “Your current password and keys stay.”
+    A sign-in file that can't be read counts as set up (it may have held a
+    password), as the store itself treats it.
+  - **Only a Conch without sign-in (a new computer) takes the backup's**, so
+    the person can sign in as before. Only the device restoring stays
+    signed in.
+  - **A key id missing from the current `access.json` never comes back.** On
+    a new computer that means no keys: they're made again
+    (`pnpm conch key`), and a key sign-in left with no key isn't restored at
+    all.
+  - **An Undo copy** is this computer's own state and goes back exactly: the
+    sign-in a restore brought to a new computer is taken away again, and
+    sign-in that the restore kept is kept by Undo too (`Plan.keep`).
 - **`browser/shots/`** are the thumbnails a chat shows for each browser step,
   so they travel with chats. The browser's profile (cookies, sign-ins to
   websites) never does.

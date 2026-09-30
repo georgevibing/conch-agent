@@ -277,16 +277,31 @@ describe('back up, restore on another computer, undo', () => {
     expect((await b.services.integrations.store.secrets(integration?.id ?? '')).values).toEqual({});
   });
 
-  it('keeps the device restoring signed in, and signs the others out', async () => {
+  it('never brings back an old password: the one in use now stays, and every device', async () => {
     const a = await open();
     const { cookie } = await useConch(a);
-    const phone = await signIn(a.app);
     const made = json(
       await a.app.inject({
         method: 'POST',
         url: '/api/backups',
         headers: { cookie },
         payload: { chats: false, passphrase: PASSPHRASE },
+      }),
+    );
+    // The password leaked, so it was changed after the backup.
+    const NEW = 'a brand new sentence nobody knows';
+    const changed = await a.app.inject({
+      method: 'PUT',
+      url: '/api/access/password',
+      headers: { cookie },
+      payload: { username: 'ada', password: NEW },
+    });
+    expect(changed.statusCode).toBe(200);
+    const phone = cookieOf(
+      await a.app.inject({
+        method: 'POST',
+        url: '/api/auth/sign-in',
+        payload: { with: 'password', username: 'ada', password: NEW },
       }),
     );
     const restored = await a.app.inject({
@@ -297,12 +312,73 @@ describe('back up, restore on another computer, undo', () => {
     });
     expect(restored.statusCode).toBe(200);
     const b = (await restart(a)).g;
+    const signInWith = (password: string) =>
+      b.app.inject({
+        method: 'POST',
+        url: '/api/auth/sign-in',
+        payload: { with: 'password', username: 'ada', password },
+      });
+    // The leaked password stays dead; the new one still opens it.
+    expect((await signInWith(PASSWORD)).statusCode).not.toBe(200);
+    expect((await signInWith(NEW)).statusCode).toBe(200);
+    // Sign-in here wasn't touched: every device stays signed in.
     expect((await b.app.inject({ url: '/api/state', headers: { cookie } })).statusCode).toBe(200);
     expect((await b.app.inject({ url: '/api/state', headers: { cookie: phone } })).statusCode).toBe(
-      401,
+      200,
     );
+    // The rest of the keys and sign-ins did come back.
+    expect(await b.services.settings.providerSecret('openrouter')).toMatchObject({
+      value: 'sk-or-v1-0123456789abcdef',
+    });
     // A backup without chats left the chats alone.
     expect((await b.services.conversations.list()).length).toBeGreaterThan(0);
+  });
+
+  it('never brings back a revoked access key', async () => {
+    const a = await open();
+    const { cookie } = await useConch(a);
+    const addKey = async (name: string) =>
+      json(
+        await a.app.inject({
+          method: 'POST',
+          url: '/api/access/keys',
+          headers: { cookie },
+          payload: { name },
+        }),
+      ) as { key: string; info: { id: string } };
+    const laptop = await addKey('Laptop');
+    const lost = await addKey('Lost phone');
+    const made = json(
+      await a.app.inject({
+        method: 'POST',
+        url: '/api/backups',
+        headers: { cookie },
+        payload: { chats: false, passphrase: PASSPHRASE },
+      }),
+    );
+    // The phone was lost after the backup: its key is revoked.
+    const revoked = await a.app.inject({
+      method: 'DELETE',
+      url: `/api/access/keys/${lost.info.id}`,
+      headers: { cookie },
+    });
+    expect(revoked.statusCode).toBe(200);
+    const restored = await a.app.inject({
+      method: 'POST',
+      url: `/api/backups/${String(made.id)}/restore`,
+      headers: { cookie },
+      payload: { passphrase: PASSPHRASE },
+    });
+    expect(restored.statusCode).toBe(200);
+    const b = (await restart(a)).g;
+    const withKey = (key: string) =>
+      b.app.inject({ url: '/api/state', headers: { authorization: `Bearer ${key}` } });
+    expect((await withKey(lost.key)).statusCode).toBe(401);
+    expect((await withKey(laptop.key)).statusCode).toBe(200);
+    const access = JSON.parse(await readFile(join(b.home, 'access.json'), 'utf8')) as {
+      keys: { id: string }[];
+    };
+    expect(access.keys.map((k) => k.id)).toEqual([laptop.info.id]);
   });
 });
 
