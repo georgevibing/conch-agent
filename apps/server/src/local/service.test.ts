@@ -278,6 +278,36 @@ describe('finding Ollama', () => {
     expect(local.contextFor('qwen3:4b-instruct')).toBe(32_768);
   });
 
+  it('never lists a cloud model as one on this computer', async () => {
+    // What `/api/tags` says once someone has signed in to ollama.com and pulled cloud models.
+    const cloud = [
+      {
+        name: 'gpt-oss:120b-cloud',
+        model: 'gpt-oss:120b-cloud',
+        remote_model: 'gpt-oss:120b',
+        remote_host: 'https://ollama.com:443',
+        size: 384,
+        digest: 'c1',
+        details: { family: 'gptoss', parameter_size: '116.8B' },
+      },
+      // An Ollama that doesn't say where it goes: the name still tells.
+      { name: 'qwen3-coder:480b-cloud', size: 382, digest: 'c2' },
+      { name: 'glm-4.6:cloud', size: 380, digest: 'c3' },
+      // Only the host set, with an ordinary-looking name.
+      { name: 'kimi-k2:latest', remote_host: 'https://ollama.com:443', size: 390, digest: 'c4' },
+    ];
+    const { local, calls } = await service({
+      world: { running: true, tags: [...cloud, QWEN_TAG] },
+    });
+    expect((await local.models()).map((m) => m.name)).toEqual(['qwen3:4b-instruct']);
+    // Not even asked about: nothing about them is shown.
+    const shown = calls
+      .filter((c) => c.url.endsWith('/api/show'))
+      .map((c) => (c.body as { model: string }).model);
+    expect(shown).toEqual(['qwen3:4b-instruct']);
+    await expect(local.choose('gpt-oss:120b-cloud')).rejects.toThrow(/isn’t on this computer/);
+  });
+
   it('asks for less context on a small computer, and never more than the model reads', async () => {
     const { local } = await service({
       memory: 7.6 * GiB,

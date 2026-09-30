@@ -37,8 +37,25 @@ const Tag = z.object({
   digest: z.string().nullish(),
   modified_at: z.string().nullish(),
   details: Details,
+  /** Set on a cloud model: Ollama forwards every chat with it to this host. */
+  remote_host: z.string().nullish(),
+  /** The model's name on that host. */
+  remote_model: z.string().nullish(),
 });
 export type OllamaTag = z.infer<typeof Tag>;
+
+/**
+ * A cloud model: listed by Ollama like the others, but every chat with it
+ * goes to ollama.com. It never counts as a model on this computer. Ollama
+ * says so with `remote_host`/`remote_model`; its names end in `-cloud` or
+ * `:cloud` too, which catches an Ollama that doesn't say.
+ */
+export function isCloudTag(
+  tag: Pick<OllamaTag, 'name' | 'model' | 'remote_host' | 'remote_model'>,
+) {
+  if (tag.remote_host?.trim() || tag.remote_model?.trim()) return true;
+  return [tag.name, tag.model ?? ''].some((name) => /[-:]cloud$/i.test(name.trim()));
+}
 
 const Tags = z.object({ models: z.array(Tag).nullish() });
 

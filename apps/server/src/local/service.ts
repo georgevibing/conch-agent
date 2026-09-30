@@ -45,7 +45,7 @@ import {
   offersFor,
   sortModels,
 } from './models';
-import { OllamaClient, contextLength } from './ollama';
+import { OllamaClient, contextLength, isCloudTag } from './ollama';
 import { explainPull, PullMeter } from './pull';
 
 /** How long Ollama gets to answer after Conch starts it (the first start finds the GPU). */
@@ -300,9 +300,12 @@ export class LocalService implements OllamaLink {
 
   // ── Models ──────────────────────────────────────────────────────────────
 
-  /** Models here that can chat, with what each can do. Never reaches the internet. */
+  /**
+   * Models here that can chat, with what each can do. Never reaches the
+   * internet, and never lists a cloud model: that one answers from ollama.com.
+   */
   async models(): Promise<LocalModel[]> {
-    const tags = await this.client.tags();
+    const tags = (await this.client.tags()).filter((tag) => !isCloudTag(tag));
     const chosen = (await this.#settings()).model;
     const models = await Promise.all(
       tags.map(async (tag): Promise<LocalModel | undefined> => {

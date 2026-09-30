@@ -135,6 +135,12 @@ looked up online until a person presses Get.
   page says what to change. `send(…, local: true)` refuses any non-loopback URL
   and follows no redirect. Reaching an Ollama on another machine would need an
   explicit, explained setting; there is none.
+- **Cloud models are never "on this computer".** Ollama lists the cloud
+  models someone pulled (`gpt-oss:120b-cloud`) next to real ones, but every
+  chat with them goes to ollama.com. Conch leaves out any tag with
+  `remote_host` or `remote_model` set, and any name ending in `-cloud` or
+  `:cloud` (for an Ollama that doesn't say), so they're never listed,
+  chosen, or used for an offline answer.
 - **Names are validated** (`LocalModelName`): each part starts with a letter or
   digit, so `.`/`..` can't be a part; no backslashes, spaces, `%`, `?`; at most
   three parts before the tag. **Only models on Conch's list can be downloaded**
