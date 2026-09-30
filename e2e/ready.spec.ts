@@ -33,12 +33,14 @@ test('first run to first conversation', async ({ page, request }) => {
   await page.getByRole('button', { name: 'Start chatting' }).click();
 
   // Settings were saved on the server.
-  const state = await (await request.get('/api/state')).json();
-  expect(state).toMatchObject({
-    onboarded: true,
-    persona: { name: 'Pearl', tone: 'concise' },
-    profile: { name: 'Ada', about: 'I build compilers.' },
-  });
+  // (The last save is on its way as the button is pressed: wait for it, don't race it.)
+  await expect
+    .poll(async () => (await request.get('/api/state')).json())
+    .toMatchObject({
+      onboarded: true,
+      persona: { name: 'Pearl', tone: 'concise' },
+      profile: { name: 'Ada', about: 'I build compilers.' },
+    });
 
   // Empty chat greets by name.
   await expect(page.getByText(/Ada\./).first()).toBeVisible();
