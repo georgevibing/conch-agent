@@ -172,9 +172,12 @@ function Detail({
             )
           }
         >
-          {(health.okAt || health.detail) && (
+          {(health.okAt || health.detail || health.retryAt) && (
             <Stack gap={2}>
               {health.okAt && <span>It last worked {relativeTime(health.okAt)}.</span>}
+              {health.retryAt && health.state === 'error' && (
+                <span>Conch keeps trying by itself — there’s nothing you need to do.</span>
+              )}
               {health.detail && (
                 <details className={styles.detail}>
                   <summary>What the app said</summary>

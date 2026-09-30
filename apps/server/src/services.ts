@@ -144,6 +144,7 @@ export class Services {
       cwd: () => this.settings.workspace(),
       blueprints: this.mockVendor && mockBlueprints(this.mockVendor),
       setup: this.setup,
+      onHeal: (message) => void this.healed.note('integrations', message),
     });
     // Other agents' skill folders are read unless turned off; test runs (the mock engine) don't look.
     const skillSources =

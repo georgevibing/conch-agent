@@ -28,7 +28,7 @@ import {
 } from './catalog';
 import { type Bridge, openBridge } from './bridge';
 import { checkEndpoint, EndpointError, guardedFetch, type Reach, reachOf } from './net';
-import { type FlowDisplay, NeedsAuthError, OAuthFlows } from './oauth';
+import { type FlowDisplay, NeedsAuthError, OAuthFlows, TransientAuthError } from './oauth';
 import { probe as realProbe, type ProbeResult, scrub } from './probe';
 import { IntegrationStore, type IntegrationSecrets, type StoredIntegration } from './store';
 
@@ -58,6 +58,8 @@ export interface TurnIntegrations {
 }
 
 const CHECK_EVERY_MS = 30 * 60_000;
+/** When a check fails for a reason that passes (offline, a restart): look again, then less often. */
+const RETRY_AFTER_MS = [30_000, 2 * 60_000, 10 * 60_000, 30 * 60_000];
 const STALE_MS = 25 * 60_000;
 const STARTUP_DELAY_MS = 4_000;
 
@@ -128,6 +130,10 @@ export interface IntegrationServiceDeps {
   blueprints?: (catalogId: string) => Blueprint | undefined;
   /** Finds and installs what local integrations need; tests and the mock vendor pass their own. */
   setup?: Setup;
+  /** Leaves a “fixed on its own” note (an integration came back by itself). */
+  onHeal?: (message: string) => void;
+  /** How long to wait before each retry; tests shorten it. Unset with `manualChecks`: no retries. */
+  retryAfterMs?: number[];
 }
 
 /**
@@ -143,6 +149,7 @@ export class IntegrationService {
   readonly store: IntegrationStore;
   readonly oauth: OAuthFlows;
   #checking = new Map<string, Promise<StoredIntegration | undefined>>();
+  #retries = new Map<string, { attempt: number; timer: NodeJS.Timeout }>();
   #timer?: NodeJS.Timeout;
   #external?: ExternalList;
   readonly setup: Setup;
@@ -163,6 +170,8 @@ export class IntegrationService {
 
   stop() {
     clearInterval(this.#timer);
+    for (const { timer } of this.#retries.values()) clearTimeout(timer);
+    this.#retries.clear();
   }
 
   async list(): Promise<IntegrationsList> {
@@ -539,6 +548,9 @@ export class IntegrationService {
   }
 
   async remove(id: string): Promise<void> {
+    const retrying = this.#retries.get(id);
+    if (retrying) clearTimeout(retrying.timer);
+    this.#retries.delete(id);
     await this.#require(id);
     this.oauth.cancel(id);
     await this.store.remove(id);
@@ -639,12 +651,53 @@ export class IntegrationService {
   check(id: string): Promise<StoredIntegration | undefined> {
     const running = this.#checking.get(id);
     if (running) return running;
-    const task = this.#check(id).finally(() => this.#checking.delete(id));
+    const task = (async () => {
+      const before = await this.store.get(id);
+      const after = await this.#check(id);
+      this.#settle(before, after);
+      return after;
+    })().finally(() => this.#checking.delete(id));
     this.#checking.set(id, task);
     return task;
   }
 
-  async #check(id: string): Promise<StoredIntegration | undefined> {
+  /**
+   * After a check: a failure that passes by itself (the server's down, the
+   * network blinked) is retried with backoff — nobody has to press Try again
+   * — and coming back leaves a quiet “fixed on its own” note.
+   */
+  #settle(before: StoredIntegration | undefined, after: StoredIntegration | undefined) {
+    if (!after) return;
+    const retrying = this.#retries.get(after.id);
+    const transient = (h: IntegrationHealth) => h.state === 'error' && h.action === 'retry';
+    if (after.health.state === 'ok' || after.health.state === 'warning') {
+      if (retrying) clearTimeout(retrying.timer);
+      this.#retries.delete(after.id);
+      if (before && transient(before.health) && before.health.okAt)
+        this.deps.onHeal?.(`${after.name} wasn’t answering for a while; it’s working again.`);
+      return;
+    }
+    const delays = this.deps.retryAfterMs ?? (this.deps.manualChecks ? undefined : RETRY_AFTER_MS);
+    if (!delays?.length || !after.enabled || !transient(after.health)) {
+      if (retrying) clearTimeout(retrying.timer);
+      this.#retries.delete(after.id);
+      return;
+    }
+    if (retrying) clearTimeout(retrying.timer);
+    const attempt = retrying ? retrying.attempt + 1 : 0;
+    const delay = delays[Math.min(attempt, delays.length - 1)] ?? CHECK_EVERY_MS;
+    const timer = setTimeout(() => void this.check(after.id).catch(() => undefined), delay);
+    timer.unref();
+    this.#retries.set(after.id, { attempt, timer });
+    void this.store
+      .update(after.id, (item) => ({
+        ...item,
+        health: { ...item.health, retryAt: Date.now() + delay },
+      }))
+      .then((updated) => updated && this.#emit(updated));
+  }
+
+  async #check(id: string, renewed = false): Promise<StoredIntegration | undefined> {
     const item = await this.store.get(id);
     if (!item?.enabled) return item;
     if (item.health.state !== 'connecting') {
@@ -670,7 +723,23 @@ export class IntegrationService {
       cwd: resolved.server.type === 'stdio' ? await this.deps.cwd() : undefined,
     });
     if (!result.ok) {
-      if (result.unauthorized && item.auth === 'oauth') await this.oauth.invalidate(id);
+      if (result.unauthorized && item.auth === 'oauth') {
+        // The server refused the token. Renew it once before asking anyone to
+        // sign in: many servers never say when a token expires.
+        if (!renewed && item.transport.type === 'http') {
+          try {
+            await this.oauth.accessToken(id, item.transport.url, resolved.reach, { force: true });
+            const again = await this.#check(id, true);
+            if (again?.health.state === 'ok' || again?.health.state === 'warning')
+              this.deps.onHeal?.(`Conch renewed your ${item.name} sign-in.`);
+            return again;
+          } catch (error) {
+            if (error instanceof TransientAuthError)
+              return this.#setHealth(id, this.#failure(item, error));
+          }
+        }
+        await this.oauth.invalidate(id);
+      }
       const entry = item.catalogId ? CATALOG.get(item.catalogId) : undefined;
       const health =
         result.unauthorized && item.auth === 'token'
@@ -727,6 +796,16 @@ export class IntegrationService {
   }
 
   #failure(item: StoredIntegration, error: unknown): IntegrationHealth {
+    // Renewing the sign-in failed only because the service was out of reach:
+    // the sign-in is fine, and Conch tries again by itself.
+    if (error instanceof TransientAuthError)
+      return {
+        state: 'error',
+        message: error.message,
+        action: 'retry',
+        checkedAt: Date.now(),
+        okAt: item.health.okAt,
+      };
     if (error instanceof NeedsAuthError)
       return {
         state: 'needs-auth',

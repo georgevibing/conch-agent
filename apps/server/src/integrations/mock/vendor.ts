@@ -14,7 +14,8 @@ import { z } from 'zod';
  * it uses for Notion or Linear.
  *
  * Every vendor path is `/<vendor>/mcp`. Controls, for tests:
- * - `POST /__control/revoke` — every access token stops working (as if expired);
+ * - `POST /__control/revoke` — every sign-in is revoked: access and refresh tokens;
+ * - `POST /__control/expire` — access tokens stop working (refreshing still works);
  * - `POST /__control/down` / `up` — the MCP endpoints return 503;
  * - `?deny=1` on /authorize — the user presses "Deny".
  */
@@ -28,6 +29,8 @@ export class MockVendor {
   #access = new Map<string, string>();
   #refresh = new Map<string, string>();
   #down = false;
+  /** The token endpoint answers 503, as an authorization server having a bad day would. */
+  tokenDown = false;
   /** Tokens a token-integration vendor accepts, by vendor. */
   readonly validTokens = new Map<string, string>();
   /** Seconds an access token lasts. */
@@ -57,7 +60,14 @@ export class MockVendor {
     return `${this.base}/${vendor}/mcp`;
   }
 
+  /** Every sign-in revoked: the person has to sign in again. */
   revokeAll() {
+    this.#access.clear();
+    this.#refresh.clear();
+  }
+
+  /** Access tokens stop working, as if they'd expired; a refresh renews them. */
+  expireAll() {
     this.#access.clear();
   }
 
@@ -75,6 +85,10 @@ export class MockVendor {
 
     if (url.pathname === '/__control/revoke') {
       this.revokeAll();
+      return json(200, { ok: true });
+    }
+    if (url.pathname === '/__control/expire') {
+      this.expireAll();
       return json(200, { ok: true });
     }
     if (url.pathname === '/__control/down' || url.pathname === '/__control/up') {
@@ -113,6 +127,9 @@ export class MockVendor {
       });
     }
     if (url.pathname === '/authorize') return this.#authorize(url, req, res, await body());
+    if (url.pathname === '/token' && req.method === 'POST' && this.tokenDown) {
+      return json(503, { error: 'temporarily_unavailable' });
+    }
     if (url.pathname === '/token' && req.method === 'POST') {
       const form = new URLSearchParams(await body());
       return this.#token(form, json);

@@ -21,6 +21,42 @@ const REFRESH_EARLY_MS = 2 * 60_000;
 
 export class NeedsAuthError extends Error {}
 
+/**
+ * Renewing a sign-in failed because the service couldn't be reached (offline,
+ * a timeout, a 5xx) — not because the sign-in is bad. Nobody needs to sign in
+ * again: Conch tries later by itself.
+ */
+export class TransientAuthError extends Error {}
+
+type Fetch = typeof fetch;
+
+/**
+ * A fetch that remembers whether the service was reachable. The MCP SDK treats
+ * a refresh that failed for any reason as "start a new sign-in", so without
+ * this a moment offline would log you out.
+ */
+function watchedFetch(base: Fetch): { fetch: Fetch; trouble: () => string | undefined } {
+  let trouble: string | undefined;
+  const host = (input: Parameters<Fetch>[0]) => {
+    try {
+      return new URL(input instanceof Request ? input.url : String(input)).host;
+    } catch {
+      return 'the service';
+    }
+  };
+  const watched: Fetch = async (input, init) => {
+    try {
+      const response = await base(input, init);
+      if (response.status >= 500) trouble ??= `${host(input)} is having problems right now`;
+      return response;
+    } catch (error) {
+      if ((error as Error).name !== 'AbortError') trouble ??= `Couldn’t reach ${host(input)}`;
+      throw error;
+    }
+  };
+  return { fetch: watched, trouble: () => trouble };
+}
+
 /** Where the sign-in page was opened: a popup closes itself afterwards, a tab goes back. */
 export type FlowDisplay = 'popup' | 'tab';
 
@@ -220,36 +256,52 @@ export class OAuthFlows {
   }
 
   /**
-   * A usable access token, refreshed first if it's about to expire. Throws
-   * `NeedsAuthError` when you have to sign in again.
+   * A usable access token, refreshed first if it's about to expire — or now,
+   * with `force`, after the server refused the one we had. Throws
+   * `NeedsAuthError` when you have to sign in again, and `TransientAuthError`
+   * when the service just couldn't be reached to renew it.
    */
-  accessToken(integrationId: string, serverUrl: string, reach: Reach): Promise<string | undefined> {
+  accessToken(
+    integrationId: string,
+    serverUrl: string,
+    reach: Reach,
+    options: { force?: boolean } = {},
+  ): Promise<string | undefined> {
     const running = this.#refreshing.get(integrationId);
     if (running) return running;
-    const task = this.#accessToken(integrationId, serverUrl, reach).finally(() =>
-      this.#refreshing.delete(integrationId),
+    const task = this.#accessToken(integrationId, serverUrl, reach, options.force ?? false).finally(
+      () => this.#refreshing.delete(integrationId),
     );
     this.#refreshing.set(integrationId, task);
     return task;
   }
 
-  async #accessToken(integrationId: string, serverUrl: string, reach: Reach) {
+  async #accessToken(integrationId: string, serverUrl: string, reach: Reach, force: boolean) {
     const oauth = { ...(await this.store.secrets(integrationId)).oauth };
     const tokens = oauth.tokens as OAuthTokens | undefined;
     if (!tokens?.access_token) throw new NeedsAuthError('Not signed in yet.');
+    // Servers that never say when a token expires are renewed when they refuse it.
     const fresh = !oauth.expiresAt || oauth.expiresAt - REFRESH_EARLY_MS > Date.now();
-    if (fresh) return tokens.access_token;
+    if (fresh && !force) return tokens.access_token;
     if (!tokens.refresh_token || !oauth.redirectUrl)
       throw new NeedsAuthError('Your sign-in has expired.');
     const provider = new StoredProvider(this.store, integrationId, oauth, oauth.redirectUrl);
-    const result = await auth(provider, { serverUrl, fetchFn: this.fetchFor(reach) }).catch(
-      (error: unknown) => {
-        throw new NeedsAuthError(`Couldn’t renew your sign-in: ${(error as Error).message}`);
-      },
-    );
+    const watched = watchedFetch(this.fetchFor(reach));
+    let result: Awaited<ReturnType<typeof auth>>;
+    try {
+      result = await auth(provider, { serverUrl, fetchFn: watched.fetch });
+    } catch (error) {
+      const trouble = watched.trouble();
+      if (trouble) throw new TransientAuthError(`${trouble}, so your sign-in wasn’t renewed yet.`);
+      throw new NeedsAuthError(`Couldn’t renew your sign-in: ${(error as Error).message}`);
+    }
     const renewed = provider.tokens()?.access_token;
-    if (result !== 'AUTHORIZED' || !renewed) throw new NeedsAuthError('Your sign-in has expired.');
-    return renewed;
+    if (result === 'AUTHORIZED' && renewed) return renewed;
+    // The SDK gave up and wanted a fresh sign-in; if that's only because the
+    // service was unreachable, the sign-in itself is still good.
+    const trouble = watched.trouble();
+    if (trouble) throw new TransientAuthError(`${trouble}, so your sign-in wasn’t renewed yet.`);
+    throw new NeedsAuthError('Your sign-in has expired.');
   }
 
   /** Forget a token the server rejected, so the next attempt asks you to sign in. */

@@ -159,6 +159,8 @@ export const IntegrationHealth = z.object({
   checkedAt: z.number().optional(),
   /** The last time it worked. */
   okAt: z.number().optional(),
+  /** Conch will look again by itself at this time (a failure that usually passes). */
+  retryAt: z.number().optional(),
 });
 export type IntegrationHealth = z.infer<typeof IntegrationHealth>;
 

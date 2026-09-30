@@ -31,7 +31,14 @@ beforeAll(async () => {
 });
 afterAll(() => vendor.stop());
 
-async function setup(options: { realCatalog?: boolean; needs?: Setup } = {}) {
+async function setup(
+  options: {
+    realCatalog?: boolean;
+    needs?: Setup;
+    onHeal?: (message: string) => void;
+    retryAfterMs?: number[];
+  } = {},
+) {
   const home = await mkdtemp(join(tmpdir(), 'conch-int-'));
   const events: ServerEvent[] = [];
   const service = new IntegrationService({
@@ -41,6 +48,8 @@ async function setup(options: { realCatalog?: boolean; needs?: Setup } = {}) {
     cwd: async () => home,
     manualChecks: true,
     setup: options.needs,
+    onHeal: options.onHeal,
+    retryAfterMs: options.retryAfterMs,
     blueprints: (id) => {
       if (options.realCatalog) return undefined;
       const entry = CATALOG.get(id);
@@ -151,6 +160,40 @@ describe('OAuth integrations', () => {
     } finally {
       vendor.tokenLifetime = 3600;
     }
+  });
+
+  it('renews an expired sign-in by itself, and says so quietly', async () => {
+    const notes: string[] = [];
+    const { service } = await setup({ onHeal: (m) => notes.push(m) });
+    const notion = await connectNotion(service);
+    vendor.expireAll();
+    const checked = await service.check(notion.id);
+    expect(checked?.health.state).toBe('ok');
+    expect(notes).toEqual(['Conch renewed your Notion sign-in.']);
+  });
+
+  it('keeps the sign-in when renewing it fails only because the service is down', async () => {
+    const notes: string[] = [];
+    const { service } = await setup({ onHeal: (m) => notes.push(m), retryAfterMs: [100] });
+    const notion = await connectNotion(service);
+    vendor.expireAll();
+    vendor.tokenDown = true;
+    try {
+      const checked = await service.check(notion.id);
+      expect(checked?.health).toMatchObject({ state: 'error', action: 'retry' });
+      expect(checked?.health.message).toMatch(/sign-in wasn’t renewed yet/);
+      await vi.waitFor(async () =>
+        expect((await service.get(notion.id)).health.retryAt).toBeDefined(),
+      );
+    } finally {
+      vendor.tokenDown = false;
+    }
+    // Nobody presses anything: the retry renews it, and it's working again.
+    await vi.waitFor(async () => expect((await service.get(notion.id)).health.state).toBe('ok'), {
+      timeout: 5_000,
+    });
+    expect(notes).toContain('Notion wasn’t answering for a while; it’s working again.');
+    service.stop();
   });
 
   it('notices a revoked sign-in, leaves it out of turns and tells the agent', async () => {
