@@ -293,58 +293,61 @@ function ConnectFlow({
         </Text>
       </Dialog.Header>
 
-      <Dialog.Body>
-        {phase === 'connected' ? (
-          <Stack gap={5}>
-            {/* In a chat, the question to try is the one just asked. */}
-            {!inChat && <TryIt entry={entry} onPick={tryIt} />}
-            {current?.health.state === 'warning' && (
-              <Callout tone="warning">{current.health.message}</Callout>
-            )}
-          </Stack>
-        ) : viaAccount ? (
-          <AccountSteps
-            entry={entry}
-            account={account}
-            provider={accountProvider?.engine}
-            found={found?.state}
-            alternative={
-              zapier && !zapierConnected && onAlternative
-                ? () => onAlternative(zapier.id)
-                : undefined
-            }
-          />
-        ) : (
-          <Stack gap={5}>
-            <AccessList entry={entry} />
-            {setup.checklist}
-            {entry.auth === 'token' && (
-              <TokenForm
-                entry={entry}
-                values={values}
-                onChange={setValues}
-                onSubmit={submit}
-                error={error ?? failure}
-              />
-            )}
-            {entry.auth !== 'token' && (error ?? setup.error ?? failure) && (
-              <Callout tone="danger" live="polite">
-                {error ?? setup.error ?? failure}
-              </Callout>
-            )}
-            {phase === 'waiting' && entry.auth === 'oauth' && (
-              <Callout tone="info" live="polite">
-                Finish signing in in the window that opened. Conch never sees your password.
-              </Callout>
-            )}
-            {phase === 'waiting' && entry.auth === 'none' && (
-              <Text size="sm" tone="muted" align="center" role="status">
-                Setting it up — the first time can take a minute.
-              </Text>
-            )}
-          </Stack>
-        )}
-      </Dialog.Body>
+      {/* In a chat, connected says it all in the header and the buttons. */}
+      {!(inChat && phase === 'connected' && current?.health.state !== 'warning') && (
+        <Dialog.Body>
+          {phase === 'connected' ? (
+            <Stack gap={5}>
+              {/* In a chat, the question to try is the one just asked. */}
+              {!inChat && <TryIt entry={entry} onPick={tryIt} />}
+              {current?.health.state === 'warning' && (
+                <Callout tone="warning">{current.health.message}</Callout>
+              )}
+            </Stack>
+          ) : viaAccount ? (
+            <AccountSteps
+              entry={entry}
+              account={account}
+              provider={accountProvider?.engine}
+              found={found?.state}
+              alternative={
+                zapier && !zapierConnected && onAlternative
+                  ? () => onAlternative(zapier.id)
+                  : undefined
+              }
+            />
+          ) : (
+            <Stack gap={5}>
+              <AccessList entry={entry} />
+              {setup.checklist}
+              {entry.auth === 'token' && (
+                <TokenForm
+                  entry={entry}
+                  values={values}
+                  onChange={setValues}
+                  onSubmit={submit}
+                  error={error ?? failure}
+                />
+              )}
+              {entry.auth !== 'token' && (error ?? setup.error ?? failure) && (
+                <Callout tone="danger" live="polite">
+                  {error ?? setup.error ?? failure}
+                </Callout>
+              )}
+              {phase === 'waiting' && entry.auth === 'oauth' && (
+                <Callout tone="info" live="polite">
+                  Finish signing in in the window that opened. Conch never sees your password.
+                </Callout>
+              )}
+              {phase === 'waiting' && entry.auth === 'none' && (
+                <Text size="sm" tone="muted" align="center" role="status">
+                  Setting it up — the first time can take a minute.
+                </Text>
+              )}
+            </Stack>
+          )}
+        </Dialog.Body>
+      )}
 
       <Dialog.Footer className={styles.connectFooter}>
         {phase === 'connected' && inChat ? (
