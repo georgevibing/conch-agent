@@ -1,17 +1,18 @@
 /**
- * What the two API engines share.
+ * What the API engines share.
  *
- * `openrouter` and `anthropic-api` are one engine driving a plain model API:
- * no program on this computer, no session on the provider's side, no files and
- * no shell. Everything that differs between them is an `ApiVariant` — the words
- * on the page, the URLs, and the wire adapter that knows the provider's HTTP.
+ * `openrouter`, `anthropic-api` and `ollama` are one engine driving a plain
+ * model API: no session on the provider's side, no files and no shell.
+ * Everything that differs between them is an `ApiVariant` — the words on the
+ * page, the URLs, and the wire adapter that knows the provider's HTTP. Ollama
+ * is the one on this computer: it has no key, and says how it is by itself.
  */
-import type { EffortChoice, EngineId, ModelInfo } from '@conch/protocol';
+import type { EffortChoice, EngineId, EngineStatus, ModelInfo } from '@conch/protocol';
 
 import type { Wire } from './wire';
 
 /** The providers this engine family speaks for. */
-export type ApiProviderId = Extract<EngineId, 'openrouter' | 'anthropic-api'>;
+export type ApiProviderId = Extract<EngineId, 'openrouter' | 'anthropic-api' | 'ollama'>;
 
 /** The one function a wire adapter needs from the outside world, so tests can supply their own. */
 export type FetchLike = typeof globalThis.fetch;
@@ -42,6 +43,17 @@ export interface ApiVariant {
   readonly wire: Wire;
   /** Where transcripts live: `<home>/api-sessions`. */
   readonly home: string;
+  /** No key at all: the model is on this computer (Ollama). */
+  readonly keyless?: boolean;
+  /** Runs on this computer: works with no internet and spends nothing (`Engine.local`). */
+  readonly local?: boolean;
+  /**
+   * How it is, for a provider with no key to check: installed, running, a
+   * model here. Replaces the key check when set.
+   */
+  status?(): Promise<EngineStatus>;
+  /** The first sentence of what the model is told about itself. */
+  readonly where?: string;
 }
 
 /** A message exactly as the provider's wire format has it. Stored and replayed verbatim. */
@@ -82,6 +94,8 @@ export type WireStop = 'end' | 'tools' | 'length';
 export type WireEvent =
   | { type: 'text'; delta: string }
   | { type: 'thinking'; delta: string }
+  /** Something worth saying while it waits ("Loading the model into memory…"). */
+  | { type: 'notice'; code: string; message: string }
   | {
       type: 'end';
       message: WireMessage;

@@ -98,6 +98,8 @@ export interface TurnResult {
   error?: string;
   /** Why it failed, when Conch can tell. */
   problem?: TurnProblem;
+  /** Who answers instead, when the failure was one someone else can answer (ADR 0018). */
+  next?: TurnRoute;
   /** Text of the last assistant message in the turn. */
   finalText: string;
 }
@@ -638,29 +640,19 @@ export class ConversationManager {
     prompt: string,
     attachments: readonly Attachment[],
   ): Promise<TurnResult> {
-    const result = await this.#runTurn(live, engine, prompt, attachments);
-    const { problem } = result;
-    if (result.outcome !== 'error' || (problem !== 'limit' && problem !== 'unavailable'))
-      return result;
-    const next = await this.deps.route?.(engine, { failed: problem }).catch(() => undefined);
-    if (!next || live.abort) return result;
-    if (next.kind === 'hold') {
-      this.#held.set(live.record.id, { engine: engine.id, prompt, attachments });
-      this.#append(live, { type: 'turn.held', reason: 'offline' });
-      await this.#persist(live);
-      return result;
-    }
-    if (next.engine.id === engine.id || !next.routed) return result;
-    this.#append(live, {
-      type: 'turn.routed',
-      from: engine.id,
-      to: next.engine.id,
-      ...next.routed,
-    });
-    live.abort = new AbortController();
-    this.#setStatus(live, 'running');
-    await this.#persist(live);
-    return this.#runTurn(live, next.engine, prompt, attachments);
+    const route = this.deps.route;
+    const result = await this.#runTurn(
+      live,
+      engine,
+      prompt,
+      attachments,
+      route && ((failed) => route(engine, { failed })),
+    );
+    // Held: it waits (set as the turn ended). Handed on: one second chance only —
+    // the next provider's own failure stands.
+    const { next } = result;
+    if (next?.kind === 'use') return this.#runTurn(live, next.engine, prompt, attachments);
+    return result;
   }
 
   async #runTurn(
@@ -668,6 +660,8 @@ export class ConversationManager {
     engine: Engine,
     said: string,
     attachments: readonly Attachment[] = [],
+    /** Asked when the turn fails for a limit or an outage: who answers instead, if anyone. */
+    retry?: (failed: TurnProblem) => Promise<TurnRoute>,
   ): Promise<TurnResult> {
     const abort = live.abort ?? new AbortController();
     const conversationId = live.record.id;
@@ -677,6 +671,7 @@ export class ConversationManager {
     let outcome: 'success' | 'interrupted' | 'error' = 'success';
     let completed: { usage?: Usage; error?: string; problem?: TurnProblem } | undefined;
     let heldProblem: TurnProblem | undefined;
+    let next: TurnRoute | undefined;
     const extras = live.extras;
     let finalText = '';
     let finalMessageId: string | undefined;
@@ -1014,6 +1009,24 @@ export class ConversationManager {
         },
         tail,
       );
+      // A limit or an outage someone else can answer is decided now, before the chat
+      // hears the turn ended — so it never shows a failure it's about to fix (ADR 0018).
+      const after =
+        retry && (problem === 'limit' || problem === 'unavailable') && !abort.signal.aborted
+          ? await retry(problem).catch(() => undefined)
+          : undefined;
+      if (after?.kind === 'hold') {
+        this.#held.set(live.record.id, { engine: engine.id, prompt: said, attachments });
+        this.#append(live, { type: 'turn.held', reason: 'offline' }, tail);
+        next = after;
+      } else if (after?.kind === 'use' && after.routed && after.engine.id !== engine.id) {
+        this.#append(
+          live,
+          { type: 'turn.routed', from: engine.id, to: after.engine.id, ...after.routed },
+          tail,
+        );
+        next = after;
+      }
       // Everything up to here is part of this provider's session now.
       const own = live.record.sessions?.[engine.id];
       if (own)
@@ -1022,9 +1035,15 @@ export class ConversationManager {
           sessions: { ...live.record.sessions, [engine.id]: { ...own, seq: live.seq - 1 } },
         };
       await closeBridge?.();
-      live.abort = undefined;
+      // Handed on: the chat stays busy while the next provider answers.
+      const handedOn = next?.kind === 'use';
+      live.abort = handedOn ? new AbortController() : undefined;
       live.permissions.clear();
-      const status: ConversationStatus = outcome === 'error' ? 'error' : 'idle';
+      const status: ConversationStatus = handedOn
+        ? 'running'
+        : outcome === 'error' && !next
+          ? 'error'
+          : 'idle';
       live.record = { ...live.record, status, updatedAt: Date.now() };
       this.#append(live, { type: 'status', status }, tail);
       await this.#persist(live);
@@ -1038,6 +1057,7 @@ export class ConversationManager {
       usage: completed?.usage,
       error: completed?.error,
       ...(heldProblem && { problem: heldProblem }),
+      ...(next && { next }),
       finalText,
     };
   }

@@ -18,6 +18,11 @@
     color: light-dark(oklch(0.55 0.2 277), oklch(0.72 0.14 277));
   }
 
+  /* A model on this computer: the green of "private, and it's yours". */
+  .logo[data-provider='local'] {
+    color: light-dark(oklch(0.5 0.08 170), oklch(0.76 0.09 170));
+  }
+
   /* ── Trigger chip (shared with ModePicker via composition) ─────────── */
   .chip {
     --nc-sheen-size: 60px;

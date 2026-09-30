@@ -107,6 +107,18 @@ export const codex: ModelProvider = {
   ],
 };
 
+/** Models on this computer (Ollama): private, free, and they work offline. */
+export const onThisComputer: ModelProvider = {
+  id: 'ollama',
+  label: 'On this computer',
+  logo: 'local',
+  models: [
+    { id: 'qwen3.5:9b', label: 'Qwen3.5 9B', description: '6.6 GB · uses your apps' },
+    { id: 'qwen3:4b-instruct', label: 'Qwen3 4B', description: '2.5 GB · uses your apps' },
+    { id: 'gemma3:1b', label: 'Gemma3 1B', description: '800 MB · can’t use your apps or memory' },
+  ],
+};
+
 /** Every provider you've connected, side by side — the default first. */
 export const connectedProviders: ModelProvider[] = [
   { ...claudeCode, note: 'Default' },

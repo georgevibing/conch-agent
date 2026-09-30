@@ -32,21 +32,40 @@ const scenarios = {
     port: 4393,
     env: { CONCH_MOCK_STATE: 'not-installed', CONCH_MOCK_INSTALL_AFTER: '2' },
   },
-} as const;
+  // A model on this computer, against a pretend Ollama (e2e/fake-ollama.ts) on a port the
+  // system picks. The only provider is Ollama; nothing here reaches the internet.
+  local: {
+    port: 4384,
+    env: { CONCH_ENGINE: 'ollama' },
+    command: 'node --import tsx ../../e2e/local-gateway.ts',
+  },
+} as const satisfies Record<
+  string,
+  { port: number; env: Record<string, string>; command?: string }
+>;
 
 const root = join(import.meta.dirname, '..');
 
 /**
- * `--project x` runs only x, so only x's gateway starts: other sessions may be
- * using the other ports. The browser journeys depend on every other project.
+ * Which journeys run, so only their gateways start (other sessions may be using
+ * the other ports): `--project x`, or `CONCH_E2E_ONLY=local,ready`. The browser
+ * journeys depend on every other one, so choosing them runs everything.
  */
-function chosen(): Set<string> | undefined {
-  const names = process.argv.flatMap((arg, i, all) =>
-    arg === '--project' ? [all[i + 1] ?? ''] : arg.startsWith('--project=') ? [arg.slice(10)] : [],
-  );
+function picked(): Set<string> | undefined {
+  const names = [
+    ...process.argv.flatMap((arg, i, all) =>
+      arg === '--project'
+        ? [all[i + 1] ?? '']
+        : arg.startsWith('--project=')
+          ? [arg.slice(10)]
+          : [],
+    ),
+    ...(process.env.CONCH_E2E_ONLY?.split(',').map((name) => name.trim()) ?? []),
+  ].filter(Boolean);
   return names.length && !names.includes('browser') ? new Set(names) : undefined;
 }
-const only = chosen();
+const only = picked();
+const chosen = Object.entries(scenarios).filter(([name]) => !only || only.has(name));
 
 export default defineConfig({
   testDir: '.',
@@ -62,7 +81,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: Object.entries(scenarios).map(([name, s]) => ({
+  projects: chosen.map(([name, s]) => ({
     name,
     testMatch: `${name}.spec.ts`,
     use: { baseURL: `http://localhost:${s.port}` },
@@ -70,25 +89,25 @@ export default defineConfig({
     // timing-sensitive specs (password hashing, streaming) flake if they run
     // alongside it. They go last.
     dependencies:
-      name === 'browser' ? Object.keys(scenarios).filter((other) => other !== 'browser') : [],
+      name === 'browser'
+        ? chosen.map(([other]) => other).filter((other) => other !== 'browser')
+        : [],
   })),
-  webServer: Object.entries(scenarios)
-    .filter(([name]) => !only || only.has(name))
-    .map(([, s]) => ({
-      // Node itself (not pnpm or tsx's CLI) so Playwright's shutdown signal reaches the
-      // server; Windows runs this through cmd.exe, which can't start `./node_modules/.bin/tsx`.
-      command: 'node --import tsx src/main.ts',
-      cwd: join(root, 'apps/server'),
-      url: `http://localhost:${s.port}/api/health`,
-      reuseExistingServer: false,
-      env: {
-        ...s.env,
-        CONCH_ENGINE: 'mock',
-        CONCH_MOCK_SPEED: '0.25',
-        CONCH_PORT: String(s.port),
-        CONCH_HOME: mkdtempSync(join(tmpdir(), 'conch-e2e-')),
-        CONCH_WEB_DIST: join(root, 'apps/web/dist'),
-        CONCH_LOG_LEVEL: 'warn',
-      },
-    })),
+  webServer: chosen.map(([, s]) => ({
+    // Node itself (not pnpm or tsx's CLI) so Playwright's shutdown signal reaches the
+    // server; Windows runs this through cmd.exe, which can't start `./node_modules/.bin/tsx`.
+    command: 'command' in s ? s.command : 'node --import tsx src/main.ts',
+    cwd: join(root, 'apps/server'),
+    url: `http://localhost:${s.port}/api/health`,
+    reuseExistingServer: false,
+    env: {
+      CONCH_ENGINE: 'mock',
+      ...s.env,
+      CONCH_MOCK_SPEED: '0.25',
+      CONCH_PORT: String(s.port),
+      CONCH_HOME: mkdtempSync(join(tmpdir(), 'conch-e2e-')),
+      CONCH_WEB_DIST: join(root, 'apps/web/dist'),
+      CONCH_LOG_LEVEL: 'warn',
+    },
+  })),
 });

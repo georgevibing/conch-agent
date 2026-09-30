@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { expect, userEvent, within } from 'storybook/test';
 
 import { Stack } from '../../components/Stack';
-import { claudeCode, connectedProviders, DemoToolbar, efforts } from './fixtures';
+import { claudeCode, connectedProviders, DemoToolbar, efforts, onThisComputer } from './fixtures';
 import { ModelPicker, type ModelPickerProps } from './ModelPicker';
 import { ProviderLogo } from './ProviderLogo';
 
@@ -92,6 +92,14 @@ export const EveryProvider: Story = {
   render: (args) => <Stateful {...args} providers={connectedProviders} open />,
 };
 
+/** A model on this computer sits beside the cloud ones: same list, same choice. */
+export const OnThisComputer: Story = {
+  name: 'With a model on this computer',
+  render: (args) => (
+    <Stateful {...args} providers={[{ ...claudeCode, note: 'Default' }, onThisComputer]} open />
+  ),
+};
+
 export const Searching: Story = {
   name: 'Search by name',
   render: (args) => <Stateful {...args} providers={connectedProviders} open />,
@@ -130,6 +138,7 @@ export const Logos: Story = {
       <ProviderLogo provider="claude" size={32} title="Claude" />
       <ProviderLogo provider="openai" size={32} title="OpenAI" />
       <ProviderLogo provider="openrouter" size={32} title="OpenRouter" />
+      <ProviderLogo provider="local" size={32} title="On this computer" />
       <ProviderLogo provider="generic" size={32} title="Other" />
     </Stack>
   ),

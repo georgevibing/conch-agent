@@ -111,7 +111,7 @@ async function setup() {
 }
 
 async function idle(manager: ConversationManager, id: string) {
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < 2000; i++) {
     const { conversation } = await manager.detail(id);
     if (conversation.status === 'idle' || conversation.status === 'error') return;
     await new Promise((r) => setTimeout(r, 5));
@@ -215,6 +215,8 @@ describe('offline and at a limit (ADR 0018)', () => {
       to: 'openrouter',
       reason: 'limit',
     });
+    // The chat never showed a failure it was about to fix.
+    expect(events.some((e) => e.type === 'status' && e.status === 'error')).toBe(false);
     expect(events.at(-2)).toMatchObject({
       type: 'turn.completed',
       outcome: 'success',
@@ -242,7 +244,10 @@ describe('offline and at a limit (ADR 0018)', () => {
     await idle(manager, convo.id);
     // (The route is asked again after the failure: offline, nothing local → it waits.)
     const events = await log(manager, convo.id);
-    expect(events.at(-1)).toMatchObject({ type: 'turn.held' });
+    // Decided before the turn's end went out: waiting, never "failed" in between.
+    expect(events.slice(-3).map((e) => e.type)).toEqual(['turn.completed', 'turn.held', 'status']);
+    expect(events.at(-1)).toMatchObject({ type: 'status', status: 'idle' });
+    expect(events.some((e) => e.type === 'status' && e.status === 'error')).toBe(false);
 
     claude.fails = undefined;
     world.online = true;

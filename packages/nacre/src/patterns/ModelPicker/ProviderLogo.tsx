@@ -4,7 +4,8 @@ import { cx } from '../../utils/cx';
 import { brandMarks, OPENAI } from '../Integrations/brands';
 import styles from './ModelPicker.module.css';
 
-export type ProviderId = 'claude' | 'openai' | 'openrouter' | 'generic';
+/** `local`: a model on this computer (Ollama), drawn as the computer it runs on. */
+export type ProviderId = 'claude' | 'openai' | 'openrouter' | 'local' | 'generic';
 
 export interface ProviderLogoProps extends Omit<ComponentProps<'svg'>, 'children'> {
   provider: ProviderId;
@@ -56,6 +57,17 @@ export function ProviderLogo({
               transform={`rotate(${angle} 12 12)`}
             />
           ))}
+        </g>
+      ) : provider === 'local' ? (
+        <g
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <rect x="4" y="4.5" width="16" height="11.5" rx="2" />
+          <path d="M1.5 20h21" />
         </g>
       ) : marks[provider] ? (
         <path fill="currentColor" d={marks[provider]} />

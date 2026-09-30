@@ -31,6 +31,7 @@ export * from './browser';
 export * from './engine';
 export * from './healed';
 export * from './integrations';
+export * from './local';
 export * from './common';
 export * from './doctor';
 export * from './providers';

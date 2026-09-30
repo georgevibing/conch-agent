@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { ArrowUpRight, Download, ExternalLink } from 'lucide-react';
+import { ArrowUpRight, Download, ExternalLink, Pause, Play, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '../../components/Button';
@@ -174,4 +174,57 @@ export const LiveInstall: Story = {
       </Stack>
     );
   },
+};
+
+/**
+ * A model on this computer: Ollama is here, the model is downloading with real
+ * progress and the time left, and it can be paused or cancelled right there.
+ */
+export const ModelDownload: Story = {
+  render: () => (
+    <SetupChecklist aria-label="What a model on this computer needs">
+      <SetupChecklist.Step state="done" title="Ollama" note="Installed" />
+      <SetupChecklist.Step
+        state="working"
+        title="Get Qwen3 4B"
+        progress={{ value: 48, label: '1.2 GB of 2.5 GB · about 2 minutes left' }}
+        action={
+          <Stack direction="row" gap={2}>
+            <Button size="sm" variant="surface" leadingIcon={<Pause />}>
+              Pause
+            </Button>
+            <Button size="sm" variant="ghost" leadingIcon={<X />}>
+              Cancel
+            </Button>
+          </Stack>
+        }
+      />
+      <SetupChecklist.Step state="waiting" title="Ready to chat" />
+    </SetupChecklist>
+  ),
+};
+
+/** Paused: what's here stays, and Resume carries on from it. */
+export const ModelPaused: Story = {
+  render: () => (
+    <SetupChecklist aria-label="What a model on this computer needs">
+      <SetupChecklist.Step state="done" title="Ollama" note="Installed" />
+      <SetupChecklist.Step
+        state="current"
+        title="Get Qwen3 4B"
+        description="Paused at 1.2 GB of 2.5 GB. It carries on from there."
+        action={
+          <Stack direction="row" gap={2}>
+            <Button size="sm" leadingIcon={<Play />}>
+              Resume
+            </Button>
+            <Button size="sm" variant="ghost" leadingIcon={<X />}>
+              Cancel
+            </Button>
+          </Stack>
+        }
+      />
+      <SetupChecklist.Step state="waiting" title="Ready to chat" />
+    </SetupChecklist>
+  ),
 };

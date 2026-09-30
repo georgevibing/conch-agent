@@ -67,6 +67,23 @@ const PROVIDERS: ProviderCopy[] = [
     homepage: 'https://developers.openai.com/codex/cli',
   },
   {
+    id: 'ollama',
+    name: 'On this computer',
+    tagline: 'Private, free, and works offline',
+    description:
+      'An open model that runs right here, through Ollama. Your chats aren’t sent to any AI company, it costs nothing, and it keeps working when the internet doesn’t. Conch lends it your integrations.',
+    // Ollama is a program on this computer; the page walks through getting it and a model.
+    connect: 'program',
+    highlights: ['Private', 'Free', 'Works offline'],
+    limits: [
+      'Slower and less capable than the big cloud models: best for everyday questions, drafts and quick jobs.',
+      'No files and no commands: this provider only talks to a model.',
+    ],
+    asksFirst: true,
+    color: '#2F6B5E',
+    homepage: 'https://ollama.com',
+  },
+  {
     id: 'openrouter',
     name: 'OpenRouter',
     tagline: 'Hundreds of models, one key',

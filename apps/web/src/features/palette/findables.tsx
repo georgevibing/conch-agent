@@ -8,6 +8,7 @@ import {
   Gauge,
   Globe,
   HeartPulse,
+  Laptop,
   Palette as PaletteIcon,
   Paperclip,
   SquareTerminal,
@@ -96,7 +97,7 @@ const settingsPlaces: {
   {
     tab: 'providers',
     label: 'Providers',
-    keywords: 'claude codex openrouter anthropic api key connect',
+    keywords: 'claude codex openrouter anthropic api key connect ollama local offline',
     icon: <Cpu />,
   },
   {
@@ -361,6 +362,14 @@ export function useFindables(query: string, conversationId: string | undefined):
         void doctorApi.repair().catch(() => undefined);
         openSettings('health');
       },
+    },
+    {
+      // A model on this computer (ADR 0022): straight to its setup page.
+      id: 'local-model',
+      label: 'Model on this computer',
+      keywords: 'local offline private free model ollama llama qwen download run laptop',
+      icon: <Laptop />,
+      run: () => openSettings('providers', 'ollama'),
     },
     ...settingsPlaces.map((p) => ({
       id: `settings-${p.tab}${p.focus ? `-${p.focus}` : ''}`,

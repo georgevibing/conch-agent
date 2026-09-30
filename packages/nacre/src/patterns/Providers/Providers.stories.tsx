@@ -103,6 +103,52 @@ export const Active: Story = {
   ),
 };
 
+/**
+ * A model on this computer (Ollama). Not set up yet is an invitation, not a
+ * problem; waiting for a model says so in its own words (`stateLabel`).
+ */
+export const OnThisComputer: Story = {
+  render: () => {
+    const base = {
+      name: 'On this computer',
+      brand: 'ollama',
+      color: '#2F6B5E',
+      tagline: 'Private, free, and works offline',
+      highlights: ['Private', 'Free', 'Works offline'],
+    };
+    return (
+      <Stack gap={3} style={{ maxInlineSize: '40rem' }}>
+        <ProviderCard
+          {...base}
+          state="not-installed"
+          message="Ollama runs the model. It isn’t on this computer yet."
+          action={{ label: 'Set up', onClick: () => {} }}
+        />
+        <ProviderCard
+          {...base}
+          index={1}
+          state="not-installed"
+          stateLabel="Needs a model"
+          message="Get a model to start chatting. It’s free, and it runs on this computer."
+          action={{ label: 'Set up', onClick: () => {} }}
+        />
+        <ProviderCard
+          {...base}
+          index={2}
+          state="ready"
+          meta="Qwen3.5 9B and 1 more · works offline · Ollama 0.35.0"
+          action={{ label: 'Make default', onClick: () => {} }}
+          secondary={{ label: 'Details', onClick: () => {} }}
+        />
+        <ProviderCaution>
+          Slower and less capable than the big cloud models: best for everyday questions, drafts and
+          quick jobs.
+        </ProviderCaution>
+      </Stack>
+    );
+  },
+};
+
 function KeyForm({
   available,
   start = 'conch',

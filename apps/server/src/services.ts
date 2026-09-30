@@ -11,7 +11,7 @@ import type { Config } from './config';
 import { CommandStore } from './commands/store';
 import { ConversationManager, type TurnRoute } from './conversations/manager';
 import { ConversationStore } from './conversations/store';
-import { anthropicApiVariant, ApiEngine, openrouterVariant } from './engines/api';
+import { anthropicApiVariant, ApiEngine, ollamaVariant, openrouterVariant } from './engines/api';
 import { ClaudeCodeEngine } from './engines/claude-code/engine';
 import { CodexEngine } from './engines/codex/engine';
 import { MockEngine } from './engines/mock/engine';
@@ -22,6 +22,7 @@ import { Doctor } from './doctor/service';
 import { NetworkWatch } from './network/watch';
 import { Healed } from './lib/healed';
 import type { Heal } from './lib/recover';
+import { LocalService } from './local/service';
 import { KNOWN_NEEDS } from './setup/known';
 import { Setup } from './setup/needs';
 import { ProviderKeys } from './providers/keys';
@@ -65,6 +66,8 @@ export class Services {
   readonly doctor: Doctor;
   /** Whether Conch can reach the internet (ADR 0018). */
   readonly network: NetworkWatch;
+  /** A model on this computer: Ollama, found, started and fed models (ADR 0022). */
+  readonly local: LocalService;
   readonly settings: SettingsStore;
   /** Who may sign in (`~/.conch/access.json`). */
   readonly access: AccessStore;
@@ -118,6 +121,19 @@ export class Services {
     this.commands = new CommandStore(join(config.CONCH_HOME, 'commands'));
     this.attachments = new AttachmentStore(join(config.CONCH_HOME, 'attachments'));
     this.keys = new ProviderKeys(this.settings, new SecretVault());
+    this.local = new LocalService({
+      home: config.CONCH_HOME,
+      setup: this.setup,
+      heal: (message) => void this.healed.note('providers', message),
+      // A model arrived or Ollama started: the card and the picker see it now.
+      onChange: () => local.forget(),
+    });
+    const local = new ApiEngine(
+      ollamaVariant(this.local, { home: config.CONCH_HOME }),
+      this.settings,
+      this.keys,
+    );
+    this.doctor.register(this.local.doctorCheck());
     this.engines = new Map<EngineId, Engine>([
       [
         'claude-code',
@@ -137,6 +153,7 @@ export class Services {
         'anthropic-api',
         new ApiEngine(anthropicApiVariant({ home: config.CONCH_HOME }), this.settings, this.keys),
       ],
+      ['ollama', local],
       [
         'mock',
         new MockEngine({
@@ -325,11 +342,10 @@ export class Services {
 
   /** A provider on this computer that's ready to answer, for when the internet isn't there. */
   async localReady(): Promise<Engine | undefined> {
-    for (const engine of this.engines.values()) {
-      if (!engine.local) continue;
-      if ((await engine.detect().catch(() => undefined))?.state === 'ready') return engine;
-    }
-    return undefined;
+    // Only a provider Conch uses: one merely installed here isn't a choice you made
+    // (and a pinned provider, like the mock engine, is the only one there is).
+    const ready = await this.providers.ready().catch(() => []);
+    return ready.find((engine) => engine.local);
   }
 
   /**
@@ -367,7 +383,8 @@ export class Services {
           : undefined;
       if (context.failed === 'limit' || usage?.blocked) {
         const other = this.providers.engineFor(fallback);
-        if ((await other.detect().catch(() => undefined))?.state === 'ready') {
+        const ready = other.id !== engine.id && (await other.detect().catch(() => undefined));
+        if (ready && ready.state === 'ready') {
           const until = usage?.blocked?.until;
           return {
             kind: 'use',
@@ -390,7 +407,10 @@ export class Services {
    */
   async needLanded(id: string): Promise<void> {
     if (id === 'op') await this.keys.vault.onePassword.state({ force: true });
-    const engine = { codex: 'codex-cli', 'claude-code': 'claude-code' }[id] as EngineId | undefined;
+    // Ollama just landed: start it (quietly), so getting a model can follow straight on.
+    if (id === 'ollama') await this.local.ensureRunning({ note: false });
+    const engine = { codex: 'codex-cli', 'claude-code': 'claude-code', ollama: 'ollama' }[id] as
+      EngineId | undefined;
     if (engine) await this.engines.get(engine)?.detect({ force: true });
     await this.integrations.recheckNeeding(id);
   }

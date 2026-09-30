@@ -64,6 +64,12 @@ export interface ProviderCardProps extends Omit<ComponentProps<'article'>, 'titl
   tagline: string;
   state: ProviderStateValue;
   /**
+   * Words for the state when the usual ones don't fit it: a model on this
+   * computer that's waiting for a model says "Needs a model", not "Not on this
+   * computer". Read by screen readers too.
+   */
+  stateLabel?: string;
+  /**
    * The default for new chats. Every connected provider can be picked in the
    * model picker; exactly one is the default, and says so.
    */
@@ -95,6 +101,7 @@ export function ProviderCard({
   color,
   tagline,
   state,
+  stateLabel,
   active,
   meta,
   message,
@@ -110,6 +117,7 @@ export function ProviderCard({
   const titleId = useId();
   const statusId = useId();
   const info = providerStateMeta[state];
+  const label = stateLabel ?? info.label;
   const stagger = { '--pc-i': Math.min(index, 8), ...style } as CSSProperties;
   const connected = state === 'ready';
 
@@ -157,8 +165,8 @@ export function ProviderCard({
             {info.icon}
           </span>
           <span className={styles.statusText}>
-            <span className="nc-visually-hidden">{info.label}. </span>
-            {message ?? (connected ? (meta ?? info.label) : info.label)}
+            <span className="nc-visually-hidden">{label}. </span>
+            {message ?? (connected ? (meta ?? label) : label)}
           </span>
         </p>
 

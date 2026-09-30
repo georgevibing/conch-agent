@@ -14,6 +14,7 @@
 import type { EffortChoice } from '@conch/protocol';
 import type { z } from 'zod';
 
+import { isLoopbackUrl } from '../../local/host';
 import type { Completion, EngineUsage, TurnImage } from '../types';
 import {
   ApiError,
@@ -53,6 +54,11 @@ export interface Wire {
   toolResults(results: ToolResult[]): WireMessage[];
   /** A small, cheap model from the last list the provider gave us, if it has one. */
   smallModel(): string | undefined;
+  /**
+   * Whether this model can call tools, from the last list. `false` means the
+   * turn goes without them (and the model is told so); unset means yes.
+   */
+  toolsFor?(model: string): boolean | undefined;
 }
 
 /** Effort levels Conch's protocol knows about (everything but `auto`). */
@@ -122,9 +128,10 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
  * Send one request. The key only ever travels in `headers` — never a query
  * string, never a log line.
  *
- * `redirect: 'error'` is deliberate: neither provider redirects, and following
- * one would mean deciding at runtime whether the new address is still https and
- * still theirs. Refusing is the safe answer, and it says so in plain words.
+ * `redirect: 'error'` is deliberate: no provider redirects, and following one
+ * would mean deciding at runtime whether the new address is still https and
+ * still theirs (or, for Ollama, still this computer). Refusing is the safe
+ * answer, and it says so in plain words.
  */
 export async function send(options: {
   fetchImpl: FetchLike;
@@ -137,10 +144,20 @@ export async function send(options: {
   label: string;
   /** The key, so it can be scrubbed out of anything we surface. */
   key?: string;
+  /**
+   * A server on this computer (Ollama): plain http, but only ever to a
+   * loopback address. Everything else must be https.
+   */
+  local?: boolean;
 }): Promise<Response> {
-  const { fetchImpl, url, method, headers, body, signal, label, key } = options;
-  if (!url.startsWith('https://')) {
-    throw new ApiError('other', `Conch only talks to ${label} over https.`);
+  const { fetchImpl, url, method, headers, body, signal, label, key, local } = options;
+  if (local ? !isLoopbackUrl(url) : !url.startsWith('https://')) {
+    throw new ApiError(
+      'other',
+      local
+        ? `Conch only talks to ${label} on this computer.`
+        : `Conch only talks to ${label} over https.`,
+    );
   }
   try {
     return await fetchImpl(url, {
@@ -165,9 +182,13 @@ export async function send(options: {
     if (/redirect/i.test(detail)) {
       throw new ApiError('other', `${label} redirected the request, so Conch stopped.`);
     }
-    throw new ApiError('network', `Conch couldn’t reach ${label}. Check your connection.`, {
-      retryable: true,
-    });
+    throw new ApiError(
+      'network',
+      local
+        ? `${label} isn’t answering on this computer.`
+        : `Conch couldn’t reach ${label}. Check your connection.`,
+      { retryable: true },
+    );
   }
 }
 

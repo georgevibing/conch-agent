@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { KNOWN_NEEDS, updateBy } from './known';
+import { KNOWN_NEEDS, ollamaDirs, updateBy } from './known';
 
 describe('what Conch knows how to get', () => {
   it('updates a program the way it was installed', () => {
@@ -36,5 +36,33 @@ describe('what Conch knows how to get', () => {
   it('gives every need somewhere to get it by hand', () => {
     for (const spec of KNOWN_NEEDS.values())
       if (!spec.comesWith) expect(Object.keys(spec.download ?? {})).toContain('linux');
+  });
+
+  it('gets Ollama without an administrator, and links Linux to the page', () => {
+    const ollama = KNOWN_NEEDS.get('ollama');
+    expect(ollama?.install?.win32).toMatchObject({
+      manager: 'winget',
+      args: expect.arrayContaining(['--id', 'Ollama.Ollama', '--exact']),
+    });
+    // The cask was renamed from `ollama` in 2026.
+    expect(ollama?.install?.darwin).toEqual({
+      manager: 'brew',
+      args: ['install', '--cask', 'ollama-app'],
+    });
+    // Linux's installer is a script run with sudo: never piped, only linked.
+    expect(ollama?.install?.linux).toBeUndefined();
+    expect(ollama?.download?.linux).toBe('https://docs.ollama.com/linux');
+    const program = String.raw`C:\Users\ada\AppData\Local\Programs\Ollama\ollama.exe`;
+    expect(ollama?.update?.(program, 'win32')[0]?.args.slice(0, 3)).toEqual([
+      'upgrade',
+      '--id',
+      'Ollama.Ollama',
+    ]);
+  });
+
+  it('looks for Ollama where its installers put it', () => {
+    expect(ollamaDirs('win32')[0]).toMatch(/Programs.Ollama$/);
+    expect(ollamaDirs('darwin')).toContain('/Applications/Ollama.app/Contents/Resources');
+    expect(ollamaDirs('linux')).toContain('/usr/local/bin');
   });
 });

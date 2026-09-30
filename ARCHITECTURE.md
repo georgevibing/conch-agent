@@ -200,6 +200,16 @@ src/
   Keys are checked before they're kept. OpenRouter can mint one for you over PKCE
   (`providers/oauth.ts`, callback `GET /oauth/provider/:flowId`). See
   [ADR 0010](./docs/adr/0010-providers.md).
+- **A model on this computer** (`local/`, `engines/api/ollama.ts`,
+  [ADR 0022](./docs/adr/0022-a-model-on-this-computer.md)). The `ollama` provider
+  (`Engine.local`) runs an open model through Ollama's native `/api/chat` with
+  `num_ctx` set (16K/32K by memory), on loopback only (`OLLAMA_HOST` is followed
+  only to this computer). `LocalService` finds Ollama (a need: winget, the
+  `ollama-app` cask, a link on Linux), starts it quietly when someone uses it
+  (noted as fixed on its own), lists models offline, and pulls a model from its
+  fixed list with progress, pause and cancel — never one that won't fit in
+  memory or on disk. `GET /api/local`, `POST /api/local/{pull,pull/pause,pull/cancel,start}`
+  (pull needs sudo mode), `PUT /api/local/model`; doctor check `local-model`.
 - **Usage limits.** `GET /api/usage` returns one `UsageSnapshot`, whatever the sign-in.
   - Subscriptions report plan windows (5-hour session, weekly, per-model), read
     through the SDK's structured `/usage`.
@@ -290,7 +300,7 @@ src/
   (the API key and a key per provider, or a 1Password reference to one),
   `memory/*.md`, `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `search.db`,
   `integrations.json` + `integrations.secrets.json`, `skills/<name>/SKILL.md` +
-  `skills.json` (modes for skills Conch doesn't own), `api-sessions/<id>.json` (the
+  `skills.json` (modes for skills Conch doesn't own), `local.json` (the local model chosen, the last download speed), `api-sessions/<id>.json` (the
   transcript a plain model API needs, since it keeps no session of its own),
   `browser.json` (browser settings, sites you always allow) + `browser/profile/` +
   `browser/shots/`, `terminal.json` (terminal settings; terminals themselves are never
