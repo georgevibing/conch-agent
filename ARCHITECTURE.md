@@ -84,6 +84,7 @@ Zod schemas for everything on the wire (v2):
 ```
 src/
   config.ts, security.ts      env validation; Host/Origin guards; remote token
+  port.ts                     which port to start on (another Conch there? a free one?)
   services.ts                 wiring: stores, engines, conversation manager, login
   app.ts                      Fastify routes + /ws + static web app
   settings/store.ts           ~/.conch/settings.json and secrets.json (0600)
@@ -267,7 +268,16 @@ src/
   transcript a plain model API needs, since it keeps no session of its own),
   `browser.json` (browser settings, sites you always allow) + `browser/profile/` +
   `browser/shots/`, `terminal.json` (terminal settings; terminals themselves are never
-  written to disk), `workspace/` (default cwd).
+  written to disk), `gateway.json` (where it's listening, while it runs), `workspace/`
+  (default cwd).
+- **A port that's taken** (`port.ts`). Before anything starts, the port is probed. A
+  Conch already there (its `/api/health` says so) is opened instead, and so is this
+  folder's own Conch at the port recorded in `gateway.json`. Another program's port
+  makes Conch start on the next free one (up to +20), say so, and leave a note. A
+  `CONCH_PORT` set on purpose is never swapped: Conch names the program holding it
+  and suggests a free port. The real port reaches everything that uses it (the
+  browser's guard, pairing links, the checkup); `pnpm conch` and the dev server read
+  it from `gateway.json`.
 - **Damaged files heal** (`lib/recover.ts`). A JSON store that won't parse or match
   its schema is kept as `<name>.broken-<time>.json` (newest two), what still reads
   carries on, the rest takes its (careful) default, and one note lands in "Fixed on

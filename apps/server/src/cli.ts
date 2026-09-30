@@ -20,10 +20,14 @@ import { loadConfig } from './config';
 import { IntegrationStore } from './integrations/store';
 import { Healed } from './lib/healed';
 import type { Heal } from './lib/recover';
+import { runningGateway } from './port';
 import { PROVIDER_COPY } from './providers/catalog';
 import { SettingsStore } from './settings/store';
 
 const config = loadConfig();
+// Conch may have started on another port (the usual one was busy): links point where it really is.
+const running = await runningGateway(config.CONCH_HOME);
+if (running) config.CONCH_PORT = running.port;
 const healed = new Healed(config.CONCH_HOME);
 const heal: Heal = (area, message) => void healed.note(area, message);
 const store = new AccessStore(config.CONCH_HOME, heal);

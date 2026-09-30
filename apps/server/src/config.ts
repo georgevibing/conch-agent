@@ -51,6 +51,14 @@ const Env = z.object({
 
 export type Config = z.infer<typeof Env>;
 
+/**
+ * `CONCH_PORT` was chosen on purpose. Then a port another program holds is
+ * reported, never swapped for the next free one (`port.ts`).
+ */
+export function portIsExplicit(env: NodeJS.ProcessEnv = process.env): boolean {
+  return Boolean(env.CONCH_PORT?.trim());
+}
+
 const LOOPBACK = new Set(['127.0.0.1', '::1', 'localhost']);
 
 /** Parse and validate configuration from the environment. Throws on unsafe input. */

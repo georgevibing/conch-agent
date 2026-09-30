@@ -14,6 +14,7 @@ import {
   DraftSkillBody,
   Id,
   LoginCodeBody,
+  type Health,
   PROTOCOL_VERSION,
   CreateRoutineBody,
   EngineId,
@@ -162,7 +163,7 @@ export async function buildApp(services: Services) {
   };
 
   // ── App & settings ─────────────────────────────────────────────────────
-  app.get('/api/health', () => ({
+  app.get('/api/health', (): Health => ({
     ok: true,
     serverVersion: SERVER_VERSION,
     protocolVersion: PROTOCOL_VERSION,

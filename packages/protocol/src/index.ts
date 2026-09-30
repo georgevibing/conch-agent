@@ -116,6 +116,19 @@ export const UpdateMemoryBody = z.object({
   kind: MemoryKind.optional(),
 });
 
+// ── Health (public) ────────────────────────────────────────────────────────
+
+/**
+ * `GET /api/health`, answered for anyone. A Conch starting on a port that's
+ * taken asks it, to tell another Conch (open that one) from another program.
+ */
+export const Health = z.object({
+  ok: z.literal(true),
+  serverVersion: z.string(),
+  protocolVersion: z.number(),
+});
+export type Health = z.infer<typeof Health>;
+
 // ── App state (first request the web app makes) ─────────────────────────────
 
 export const AppState = z.object({
