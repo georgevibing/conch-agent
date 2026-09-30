@@ -11,7 +11,7 @@ import type { Config } from './config';
 import { CommandStore } from './commands/store';
 import { ConversationManager } from './conversations/manager';
 import { ConversationStore } from './conversations/store';
-import { anthropicApiVariant, ApiEngine, openrouterVariant } from './engines/api';
+import { anthropicApiVariant, ApiEngine, ollamaVariant, openrouterVariant } from './engines/api';
 import { ClaudeCodeEngine } from './engines/claude-code/engine';
 import { CodexEngine } from './engines/codex/engine';
 import { MockEngine } from './engines/mock/engine';
@@ -20,6 +20,7 @@ import { Emitter } from './lib/emitter';
 import { Doctor } from './doctor/service';
 import { Healed } from './lib/healed';
 import type { Heal } from './lib/recover';
+import { LocalService } from './local/service';
 import { KNOWN_NEEDS } from './setup/known';
 import { Setup } from './setup/needs';
 import { ProviderKeys } from './providers/keys';
@@ -61,6 +62,8 @@ export class Services {
   readonly setup: Setup;
   /** Repair everything: every part's check, run at once (see `doctor/`). */
   readonly doctor: Doctor;
+  /** A model on this computer: Ollama, found, started and fed models (ADR 0018). */
+  readonly local: LocalService;
   readonly settings: SettingsStore;
   /** Who may sign in (`~/.conch/access.json`). */
   readonly access: AccessStore;
@@ -109,6 +112,19 @@ export class Services {
     this.commands = new CommandStore(join(config.CONCH_HOME, 'commands'));
     this.attachments = new AttachmentStore(join(config.CONCH_HOME, 'attachments'));
     this.keys = new ProviderKeys(this.settings, new SecretVault());
+    this.local = new LocalService({
+      home: config.CONCH_HOME,
+      setup: this.setup,
+      heal: (message) => void this.healed.note('providers', message),
+      // A model arrived or Ollama started: the card and the picker see it now.
+      onChange: () => local.forget(),
+    });
+    const local = new ApiEngine(
+      ollamaVariant(this.local, { home: config.CONCH_HOME }),
+      this.settings,
+      this.keys,
+    );
+    this.doctor.register(this.local.doctorCheck());
     this.engines = new Map<EngineId, Engine>([
       [
         'claude-code',
@@ -128,6 +144,7 @@ export class Services {
         'anthropic-api',
         new ApiEngine(anthropicApiVariant({ home: config.CONCH_HOME }), this.settings, this.keys),
       ],
+      ['ollama', local],
       [
         'mock',
         new MockEngine({
@@ -303,7 +320,10 @@ export class Services {
    */
   async needLanded(id: string): Promise<void> {
     if (id === 'op') await this.keys.vault.onePassword.state({ force: true });
-    const engine = { codex: 'codex-cli', 'claude-code': 'claude-code' }[id] as EngineId | undefined;
+    // Ollama just landed: start it (quietly), so getting a model can follow straight on.
+    if (id === 'ollama') await this.local.ensureRunning({ note: false });
+    const engine = { codex: 'codex-cli', 'claude-code': 'claude-code', ollama: 'ollama' }[id] as
+      EngineId | undefined;
     if (engine) await this.engines.get(engine)?.detect({ force: true });
     await this.integrations.recheckNeeding(id);
   }

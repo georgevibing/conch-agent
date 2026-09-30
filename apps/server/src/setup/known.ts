@@ -199,6 +199,30 @@ list.push(
     },
   },
   {
+    // A model on this computer (ADR 0018). Ollama for Windows installs per
+    // user (no administrator) and puts itself on the user's PATH; the Mac app
+    // keeps its command-line tool inside the bundle. Linux gets the page:
+    // its installer is a script that needs sudo, and Conch never pipes one
+    // into a shell.
+    id: 'ollama',
+    name: 'Ollama',
+    short: 'Ollama',
+    find: (platform) => findOllama(platform),
+    install: {
+      win32: winget('Ollama.Ollama'),
+      darwin: { manager: 'brew', args: ['install', '--cask', 'ollama-app'] },
+    },
+    update: (path, platform) =>
+      platform === 'win32'
+        ? [{ manager: 'winget', args: ['upgrade', '--id', 'Ollama.Ollama', ...WINGET_QUIET] }]
+        : updateBy(path, platform, { brew: 'ollama-app', cask: true }),
+    download: {
+      win32: 'https://ollama.com/download/windows',
+      darwin: 'https://ollama.com/download/mac',
+      linux: 'https://docs.ollama.com/linux',
+    },
+  },
+  {
     id: 'docker',
     name: 'Docker',
     short: 'Docker',
@@ -211,6 +235,21 @@ list.push(
     },
   },
 );
+
+/** Where Ollama puts its program on each system, when it isn't on `PATH`. */
+export function ollamaDirs(platform: Platform): string[] {
+  if (platform === 'win32') return [join(localAppData(), 'Programs', 'Ollama')];
+  if (platform === 'darwin')
+    return [
+      '/Applications/Ollama.app/Contents/Resources',
+      join(homedir(), 'Applications', 'Ollama.app', 'Contents', 'Resources'),
+    ];
+  return ['/usr/local/bin', '/usr/bin'];
+}
+
+export function findOllama(platform: Platform): Promise<string | undefined> {
+  return findExecutable('ollama', { extraDirs: ollamaDirs(platform) });
+}
 
 /** Where Docker Desktop keeps its command-line tools. */
 function dockerDirs(): string[] {

@@ -49,6 +49,7 @@ import { RoutineError } from './routines/service';
 import { registerAuthRoutes } from './auth/routes';
 import { registerBrowserRoutes } from './browser/routes';
 import { registerTerminalRoutes } from './terminal/routes';
+import { registerLocalRoutes } from './local/routes';
 import { ProviderError } from './providers/service';
 import { SkillError } from './skills/store';
 import { registerSecurity } from './security';
@@ -135,6 +136,7 @@ export async function buildApp(services: Services) {
   registerAuthRoutes(app, services, gate);
   registerBrowserRoutes(app, services, gate);
   registerTerminalRoutes(app, services, gate);
+  registerLocalRoutes(app, services, gate);
   registerAttachmentRoutes(app, services.attachments);
   app.addHook('onClose', () => services.browser.stop());
   app.addHook('onClose', async () => services.stop());
