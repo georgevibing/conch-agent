@@ -1,0 +1,41 @@
+@layer nacre.components {
+  .field {
+    inline-size: 100%;
+  }
+
+  .row {
+    display: flex;
+    gap: var(--nc-space-2);
+  }
+
+  .input {
+    flex: 1;
+    min-inline-size: 0;
+    font-family: var(--nc-font-mono);
+  }
+
+  .status {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  .ok {
+    color: var(--nc-text);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  .okIcon {
+    flex-shrink: 0;
+    color: light-dark(oklch(0.55 0.15 var(--nc-success-h)), oklch(0.75 0.15 var(--nc-success-h)));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ok {
+      animation: none;
+    }
+  }
+}

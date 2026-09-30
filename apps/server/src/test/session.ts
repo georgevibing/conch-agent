@@ -15,6 +15,7 @@ import type { ServerEvent } from '@conch/protocol';
 import { buildApp } from '../app';
 import { loadConfig } from '../config';
 import { sessionsDir, TranscriptStore } from '../engines/api/session';
+import { MockTelegram } from '../channels/mock/telegram';
 import { recordGateway } from '../port';
 import { Services } from '../services';
 
@@ -178,6 +179,14 @@ export async function useConch(g: Gateway) {
   await writeFile(join(await services.settings.workspace(), 'notes.md'), '# Notes\n');
   await services.healed.note('search', 'The search index was rebuilt.');
   await recordGateway(home, { pid: process.pid, host: '127.0.0.1', port: 4382, startedAt: 1 });
+  // A bot on (pretend) Telegram, with its key.
+  await ok(
+    await app.inject({
+      method: 'POST',
+      url: '/api/channels',
+      payload: { kind: 'telegram', token: MockTelegram.TOKEN },
+    }),
+  );
   await services.backups.backupNow();
   // Sign-in last: from here on, requests need the cookie.
   const signedIn = await app.inject({

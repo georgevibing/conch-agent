@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import {
   ConversationEvent,
   ConversationStatus,
-  type ConversationSummary,
+  ConversationSummary,
   EngineId,
   Id,
   TurnOptions,
@@ -45,10 +45,7 @@ const StoredRecord = z.object({
   status: ConversationStatus.catch('idle'),
   titling: z.boolean().optional().catch(undefined),
   options: TurnOptions.catch({}),
-  origin: z
-    .object({ kind: z.literal('routine'), routineId: z.string(), runId: z.string() })
-    .optional()
-    .catch(undefined),
+  origin: ConversationSummary.shape.origin.catch(undefined),
   engine: EngineId.catch('claude-code'),
   resumeId: z.string().optional().catch(undefined),
   sessions: z

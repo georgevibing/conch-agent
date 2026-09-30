@@ -39,6 +39,7 @@ working agreement 11: _fix it before you ask_.
 | Updates (Conch itself, the programs it uses, rollback)          | `apps/server/src/updates/`, `apps/web/src/features/health/UpdatesSection.tsx`, Nacre `SoftwareUpdate` + [ADR 0019](./docs/adr/0019-updates.md) — security-relevant                                |
 | Attachments (long pastes, files, pictures, drop, previews)      | `apps/server/src/attachments/`, `apps/web/src/features/chat/`, Nacre `Attachments` + [ADR 0017](./docs/adr/0017-attachments.md) — security-relevant                                               |
 | Backups (what's in one, the format, restore, automatic backups) | `apps/server/src/backup/`, `apps/web/src/features/health/`, Nacre `Backups` + [ADR 0020](./docs/adr/0020-backups.md) — security-relevant                                                          |
+| Channels (Telegram, Discord, Slack: reaching your assistant)    | `apps/server/src/channels/`, `apps/web/src/features/channels/`, Nacre `Channels` + [ADR 0018](./docs/adr/0018-channels.md), [§ Adding a channel](#adding-a-channel) — security-relevant           |
 | What ⌘K can find by name                                        | `apps/web/src/features/palette/` (`findables.tsx`) — see working agreement 10                                                                                                                     |
 | Repair everything (the whole-Conch checkup, Settings → Health)  | `apps/server/src/doctor/` (`checks.ts`), `apps/web/src/features/health/`, Nacre `RepairPanel` — see working agreement 12                                                                          |
 | Offline, usage limits, who answers a turn                       | `Services.route`, `apps/server/src/network/`, `ConversationManager` + [ADR 0023](./docs/adr/0023-offline-and-limits.md)                                                                           |
@@ -215,19 +216,21 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
     **offline and limits** route around every provider. They only stay whole if
     each new part plugs itself in — in the same change, without being asked:
 
-    | You’re adding…                                                                     | Also, in the same change                                                                                                                                                                                                                                                                                                                                                                                        |
-    | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-    | Anything with state that can go wrong (a service, a connection, a store, a daemon) | A `DoctorCheck` in `apps/server/src/doctor/checks.ts` (`registerCoreChecks`), or the subsystem's own `doctor.ts` registered from `Services`. With `repair: false` it only looks; with `repair: true` it applies the safe fixes and says `fixed`. What only a person can do is `needs-you` with one `action` (`open` a settings place, `need` to install, or a `command` to copy). Tested like `checks.test.ts`. |
-    | A file or folder under `CONCH_HOME`                                                | A rule in `apps/server/src/backup/manifest.ts` (ADR 0020): `kept` (with its group), `secret` (only in a passphrase-locked backup), `derived` (rebuilt, never backed up) or `outside`. `manifest.test.ts` fails on any file no rule covers.                                                                                                                                                                      |
-    | A program, app or runtime Conch runs or relies on                                  | A need in `apps/server/src/setup/known.ts` (ADR 0016) with `version` (how to read the installed one), `latest` (where the newest is announced) and its `update` recipe — `updatable({ winget, brew, npm })` gives all three. Updates (ADR 0019) then watches it and offers the one-click update; `latest.test.ts` fails on a need that can update but can't say its versions.                                   |
-    | An app in the integrations catalog                                                 | Its `cues` in `integrations/catalog.ts` (ADR 0021; the type requires them): the precise phrases that only mean that app, and the ones that mean something else, with rows in `cues.test.ts`. A false offer is worse than none; `{ match: [] }` is allowed and honest.                                                                                                                                           |
-    | A provider                                                                         | `Engine.local = true` if it runs on this computer (offline answers: ADR 0023, and ADR 0022 for how Ollama does it). Its failures classified as a `TurnProblem` (`limit`, `unavailable`, `signed-out`…) so a limit or an outage routes to your fallback instead of a dead end. Its readiness shows in `providersCheck`.                                                                                          |
-    | A failure another provider could answer                                            | `ConversationManager.#answer`'s retry condition and `Services.route` (ADR 0023). Not a failure the person must fix (`signed-out`, `key-locked`): that keeps its own card.                                                                                                                                                                                                                                       |
-    | Something a person can open or do by name                                          | Working agreement 10 (⌘K).                                                                                                                                                                                                                                                                                                                                                                                      |
+    | You’re adding…                                                                                                                 | Also, in the same change                                                                                                                                                                                                                                                                                                                                                                                        |
+    | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | Anything with state that can go wrong (a service, a connection, a store, a daemon)                                             | A `DoctorCheck` in `apps/server/src/doctor/checks.ts` (`registerCoreChecks`), or the subsystem's own `doctor.ts` registered from `Services`. With `repair: false` it only looks; with `repair: true` it applies the safe fixes and says `fixed`. What only a person can do is `needs-you` with one `action` (`open` a settings place, `need` to install, or a `command` to copy). Tested like `checks.test.ts`. |
+    | A file or folder under `CONCH_HOME`                                                                                            | A rule in `apps/server/src/backup/manifest.ts` (ADR 0020): `kept` (with its group), `secret` (only in a passphrase-locked backup), `derived` (rebuilt, never backed up) or `outside`. `manifest.test.ts` fails on any file no rule covers.                                                                                                                                                                      |
+    | A setting that lets Conch act without asking, or lets someone else reach it (a trust level, a bot's people, a program it runs) | A line in `apps/server/src/backup/powers.ts` (and a `BackupPower` kind): a restore preview names it, so an old or someone else's backup can't quietly bring it back.                                                                                                                                                                                                                                            |
+    | A program, app or runtime Conch runs or relies on                                                                              | A need in `apps/server/src/setup/known.ts` (ADR 0016) with `version` (how to read the installed one), `latest` (where the newest is announced) and its `update` recipe — `updatable({ winget, brew, npm })` gives all three. Updates (ADR 0019) then watches it and offers the one-click update; `latest.test.ts` fails on a need that can update but can't say its versions.                                   |
+    | An app in the integrations catalog                                                                                             | Its `cues` in `integrations/catalog.ts` (ADR 0021; the type requires them): the precise phrases that only mean that app, and the ones that mean something else, with rows in `cues.test.ts`. A false offer is worse than none; `{ match: [] }` is allowed and honest.                                                                                                                                           |
+    | A provider                                                                                                                     | `Engine.local = true` if it runs on this computer (offline answers: ADR 0023, and ADR 0022 for how Ollama does it). Its failures classified as a `TurnProblem` (`limit`, `unavailable`, `signed-out`…) so a limit or an outage routes to your fallback instead of a dead end. Its readiness shows in `providersCheck`.                                                                                          |
+    | A failure another provider could answer                                                                                        | `ConversationManager.#answer`'s retry condition and `Services.route` (ADR 0023). Not a failure the person must fix (`signed-out`, `key-locked`): that keeps its own card.                                                                                                                                                                                                                                       |
+    | Something a person can open or do by name                                                                                      | Working agreement 10 (⌘K).                                                                                                                                                                                                                                                                                                                                                                                      |
 
     Three of these are enforced by tests that fail with the fix in their message
-    (`backup/manifest.test.ts`, `updates/latest.test.ts`, and the catalog's type for
-    `cues`); the rest are on you. If a new part fits no row but is still something
+    (`backup/manifest.test.ts` — whose session really uses every store, so extend
+    `test/session.ts` when you add one — `updates/latest.test.ts`, and the catalog's
+    type for `cues`); the rest are on you. If a new part fits no row but is still something
     you’d want back on a new computer, or would want to know is broken, it belongs
     in one of these features: extend the feature (and this table) rather than
     leave the part out.
@@ -277,6 +280,37 @@ threat model. Hold every change to the bar of a FAANG security review:
    `apps/server/src/auth/auth.test.ts` and `e2e/security.spec.ts`.
 9. **Warn people in their words.** Every security message says what could happen
    and what to do next, never jargon alone.
+
+## Adding a channel
+
+Channels are chat apps your assistant can be reached from (ADR 0018). More are
+coming, and each one follows the same shape:
+
+1. **Outbound only.** Connect from this computer (long polling, a WebSocket
+   the app offers). Never require a public address, webhook or tunnel. An app
+   that only offers webhooks waits.
+2. **An adapter.** Put it in `apps/server/src/channels/<app>.ts`, implementing `ChannelAdapter`:
+   - `identify()` checks the keys with a real call and says who the bot is.
+   - `connect()` runs and reconnects by itself, and reports `state`. It ends
+     on `needs-token` only when the app refuses the key.
+   - Map every error to a plain `ChannelError`, turning the app's own error
+     codes into the setting to change.
+   - Never put a key in a message or a URL you log (`redact`).
+   - Private chats only. One channel's failure never reaches another.
+3. **A pretend app** in `channels/mock/<app>.ts`, with `/__control/…` endpoints.
+   Unit tests, e2e and `pnpm dev:mock` use it. Test the healing paths: a
+   dropped connection, a refused key, a rate limit, and the app's own quirks.
+4. **The words and pictures**: a `CHANNEL_CATALOG` entry, the logo in Nacre's
+   `brands.ts` (Simple Icons; keep a brand's own colours when its rules ask),
+   and a setup in `ConnectChannel.tsx`:
+   - numbered steps that say which button to press;
+   - beside them, a `Handset` for a chat or a `PortalSketch` for a web page;
+   - everything worked out for the person that can be: names, settings, links;
+   - keys accepted when pasted anywhere on the page, and checked as they land;
+   - a last step, a hello that recognises the owner.
+5. **Nobody gets in by default.** Only two things admit anyone: the owner's
+   hello (a one-time code, or **That's me** in Conch), or a person pressing
+   **Let in**.
 
 ## Definition of done
 

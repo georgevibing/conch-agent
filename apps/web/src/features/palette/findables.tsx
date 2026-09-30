@@ -8,6 +8,7 @@ import {
   CircleArrowUp,
   Cpu,
   Gauge,
+  MessagesSquare,
   Globe,
   HeartPulse,
   Laptop,
@@ -32,6 +33,8 @@ import { useNavigate } from 'react-router';
 import { useUi, type SettingsTab } from '../../app/ui';
 import { doctorApi } from '../health/api';
 import { FALLBACK_FOCUS } from '../settings/FallbackSection';
+import { APPS } from '../channels/describe';
+import { useChannels } from '../channels/queries';
 import { useIntegrations } from '../integrations/queries';
 import { modelLabel, providerLogos } from '../models/catalog';
 import { modelKey, useTurnOptions } from '../models/useTurnOptions';
@@ -170,6 +173,7 @@ export function useFindables(query: string, conversationId: string | undefined):
   const { data: skills } = useSkills();
   const { data: integrations } = useIntegrations();
   const { data: routines } = useRoutines();
+  const { data: channels } = useChannels();
   const { data: terminal } = useTerminalStatus();
   const { data: updates } = useUpdates();
   const q = query.trim();
@@ -271,6 +275,52 @@ export function useFindables(query: string, conversationId: string | undefined):
       ),
   }));
 
+  // Chat apps: the bots you connected (open them) and the apps you can add (connect one).
+  const reachable = [
+    ...(channels?.channels ?? []).map((c) => ({
+      id: c.id,
+      label: `${c.bot.name} on ${APPS[c.kind].name}`,
+      keywords: `${APPS[c.kind].name} ${c.bot.username ?? ''} channel bot phone`,
+      brand: c.kind as string,
+      color: APPS[c.kind].color,
+      to: `/channels/${c.id}`,
+      hint: 'Open',
+    })),
+    ...(channels?.catalog ?? [])
+      .filter((c) => c.available)
+      .map((c) => ({
+        id: `new-${c.id}`,
+        label: `Connect ${c.name}`,
+        keywords: `${c.name} channel bot phone chat message reach`,
+        brand: c.id,
+        color: c.color,
+        to: `/channels/new/${c.id}`,
+        hint: `About ${c.minutes ?? 2} min`,
+      })),
+  ];
+  const channelItems = find(
+    reachable,
+    q,
+    (c) => c.label,
+    (c) => c.keywords,
+    4,
+  ).map(({ item, match }): Findable => ({
+    id: `channel:${item.id}`,
+    label: item.label,
+    ranges: match.ranges,
+    hint: item.hint,
+    icon: (
+      <IntegrationLogo
+        brand={item.brand}
+        name={item.label}
+        color={item.color}
+        size="xs"
+        decorative
+      />
+    ),
+    run: () => void navigate(item.to),
+  }));
+
   const routineItems = find(
     routines ?? [],
     q,
@@ -334,6 +384,13 @@ export function useFindables(query: string, conversationId: string | undefined):
       keywords: 'schedule cron',
       icon: <Repeat />,
       run: () => void navigate('/routines'),
+    },
+    {
+      id: 'channels',
+      label: 'Channels',
+      keywords: 'telegram discord slack whatsapp phone mobile chat message reach bot remote',
+      icon: <MessagesSquare />,
+      run: () => void navigate('/channels'),
     },
     {
       id: 'integrations',
@@ -438,6 +495,7 @@ export function useFindables(query: string, conversationId: string | undefined):
     { heading: 'Skills', items: skillItems },
     { heading: 'Models', items: modelItems },
     { heading: 'Integrations', items: appItems },
+    { heading: 'Channels', items: channelItems },
     { heading: 'Routines', items: routineItems },
   ].filter((group) => group.items.length > 0);
 }

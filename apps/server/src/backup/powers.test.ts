@@ -14,6 +14,8 @@ describe('what in a backup can act for you', () => {
         'settings.json',
         'browser.json',
         'terminal.json',
+        'channels.json',
+        'channels.secrets.json',
         'routines/r_1.json',
         'routines/r_1.runs.jsonl',
         'memory/m_1.md',
@@ -24,8 +26,34 @@ describe('what in a backup can act for you', () => {
       'settings.json',
       'browser.json',
       'terminal.json',
+      'channels.json',
       'routines/r_1.json',
     ]);
+  });
+
+  it('names who a bot will talk to, so an old backup can’t quietly let someone back in', () => {
+    const powers = powersOf(
+      ['channels.json'],
+      reader({
+        'channels.json': {
+          version: 1,
+          channels: [
+            {
+              kind: 'telegram',
+              bot: { name: 'Ada’s Conch' },
+              people: [{ name: 'Ada' }, { name: 'Sam' }],
+            },
+            // Turned off, or nobody let in: nothing to say.
+            { kind: 'discord', enabled: false, bot: { name: 'Off' }, people: [{ name: 'X' }] },
+            { kind: 'slack', bot: { name: 'Empty' }, people: [] },
+          ],
+        },
+      }),
+    );
+    expect(powers).toEqual([
+      { kind: 'channel-people', name: 'Ada’s Conch on Telegram', people: ['Ada', 'Sam'], more: 0 },
+    ]);
+    for (const power of powers) expect(BackupPower.safeParse(power).success).toBe(true);
   });
 
   it('cuts names from the file to size, and counts what it doesn’t list', () => {

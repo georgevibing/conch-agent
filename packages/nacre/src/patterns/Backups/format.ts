@@ -31,7 +31,8 @@ export type BackupPowerInfo =
   | { kind: 'routine-never-asks'; name: string }
   | { kind: 'browser-sites'; sites: string[]; more?: number }
   | { kind: 'browser-local' }
-  | { kind: 'terminal-remote' };
+  | { kind: 'terminal-remote' }
+  | { kind: 'channel-people'; name: string; people: string[]; more?: number };
 
 /** What it is (“Files”, “The browser”), when the words need one. */
 export interface PowerWords {
@@ -81,6 +82,11 @@ export function powerWords(power: BackupPowerInfo): PowerWords {
       return { subject: 'The browser', text: 'Can open apps on this computer and your network' };
     case 'terminal-remote':
       return { text: 'Other devices can open a terminal on this computer' };
+    case 'channel-people':
+      return {
+        subject: power.name,
+        text: `Lets ${named(power.people, power.more)} talk to your assistant`,
+      };
   }
 }
 

@@ -1,0 +1,146 @@
+@layer nacre.components {
+  .steps {
+    --ss-marker: 1.75rem;
+
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .step {
+    position: relative;
+    display: grid;
+    grid-template-columns: var(--ss-marker) minmax(0, 1fr);
+    gap: var(--nc-space-3);
+    padding-block-end: var(--nc-space-5);
+  }
+
+  /* The thread that joins the steps: solid behind you, faint ahead. */
+  .step:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    inset-block: calc(var(--ss-marker) + var(--nc-space-1)) var(--nc-space-1);
+    inset-inline-start: calc(var(--ss-marker) / 2 - 1px);
+    inline-size: 2px;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-border-subtle);
+  }
+
+  .step[data-state='done']:not(:last-child)::before {
+    background: color-mix(in oklch, var(--nc-accent-9) 45%, var(--nc-border-subtle));
+  }
+
+  .marker {
+    display: grid;
+    place-items: center;
+    inline-size: var(--ss-marker);
+    block-size: var(--ss-marker);
+    border-radius: var(--nc-radius-full);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-subtle);
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1.5px var(--nc-border);
+    transition:
+      background-color var(--nc-duration-base) var(--nc-ease-out),
+      color var(--nc-duration-base) var(--nc-ease-out),
+      box-shadow var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .step[data-state='current'] .marker {
+    color: var(--nc-accent-contrast);
+    background: var(--nc-accent-9);
+    box-shadow:
+      0 0 0 4px color-mix(in oklch, var(--nc-accent-9) 18%, transparent),
+      var(--nc-glaze-edge);
+  }
+
+  .step[data-state='done'] .marker {
+    color: var(--nc-accent-11);
+    background: var(--nc-accent-3);
+    box-shadow: inset 0 0 0 1.5px var(--nc-accent-6);
+    animation: nc-settle var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both;
+  }
+
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+    padding-block-start: 0.2rem;
+  }
+
+  .head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    letter-spacing: -0.008em;
+    color: var(--nc-text);
+    text-wrap: balance;
+  }
+
+  .step[data-state='upcoming'] .title {
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-subtle);
+  }
+
+  .edit {
+    appearance: none;
+    flex-shrink: 0;
+    padding: 0.125rem var(--nc-space-1-5);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    background: none;
+    font: inherit;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .edit:hover {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+  }
+
+  .edit:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .summary {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  .content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    padding-block-start: var(--nc-space-2);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .content,
+    .step[data-state='done'] .marker {
+      animation: none;
+    }
+  }
+}

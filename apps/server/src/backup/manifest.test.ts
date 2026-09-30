@@ -46,6 +46,8 @@ describe('what’s in a backup', () => {
       'access.json',
       'integrations.json',
       'integrations.secrets.json',
+      'channels.json',
+      'channels.secrets.json',
       'browser.json',
       'terminal.json',
       'usage.json',

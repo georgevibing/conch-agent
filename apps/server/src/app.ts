@@ -53,6 +53,7 @@ import { RoutineError } from './routines/service';
 import { registerAuthRoutes } from './auth/routes';
 import { registerBackupRoutes } from './backup/routes';
 import { registerBrowserRoutes } from './browser/routes';
+import { registerChannelRoutes } from './channels/routes';
 import { registerTerminalRoutes } from './terminal/routes';
 import { registerLocalRoutes } from './local/routes';
 import { ProviderError } from './providers/service';
@@ -149,6 +150,17 @@ export async function buildApp(services: Services) {
   registerLocalRoutes(app, services, gate);
   registerAttachmentRoutes(app, services.attachments);
   registerBackupRoutes(app, services.backups, gate);
+  registerChannelRoutes(
+    app,
+    services.channels,
+    gate,
+    services.mockTelegram &&
+      (() => ({
+        telegram: services.mockTelegram?.base,
+        discord: services.mockDiscord?.base,
+        slack: services.mockSlack?.base,
+      })),
+  );
   app.addHook('onClose', () => services.browser.stop());
   app.addHook('onClose', async () => services.stop());
   app.addHook('onClose', async () => services.terminal.stop());

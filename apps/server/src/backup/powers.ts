@@ -20,6 +20,7 @@ export function previewReads(path: string): boolean {
     path === 'settings.json' ||
     path === 'browser.json' ||
     path === 'terminal.json' ||
+    path === 'channels.json' ||
     /^routines\/[^/]+(?<!\.runs)\.json$/.test(path)
   );
 }
@@ -27,6 +28,12 @@ export function previewReads(path: string): boolean {
 type Read = (path: string) => Buffer | undefined;
 
 const MAX_LISTED = 20;
+
+const APP_NAMES: Record<string, string> = {
+  telegram: 'Telegram',
+  discord: 'Discord',
+  slack: 'Slack',
+};
 
 const text = (value: unknown, fallback: string) => {
   const s = typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
@@ -120,6 +127,26 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
 
   if (record(json(read, 'terminal.json')?.settings)?.allowRemote === true)
     powers.push({ kind: 'terminal-remote' });
+
+  // A bot and the people it answers: restoring an old file must not quietly let
+  // back in someone you removed since, so each one is named.
+  const channels = json(read, 'channels.json')?.channels;
+  for (const raw of Array.isArray(channels) ? channels : []) {
+    const channel = record(raw);
+    if (!channel || !on(channel.enabled)) continue;
+    const people = (Array.isArray(channel.people) ? channel.people : [])
+      .map(record)
+      .map((person) => text(person?.name ?? person?.username, 'Someone'));
+    if (!people.length) continue;
+    const bot = text(record(channel.bot)?.name, 'A bot');
+    const app = APP_NAMES[String(channel.kind)] ?? 'a chat app';
+    powers.push({
+      kind: 'channel-people',
+      name: text(`${bot} on ${app}`, 'A bot'),
+      people: people.slice(0, MAX_LISTED),
+      more: Math.max(0, people.length - MAX_LISTED),
+    });
+  }
 
   return powers;
 }

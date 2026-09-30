@@ -8,6 +8,7 @@ import {
   Input,
   Kbd,
   LiveTitle,
+  IntegrationLogo,
   Pearl,
   ScrollArea,
   Text,
@@ -33,6 +34,8 @@ import { keys, useAppState, useConversations } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { dayGroup, type DayGroup } from '../../lib/time';
 import { useAutoFocus } from '../../lib/useAutoFocus';
+import { ChannelsLink } from '../channels/ChannelsLink';
+import { APPS } from '../channels/describe';
 import { IntegrationsLink } from '../integrations/IntegrationsLink';
 import { RoutinesLink } from '../routines/RoutinesLink';
 import { SkillsLink } from '../skills/SkillsLink';
@@ -135,6 +138,15 @@ function ConversationRow({
         onClick={onNavigate}
       >
         {running && <Pearl size="xs" state="thinking" label="Working" className={styles.running} />}
+        {conversation.origin?.kind === 'channel' && (
+          <IntegrationLogo
+            brand={conversation.origin.channel}
+            name={APPS[conversation.origin.channel].name}
+            color={APPS[conversation.origin.channel].color}
+            size="xs"
+            className={styles.origin}
+          />
+        )}
         <LiveTitle pending={conversation.titling} className={styles.title}>
           {conversation.title}
         </LiveTitle>
@@ -200,7 +212,7 @@ export function Sidebar({
 
   const groups = new Map<DayGroup, ConversationSummary[]>();
   // Routine runs live under Routines, not in your chat list.
-  for (const c of (conversations ?? []).filter((c) => !c.origin)) {
+  for (const c of (conversations ?? []).filter((c) => c.origin?.kind !== 'routine')) {
     const g = dayGroup(c.updatedAt);
     groups.set(g, [...(groups.get(g) ?? []), c]);
   }
@@ -253,6 +265,7 @@ export function Sidebar({
         <RoutinesLink onNavigate={onNavigate} />
         <SkillsLink onNavigate={onNavigate} />
         <IntegrationsLink onNavigate={onNavigate} />
+        <ChannelsLink onNavigate={onNavigate} />
       </div>
       <ScrollArea className={styles.scroll}>
         {!isPending && (conversations?.length ?? 0) === 0 && (

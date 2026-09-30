@@ -174,6 +174,8 @@ export interface CheckupInput {
   tokenProfile?: string;
   /** Defaults to this computer's. */
   platform?: NodeJS.Platform;
+  /** Chat apps that reach the assistant, and who besides you may use each. */
+  channels?: { app: string; bot: string; others: string[] }[];
 }
 
 /**
@@ -290,6 +292,30 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       detail:
         '“Full trust” lets the assistant run any command and change any file without asking. A web page or file it reads could trick it. Go back to asking first — or choose “Auto” in Settings › Models & modes.',
       fix: { kind: 'act', label: 'Ask first', action: 'ask-first' },
+    });
+  }
+
+  const channels = input.channels ?? [];
+  if (channels.length && input.permissionMode === 'bypassPermissions') {
+    const apps = [...new Set(channels.map((c) => c.app))];
+    const list = apps.length === 1 ? apps[0] : `${apps.slice(0, -1).join(', ')} and ${apps.at(-1)}`;
+    items.push({
+      id: 'channels-full-trust',
+      level: 'warn',
+      title: `Messages from ${list} run without asking`,
+      detail: `Chats started from ${list} use “Full trust” too. Anyone who gets into your ${apps.length === 1 ? 'account' : 'accounts'} there could make the assistant change files or run commands on this computer. Go back to asking first: you’ll get a button to press in the chat.`,
+      fix: { kind: 'act', label: 'Ask first', action: 'ask-first' },
+    });
+  }
+  const shared = channels.filter((c) => c.others.length);
+  if (shared.length) {
+    const people = [...new Set(shared.flatMap((c) => c.others))];
+    items.push({
+      id: 'channel-people',
+      level: 'info',
+      title: `${people.length === 1 ? people[0] : `${people.length} other people`} can use your assistant from ${shared.map((c) => c.app).join(' and ')}`,
+      detail: `They can ask it to do what you can, and it asks them, not you, before anything important. Remove anyone you no longer want there.`,
+      fix: { kind: 'open', label: 'Review', place: 'channels' },
     });
   }
 

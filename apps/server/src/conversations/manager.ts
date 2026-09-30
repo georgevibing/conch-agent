@@ -410,6 +410,8 @@ export class ConversationManager {
     /** Ids of uploaded attachments, in order. */
     attachments?: readonly string[];
     options?: TurnOptions;
+    /** Where a new conversation came from (a channel), when not from this app. */
+    origin?: ConversationRecord['origin'];
   }) {
     const existing = input.conversationId ? await this.#get(input.conversationId) : undefined;
     if (existing?.abort)
@@ -466,6 +468,7 @@ export class ConversationManager {
         status: 'idle',
         options: clean(input.options ?? {}),
         engine: engine.id,
+        ...(input.origin && { origin: input.origin }),
         ...(autoTitle && { titling: true }),
       };
       live = { record, events: [], seq: 0, permissions: new Map(), alwaysAllow: new Set() };

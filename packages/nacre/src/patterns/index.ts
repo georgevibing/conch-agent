@@ -20,6 +20,7 @@ export * from './SearchPreview';
 export * from './Usage';
 export * from './Security';
 export * from './Integrations';
+export * from './Channels';
 export * from './Providers';
 export * from './Skills';
 export * from './Browser';

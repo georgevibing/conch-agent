@@ -1,8 +1,8 @@
-import { Globe, Hash, Laptop, Plug } from 'lucide-react';
+import { Globe, Laptop, Plug } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 
 import { cx } from '../../utils/cx';
-import { brandMarks } from './brands';
+import { brandArt, brandMarks } from './brands';
 import styles from './IntegrationLogo.module.css';
 import type { IntegrationStateValue } from './status';
 
@@ -27,7 +27,6 @@ export interface IntegrationLogoProps extends Omit<ComponentProps<'span'>, 'chil
  */
 const glyphs: Record<string, ReactNode> = {
   browser: <Globe />,
-  slack: <Hash />,
   // A model on this computer: the computer is the point, not the program running it.
   ollama: <Laptop />,
 };
@@ -63,10 +62,11 @@ export function IntegrationLogo({
   style,
   ...props
 }: IntegrationLogoProps) {
-  const path = brand ? brandMarks[brand] : undefined;
-  const glyph = brand ? glyphs[brand] : undefined;
+  const art = brand ? brandArt[brand] : undefined;
+  const path = brand && !art ? brandMarks[brand] : undefined;
+  const glyph = brand && !art ? glyphs[brand] : undefined;
   // No mark and no brand colour: a soft monogram tile instead of a loud one.
-  const custom = !path && !glyph && !color;
+  const custom = !art && !path && !glyph && !color;
   return (
     <span
       role={decorative ? undefined : 'img'}
@@ -74,6 +74,7 @@ export function IntegrationLogo({
       aria-hidden={decorative || undefined}
       data-size={size}
       data-custom={custom || undefined}
+      data-art={art ? '' : undefined}
       className={cx(styles.logo, className)}
       style={{
         ...(color ? { '--il-color': color } : { '--il-hue': hueOf(name) }),
@@ -81,7 +82,13 @@ export function IntegrationLogo({
       }}
       {...props}
     >
-      {path ? (
+      {art ? (
+        <svg viewBox={art.viewBox} aria-hidden className={styles.art}>
+          {art.paths.map((p) => (
+            <path key={p.d.slice(0, 24)} d={p.d} fill={p.fill} />
+          ))}
+        </svg>
+      ) : path ? (
         <svg viewBox="0 0 24 24" aria-hidden className={styles.mark}>
           <path d={path} />
         </svg>

@@ -475,4 +475,62 @@ describe('Palette search', () => {
     expect(useUi.getState()).toMatchObject({ settings: 'health', settingsFocus: 'update-conch' });
     useUi.setState({ settings: null, settingsFocus: undefined });
   });
+
+  it('finds channels: the bots you connected, and each app to connect', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'GET /api/channels': () => ({
+        channels: [
+          {
+            id: 'ch_1',
+            kind: 'telegram',
+            enabled: true,
+            createdAt: 1,
+            bot: { id: '42', name: 'Ada’s Conch', username: 'adas_conch_bot' },
+            people: [],
+            requests: [],
+            blocked: 0,
+            settings: { notifyRoutines: true },
+            health: { state: 'online' },
+          },
+        ],
+        catalog: [
+          {
+            id: 'telegram',
+            name: 'Telegram',
+            tagline: '',
+            color: '#26A5E4',
+            minutes: 2,
+            available: true,
+          },
+          {
+            id: 'discord',
+            name: 'Discord',
+            tagline: '',
+            color: '#5865F2',
+            minutes: 4,
+            available: true,
+          },
+          { id: 'signal', name: 'Signal', tagline: '', color: '#3A76F0', available: false },
+        ],
+      }),
+    });
+    renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'discord');
+    expect(await screen.findByRole('option', { name: /Connect Discord/ })).toBeInTheDocument();
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'telegram');
+    expect(
+      await screen.findByRole('option', { name: /Ada’s Conch on Telegram/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^Channels/ })).toBeInTheDocument();
+    // What's coming isn't offered as if it were here.
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'signal');
+    expect(screen.queryByRole('option', { name: /Connect Signal/ })).toBeNull();
+  });
 });

@@ -1,0 +1,304 @@
+@layer nacre.components {
+  .card {
+    --nc-rim-rest: 0.16;
+    --nc-rim-hover: 0.8;
+    --nc-sheen-size: 240px;
+    --nc-sheen-hover: 0.18;
+
+    position: relative;
+    min-inline-size: 0;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+    animation-delay: calc(var(--cc-i, 0) * 32ms);
+    transition:
+      box-shadow var(--nc-duration-slow) var(--nc-ease-out),
+      transform var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  @media (hover: hover) {
+    .card:hover {
+      transform: translateY(-1px);
+      box-shadow:
+        inset 0 0 0 1px var(--nc-border-subtle),
+        var(--nc-glaze-edge),
+        var(--nc-elevation-3);
+    }
+
+    .tile:hover .affordance {
+      color: var(--nc-text-accent);
+    }
+  }
+
+  .card:active:not(:has(.toggle:active, .action:active)) {
+    transform: scale(0.99);
+    transition-duration: var(--nc-duration-fast);
+  }
+
+  .card:has(.open:focus-visible) {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .title {
+    display: flex;
+    align-items: baseline;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+    margin: 0;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    letter-spacing: -0.008em;
+    color: var(--nc-text);
+  }
+
+  /* The title button stretches over the card so a tap anywhere opens it. */
+  .open {
+    appearance: none;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .open::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+  }
+
+  .open:focus-visible {
+    outline: none;
+  }
+
+  /* ── The tile: an app you can add ──────────────────────────────────── */
+  .tile {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--nc-space-1);
+    padding: var(--nc-space-4);
+  }
+
+  .tile > :first-child {
+    margin-block-end: var(--nc-space-2);
+  }
+
+  .tagline {
+    flex: 1;
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  .tileFoot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+    align-self: stretch;
+    margin-block-start: var(--nc-space-3);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .minutes,
+  .affordance {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+  }
+
+  .affordance {
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-muted);
+    transition: color var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  /* ── Coming soon ───────────────────────────────────────────────────── */
+  .soon {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2) var(--nc-space-3);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .soonList {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .soonItem {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    color: var(--nc-text-muted);
+    filter: saturate(0.35);
+    opacity: 0.8;
+  }
+
+  .soonNote {
+    font-style: italic;
+  }
+
+  /* ── The row: a channel you have ───────────────────────────────────── */
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-3) var(--nc-space-4) var(--nc-space-3) var(--nc-space-3);
+  }
+
+  .row[data-attention] {
+    box-shadow:
+      inset 0 0 0 1px
+        light-dark(
+          oklch(0.8 0.09 var(--nc-warning-h) / 0.7),
+          oklch(0.5 0.08 var(--nc-warning-h) / 0.6)
+        ),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+  }
+
+  .row[data-state='hello'] {
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--nc-accent-7) 70%, transparent),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+  }
+
+  .identity {
+    display: inline-grid;
+    flex-shrink: 0;
+  }
+
+  .avatar {
+    position: relative;
+    display: inline-grid;
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+  }
+
+  .avatarImg {
+    inline-size: 100%;
+    block-size: 100%;
+    border-radius: var(--nc-radius-full);
+    object-fit: cover;
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .corner {
+    --il-size: 1.125rem;
+    position: absolute;
+    inset-block-end: -3px;
+    inset-inline-end: -3px;
+    box-shadow: 0 0 0 2px var(--nc-surface);
+  }
+
+  .text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-inline-size: 0;
+  }
+
+  .handle {
+    overflow: hidden;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-regular);
+    color: var(--nc-text-subtle);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .status {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+  }
+
+  .status[data-tone='warning'] {
+    color: light-dark(oklch(0.5 0.12 var(--nc-warning-h)), oklch(0.82 0.12 var(--nc-warning-h)));
+  }
+
+  .status[data-tone='danger'] {
+    color: light-dark(oklch(0.52 0.18 var(--nc-danger-h)), oklch(0.78 0.14 var(--nc-danger-h)));
+  }
+
+  .app {
+    flex-shrink: 0;
+    color: var(--nc-text-subtle);
+  }
+
+  .sep {
+    flex-shrink: 0;
+    inline-size: 1px;
+    block-size: 0.8em;
+    background: var(--nc-border);
+  }
+
+  /* What you can do, above the card's stretched open button. */
+  .controls {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--nc-space-3);
+  }
+
+  @media (max-width: 560px) {
+    .row {
+      flex-wrap: wrap;
+    }
+
+    .text {
+      flex-basis: calc(100% - 3.5rem);
+    }
+
+    /* Under the words, lined up with them; the switch keeps to the right. */
+    .controls {
+      flex-basis: 100%;
+      padding-inline-start: 3.25rem;
+    }
+
+    .controls:empty {
+      display: none;
+    }
+
+    .toggle {
+      margin-inline-start: auto;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card {
+      animation: none;
+    }
+  }
+}

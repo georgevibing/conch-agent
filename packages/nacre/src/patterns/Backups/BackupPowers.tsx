@@ -1,6 +1,7 @@
 import {
   Blocks,
   Globe,
+  MessageCircle,
   MessagesSquare,
   MonitorSmartphone,
   Repeat,
@@ -30,6 +31,7 @@ const ICONS: Record<BackupPowerInfo['kind'], ReactNode> = {
   'browser-sites': <Globe />,
   'browser-local': <Router />,
   'terminal-remote': <MonitorSmartphone />,
+  'channel-people': <MessageCircle />,
 };
 
 /**

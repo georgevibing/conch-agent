@@ -121,6 +121,13 @@ export const BackupPower = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('browser-local') }),
   /** Other devices can open a terminal on this computer. */
   z.object({ kind: z.literal('terminal-remote') }),
+  /** A bot (Telegram, Discord, Slack) that these people can talk to your assistant through. */
+  z.object({
+    kind: z.literal('channel-people'),
+    name: PowerText,
+    people: z.array(PowerText).max(20),
+    more: z.number().int().nonnegative().default(0),
+  }),
 ]);
 export type BackupPower = z.infer<typeof BackupPower>;
 

@@ -1,0 +1,206 @@
+@layer nacre.components {
+  .page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-8);
+    inline-size: 100%;
+    max-inline-size: 64rem;
+    margin-inline: auto;
+    padding: var(--nc-space-8) var(--nc-space-6) var(--nc-space-12);
+    overflow-y: auto;
+  }
+
+  .pageHeader {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-6);
+  }
+
+  .pageIntro {
+    display: flex;
+    flex: 1 1 22rem;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    max-inline-size: 34rem;
+  }
+
+  .how {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    margin: var(--nc-space-2) 0 0;
+    padding-inline-start: var(--nc-space-5);
+    color: var(--nc-text-muted);
+  }
+
+  .how li::marker {
+    color: var(--nc-text-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+  }
+
+  .cards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+    align-items: stretch;
+    gap: var(--nc-space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .tiles > li {
+    display: grid;
+  }
+
+  .footer {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    padding-block-start: var(--nc-space-4);
+    border-block-start: 1px solid var(--nc-border-subtle);
+    color: var(--nc-text-subtle);
+  }
+
+  .footer svg {
+    flex-shrink: 0;
+    margin-block-start: 0.15em;
+  }
+
+  /* ── Setting one up: the path, and beside it the picture ──────────────── */
+  .setup {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--nc-space-10);
+  }
+
+  .setupMain {
+    display: flex;
+    flex: 1 1 26rem;
+    flex-direction: column;
+    gap: var(--nc-space-6);
+    min-inline-size: 0;
+    max-inline-size: 36rem;
+  }
+
+  .setupPreview {
+    position: sticky;
+    inset-block-start: var(--nc-space-6);
+    display: flex;
+    flex: 0 1 24rem;
+    justify-content: center;
+    margin-inline: auto;
+  }
+
+  .back {
+    align-self: flex-start;
+    margin-inline-start: calc(var(--nc-space-2) * -1);
+  }
+
+  .fit {
+    align-self: flex-start;
+  }
+
+  .answers {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+    gap: var(--nc-space-3);
+  }
+
+  .openRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-4);
+  }
+
+  .qrSmall {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .fallback {
+    padding-block-start: var(--nc-space-2);
+  }
+
+  /* ── One channel ───────────────────────────────────────────────────── */
+  .detailHeader {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-4);
+  }
+
+  .detailTitle {
+    display: flex;
+    flex: 1 1 16rem;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+  }
+
+  .detailActions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .avatar {
+    inline-size: 3.5rem;
+    block-size: 3.5rem;
+    border-radius: var(--nc-radius-full);
+    object-fit: cover;
+  }
+
+  .people {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .chats {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .setting {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-4);
+  }
+
+  @media (max-width: 820px) {
+    .page {
+      padding-inline: var(--nc-space-4);
+    }
+
+    .setupPreview {
+      position: static;
+      flex-basis: 100%;
+    }
+  }
+}

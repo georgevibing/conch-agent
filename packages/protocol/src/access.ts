@@ -123,6 +123,8 @@ export const CheckupPlace = z.enum([
   'reach',
   /** Settings › Models & modes, where new chats' mode is chosen. */
   'models',
+  /** The Channels page: who may talk to your assistant from Telegram, Discord or Slack. */
+  'channels',
 ]);
 export type CheckupPlace = z.infer<typeof CheckupPlace>;
 

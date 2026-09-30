@@ -18,6 +18,9 @@ const LOW_DISK_BYTES = 1024 ** 3;
 const PROVIDERS = 'Providers';
 const INTEGRATIONS = 'Integrations';
 const COMPUTER = 'This computer';
+const CHANNELS = 'Channels';
+
+const APP: Record<string, string> = { telegram: 'Telegram', discord: 'Discord', slack: 'Slack' };
 
 function providerItem(provider: Provider, fixed: boolean): DoctorItem {
   const { status } = provider;
@@ -117,6 +120,66 @@ export function integrationsCheck(services: Services): DoctorCheck {
               kind: 'open',
               label: health.state === 'needs-auth' ? 'Sign in again' : 'Open',
               place: 'integrations',
+              focus: now.id,
+            },
+          });
+      }
+      return results;
+    },
+  };
+}
+
+/**
+ * Your bots on Telegram, Discord and Slack (ADR 0018). A blip reconnects by
+ * itself; Repair asks again now. A key the app stopped accepting, or another
+ * program reading the bot's messages, only a person can sort out.
+ */
+export function channelsCheck(services: Services): DoctorCheck {
+  return {
+    id: 'channels',
+    group: CHANNELS,
+    title: 'Channels',
+    async run({ repair }) {
+      const { channels } = await services.channels.list();
+      const results: DoctorItem[] = [];
+      for (const listed of channels) {
+        const broken = ['reconnecting', 'error'].includes(listed.health.state);
+        const now =
+          repair && broken ? await services.channels.repair(listed.id).catch(() => listed) : listed;
+        const base = {
+          id: `channels:${now.id}`,
+          group: CHANNELS,
+          title: `${now.bot.name} on ${APP[now.kind] ?? now.kind}`,
+        };
+        const { state, message } = now.health;
+        if (state === 'off') results.push({ ...base, state: 'off', message: 'Turned off.' });
+        else if (state === 'online' || state === 'connecting')
+          results.push({
+            ...base,
+            state: broken ? 'fixed' : 'ok',
+            message: broken ? 'Connected again.' : state === 'online' ? 'Online.' : 'Connecting…',
+          });
+        else if (state === 'reconnecting')
+          results.push({
+            ...base,
+            state: 'warning',
+            message: message ?? 'Reconnecting by itself.',
+          });
+        else
+          results.push({
+            ...base,
+            state: 'needs-you',
+            message:
+              message ??
+              (state === 'needs-token'
+                ? 'The app stopped accepting its key.'
+                : state === 'conflict'
+                  ? 'Another program is reading this bot’s messages.'
+                  : 'Not working.'),
+            action: {
+              kind: 'open',
+              label: state === 'needs-token' ? 'Paste a new key' : 'Open',
+              place: 'channels',
               focus: now.id,
             },
           });
@@ -320,6 +383,7 @@ export function registerCoreChecks(services: Services) {
     integrationsCheck(services),
     browserCheck(services),
     searchCheck(services),
+    channelsCheck(services),
     networkCheck(services),
     computerCheck(services),
     routinesCheck(services),

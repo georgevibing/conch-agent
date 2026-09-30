@@ -107,6 +107,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
         browserLocal: (await services.browser.store.settings()).allowLocal,
         terminalRemote: (await services.terminal.settings()).allowRemote,
         provider: await services.providers.checkupCopy(),
+        channels: await services.channels.checkupCopy(),
         ...(services.config.CONCH_TOKEN && { tokenProfile: await findTokenProfile() }),
       }),
       exposure: exposure(services.config),

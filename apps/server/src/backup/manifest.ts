@@ -149,6 +149,12 @@ export const RULES: readonly BackupRule[] = [
     why: 'What’s connected and how, with your per-tool choices (not its tokens).',
   },
   {
+    match: 'channels.json',
+    class: 'kept',
+    group: 'integrations',
+    why: 'Your bots on Telegram, Discord and Slack, and who may talk to them (not their keys).',
+  },
+  {
     match: 'conversations/index.json',
     class: 'kept',
     group: 'chats',
@@ -191,6 +197,12 @@ export const RULES: readonly BackupRule[] = [
     class: 'secret',
     group: 'secrets',
     why: 'Integration tokens and keys.',
+  },
+  {
+    match: 'channels.secrets.json',
+    class: 'secret',
+    group: 'secrets',
+    why: 'Your bots’ keys.',
   },
   {
     match: 'access.json',

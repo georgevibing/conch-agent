@@ -1,0 +1,185 @@
+@layer nacre.components {
+  .sketch {
+    --nc-rim-rest: 0.3;
+    --nc-rim-hover: 0.6;
+    --nc-sheen-hover: 0.06;
+    --ps-brand: var(--nc-accent-9);
+
+    inline-size: min(100%, 24rem);
+    margin: 0;
+    overflow: hidden;
+    border-radius: var(--nc-radius-xl);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-3);
+    font-size: var(--nc-text-xs);
+  }
+
+  .chrome {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-2) var(--nc-space-3);
+    background: var(--nc-surface-sunken);
+    box-shadow: 0 1px 0 var(--nc-border-subtle);
+  }
+
+  .dots {
+    display: flex;
+    gap: 0.3rem;
+  }
+
+  .dots span {
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-gray-6);
+  }
+
+  .address {
+    flex: 1;
+    overflow: hidden;
+    padding: 0.2rem var(--nc-space-2);
+    border-radius: var(--nc-radius-full);
+    color: var(--nc-text-subtle);
+    background: var(--nc-surface);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .page {
+    display: flex;
+    min-block-size: 12rem;
+  }
+
+  .nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    inline-size: 7.5rem;
+    margin: 0;
+    padding: var(--nc-space-3) var(--nc-space-2);
+    list-style: none;
+    background: color-mix(in oklab, var(--ps-brand) 4%, var(--nc-surface-sunken));
+    box-shadow: 1px 0 0 var(--nc-border-subtle);
+  }
+
+  .nav li {
+    padding: 0.3rem var(--nc-space-2);
+    border-radius: var(--nc-radius-sm);
+    color: var(--nc-text-muted);
+  }
+
+  .nav li[data-active] {
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+    background: color-mix(in oklab, var(--ps-brand) 16%, var(--nc-surface));
+    box-shadow: inset 2px 0 0 var(--ps-brand);
+  }
+
+  .main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--nc-space-3);
+    min-inline-size: 0;
+    padding: var(--nc-space-3) var(--nc-space-4);
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .bar {
+    display: block;
+    inline-size: var(--ps-w, 70%);
+    block-size: 0.45rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-gray-4);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    inline-size: 100%;
+  }
+
+  .fieldLabel {
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-muted);
+  }
+
+  .fieldValue {
+    overflow: hidden;
+    padding: 0.3rem var(--nc-space-2);
+    border-radius: var(--nc-radius-sm);
+    font-family: var(--nc-font-mono);
+    color: var(--nc-text-subtle);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The one thing to press: the brand's colour, and a slow ring calling for it. */
+  .button {
+    position: relative;
+    padding: 0.3rem var(--nc-space-3);
+    border-radius: var(--nc-radius-sm);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text-inverse);
+    background: var(--ps-brand);
+  }
+
+  .button::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: var(--nc-radius-md);
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--ps-brand) 60%, transparent);
+    animation: ps-call 2.2s var(--nc-ease-out) infinite;
+  }
+
+  .button[data-quiet] {
+    color: var(--nc-text-muted);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .button[data-quiet]::after {
+    content: none;
+  }
+
+  @keyframes ps-call {
+    0% {
+      opacity: 0.9;
+      transform: scale(0.97);
+    }
+    70%,
+    100% {
+      opacity: 0;
+      transform: scale(1.14);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .button::after {
+      animation: none;
+    }
+  }
+}

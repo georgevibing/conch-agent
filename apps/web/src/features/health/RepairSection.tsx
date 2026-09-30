@@ -26,8 +26,16 @@ function ActionButton({ action }: { action: DoctorAction }) {
       size="sm"
       variant="surface"
       onClick={() => {
-        if (action.place === 'integrations') window.location.assign(`/integrations`);
-        else openSettings(action.place as SettingsTab, action.focus);
+        // A page, not a part of Settings: close Settings and go there, in the app.
+        const page =
+          action.place === 'integrations'
+            ? '/integrations'
+            : action.place === 'channels'
+              ? `/channels${action.focus ? `/${encodeURIComponent(action.focus)}` : ''}`
+              : undefined;
+        if (!page) return openSettings(action.place as SettingsTab, action.focus);
+        useUi.getState().closeSettings();
+        window.dispatchEvent(new CustomEvent('conch:navigate', { detail: page }));
       }}
     >
       {action.label}

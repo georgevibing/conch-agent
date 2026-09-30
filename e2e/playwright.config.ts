@@ -20,11 +20,12 @@ const scenarios = {
   browser: { port: 4399, env: { CONCH_MOCK_STATE: 'ready' } },
   terminal: { port: 4390, env: { CONCH_MOCK_STATE: 'ready' } },
   recovery: { port: 4388, env: { CONCH_MOCK_STATE: 'ready' } },
-  offline: { port: 4387, env: { CONCH_MOCK_STATE: 'ready' } },
+  offline: { port: 4385, env: { CONCH_MOCK_STATE: 'ready' } },
   attachments: { port: 4389, env: { CONCH_MOCK_STATE: 'ready' } },
   suggest: { port: 4383, env: { CONCH_MOCK_STATE: 'ready' } },
   // Runs under the supervisor (`pnpm start`), so a restore can start Conch again.
   backups: { port: 4382, env: { CONCH_MOCK_STATE: 'ready', CONCH_SUPERVISE: '1' }, entry: 'start' },
+  channels: { port: 4387, env: { CONCH_MOCK_STATE: 'ready' } },
   security: {
     port: 4397,
     env: { CONCH_MOCK_STATE: 'ready', CONCH_ALLOWED_HOSTS: 'studio-mac.tail1234.ts.net' },

@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 import { ATTACHMENT_LIMITS, Attachment } from './attachments';
 import { BrowserHandoff, BrowserPermission, BrowserStatus, BrowserStep } from './browser';
+import { Channel, ChannelOrigin } from './channels';
 import {
   EffortChoice,
   EngineId,
@@ -30,6 +31,7 @@ export * from './access';
 export * from './attachments';
 export * from './backups';
 export * from './browser';
+export * from './channels';
 export * from './engine';
 export * from './healed';
 export * from './integrations';
@@ -248,7 +250,11 @@ export const ConversationSummary = z.object({
   options: TurnOptions.default({}),
   /** Set when the conversation is a routine's run rather than a chat you started. */
   origin: z
-    .object({ kind: z.literal('routine'), routineId: z.string(), runId: z.string() })
+    .discriminatedUnion('kind', [
+      z.object({ kind: z.literal('routine'), routineId: z.string(), runId: z.string() }),
+      /** You wrote to your assistant from a chat app (Telegram, Discord, Slack). */
+      ChannelOrigin,
+    ])
     .optional(),
 });
 export type ConversationSummary = z.infer<typeof ConversationSummary>;
@@ -521,6 +527,9 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('doctor.report'), report: DoctorReport }),
   /** Updates for Conch and its programs: a check finished, an update moved along. */
   z.object({ type: z.literal('updates.changed'), status: UpdatesStatus }),
+  /** A channel was connected, changed, went on- or offline, or someone asked to talk. */
+  z.object({ type: z.literal('channel.changed'), channel: Channel }),
+  z.object({ type: z.literal('channel.deleted'), channelId: z.string() }),
   /** Conch fixed something on its own: a quiet note, never an alert. */
   z.object({ type: z.literal('healed'), note: HealNote }),
   /** A backup was made, kept or let go, or a restore got ready: refetch the list. */

@@ -36,6 +36,7 @@ export const DoctorPlace = z.enum([
   'models',
   'usage',
   'health',
+  'channels',
 ]);
 export type DoctorPlace = z.infer<typeof DoctorPlace>;
 

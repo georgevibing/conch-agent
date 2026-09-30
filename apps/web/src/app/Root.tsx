@@ -57,6 +57,9 @@ export function Root() {
       <Route path="/skills/:skillId" element={<Shell />} />
       <Route path="/integrations" element={<Shell />} />
       <Route path="/integrations/:integrationId" element={<Shell />} />
+      <Route path="/channels" element={<Shell />} />
+      <Route path="/channels/new/:channelKind" element={<Shell />} />
+      <Route path="/channels/:channelId" element={<Shell />} />
       <Route path="*" element={<Shell />} />
     </Routes>
   );

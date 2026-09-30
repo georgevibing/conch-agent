@@ -330,3 +330,50 @@ describe('ChatView', () => {
     });
   });
 });
+
+describe('Chats started elsewhere', () => {
+  it('subscribes when you open a chat another tab or a channel started', async () => {
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/channels': () => ({ channels: [], catalog: [] }),
+    });
+    const { useState } = await import('react');
+    function Later() {
+      const [open, setOpen] = useState(false);
+      return open ? (
+        <ChatView conversationId="c9" />
+      ) : (
+        <button type="button" onClick={() => setOpen(true)}>
+          open
+        </button>
+      );
+    }
+    renderApp(<Later />);
+    await waitFor(() => expect(FakeSocket.last?.readyState).toBe(1));
+    const socket = FakeSocket.last;
+    // Telegram started it: this tab never sent its first message.
+    act(() =>
+      socket?.push({
+        type: 'conversation.created',
+        clientMessageId: 'u_from_telegram',
+        conversation: {
+          id: 'c9',
+          title: 'From my phone',
+          preview: '',
+          createdAt: 1,
+          updatedAt: 1,
+          status: 'running',
+          options: {},
+          origin: { kind: 'channel', channelId: 'ch_1', channel: 'telegram' },
+        },
+      }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'open' }));
+    await waitFor(() =>
+      expect(socket?.sent).toContainEqual(
+        expect.objectContaining({ type: 'conversation.subscribe', conversationId: 'c9' }),
+      ),
+    );
+  });
+});
