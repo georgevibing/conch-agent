@@ -65,12 +65,16 @@ export class ChannelStore {
     return join(this.home, 'channels.secrets.json');
   }
 
-  async all(): Promise<StoredChannel[]> {
-    return [...(await this.#load()).values()].sort((a, b) => a.createdAt - b.createdAt);
+  // Reads wait for writes already under way: what they return is what's on disk,
+  // so a restart right after a change (someone just paired) never loses it.
+  all(): Promise<StoredChannel[]> {
+    return this.#mutex.run(async () =>
+      [...(await this.#load()).values()].sort((a, b) => a.createdAt - b.createdAt),
+    );
   }
 
-  async get(id: string): Promise<StoredChannel | undefined> {
-    return (await this.#load()).get(id);
+  get(id: string): Promise<StoredChannel | undefined> {
+    return this.#mutex.run(async () => (await this.#load()).get(id));
   }
 
   add(item: StoredChannel, secrets: ChannelSecrets): Promise<StoredChannel> {
@@ -116,8 +120,8 @@ export class ChannelStore {
     });
   }
 
-  async secrets(id: string): Promise<ChannelSecrets | undefined> {
-    return (await this.#loadSecrets())[id];
+  secrets(id: string): Promise<ChannelSecrets | undefined> {
+    return this.#mutex.run(async () => (await this.#loadSecrets())[id]);
   }
 
   setSecrets(id: string, secrets: ChannelSecrets): Promise<void> {
