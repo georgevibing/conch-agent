@@ -59,6 +59,8 @@ interface TgMessage {
 
 interface TgUpdate {
   update_id: number;
+  /** The person pressed Stop under a streaming draft (Bot API 10.3). */
+  stopped_message_generation?: { chat: { id: number }; draft_id: number };
   message?: TgMessage;
   callback_query?: {
     id: string;
@@ -201,8 +203,25 @@ export class TelegramAdapter implements ChannelAdapter {
   connect(events: ChannelEvents): ChannelConnection {
     const stop = new AbortController();
     void this.#poll(events, stop.signal);
+    // Drafts stream the answer as it's written (Bot API 9.5+). If this Telegram
+    // refuses them, typing… is used instead for the rest of the connection.
+    let drafts = true;
     return {
       send: (chatId, markdown, options) => this.#send(chatId, markdown, options),
+      draft: async (chatId, draftId, markdown) => {
+        if (!drafts) return false;
+        try {
+          await this.#formatted('sendMessageDraft', tail(markdown, PART), {
+            chat_id: chatId,
+            draft_id: draftId,
+            can_stop: true,
+          });
+          return true;
+        } catch (error) {
+          if (error instanceof ChannelError && error.code === 'refused') drafts = false;
+          return false;
+        }
+      },
       edit: (ref, markdown, options) => this.#edit(ref, markdown, options),
       typing: async (chatId) => {
         await this.call('sendChatAction', { chat_id: chatId, action: 'typing' });
@@ -226,7 +245,7 @@ export class TelegramAdapter implements ChannelAdapter {
           'getUpdates',
           {
             timeout: POLL_SECONDS,
-            allowed_updates: ['message', 'callback_query'],
+            allowed_updates: ['message', 'callback_query', 'stopped_message_generation'],
             ...(offset !== undefined && { offset }),
           },
           { signal, timeoutMs: (POLL_SECONDS + 15) * 1000 },
@@ -285,6 +304,10 @@ export class TelegramAdapter implements ChannelAdapter {
   }
 
   #dispatch(update: TgUpdate, events: ChannelEvents) {
+    if (update.stopped_message_generation) {
+      events.stop?.(String(update.stopped_message_generation.chat.id));
+      return;
+    }
     const query = update.callback_query;
     if (query?.data && query.message) {
       events.press({
@@ -378,6 +401,8 @@ export class TelegramAdapter implements ChannelAdapter {
 
   /** Send as HTML; if Telegram can't read the markup, send the words plain instead. */
   async #formatted<T>(method: string, markdown: string, params: Record<string, unknown>) {
+    // An empty draft shows Telegram's own "Thinking…".
+    if (!markdown) return this.call<T>(method, { ...params, text: '' });
     try {
       return await this.call<T>(method, {
         ...params,
@@ -436,7 +461,19 @@ export class TelegramAdapter implements ChannelAdapter {
 function keyboard(options: SendOptions) {
   return {
     inline_keyboard: [
-      (options.buttons ?? []).map((button) => ({ text: button.label, callback_data: button.data })),
+      (options.buttons ?? []).map((button) => ({
+        text: button.label,
+        callback_data: button.data,
+        ...(button.style && { style: button.style }),
+      })),
     ],
   };
+}
+
+/** The newest part of a long answer, for a draft (the whole answer is sent at the end). */
+function tail(markdown: string, max: number): string {
+  if (markdown.length <= max) return markdown;
+  const cut = markdown.slice(-max);
+  const start = cut.indexOf('\n');
+  return `…${start > 0 && start < 400 ? cut.slice(start) : cut}`;
 }

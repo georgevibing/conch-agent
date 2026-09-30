@@ -11,8 +11,8 @@ import { MockTelegram } from './mock/telegram';
 
 let services: Services | undefined;
 
-async function setup() {
-  process.env.CONCH_MOCK_SPEED = '0.02';
+async function setup(speed = '0.02') {
+  process.env.CONCH_MOCK_SPEED = speed;
   process.env.CONCH_MOCK_STATE = 'ready';
   const home = await mkdtemp(join(tmpdir(), 'conch-channels-'));
   services = new Services(
@@ -53,8 +53,8 @@ ${MockTelegram.TOKEN}
 Keep your token secure and store it safely.`;
 
 /** Connect the mock bot and say hello through the link, as the owner. */
-async function paired() {
-  const ctx = await setup();
+async function paired(speed?: string) {
+  const ctx = await setup(speed);
   const channel = await ctx.s.channels.create({ kind: 'telegram', token: BOTFATHER });
   const code = new URL(channel.pairing?.link ?? '').searchParams.get('start');
   ctx.telegram.say(`/start ${code}`);
@@ -106,7 +106,10 @@ describe('ChannelService — Telegram', () => {
       channel: 'telegram',
     });
     await until(() => telegram.sent.length > before, 'answer');
-    expect(telegram.calls.some((c) => c.method === 'sendChatAction')).toBe(true);
+    // It showed it was working: a streaming draft (or typing…).
+    expect(
+      telegram.drafts.length > 0 || telegram.calls.some((c) => c.method === 'sendChatAction'),
+    ).toBe(true);
     const answer = telegram.sent.slice(before).find((m) => m.method === 'sendMessage');
     expect(answer?.parse_mode).toBe('HTML');
   });
@@ -205,7 +208,7 @@ describe('ChannelService — Telegram', () => {
     const channelChats = async () =>
       (await s.conversations.list()).filter((c) => c.origin?.kind === 'channel');
     telegram.say('hello');
-    await until(async () => (await channelChats()).find((c) => c.status === 'idle'), 'first');
+    await until(() => telegram.sent.some((m) => m.text.includes('thought on')), 'first answer');
     const [first] = await channelChats();
     telegram.say('/new');
     await until(() => telegram.last()?.text.includes('Fresh start'), 'fresh start');
@@ -232,6 +235,76 @@ describe('ChannelService — Telegram', () => {
     expect(message?.type === 'user.message' && message.attachments?.[0]).toMatchObject({
       kind: 'image',
     });
+  });
+});
+
+describe('ChannelService — while it works', () => {
+  it('streams the answer as a draft with a Stop button, then sends it for good', async () => {
+    const { telegram } = await paired('0.5');
+    telegram.say('Tell me something');
+    await until(() => telegram.drafts.find((d) => d.text === '' && d.can_stop), 'thinking draft');
+    const words = await until(
+      () => telegram.drafts.find((d) => d.text.includes('thought')),
+      'draft with words',
+      15_000,
+    );
+    await until(
+      () =>
+        telegram.sent.find(
+          (m) =>
+            m.method === 'sendMessage' && m.text.includes('thought') && m.text.includes('<pre>'),
+        ),
+      'final message',
+      15_000,
+    );
+    // Drafts of one message share an id, so Telegram animates them.
+    const same = telegram.drafts.filter((d) => d.draft_id === words.draft_id && d.text);
+    expect(same.length).toBeGreaterThanOrEqual(1);
+  }, 30_000);
+
+  it('stops the turn when Stop is pressed under the draft', async () => {
+    const { s, telegram } = await paired('0.5');
+    telegram.say('Tell me something long');
+    const draft = await until(() => telegram.drafts.find((d) => d.can_stop), 'draft');
+    telegram.stopDraft(draft.draft_id);
+    const conversation = await until(
+      async () => (await s.conversations.list()).find((c) => c.origin?.kind === 'channel'),
+      'conversation',
+    );
+    await until(
+      async () =>
+        (await s.conversations.eventsAfter(conversation.id)).some(
+          (e) => e.type === 'turn.completed' && e.outcome === 'interrupted',
+        ),
+      'interrupted turn',
+      15_000,
+    );
+  }, 30_000);
+
+  it('shows typing… where drafts aren’t available', async () => {
+    const { telegram } = await paired();
+    telegram.noDrafts = true;
+    telegram.say('hello');
+    await until(() => telegram.calls.some((c) => c.method === 'sendChatAction'), 'typing');
+  });
+
+  it('reads messages sent together as one', async () => {
+    const { s, telegram } = await paired();
+    telegram.say('first thought');
+    telegram.say('and the second');
+    const conversation = await until(
+      async () => (await s.conversations.list()).find((c) => c.origin?.kind === 'channel'),
+      'conversation',
+    );
+    const said = await until(async () => {
+      const events = await s.conversations.eventsAfter(conversation.id);
+      const messages = events.filter((e) => e.type === 'user.message');
+      return messages.length ? messages : undefined;
+    }, 'the message');
+    expect(said).toHaveLength(1);
+    expect(said[0]?.type === 'user.message' && said[0].text).toBe(
+      'first thought\n\nand the second',
+    );
   });
 });
 

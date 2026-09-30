@@ -44,6 +44,11 @@ const REPLY_TO_STRANGERS_MS = 30 * 60_000;
 const MAX_REQUESTS = 20;
 /** "typing…" lasts about 5 s on Telegram and 10 s on Discord; renew it before then. */
 const TYPING_EVERY_MS = 4_500;
+/** Messages sent this close together are read as one (a photo album, a thought typed in pieces). */
+export const GATHER_MS = 700;
+/** Streaming drafts: at most one update a second, and a keep-alive before Telegram's 30 s preview ends. */
+const DRAFT_EVERY_MS = 1_000;
+const DRAFT_KEEPALIVE_MS = 20_000;
 /** An outage this long earns a "reconnected on its own" note. */
 const NOTEWORTHY_OUTAGE_MS = 60_000;
 
@@ -124,6 +129,8 @@ interface Relay {
   /** Assistant text so far, per message. */
   texts: Map<string, string>;
   typing?: NodeJS.Timeout;
+  /** Streaming the answer as a draft (Telegram): which draft, what it says, when it last went. */
+  draft?: { id: number; text: string; sentAt: number; timer?: NodeJS.Timeout };
   /** Messages sent while it was busy: they go next, together. */
   queued: { text: string; attachments: string[] }[];
   /** Said "I'll get to that" already this turn. */
@@ -184,6 +191,9 @@ export class ChannelService {
   /** Button keys → the question they answer (Telegram allows 64 bytes of button data). */
   #buttons = new Map<string, string>();
   #answered = new Map<string, number>();
+  /** Messages being gathered before they go to a conversation, per person. */
+  #epochs = new Map<string, number>();
+  #gathering = new Map<string, { messages: ChannelMessage[]; timer: NodeJS.Timeout }>();
   #notified = new Map<string, string>();
   #started = false;
 
@@ -490,6 +500,7 @@ export class ChannelService {
           this.#log(`button on ${stored.kind}: ${explain(error)}`),
         ),
       state: (state, detail) => this.#setHealth(id, state, detail),
+      stop: (chatId) => void this.#stopFromApp(id, chatId),
       healed: (message) => this.deps.onHeal(message),
       joined: () => void this.#refreshBot(id),
     });
@@ -713,7 +724,49 @@ export class ChannelService {
       await this.#command(stored, live, message, command);
       return;
     }
-    await this.#toConversation(stored, live, message);
+    this.#gather(id, message);
+  }
+
+  /** Wait a moment for more (the rest of an album, the next line), then send it all as one message. */
+  #gather(id: string, message: ChannelMessage) {
+    const key = `${id}:${message.user.id}`;
+    const pending = this.#gathering.get(key);
+    if (pending) clearTimeout(pending.timer);
+    const messages = [...(pending?.messages ?? []), message];
+    const timer = setTimeout(() => {
+      this.#gathering.delete(key);
+      void this.#flushGathered(id, messages).catch((error: unknown) =>
+        this.#log(`message: ${explain(error)}`),
+      );
+    }, GATHER_MS);
+    timer.unref?.();
+    this.#gathering.set(key, { messages, timer });
+  }
+
+  async #flushGathered(id: string, messages: ChannelMessage[]) {
+    const stored = await this.deps.store.get(id);
+    const live = this.#live.get(id);
+    const last = messages.at(-1);
+    if (!stored?.enabled || !live || !last) return;
+    // Let go while it waited? Then it doesn't go.
+    if (!stored.people.some((p) => p.id === last.user.id)) return;
+    await this.#toConversation(stored, live, {
+      ...last,
+      text: messages
+        .map((m) => m.text.trim())
+        .filter(Boolean)
+        .join('\n\n'),
+      files: messages.flatMap((m) => m.files),
+    });
+  }
+
+  /** The person pressed Stop under the streaming answer. */
+  async #stopFromApp(id: string, chatId: string) {
+    for (const [conversationId, relay] of this.#relays) {
+      if (relay.channelId !== id || relay.chatId !== chatId) continue;
+      relay.queued = [];
+      await this.deps.conversations.interrupt(conversationId).catch(() => undefined);
+    }
   }
 
   async #command(
@@ -726,6 +779,7 @@ export class ChannelService {
     const conversationId = stored.chats[message.user.id];
     const assistant = (await this.deps.settings.get()).persona.name;
     if (command === 'new') {
+      this.#fresh(stored.id, message.user.id);
       await this.deps.store.update(stored.id, (c) => {
         const { [message.user.id]: _, ...chats } = c.chats;
         return { ...c, chats };
@@ -733,6 +787,7 @@ export class ChannelService {
       await say('Fresh start. What’s next?');
     } else if (command === 'stop') {
       const relay = conversationId ? this.#relays.get(conversationId) : undefined;
+      this.#dropGathered(stored.id, message.user.id);
       if (conversationId && relay) {
         relay.queued = [];
         await this.deps.conversations.interrupt(conversationId).catch(() => undefined);
@@ -747,6 +802,21 @@ export class ChannelService {
           'Everything we say here is also in Conch on your computer.',
       );
     }
+  }
+
+  /** Bumped by /new, so a conversation still being created doesn't become the current one again. */
+  #epoch(id: string, personId: string) {
+    return this.#epochs.get(`${id}:${personId}`) ?? 0;
+  }
+
+  #fresh(id: string, personId: string) {
+    this.#epochs.set(`${id}:${personId}`, this.#epoch(id, personId) + 1);
+  }
+
+  #dropGathered(id: string, userId: string) {
+    const key = `${id}:${userId}`;
+    clearTimeout(this.#gathering.get(key)?.timer);
+    this.#gathering.delete(key);
   }
 
   async #request(stored: StoredChannel, live: LiveChannel, message: ChannelMessage) {
@@ -839,6 +909,7 @@ export class ChannelService {
       queued: [],
       chain: Promise.resolve(),
     };
+    const epoch = this.#epoch(stored.id, personId);
     let conversationId = (await this.deps.store.get(stored.id))?.chats[personId];
     for (let attempt = 0; attempt < 2; attempt++) {
       const clientMessageId = newId('u');
@@ -856,7 +927,8 @@ export class ChannelService {
         });
         this.#pending.delete(clientMessageId);
         this.#relays.set(summary.id, relay);
-        if (summary.id !== conversationId) {
+        // Remember it as their current conversation, unless they asked for a fresh one meanwhile.
+        if (summary.id !== conversationId && this.#epoch(stored.id, personId) === epoch) {
           await this.deps.store.update(stored.id, (c) => ({
             ...c,
             chats: { ...c.chats, [personId]: summary.id },
@@ -886,18 +958,56 @@ export class ChannelService {
     }
   }
 
+  /**
+   * Show that it's working: a streaming draft where the app has them (it reads
+   * "Thinking…" until words arrive, with a Stop button), else typing… renewed
+   * before it fades.
+   */
   #startTyping(relay: Relay) {
     const live = this.#live.get(relay.channelId);
     if (!live || relay.typing) return;
-    const tick = () => void live.connection.typing(relay.chatId).catch(() => undefined);
-    tick();
-    relay.typing = setInterval(tick, TYPING_EVERY_MS);
+    const typing = () => void live.connection.typing(relay.chatId).catch(() => undefined);
+    if (live.connection.draft) {
+      relay.draft ??= { id: 1 + Math.floor(Math.random() * 1e9), text: '', sentAt: 0 };
+      relay.typing = setInterval(() => void this.#pushDraft(relay), DRAFT_KEEPALIVE_MS);
+      void this.#pushDraft(relay).then((ok) => {
+        if (ok || !relay.typing) return;
+        // This Telegram won't stream: typing… instead.
+        clearInterval(relay.typing);
+        relay.draft = undefined;
+        typing();
+        relay.typing = setInterval(typing, TYPING_EVERY_MS);
+      });
+    } else {
+      typing();
+      relay.typing = setInterval(typing, TYPING_EVERY_MS);
+    }
     relay.typing.unref?.();
   }
 
   #stopTyping(relay: Relay) {
     clearInterval(relay.typing);
     relay.typing = undefined;
+    if (relay.draft) clearTimeout(relay.draft.timer);
+  }
+
+  async #pushDraft(relay: Relay): Promise<boolean> {
+    const live = this.#live.get(relay.channelId);
+    const draft = relay.draft;
+    if (!live?.connection.draft || !draft) return false;
+    clearTimeout(draft.timer);
+    draft.timer = undefined;
+    draft.sentAt = Date.now();
+    return live.connection.draft(relay.chatId, draft.id, draft.text.trim());
+  }
+
+  /** New words: update the draft, at most once a second. */
+  #scheduleDraft(relay: Relay) {
+    const draft = relay.draft;
+    if (!draft || draft.timer) return;
+    const wait = Math.max(0, draft.sentAt + DRAFT_EVERY_MS - Date.now());
+    draft.timer = setTimeout(() => void this.#pushDraft(relay), wait);
+    draft.timer.unref?.();
   }
 
   /** Queue a send after the ones before it, so answers arrive in order. */
@@ -945,12 +1055,23 @@ export class ChannelService {
         else this.#stopTyping(relay);
         break;
       case 'assistant.delta':
-        if (e.kind === 'text')
-          relay.texts.set(e.messageId, (relay.texts.get(e.messageId) ?? '') + e.delta);
+        if (e.kind === 'text') {
+          const text = (relay.texts.get(e.messageId) ?? '') + e.delta;
+          relay.texts.set(e.messageId, text);
+          if (relay.draft) {
+            relay.draft.text = text;
+            this.#scheduleDraft(relay);
+          }
+        }
         break;
       case 'assistant.done': {
         const text = relay.texts.get(e.messageId)?.trim();
         relay.texts.delete(e.messageId);
+        if (relay.draft) {
+          // The finished message replaces the draft; the next one gets its own.
+          clearTimeout(relay.draft.timer);
+          relay.draft = { id: relay.draft.id + 1, text: '', sentAt: relay.draft.sentAt };
+        }
         if (text) void this.#say(relay, text).catch(() => undefined);
         break;
       }

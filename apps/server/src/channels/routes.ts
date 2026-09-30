@@ -49,13 +49,11 @@ export function registerChannelRoutes(
 
   const fail = (reply: FastifyReply, error: unknown) => {
     if (!(error instanceof ChannelServiceError)) throw error;
-    return reply
-      .code(STATUS[error.code])
-      .send({
-        error: error.code,
-        message: error.message,
-        ...(error.field && { field: error.field }),
-      });
+    return reply.code(STATUS[error.code]).send({
+      error: error.code,
+      message: error.message,
+      ...(error.field && { field: error.field }),
+    });
   };
 
   const person = (value: string, reply: FastifyReply) => {

@@ -60,6 +60,8 @@ export interface ChannelEvents {
   message(message: ChannelMessage): void;
   press(press: ChannelPress): void;
   state(state: ChannelState, detail?: { message?: string; retryAt?: number }): void;
+  /** The person pressed the app's own Stop button (Telegram drafts). */
+  stop?(chatId: string): void;
   /** A repair the connection made by itself, for "Fixed on its own". */
   healed(message: string): void;
   /** Discord: the bot joined a server (so people there can now message it). */
@@ -74,6 +76,11 @@ export interface ChannelConnection {
   edit(ref: SentRef, markdown: string, options?: SendOptions): Promise<void>;
   /** Show "typing…" for a few seconds. */
   typing(chatId: string): Promise<void>;
+  /**
+   * Stream an answer while it's written (Telegram drafts): an empty text shows
+   * "Thinking…". Resolves false when the app won't, and typing… is used instead.
+   */
+  draft?(chatId: string, draftId: number, markdown: string): Promise<boolean>;
   /** Mark a message as seen and being worked on (Slack, which has no typing indicator for bots). */
   seen?(ref: SentRef, working: boolean): Promise<void>;
   download(file: ChannelFile): Promise<{ name: string; bytes: Buffer; mimeType?: string }>;

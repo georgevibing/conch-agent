@@ -44,6 +44,10 @@ export class MockTelegram {
   readonly bots = new Map<string, MockUser>();
   readonly sent: MockSent[] = [];
   readonly calls: { method: string; params: Record<string, unknown> }[] = [];
+  /** Streaming drafts sent (Bot API `sendMessageDraft`). */
+  readonly drafts: { chat_id: string; draft_id: number; text: string; can_stop: boolean }[] = [];
+  /** Answer `sendMessageDraft` as an older Telegram would: not available. */
+  noDrafts = false;
   /** Refuse every formatted message, as Telegram does with markup it can't read. */
   refuseHtml = false;
   /** How long an empty `getUpdates` waits at most (ms), whatever timeout it asked for. */
@@ -122,6 +126,11 @@ export class MockTelegram {
         message: { message_id: messageId, chat: { id: from.id, type: 'private' } },
       },
     });
+  }
+
+  /** The person presses Stop under a streaming draft. */
+  stopDraft(draftId: number, from: MockUser = MockTelegram.OWNER) {
+    this.#push({ stopped_message_generation: { chat: { id: from.id }, draft_id: draftId } });
   }
 
   /** The newest message sent to a chat (edits included). */
@@ -245,6 +254,20 @@ export class MockTelegram {
         });
         return ok({ message_id, chat: { id: Number(params.chat_id) } });
       }
+      case 'sendMessageDraft':
+        if (this.noDrafts)
+          return json(res, 400, {
+            ok: false,
+            error_code: 400,
+            description: 'Bad Request: method is not available',
+          });
+        this.drafts.push({
+          chat_id: String(params.chat_id),
+          draft_id: Number(params.draft_id),
+          text: String(params.text ?? ''),
+          can_stop: params.can_stop === true,
+        });
+        return ok(true);
       case 'getUserProfilePhotos':
         return ok({ total_count: 0, photos: [] });
       case 'getFile':
