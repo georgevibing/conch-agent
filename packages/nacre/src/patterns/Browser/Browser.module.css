@@ -735,8 +735,9 @@
     overflow: hidden;
   }
 
+  /* Fills the preview card inside its padding; a fixed width would overflow it. */
   .thumb[data-size='lg'] {
-    inline-size: 20rem;
+    inline-size: 100%;
   }
 
   .thumb > img {
@@ -784,6 +785,7 @@
   .previewUrl {
     color: var(--nc-text-subtle);
     font-size: var(--nc-text-xs);
+    overflow-wrap: anywhere;
   }
 
   .trailNow {
