@@ -16,6 +16,7 @@ import {
   DraftSkillBody,
   Id,
   LoginCodeBody,
+  type Health,
   PROTOCOL_VERSION,
   CreateRoutineBody,
   EngineId,
@@ -26,6 +27,7 @@ import {
   SaveCommandBody,
   SearchPreviewQuery,
   SearchQuery,
+  type SearchRepairResult,
   StartLoginBody,
   UpdateIntegrationBody,
   UpdateMemoryBody,
@@ -163,7 +165,7 @@ export async function buildApp(services: Services) {
   };
 
   // ── App & settings ─────────────────────────────────────────────────────
-  app.get('/api/health', () => ({
+  app.get('/api/health', (): Health => ({
     ok: true,
     serverVersion: SERVER_VERSION,
     protocolVersion: PROTOCOL_VERSION,
@@ -628,26 +630,31 @@ export async function buildApp(services: Services) {
   });
 
   // ── Search ─────────────────────────────────────────────────────────────
+  // The index rebuilds itself when it breaks (`search/service.ts`); `unavailable`
+  // only after it broke again, and Repair tries once more.
   const searchUnavailable = (reply: FastifyReply) =>
-    reply.code(503).send({ error: 'search-unavailable', message: 'Search isn’t available.' });
+    reply.code(503).send({
+      error: 'search-unavailable',
+      message: 'Search isn’t working right now. Repair it to rebuild it from your chats.',
+    });
   app.get('/api/search', async (request, reply) => {
     const query = parse(SearchQuery, request.query, reply);
     if (!query) return;
-    if (!services.search) return searchUnavailable(reply);
-    // A search right after start-up waits for the catch-up rather than missing results.
-    await services.search.indexer.ready;
-    return services.search.index.search(query.q, { in: query.in, limit: query.limit });
+    const results = await services.search.search(query.q, { in: query.in, limit: query.limit });
+    return results === 'unavailable' ? searchUnavailable(reply) : results;
   });
   app.get('/api/search/preview', async (request, reply) => {
     const query = parse(SearchPreviewQuery, request.query, reply);
     if (!query) return;
-    if (!services.search) return searchUnavailable(reply);
-    await services.search.indexer.ready;
-    const preview = services.search.index.preview(query.conversationId, query.anchor, query.q);
+    const preview = await services.search.preview(query.conversationId, query.anchor, query.q);
+    if (preview === 'unavailable') return searchUnavailable(reply);
     return (
       preview ?? reply.code(404).send({ error: 'not-found', message: 'Conversation not found.' })
     );
   });
+  app.post('/api/search/repair', async (): Promise<SearchRepairResult> => ({
+    state: await services.search.repair(),
+  }));
 
   // ── Conversations ──────────────────────────────────────────────────────
   app.get('/api/conversations', () => services.conversations.list());

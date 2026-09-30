@@ -3,7 +3,8 @@ import { join } from 'node:path';
 import { Integration, IntegrationTool } from '@conch/protocol';
 import { z } from 'zod';
 
-import { Mutex, readJson, writeJson } from '../lib/fs';
+import { Mutex, writeJson } from '../lib/fs';
+import { readStore, type Heal } from '../lib/recover';
 
 export const StoredTool = IntegrationTool.extend({
   /** Fingerprint of the tool's definition, so a changed tool loses "always allow". */
@@ -16,7 +17,8 @@ export type StoredIntegration = z.infer<typeof StoredIntegration>;
 
 const IntegrationsFile = z.object({
   version: z.literal(1).default(1),
-  integrations: z.array(z.unknown()).default([]),
+  /** An entry that no longer reads (hand-edited, older) is dropped on its own; the rest carry on. */
+  integrations: z.array(StoredIntegration).default([]),
 });
 
 /** OAuth state for one integration. Shapes come from the MCP SDK and are opaque here. */
@@ -43,13 +45,20 @@ const SecretsFile = z.record(z.string(), IntegrationSecrets);
  * `~/.conch/integrations.json` — what's connected and how (safe to read);
  * `~/.conch/integrations.secrets.json` (0600) — tokens and keys, never sent
  * to the browser, never logged.
+ *
+ * A damaged file is kept as `<name>.broken-<time>.json` and every entry that
+ * still reads carries on (`readStore`). Dropping one is safe: an integration
+ * that's gone can't act, and a lost token only means signing in again.
  */
 export class IntegrationStore {
   #mutex = new Mutex();
-  #items?: Map<string, StoredIntegration>;
-  #secrets?: Record<string, IntegrationSecrets>;
+  #items?: Promise<Map<string, StoredIntegration>>;
+  #secrets?: Promise<Record<string, IntegrationSecrets>>;
 
-  constructor(private readonly home: string) {}
+  constructor(
+    private readonly home: string,
+    private readonly heal?: Heal,
+  ) {}
 
   get #path() {
     return join(this.home, 'integrations.json');
@@ -107,7 +116,7 @@ export class IntegrationStore {
       const rest = Object.fromEntries(
         Object.entries(await this.#loadSecrets()).filter(([key]) => key !== id),
       );
-      this.#secrets = rest;
+      this.#secrets = Promise.resolve(rest);
       await writeJson(this.#secretsPath, rest);
     });
   }
@@ -138,23 +147,41 @@ export class IntegrationStore {
     await writeJson(this.#path, { version: 1, integrations: [...items.values()] });
   }
 
-  async #load(): Promise<Map<string, StoredIntegration>> {
-    if (this.#items) return this.#items;
-    const file = IntegrationsFile.safeParse((await readJson(this.#path)) ?? {});
-    const map = new Map<string, StoredIntegration>();
-    for (const raw of file.success ? file.data.integrations : []) {
-      // A hand-edited entry that no longer parses is skipped, not fatal.
-      const parsed = StoredIntegration.safeParse(raw);
-      if (parsed.success) map.set(parsed.data.id, parsed.data);
-    }
-    this.#items = map;
-    return map;
+  #load(): Promise<Map<string, StoredIntegration>> {
+    this.#items ??= readStore(this.#path, IntegrationsFile, {
+      onRepair: (state) =>
+        this.heal?.(
+          'integrations',
+          state === 'salvaged'
+            ? 'An integration’s settings couldn’t be read, so Conch kept a copy and carried on with the rest.'
+            : 'Your list of integrations couldn’t be read, so Conch kept a copy and started a new one.',
+        ),
+    }).then(
+      (read) => new Map(read.value.integrations.map((item) => [item.id, item])),
+      (error: unknown) => {
+        this.#items = undefined;
+        throw error;
+      },
+    );
+    return this.#items;
   }
 
-  async #loadSecrets(): Promise<Record<string, IntegrationSecrets>> {
-    if (this.#secrets) return this.#secrets;
-    const parsed = SecretsFile.safeParse((await readJson(this.#secretsPath)) ?? {});
-    this.#secrets = parsed.success ? parsed.data : {};
+  #loadSecrets(): Promise<Record<string, IntegrationSecrets>> {
+    this.#secrets ??= readStore(this.#secretsPath, SecretsFile, {
+      onRepair: (state) =>
+        this.heal?.(
+          'integrations',
+          state === 'salvaged'
+            ? 'One integration’s sign-in couldn’t be read, so Conch kept a copy and carried on with the rest.'
+            : 'Your integrations’ sign-ins couldn’t be read, so Conch kept a copy and started a new file.',
+        ),
+    }).then(
+      (read) => read.value,
+      (error: unknown) => {
+        this.#secrets = undefined;
+        throw error;
+      },
+    );
     return this.#secrets;
   }
 }

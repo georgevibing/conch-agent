@@ -17,6 +17,7 @@ import { MockEngine } from './engines/mock/engine';
 import type { Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
 import { Healed } from './lib/healed';
+import type { Heal } from './lib/recover';
 import { KNOWN_NEEDS } from './setup/known';
 import { Setup } from './setup/needs';
 import { ProviderKeys } from './providers/keys';
@@ -27,8 +28,7 @@ import { MockVendor } from './integrations/mock/vendor';
 import { IntegrationService } from './integrations/service';
 import { MemoryStore } from './memory/store';
 import { RoutineService } from './routines/service';
-import { SearchIndex } from './search/index';
-import { SearchIndexer } from './search/indexer';
+import { SearchService } from './search/service';
 import { RoutineStore } from './routines/store';
 import { SettingsStore } from './settings/store';
 import { SkillService } from './skills/service';
@@ -80,8 +80,8 @@ export class Services {
   readonly skills: SkillService;
   /** The pretend SaaS vendor used with the mock engine. */
   readonly mockVendor?: MockVendor;
-  /** Full-text search over every conversation; absent if the index can't be opened. */
-  readonly search?: { index: SearchIndex; indexer: SearchIndexer };
+  /** Full-text search over every conversation; rebuilds its index when it breaks. */
+  readonly search: SearchService;
   #login?: { handle: LoginHandle; state: LoginState };
 
   constructor(readonly config: Config) {
@@ -89,8 +89,10 @@ export class Services {
       this.broadcast.emit({ type: 'healed', note }),
     );
     this.setup = new Setup(KNOWN_NEEDS);
-    this.settings = new SettingsStore(config.CONCH_HOME);
-    this.access = new AccessStore(config.CONCH_HOME);
+    /** Every store that repairs itself says so here (AGENTS.md agreement 11). */
+    const heal: Heal = (area, message) => void this.healed.note(area, message);
+    this.settings = new SettingsStore(config.CONCH_HOME, heal);
+    this.access = new AccessStore(config.CONCH_HOME, heal);
     this.gate = new Gatekeeper(config, this.access);
     this.memory = new MemoryStore(join(config.CONCH_HOME, 'memory'));
     this.commands = new CommandStore(join(config.CONCH_HOME, 'commands'));
@@ -139,6 +141,7 @@ export class Services {
     this.mockVendor = config.CONCH_ENGINE === 'mock' ? new MockVendor() : undefined;
     this.integrations = new IntegrationService({
       home: config.CONCH_HOME,
+      heal,
       emit: (event) => this.broadcast.emit(event),
       engines: () => this.providers.ready(),
       cwd: () => this.settings.workspace(),
@@ -154,6 +157,7 @@ export class Services {
         config.CONCH_HOME,
         skillSources === 'auto' ? externalRoots() : [],
         () => this.#nativeSkillSources,
+        heal,
       ),
       engines: () => this.providers.ready(),
       emit: (event) => this.broadcast.emit(event),
@@ -161,6 +165,7 @@ export class Services {
     });
     this.terminal = new TerminalService({
       home: config.CONCH_HOME,
+      heal,
       workspace: () => this.settings.workspace(),
       emit: (event) => this.broadcast.emit(event),
     });
@@ -168,11 +173,12 @@ export class Services {
     this.gate.signedOut.on((ids) => this.terminal.endOwnedBy(ids.map((id) => `session:${id}`)));
     this.browser = new BrowserService({
       home: config.CONCH_HOME,
+      heal,
       gatewayPort: config.CONCH_PORT,
       workspace: () => this.settings.workspace(),
       emit: (event) => this.broadcast.emit(event),
     });
-    const conversationStore = new ConversationStore(join(config.CONCH_HOME, 'conversations'));
+    const conversationStore = new ConversationStore(join(config.CONCH_HOME, 'conversations'), heal);
     this.conversations = new ConversationManager({
       store: conversationStore,
       settings: this.settings,
@@ -198,7 +204,7 @@ export class Services {
       onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
     });
     this.routines = new RoutineService({
-      store: new RoutineStore(join(config.CONCH_HOME, 'routines')),
+      store: new RoutineStore(join(config.CONCH_HOME, 'routines'), heal),
       conversations: this.conversations,
       engine: (id) => this.providers.engineFor(id),
       emit: (event) => this.broadcast.emit(event),
@@ -212,6 +218,7 @@ export class Services {
     this.memory.changed.on(() => this.broadcast.emit({ type: 'memory.changed' }));
     this.usage = new UsageService({
       home: config.CONCH_HOME,
+      heal,
       engine: () => this.engine(),
       history: () => turnCosts(conversationStore),
     });
@@ -223,7 +230,18 @@ export class Services {
     });
     this.usage.start();
     void (this.mockVendor?.start() ?? Promise.resolve()).then(() => this.integrations.start());
-    this.search = openSearch(config, conversationStore, this.conversations);
+    this.search = new SearchService({
+      path: join(config.CONCH_HOME, 'search.db'),
+      source: {
+        list: () => conversationStore.list(),
+        events: (id) => conversationStore.events(id),
+        detail: (id) => this.conversations.detail(id),
+      },
+      heal,
+      log: (error) => console.error('[search]', error),
+    });
+    this.conversations.events.on((event) => this.search.onEvent(event));
+    this.search.open();
   }
 
   /** The default provider: your choice, or `CONCH_ENGINE` when it's set. */
@@ -334,30 +352,4 @@ function mockBlueprints(vendor: MockVendor) {
       return { type: 'stdio', command: process.execPath, args: [fixture] };
     return { type: 'http', url: () => vendor.url(id) };
   };
-}
-
-/** The search index is derived data: if it can't be opened, Conch runs without search. */
-function openSearch(
-  config: Config,
-  store: ConversationStore,
-  conversations: ConversationManager,
-): Services['search'] {
-  try {
-    const index = new SearchIndex(join(config.CONCH_HOME, 'search.db'));
-    const indexer = new SearchIndexer(
-      index,
-      {
-        list: () => store.list(),
-        events: (id) => store.events(id),
-        detail: (id) => conversations.detail(id),
-      },
-      (error) => console.error('[search]', error),
-    );
-    conversations.events.on((event) => indexer.onEvent(event));
-    void indexer.start();
-    return { index, indexer };
-  } catch (error) {
-    console.error('[search] index unavailable:', error);
-    return undefined;
-  }
 }

@@ -154,11 +154,14 @@ export class Gatekeeper {
 
   async status(request: FastifyRequest): Promise<AuthStatus> {
     const resolved = request.access ?? (await this.resolve(request));
+    const signedIn = typeof resolved === 'object';
     return {
       method: await this.method(),
-      signedIn: typeof resolved === 'object',
+      signedIn,
       setupRequired: resolved === 'setup-required',
       secure: this.isSecure(request),
+      // Only those still outside need telling: the way back in is on this computer.
+      ...(!signedIn && (await this.store.locked()) && { locked: true }),
     };
   }
 

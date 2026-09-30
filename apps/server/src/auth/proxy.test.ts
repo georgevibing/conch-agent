@@ -137,7 +137,7 @@ it('keeps independent revocable key auth behind a host-preserving HTTPS proxy', 
   } finally {
     await app.close();
     // Windows won't delete a database that is still open.
-    services.search?.index.close();
+    services.search.close();
     await rm(home, { recursive: true, force: true });
   }
 });
@@ -199,7 +199,7 @@ it('closes rejected upgrade transports so a proxy cannot reuse a detached socket
     }
   } finally {
     await app.close();
-    services.search?.index.close();
+    services.search.close();
     await rm(home, { recursive: true, force: true });
   }
 });

@@ -1,9 +1,9 @@
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, readdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { SearchPreview, SearchResults } from '@conch/protocol';
-import { describe, expect, it } from 'vitest';
+import { HealLog, SearchPreview, SearchResults } from '@conch/protocol';
+import { describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
 import { loadConfig } from '../config';
@@ -43,7 +43,7 @@ describe('search API', () => {
   it('indexes turns as they happen and serves results and previews', async () => {
     const { services, app } = await setup();
     const id = await sendAndWait(services, 'Tell me about the Voyager golden record');
-    await services.search?.indexer.settled();
+    await services.search.settled();
 
     const res = await app.inject('/api/search?q=golden%20recor');
     expect(res.statusCode).toBe(200);
@@ -67,12 +67,12 @@ describe('search API', () => {
       url: `/api/conversations/${id}`,
       payload: { title: 'Space' },
     });
-    await services.search?.indexer.settled();
+    await services.search.settled();
     const renamed = SearchResults.parse((await app.inject('/api/search?q=voyager')).json());
     expect(renamed.groups[0]?.title).toBe('Space');
 
     await app.inject({ method: 'DELETE', url: `/api/conversations/${id}` });
-    await services.search?.indexer.settled();
+    await services.search.settled();
     expect(SearchResults.parse((await app.inject('/api/search?q=voyager')).json()).groups).toEqual(
       [],
     );
@@ -83,7 +83,7 @@ describe('search API', () => {
     const first = await setup();
     await sendAndWait(first.services, 'An old chat about marmalade');
     await first.app.close();
-    first.services.search?.index.close();
+    first.services.search.close();
     const { rm } = await import('node:fs/promises');
     await rm(join(first.home, 'search.db'), { force: true });
 
@@ -93,5 +93,39 @@ describe('search API', () => {
     );
     expect(results.groups).toHaveLength(1);
     await second.app.close();
+    second.services.search.close();
+  });
+
+  it('rebuilds a search.db that won’t open, and says so once', async () => {
+    const first = await setup();
+    await sendAndWait(first.services, 'An old chat about quince jelly');
+    await first.app.close();
+    first.services.search.close();
+    const { rm } = await import('node:fs/promises');
+    for (const extra of ['-wal', '-shm'])
+      await rm(join(first.home, `search.db${extra}`), { force: true });
+    await writeFile(join(first.home, 'search.db'), 'garbage, not a database');
+
+    const second = await setup(first.home);
+    await second.services.search.settled();
+    const results = SearchResults.parse((await second.app.inject('/api/search?q=quince')).json());
+    expect(results.groups).toHaveLength(1);
+    expect(results.catchingUp).toBeUndefined();
+    expect(
+      (await readdir(first.home)).filter((n) => n.startsWith('search.db.broken-')),
+    ).toHaveLength(1);
+    await vi.waitFor(async () => {
+      const healed = HealLog.parse((await second.app.inject('/api/healed')).json());
+      expect(healed.notes.map((n) => n.area)).toEqual(['search']);
+    });
+    // Repair is one press away (and never a dead end).
+    const repair = await second.app.inject({ method: 'POST', url: '/api/search/repair' });
+    expect(repair.json()).toEqual({ state: 'catching-up' });
+    await second.services.search.settled();
+    expect(
+      SearchResults.parse((await second.app.inject('/api/search?q=quince')).json()).groups,
+    ).toHaveLength(1);
+    await second.app.close();
+    second.services.search.close();
   });
 });

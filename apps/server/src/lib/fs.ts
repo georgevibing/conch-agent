@@ -16,7 +16,11 @@ export function safeJoin(dir: string, name: string): string {
 }
 
 /** Write a file atomically (temp file + rename) so crashes never leave half-written state. */
-export async function writeFileAtomic(path: string, data: string, mode = 0o600): Promise<void> {
+export async function writeFileAtomic(
+  path: string,
+  data: string | Uint8Array,
+  mode = 0o600,
+): Promise<void> {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const tmp = `${path}.${randomBytes(4).toString('hex')}.tmp`;
   await writeFile(tmp, data, { mode });

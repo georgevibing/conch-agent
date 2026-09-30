@@ -153,6 +153,8 @@ export function removeTokenCommand(platform: NodeJS.Platform, profile?: string):
 export interface CheckupInput {
   config: Config;
   access: AccessFile;
+  /** `access.json` couldn't be read, so sign-in is locked (`AccessStore.locked`). */
+  accessLocked?: boolean;
   permissionMode: PermissionMode;
   /** The request asking is on HTTPS (or never leaves this computer). */
   secure: boolean;
@@ -194,7 +196,16 @@ export function checkup(input: CheckupInput): CheckupItem[] {
     });
   }
 
-  if (access.method === 'none') {
+  if (input.accessLocked) {
+    items.push({
+      id: 'sign-in',
+      level: 'danger',
+      title: 'Sign-in is locked',
+      detail:
+        'Conch couldn’t read who may sign in, so nobody can sign in until you reset it on this computer. A copy of the damaged file was kept next to it.',
+      command: 'pnpm conch reset',
+    });
+  } else if (access.method === 'none') {
     items.push(
       network
         ? {

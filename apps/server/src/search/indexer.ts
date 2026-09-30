@@ -4,7 +4,7 @@ import type { ConversationEvent, ConversationSummary, ServerEvent } from '@conch
 
 import type { SearchIndex } from './index';
 
-interface Source {
+export interface SearchSource {
   /** Every stored conversation (for the start-up catch-up). */
   list(): Promise<ConversationSummary[]>;
   /** A stored conversation's log, read from disk without caching it. */
@@ -25,7 +25,7 @@ export class SearchIndexer {
 
   constructor(
     private readonly index: SearchIndex,
-    private readonly source: Source,
+    private readonly source: SearchSource,
     private readonly log: (error: unknown) => void = () => {},
   ) {}
 

@@ -1,4 +1,4 @@
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
@@ -12,7 +12,8 @@ import {
 import { z } from 'zod';
 
 import { newId } from '../lib/ids';
-import { Mutex, readJson, writeJson } from '../lib/fs';
+import { Mutex, writeJson } from '../lib/fs';
+import { setAside, type Heal } from '../lib/recover';
 import { describeDevice } from './device';
 import {
   Semaphore,
@@ -76,11 +77,65 @@ export type AccessFile = z.infer<typeof AccessFile>;
 
 export class AccessError extends Error {
   constructor(
-    readonly code: 'invalid' | 'weak-password' | 'not-found',
+    readonly code: 'invalid' | 'weak-password' | 'not-found' | 'locked',
     message: string,
   ) {
     super(message);
   }
+}
+
+/** Where the way back in is: having this computer's terminal is the proof it's you. */
+export const LOCKED_MESSAGE =
+  'Sign-in is locked because Conch couldn’t read who may sign in. On the computer running Conch, run: pnpm conch reset';
+
+/**
+ * What a damaged `access.json` reads as: password sign-in with no password.
+ * Every sign-in fails, every session is gone, and this computer has to sign
+ * in too.
+ *
+ * Why not the defaults, like every other store? The default is *no* sign-in,
+ * which lets this computer in without a password (and, through a proxy on
+ * this computer, maybe others). A file that won't read may have held a
+ * password, so Conch never guesses: it locks, keeps a copy, and waits for
+ * `pnpm conch reset` (or `password`, or `key`) on this computer, whose
+ * terminal is the proof that it's you. OWASP ASVS 5.0: errors fail closed,
+ * never open (V16.5), and recovery is no weaker than signing in (V6.4). A
+ * `CONCH_TOKEN` from the environment still works: whoever started Conch set
+ * it, so it grants nothing new.
+ */
+const LOCKED: AccessFile = {
+  version: 1,
+  method: 'password',
+  keys: [],
+  sessions: [],
+  pairings: [],
+};
+
+/**
+ * Keep what's safe to keep from a damaged file. Signed-in devices and pairing
+ * links may be dropped: the worst outcome is signing in again. Everything
+ * about *who may sign in* (the method, username, password hash and keys) must
+ * read cleanly, and the method must be written out, never defaulted to
+ * "none". Otherwise `undefined`, and sign-in locks.
+ */
+function salvageAccess(raw: unknown): AccessFile | undefined {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return undefined;
+  const fields = raw as Record<string, unknown>;
+  if (!AccessMethod.safeParse(fields.method).success) return undefined;
+  const credentials = AccessFile.omit({ sessions: true, pairings: true }).safeParse(fields);
+  if (!credentials.success) return undefined;
+  const valid = <T>(schema: z.ZodType<T>, list: unknown): T[] =>
+    Array.isArray(list)
+      ? list.flatMap((item) => {
+          const parsed = schema.safeParse(item);
+          return parsed.success ? [parsed.data] : [];
+        })
+      : [];
+  return {
+    ...credentials.data,
+    sessions: valid(SessionRecord, fields.sessions),
+    pairings: valid(PairingRecord, fields.pairings),
+  };
 }
 
 export interface SignInResult {
@@ -101,11 +156,16 @@ export class AccessStore {
   #cache?: AccessFile;
   #mtime = -1;
   #checkedAt = 0;
+  /** `access.json` couldn't be read: nobody may sign in until it's reset (see `LOCKED`). */
+  #locked = false;
   /** Two concurrent password hashes at most (128 MiB each). */
   #hashing = new Semaphore(2);
   readonly path: string;
 
-  constructor(home: string) {
+  constructor(
+    home: string,
+    private readonly heal?: Heal,
+  ) {
     this.path = join(home, 'access.json');
   }
 
@@ -118,22 +178,84 @@ export class AccessStore {
       () => 0,
     );
     if (!this.#cache || mtime !== this.#mtime) {
-      this.#cache = AccessFile.parse((await readJson(this.path)) ?? {});
+      this.#cache = await this.#read();
       this.#mtime = mtime;
     }
     return this.#cache;
   }
 
-  #update<T>(fn: (file: AccessFile) => T | Promise<T>): Promise<T> {
+  /** Sign-in is locked because `access.json` couldn't be read. */
+  async locked(): Promise<boolean> {
+    await this.get();
+    return this.#locked;
+  }
+
+  async #read(): Promise<AccessFile> {
+    let bytes: Buffer;
+    try {
+      bytes = await readFile(this.path);
+    } catch (error) {
+      // No file is a new install: nothing was ever set up to protect.
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      this.#locked = false;
+      return AccessFile.parse({});
+    }
+    let raw: unknown;
+    try {
+      raw = JSON.parse(bytes.toString('utf8'));
+    } catch {
+      return this.#lock(bytes);
+    }
+    const parsed = AccessFile.safeParse(raw);
+    if (parsed.success) {
+      this.#locked = false;
+      return parsed.data;
+    }
+    const salvaged = salvageAccess(raw);
+    if (!salvaged) return this.#lock(bytes);
+    this.#locked = false;
+    // Saved with the next change; until then it's read (and salvaged) again, quietly.
+    const aside = await setAside(this.path, { bytes }).catch(() => undefined);
+    if (aside?.fresh)
+      this.heal?.(
+        'access',
+        'Some signed-in devices couldn’t be read, so Conch kept a copy and they’ll be asked to sign in again.',
+      );
+    return salvaged;
+  }
+
+  /** Fail closed: a damaged file never reads as "no sign-in". It stays put, so a restart stays locked. */
+  async #lock(bytes: Buffer): Promise<AccessFile> {
+    this.#locked = true;
+    const aside = await setAside(this.path, { bytes }).catch(() => undefined);
+    if (aside?.fresh)
+      this.heal?.(
+        'access',
+        'Conch couldn’t read who may sign in, so it kept a copy and locked sign-in until it’s reset on this computer.',
+      );
+    return structuredClone(LOCKED);
+  }
+
+  /**
+   * Read, change and save `access.json`. While sign-in is locked, only a
+   * change that sets who may sign in from scratch (`resets`) is allowed:
+   * anything else would save the locked stand-in as if it were real.
+   */
+  #update<T>(
+    fn: (file: AccessFile) => T | Promise<T>,
+    { resets = false }: { resets?: boolean } = {},
+  ): Promise<T> {
     return this.#mutex.run(async () => {
       this.#checkedAt = 0;
       const file = structuredClone(await this.get());
+      if (this.#locked && !resets) throw new AccessError('locked', LOCKED_MESSAGE);
       const result = await fn(file);
       const now = Date.now();
       file.sessions = file.sessions.filter((s) => alive(s, now));
       file.pairings = file.pairings.filter((p) => p.expiresAt > now);
       await writeJson(this.path, file);
       this.#cache = file;
+      this.#locked = false;
       this.#mtime = await stat(this.path).then((s) => s.mtimeMs);
       return result;
     });
@@ -150,13 +272,16 @@ export class AccessStore {
     const check = checkPassword(password, { username });
     if (!check.ok) throw new AccessError('weak-password', check.message);
     const passwordHash = await this.#hashing.run(() => hashPassword(password));
-    await this.#update((file) => {
-      file.method = 'password';
-      file.username = username.trim();
-      file.passwordHash = passwordHash;
-      file.keys = [];
-      file.sessions = file.sessions.filter((s) => s.id === keepSessionId);
-    });
+    await this.#update(
+      (file) => {
+        file.method = 'password';
+        file.username = username.trim();
+        file.passwordHash = passwordHash;
+        file.keys = [];
+        file.sessions = file.sessions.filter((s) => s.id === keepSessionId);
+      },
+      { resets: true },
+    );
   }
 
   /** Add an access key (switching to key sign-in if needed). Returned once. */
@@ -169,15 +294,19 @@ export class AccessStore {
       hint: key.slice(-4),
       createdAt: Date.now(),
     };
-    await this.#update((file) => {
-      if (file.method !== 'key') {
-        file.method = 'key';
-        delete file.username;
-        delete file.passwordHash;
-        file.sessions = file.sessions.filter((s) => s.id === keepSessionId);
-      }
-      file.keys.push(record);
-    });
+    await this.#update(
+      (file) => {
+        if (file.method !== 'key') {
+          file.method = 'key';
+          delete file.username;
+          delete file.passwordHash;
+          file.sessions = file.sessions.filter((s) => s.id === keepSessionId);
+        }
+        file.keys.push(record);
+      },
+      // While locked, the stand-in is "password", so this starts a fresh key list.
+      { resets: true },
+    );
     return { key, info: keyInfo(record) };
   }
 
@@ -195,16 +324,19 @@ export class AccessStore {
 
   /** Turn sign-in off: forget every credential and end every session. */
   async disable(): Promise<string[]> {
-    return this.#update((file) => {
-      const ended = file.sessions.map((s) => s.id);
-      file.method = 'none';
-      delete file.username;
-      delete file.passwordHash;
-      file.keys = [];
-      file.sessions = [];
-      file.pairings = [];
-      return ended;
-    });
+    return this.#update(
+      (file) => {
+        const ended = file.sessions.map((s) => s.id);
+        file.method = 'none';
+        delete file.username;
+        delete file.passwordHash;
+        file.keys = [];
+        file.sessions = [];
+        file.pairings = [];
+        return ended;
+      },
+      { resets: true },
+    );
   }
 
   async keys(): Promise<AccessKeyInfo[]> {

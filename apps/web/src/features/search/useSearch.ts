@@ -1,8 +1,7 @@
-import type { SearchResults } from '@conch/protocol';
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
-import { api } from '../../api/client';
+import { ApiError, api } from '../../api/client';
 
 /** `value`, once it has stopped changing for `ms`. */
 export function useDebounced<T>(value: T, ms: number): T {
@@ -13,6 +12,13 @@ export function useDebounced<T>(value: T, ms: number): T {
   }, [value, ms]);
   return settled;
 }
+
+/** While the index is being filled, results are re-asked for this often, so they fill in. */
+const CATCHING_UP_POLL_MS = 1_500;
+
+/** Search broke again after rebuilding itself; retrying won't help, a Repair might. */
+export const isSearchUnavailable = (error: unknown) =>
+  error instanceof ApiError && error.code === 'search-unavailable';
 
 export const searchKeys = {
   results: (q: string) => ['search', q] as const,
@@ -34,6 +40,16 @@ export function useSearchResults(query: string, enabled = true) {
     placeholderData: keepPreviousData,
     staleTime: 5_000,
     gcTime: 60_000,
+    retry: (count, error) => !isSearchUnavailable(error) && count < 1,
+    // A rebuilt index fills in over a few seconds: keep asking until it's done.
+    refetchInterval: (query) => (query.state.data?.catchingUp ? CATCHING_UP_POLL_MS : false),
+  });
+  const repair = useMutation({
+    mutationFn: api.searchRepair,
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: ['search'] });
+      void client.invalidateQueries({ queryKey: ['search-preview'] });
+    },
   });
 
   // Warm the previews of the top hits so arrowing through them is instant.
@@ -56,10 +72,24 @@ export function useSearchResults(query: string, enabled = true) {
   }, [data, client]);
 
   const settled = q === query.trim();
+  const unavailable = q.length >= 3 && isSearchUnavailable(result.error);
+  const shown = q.length >= 3 && !unavailable ? data : undefined;
   return {
-    data: (q.length >= 3 ? data : undefined) as SearchResults | undefined,
-    /** Results are for an older query, or a request is in flight. */
-    pending: q.length >= 3 && (!settled || result.isFetching),
+    data: shown,
+    /**
+     * Results are for an older query, or a request is in flight. Asking again
+     * while catching up doesn't count: what's shown is already this query's.
+     */
+    pending:
+      q.length >= 3 &&
+      !unavailable &&
+      (!settled || (result.isFetching && !(result.data?.catchingUp && !result.isPlaceholderData))),
+    /** The index is still filling from the chats: more results may come. */
+    catchingUp: Boolean(shown?.catchingUp),
+    /** It broke again after rebuilding itself; `repair` tries once more. */
+    unavailable,
+    repair: () => repair.mutate(),
+    repairing: repair.isPending,
   };
 }
 

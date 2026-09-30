@@ -16,6 +16,7 @@ import { z } from 'zod';
 
 import { Mutex, readJson, writeJson } from '../lib/fs';
 import { newId } from '../lib/ids';
+import { readStore, type Heal } from '../lib/recover';
 import { agentEnv } from '../lib/proc';
 import { SERVER_VERSION } from '../version';
 import { loadBackend, type PtyBackend } from './backend';
@@ -61,6 +62,8 @@ export interface TerminalServiceDeps {
   home: string;
   workspace: () => Promise<string>;
   emit: (event: ServerEvent) => void;
+  /** Note a repair, e.g. damaged terminal settings set aside. */
+  heal?: Heal;
 }
 
 /**
@@ -91,10 +94,17 @@ export class TerminalService {
 
   async settings(): Promise<TerminalSettings> {
     if (!this.#settings) {
-      const parsed = TerminalFile.safeParse(
-        (await readJson(this.#path).catch(() => undefined)) ?? {},
-      );
-      this.#settings = (parsed.success ? parsed.data : TerminalFile.parse({})).settings;
+      // Damaged settings go back to the careful defaults (only this computer may open one).
+      const read = await readStore(this.#path, TerminalFile, {
+        onRepair: (state) =>
+          this.deps.heal?.(
+            'terminal',
+            state === 'salvaged'
+              ? 'Part of the terminal settings couldn’t be read, so Conch kept a copy and reset just that part.'
+              : 'The terminal settings couldn’t be read, so Conch kept a copy and went back to the defaults.',
+          ),
+      }).catch(() => undefined);
+      this.#settings ??= (read?.value ?? TerminalFile.parse({})).settings;
     }
     return this.#settings;
   }

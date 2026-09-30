@@ -18,11 +18,19 @@ import { BrowserStore } from './browser/store';
 import { terminalRemote } from './terminal/service';
 import { loadConfig } from './config';
 import { IntegrationStore } from './integrations/store';
+import { Healed } from './lib/healed';
+import type { Heal } from './lib/recover';
+import { runningGateway } from './port';
 import { PROVIDER_COPY } from './providers/catalog';
 import { SettingsStore } from './settings/store';
 
 const config = loadConfig();
-const store = new AccessStore(config.CONCH_HOME);
+// Conch may have started on another port (the usual one was busy): links point where it really is.
+const running = await runningGateway(config.CONCH_HOME);
+if (running) config.CONCH_PORT = running.port;
+const healed = new Healed(config.CONCH_HOME);
+const heal: Heal = (area, message) => void healed.note(area, message);
+const store = new AccessStore(config.CONCH_HOME, heal);
 
 const bold = (s: string) => (process.stdout.isTTY ? `\x1b[1m${s}\x1b[22m` : s);
 const dim = (s: string) => (process.stdout.isTTY ? `\x1b[2m${s}\x1b[22m` : s);
@@ -152,6 +160,11 @@ async function signOutEverywhere() {
 }
 
 async function reset() {
+  if (await store.locked()) {
+    say('Conch couldn’t read who may sign in, so sign-in is locked. A copy of the');
+    say('damaged file was kept next to it, in the Conch folder.');
+    say();
+  }
   say('This turns sign-in off, deletes your password and access keys, and signs');
   say('every device out. Only this computer will be able to open Conch.');
   const answer = await ask('Type “reset” to continue: ');
@@ -169,16 +182,17 @@ function providerCopy(id: string) {
 
 async function status() {
   const access = await store.get();
-  const settings = new SettingsStore(config.CONCH_HOME);
+  const settings = new SettingsStore(config.CONCH_HOME, heal);
   const items = checkup({
     config,
     access,
+    accessLocked: await store.locked(),
     permissionMode: (await settings.get()).preferences.permissionMode,
     secure: exposure(config) === 'local',
     homeProblems: await secureHome(config.CONCH_HOME),
     workspaceRules: await workspaceRules(await settings.workspace()),
-    trustedIntegrations: await new IntegrationStore(config.CONCH_HOME).trusted(),
-    browserLocal: (await new BrowserStore(config.CONCH_HOME).settings()).allowLocal,
+    trustedIntegrations: await new IntegrationStore(config.CONCH_HOME, heal).trusted(),
+    browserLocal: (await new BrowserStore(config.CONCH_HOME, heal).settings()).allowLocal,
     terminalRemote: await terminalRemote(config.CONCH_HOME),
     provider: providerCopy(config.CONCH_ENGINE ?? (await settings.get()).preferences.engine),
   });

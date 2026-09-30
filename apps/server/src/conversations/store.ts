@@ -1,9 +1,19 @@
-import { readFile, rm } from 'node:fs/promises';
+import { readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { ConversationEvent, type ConversationSummary, type EngineId } from '@conch/protocol';
+import {
+  ConversationEvent,
+  ConversationStatus,
+  type ConversationSummary,
+  EngineId,
+  Id,
+  TurnOptions,
+} from '@conch/protocol';
+import { z } from 'zod';
 
-import { Mutex, readJson, safeJoin, writeFileAtomic, writeJson } from '../lib/fs';
+import { Mutex, safeJoin, writeFileAtomic, writeJson } from '../lib/fs';
+import { readStore, type Heal } from '../lib/recover';
+import { titleFrom } from './summarize';
 
 /** One provider's own session within a conversation. */
 export interface EngineSession {
@@ -23,15 +33,47 @@ export interface ConversationRecord extends ConversationSummary {
 }
 
 /**
+ * One summary in `index.json`. Lenient on purpose: an odd field is put right
+ * rather than losing the chat; only an entry without an id can't be kept.
+ */
+const StoredRecord = z.object({
+  id: z.string().min(1),
+  title: z.string().catch('Untitled chat'),
+  preview: z.string().catch(''),
+  createdAt: z.number().catch(0),
+  updatedAt: z.number().catch(0),
+  status: ConversationStatus.catch('idle'),
+  titling: z.boolean().optional().catch(undefined),
+  options: TurnOptions.catch({}),
+  origin: z
+    .object({ kind: z.literal('routine'), routineId: z.string(), runId: z.string() })
+    .optional()
+    .catch(undefined),
+  engine: EngineId.catch('claude-code'),
+  resumeId: z.string().optional().catch(undefined),
+  sessions: z
+    .partialRecord(EngineId, z.object({ resumeId: z.string(), seq: z.number() }))
+    .optional()
+    .catch(undefined),
+});
+const IndexFile = z.array(StoredRecord);
+
+/**
  * `~/.conch/conversations/` — `index.json` with summaries plus one JSONL event
  * log per conversation. Streaming deltas are merged before writing so logs
  * stay small; `seq` stays monotonic so resumable subscriptions keep working.
+ *
+ * The logs are the truth and the index lists them, so a damaged index is kept
+ * aside and rebuilt from the logs: no chat goes missing.
  */
 export class ConversationStore {
   #mutex = new Mutex();
-  #index?: Map<string, ConversationRecord>;
+  #index?: Promise<Map<string, ConversationRecord>>;
 
-  constructor(private readonly dir: string) {}
+  constructor(
+    private readonly dir: string,
+    private readonly heal?: Heal,
+  ) {}
 
   async list(): Promise<ConversationRecord[]> {
     return [...(await this.#load()).values()].sort((a, b) => b.updatedAt - a.updatedAt);
@@ -59,11 +101,12 @@ export class ConversationStore {
   async events(id: string): Promise<ConversationEvent[]> {
     try {
       const text = await readFile(safeJoin(this.dir, `${id}.jsonl`), 'utf8');
+      // A line that won't read (cut short by a full disk) is skipped, not the whole chat.
       return text
         .split('\n')
         .filter(Boolean)
         .flatMap((line) => {
-          const parsed = ConversationEvent.safeParse(JSON.parse(line));
+          const parsed = ConversationEvent.safeParse(parseLine(line));
           return parsed.success ? [parsed.data] : [];
         });
     } catch (error) {
@@ -77,23 +120,99 @@ export class ConversationStore {
     return writeFileAtomic(safeJoin(this.dir, `${id}.jsonl`), `${lines.join('\n')}\n`);
   }
 
-  async #load(): Promise<Map<string, ConversationRecord>> {
-    if (!this.#index) {
-      const records = (await readJson<ConversationRecord[]>(join(this.dir, 'index.json'))) ?? [];
-      // A turn (or a title being written) can't survive a restart; don't show stale states.
-      this.#index = new Map(
-        records.map((r) => [
-          r.id,
-          { ...r, options: r.options ?? {}, status: 'idle', titling: undefined },
-        ]),
-      );
-    }
+  #load(): Promise<Map<string, ConversationRecord>> {
+    this.#index ??= this.#read().catch((error: unknown) => {
+      this.#index = undefined;
+      throw error;
+    });
     return this.#index;
   }
 
-  #saveIndex() {
-    return writeJson(join(this.dir, 'index.json'), [...(this.#index?.values() ?? [])]);
+  async #read(): Promise<Map<string, ConversationRecord>> {
+    let repaired = false;
+    const read = await readStore(join(this.dir, 'index.json'), IndexFile, {
+      fallback: () => [],
+      onRepair: () => (repaired = true),
+    });
+    let records: ConversationRecord[] = read.value;
+    if (read.state === 'salvaged' || read.state === 'reset') {
+      records = [...records, ...(await this.#fromLogs(new Set(records.map((r) => r.id))))];
+      await writeJson(join(this.dir, 'index.json'), records);
+      if (repaired)
+        this.heal?.(
+          'conversations',
+          'Your list of chats couldn’t be read, so Conch kept a copy and rebuilt it from the chats themselves.',
+        );
+    }
+    // A turn (or a title being written) can't survive a restart; don't show stale states.
+    return new Map(
+      records.map((r) => [r.id, { ...r, status: 'idle' as const, titling: undefined }]),
+    );
   }
+
+  /** Summaries of the chats whose logs are here but aren't in `known`, worked out from the logs. */
+  async #fromLogs(known: Set<string>): Promise<ConversationRecord[]> {
+    const names = await readdir(this.dir).catch(() => [] as string[]);
+    const found: ConversationRecord[] = [];
+    for (const name of names) {
+      const id = name.slice(0, -'.jsonl'.length);
+      if (!name.endsWith('.jsonl') || known.has(id) || !Id.safeParse(id).success) continue;
+      const record = recordFromLog(id, await this.events(id).catch(() => []));
+      if (record) found.push(record);
+    }
+    return found;
+  }
+
+  async #saveIndex() {
+    const index = await this.#load();
+    await writeJson(join(this.dir, 'index.json'), [...index.values()]);
+  }
+}
+
+function parseLine(line: string): unknown {
+  try {
+    return JSON.parse(line);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * A chat's summary, worked out from its log: the title it was given (or its
+ * first line), what you said last, and who answered last. Which provider
+ * session to resume is lost, so the next answer starts a new session and is
+ * handed the conversation so far (ADR 0012).
+ */
+export function recordFromLog(
+  id: string,
+  events: ConversationEvent[],
+): ConversationRecord | undefined {
+  const first = events[0];
+  const last = events.at(-1);
+  if (!first || !last) return undefined;
+  let title: string | undefined;
+  let firstText: string | undefined;
+  let lastText: string | undefined;
+  let options: TurnOptions = {};
+  let engine: EngineId | undefined;
+  for (const event of events) {
+    if (event.type === 'title') title = event.title;
+    else if (event.type === 'user.message') {
+      firstText ??= event.text;
+      lastText = event.text;
+    } else if (event.type === 'options') options = event.options;
+    else if (event.type === 'turn.completed' && event.engine) engine = event.engine;
+  }
+  return {
+    id,
+    title: title ?? (firstText ? titleFrom(firstText) : 'Untitled chat'),
+    preview: (lastText ?? '').slice(0, 140),
+    createdAt: first.at,
+    updatedAt: last.at,
+    status: 'idle',
+    options,
+    engine: engine ?? options.engine ?? 'claude-code',
+  };
 }
 
 /** Merge consecutive deltas of the same message and kind; keeps the last `seq`. */

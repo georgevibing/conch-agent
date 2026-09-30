@@ -5,7 +5,8 @@ import { z } from 'zod';
 
 import type { Engine, EngineUsage, LimitSignal } from '../engines/types';
 import { Emitter } from '../lib/emitter';
-import { Mutex, readJson, writeJson } from '../lib/fs';
+import { Mutex, writeJson } from '../lib/fs';
+import { readStore, type Heal } from '../lib/recover';
 
 /** Subscriptions are re-read this often even when nothing happens here (you may use claude.ai too). */
 const POLL_MS = 5 * 60_000;
@@ -75,6 +76,8 @@ export class UsageService {
       /** Past turns, used once to seed the ledger so spend is right from day one. */
       history?: () => Promise<{ at: number; costUsd: number }[]>;
       now?: () => number;
+      /** Note a repair, e.g. a damaged ledger rebuilt from the chats. */
+      heal?: Heal;
     },
   ) {}
 
@@ -152,13 +155,25 @@ export class UsageService {
 
   async #load(): Promise<Ledger> {
     if (this.#ledger) return this.#ledger;
-    const saved = await readJson(this.#path);
-    const ledger = LedgerFile.parse(saved ?? {});
-    if (saved === undefined && this.deps.history) {
+    const read = await readStore(this.#path, LedgerFile, {
+      onRepair: (state) =>
+        this.deps.heal?.(
+          'usage',
+          state === 'salvaged'
+            ? 'Part of your spending record couldn’t be read, so Conch kept a copy and filled it in from your chats.'
+            : 'Your spending record couldn’t be read, so Conch kept a copy and rebuilt it from your chats.',
+        ),
+    });
+    const ledger = read.value;
+    // A new ledger, or one that lost days, is filled in from past turns;
+    // what the ledger still had (chats deleted since included) wins.
+    if (read.state !== 'read' && this.deps.history) {
+      const seeded: Record<string, number> = {};
       for (const turn of await this.deps.history().catch(() => [])) {
         const day = dayKey(turn.at);
-        ledger.days[day] = (ledger.days[day] ?? 0) + turn.costUsd;
+        seeded[day] = (seeded[day] ?? 0) + turn.costUsd;
       }
+      ledger.days = { ...seeded, ...ledger.days };
       await writeJson(this.#path, ledger);
     }
     this.#ledger = ledger;

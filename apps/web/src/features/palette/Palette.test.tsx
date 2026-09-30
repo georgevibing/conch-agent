@@ -149,6 +149,64 @@ describe('Palette search', () => {
     ).toBeInTheDocument();
   });
 
+  it('says search is catching up while its index rebuilds, not that nothing matches', async () => {
+    const user = userEvent.setup();
+    let asked = 0;
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () =>
+        ++asked === 1
+          ? { ...results, groups: [], total: 0, catchingUp: true }
+          : { ...results, catchingUp: undefined },
+    });
+    renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'redeploy');
+    expect(await screen.findByText(/Search is catching up on your chats/)).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Search is catching up…');
+    expect(screen.queryByText(/Nothing matches/)).not.toBeInTheDocument();
+    // It asks again by itself, and the results fill in.
+    expect(
+      await screen.findByRole('option', { name: /Run the redeploy script/ }, { timeout: 4000 }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('2 messages in 1 chat');
+  });
+
+  it('offers one Repair when search isn’t working, and searches again after it', async () => {
+    const user = userEvent.setup();
+    let repaired = false;
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () =>
+        repaired
+          ? results
+          : new Response(
+              JSON.stringify({ error: 'search-unavailable', message: 'Search isn’t working.' }),
+              { status: 503 },
+            ),
+      'POST /api/search/repair': () => {
+        repaired = true;
+        return { state: 'catching-up' };
+      },
+    });
+    renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'redeploy');
+    const repair = await screen.findByRole('button', { name: 'Repair search' });
+    expect(screen.getByText(/Repair rebuilds it from your chats/)).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Search isn’t working right now');
+    expect(screen.queryByText(/Nothing matches/)).not.toBeInTheDocument();
+    // Not retried on its own: only a person's Repair tries again.
+    expect(calls.filter((c) => c.path.startsWith('/api/search?'))).toHaveLength(1);
+    await user.click(repair);
+    expect(
+      await screen.findByRole('option', { name: /Run the redeploy script/ }),
+    ).toBeInTheDocument();
+    expect(calls.some((c) => c.method === 'POST' && c.path === '/api/search/repair')).toBe(true);
+  });
+
   it('finds skills, models from every provider, and settings by name', async () => {
     const user = userEvent.setup();
     const model = (id: string, label: string) => ({

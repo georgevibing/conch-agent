@@ -84,6 +84,7 @@ Zod schemas for everything on the wire (v2):
 ```
 src/
   config.ts, security.ts      env validation; Host/Origin guards; remote token
+  port.ts                     which port to start on (another Conch there? a free one?)
   services.ts                 wiring: stores, engines, conversation manager, login
   app.ts                      Fastify routes + /ws + static web app
   settings/store.ts           ~/.conch/settings.json and secrets.json (0600)
@@ -274,6 +275,10 @@ src/
   `~/.conch/search.db`, fed by the conversation event stream and caught up on start;
   `GET /api/search` ranks and groups hits with snippets, `GET /api/search/preview`
   shows one in context. See [ADR 0007 — Search](./docs/adr/0007-search.md).
+  `search/service.ts` keeps it working: an index that won't open or breaks mid-run is
+  set aside (`search.db.broken-<time>`) and rebuilt from the logs while results say
+  `catchingUp`. That happens once per run: a second failure answers 503 until a
+  person presses Repair (`POST /api/search/repair`), never a loop.
 - Local data lives in `~/.conch/` (`CONCH_HOME`): `settings.json`, `secrets.json`
   (the API key and a key per provider, or a 1Password reference to one),
   `memory/*.md`, `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `search.db`,
@@ -282,7 +287,22 @@ src/
   transcript a plain model API needs, since it keeps no session of its own),
   `browser.json` (browser settings, sites you always allow) + `browser/profile/` +
   `browser/shots/`, `terminal.json` (terminal settings; terminals themselves are never
-  written to disk), `workspace/` (default cwd).
+  written to disk), `gateway.json` (where it's listening, while it runs), `workspace/`
+  (default cwd).
+- **A port that's taken** (`port.ts`). Before anything starts, the port is probed. A
+  Conch already there (its `/api/health` says so) is opened instead, and so is this
+  folder's own Conch at the port recorded in `gateway.json`. Another program's port
+  makes Conch start on the next free one (up to +20), say so, and leave a note. A
+  `CONCH_PORT` set on purpose is never swapped: Conch names the program holding it
+  and suggests a free port. The real port reaches everything that uses it (the
+  browser's guard, pairing links, the checkup); `pnpm conch` and the dev server read
+  it from `gateway.json`.
+- **Damaged files heal** (`lib/recover.ts`). A JSON store that won't parse or match
+  its schema is kept as `<name>.broken-<time>.json` (newest two), what still reads
+  carries on, the rest takes its (careful) default, and one note lands in "Fixed on
+  its own". The chat list is rebuilt from the logs, the spending record from past
+  turns, and a routine that won't read is set aside whole, never run half-read.
+  `access.json` is the exception: see Security.
 
 See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
 [ADR 0004 — Engines](./docs/adr/0004-engines.md).
@@ -355,7 +375,9 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
   hashed, revocable) or _no sign-in_. With no sign-in, only genuinely local requests
   are served: loopback socket **and** loopback `Host` **and** no proxy headers.
   Everything else gets `401 setup-required`. Credentials, sessions and pairing codes
-  live hashed in `~/.conch/access.json` (0600).
+  live hashed in `~/.conch/access.json` (0600). A damaged `access.json` never reads
+  as "no sign-in": sign-in locks (this computer included) until `pnpm conch reset`,
+  keeping a copy. Only unreadable sessions and pairing codes are dropped.
 - **Sessions:** a fresh random cookie per sign-in (`HttpOnly; SameSite=Strict`,
   `__Host-…; Secure` over HTTPS), expiring after 30 days or 7 idle days, listed and
   revocable per device. Revoking one closes its WebSocket at once. Sensitive changes

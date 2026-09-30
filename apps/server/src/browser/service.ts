@@ -14,6 +14,7 @@ import type { Download, Page } from 'playwright-core';
 import type { Engine, HostTool } from '../engines/types';
 import type { ToolContext } from '../conversations/manager';
 import { safeJoin } from '../lib/fs';
+import type { Heal } from '../lib/recover';
 import { declineCookies } from './cookies';
 import { BrowserGuard } from './guard';
 import { blockedPage } from './pages';
@@ -29,6 +30,8 @@ const SHOTS_KEPT = 300;
 
 export interface BrowserServiceDeps {
   home: string;
+  /** Note a repair, e.g. damaged browser settings set aside. */
+  heal?: Heal;
   /** The gateway's port: never reachable from the browser. */
   gatewayPort: number;
   /** The working folder, for downloads. */
@@ -57,7 +60,7 @@ export class BrowserService {
   #idleTimer: NodeJS.Timeout;
 
   constructor(private readonly deps: BrowserServiceDeps) {
-    this.store = new BrowserStore(deps.home);
+    this.store = new BrowserStore(deps.home, deps.heal);
     this.guard = new BrowserGuard(() => ({
       allowLocal: this.#settings?.allowLocal ?? false,
       gatewayPort: deps.gatewayPort,

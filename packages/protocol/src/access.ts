@@ -32,6 +32,12 @@ export const AuthStatus = z.object({
   setupRequired: z.boolean(),
   /** The connection is encrypted (HTTPS), or it never leaves this computer. */
   secure: z.boolean(),
+  /**
+   * Who may sign in couldn't be read (a damaged `access.json`), so nobody
+   * can until it's reset on the computer running Conch (`pnpm conch reset`).
+   * Conch never guesses "no sign-in" instead: that would let anyone in.
+   */
+  locked: z.boolean().optional(),
 });
 export type AuthStatus = z.infer<typeof AuthStatus>;
 

@@ -59,8 +59,25 @@ export const SearchResults = z.object({
   total: z.number().int().nonnegative(),
   capped: z.boolean(),
   tookMs: z.number().nonnegative(),
+  /**
+   * The index is still being filled from the chats (just started, or rebuilt
+   * after it broke): these are the results so far, and more may come.
+   */
+  catchingUp: z.boolean().optional(),
 });
 export type SearchResults = z.infer<typeof SearchResults>;
+
+/**
+ * How search is: `catching-up` while the index fills from the chats (at start,
+ * or rebuilt after it broke), `ready`, or `unavailable` when it broke again
+ * after a rebuild (`GET /api/search` answers 503 `search-unavailable`).
+ */
+export const SearchState = z.enum(['catching-up', 'ready', 'unavailable']);
+export type SearchState = z.infer<typeof SearchState>;
+
+/** `POST /api/search/repair`: rebuild the index from the chats, because a person asked. */
+export const SearchRepairResult = z.object({ state: SearchState });
+export type SearchRepairResult = z.infer<typeof SearchRepairResult>;
 
 export const SearchPreviewQuery = z.object({
   conversationId: z.string().max(128),

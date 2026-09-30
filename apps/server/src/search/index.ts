@@ -21,6 +21,30 @@ import { extractDocs } from './extract';
 
 /** Bump to rebuild every index from the conversation logs on next start. */
 const SCHEMA_VERSION = 1;
+
+/** SQLite's own words for "this file is damaged or not an index we know" (primary result codes). */
+const BROKEN_CODES = new Set([
+  10, // SQLITE_IOERR
+  11, // SQLITE_CORRUPT
+  14, // SQLITE_CANTOPEN
+  26, // SQLITE_NOTADB
+]);
+
+/**
+ * The database itself is broken (damaged, not a database, its tables gone),
+ * as opposed to a query SQLite couldn't parse, or a bug.
+ */
+export function isBroken(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const { code, errcode, message } = error as {
+    code?: unknown;
+    errcode?: unknown;
+    message?: unknown;
+  };
+  if (code !== 'ERR_SQLITE_ERROR') return false;
+  if (typeof errcode === 'number' && BROKEN_CODES.has(errcode & 0xff)) return true;
+  return typeof message === 'string' && /no such (table|column)|malformed/i.test(message);
+}
 /** Ranked rows considered per query; plenty for grouping, cheap for SQLite. */
 const CANDIDATES = 400;
 /** Past this many matches a query is "broad": take the newest, don't rank them all. */
@@ -76,8 +100,14 @@ export class SearchIndex {
       else chmodSync(path, 0o600);
     }
     this.#db = new DatabaseSync(path);
-    this.#db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;');
-    this.#migrate();
+    try {
+      this.#db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;');
+      this.#migrate();
+    } catch (error) {
+      // Let go of the file, so it can be set aside and rebuilt (Windows won't move an open file).
+      this.#db.close();
+      throw error;
+    }
   }
 
   close() {
@@ -295,8 +325,10 @@ export class SearchIndex {
         WHERE docs_fts MATCH ? ${scope}
         ORDER BY ${order} LIMIT ${CANDIDATES}`,
       ).all(...params) as unknown as Row[];
-    } catch {
-      // A query FTS5 can't parse matches nothing rather than failing the request.
+    } catch (error) {
+      // A query FTS5 can't parse matches nothing rather than failing the request;
+      // a broken index is for `SearchService` to repair.
+      if (isBroken(error)) throw error;
       return [];
     }
   }
@@ -319,7 +351,8 @@ export class SearchIndex {
       )
         .map((r) => r.conversation_id)
         .filter((id) => !have.has(id));
-    } catch {
+    } catch (error) {
+      if (isBroken(error)) throw error;
       return [];
     }
     if (!ids.length) return [];
