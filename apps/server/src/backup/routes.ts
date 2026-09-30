@@ -112,6 +112,11 @@ export function registerBackupRoutes(
     guarded(reply, () => backups.summary(request.params.id)),
   );
 
+  /** What restoring it brings, read from its files, before anyone confirms. */
+  app.get<{ Params: { id: string } }>('/api/backups/:id/preview', (request, reply) =>
+    guarded(reply, () => backups.preview(request.params.id)),
+  );
+
   app.get<{ Params: { id: string } }>('/api/backups/:id/download', (request, reply) =>
     guarded(reply, async () => {
       const summary = await backups.summary(request.params.id);

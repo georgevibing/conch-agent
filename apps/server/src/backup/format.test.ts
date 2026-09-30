@@ -167,6 +167,28 @@ describe('backing up and reading it back', () => {
     expect(await files(join(staging, 'files'))).not.toContain('search.db');
   });
 
+  it('checks one through for a preview without writing anything or asking for the passphrase', async () => {
+    const from = await home();
+    const path = await backup(from, 'passphrase');
+    const read = await extractBackup(path, { capture: (p) => p === 'settings.json' });
+    expect(read.files).toEqual([
+      'conversations/c_1.jsonl',
+      'conversations/index.json',
+      'memory/m_1.md',
+      'settings.json',
+    ]);
+    expect(read.secrets).toEqual([]);
+    expect(read.captured.get('settings.json')?.toString()).toContain('Shelly');
+    expect([...read.captured.keys()]).toEqual(['settings.json']);
+    // The same checks as a restore: a changed file is caught.
+    const bytes = gunzipSync(await readFile(path));
+    const at = bytes.indexOf('Likes lemon tea.');
+    bytes.write('Likes lemon pie.', at);
+    const changed = join(await temp(), 'changed.conchbackup');
+    await writeFile(changed, gzipSync(bytes));
+    await expect(extractBackup(changed, {})).rejects.toMatchObject({ code: 'damaged' });
+  });
+
   it('is a real tar.gz that any tar can open', async () => {
     const path = await backup(await home());
     const raw = gunzipSync(await readFile(path));

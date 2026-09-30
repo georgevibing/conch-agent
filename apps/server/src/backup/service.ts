@@ -20,7 +20,9 @@ import { Readable, Transform } from 'node:stream';
 import {
   BACKUP_EXTENSION,
   BACKUP_LIMITS,
+  type BackupContents,
   type BackupKind,
+  type BackupPreview,
   type BackupStatus,
   type BackupSummary,
   Id,
@@ -32,7 +34,8 @@ import { Mutex, readJson, safeJoin, writeJson } from '../lib/fs';
 import { readStore, type Heal } from '../lib/recover';
 import { BackupError, NO_ROOM } from './archive';
 import { extractBackup, readHeader, writeBackup, type Header } from './format';
-import { groupsFor, walk, type BackupGroup } from './manifest';
+import { countContents, groupsFor, walk, type BackupGroup } from './manifest';
+import { powersOf, previewReads } from './powers';
 import { backupsDir, Journal, journalPath, Plan, stagingDir } from './restore';
 import { currentAccess, hasSignIn, signInAfterRestore, stagedAccess } from './signin';
 import { dayOf, retain, retainUndo } from './retention';
@@ -63,6 +66,15 @@ const PREFIX: Record<BackupKind, string> = {
 };
 const kindOf = (id: string): BackupKind | undefined =>
   (Object.entries(PREFIX) as [BackupKind, string][]).find(([, p]) => id.startsWith(`${p}-`))?.[0];
+
+/** What a backup's files hold, read for the preview. */
+interface Inspection {
+  header: Header;
+  contents: BackupContents;
+  powers: BackupPreview['powers'];
+}
+/** The most things-that-act-for-you a preview lists; the rest are counted. */
+const MAX_POWERS = 40;
 
 const SettingsFile = z.object({
   version: z.literal(1).default(1),
@@ -115,6 +127,7 @@ export class BackupService {
   #problem?: string;
   #settings?: Promise<Settings>;
   #summaries = new Map<string, { mtimeMs: number; summary: BackupSummary }>();
+  #inspected = new Map<string, { mtimeMs: number; size: number; inspection: Inspection }>();
   #timer?: NodeJS.Timeout;
   #first?: NodeJS.Timeout;
 
@@ -187,7 +200,64 @@ export class BackupService {
       .filter((id) => Id.safeParse(id).success && kindOf(id) !== undefined);
   }
 
-  /** One backup, from its header (cached until the file changes). */
+  /**
+   * What a backup really holds, from its files (cached until the file
+   * changes): checked through like a restore — paths, kinds, sizes, sums —
+   * but nothing written and no passphrase needed. Never what its header
+   * says: anyone can write a header.
+   */
+  async #inspect(id: string): Promise<Inspection> {
+    const kind = kindOf(id);
+    if (!kind || !Id.safeParse(id).success)
+      throw new BackupError('not-found', 'That backup is gone.');
+    const path = this.pathOf(id);
+    const info = await stat(path).catch(() => undefined);
+    if (!info?.isFile()) throw new BackupError('not-found', 'That backup is gone.');
+    const cached = this.#inspected.get(id);
+    if (cached?.mtimeMs === info.mtimeMs && cached.size === info.size) return cached.inspection;
+    const { header, files, captured } = await extractBackup(path, {
+      allowLocal: kind === 'before-restore',
+      capture: previewReads,
+    });
+    const read = (p: string) => captured.get(p);
+    const contents: BackupContents = {
+      ...(await countContents(
+        files.map((p) => ({ path: p })),
+        async (p) => read(p),
+        { chats: header.groups.includes('chats') },
+      )),
+      ...(header.secrets && { secrets: header.secrets.mode }),
+    };
+    const inspection: Inspection = { header, contents, powers: powersOf(files, read) };
+    this.#inspected.set(id, { mtimeMs: info.mtimeMs, size: info.size, inspection });
+    return inspection;
+  }
+
+  /**
+   * What restoring a backup brings, for the preview a person sees before
+   * they confirm: counted from its files, what in it can act for them, and
+   * whether sign-in here stays as it is.
+   */
+  async preview(id: string): Promise<BackupPreview> {
+    const { header, contents, powers } = await this.#inspect(id);
+    const listed = powers.slice(0, MAX_POWERS);
+    return {
+      id,
+      contents,
+      powers: listed,
+      morePowers: powers.length - listed.length,
+      signInStays:
+        header.secrets !== undefined &&
+        kindOf(id) !== 'before-restore' &&
+        (await this.signInStays()),
+    };
+  }
+
+  /**
+   * One backup (cached until the file changes). A file uploaded to restore
+   * from is checked through, and what it holds is counted from its files;
+   * one this computer made says what it holds in its header.
+   */
   async summary(id: string): Promise<BackupSummary> {
     const kind = kindOf(id);
     if (!kind || !Id.safeParse(id).success)
@@ -197,14 +267,14 @@ export class BackupService {
     if (!info?.isFile()) throw new BackupError('not-found', 'That backup is gone.');
     const cached = this.#summaries.get(id);
     if (cached?.mtimeMs === info.mtimeMs) return cached.summary;
-    const header = await readHeader(path);
+    const header = kind === 'uploaded' ? (await this.#inspect(id)).header : await readHeader(path);
     const summary: BackupSummary = {
       id,
       kind,
       createdAt: header.createdAt,
       conchVersion: header.conchVersion,
       size: info.size,
-      contents: header.contents,
+      contents: kind === 'uploaded' ? (await this.#inspect(id)).contents : header.contents,
       // An Undo copy may hold keys unlocked: it never leaves this computer.
       downloadable: kind === 'automatic' || kind === 'manual',
     };
@@ -445,6 +515,7 @@ export class BackupService {
     if (kindOf(id) !== 'uploaded' && kindOf(id) !== 'manual') return false;
     await rm(this.pathOf(id), { force: true });
     this.#summaries.delete(id);
+    this.#inspected.delete(id);
     return true;
   }
 
@@ -465,6 +536,7 @@ export class BackupService {
       if (!kept) {
         await rm(this.pathOf(backup.id), { force: true });
         this.#summaries.delete(backup.id);
+        this.#inspected.delete(backup.id);
       }
     }
     await this.#sweep();
@@ -584,7 +656,11 @@ export class BackupService {
         };
         // Written last: its presence is what makes the restore pending.
         await writeJson(join(staging, 'plan.json'), plan);
-        if (kind === 'uploaded') await rm(path, { force: true });
+        if (kind === 'uploaded') {
+          await rm(path, { force: true });
+          this.#summaries.delete(id);
+          this.#inspected.delete(id);
+        }
         await this.#prune();
         return from;
       } catch (error) {
