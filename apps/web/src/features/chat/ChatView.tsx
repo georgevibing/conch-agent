@@ -30,7 +30,7 @@ import { modeInfo } from '../models/catalog';
 import { ChatFind } from '../search/ChatFind';
 import { modelKey, useTurnOptions } from '../models/useTurnOptions';
 import { providersApi } from '../providers/api';
-import { putProvider, useProviders } from '../providers/queries';
+import { providerKeys, putProvider, useProviders } from '../providers/queries';
 import { useNeed } from '../setup/useNeed';
 import { UsageComposerNotice } from '../usage/UsageComposerNotice';
 import styles from './ChatView.module.css';
@@ -161,7 +161,9 @@ function useTurnRecovery(
       failed && text
         ? () => {
             setWaitingFor({ engine: failed, text });
-            openSettings('providers');
+            // Straight to its page, where the sign-in button is — and fresh, not cached.
+            void client.invalidateQueries({ queryKey: providerKeys.list });
+            openSettings('providers', failed);
           }
         : undefined,
     alternative:

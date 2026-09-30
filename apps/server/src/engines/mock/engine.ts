@@ -8,6 +8,7 @@ import type {
 
 import { newId } from '../../lib/ids';
 import { installHints } from '../claude-code/detect';
+import { friendlyError } from '../claude-code/translate';
 import { severityFor } from '@conch/protocol';
 
 import { Emitter } from '../../lib/emitter';
@@ -81,6 +82,7 @@ export class MockEngine implements Engine {
     },
   };
   #state: EngineState;
+  #signedOutOnce = false;
   #speed: number;
   #installAfter?: number;
   #checks = 0;
@@ -332,6 +334,22 @@ export class MockEngine implements Engine {
     this.#spend();
     try {
       yield { type: 'session', resumeId: input.resumeId ?? newId('mock-session'), model: 'mock' };
+      // Scripted for tests and demos: the sign-in ends in the middle of a chat
+      // (once, so the message that goes again after signing in gets its reply).
+      if (
+        !this.#signedOutOnce &&
+        /pretend (?:you(?:'|’)?re|to be) signed out/i.test(input.prompt)
+      ) {
+        this.#signedOutOnce = true;
+        this.#state = 'signed-out';
+        yield {
+          type: 'done',
+          outcome: 'error',
+          error: friendlyError('authentication_failed'),
+          problem: 'signed-out',
+        };
+        return;
+      }
       await wait(700);
       // Reasoning streams in uneven clumps, like the real thing.
       const thought = `The question is about "${input.prompt.slice(0, 48)}". Let me consider what they actually need, what they already know, and the clearest way to put it — starting with the essentials, then one concrete example.`;

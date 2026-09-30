@@ -31,6 +31,8 @@ interface UiState {
   sidebarOpen: boolean;
   mobileSidebarOpen: boolean;
   settings: SettingsTab | null;
+  /** Something to open inside the settings tab (a provider's page), once. */
+  settingsFocus?: string;
   paletteOpen: boolean;
   find: FindState | null;
   /** What find last searched for, so ⌘F reopens where you left off. */
@@ -47,7 +49,8 @@ interface UiState {
   setDraftOptions(options: TurnOptions): void;
   toggleSidebar(): void;
   setMobileSidebar(open: boolean): void;
-  openSettings(tab?: SettingsTab): void;
+  /** `focus`: open this inside the tab straight away (e.g. a provider, to sign in). */
+  openSettings(tab?: SettingsTab, focus?: string): void;
   closeSettings(): void;
   setPalette(open: boolean): void;
   openFind(conversationId: string, query?: string, target?: string): void;
@@ -118,7 +121,8 @@ export const useUi = create<UiState>((set) => ({
       return { sidebarOpen: !s.sidebarOpen };
     }),
   setMobileSidebar: (mobileSidebarOpen) => set({ mobileSidebarOpen }),
-  openSettings: (tab = 'personality') => set({ settings: tab, paletteOpen: false }),
+  openSettings: (tab = 'personality', focus) =>
+    set({ settings: tab, settingsFocus: focus, paletteOpen: false }),
   closeSettings: () => set({ settings: null }),
   setPalette: (paletteOpen) => set({ paletteOpen }),
   openFind: (conversationId, query, target) =>

@@ -381,6 +381,10 @@ export function TurnEnd({
   if (item.outcome === 'interrupted') {
     return <div className={styles.stopped}>Stopped</div>;
   }
+  // An earlier failure the chat has moved past: a quiet line, not an alarm.
+  if (item.outcome === 'error' && item.problem && !onRetry) {
+    return <div className={styles.stopped}>Didn’t go through: {item.error}</div>;
+  }
   if (item.outcome === 'error' && item.problem && recover && onRetry) {
     const { problem } = item;
     const retry = (

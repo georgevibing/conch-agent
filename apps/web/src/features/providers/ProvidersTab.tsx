@@ -15,6 +15,7 @@ import { useState } from 'react';
 import { useAppState, useUpdateSettings } from '../../api/queries';
 import { Section, SaveStatus } from '../settings/Section';
 import { useAutosave } from '../settings/useAutosave';
+import { useUi } from '../../app/ui';
 import { ProviderDetail } from './ConnectProviderDialog';
 import styles from './Providers.module.css';
 import { useCheckProvider, useClearProviderKey, useProviders, useUseProvider } from './queries';
@@ -51,7 +52,12 @@ export function ProvidersTab({
   );
 
   const assistant = app?.persona.name ?? 'Conch';
-  const [connecting, setConnecting] = useState<string>();
+  // Opened to sign in to one provider (from a chat): its page, straight away.
+  const [connecting, setConnecting] = useState<string | undefined>(() => {
+    const focus = useUi.getState().settingsFocus;
+    if (focus) useUi.setState({ settingsFocus: undefined });
+    return focus;
+  });
   const [removing, setRemoving] = useState<Provider>();
   const use = useUseProvider();
   const check = useCheckProvider();
