@@ -36,4 +36,17 @@ describe('IconButton', () => {
     await userEvent.tab();
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
+
+  it('says what waits behind its dot, to everyone', async () => {
+    const { container } = renderNacre(
+      <IconButton label="Settings" dot="Update available">
+        <Settings />
+      </IconButton>,
+    );
+    const button = screen.getByRole('button', { name: 'Settings, Update available' });
+    expect(button).toHaveAttribute('data-dot');
+    await userEvent.tab();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Settings · Update available');
+    await expectAccessible(container);
+  });
 });

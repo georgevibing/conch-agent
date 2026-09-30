@@ -88,3 +88,24 @@ export const TooltipOnFocus: Story = {
     await expect(await body.findByRole('tooltip')).toHaveTextContent('Settings');
   },
 };
+
+/**
+ * Something waits behind the button — an update, say. A small dot, never a
+ * count or a colour alone: the words are read with the label and shown in its
+ * tooltip.
+ */
+export const WithDot: Story = {
+  render: () => (
+    <Stack direction="row" gap={3} align="center">
+      <IconButton label="Settings" size="sm" dot="Update available">
+        <Settings />
+      </IconButton>
+      <IconButton label="Settings" dot="Update available">
+        <Settings />
+      </IconButton>
+      <IconButton label="Settings" size="lg" dot="Update available">
+        <Settings />
+      </IconButton>
+    </Stack>
+  ),
+};
