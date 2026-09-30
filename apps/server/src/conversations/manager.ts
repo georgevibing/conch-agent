@@ -883,6 +883,14 @@ export class ConversationManager {
     return live;
   }
 
+  /** A turn is running, or waiting on someone's answer, somewhere (updates wait for it). */
+  busy(): boolean {
+    for (const live of this.#live.values())
+      if (live.record.status === 'running' || live.record.status === 'awaiting-permission')
+        return true;
+    return false;
+  }
+
   /**
    * Keep memory bounded: forget the least recently used conversations that
    * are idle (nothing running, nothing waiting on the user). They reload from

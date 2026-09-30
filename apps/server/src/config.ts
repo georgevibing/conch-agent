@@ -38,6 +38,16 @@ const Env = z.object({
    * except with the mock engine, whose test runs shouldn't see your skills.
    */
   CONCH_SKILL_SOURCES: z.enum(['auto', 'off']).optional(),
+  /**
+   * Conch's own git checkout, which updates move forward. For development and
+   * tests only: Conch finds the folder it runs from by itself.
+   */
+  CONCH_CHECKOUT: z.string().optional(),
+  /**
+   * `auto` looks for updates once a day; `off` only when asked ("Check now").
+   * Unset: `auto`, except with the mock engine.
+   */
+  CONCH_UPDATE_CHECKS: z.enum(['auto', 'off']).optional(),
   /** Built web app to serve at `/`. */
   CONCH_WEB_DIST: z.string().optional(),
   CONCH_OPEN: z
