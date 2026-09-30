@@ -21,6 +21,8 @@ const scenarios = {
   terminal: { port: 4390, env: { CONCH_MOCK_STATE: 'ready' } },
   recovery: { port: 4388, env: { CONCH_MOCK_STATE: 'ready' } },
   attachments: { port: 4389, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Runs under the supervisor (`pnpm start`), so a restore can start Conch again.
+  backups: { port: 4382, env: { CONCH_MOCK_STATE: 'ready', CONCH_SUPERVISE: '1' }, entry: 'start' },
   security: {
     port: 4397,
     env: { CONCH_MOCK_STATE: 'ready', CONCH_ALLOWED_HOSTS: 'studio-mac.tail1234.ts.net' },
@@ -33,6 +35,20 @@ const scenarios = {
 } as const;
 
 const root = join(import.meta.dirname, '..');
+
+/**
+ * `--project x` starts only x's gateway (and, for the browser journeys, the
+ * others they wait for), so one scenario runs without holding every port.
+ */
+const chosen = process.argv.flatMap((arg, i) =>
+  arg === '--project'
+    ? [process.argv[i + 1] ?? '']
+    : arg.startsWith('--project=')
+      ? [arg.slice('--project='.length)]
+      : [],
+);
+const needed = (name: string) =>
+  chosen.length === 0 || chosen.includes(name) || chosen.includes('browser');
 
 export default defineConfig({
   testDir: '.',
@@ -58,21 +74,23 @@ export default defineConfig({
     dependencies:
       name === 'browser' ? Object.keys(scenarios).filter((other) => other !== 'browser') : [],
   })),
-  webServer: Object.values(scenarios).map((s) => ({
-    // Node itself (not pnpm or tsx's CLI) so Playwright's shutdown signal reaches the
-    // server; Windows runs this through cmd.exe, which can't start `./node_modules/.bin/tsx`.
-    command: 'node --import tsx src/main.ts',
-    cwd: join(root, 'apps/server'),
-    url: `http://localhost:${s.port}/api/health`,
-    reuseExistingServer: false,
-    env: {
-      ...s.env,
-      CONCH_ENGINE: 'mock',
-      CONCH_MOCK_SPEED: '0.25',
-      CONCH_PORT: String(s.port),
-      CONCH_HOME: mkdtempSync(join(tmpdir(), 'conch-e2e-')),
-      CONCH_WEB_DIST: join(root, 'apps/web/dist'),
-      CONCH_LOG_LEVEL: 'warn',
-    },
-  })),
+  webServer: Object.entries(scenarios)
+    .filter(([name]) => needed(name))
+    .map(([, s]) => ({
+      // Node itself (not pnpm or tsx's CLI) so Playwright's shutdown signal reaches the
+      // server; Windows runs this through cmd.exe, which can't start `./node_modules/.bin/tsx`.
+      command: `node --import tsx src/${'entry' in s ? s.entry : 'main'}.ts`,
+      cwd: join(root, 'apps/server'),
+      url: `http://localhost:${s.port}/api/health`,
+      reuseExistingServer: false,
+      env: {
+        ...s.env,
+        CONCH_ENGINE: 'mock',
+        CONCH_MOCK_SPEED: '0.25',
+        CONCH_PORT: String(s.port),
+        CONCH_HOME: mkdtempSync(join(tmpdir(), 'conch-e2e-')),
+        CONCH_WEB_DIST: join(root, 'apps/web/dist'),
+        CONCH_LOG_LEVEL: 'warn',
+      },
+    })),
 });

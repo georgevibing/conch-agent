@@ -105,10 +105,7 @@ export function BackupContents({
           key: 'secrets',
           icon: <KeyRound />,
           text: 'Your keys and sign-ins',
-          note:
-            contents.secrets === 'passphrase'
-              ? 'with your passphrase'
-              : 'as they were here',
+          note: contents.secrets === 'passphrase' ? 'with your passphrase' : 'as they were here',
         }
       : {
           key: 'secrets',
