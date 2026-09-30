@@ -17,6 +17,7 @@ import { CodexEngine } from './engines/codex/engine';
 import { MockEngine } from './engines/mock/engine';
 import type { Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
+import { registerCoreChecks } from './doctor/checks';
 import { Doctor } from './doctor/service';
 import { Healed } from './lib/healed';
 import type { Heal } from './lib/recover';
@@ -255,6 +256,8 @@ export class Services {
     });
     this.conversations.events.on((event) => this.search.onEvent(event));
     this.search.open();
+    // Repair everything looks at every part of Conch (see `doctor/checks.ts`).
+    registerCoreChecks(this);
   }
 
   /** The default provider: your choice, or `CONCH_ENGINE` when it's set. */

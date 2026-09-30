@@ -178,6 +178,11 @@ export class RoutineService {
 
   // ── Scheduling ─────────────────────────────────────────────────────────
 
+  /** Routines held back because their provider wasn't ready (for Repair everything). */
+  held(): { routineId: string; engine: EngineId }[] {
+    return [...this.#waiting].map(([routineId, held]) => ({ routineId, engine: held.engine }));
+  }
+
   /** Runs held for a provider that's ready now go, once each. */
   async #resumeWaiting() {
     for (const [routineId, held] of this.#waiting) {
