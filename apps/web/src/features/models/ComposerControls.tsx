@@ -12,9 +12,12 @@ import { modelKey, type useTurnOptions } from './useTurnOptions';
  */
 export function ComposerControls({
   turn,
+  name,
   disabled,
 }: {
   turn: ReturnType<typeof useTurnOptions>;
+  /** The assistant's name, for the mode picker's warnings. */
+  name: string;
   disabled?: boolean;
 }) {
   const picker = useUi((s) => s.picker);
@@ -58,6 +61,7 @@ export function ComposerControls({
         open={picker === 'mode'}
         onOpenChange={(open) => setPicker(open ? 'mode' : null)}
         disabled={disabled}
+        name={name}
       />
     </>
   );

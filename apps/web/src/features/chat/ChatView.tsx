@@ -24,6 +24,7 @@ import { NEW, useLiveStore } from '../../live/store';
 import { useSlashCommands } from '../commands/useSlashCommands';
 import { RunBanner } from '../routines/RunBanner';
 import { ComposerControls } from '../models/ComposerControls';
+import { modeInfo } from '../models/catalog';
 import { ChatFind } from '../search/ChatFind';
 import { useTurnOptions } from '../models/useTurnOptions';
 import { UsageComposerNotice } from '../usage/UsageComposerNotice';
@@ -223,7 +224,9 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
         label={`Message ${name}`}
         toolbar={
           <>
-            {(engine?.state === 'ready' || chosenReady) && <ComposerControls turn={turn} />}
+            {(engine?.state === 'ready' || chosenReady) && (
+              <ComposerControls turn={turn} name={name} />
+            )}
             <Tooltip content={app?.workspace ?? ''}>
               <ComposerChip
                 icon={<Folder />}
@@ -237,7 +240,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
         }
       />
       <Text size="2xs" tone="subtle" align="center" className={styles.hint}>
-        {name} can make mistakes and always asks before changing anything on your computer.
+        {name} can make mistakes, and {modeInfo(turn.options.permissionMode).hint}.
       </Text>
     </div>
   );

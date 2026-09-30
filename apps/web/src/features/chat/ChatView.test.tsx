@@ -2,10 +2,15 @@ import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { useUi } from '../../app/ui';
 import { appState, FakeSocket, mockFetch, renderApp } from '../../test/harness';
 import { ChatView } from './ChatView';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  // The composer's pickers and a new chat's choices live in a shared store.
+  useUi.setState({ picker: null, draftOptions: {} });
+});
 
 describe('ChatView', () => {
   it('greets, sends a new conversation and renders the streamed reply', async () => {
@@ -101,6 +106,42 @@ describe('ChatView', () => {
       }),
     );
     await waitFor(() => expect(box).toHaveValue('Are you there?'));
+  });
+
+  it('says under the box what the mode in effect does, in the same words for every provider', async () => {
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/models': () => ({
+        default: 'codex-cli',
+        providers: [
+          {
+            engine: 'codex-cli',
+            label: 'Codex',
+            models: [],
+            commands: [],
+            // It can't ask first, so "Ask first" isn't on offer: Plan only is in effect.
+            permissionModes: ['plan', 'acceptEdits', 'bypassPermissions'],
+          },
+        ],
+      }),
+    });
+    renderApp(<ChatView />);
+    expect(await screen.findByRole('button', { name: 'Mode: Plan only' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Conch can make mistakes, and only reads and plans: it won’t change anything.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/always asks/)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Mode: Plan only' }));
+    await userEvent.click(await screen.findByRole('radio', { name: /Edit freely/ }));
+    expect(
+      await screen.findByText(
+        'Conch can make mistakes, and changes files in this folder without asking.',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('picks a model from any connected provider, found by name, for the next chat', async () => {

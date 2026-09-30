@@ -86,7 +86,7 @@ export function sandboxFor(mode: PermissionMode): Sandbox {
 export function sandboxNotice(sandbox: Sandbox): string {
   switch (sandbox) {
     case 'read-only':
-      return 'Codex works inside its own sandbox and can’t ask you before each step, so in this mode it can only read — switch to Accept edits to let it change files.';
+      return 'Codex works inside its own sandbox and can’t ask you before each step, so in this mode it can only read — switch to Edit freely to let it change files.';
     case 'workspace-write':
       return 'Codex works inside its own sandbox and can’t ask you before each step: it can read and change files in this folder, but not the rest of your computer.';
     case 'danger-full-access':
