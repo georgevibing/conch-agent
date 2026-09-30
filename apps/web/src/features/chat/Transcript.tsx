@@ -22,10 +22,11 @@ import { IntegrationIssue } from '../integrations/ChatBits';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
 import { RoutineInstruction } from '../routines/RunBanner';
 import styles from './Transcript.module.css';
+import type { PendingMessage } from '../../live/store';
 
 export interface TranscriptProps {
   view: ConversationView;
-  pending: { clientMessageId: string; text: string; at: number }[];
+  pending: PendingMessage[];
   name: string;
   onRespond: (permissionId: string, decision: 'allow' | 'allow-always' | 'deny') => void;
   onRetry: () => void;
@@ -113,6 +114,7 @@ export function Transcript({
       text: p.text,
       at: p.at,
       pending: true,
+      ...(p.attachments && { attachments: p.attachments }),
     })),
   ];
   // The model's hidden reasoning arrives as empty items that render nothing, so they

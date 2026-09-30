@@ -45,6 +45,9 @@ interface UiState {
   /** Words to put in the open chat's composer (e.g. `/weekly-review ` from ⌘K). */
   composerText: string | null;
   setComposerText(text: string | null): void;
+  /** Bumped to open the chat's file picker (⌘K "Attach files"). */
+  attachRequest: number;
+  requestAttach(): void;
   setPicker(picker: Picker): void;
   setDraftOptions(options: TurnOptions): void;
   toggleSidebar(): void;
@@ -113,6 +116,8 @@ export const useUi = create<UiState>((set) => ({
   draftOptions: {},
   composerText: null,
   setComposerText: (composerText) => set({ composerText }),
+  attachRequest: 0,
+  requestAttach: () => set((state) => ({ attachRequest: state.attachRequest + 1 })),
   setPicker: (picker) => set({ picker }),
   setDraftOptions: (draftOptions) => set({ draftOptions }),
   toggleSidebar: () =>

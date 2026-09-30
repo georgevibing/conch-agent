@@ -1,4 +1,4 @@
-import type { ConversationSummary, HealLog, TurnOptions } from '@conch/protocol';
+import type { Attachment, ConversationSummary, HealLog, TurnOptions } from '@conch/protocol';
 import { toast } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
@@ -14,7 +14,12 @@ import { NEW, useLiveStore } from './store';
 
 interface LiveApi {
   /** Send a message; returns the clientMessageId. Omit conversationId for a new chat. */
-  send(text: string, conversationId?: string, options?: TurnOptions): string;
+  send(
+    text: string,
+    conversationId?: string,
+    options?: TurnOptions,
+    attachments?: Attachment[],
+  ): string;
   /** Change a conversation's model/effort/mode. */
   configure(conversationId: string, options: TurnOptions): void;
   interrupt(conversationId: string): void;
@@ -156,16 +161,20 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
 
   const value = useMemo<LiveApi>(
     () => ({
-      send(text, conversationId, options) {
+      send(text, conversationId, options, attachments) {
         const clientMessageId = `u_${crypto.randomUUID().slice(0, 12)}`;
-        useLiveStore
-          .getState()
-          .addPending(conversationId ?? NEW, { clientMessageId, text, at: Date.now() });
+        useLiveStore.getState().addPending(conversationId ?? NEW, {
+          clientMessageId,
+          text,
+          at: Date.now(),
+          ...(attachments?.length && { attachments }),
+        });
         socketRef.current?.send({
           type: 'conversation.send',
           conversationId,
           clientMessageId,
           text,
+          ...(attachments?.length && { attachments: attachments.map((a) => a.id) }),
           ...(options && { options }),
         });
         return clientMessageId;

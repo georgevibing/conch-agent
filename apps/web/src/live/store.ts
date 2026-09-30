@@ -1,4 +1,4 @@
-import type { ConversationEvent, LoginState } from '@conch/protocol';
+import type { Attachment, ConversationEvent, LoginState } from '@conch/protocol';
 import { create } from 'zustand';
 
 import { emptyView, reduce, type ConversationView } from './reducer';
@@ -9,6 +9,7 @@ export interface PendingMessage {
   clientMessageId: string;
   text: string;
   at: number;
+  attachments?: Attachment[];
 }
 
 /** Key for a conversation that doesn't exist yet (the first message of a new chat). */
@@ -25,7 +26,7 @@ interface LiveState {
   /** Set when a send failed because the engine isn't ready. */
   engineIssue?: string;
   /** Text of a message the server rejected, so the composer can give it back. */
-  returned?: { key: string; text: string };
+  returned?: { key: string; text: string; attachments?: Attachment[] };
 
   setConnection(state: ConnectionState): void;
   apply(event: ConversationEvent): void;
@@ -82,7 +83,9 @@ export const useLiveStore = create<LiveState>((set) => ({
           ...state.pending,
           [key]: (state.pending[key] ?? []).filter((p) => p.clientMessageId !== clientMessageId),
         },
-        returned: message ? { key, text: message.text } : state.returned,
+        returned: message
+          ? { key, text: message.text, attachments: message.attachments }
+          : state.returned,
       };
     }),
   clearReturned: () => set({ returned: undefined }),

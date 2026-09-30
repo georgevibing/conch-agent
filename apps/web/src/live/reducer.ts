@@ -1,4 +1,5 @@
 import type {
+  Attachment,
   BrowserHandoff,
   BrowserPermission,
   BrowserStep,
@@ -13,7 +14,15 @@ import type {
 
 /** Everything the transcript renders, folded from the append-only event log. */
 export type TranscriptItem =
-  | { kind: 'user'; id: string; text: string; at: number; pending?: boolean }
+  | {
+      kind: 'user';
+      id: string;
+      text: string;
+      at: number;
+      pending?: boolean;
+      /** Files and long pastes sent with it. */
+      attachments?: Attachment[];
+    }
   | {
       kind: 'assistant';
       /** Unique per visual segment: `messageId` or `messageId#n`. */
@@ -161,7 +170,13 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         turnStartedAt: event.at,
         items: [
           ...withoutPending,
-          { kind: 'user', id: event.messageId, text: event.text, at: event.at },
+          {
+            kind: 'user',
+            id: event.messageId,
+            text: event.text,
+            at: event.at,
+            ...(event.attachments?.length && { attachments: event.attachments }),
+          },
         ],
       };
     }
@@ -402,9 +417,16 @@ export function reduceAll(events: ConversationEvent[], view = emptyView): Conver
 
 /** The text of the most recent user message (for "Try again"). */
 export function lastUserText(view: ConversationView): string | undefined {
+  return lastUserMessage(view)?.text;
+}
+
+/** The last message you sent, with what was attached to it (for Retry). */
+export function lastUserMessage(
+  view: ConversationView,
+): { text: string; attachments: Attachment[] } | undefined {
   for (let i = view.items.length - 1; i >= 0; i--) {
     const item = view.items[i];
-    if (item?.kind === 'user') return item.text;
+    if (item?.kind === 'user') return { text: item.text, attachments: item.attachments ?? [] };
   }
   return undefined;
 }

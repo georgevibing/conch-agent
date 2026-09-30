@@ -1,16 +1,25 @@
-import type { EngineId, EngineStatus } from '@conch/protocol';
 import {
+  ATTACHMENT_LIMITS,
+  shouldFoldPaste,
+  type Attachment,
+  type EngineId,
+  type EngineStatus,
+} from '@conch/protocol';
+import {
+  AttachmentCard,
   Button,
   Callout,
   CommandMenu,
   Composer,
   ComposerChip,
+  DropOverlay,
   Heading,
   Pearl,
   Stack,
   Text,
   Tooltip,
   toast,
+  useFileDrop,
 } from '@conch/nacre';
 import { ArrowRight, Folder } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -21,7 +30,7 @@ import { useAppState, useConversations } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { greeting } from '../../lib/time';
 import { useLive } from '../../live/LiveProvider';
-import { emptyView, lastUserText, type ConversationView } from '../../live/reducer';
+import { emptyView, lastUserMessage, type ConversationView } from '../../live/reducer';
 import { NEW, useLiveStore } from '../../live/store';
 import { useSlashCommands } from '../commands/useSlashCommands';
 import { RunBanner } from '../routines/RunBanner';
@@ -34,8 +43,13 @@ import { providerKeys, putProvider, useProviders } from '../providers/queries';
 import { useNeed } from '../setup/useNeed';
 import { UsageComposerNotice } from '../usage/UsageComposerNotice';
 import styles from './ChatView.module.css';
+import { attachmentUrl } from './uploads';
+
+const attachmentSrc = (attachment: Attachment) => attachmentUrl(attachment.id);
+import { AttachmentViewer, type Viewable } from './AttachmentViewer';
 import { Transcript } from './Transcript';
 import type { TurnRecovery } from './TranscriptItems';
+import { type Draft, useDraftAttachments } from './useDraftAttachments';
 import { useIntegrations } from '../integrations/queries';
 import { BrowserDock } from '../browser/BrowserDock';
 
@@ -107,13 +121,17 @@ function EngineIssue({ status, issue }: { status?: EngineStatus; issue?: string 
 function useTurnRecovery(
   view: ConversationView,
   turn: ReturnType<typeof useTurnOptions>,
-  send: (text: string) => void,
+  send: (text: string, attached: Attachment[]) => void,
 ): TurnRecovery | undefined {
   const openSettings = useUi((s) => s.openSettings);
   const client = useQueryClient();
   const { data: providers } = useProviders();
   const onePassword = useNeed('1password-app');
-  const [waitingFor, setWaitingFor] = useState<{ engine: EngineId; text: string }>();
+  const [waitingFor, setWaitingFor] = useState<{
+    engine: EngineId;
+    text: string;
+    attachments: Attachment[];
+  }>();
   const sendRef = useRef(send);
   useEffect(() => {
     sendRef.current = send;
@@ -131,7 +149,7 @@ function useTurnRecovery(
       done = true;
       setWaitingFor(undefined);
       toast.success(`Signed in to ${provider.name} — sending your message again.`);
-      sendRef.current(waitingFor.text);
+      sendRef.current(waitingFor.text, waitingFor.attachments);
     };
     const timer = setInterval(() => void look(), 3000);
     const onFocus = () => void look();
@@ -153,28 +171,34 @@ function useTurnRecovery(
   const other = turn.catalog?.providers.find(
     (p) => p.engine !== failed && p.models.length > 0 && !p.message,
   );
-  const text = lastUserText(view);
+  // The message goes again with what was attached to it, not the new draft's cards.
+  const lastMessage = lastUserMessage(view);
+  const text =
+    lastMessage && (lastMessage.text || lastMessage.attachments.length)
+      ? lastMessage.text
+      : undefined;
+  const attached = lastMessage?.attachments ?? [];
   return {
     label: name(failed),
     waiting: Boolean(waitingFor),
     signIn:
-      failed && text
+      failed && text !== undefined
         ? () => {
-            setWaitingFor({ engine: failed, text });
+            setWaitingFor({ engine: failed, text, attachments: attached });
             // Straight to its page, where the sign-in button is — and fresh, not cached.
             void client.invalidateQueries({ queryKey: providerKeys.list });
             openSettings('providers', failed);
           }
         : undefined,
     alternative:
-      other && text
+      other && text !== undefined
         ? {
             label: other.label,
             use: () => {
               const first = other.models[0];
               if (first) turn.choose(modelKey(other.engine, first.id));
               else turn.set({ engine: other.engine });
-              send(text);
+              send(text, attached);
             },
           }
         : undefined,
@@ -202,6 +226,8 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   const [sentId, setSentId] = useState<string>();
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const columnRef = useRef<HTMLDivElement>(null);
+  const attachments = useDraftAttachments();
+  const [previewing, setPreviewing] = useState<number>();
 
   // Words handed over from elsewhere (⌘K's "use this skill") land in the composer.
   useEffect(() => {
@@ -226,10 +252,12 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
     () =>
       useLiveStore.subscribe((state) => {
         if (state.returned?.key !== key) return;
-        const text = state.returned.text;
+        const { text, attachments: returned } = state.returned;
         state.clearReturned();
         setDraft((d) => d || text);
+        if (returned?.length) attachments.restore(returned);
       }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `restore` is stable
     [key],
   );
 
@@ -261,20 +289,97 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
     useConversations().data?.find((c) => c.id === conversationId)?.origin,
   );
 
-  const send = (text: string) => {
+  /** Send words, and whatever is attached (the draft's cards unless given). */
+  const send = (text: string, attached: Attachment[] = attachments.ready) => {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed && !attached.length) return;
     setEngineIssue(undefined);
-    const id = live.send(trimmed, conversationId, turn.takeDraft());
+    const id = live.send(trimmed, conversationId, turn.takeDraft(), attached);
     if (!conversationId) setSentId(id);
     setDraft('');
+    if (attached === attachments.ready) attachments.clear();
   };
+
+  // ⌘K "Attach files" opens the picker here (still inside the keypress, so the browser allows it).
+  const picker = useRef<HTMLInputElement>(null);
+  useEffect(
+    () =>
+      useUi.subscribe((state, before) => {
+        if (state.attachRequest !== before.attachRequest) picker.current?.click();
+      }),
+    [],
+  );
+
+  const drop = useFileDrop({
+    onDrop: ({ files, folders }) => void attachments.addFiles(files, folders),
+  });
 
   const slash = useSlashCommands({ draft, setDraft, send, turn });
   const recover = useTurnRecovery(view, turn, send);
   const chosenReady = Boolean(
     turn.catalog?.providers.some((p) => p.engine === turn.options.engine),
   );
+
+  // Say so on a card when the chosen provider can't use it, before it's sent.
+  const provider = turn.catalog?.providers.find((p) => p.engine === turn.options.engine);
+  const can = provider?.attachments;
+  const sees =
+    provider?.models.find((m) => m.id === turn.options.model)?.images ?? can?.images ?? false;
+  const noteFor = (d: Draft): string | undefined => {
+    if (!provider) return undefined;
+    if (d.kind === 'image' && !sees && !can?.files)
+      return `${provider.label} can’t see pictures with this model. It will only get the name.`;
+    if (d.kind === 'file' && !can?.files)
+      return `${provider.label} can’t open this kind of file. It will only get the name.`;
+    return undefined;
+  };
+
+  const viewables: Viewable[] = attachments.drafts.map((d) => ({
+    info: d,
+    id: d.attachment?.id,
+    text: d.text,
+    src: d.src,
+    ...(d.pasted && {
+      onTextChange: (text: string) => attachments.editPaste(d.key, text),
+      onInsert: () => {
+        const text = d.text ?? '';
+        attachments.remove(d.key);
+        setPreviewing(undefined);
+        setDraft((current) => (current ? `${current}\n\n${text}` : text));
+        composerRef.current?.focus();
+      },
+    }),
+  }));
+
+  const cards = attachments.drafts.length
+    ? attachments.drafts.map((d, i) => (
+        <AttachmentCard
+          key={d.key}
+          name={d.name}
+          kind={d.kind}
+          mimeType={d.mimeType}
+          size={d.size}
+          lines={d.lines}
+          pasted={d.pasted}
+          width={d.width}
+          height={d.height}
+          excerpt={d.excerpt}
+          src={
+            d.src ?? (d.kind === 'image' && d.attachment ? attachmentSrc(d.attachment) : undefined)
+          }
+          status={d.status}
+          progress={d.progress}
+          error={d.error}
+          note={noteFor(d)}
+          onOpen={() => setPreviewing(i)}
+          onRemove={() => {
+            attachments.remove(d.key);
+            if (attachments.drafts.length <= 1) composerRef.current?.focus();
+          }}
+          onRetry={() => attachments.retry(d.key)}
+        />
+      ))
+    : undefined;
 
   const workspaceName = useMemo(
     () => app?.workspace.split(/[\\/]/).filter(Boolean).at(-1) ?? 'workspace',
@@ -301,8 +406,20 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
         value={draft}
         onValueChange={slash.onDraftChange}
         onSubmit={(text) => {
-          if (!slash.submit(text)) send(text);
+          if (!text || !slash.submit(text)) send(text);
         }}
+        attachments={cards}
+        onFiles={(files) => void attachments.addFiles(files)}
+        onLongPaste={attachments.addPaste}
+        foldPaste={shouldFoldPaste}
+        canSubmitEmpty={attachments.ready.length > 0}
+        sendBlocked={
+          attachments.uploading
+            ? 'Waiting for attachments to upload…'
+            : attachments.failed
+              ? 'Remove or retry the attachment that didn’t upload'
+              : undefined
+        }
         onTextareaKeyDown={(e) => {
           slash.menu.onKeyDown(e);
         }}
@@ -332,12 +449,39 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
       <Text size="2xs" tone="subtle" align="center" className={styles.hint}>
         {name} can make mistakes, and {modeInfo(turn.options.permissionMode).hint}.
       </Text>
+      <input
+        ref={picker}
+        type="file"
+        multiple
+        hidden
+        tabIndex={-1}
+        aria-hidden
+        onChange={(event) => {
+          const files = Array.from(event.target.files ?? []);
+          event.target.value = '';
+          if (files.length) void attachments.addFiles(files);
+          composerRef.current?.focus();
+        }}
+      />
+      <AttachmentViewer
+        items={viewables}
+        index={previewing !== undefined && previewing < viewables.length ? previewing : undefined}
+        onIndexChange={setPreviewing}
+      />
     </div>
+  );
+
+  const dropOverlay = (
+    <DropOverlay
+      active={drop.dragging}
+      hint={`Pictures, PDFs, text and more — up to ${ATTACHMENT_LIMITS.maxBytes / 1024 / 1024} MB each`}
+    />
   );
 
   if (isEmpty && !conversationId) {
     return (
-      <div className={styles.empty}>
+      <div className={styles.empty} {...drop.props}>
+        {dropOverlay}
         <Stack gap={4} align="center" className={styles.hello}>
           <Pearl size="lg" state={running ? 'thinking' : 'idle'} label={null} />
           <Heading level={1} display size="4xl" align="center">
@@ -356,7 +500,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
               role="listitem"
               variant="surface"
               size="sm"
-              onClick={() => send(s.prompt)}
+              onClick={() => send(s.prompt, [])}
             >
               {s.label}
             </Button>
@@ -368,7 +512,8 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   }
 
   const chat = (
-    <div className={styles.chat}>
+    <div className={styles.chat} {...drop.props}>
+      {dropOverlay}
       <RunBanner conversationId={conversationId} />
       <Transcript
         view={view}
@@ -390,8 +535,8 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
           conversationId && live.respond(conversationId, permissionId, decision)
         }
         onRetry={() => {
-          const text = lastUserText(view);
-          if (text) send(text);
+          const last = lastUserMessage(view);
+          if (last) send(last.text, last.attachments);
         }}
         recover={recover}
       />

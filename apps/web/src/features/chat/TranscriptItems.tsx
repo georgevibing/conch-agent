@@ -25,6 +25,7 @@ import { api } from '../../api/client';
 import { keys } from '../../api/queries';
 import type { TranscriptItem } from '../../live/reducer';
 import { useAutoFocus } from '../../lib/useAutoFocus';
+import { SentAttachments } from './AttachmentViewer';
 import { StreamingMarkdown } from './Markdown';
 import { formatInput, toolDiff, toolSummary } from './tools';
 import styles from './Transcript.module.css';
@@ -33,7 +34,8 @@ import { useToolLabel } from '../integrations/ChatBits';
 type Of<K extends TranscriptItem['kind']> = Extract<TranscriptItem, { kind: K }>;
 
 export function UserMessage({ item }: { item: Of<'user'> }) {
-  return (
+  const attachments = item.attachments ?? [];
+  const message = (
     <Message
       from="user"
       data-anchor={item.id}
@@ -43,6 +45,13 @@ export function UserMessage({ item }: { item: Of<'user'> }) {
     >
       <span className={styles.userText}>{item.text}</span>
     </Message>
+  );
+  if (!attachments.length) return message;
+  return (
+    <div className={styles.userWithAttachments} data-pending={item.pending || undefined}>
+      <SentAttachments attachments={attachments} />
+      {item.text ? message : <span data-anchor={item.id} />}
+    </div>
   );
 }
 

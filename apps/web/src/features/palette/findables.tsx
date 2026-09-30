@@ -8,6 +8,7 @@ import {
   Gauge,
   Globe,
   Palette as PaletteIcon,
+  Paperclip,
   SquareTerminal,
   Plus,
   Repeat,
@@ -257,6 +258,13 @@ export function useFindables(query: string, conversationId: string | undefined):
     icon: ReactNode;
     run: () => void;
   }[] = [
+    {
+      id: 'attach',
+      label: 'Attach files',
+      keywords: 'upload file picture image photo pdf document add paperclip',
+      icon: <Paperclip />,
+      run: () => useUi.getState().requestAttach(),
+    },
     {
       id: 'skills',
       label: 'Skills',

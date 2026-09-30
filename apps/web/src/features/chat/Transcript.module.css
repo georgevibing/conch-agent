@@ -27,6 +27,17 @@
     opacity: 0.72;
   }
 
+  /* What you attached sits above your words, lined up at the end like them. */
+  .userWithAttachments {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+  }
+
+  .userWithAttachments[data-pending] > [role='list'] {
+    opacity: 0.72;
+  }
+
   .userText {
     white-space: pre-wrap;
     overflow-wrap: anywhere;

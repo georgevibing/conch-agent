@@ -346,4 +346,19 @@ describe('Palette search', () => {
     expect(screen.queryByRole('option', { name: /Show the terminal/ })).toBeNull();
     expect(screen.queryByRole('option', { name: /New terminal/ })).toBeNull();
   });
+
+  it('attaches files by the words people use for it', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'upload pdf');
+    const before = useUi.getState().attachRequest;
+    await user.click(await screen.findByRole('option', { name: /Attach files/ }));
+    expect(useUi.getState().attachRequest).toBe(before + 1);
+  });
 });
