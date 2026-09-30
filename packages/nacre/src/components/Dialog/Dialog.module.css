@@ -39,7 +39,9 @@
     display: flex;
     flex-direction: column;
     inline-size: min(var(--dialog-w), calc(100vw - 2rem));
-    max-block-size: calc(100dvh - 3rem);
+    /* Centred a little high (46%), so the room is 2 × 46%: a tall dialog keeps 1.5rem
+       above it instead of running off the top of a short screen. */
+    max-block-size: calc(92dvh - 3rem);
     overflow: hidden;
     border-radius: var(--nc-radius-xl);
     corner-shape: var(--nc-corner-shape);
