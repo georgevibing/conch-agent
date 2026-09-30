@@ -23,6 +23,7 @@ import { EngineStatus, LoginState } from './engine';
 import { HealNote } from './healed';
 import { Integration } from './integrations';
 import { Routine, RoutineRun } from './routines';
+import { UpdatesStatus } from './updates';
 import { UsageSnapshot } from './usage';
 
 export * from './access';
@@ -39,6 +40,7 @@ export * from './search';
 export * from './setup';
 export * from './skills';
 export * from './terminal';
+export * from './updates';
 export * from './usage';
 
 export const PROTOCOL_VERSION = 7;
@@ -433,6 +435,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('browser.status'), status: BrowserStatus }),
   /** Repair everything: the report as it fills in. */
   z.object({ type: z.literal('doctor.report'), report: DoctorReport }),
+  /** Updates for Conch and its programs: a check finished, an update moved along. */
+  z.object({ type: z.literal('updates.changed'), status: UpdatesStatus }),
   /** Conch fixed something on its own: a quiet note, never an alert. */
   z.object({ type: z.literal('healed'), note: HealNote }),
   z.object({ type: z.literal('pong') }),
