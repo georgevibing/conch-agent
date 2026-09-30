@@ -26,7 +26,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router';
 
-import { useAppState, useConversations } from '../../api/queries';
+import { useAppState, useConversations, useUpdateSettings } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { greeting } from '../../lib/time';
 import { useLive } from '../../live/LiveProvider';
@@ -127,6 +127,8 @@ function useTurnRecovery(
   const openSettings = useUi((s) => s.openSettings);
   const client = useQueryClient();
   const { data: providers } = useProviders();
+  const { data: app } = useAppState();
+  const updateSettings = useUpdateSettings();
   const onePassword = useNeed('1password-app');
   const [waitingFor, setWaitingFor] = useState<{
     engine: EngineId;
@@ -200,6 +202,24 @@ function useTurnRecovery(
               if (first) turn.choose(modelKey(other.engine, first.id));
               else turn.set({ engine: other.engine });
               send(text, attached);
+              // Once is a choice; the second time it should just happen (ADR 0018).
+              if (last.problem === 'limit' && !app?.preferences.limitFallback)
+                toast(`Answering with ${other.label}`, {
+                  description: `Next time ${name(failed)} reaches a limit, carry on with ${other.label} by itself?`,
+                  action: {
+                    label: 'Always',
+                    onClick: () =>
+                      updateSettings.mutate(
+                        { preferences: { limitFallback: other.engine } },
+                        {
+                          onSuccess: () =>
+                            toast.success(`${other.label} carries on at a limit`, {
+                              description: 'Change it in Settings → Models & modes.',
+                            }),
+                        },
+                      ),
+                  },
+                });
             },
           }
         : undefined,

@@ -1,5 +1,6 @@
 import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Toaster } from '@conch/nacre';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useUi } from '../../app/ui';
@@ -204,6 +205,82 @@ describe('ChatView', () => {
         expect.objectContaining({
           type: 'conversation.send',
           options: { engine: 'openrouter', model: 'qwen/qwen3-coder' },
+        }),
+      ),
+    );
+  });
+
+  it('at a limit, answering with another provider once offers to do it by itself next time', async () => {
+    const model = (id: string, label: string) => ({
+      id,
+      label,
+      description: '',
+      efforts: [],
+      supportsFastMode: false,
+      supportsAutoMode: false,
+    });
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/models': () => ({
+        default: 'claude-code',
+        providers: [
+          {
+            engine: 'claude-code',
+            label: 'Claude Code',
+            models: [model('default', 'Default (recommended)')],
+            commands: [],
+            permissionModes: ['default'],
+          },
+          {
+            engine: 'openrouter',
+            label: 'OpenRouter',
+            models: [model('qwen/qwen3-coder', 'Qwen: Qwen3 Coder')],
+            commands: [],
+            permissionModes: ['default'],
+          },
+        ],
+      }),
+      'PATCH /api/settings': () => appState(),
+    });
+    renderApp(
+      <>
+        <ChatView conversationId="c-limit" />
+        <Toaster />
+      </>,
+      { route: '/c/c-limit' },
+    );
+    await screen.findByRole('textbox', { name: 'Message Conch' });
+    act(() => {
+      for (const [seq, event] of [
+        { type: 'user.message', messageId: 'u1', text: 'Keep going' },
+        {
+          type: 'turn.completed',
+          outcome: 'error',
+          error: 'You’ve reached your limit.',
+          problem: 'limit',
+          engine: 'claude-code',
+        },
+        { type: 'status', status: 'error' },
+      ].entries())
+        FakeSocket.last?.push({
+          type: 'conversation.event',
+          event: { conversationId: 'c-limit', seq, at: 1000 + seq, ...event },
+        } as never);
+    });
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Answer with OpenRouter for now' }),
+    );
+    expect(
+      await screen.findByText(/Next time Claude Code reaches a limit, carry on with OpenRouter/),
+    ).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: 'Always' }));
+    await waitFor(() =>
+      expect(calls).toContainEqual(
+        expect.objectContaining({
+          method: 'PATCH',
+          path: '/api/settings',
+          body: { preferences: { limitFallback: 'openrouter' } },
         }),
       ),
     );
