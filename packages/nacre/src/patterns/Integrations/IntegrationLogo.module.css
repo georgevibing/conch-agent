@@ -31,6 +31,20 @@
       var(--nc-glaze-edge);
   }
 
+  /* A full-colour mark (Slack) keeps its colours, on a porcelain tile. */
+  .logo[data-art] {
+    --il-bg: oklch(0.995 0.002 90);
+    box-shadow:
+      inset 0 0 0 1px light-dark(oklch(0 0 0 / 0.08), oklch(1 0 0 / 0.14)),
+      inset 0 1px 0 0 oklch(1 0 0 / 0.6),
+      0 1px 2px oklch(0 0 0 / 0.12);
+  }
+
+  .art {
+    inline-size: 58%;
+    block-size: 58%;
+  }
+
   .logo[data-size='xs'] {
     --il-size: 1.25rem;
     --il-radius: var(--nc-radius-xs);

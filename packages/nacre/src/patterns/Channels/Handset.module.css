@@ -1,0 +1,261 @@
+@layer nacre.components {
+  .handset {
+    --nc-rim-rest: 0.35;
+    --nc-rim-hover: 0.7;
+    --nc-sheen-hover: 0.08;
+    --hs-brand: var(--nc-accent-9);
+    /* The chat's own tint: a whisper of the app's colour over porcelain. */
+    --hs-screen: color-mix(in oklab, var(--hs-brand) 7%, var(--nc-surface-sunken));
+    --hs-you: color-mix(in oklab, var(--hs-brand) 24%, var(--nc-surface-hi));
+
+    position: relative;
+    inline-size: min(100%, 18.5rem);
+    margin: 0;
+    padding: 0.625rem;
+    border-radius: 2.25rem;
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(165deg, var(--nc-surface-hi), var(--nc-surface) 60%);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-3);
+  }
+
+  .screen {
+    display: flex;
+    flex-direction: column;
+    min-block-size: 25rem;
+    overflow: hidden;
+    border-radius: 1.75rem;
+    corner-shape: var(--nc-corner-shape);
+    background: var(--hs-screen);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-4) var(--nc-space-3) var(--nc-space-2-5);
+    background: var(--nc-surface);
+    box-shadow: 0 1px 0 var(--nc-border-subtle);
+  }
+
+  .avatar {
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    border-radius: var(--nc-radius-full);
+    object-fit: cover;
+  }
+
+  .logo {
+    border-radius: var(--nc-radius-full);
+  }
+
+  .who {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    line-height: 1.2;
+  }
+
+  .title {
+    overflow: hidden;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .subtitle {
+    font-size: var(--nc-text-2xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .messages {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: var(--nc-space-2);
+    margin: 0;
+    padding: var(--nc-space-3);
+    list-style: none;
+  }
+
+  .message {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    max-inline-size: 88%;
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+    animation-delay: calc(var(--hs-i, 0) * 220ms + 120ms);
+  }
+
+  .message[data-from='you'] {
+    align-self: flex-end;
+    align-items: flex-end;
+  }
+
+  .bubble {
+    padding: var(--nc-space-2) var(--nc-space-3);
+    border-radius: 1rem 1rem 1rem 0.3rem;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text);
+    background: var(--nc-surface-hi);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      0 1px 1px oklch(0 0 0 / 0.04);
+    overflow-wrap: anywhere;
+  }
+
+  .message[data-from='you'] .bubble {
+    border-radius: 1rem 1rem 0.3rem 1rem;
+    background: var(--hs-you);
+  }
+
+  .bubble p {
+    margin: 0;
+  }
+
+  .bubble p + p {
+    margin-block-start: var(--nc-space-1-5);
+  }
+
+  .bubble code {
+    font-family: var(--nc-font-mono);
+    font-size: 0.95em;
+  }
+
+  .buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1);
+    inline-size: 100%;
+  }
+
+  .button {
+    flex: 1;
+    padding: 0.3rem var(--nc-space-2);
+    border-radius: var(--nc-radius-md);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-medium);
+    text-align: center;
+    white-space: nowrap;
+    color: var(--nc-text);
+    background: var(--nc-surface-hi);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .button[data-tone='primary'] {
+    color: var(--nc-text-inverse);
+    background: color-mix(in oklch, var(--hs-brand) 88%, var(--nc-gray-12));
+    box-shadow: none;
+  }
+
+  .button[data-tone='danger'] {
+    color: light-dark(oklch(0.5 0.18 var(--nc-danger-h)), oklch(0.78 0.14 var(--nc-danger-h)));
+  }
+
+  /* The key BotFather sends, lit up: the thing to copy. */
+  .key {
+    padding: 0.05em 0.25em;
+    border-radius: var(--nc-radius-xs);
+    font-family: var(--nc-font-mono);
+    font-size: 0.92em;
+    color: var(--nc-text);
+    background:
+      linear-gradient(90deg, var(--nc-pearl-2), var(--nc-pearl-3), var(--nc-pearl-4)) bottom / 100%
+        2px no-repeat,
+      color-mix(in oklch, var(--nc-accent-9) 16%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in oklch, var(--nc-accent-9) 30%, transparent);
+    overflow-wrap: anywhere;
+    box-decoration-break: clone;
+  }
+
+  .typing {
+    display: inline-flex;
+    gap: 0.25rem;
+    align-items: center;
+    padding-block: 0.7rem;
+  }
+
+  .typing span {
+    inline-size: 0.35rem;
+    block-size: 0.35rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-text-subtle);
+    animation: nc-breathe 1.2s var(--nc-ease-in-out) infinite;
+  }
+
+  .typing span:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+
+  .typing span:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+
+  .footer {
+    padding: var(--nc-space-2) var(--nc-space-3) var(--nc-space-4);
+    background: var(--nc-surface);
+    box-shadow: 0 -1px 0 var(--nc-border-subtle);
+  }
+
+  .composer {
+    padding: var(--nc-space-2) var(--nc-space-3);
+    border-radius: var(--nc-radius-full);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .action {
+    display: grid;
+    place-items: center;
+  }
+
+  .actionLabel {
+    position: relative;
+    padding: var(--nc-space-2) var(--nc-space-6);
+    border-radius: var(--nc-radius-full);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: 0.02em;
+    color: var(--hs-brand);
+    background: color-mix(in oklch, var(--hs-brand) 12%, var(--nc-surface));
+  }
+
+  /* A slow ring asks to be pressed; it's the one moving thing on the phone. */
+  .actionLabel::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: inherit;
+    box-shadow: 0 0 0 2px color-mix(in oklch, var(--hs-brand) 55%, transparent);
+    animation: hs-call 2.2s var(--nc-ease-out) infinite;
+  }
+
+  @keyframes hs-call {
+    0% {
+      opacity: 0.9;
+      transform: scale(0.96);
+    }
+    70%,
+    100% {
+      opacity: 0;
+      transform: scale(1.18);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .message,
+    .typing span,
+    .actionLabel::after {
+      animation: none;
+    }
+  }
+}

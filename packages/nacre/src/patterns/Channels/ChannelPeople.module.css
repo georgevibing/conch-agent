@@ -1,0 +1,114 @@
+@layer nacre.components {
+  .person {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-2) 0;
+  }
+
+  .person + .person {
+    box-shadow: 0 -1px 0 var(--nc-border-subtle);
+  }
+
+  .text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.0625rem;
+    min-inline-size: 0;
+  }
+
+  .name {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--nc-space-1-5);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .handle {
+    font-weight: var(--nc-weight-regular);
+    color: var(--nc-text-subtle);
+  }
+
+  .meta {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .request {
+    --nc-rim-rest: 0.4;
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  .request[data-hello] {
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--nc-accent-7) 70%, transparent),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-2);
+  }
+
+  .ask {
+    margin: 0;
+    font-family: var(--nc-font-display);
+    font-size: var(--nc-text-2xl);
+    line-height: var(--nc-leading-tight);
+    color: var(--nc-text);
+  }
+
+  .who {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+  }
+
+  .dismiss {
+    align-self: flex-start;
+    margin-inline-start: auto;
+  }
+
+  /* What they wrote, quoted: their words, not ours. */
+  .preview {
+    margin: 0;
+    padding: 0.125rem 0 0.125rem var(--nc-space-3);
+    font-size: var(--nc-text-sm);
+    font-style: italic;
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    box-shadow: inset 2px 0 0 var(--nc-border-strong);
+    overflow-wrap: anywhere;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-2);
+  }
+
+  .note {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-subtle);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .request {
+      animation: none;
+    }
+  }
+}
