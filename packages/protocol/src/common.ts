@@ -9,9 +9,17 @@ export const Id = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/, 'Invalid
 
 /**
  * Engines Conch can drive — the providers behind the model picker. Every
- * connected one is available at once (ADR 0012); `mock` is the test double.
+ * connected one is available at once (ADR 0012); `ollama` runs a model on this
+ * computer (ADR 0018); `mock` is the test double.
  */
-export const EngineId = z.enum(['claude-code', 'codex-cli', 'anthropic-api', 'openrouter', 'mock']);
+export const EngineId = z.enum([
+  'claude-code',
+  'codex-cli',
+  'anthropic-api',
+  'openrouter',
+  'ollama',
+  'mock',
+]);
 export type EngineId = z.infer<typeof EngineId>;
 
 /** How hard the model thinks. `auto` lets the model decide (engine default). */
