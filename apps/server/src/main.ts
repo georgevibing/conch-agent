@@ -95,6 +95,7 @@ const findings = checkup({
   browserLocal: (await services.browser.store.settings()).allowLocal,
   terminalRemote: (await services.terminal.settings()).allowRemote,
   provider: services.providers.activeCopy(),
+  channels: await services.channels.checkupCopy(),
 }).filter((item) => item.level === 'danger' || item.level === 'warn');
 for (const item of findings) {
   console.warn(`  ${item.level === 'danger' ? '⛔' : '⚠️ '}  ${item.title}\n      ${item.detail}`);

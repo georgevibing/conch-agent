@@ -296,6 +296,17 @@ export class ChannelService {
     if (stored) this.deps.emit({ type: 'channel.changed', channel: this.#view(stored) });
   }
 
+  /** What the security checkup needs: each channel that's on, and who besides you may use it. */
+  async checkupCopy(): Promise<{ app: string; bot: string; others: string[] }[]> {
+    return (await this.deps.store.all())
+      .filter((c) => c.enabled && c.people.length > 0)
+      .map((c) => ({
+        app: CHANNEL_NAMES[c.kind],
+        bot: c.bot.username ? `@${c.bot.username}` : c.bot.name,
+        others: c.people.slice(1).map((p) => p.name),
+      }));
+  }
+
   // ── Connecting ─────────────────────────────────────────────────────────
 
   /** Is this key good, and whose bot is it? Nothing is saved. */

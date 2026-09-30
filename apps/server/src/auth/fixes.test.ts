@@ -86,6 +86,10 @@ describe('checkup findings', () => {
       browserLocal: true,
       provider: { name: 'Codex', asksFirst: false },
       platform: 'linux',
+      channels: [
+        { app: 'Telegram', bot: '@adas_conch_bot', others: ['Grace Hopper'] },
+        { app: 'Slack', bot: 'Conch', others: [] },
+      ],
     });
 
   it('offer every problem one thing to press or copy', () => {
@@ -108,7 +112,19 @@ describe('checkup findings', () => {
       'browser-local': { kind: 'act', action: 'browser-local-off' },
       'stale-keys': { kind: 'open', place: 'keys', label: 'Review keys' },
       files: { kind: 'act', action: 'secure-files' },
+      'channels-full-trust': { kind: 'act', action: 'ask-first', label: 'Ask first' },
+      'channel-people': { kind: 'open', place: 'channels' },
     });
+  });
+
+  it('name the chat apps and the people let in, in plain words', () => {
+    const items = everything();
+    expect(items.find((i) => i.id === 'channels-full-trust')?.title).toBe(
+      'Messages from Telegram and Slack run without asking',
+    );
+    expect(items.find((i) => i.id === 'channel-people')?.title).toBe(
+      'Grace Hopper can use your assistant from Telegram',
+    );
   });
 
   it('never offer a one-click fix for something that already passes', () => {

@@ -80,7 +80,7 @@ function useApply() {
 const fail = (error: unknown) => toast.error((error as Error).message);
 
 /** A part of this tab a checkup fix can bring you to. */
-type Place = Exclude<CheckupPlace, 'models'>;
+type Place = Exclude<CheckupPlace, 'models' | 'channels'>;
 
 /** A request to bring one part into view; the part calls `done` once it has. */
 interface Focus {
@@ -770,7 +770,11 @@ function useCheckupFix(guard: Guard) {
   const run = (fix: CheckupFix): Promise<unknown> | undefined => {
     if (fix.kind === 'open') {
       if (fix.place === 'models') openSettings('models');
-      else setFocus({ place: fix.place, done: () => setFocus(undefined) });
+      else if (fix.place === 'channels') {
+        // A page, not a part of Settings: close Settings and go there.
+        useUi.getState().closeSettings();
+        window.dispatchEvent(new CustomEvent('conch:navigate', { detail: '/channels' }));
+      } else setFocus({ place: fix.place, done: () => setFocus(undefined) });
       return undefined;
     }
     return guard(async () => {
