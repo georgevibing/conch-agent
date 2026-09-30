@@ -9,6 +9,11 @@
  * that quietly sends every chat to another machine would break the one promise
  * the feature makes.
  *
+ * The every-address binding (`0.0.0.0`, `::`, or just `:port`) is followed,
+ * dialled on `127.0.0.1`, but remembered as `wildcard`: an Ollama started that
+ * way answers the whole network. Conch never starts one like that (it passes
+ * its own loopback `OLLAMA_HOST`), and Repair everything says so.
+ *
  * The address Conch uses is always an IP literal (`127.0.0.1`, `[::1]`), never
  * a name that DNS could answer differently next time.
  */
@@ -20,18 +25,26 @@ export interface OllamaHost {
   url: string;
   /** Set when `OLLAMA_HOST` pointed elsewhere and Conch used the default instead. */
   refused?: string;
+  /**
+   * Set (to what it said) when `OLLAMA_HOST` binds every address: Conch dials
+   * this computer, but an Ollama started with it answers other computers too.
+   */
+  wildcard?: string;
 }
 
 const LOOPBACK_V4 = /^127(?:\.\d{1,3}){3}$/;
 
+/** "Every address": an empty host (`:11434`), `0.0.0.0`, or `::`. */
+const WILDCARDS = new Set(['', '0.0.0.0', '::', '0:0:0:0:0:0:0:0']);
+
 /** `host` (no brackets) as Conch will dial it, or undefined when it isn't this computer. */
 function loopback(host: string): string | undefined {
   const lower = host.toLowerCase();
-  if (lower === 'localhost' || lower === '' || lower === '0.0.0.0') return '127.0.0.1';
+  // Every address includes this computer's own; Go listens on both IPv4 and IPv6 for `::`.
+  if (lower === 'localhost' || WILDCARDS.has(lower)) return '127.0.0.1';
   if (LOOPBACK_V4.test(lower) && lower.split('.').every((part) => Number(part) <= 255))
     return lower;
-  // `::` is "every address", like 0.0.0.0; `::1` is loopback.
-  if (lower === '::1' || lower === '::' || lower === '0:0:0:0:0:0:0:1') return '[::1]';
+  if (lower === '::1' || lower === '0:0:0:0:0:0:0:1') return '[::1]';
   return undefined;
 }
 
@@ -72,7 +85,19 @@ export function ollamaHost(value: string | undefined): OllamaHost {
 
   const dial = loopback(host);
   if (!dial) return refuse();
-  return { url: `http://${dial}:${portNumber}` };
+  return {
+    url: `http://${dial}:${portNumber}`,
+    ...(WILDCARDS.has(host.toLowerCase()) && { wildcard: raw.slice(0, 200) }),
+  };
+}
+
+/**
+ * The `OLLAMA_HOST` Conch gives an Ollama it starts: the loopback address it
+ * dials (`127.0.0.1:11434`), so what Conch starts never answers the network,
+ * whatever the variable says.
+ */
+export function bindFor(host: OllamaHost): string {
+  return new URL(host.url).host;
 }
 
 /** Whether a URL is one `ollamaHost` could have produced: plain http to this computer. */

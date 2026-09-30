@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isLoopbackUrl, ollamaHost } from './host';
+import { bindFor, isLoopbackUrl, ollamaHost } from './host';
 
 describe('where Ollama is', () => {
   it('uses the default when nothing is set', () => {
@@ -11,19 +11,31 @@ describe('where Ollama is', () => {
   it.each([
     ['127.0.0.1', 'http://127.0.0.1:11434'],
     ['127.0.0.1:8080', 'http://127.0.0.1:8080'],
-    [':11500', 'http://127.0.0.1:11500'],
     ['localhost', 'http://127.0.0.1:11434'],
     ['http://localhost:11434', 'http://127.0.0.1:11434'],
     ['http://127.0.0.1:11434/', 'http://127.0.0.1:11434'],
-    // "Every address" includes this one, and that's what Conch dials.
-    ['0.0.0.0', 'http://127.0.0.1:11434'],
-    ['0.0.0.0:9000', 'http://127.0.0.1:9000'],
     ['[::1]:11434', 'http://[::1]:11434'],
     ['::1', 'http://[::1]:11434'],
-    ['[::]:7000', 'http://[::1]:7000'],
     ['127.1.2.3', 'http://127.1.2.3:11434'],
   ])('follows %s to this computer', (value, url) => {
     expect(ollamaHost(value)).toEqual({ url });
+    expect(bindFor(ollamaHost(value))).toBe(new URL(url).host);
+  });
+
+  it.each([
+    ['0.0.0.0', 'http://127.0.0.1:11434'],
+    ['0.0.0.0:9000', 'http://127.0.0.1:9000'],
+    ['http://0.0.0.0:11434', 'http://127.0.0.1:11434'],
+    ['[::]:7000', 'http://127.0.0.1:7000'],
+    ['::', 'http://127.0.0.1:11434'],
+    // No host at all is every address to Ollama too.
+    [':11500', 'http://127.0.0.1:11500'],
+  ])('dials %s on this computer, remembers it answers the network', (value, url) => {
+    const host = ollamaHost(value);
+    expect(host).toEqual({ url, wildcard: value });
+    // What Conch starts Ollama with: this computer only, never every address.
+    expect(bindFor(host)).toBe(new URL(url).host);
+    expect(bindFor(host)).toMatch(/^127\.0\.0\.1:\d+$/);
   });
 
   it.each([

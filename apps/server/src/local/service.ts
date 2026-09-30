@@ -34,7 +34,7 @@ import { Mutex, writeJson } from '../lib/fs';
 import { agentEnv, presentSync } from '../lib/proc';
 import { readStore } from '../lib/recover';
 import type { NeedSpec, Platform, Setup } from '../setup/needs';
-import { ollamaHost, type OllamaHost } from './host';
+import { bindFor, ollamaHost, type OllamaHost } from './host';
 import {
   atLeast,
   catalogModel,
@@ -262,9 +262,15 @@ export class LocalService implements OllamaLink {
    * Start it the quiet way for each system: the Windows app hidden in the
    * tray, the Mac app hidden, else `ollama serve` in the background. Says
    * whether it was the app (which can fail quietly) rather than the server.
+   *
+   * With `OLLAMA_HOST` set to every address, only `ollama serve` itself: the
+   * Mac app reads its settings from launchd, not from Conch, and would answer
+   * the network.
    */
   #launch(program: string): boolean {
-    if (this.#platform === 'win32') {
+    if (this.host().wildcard) {
+      // Straight to the server, on this computer only.
+    } else if (this.#platform === 'win32') {
       const app = join(dirname(program), 'ollama app.exe');
       if (presentSync(app)) {
         this.#spawn(app, ['--hide', '--fast-startup']);
@@ -281,12 +287,17 @@ export class LocalService implements OllamaLink {
     return false;
   }
 
-  /** Detached, so it outlives Conch, with Conch's own settings kept out of its environment. */
+  /**
+   * Detached, so it outlives Conch, with Conch's own settings kept out of its
+   * environment. `OLLAMA_HOST` is always the loopback address Conch dials: an
+   * Ollama that Conch starts answers this computer only, even when the
+   * variable says every address (`0.0.0.0`).
+   */
   #spawn(command: string, args: string[]): void {
     const spawn = this.deps.spawn ?? nodeSpawn;
     try {
       const child = spawn(command, args, {
-        env: agentEnv(),
+        env: agentEnv({ OLLAMA_HOST: bindFor(this.host()) }),
         detached: true,
         stdio: 'ignore',
         windowsHide: true,
@@ -635,10 +646,51 @@ export class LocalService implements OllamaLink {
   // ── Repair everything ───────────────────────────────────────────────────
 
   /**
+   * `OLLAMA_HOST` binds every address, so an Ollama started outside Conch (at
+   * sign-in, from the app) answers other computers on the network: anyone
+   * there can chat with the models, download more, or delete them. Only the
+   * person can change the variable; this says how.
+   */
+  #networkItem(): DoctorItem | undefined {
+    const wildcard = this.host().wildcard;
+    if (wildcard === undefined) return undefined;
+    const command =
+      this.#platform === 'win32'
+        ? 'setx OLLAMA_HOST 127.0.0.1'
+        : this.#platform === 'darwin'
+          ? 'launchctl setenv OLLAMA_HOST 127.0.0.1'
+          : undefined;
+    return {
+      id: 'local-model:network',
+      group: 'Providers',
+      title: 'Model on this computer',
+      state: 'warning',
+      message: `Other computers on your network can reach Ollama: OLLAMA_HOST is set to “${wildcard}”, so anyone there could use your models, download more or delete them. Conch starts Ollama for this computer only. Set OLLAMA_HOST to 127.0.0.1, then quit Ollama and open it again.`,
+      ...(command && {
+        action: { kind: 'command', label: 'Run this, then restart Ollama', command },
+      }),
+    };
+  }
+
+  /**
    * The `local-model` check. Not set up is not a problem ("off"); a stopped
-   * Ollama that someone uses is started by a repair.
+   * Ollama that someone uses is started by a repair. An `OLLAMA_HOST` that
+   * opens Ollama to the network is a warning of its own, once it's installed.
    */
   doctorCheck(): DoctorCheck {
+    return {
+      id: 'local-model',
+      group: 'Providers',
+      title: 'Model on this computer',
+      run: async ({ repair }) => {
+        const { items, installed } = await this.#look(repair);
+        const network = installed ? this.#networkItem() : undefined;
+        return network ? [...items, network] : items;
+      },
+    };
+  }
+
+  async #look(repair: boolean): Promise<{ items: DoctorItem[]; installed: boolean }> {
     const item = (state: DoctorItem['state'], message: string, action?: DoctorItem['action']) => ({
       id: 'local-model:ollama',
       group: 'Providers',
@@ -653,53 +705,50 @@ export class LocalService implements OllamaLink {
       place: 'providers',
       focus: 'ollama',
     });
-    return {
-      id: 'local-model',
-      group: 'Providers',
-      title: 'Model on this computer',
-      run: async ({ repair }) => {
-        const before = await this.#ollama({ heal: false });
-        if (before.state === 'elsewhere')
-          return [item('needs-you', before.message ?? '', open('Open providers'))];
-        if (before.state === 'missing')
-          return [
+    const one = (...items: DoctorItem[]) => ({ items, installed: true });
+    const before = await this.#ollama({ heal: false });
+    if (before.state === 'elsewhere')
+      return one(item('needs-you', before.message ?? '', open('Open providers')));
+    if (before.state === 'missing')
+      return {
+        items: [
+          item(
+            'off',
+            'Not set up. A private model that works offline is one click away.',
+            open('Set it up'),
+          ),
+        ],
+        installed: false,
+      };
+    let state = before.state;
+    let started = false;
+    if (state !== 'running' && (repair || this.#starting)) {
+      started = await this.ensureRunning({ note: false });
+      state = started ? 'running' : 'stopped';
+    }
+    if (state !== 'running') {
+      return (await this.#wanted())
+        ? one(
             item(
-              'off',
-              'Not set up. A private model that works offline is one click away.',
-              open('Set it up'),
+              repair ? 'needs-you' : 'warning',
+              repair
+                ? 'Ollama didn’t start. Open it once, then look again.'
+                : 'Ollama isn’t running. Repair starts it.',
+              repair ? open('Open providers') : undefined,
             ),
-          ];
-        let state = before.state;
-        let started = false;
-        if (state !== 'running' && (repair || this.#starting)) {
-          started = await this.ensureRunning({ note: false });
-          state = started ? 'running' : 'stopped';
-        }
-        if (state !== 'running') {
-          return (await this.#wanted())
-            ? [
-                item(
-                  repair ? 'needs-you' : 'warning',
-                  repair
-                    ? 'Ollama didn’t start. Open it once, then look again.'
-                    : 'Ollama isn’t running. Repair starts it.',
-                  repair ? open('Open providers') : undefined,
-                ),
-              ]
-            : [item('off', 'Ollama is installed, with no model yet.', open('Get a model'))];
-        }
-        const models = await this.models().catch(() => []);
-        if (!models.length)
-          return [item('off', 'Ollama is running, with no model yet.', open('Get a model'))];
-        const picked = (await this.#settings()).model;
-        const chosen = models.find((m) => m.name === picked) ?? (models[0] as LocalModel);
-        const more = models.length > 1 ? `, and ${models.length - 1} more` : '';
-        return [
-          started
-            ? item('fixed', `Started Ollama. ${chosen.label} is ready${more}.`)
-            : item('ok', `${chosen.label} is ready${more}.`),
-        ];
-      },
-    };
+          )
+        : one(item('off', 'Ollama is installed, with no model yet.', open('Get a model')));
+    }
+    const models = await this.models().catch(() => []);
+    if (!models.length)
+      return one(item('off', 'Ollama is running, with no model yet.', open('Get a model')));
+    const picked = (await this.#settings()).model;
+    const chosen = models.find((m) => m.name === picked) ?? (models[0] as LocalModel);
+    const more = models.length > 1 ? `, and ${models.length - 1} more` : '';
+    return one(
+      started
+        ? item('fixed', `Started Ollama. ${chosen.label} is ready${more}.`)
+        : item('ok', `${chosen.label} is ready${more}.`),
+    );
   }
 }
