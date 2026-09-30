@@ -79,6 +79,8 @@ export const Provider = z.object({
   status: EngineStatus,
   /** The default for new chats. Exactly one provider is; every ready one can be picked. */
   active: z.boolean(),
+  /** Runs on this computer: works with no internet, spends nothing. */
+  local: z.boolean().default(false),
   /** Ready to be used or switched to right now. */
   ready: z.boolean(),
   /** Two or three things this provider is good at, for the card. */

@@ -167,12 +167,14 @@ export class ProviderService {
           return {
             ...capabilities,
             engine: engine.id,
+            local: Boolean(engine.local),
             ...(engine.attachments && { attachments: engine.attachments }),
           };
         } catch (error) {
           return {
             engine: engine.id,
             label: engine.label,
+            local: Boolean(engine.local),
             ...(engine.attachments && { attachments: engine.attachments }),
             models: [],
             commands: [],
@@ -232,6 +234,7 @@ export class ProviderService {
       tagline: copy?.tagline ?? '',
       description: copy?.description ?? '',
       connect: copy?.connect ?? 'program',
+      local: Boolean(engine.local),
       status,
       active: id === active,
       ready: status.state === 'ready',

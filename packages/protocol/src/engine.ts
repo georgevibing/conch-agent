@@ -163,6 +163,8 @@ export function honouredMode(
 export const ProviderModels = Capabilities.extend({
   /** Set when the provider is connected but couldn't list its models right now. */
   message: z.string().optional(),
+  /** Runs on this computer: works with no internet, spends nothing. */
+  local: z.boolean().default(false),
 });
 export type ProviderModels = z.infer<typeof ProviderModels>;
 

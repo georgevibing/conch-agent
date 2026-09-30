@@ -222,6 +222,11 @@ export interface LoginHandle {
 export interface Engine {
   readonly id: EngineId;
   readonly label: string;
+  /**
+   * The model runs on this computer: it works with no internet and spends
+   * nothing. Offline, Conch answers with it (see ADR 0018).
+   */
+  readonly local?: boolean;
   /** Probe installation and credentials. Cheap to call; results may be cached briefly. */
   detect(options?: { force?: boolean }): Promise<EngineStatus>;
   /** Start an interactive sign-in. Progress is reported through `onUpdate`. */

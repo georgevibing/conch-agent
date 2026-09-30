@@ -66,6 +66,7 @@ export function provider(patch: Partial<Provider> = {}): Provider {
     connect: 'program',
     status: baseEngine,
     active: true,
+    local: false,
     ready: true,
     highlights: ['Works with your files'],
     limits: [],
