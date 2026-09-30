@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { plain, split, toDiscordMarkdown, toSlackMrkdwn, toTelegramHtml } from './format';
+import { fit, plain, split, toDiscordMarkdown, toSlackMrkdwn, toTelegramHtml } from './format';
 
 describe('toTelegramHtml', () => {
   it('turns the common Markdown into Telegram HTML', () => {
@@ -105,5 +105,21 @@ describe('split', () => {
     const parts = split('x'.repeat(250), 100);
     expect(parts.every((p) => p.length <= 100)).toBe(true);
     expect(parts.join('')).toBe('x'.repeat(250));
+  });
+});
+
+describe('fit', () => {
+  it('cuts again when formatting makes a part too long (a padded table)', () => {
+    const rows = Array.from(
+      { length: 40 },
+      (_, i) => `| ${i === 3 ? 'x'.repeat(200) : `row ${i}`} | ok |`,
+    );
+    const table = ['| name | value |', '| --- | --- |', ...rows].join('\n');
+    expect(table.length).toBeLessThan(2000);
+    const measure = (part: string) => toDiscordMarkdown(part).length;
+    expect(measure(table)).toBeGreaterThan(2000);
+    const parts = fit(table, 1900, measure);
+    expect(parts.length).toBeGreaterThan(1);
+    for (const part of parts) expect(measure(part)).toBeLessThanOrEqual(1900);
   });
 });

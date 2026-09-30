@@ -1,7 +1,7 @@
 import type { ChannelBot } from '@conch/protocol';
 
 import { botAvatar } from './assets';
-import { plain, split, toTelegramHtml } from './format';
+import { fit, plain, toTelegramHtml } from './format';
 import {
   Backoff,
   type ChannelAdapter,
@@ -23,6 +23,8 @@ export const TELEGRAM_API = 'https://api.telegram.org';
 
 /** Telegram counts 4096 characters after formatting; Markdown parts this long stay under it. */
 const PART = 3800;
+/** Drafts show the end of a long answer; tables can make this much text longer once padded. */
+const DRAFT_PART = 2500;
 /** How long one getUpdates waits for news before answering empty (seconds). */
 const POLL_SECONDS = 30;
 /** Conflicts in a row before saying another program has the bot (each is a 409). */
@@ -237,14 +239,20 @@ export class TelegramAdapter implements ChannelAdapter {
       draft: async (chatId, draftId, markdown) => {
         if (!drafts) return false;
         try {
-          await this.#formatted('sendMessageDraft', tail(markdown, PART), {
+          await this.#formatted('sendMessageDraft', tail(markdown, DRAFT_PART), {
             chat_id: chatId,
             draft_id: draftId,
             can_stop: true,
           });
           return true;
         } catch (error) {
-          if (error instanceof ChannelError && error.code === 'refused') drafts = false;
+          // An older Telegram without drafts answers "not found": stop trying. Anything else
+          // (a preview that was too long, a blip) only skips this one.
+          if (
+            error instanceof ChannelError &&
+            (error.code === 'auth' || /method/i.test(error.message))
+          )
+            drafts = false;
           return false;
         }
       },
@@ -394,7 +402,7 @@ export class TelegramAdapter implements ChannelAdapter {
   }
 
   async #send(chatId: string, markdown: string, options?: SendOptions): Promise<SentRef[]> {
-    const parts = split(markdown, PART);
+    const parts = fit(markdown, PART, (part) => plain(part).length);
     const sent: SentRef[] = [];
     for (const [index, part] of parts.entries()) {
       const last = index === parts.length - 1;
@@ -412,12 +420,16 @@ export class TelegramAdapter implements ChannelAdapter {
 
   async #edit(ref: SentRef, markdown: string, options?: SendOptions): Promise<void> {
     try {
-      await this.#formatted('editMessageText', split(markdown, PART)[0] ?? '…', {
-        chat_id: ref.chatId,
-        message_id: Number(ref.messageId),
-        link_preview_options: { is_disabled: true },
-        reply_markup: options?.buttons ? keyboard(options) : { inline_keyboard: [] },
-      });
+      await this.#formatted(
+        'editMessageText',
+        fit(markdown, PART, (part) => plain(part).length)[0] ?? '…',
+        {
+          chat_id: ref.chatId,
+          message_id: Number(ref.messageId),
+          link_preview_options: { is_disabled: true },
+          reply_markup: options?.buttons ? keyboard(options) : { inline_keyboard: [] },
+        },
+      );
     } catch (error) {
       // Pressing a button twice asks for the same text again: that's fine.
       if (error instanceof ChannelError && /not modified/i.test(error.message)) return;

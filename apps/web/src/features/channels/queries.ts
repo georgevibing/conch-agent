@@ -76,6 +76,10 @@ export function useChannelAction<A extends unknown[]>(
   return useMutation({
     mutationFn: (args: A) => fn(...args),
     onSuccess: (channel) => putChannel(client, channel),
-    onError: (error) => toast.error(errorText(error, failure)),
+    onError: (error) => {
+      // "Confirm it's you" opens its own dialog; a toast on top would say it twice.
+      if (error instanceof ApiError && error.code === 'verify-required') return;
+      toast.error(errorText(error, failure));
+    },
   });
 }

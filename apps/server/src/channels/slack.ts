@@ -1,6 +1,6 @@
 import type { ChannelBot, ChannelCheck } from '@conch/protocol';
 
-import { split, toSlackMrkdwn } from './format';
+import { fit, toSlackMrkdwn } from './format';
 import type { SlackCheck } from './service';
 import {
   Backoff,
@@ -22,6 +22,10 @@ export const SLACK_API = 'https://slack.com/api';
 /** A section of mrkdwn holds 3000 characters; parts this long stay under it once formatted. */
 const PART = 2800;
 const FILE_LIMIT = 50 * 1024 * 1024;
+/** Open a fresh socket this often, so one that died quietly is replaced. */
+const RENEW_MS = 10 * 60_000;
+/** How long a part is as Slack counts it, whichever way it ends up written. */
+const slackLength = (part: string) => Math.max(part.length, toSlackMrkdwn(part).length);
 const AUTH_ERRORS = new Set([
   'invalid_auth',
   'not_authed',
@@ -273,7 +277,7 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
     return {
       send: (chatId, markdown, options) => this.#send(chatId, markdown, options),
       edit: async (ref, markdown, options) => {
-        const part = split(markdown, PART)[0] ?? '…';
+        const part = fit(markdown, PART, slackLength)[0] ?? '…';
         await this.#posting((blocks) =>
           this.web('chat.update', {
             channel: ref.chatId,
@@ -314,7 +318,7 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
   }
 
   async #send(chatId: string, markdown: string, options?: SendOptions): Promise<SentRef[]> {
-    const parts = split(markdown, PART);
+    const parts = fit(markdown, PART, slackLength);
     const sent: SentRef[] = [];
     for (const [index, part] of parts.entries()) {
       const last = index === parts.length - 1;
@@ -458,7 +462,10 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
         await pause(wait, signal);
         continue;
       }
-      if (!url) continue;
+      if (!url) {
+        await pause(backoff.next(), signal);
+        continue;
+      }
       const closed = await this.#session(url, events, signal, () => backoff.reset());
       if (signal.aborted) return;
       if (closed === 'link_disabled') {
@@ -494,9 +501,17 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
         return;
       }
       let settled = false;
+      // A socket can die quietly (a laptop asleep, a new network) and still look open.
+      // Renewing it now and then bounds how long that can go unnoticed.
+      const renew = setTimeout(() => {
+        socket.close(1000);
+        finish('refresh');
+      }, RENEW_MS);
+      renew.unref?.();
       const finish = (why: 'refresh' | 'link_disabled' | 'dropped') => {
         if (settled) return;
         settled = true;
+        clearTimeout(renew);
         signal.removeEventListener('abort', abort);
         resolve(why);
       };

@@ -1,7 +1,7 @@
 import type { ChannelBot } from '@conch/protocol';
 
 import { botAvatar } from './assets';
-import { split, toDiscordMarkdown } from './format';
+import { fit, toDiscordMarkdown } from './format';
 import {
   Backoff,
   type ChannelAdapter,
@@ -30,6 +30,8 @@ const PART = 1900;
 export const DISCORD_INTENTS = (1 << 0) | (1 << 12) | (1 << 13);
 /** Close codes after which reconnecting can't help (a bad key, a bad request). */
 const FATAL = new Set([4004, 4010, 4011, 4012, 4013, 4014]);
+/** Closes after which the session is gone: identify again rather than resume. */
+const FRESH = new Set([4007, 4009]);
 /** Discord resets a token after 1000 identifies a day; stay far below. */
 const IDENTIFY_BUDGET = 100;
 const FILE_LIMIT = 25 * 1024 * 1024;
@@ -211,7 +213,9 @@ export class DiscordAdapter implements ChannelAdapter {
       edit: async (ref, markdown, options) => {
         await this.#retry(() =>
           this.rest('PATCH', `/channels/${ref.chatId}/messages/${ref.messageId}`, {
-            content: toDiscordMarkdown(split(markdown, PART)[0] ?? '…'),
+            content: toDiscordMarkdown(
+              fit(markdown, PART, (p) => toDiscordMarkdown(p).length)[0] ?? '…',
+            ),
             components: options?.buttons ? components(options) : [],
           }),
         );
@@ -236,7 +240,7 @@ export class DiscordAdapter implements ChannelAdapter {
   }
 
   async #send(chatId: string, markdown: string, options?: SendOptions): Promise<SentRef[]> {
-    const parts = split(markdown, PART);
+    const parts = fit(markdown, PART, (part) => toDiscordMarkdown(part).length);
     const sent: SentRef[] = [];
     for (const [index, part] of parts.entries()) {
       const last = index === parts.length - 1;
@@ -364,7 +368,12 @@ export class DiscordAdapter implements ChannelAdapter {
         session.seq = null;
         session.resumeUrl = undefined;
       }
-      const wait = closed.resumable && backoff.attempts === 0 ? 500 : backoff.next();
+      // After an invalid session Discord asks for a pause of one to five seconds.
+      const wait = closed.invalid
+        ? 1000 + Math.random() * 4000
+        : closed.resumable && backoff.attempts === 0
+          ? 500
+          : backoff.next();
       events.state('reconnecting', {
         message: 'Reconnecting to Discord.',
         retryAt: Date.now() + wait,
@@ -380,13 +389,15 @@ export class DiscordAdapter implements ChannelAdapter {
     events: ChannelEvents,
     signal: AbortSignal,
     onReady: () => void,
-  ): Promise<{ code: number; resumable: boolean }> {
+  ): Promise<{ code: number; resumable: boolean; invalid: boolean }> {
     return new Promise((resolve) => {
+      /** Discord said the session is invalid (op 9). */
+      let invalid = false;
       let socket: WebSocket;
       try {
         socket = new WebSocket(url);
       } catch {
-        resolve({ code: 1006, resumable: false });
+        resolve({ code: 1006, resumable: false, invalid: false });
         return;
       }
       let heartbeat: NodeJS.Timeout | undefined;
@@ -405,7 +416,11 @@ export class DiscordAdapter implements ChannelAdapter {
         clearInterval(heartbeat);
         clearTimeout(heartbeat);
         signal.removeEventListener('abort', abort);
-        resolve({ code, resumable: resumable && !FATAL.has(code) && code !== 1000 });
+        resolve({
+          code,
+          resumable: resumable && !FATAL.has(code) && !FRESH.has(code) && code !== 1000,
+          invalid,
+        });
       };
       const abort = () => {
         resumable = false;
@@ -466,6 +481,7 @@ export class DiscordAdapter implements ChannelAdapter {
             finish(4000);
             break;
           case 9:
+            invalid = true;
             resumable = frame.d === true;
             socket.close(4000);
             finish(4000);

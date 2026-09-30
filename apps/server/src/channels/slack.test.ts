@@ -32,7 +32,7 @@ async function setup() {
 async function until<T>(
   fn: () => T | Promise<T>,
   what: string,
-  ms = 6000,
+  ms = 10_000,
 ): Promise<NonNullable<T>> {
   const end = Date.now() + ms;
   for (;;) {

@@ -264,6 +264,27 @@ export function plain(markdown: string): string {
 }
 
 /**
+ * Cut an answer into parts that each fit an app's limit *once formatted*
+ * (`measure` says how long a part will be as the app counts it). A table's
+ * padding can make a part several times longer than its Markdown, so a part
+ * that doesn't fit is cut again, smaller, until it does.
+ */
+export function fit(markdown: string, max: number, measure: (part: string) => number): string[] {
+  const out: string[] = [];
+  const place = (part: string, depth: number) => {
+    const size = measure(part);
+    if (size <= max || part.length < 200 || depth > 6) {
+      out.push(part);
+      return;
+    }
+    const smaller = Math.max(200, Math.floor((part.length * max * 0.9) / size));
+    for (const piece of split(part, smaller)) place(piece, depth + 1);
+  };
+  for (const part of split(markdown, max)) place(part, 0);
+  return out;
+}
+
+/**
  * Cut an answer into messages of at most `max` characters of Markdown, where a
  * person would: between paragraphs, then lines, then words. A code block that
  * has to be cut is closed at the end of one message and reopened in the next,

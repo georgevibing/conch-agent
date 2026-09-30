@@ -51,6 +51,8 @@ export class MockDiscord {
   readonly sent: MockDiscordMessage[] = [];
   readonly calls: { method: string; path: string; body: unknown }[] = [];
   identifies = 0;
+  /** The person has direct messages turned off for the server (Discord error 50007). */
+  dmsClosed = false;
   /** Conch gave the bot a picture (PATCH /users/@me). */
   avatarSet = false;
   resumes = 0;
@@ -98,10 +100,11 @@ export class MockDiscord {
       return { ...this.bot, avatar: null, bot: true };
     });
     app.get('/api/v10/gateway/bot', () => ({ url: `${this.base.replace('http', 'ws')}/gateway` }));
-    app.post('/api/v10/users/@me/channels', (request) => ({
-      id: `dm${(request.body as { recipient_id: string }).recipient_id}`,
-      type: 1,
-    }));
+    app.post('/api/v10/users/@me/channels', (request, reply) =>
+      this.dmsClosed
+        ? reply.code(403).send({ code: 50007, message: 'Cannot send messages to this user' })
+        : { id: `dm${(request.body as { recipient_id: string }).recipient_id}`, type: 1 },
+    );
     app.post<{ Params: { id: string } }>('/api/v10/channels/:id/messages', (request) => {
       const body = request.body as {
         content: string;

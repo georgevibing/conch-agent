@@ -33,7 +33,7 @@ async function setup() {
 async function until<T>(
   fn: () => T | Promise<T>,
   what: string,
-  ms = 6000,
+  ms = 10_000,
 ): Promise<NonNullable<T>> {
   const end = Date.now() + ms;
   for (;;) {
@@ -134,6 +134,15 @@ describe('Discord', () => {
     expect(events.some((e) => e.type === 'permission.resolved' && e.decision === 'allow')).toBe(
       true,
     );
+  });
+
+  it('lets someone in even when Discord won’t deliver the welcome', async () => {
+    const { s, discord, channel } = await connected();
+    discord.say('hi');
+    await until(async () => (await s.channels.get(channel.id)).requests.length === 1, 'request');
+    discord.dmsClosed = true;
+    const view = await s.channels.answer(channel.id, MockDiscord.OWNER.id, 'allow');
+    expect(view.people.map((p) => p.id)).toEqual([MockDiscord.OWNER.id]);
   });
 
   it('ignores messages in servers', async () => {

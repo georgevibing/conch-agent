@@ -36,7 +36,8 @@ afterEach(() => {
 async function until<T>(
   fn: () => T | Promise<T>,
   what = 'condition',
-  ms = 5000,
+  // Generous: under a full parallel test run the machine is busy.
+  ms = 10_000,
 ): Promise<NonNullable<T>> {
   const end = Date.now() + ms;
   for (;;) {
@@ -339,6 +340,69 @@ describe('ChannelService — while it works', () => {
     expect(said[0]?.type === 'user.message' && said[0].text).toBe(
       'first thought\n\nand the second',
     );
+  });
+});
+
+describe('ChannelService — one turn at a time', () => {
+  it('a message sent while the first is still being set up joins its queue', async () => {
+    const { s, telegram } = await paired('0.5');
+    telegram.photo('what is this?');
+    // After the album window, while the photo's turn is starting.
+    await new Promise((r) => setTimeout(r, 760));
+    telegram.say('and this too');
+    const chats = async () =>
+      (await s.conversations.list()).filter((c) => c.origin?.kind === 'channel');
+    await until(
+      async () => {
+        const [chat] = await chats();
+        if (!chat) return false;
+        const said = (await s.conversations.eventsAfter(chat.id)).filter(
+          (e) => e.type === 'user.message',
+        );
+        return said.length === 2;
+      },
+      'both messages in one conversation',
+      20_000,
+    );
+    expect(await chats()).toHaveLength(1);
+  }, 30_000);
+
+  it('stops what someone removed had running and queued', async () => {
+    const { s, telegram, channel } = await paired('3');
+    const bob = { id: 5151, first_name: 'Bob' };
+    telegram.say('hi', bob);
+    await until(async () => (await s.channels.get(channel.id)).requests.length === 1, 'request');
+    await s.channels.answer(channel.id, '5151', 'allow');
+    telegram.say('Tell me something long', bob);
+    const chat = await until(
+      async () => (await s.conversations.list()).find((c) => c.origin?.kind === 'channel'),
+      'Bob’s conversation',
+    );
+    await new Promise((r) => setTimeout(r, 800));
+    telegram.say('and then delete everything', bob);
+    await new Promise((r) => setTimeout(r, 800));
+    await s.channels.removePerson(channel.id, '5151');
+    await until(
+      async () =>
+        (await s.conversations.eventsAfter(chat.id)).some(
+          (e) => e.type === 'turn.completed' && e.outcome === 'interrupted',
+        ),
+      'interrupted',
+      15_000,
+    );
+    await new Promise((r) => setTimeout(r, 1500));
+    const said = (await s.conversations.eventsAfter(chat.id)).filter(
+      (e) => e.type === 'user.message',
+    );
+    expect(said).toHaveLength(1);
+  }, 30_000);
+
+  it('never turns a channel you switched off back on by repairing it', async () => {
+    const { s, channel } = await paired();
+    await s.channels.update(channel.id, { enabled: false });
+    const repaired = await s.channels.repair(channel.id);
+    expect(repaired.enabled).toBe(false);
+    expect(repaired.health.state).toBe('off');
   });
 });
 

@@ -124,6 +124,8 @@ interface Relay {
   channelId: string;
   chatId: string;
   personId: string;
+  /** Known once the message is in a conversation. */
+  conversationId?: string;
   /** The message that started it (Slack marks it as seen). */
   source?: SentRef;
   /** Assistant text so far, per message. */
@@ -185,8 +187,14 @@ export class ChannelService {
   #live = new Map<string, LiveChannel>();
   #pairings = new Map<string, { hash: Buffer; expiresAt: number; link?: string }>();
   #relays = new Map<string, Relay>();
+  /**
+   * Each person's turn in progress, from the moment it's decided until it's
+   * done: anything they send meanwhile joins its queue instead of racing it.
+   */
+  #inflight = new Map<string, Relay>();
   /** A relay waiting for its conversation to be created, by the message that creates it. */
   #pending = new Map<string, Relay>();
+  /** Questions asked with buttons, by channel and permission (a routine's can go to several). */
   #asks = new Map<string, Ask>();
   /** Button keys → the question they answer (Telegram allows 64 bytes of button data). */
   #buttons = new Map<string, string>();
@@ -292,8 +300,17 @@ export class ChannelService {
   }
 
   async #emit(id: string) {
-    const stored = await this.deps.store.get(id);
-    if (stored) this.deps.emit({ type: 'channel.changed', channel: this.#view(stored) });
+    try {
+      const stored = await this.deps.store.get(id);
+      if (stored) this.deps.emit({ type: 'channel.changed', channel: this.#view(stored) });
+    } catch (error) {
+      this.#log(`update: ${explain(error)}`);
+    }
+  }
+
+  /** Fire and forget, but never let a failure stop Conch (an unhandled rejection would). */
+  #quietly(work: Promise<unknown>, what: string) {
+    void work.catch((error: unknown) => this.#log(`${what}: ${explain(error)}`));
   }
 
   /** What the security checkup needs: each channel that's on, and who besides you may use it. */
@@ -372,7 +389,7 @@ export class ChannelService {
       );
     }
     this.#connect(stored, secrets);
-    void this.#prepare(adapter, stored.id);
+    this.#quietly(this.#prepare(adapter, stored.id), 'profile');
     if (!stored.people.length) this.#openPairing(stored);
     const view = this.#view(stored);
     this.deps.emit({ type: 'channel.changed', channel: view });
@@ -448,9 +465,14 @@ export class ChannelService {
     this.deps.emit({ type: 'channel.deleted', channelId: id });
   }
 
-  /** Reconnect now, trying every fix: refresh who the bot is, then connect again. */
+  /**
+   * Reconnect now, trying every fix: refresh who the bot is, then connect
+   * again. A channel you turned off stays off: turning it on is its own,
+   * checked, request.
+   */
   async repair(id: string): Promise<Channel> {
     const stored = await this.#require(id);
+    if (!stored.enabled) return this.#view(stored);
     const secrets = await this.deps.store.secrets(id);
     if (!secrets) {
       this.#setHealth(id, 'needs-token', {
@@ -461,7 +483,7 @@ export class ChannelService {
     let current = stored;
     try {
       const bot = await this.deps.adapter(secrets).identify(AbortSignal.timeout(20_000));
-      current = (await this.deps.store.update(id, (c) => ({ ...c, bot, enabled: true }))) ?? stored;
+      current = (await this.deps.store.update(id, (c) => ({ ...c, bot }))) ?? stored;
     } catch (error) {
       if (error instanceof ChannelError && error.code === 'auth') {
         this.#disconnect(id);
@@ -513,9 +535,9 @@ export class ChannelService {
           this.#log(`button on ${stored.kind}: ${explain(error)}`),
         ),
       state: (state, detail) => this.#setHealth(id, state, detail),
-      stop: (chatId) => void this.#stopFromApp(id, chatId),
+      stop: (chatId) => this.#quietly(this.#stopFromApp(id, chatId), 'stop'),
       healed: (message) => this.deps.onHeal(message),
-      joined: () => void this.#refreshBot(id),
+      joined: () => this.#quietly(this.#refreshBot(id), 'refresh'),
     });
   }
 
@@ -545,12 +567,15 @@ export class ChannelService {
     if (state === 'online' && live.downSince !== undefined) {
       const minutes = Math.round((now - live.downSince) / 60_000);
       if (now - live.downSince >= NOTEWORTHY_OUTAGE_MS)
-        void this.deps.store.get(id).then((c) => {
-          if (c)
-            this.deps.onHeal(
-              `${CHANNEL_NAMES[c.kind]} was out of reach for ${minutes <= 1 ? 'a minute' : `${minutes} minutes`}; Conch reconnected on its own.`,
-            );
-        });
+        void this.deps.store
+          .get(id)
+          .catch(() => undefined)
+          .then((c) => {
+            if (c)
+              this.deps.onHeal(
+                `${CHANNEL_NAMES[c.kind]} was out of reach for ${minutes <= 1 ? 'a minute' : `${minutes} minutes`}; Conch reconnected on its own.`,
+              );
+          });
       live.downSince = undefined;
     }
     if (was.state === 'online' && state !== 'online') live.downSince = now;
@@ -625,25 +650,27 @@ export class ChannelService {
     });
     if (!stored) return;
     if (owner) this.#pairings.delete(id);
+    // They're in now, whatever happens to the welcome: say so on the page first.
+    await this.#emit(id);
     const live = this.#live.get(id);
-    if (live) {
+    if (!live) return;
+    try {
       const settings = await this.deps.settings.get();
       const assistant = settings.persona.name;
       const chat = chatId ?? (await live.connection.directChat(user.id));
       const ownerName = stored.people[0]?.name;
-      await live.connection
-        .send(
-          chat,
-          owner
-            ? `Hi ${firstName(user.name)}! 👋 I’m **${assistant}**, and I’m connected to Conch on your computer.\n\n` +
-                'Ask me anything — I can work with your files, the web and your apps, just like in Conch. ' +
-                'Before I do anything important, I’ll ask you here.\n\n' +
-                '/new starts a fresh conversation · /stop stops me'
-            : `Hi ${firstName(user.name)}! 👋 ${ownerName ? firstName(ownerName) : 'The owner'} let you in. I’m **${assistant}**: ask me anything.`,
-        )
-        .catch((error: unknown) => this.#log(`welcome: ${explain(error)}`));
+      await live.connection.send(
+        chat,
+        owner
+          ? `Hi ${firstName(user.name)}! 👋 I’m **${assistant}**, and I’m connected to Conch on your computer.\n\n` +
+              'Ask me anything — I can work with your files, the web and your apps, just like in Conch. ' +
+              'Before I do anything important, I’ll ask you here.\n\n' +
+              '/new starts a fresh conversation · /stop stops me'
+          : `Hi ${firstName(user.name)}! 👋 ${ownerName ? firstName(ownerName) : 'The owner'} let you in. I’m **${assistant}**: ask me anything.`,
+      );
+    } catch (error) {
+      this.#log(`welcome: ${explain(error)}`);
     }
-    await this.#emit(id);
   }
 
   /** Answer a request from the page: let them in, turn them away for good, or just clear it. */
@@ -675,6 +702,14 @@ export class ChannelService {
   /** Stop someone from talking to your assistant here. */
   async removePerson(id: string, personId: string): Promise<Channel> {
     await this.#require(id);
+    // What they sent and what's running for them stops with them.
+    this.#dropGathered(id, personId);
+    const relay = this.#inflight.get(`${id}:${personId}`);
+    if (relay) {
+      relay.queued.length = 0;
+      if (relay.conversationId)
+        await this.deps.conversations.interrupt(relay.conversationId).catch(() => undefined);
+    }
     const stored = await this.deps.store.update(id, (c) => {
       const { [personId]: _, ...chats } = c.chats;
       return { ...c, people: c.people.filter((p) => p.id !== personId), chats };
@@ -789,7 +824,7 @@ export class ChannelService {
   async #stopFromApp(id: string, chatId: string) {
     for (const [conversationId, relay] of this.#relays) {
       if (relay.channelId !== id || relay.chatId !== chatId) continue;
-      relay.queued = [];
+      relay.queued.length = 0;
       await this.deps.conversations.interrupt(conversationId).catch(() => undefined);
     }
   }
@@ -811,11 +846,12 @@ export class ChannelService {
       });
       await say('Fresh start. What’s next?');
     } else if (command === 'stop') {
-      const relay = conversationId ? this.#relays.get(conversationId) : undefined;
+      const relay = this.#inflight.get(`${stored.id}:${message.user.id}`);
       this.#dropGathered(stored.id, message.user.id);
-      if (conversationId && relay) {
-        relay.queued = [];
-        await this.deps.conversations.interrupt(conversationId).catch(() => undefined);
+      if (relay) {
+        relay.queued.length = 0;
+        const running = relay.conversationId ?? conversationId;
+        if (running) await this.deps.conversations.interrupt(running).catch(() => undefined);
         await say('Stopped.');
       } else await say('I’m not doing anything right now.');
     } else if (command === 'help' || command === 'start') {
@@ -910,22 +946,43 @@ export class ChannelService {
     const text = message.text.trim();
     if (!text && !attachments.length) return;
 
-    const conversationId = stored.chats[message.user.id];
-    const running = conversationId ? this.#relays.get(conversationId) : undefined;
-    if (running) {
-      running.queued.push({ text, attachments });
-      if (!running.toldQueued) {
-        running.toldQueued = true;
-        await live.connection
-          .send(message.chatId, 'Got it — I’ll look at that as soon as I’ve finished this.')
-          .catch(() => undefined);
-      }
+    // Decided now, after the downloads: a turn that started meanwhile takes this as its next message.
+    if (this.#queueBehind(stored.id, message.user.id, message.chatId, text, attachments, live))
       return;
-    }
     await this.#send(stored, message.chatId, message.user.id, text, attachments, {
       chatId: message.chatId,
       messageId: message.messageId,
     });
+  }
+
+  /** If the person has a turn in progress, add this to what goes next. */
+  #queueBehind(
+    channelId: string,
+    personId: string,
+    chatId: string,
+    text: string,
+    attachments: string[],
+    live: LiveChannel,
+  ): boolean {
+    const running = this.#inflight.get(`${channelId}:${personId}`);
+    if (!running) return false;
+    running.queued.push({ text, attachments });
+    if (!running.toldQueued) {
+      running.toldQueued = true;
+      void live.connection
+        .send(chatId, 'Got it — I’ll look at that as soon as I’ve finished this.')
+        .catch(() => undefined);
+    }
+    return true;
+  }
+
+  /** The turn is over (or never started): the next message may start one. */
+  #release(relay: Relay) {
+    const key = `${relay.channelId}:${relay.personId}`;
+    if (this.#inflight.get(key) === relay) this.#inflight.delete(key);
+    if (relay.conversationId && this.#relays.get(relay.conversationId) === relay)
+      this.#relays.delete(relay.conversationId);
+    this.#stopTyping(relay);
   }
 
   async #send(
@@ -938,6 +995,8 @@ export class ChannelService {
   ) {
     const live = this.#live.get(stored.id);
     if (!live) return;
+    // Claimed before the first await, so nothing sent meanwhile can start a second turn.
+    if (this.#queueBehind(stored.id, personId, chatId, text, attachments, live)) return;
     const relay: Relay = {
       channelId: stored.id,
       chatId,
@@ -947,12 +1006,21 @@ export class ChannelService {
       queued: [],
       chain: Promise.resolve(),
     };
+    this.#inflight.set(`${stored.id}:${personId}`, relay);
     const epoch = this.#epoch(stored.id, personId);
-    let conversationId = (await this.deps.store.get(stored.id))?.chats[personId];
+    const current = await this.deps.store.get(stored.id);
+    // Let go while this was on its way? Then it doesn't go.
+    if (!current?.people.some((p) => p.id === personId)) {
+      this.#release(relay);
+      return;
+    }
+    let conversationId = current.chats[personId];
     for (let attempt = 0; attempt < 2; attempt++) {
       const clientMessageId = newId('u');
-      if (conversationId) this.#relays.set(conversationId, relay);
-      else this.#pending.set(clientMessageId, relay);
+      if (conversationId) {
+        relay.conversationId = conversationId;
+        if (!this.#relays.has(conversationId)) this.#relays.set(conversationId, relay);
+      } else this.#pending.set(clientMessageId, relay);
       try {
         const summary = await this.deps.conversations.send({
           ...(conversationId && { conversationId }),
@@ -964,6 +1032,7 @@ export class ChannelService {
           }),
         });
         this.#pending.delete(clientMessageId);
+        relay.conversationId = summary.id;
         this.#relays.set(summary.id, relay);
         // Remember it as their current conversation, unless they asked for a fresh one meanwhile.
         if (summary.id !== conversationId && this.#epoch(stored.id, personId) === epoch) {
@@ -977,12 +1046,15 @@ export class ChannelService {
         return;
       } catch (error) {
         this.#pending.delete(clientMessageId);
-        if (conversationId) this.#relays.delete(conversationId);
+        if (conversationId && this.#relays.get(conversationId) === relay)
+          this.#relays.delete(conversationId);
+        relay.conversationId = undefined;
         // The conversation was deleted in Conch: start a new one.
         if (error instanceof ConversationError && error.code === 'not-found' && attempt === 0) {
           conversationId = undefined;
           continue;
         }
+        this.#release(relay);
         const assistant = (await this.deps.settings.get()).persona.name;
         const why =
           error instanceof ConversationError && error.code === 'engine-unavailable'
@@ -1007,15 +1079,21 @@ export class ChannelService {
     const typing = () => void live.connection.typing(relay.chatId).catch(() => undefined);
     if (live.connection.draft) {
       relay.draft ??= { id: 1 + Math.floor(Math.random() * 1e9), text: '', sentAt: 0 };
-      relay.typing = setInterval(() => void this.#pushDraft(relay), DRAFT_KEEPALIVE_MS);
-      void this.#pushDraft(relay).then((ok) => {
-        if (ok || !relay.typing) return;
-        // This Telegram won't stream: typing… instead.
-        clearInterval(relay.typing);
-        relay.draft = undefined;
-        typing();
-        relay.typing = setInterval(typing, TYPING_EVERY_MS);
-      });
+      relay.typing = setInterval(
+        () => this.#quietly(this.#pushDraft(relay), 'draft'),
+        DRAFT_KEEPALIVE_MS,
+      );
+      void this.#pushDraft(relay)
+        .catch(() => false)
+        .then((ok) => {
+          if (ok || !relay.typing) return;
+          // This Telegram won't stream: typing… instead.
+          clearInterval(relay.typing);
+          relay.draft = undefined;
+          typing();
+          relay.typing = setInterval(typing, TYPING_EVERY_MS);
+          relay.typing.unref?.();
+        });
     } else {
       typing();
       relay.typing = setInterval(typing, TYPING_EVERY_MS);
@@ -1044,7 +1122,7 @@ export class ChannelService {
     const draft = relay.draft;
     if (!draft || draft.timer) return;
     const wait = Math.max(0, draft.sentAt + DRAFT_EVERY_MS - Date.now());
-    draft.timer = setTimeout(() => void this.#pushDraft(relay), wait);
+    draft.timer = setTimeout(() => this.#quietly(this.#pushDraft(relay), 'draft'), wait);
     draft.timer.unref?.();
   }
 
@@ -1078,7 +1156,7 @@ export class ChannelService {
     if (event.type !== 'conversation.event') return;
     const e = event.event;
     if (e.type === 'permission.resolved') {
-      void this.#resolved(e.permissionId, e.decision);
+      this.#quietly(this.#resolved(e.permissionId, e.decision), 'answer');
       return;
     }
     const relay = this.#relays.get(e.conversationId);
@@ -1114,7 +1192,10 @@ export class ChannelService {
         break;
       }
       case 'permission.requested':
-        void this.#ask(relay.channelId, relay.chatId, e.conversationId, e.permissionId, e.summary);
+        this.#quietly(
+          this.#ask(relay.channelId, relay.chatId, e.conversationId, e.permissionId, e.summary),
+          'question',
+        );
         break;
       case 'browser.handoff':
         if (e.handoff.state === 'waiting')
@@ -1130,7 +1211,7 @@ export class ChannelService {
         ).catch(() => undefined);
         break;
       case 'turn.completed':
-        void this.#finish(relay, e);
+        this.#quietly(this.#finish(relay, e), 'finish');
         break;
       default:
         break;
@@ -1158,12 +1239,12 @@ export class ChannelService {
     const live = this.#live.get(relay.channelId);
     if (relay.source) void live?.connection.seen?.(relay.source, false).catch(() => undefined);
     await relay.chain;
-    if (this.#relays.get(e.conversationId) === relay) this.#relays.delete(e.conversationId);
-    // What was sent meanwhile goes now, as one message.
+    // Read before letting go, so a message arriving now still joins this queue.
+    const stored = relay.queued.length ? await this.deps.store.get(relay.channelId) : undefined;
+    this.#release(relay);
+    // What was sent meanwhile goes now, as one message, if they're still let in.
     const queued = relay.queued;
-    if (!queued.length) return;
-    const stored = await this.deps.store.get(relay.channelId);
-    if (!stored) return;
+    if (!queued.length || !stored?.people.some((p) => p.id === relay.personId)) return;
     await this.#send(
       stored,
       relay.chatId,
@@ -1186,11 +1267,12 @@ export class ChannelService {
     heading?: string,
   ) {
     const live = this.#live.get(channelId);
-    if (!live || this.#asks.has(permissionId)) return;
+    const askKey = `${channelId}:${permissionId}`;
+    if (!live || this.#asks.has(askKey)) return;
     const key = randomBytes(6).toString('base64url');
     const ask: Ask = { channelId, chatId, conversationId, permissionId, summary, refs: [] };
-    this.#asks.set(permissionId, ask);
-    this.#buttons.set(key, permissionId);
+    this.#asks.set(askKey, ask);
+    this.#buttons.set(key, askKey);
     const assistant = (await this.deps.settings.get()).persona.name;
     const relay = this.#relays.get(conversationId);
     const text = `🔐 ${heading ?? `**${assistant} would like to:**`}\n${summary}`;
@@ -1208,13 +1290,29 @@ export class ChannelService {
     } catch (error) {
       this.#log(`question: ${explain(error)}`);
     }
+    // Answered somewhere while this was on its way? Then its buttons are done too.
+    const decided = await this.#decisionOn(conversationId, permissionId);
+    if (decided) await this.#resolved(permissionId, decided);
   }
 
+  async #decisionOn(conversationId: string, permissionId: string) {
+    const events = await this.deps.conversations.eventsAfter(conversationId).catch(() => []);
+    for (const e of events)
+      if (e.type === 'permission.resolved' && e.permissionId === permissionId) return e.decision;
+    return undefined;
+  }
+
+  /** Every chat that was asked hears how it was answered, and its buttons stop working. */
   async #resolved(permissionId: string, decision: PermissionDecision | 'expired') {
-    const ask = this.#asks.get(permissionId);
-    if (!ask) return;
-    this.#asks.delete(permissionId);
-    for (const [key, id] of this.#buttons) if (id === permissionId) this.#buttons.delete(key);
+    for (const [askKey, ask] of this.#asks) {
+      if (ask.permissionId !== permissionId) continue;
+      this.#asks.delete(askKey);
+      for (const [key, target] of this.#buttons) if (target === askKey) this.#buttons.delete(key);
+      await this.#showAnswer(ask, decision);
+    }
+  }
+
+  async #showAnswer(ask: Ask, decision: PermissionDecision | 'expired') {
     const live = this.#live.get(ask.channelId);
     const ref = ask.refs.at(-1);
     if (!live || !ref) return;
@@ -1234,8 +1332,8 @@ export class ChannelService {
       return;
     }
     const match = /^p:([\w-]+):([aAd])$/.exec(press.data);
-    const permissionId = match?.[1] ? this.#buttons.get(match[1]) : undefined;
-    const ask = permissionId ? this.#asks.get(permissionId) : undefined;
+    const askKey = match?.[1] ? this.#buttons.get(match[1]) : undefined;
+    const ask = askKey ? this.#asks.get(askKey) : undefined;
     if (!match || !ask || ask.channelId !== id || ask.chatId !== press.chatId) {
       await press.ack('That was already answered.');
       return;
