@@ -185,6 +185,8 @@ describe('ChannelService — Telegram', () => {
       'request',
     );
     expect(request).toMatchObject({ id: '5151', name: 'Bob', username: 'bob' });
+    // The reply goes out after the request is saved: wait for it, then check it was only one.
+    await until(() => telegram.sent.some((m) => m.chat_id === '5151'), 'answer to Bob');
     const toBob = telegram.sent.filter((m) => m.chat_id === '5151');
     expect(toBob).toHaveLength(1);
     expect(toBob[0]?.text).toMatch(/private assistant/);
