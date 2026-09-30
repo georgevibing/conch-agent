@@ -4,8 +4,9 @@ import { join } from 'node:path';
 import { bundledClaude } from '../engines/claude-code/bundled';
 import { findClaude } from '../engines/claude-code/detect';
 import { findCodex } from '../engines/codex/detect';
-import { findExecutable, presentSync } from '../lib/proc';
-import type { InstallRecipe, NeedSpec, Platform } from './needs';
+import { findExecutable, presentSync, run } from '../lib/proc';
+import { parseVersion } from '../updates/version';
+import type { InstallRecipe, LatestLookup, NeedSpec, Platform } from './needs';
 
 /** Where macOS keeps apps: for everyone, then just for you. */
 const macApp = (name: string) =>
@@ -31,23 +32,101 @@ const npmGlobal = (pkg: string): InstallRecipe => ({
   args: ['install', '--global', `${pkg}@latest`],
 });
 
+/** A program's ids with each package manager, and whether it updates itself. */
+export interface PackageIds {
+  winget?: string;
+  brew?: string;
+  cask?: boolean;
+  npm?: string;
+  /**
+   * Where the program's own installer puts it, when it updates itself
+   * (`claude update`): a path containing one of these came from there.
+   */
+  self?: { dirs: string[]; args: string[] };
+}
+
 /**
- * Update a program the way it was installed, judged by where it lives: winget
- * keeps its programs under `WinGet`, Homebrew under its prefix; anything else
- * came from npm.
+ * How a program was installed, judged by where it lives: winget keeps its
+ * programs under `WinGet`, Homebrew under its prefix, a self-updating
+ * installer in its own folders; anything else came from npm.
  */
-export function updateBy(
+export function installedBy(
   path: string,
   platform: Platform,
-  ids: { winget?: string; brew?: string; cask?: boolean; npm?: string },
-): InstallRecipe[] {
+  ids: PackageIds,
+): 'winget' | 'brew' | 'self' | 'npm' | undefined {
   const where = path.replaceAll('\\', '/').toLowerCase();
-  if (platform === 'win32' && ids.winget && where.includes('/winget/'))
-    return [{ manager: 'winget', args: ['upgrade', '--id', ids.winget, ...WINGET_QUIET] }];
-  if (ids.brew && /\/(homebrew|cellar|caskroom)\//.test(where))
-    return [{ manager: 'brew', args: ['upgrade', ...(ids.cask ? ['--cask'] : []), ids.brew] }];
-  return ids.npm ? [npmGlobal(ids.npm)] : [];
+  if (platform === 'win32' && ids.winget && where.includes('/winget/')) return 'winget';
+  if (ids.brew && /\/(homebrew|cellar|caskroom)\//.test(where)) return 'brew';
+  if (ids.self?.dirs.some((dir) => where.includes(dir))) return 'self';
+  return ids.npm ? 'npm' : undefined;
 }
+
+/** Update a program the way it was installed (see `installedBy`). */
+export function updateBy(path: string, platform: Platform, ids: PackageIds): InstallRecipe[] {
+  switch (installedBy(path, platform, ids)) {
+    case 'winget':
+      return [{ manager: 'winget', args: ['upgrade', '--id', ids.winget ?? '', ...WINGET_QUIET] }];
+    case 'brew':
+      return [
+        { manager: 'brew', args: ['upgrade', ...(ids.cask ? ['--cask'] : []), ids.brew ?? ''] },
+      ];
+    case 'self':
+      return [{ manager: 'self', args: ids.self?.args ?? [] }];
+    case 'npm':
+      return [npmGlobal(ids.npm ?? '')];
+    default:
+      return [];
+  }
+}
+
+/**
+ * The newest version, from where the program came from — the same judgement
+ * as `updateBy`. A program that updates itself follows its npm releases.
+ */
+export function latestBy(
+  path: string,
+  platform: Platform,
+  ids: PackageIds,
+  lookup: LatestLookup,
+): Promise<string | undefined> {
+  switch (installedBy(path, platform, ids)) {
+    case 'winget':
+      return lookup.winget(ids.winget ?? '');
+    case 'brew':
+      return lookup.brew(ids.brew ?? '', ids.cask);
+    case 'self':
+    case 'npm':
+      return ids.npm ? lookup.npm(ids.npm) : Promise.resolve(undefined);
+    default:
+      return Promise.resolve(undefined);
+  }
+}
+
+/** What `<program> --version` says, as a version number. */
+export async function versionOf(path: string): Promise<string | undefined> {
+  const result = await run(path, ['--version'], { timeout: 15_000 });
+  return result.code === 0 ? parseVersion(`${result.stdout}\n${result.stderr}`) : undefined;
+}
+
+/** A need's `update`, `latest` and `version`, from its package ids. */
+function updatable(ids: PackageIds): Pick<NeedSpec, 'update' | 'latest' | 'version'> {
+  return {
+    update: (path, platform) => updateBy(path, platform, ids),
+    latest: (path, platform, lookup) => latestBy(path, platform, ids, lookup),
+    version: versionOf,
+  };
+}
+
+/**
+ * Claude Code's own installer (`install.sh` / `install.ps1`) puts it in
+ * `~/.local/bin`, with its versions under `~/.local/share/claude`; the older
+ * local install lives in `~/.claude/local`. Those copies update themselves.
+ */
+const CLAUDE_SELF = {
+  dirs: ['/.local/bin/', '/.local/share/claude/', '/.claude/local/'],
+  args: ['update'],
+};
 
 /**
  * Everything Conch knows how to find and get. Checked on real installs
@@ -132,13 +211,15 @@ list.push(
       ],
       linux: npmGlobal('@anthropic-ai/claude-code'),
     },
-    update: (path, platform) =>
-      updateBy(path, platform, {
-        winget: 'Anthropic.ClaudeCode',
-        brew: 'claude-code',
-        cask: true,
-        npm: '@anthropic-ai/claude-code',
-      }),
+    ...updatable({
+      winget: 'Anthropic.ClaudeCode',
+      brew: 'claude-code',
+      cask: true,
+      npm: '@anthropic-ai/claude-code',
+      self: CLAUDE_SELF,
+    }),
+    // The copy that comes with Conch is updated with Conch, so it isn't listed.
+    version: async (path) => (path === bundledClaude() ? undefined : versionOf(path)),
     download: {
       win32: 'https://code.claude.com/docs/en/setup',
       darwin: 'https://code.claude.com/docs/en/setup',
@@ -155,8 +236,7 @@ list.push(
       darwin: [{ manager: 'brew', args: ['install', 'codex'] }, npmGlobal('@openai/codex')],
       linux: npmGlobal('@openai/codex'),
     },
-    update: (path, platform) =>
-      updateBy(path, platform, { winget: 'OpenAI.Codex', brew: 'codex', npm: '@openai/codex' }),
+    ...updatable({ winget: 'OpenAI.Codex', brew: 'codex', npm: '@openai/codex' }),
     download: {
       win32: 'https://developers.openai.com/codex/cli',
       darwin: 'https://developers.openai.com/codex/cli',
@@ -172,8 +252,7 @@ list.push(
       win32: winget('AgileBits.1Password.CLI'),
       darwin: { manager: 'brew', args: ['install', '1password-cli'] },
     },
-    update: (path, platform) =>
-      updateBy(path, platform, { winget: 'AgileBits.1Password.CLI', brew: '1password-cli' }),
+    ...updatable({ winget: 'AgileBits.1Password.CLI', brew: '1password-cli' }),
     // Linux needs sudo and 1Password's package repository.
     download: {
       win32: 'https://developer.1password.com/docs/cli/get-started/',
@@ -191,7 +270,7 @@ list.push(
       win32: winget('astral-sh.uv'),
       darwin: { manager: 'brew', args: ['install', 'uv'] },
     },
-    update: (path, platform) => updateBy(path, platform, { winget: 'astral-sh.uv', brew: 'uv' }),
+    ...updatable({ winget: 'astral-sh.uv', brew: 'uv' }),
     download: {
       win32: 'https://docs.astral.sh/uv/getting-started/installation/',
       darwin: 'https://docs.astral.sh/uv/getting-started/installation/',
