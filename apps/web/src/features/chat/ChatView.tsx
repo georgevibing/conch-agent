@@ -34,6 +34,7 @@ import { emptyView, lastUserMessage, type ConversationView } from '../../live/re
 import { NEW, useLiveStore } from '../../live/store';
 import { useSlashCommands } from '../commands/useSlashCommands';
 import { ChannelBanner } from '../channels/ChannelBanner';
+import { useChannels } from '../channels/queries';
 import { RunBanner } from '../routines/RunBanner';
 import { ComposerControls } from '../models/ComposerControls';
 import { modeInfo } from '../models/catalog';
@@ -66,6 +67,24 @@ const suggestions = [
   },
   { label: 'Remember something', prompt: 'Remember that I prefer short, direct answers.' },
 ];
+
+/** Until a chat app is connected, point at talking to the assistant from your phone. */
+function ChannelsHint() {
+  const { data } = useChannels();
+  const navigate = useNavigate();
+  if (!data || data.channels.length > 0) return null;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      trailingIcon={<ArrowRight />}
+      onClick={() => void navigate('/channels')}
+      className={styles.connectHint}
+    >
+      Talk to it from Telegram, Discord or Slack
+    </Button>
+  );
+}
 
 /** Until something is connected, point at where the assistant gets its reach. */
 function ConnectAppsHint() {
@@ -506,7 +525,10 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
             </Button>
           ))}
         </div>
-        <ConnectAppsHint />
+        <div className={styles.hints}>
+          <ConnectAppsHint />
+          <ChannelsHint />
+        </div>
       </div>
     );
   }

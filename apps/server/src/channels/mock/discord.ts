@@ -51,6 +51,8 @@ export class MockDiscord {
   readonly sent: MockDiscordMessage[] = [];
   readonly calls: { method: string; path: string; body: unknown }[] = [];
   identifies = 0;
+  /** Conch gave the bot a picture (PATCH /users/@me). */
+  avatarSet = false;
   resumes = 0;
   guilds = 0;
   /** An Interactions Endpoint URL left in the app's settings. */
@@ -88,6 +90,12 @@ export class MockDiscord {
       const body = request.body as { interactions_endpoint_url?: string };
       if (body.interactions_endpoint_url === '') this.endpoint = '';
       return {};
+    });
+    app.patch('/api/v10/users/@me', (request) => {
+      this.avatarSet = Boolean(
+        (request.body as { avatar?: string }).avatar?.startsWith('data:image/'),
+      );
+      return { ...this.bot, avatar: null, bot: true };
     });
     app.get('/api/v10/gateway/bot', () => ({ url: `${this.base.replace('http', 'ws')}/gateway` }));
     app.post('/api/v10/users/@me/channels', (request) => ({

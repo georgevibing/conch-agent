@@ -84,6 +84,22 @@ describe('ChannelService — Telegram', () => {
     expect(commands).toEqual(expect.arrayContaining([expect.objectContaining({ command: 'new' })]));
   });
 
+  it('gives a bot without a picture Conch’s pearl, and leaves one you chose alone', async () => {
+    const { s, telegram } = await setup();
+    const channel = await s.channels.create({ kind: 'telegram', token: MockTelegram.TOKEN });
+    await until(() => telegram.hasPhoto, 'picture set');
+    // The page shows the bot's new picture once it's there.
+    await until(
+      async () => (await s.channels.get(channel.id)).bot.avatar?.startsWith('data:image/'),
+      'avatar shown',
+    );
+    const sets = telegram.calls.filter((c) => c.method === 'setMyProfilePhoto').length;
+    await s.channels.repair(channel.id);
+    await s.channels.create({ kind: 'telegram', token: MockTelegram.TOKEN });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(telegram.calls.filter((c) => c.method === 'setMyProfilePhoto')).toHaveLength(sets);
+  });
+
   it('lets the owner in when they press Start on the hello link, once', async () => {
     const { s, telegram, channel } = await paired();
     const view = await s.channels.get(channel.id);

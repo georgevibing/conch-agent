@@ -1,5 +1,6 @@
 import type { ChannelBot } from '@conch/protocol';
 
+import { botAvatar } from './assets';
 import { plain, split, toTelegramHtml } from './format';
 import {
   Backoff,
@@ -197,7 +198,32 @@ export class TelegramAdapter implements ChannelAdapter {
           'computer through Conch and can do everything there: files, the web, your apps. ' +
           'I’m private: only people who were let in can talk to me.',
       }),
+      this.#pictureIfNone(),
     ]);
+  }
+
+  /** A bot without a picture gets Conch's pearl (Bot API 9.4); one you chose is left alone. */
+  async #pictureIfNone() {
+    const me = await this.call<TgUser>('getMe');
+    const photos = await this.call<{ total_count: number }>('getUserProfilePhotos', {
+      user_id: me.id,
+      limit: 1,
+    });
+    if (photos.total_count > 0) return;
+    const form = new FormData();
+    form.set('photo', JSON.stringify({ type: 'static', photo: 'attach://avatar' }));
+    form.set(
+      'avatar',
+      new Blob([new Uint8Array(await botAvatar())], { type: 'image/jpeg' }),
+      'avatar.jpg',
+    );
+    const response = await fetch(`${this.base}/bot${this.token}/setMyProfilePhoto`, {
+      method: 'POST',
+      body: form,
+      signal: AbortSignal.timeout(30_000),
+    });
+    const body = (await response.json().catch(() => undefined)) as TgResponse<boolean> | undefined;
+    if (!body?.ok) throw new ChannelError('refused', 'Telegram didn’t take the picture.');
   }
 
   connect(events: ChannelEvents): ChannelConnection {

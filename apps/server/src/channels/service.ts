@@ -372,14 +372,14 @@ export class ChannelService {
       );
     }
     this.#connect(stored, secrets);
-    void this.#prepare(adapter);
+    void this.#prepare(adapter, stored.id);
     if (!stored.people.length) this.#openPairing(stored);
     const view = this.#view(stored);
     this.deps.emit({ type: 'channel.changed', channel: view });
     return view;
   }
 
-  async #prepare(adapter: ChannelAdapter) {
+  async #prepare(adapter: ChannelAdapter, id: string) {
     const settings = await this.deps.settings.get();
     await adapter
       .prepare?.({
@@ -387,6 +387,8 @@ export class ChannelService {
         ...(settings.profile.name && { owner: firstName(settings.profile.name) }),
       })
       .catch(() => undefined);
+    // It may have a new picture now: show it.
+    await this.#refreshBot(id);
   }
 
   async update(id: string, patch: UpdateChannelBody): Promise<Channel> {

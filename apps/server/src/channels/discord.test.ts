@@ -93,6 +93,11 @@ describe('Discord', () => {
     await until(() => ctx.discord.endpoint === '', 'endpoint cleared');
   });
 
+  it('gives a bot without a picture Conch’s pearl', async () => {
+    const { discord } = await connected();
+    await until(() => discord.avatarSet, 'avatar set');
+  });
+
   it('notices when the bot is added to a server', async () => {
     const { s, discord, channel } = await connected();
     discord.join();

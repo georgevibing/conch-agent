@@ -1,6 +1,8 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { botAvatar } from '../assets';
+
 interface MockUser {
   id: number;
   first_name: string;
@@ -44,6 +46,8 @@ export class MockTelegram {
   readonly bots = new Map<string, MockUser>();
   readonly sent: MockSent[] = [];
   readonly calls: { method: string; params: Record<string, unknown> }[] = [];
+  /** The bot has a profile picture (set with setMyProfilePhoto). */
+  hasPhoto = false;
   /** Streaming drafts sent (Bot API `sendMessageDraft`). */
   readonly drafts: { chat_id: string; draft_id: number; text: string; can_stop: boolean }[] = [];
   /** Answer `sendMessageDraft` as an older Telegram would: not available. */
@@ -173,7 +177,9 @@ export class MockTelegram {
     const file = /^\/file\/bot([^/]+)\/(.+)$/.exec(url.pathname);
     if (file) {
       if (!this.bots.has(decodeURIComponent(file[1] ?? ''))) return res.writeHead(401).end();
-      // A tiny valid PNG, whatever was asked for.
+      // The bot's picture is the pearl it was given; anything else, a tiny valid PNG.
+      if (file[2]?.includes('avatar'))
+        return res.writeHead(200, { 'content-type': 'image/jpeg' }).end(await botAvatar());
       return res.writeHead(200, { 'content-type': 'image/png' }).end(PNG);
     }
     const match = /^\/bot([^/]+)\/(\w+)$/.exec(url.pathname);
@@ -269,7 +275,14 @@ export class MockTelegram {
         });
         return ok(true);
       case 'getUserProfilePhotos':
-        return ok({ total_count: 0, photos: [] });
+        return ok(
+          this.hasPhoto
+            ? { total_count: 1, photos: [[{ file_id: 'avatar-small', file_size: 68, width: 160 }]] }
+            : { total_count: 0, photos: [] },
+        );
+      case 'setMyProfilePhoto':
+        this.hasPhoto = true;
+        return ok(true);
       case 'getFile':
         return ok({ file_id: params.file_id, file_path: `photos/${String(params.file_id)}.png` });
       case 'sendChatAction':

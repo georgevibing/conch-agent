@@ -1,5 +1,6 @@
 import type { ChannelBot } from '@conch/protocol';
 
+import { botAvatar } from './assets';
 import { split, toDiscordMarkdown } from './format';
 import {
   Backoff,
@@ -194,6 +195,12 @@ export class DiscordAdapter implements ChannelAdapter {
       // Presses must come over the Gateway; a leftover endpoint URL would take them away.
       ...(app?.interactions_endpoint_url && { interactions_endpoint_url: '' }),
     }).catch(() => undefined);
+    // A bot without a picture gets Conch's pearl; one you chose is left alone.
+    const me = await this.rest<DiscordUser>('GET', '/users/@me').catch(() => undefined);
+    if (me && !me.avatar) {
+      const avatar = `data:image/jpeg;base64,${(await botAvatar()).toString('base64')}`;
+      await this.rest('PATCH', '/users/@me', { avatar }).catch(() => undefined);
+    }
   }
 
   connect(events: ChannelEvents): ChannelConnection {
