@@ -189,6 +189,12 @@
     }
   }
 
+  /* ── Attach ───────────────────────────────────────────────────────── */
+  .toolbar .attach[data-size] {
+    flex-shrink: 0;
+    color: var(--nc-text-muted);
+  }
+
   /* ── Toolbar chip ─────────────────────────────────────────────────── */
   /* Gives way before its neighbours, down to its icon; the clip hides the
      gap and ellipsis once the label is gone. Flex shrink is shared out by
@@ -272,11 +278,20 @@
   }
 
   /* ── Attachments ──────────────────────────────────────────────────── */
+  /* One row that scrolls sideways, so twenty files never push the text off
+     screen. The padding leaves room for each card's corner ×. */
   .attachments {
     display: flex;
-    flex-wrap: wrap;
     gap: var(--nc-space-2);
-    padding: var(--nc-space-3) var(--nc-space-3) 0;
+    padding: var(--nc-space-3) var(--nc-space-3) var(--nc-space-1);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    scroll-padding-inline: var(--nc-space-3);
+  }
+
+  .attachments > * {
+    flex: none;
   }
 
   .attachment {

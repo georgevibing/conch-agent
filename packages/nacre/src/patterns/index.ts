@@ -1,3 +1,4 @@
+export * from './Attachments';
 export * from './CodeBlock';
 export * from './Composer';
 export * from './CopyButton';

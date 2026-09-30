@@ -1,4 +1,4 @@
-import { ArrowUp, FileText, Image as ImageIcon, Square, X } from 'lucide-react';
+import { ArrowUp, FileText, Image as ImageIcon, Plus, Square, X } from 'lucide-react';
 import {
   useCallback,
   useId,
@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type ClipboardEvent,
   type ComponentProps,
   type KeyboardEvent,
   type ReactNode,
@@ -62,6 +63,32 @@ export interface ComposerProps extends Omit<
   >;
   /** Floating content anchored to the composer, e.g. a `CommandMenu`. */
   overlay?: ReactNode;
+  /**
+   * Files to attach: picked with the attach button, or pasted (a screenshot).
+   * Giving it shows the attach button.
+   */
+  onFiles?: (files: File[]) => void;
+  /** Types the file picker offers first (the `accept` attribute). Any file can still be chosen. */
+  accept?: string;
+  /**
+   * A paste too long to write around: attach it as a card instead of pouring
+   * it into the box. Shift+paste always pastes inline.
+   */
+  onLongPaste?: (text: string) => void;
+  /** Which pastes count as long. Defaults to more than 1 000 characters or 20 lines. */
+  foldPaste?: (text: string) => boolean;
+  /** Send even with nothing typed (the message is its attachments). */
+  canSubmitEmpty?: boolean;
+  /** Hold sending, and say why on the button (e.g. "Waiting for uploads…"). */
+  sendBlocked?: string;
+}
+
+/** More than 1 000 characters or 20 lines: Codex CLI's and Open WebUI's threshold (ADR 0017). */
+export function defaultFoldPaste(text: string): boolean {
+  if (text.length > 1000) return true;
+  let lines = 1;
+  for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) === 10 && ++lines > 20) return true;
+  return false;
 }
 
 function assignRef<T>(ref: Ref<T> | undefined, value: T) {
@@ -96,6 +123,12 @@ export function Composer({
   onTextareaKeyDown,
   textareaProps,
   overlay,
+  onFiles,
+  accept,
+  onLongPaste,
+  foldPaste = defaultFoldPaste,
+  canSubmitEmpty = false,
+  sendBlocked,
   className,
   ...props
 }: ComposerProps) {
@@ -103,6 +136,9 @@ export function Composer({
   const controlled = valueProp !== undefined;
   const value = controlled ? valueProp : uncontrolled;
   const textarea = useRef<HTMLTextAreaElement | null>(null);
+  const picker = useRef<HTMLInputElement | null>(null);
+  /** The paste in progress came with Shift (⇧⌘V / Ctrl+Shift+V): keep it inline. */
+  const shiftPaste = useRef(false);
   const hintId = useId();
 
   const setValue = useCallback(
@@ -128,7 +164,9 @@ export function Composer({
     el.style.overflowY = el.scrollHeight > max ? 'auto' : 'hidden';
   }, [value, minRows, maxRows]);
 
-  const canSubmit = !disabled && value.trim().length > 0 && (!running || allowSubmitWhileRunning);
+  const hasContent = value.trim().length > 0 || canSubmitEmpty;
+  const canSubmit =
+    !disabled && hasContent && !sendBlocked && (!running || allowSubmitWhileRunning);
 
   const submit = () => {
     if (!canSubmit) return;
@@ -136,7 +174,30 @@ export function Composer({
     if (!controlled) setUncontrolled('');
   };
 
+  const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    textareaProps?.onPaste?.(event);
+    const shift = shiftPaste.current;
+    shiftPaste.current = false;
+    if (event.defaultPrevented) return;
+    const data = event.clipboardData;
+    const text = data.getData('text/plain');
+    // A copied screenshot or file. Office apps put a picture of the cells next
+    // to the text, so the text wins when there is some.
+    const files = Array.from(data.files ?? []);
+    if (onFiles && files.length && !text) {
+      event.preventDefault();
+      onFiles(files);
+      return;
+    }
+    if (onLongPaste && text && !shift && foldPaste(text)) {
+      event.preventDefault();
+      onLongPaste(text);
+    }
+  };
+
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    shiftPaste.current =
+      event.shiftKey && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v';
     onTextareaKeyDown?.(event);
     if (event.defaultPrevented) return;
     // Never act while an IME composition is in progress (CJK input etc.).
@@ -150,7 +211,7 @@ export function Composer({
     }
   };
 
-  const showStop = running && !(allowSubmitWhileRunning && value.trim());
+  const showStop = running && !(allowSubmitWhileRunning && hasContent);
 
   return (
     <div
@@ -197,9 +258,42 @@ export function Composer({
           enterKeyHint="send"
           onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setValue(event.target.value)}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
         />
         <div className={styles.footer}>
-          <div className={styles.toolbar}>{toolbar}</div>
+          <div className={styles.toolbar}>
+            {onFiles && (
+              <>
+                <IconButton
+                  size="sm"
+                  shape="circle"
+                  label="Attach files"
+                  className={styles.attach}
+                  disabled={disabled}
+                  onClick={() => picker.current?.click()}
+                >
+                  <Plus />
+                </IconButton>
+                <input
+                  ref={picker}
+                  type="file"
+                  multiple
+                  accept={accept}
+                  hidden
+                  tabIndex={-1}
+                  aria-hidden
+                  onChange={(event) => {
+                    const files = Array.from(event.target.files ?? []);
+                    // Cleared so choosing the same file again still counts.
+                    event.target.value = '';
+                    if (files.length) onFiles(files);
+                    textarea.current?.focus();
+                  }}
+                />
+              </>
+            )}
+            {toolbar}
+          </div>
           <span id={hintId} className="nc-visually-hidden">
             {running && onStop
               ? 'Press Escape to stop.'
@@ -227,7 +321,7 @@ export function Composer({
               tone={showStop ? 'neutral' : 'accent'}
               shape="circle"
               size="sm"
-              label={showStop ? 'Stop' : 'Send message'}
+              label={showStop ? 'Stop' : (sendBlocked ?? 'Send message')}
               shortcut={showStop ? 'esc' : 'enter'}
               data-mode={showStop ? 'stop' : 'send'}
               className={styles.send}

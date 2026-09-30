@@ -1,0 +1,725 @@
+@layer nacre.components {
+  /* ── List ─────────────────────────────────────────────────────────── */
+  .list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .list[data-align='end'] {
+    justify-content: flex-end;
+  }
+
+  /* ── Card ─────────────────────────────────────────────────────────── */
+  /* Each family tints its glyph and badge; neutral families stay grey. */
+  .card {
+    --att-h: var(--nc-accent-h);
+    --att-c: var(--nc-accent-c);
+    --att-block: 5.5rem;
+    --att-inline: 10.5rem;
+    --att-tint-fg: light-dark(
+      oklch(0.5 calc(var(--att-c) * 0.95) var(--att-h)),
+      oklch(0.83 calc(var(--att-c) * 0.7) var(--att-h))
+    );
+    --att-tint-bg: light-dark(
+      oklch(0.95 calc(var(--att-c) * 0.28) var(--att-h)),
+      oklch(0.3 calc(var(--att-c) * 0.4) var(--att-h))
+    );
+
+    position: relative;
+    flex: none;
+    inline-size: var(--att-inline);
+    block-size: var(--att-block);
+    animation: att-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  .card[data-family='pdf'] {
+    --att-h: var(--nc-danger-h);
+    --att-c: 0.17;
+  }
+  .card[data-family='sheet'],
+  .card[data-family='data'] {
+    --att-h: var(--nc-success-h);
+    --att-c: 0.13;
+  }
+  .card[data-family='doc'] {
+    --att-h: var(--nc-info-h);
+    --att-c: 0.13;
+  }
+  .card[data-family='slides'] {
+    --att-h: var(--nc-warning-h);
+    --att-c: 0.15;
+  }
+  .card[data-family='pasted'],
+  .card[data-family='text'],
+  .card[data-family='archive'],
+  .card[data-family='file'] {
+    --att-h: var(--nc-neutral-h);
+    --att-c: var(--nc-neutral-c);
+  }
+
+  @keyframes att-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px) scale(0.94);
+      filter: blur(2px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+      filter: none;
+    }
+  }
+
+  /* The whole face is one button: open on click, Delete to remove. */
+  .open {
+    --nc-rim-rest: 0;
+    --nc-rim-hover: 0.5;
+    --nc-sheen-hover: 0.07;
+    --nc-sheen-size: 180px;
+
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    margin: 0;
+    padding: var(--nc-space-2) var(--nc-space-2-5);
+    border: 0;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    overflow: hidden;
+    font: inherit;
+    color: var(--nc-text);
+    text-align: start;
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+    cursor: pointer;
+    transition:
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy),
+      box-shadow var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  /* A paste reads like a slip of paper: sunken, set in type. */
+  .card[data-family='pasted'] .open {
+    background: var(--nc-surface-sunken);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge);
+  }
+
+  @media (hover: hover) {
+    .open:not(:disabled):hover {
+      transform: translateY(-1px);
+      box-shadow:
+        inset 0 0 0 1px var(--nc-border-strong),
+        var(--nc-glaze-edge),
+        var(--nc-elevation-2);
+    }
+  }
+
+  .open:not(:disabled):active {
+    transform: scale(0.97);
+  }
+
+  .open:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .open:disabled {
+    cursor: default;
+  }
+
+  /* ── Faces ────────────────────────────────────────────────────────── */
+  .head {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .glyph {
+    display: grid;
+    place-items: center;
+    flex: none;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    color: var(--att-tint-fg);
+    background: var(--att-tint-bg);
+  }
+
+  .glyph > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    stroke-width: 1.75;
+  }
+
+  .name {
+    min-inline-size: 0;
+    overflow: hidden;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    line-height: var(--nc-leading-snug);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .name[data-clamp='2'] {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .excerpt {
+    flex: 1 1 0;
+    min-block-size: 0;
+    overflow: hidden;
+    font-family: var(--nc-font-mono);
+    font-size: 0.625rem;
+    line-height: 1.4;
+    color: var(--nc-text-muted);
+    /* Lines stay whole and fade out at the edges, like the start of a page. */
+    white-space: pre;
+    mask-image:
+      linear-gradient(to bottom, currentcolor 45%, transparent),
+      linear-gradient(to right, currentcolor 80%, transparent);
+    mask-composite: intersect;
+  }
+
+  .foot {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+    margin-block-start: auto;
+  }
+
+  .badge {
+    flex: none;
+    padding: 0.0625rem 0.3125rem;
+    border-radius: var(--nc-radius-xs);
+    font-size: 0.625rem;
+    font-weight: var(--nc-weight-semibold);
+    line-height: 1.4;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--att-tint-fg);
+    background: var(--att-tint-bg);
+  }
+
+  .meta {
+    min-inline-size: 0;
+    overflow: hidden;
+    font-size: var(--nc-text-2xs);
+    color: var(--nc-text-subtle);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Pictures ─────────────────────────────────────────────────────── */
+  .card[data-photo] {
+    --att-inline: var(--att-block);
+  }
+
+  /* In the transcript a picture shows its shape, not a crop of it. */
+  .card[data-photo][data-density='comfortable'] {
+    --att-block: 10rem;
+    --att-inline: calc(var(--att-block) * var(--att-aspect, 1));
+    max-inline-size: min(22rem, 100%);
+  }
+
+  .card[data-photo] .open {
+    padding: 0;
+    background: var(--nc-surface-sunken);
+  }
+
+  .photo {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  /* ── Uploading ────────────────────────────────────────────────────── */
+  .card[data-status='uploading'] .open > :not(.progress) {
+    opacity: 0.55;
+    filter: saturate(0.5);
+    transition: opacity var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  /* On a card with words, the ring sits in the corner; over a picture, in the middle. */
+  .progress {
+    position: absolute;
+    inset-block-end: var(--nc-space-2);
+    inset-inline-end: var(--nc-space-2);
+    display: grid;
+  }
+
+  .progress > svg {
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+    rotate: -90deg;
+  }
+
+  .card[data-photo] .progress {
+    inset: 0;
+    place-items: center;
+  }
+
+  .card[data-photo] .progress > svg {
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+  }
+
+  .progress > svg[data-indeterminate] {
+    animation: att-spin 0.9s linear infinite;
+  }
+
+  @keyframes att-spin {
+    to {
+      rotate: 270deg;
+    }
+  }
+
+  .track,
+  .value {
+    fill: none;
+    stroke-width: 3;
+  }
+
+  .track {
+    stroke: color-mix(in oklch, var(--nc-text) 12%, transparent);
+  }
+
+  .value {
+    stroke: var(--nc-accent-9);
+    stroke-linecap: round;
+    transition: stroke-dasharray var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  /* ── Failed, and caveats ──────────────────────────────────────────── */
+  .card[data-status='error'] .open {
+    box-shadow:
+      inset 0 0 0 1px
+        light-dark(
+          oklch(0.62 0.19 var(--nc-danger-h) / 0.65),
+          oklch(0.7 0.16 var(--nc-danger-h) / 0.6)
+        ),
+      var(--nc-glaze-edge);
+  }
+
+  .failed {
+    position: absolute;
+    inset-block-end: var(--nc-space-2);
+    inset-inline-end: var(--nc-space-2);
+    display: grid;
+    color: light-dark(oklch(0.55 0.19 var(--nc-danger-h)), oklch(0.75 0.15 var(--nc-danger-h)));
+  }
+
+  .failed > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .card:has(.retry) .failed {
+    display: none;
+  }
+
+  .card .retry[data-size] {
+    --btn-h: 1.5rem;
+    --btn-icon: 0.75rem;
+    position: absolute;
+    inset-block-end: var(--nc-space-1-5);
+    inset-inline-end: var(--nc-space-1-5);
+    z-index: 1;
+  }
+
+  .noteDot {
+    position: absolute;
+    inset-block-start: var(--nc-space-2);
+    inset-inline-end: var(--nc-space-2);
+    inline-size: 0.4375rem;
+    block-size: 0.4375rem;
+    border-radius: var(--nc-radius-full);
+    background: oklch(0.74 0.15 var(--nc-warning-h));
+    box-shadow: 0 0 0 2px var(--nc-surface);
+  }
+
+  /* ── Remove ───────────────────────────────────────────────────────── */
+  .card .remove[data-size] {
+    --btn-h: 1.375rem;
+    --btn-icon: 0.6875rem;
+    position: absolute;
+    inset-block-start: -0.4375rem;
+    inset-inline-end: -0.4375rem;
+    z-index: 1;
+    opacity: 0;
+    scale: 0.8;
+    transition:
+      opacity var(--nc-duration-fast) var(--nc-ease-out),
+      scale var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .card:hover .remove[data-size],
+  .card:focus-within .remove[data-size] {
+    opacity: 1;
+    scale: 1;
+  }
+
+  /* Touch screens can't hover: the × is always there. */
+  @media (hover: none) {
+    .card .remove[data-size] {
+      opacity: 1;
+      scale: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card,
+    .progress > svg[data-indeterminate] {
+      animation: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .card,
+  :global([data-nacre-motion='reduced']) .progress > svg[data-indeterminate] {
+    animation: none;
+  }
+
+  /* ── Drop overlay ─────────────────────────────────────────────────── */
+  .drop {
+    position: absolute;
+    inset: var(--nc-space-2);
+    z-index: var(--nc-z-overlay);
+    display: grid;
+    place-items: center;
+    border-radius: var(--nc-radius-2xl);
+    corner-shape: var(--nc-corner-shape);
+    background: color-mix(in oklch, var(--nc-canvas) 82%, transparent);
+    box-shadow: inset 0 0 0 1.5px color-mix(in oklch, var(--nc-accent-9) 45%, transparent);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      opacity var(--nc-duration-base) var(--nc-ease-out),
+      visibility 0s linear var(--nc-duration-base);
+  }
+
+  .drop[data-active] {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  /* A pearl halo that gathers while files hover over the chat. */
+  .drop::before {
+    content: '';
+    position: absolute;
+    inset: 12% 18%;
+    z-index: -1;
+    border-radius: 50%;
+    background: conic-gradient(from var(--nc-angle), var(--nc-pearl-spectrum));
+    filter: blur(48px);
+    opacity: calc(var(--nc-lustre) * 0.28);
+    animation: drop-orbit 8s linear infinite;
+  }
+
+  @keyframes drop-orbit {
+    to {
+      --nc-angle: 360deg;
+    }
+  }
+
+  .dropCard {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-6) var(--nc-space-8);
+    text-align: center;
+    transform: translateY(6px) scale(0.97);
+    transition: transform var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .drop[data-active] .dropCard {
+    transform: none;
+  }
+
+  .dropIcon {
+    display: grid;
+    place-items: center;
+    inline-size: 3.25rem;
+    block-size: 3.25rem;
+    margin-block-end: var(--nc-space-1);
+    border-radius: var(--nc-radius-xl);
+    corner-shape: var(--nc-corner-shape);
+    color: var(--nc-accent-11);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-3);
+    animation: drop-bob 1.6s var(--nc-ease-in-out) infinite alternate;
+  }
+
+  .dropIcon > svg {
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+  }
+
+  @keyframes drop-bob {
+    to {
+      transform: translateY(-4px);
+    }
+  }
+
+  .dropTitle {
+    font-family: var(--nc-font-display);
+    font-size: var(--nc-text-2xl);
+    line-height: var(--nc-leading-tight);
+    color: var(--nc-text);
+  }
+
+  .dropHint {
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .drop::before,
+    .dropIcon {
+      animation: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .drop::before,
+  :global([data-nacre-motion='reduced']) .dropIcon {
+    animation: none;
+  }
+
+  /* ── Preview ──────────────────────────────────────────────────────── */
+  .preview {
+    --dialog-w: 56rem;
+  }
+
+  .previewHead {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-4) var(--nc-space-12) var(--nc-space-3) var(--nc-space-5);
+    min-inline-size: 0;
+  }
+
+  .previewTitle {
+    min-inline-size: 0;
+  }
+
+  .previewTitle > h2 {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .previewMeta {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .previewBody {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-block-size: 0;
+    padding: 0 var(--nc-space-5);
+  }
+
+  .stage {
+    display: grid;
+    place-items: center;
+    min-block-size: 12rem;
+    max-block-size: 68dvh;
+    overflow: hidden;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .stage > img {
+    display: block;
+    max-inline-size: 100%;
+    max-block-size: 68dvh;
+    object-fit: contain;
+  }
+
+  .stage > video,
+  .stage > audio {
+    max-inline-size: 100%;
+  }
+
+  .stage > audio {
+    inline-size: min(28rem, 100%);
+    margin: var(--nc-space-8);
+  }
+
+  .frame {
+    inline-size: 100%;
+    block-size: 68dvh;
+    border: 0;
+    border-radius: var(--nc-radius-lg);
+    background: var(--nc-surface-sunken);
+  }
+
+  .editor,
+  .raw {
+    box-sizing: border-box;
+    inline-size: 100%;
+    block-size: min(60dvh, 36rem);
+    margin: 0;
+    padding: var(--nc-space-3) var(--nc-space-4);
+    overflow: auto;
+    border: 0;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+    line-height: 1.6;
+    color: var(--nc-text);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    tab-size: 2;
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    resize: none;
+    outline: none;
+  }
+
+  .editor:focus-visible {
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--nc-accent-9) 55%, var(--nc-border)),
+      0 0 0 3px color-mix(in oklch, var(--nc-accent-9) 14%, transparent);
+  }
+
+  .code {
+    max-block-size: min(60dvh, 36rem);
+    overflow: auto;
+  }
+
+  .tableWrap {
+    max-block-size: min(60dvh, 36rem);
+    overflow: auto;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .table {
+    inline-size: max-content;
+    min-inline-size: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .table th,
+  .table td {
+    max-inline-size: 22rem;
+    padding: var(--nc-space-1-5) var(--nc-space-3);
+    overflow: hidden;
+    text-align: start;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    border-block-end: 1px solid var(--nc-border-subtle);
+  }
+
+  .table th {
+    position: sticky;
+    inset-block-start: 0;
+    font-weight: var(--nc-weight-semibold);
+    background: var(--nc-surface-hi);
+  }
+
+  .table tbody tr:nth-child(even) td {
+    background: color-mix(in oklch, var(--nc-surface-sunken) 60%, transparent);
+  }
+
+  .rowNumber {
+    color: var(--nc-text-subtle);
+    text-align: end;
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+    margin-block-end: var(--nc-space-2);
+    min-block-size: var(--nc-control-sm);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .nothing {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-10) var(--nc-space-6);
+    text-align: center;
+    color: var(--nc-text-muted);
+  }
+
+  .bigGlyph {
+    --att-h: var(--nc-accent-h);
+    --att-c: var(--nc-accent-c);
+    display: grid;
+    place-items: center;
+    inline-size: 4rem;
+    block-size: 4rem;
+    margin-block-end: var(--nc-space-2);
+    border-radius: var(--nc-radius-xl);
+    corner-shape: var(--nc-corner-shape);
+    color: light-dark(
+      oklch(0.5 calc(var(--att-c) * 0.95) var(--att-h)),
+      oklch(0.83 calc(var(--att-c) * 0.7) var(--att-h))
+    );
+    background: light-dark(
+      oklch(0.95 calc(var(--att-c) * 0.28) var(--att-h)),
+      oklch(0.3 calc(var(--att-c) * 0.4) var(--att-h))
+    );
+  }
+
+  .bigGlyph > svg {
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+  }
+
+  .previewFoot {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-3) var(--nc-space-5) var(--nc-space-4);
+  }
+
+  .previewFoot > .spacer {
+    flex: 1;
+  }
+
+  .counter {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+}
