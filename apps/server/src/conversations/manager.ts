@@ -116,11 +116,22 @@ export type TurnRoute =
     }
   | { kind: 'hold' };
 
-/** A message waiting for the internet. */
+/** What's waiting for the internet in one chat: every message sent since, as one turn. */
 interface Held {
-  engine: EngineId;
+  /** Who it was for (unset: the default provider). */
+  engine?: EngineId;
   prompt: string;
   attachments: readonly Attachment[];
+}
+
+/** A second message sent while the first waits joins it, like two texts in a row. */
+function joinHeld(before: Held | undefined, next: Held): Held {
+  if (!before) return next;
+  return {
+    engine: next.engine ?? before.engine,
+    prompt: [before.prompt, next.prompt].filter(Boolean).join('\n\n'),
+    attachments: [...before.attachments, ...next.attachments],
+  };
 }
 
 /** An integration that isn't working, as a conversation shows it. */
@@ -389,6 +400,9 @@ export class ConversationManager {
       });
     }
 
+    // Anything still waiting for the internet goes along with this message.
+    const waiting = this.#held.get(live.record.id) ?? heldFromLog(live.events);
+    this.#held.delete(live.record.id);
     this.#append(live, {
       type: 'user.message',
       messageId: input.clientMessageId,
@@ -397,10 +411,14 @@ export class ConversationManager {
     });
     if (expanded?.skill) this.#append(live, { type: 'skill.used', ...expanded.skill, by: 'user' });
     live.record = { ...live.record, preview: said.slice(0, 140), updatedAt: Date.now() };
-    const prompt = expanded?.prompt ?? input.text;
+    const { prompt, attachments: sending } = joinHeld(waiting, {
+      engine: chosen.id,
+      prompt: expanded?.prompt ?? input.text,
+      attachments,
+    });
     if (route.kind === 'hold') {
       // Offline, and nothing on this computer answers: it waits, and goes by itself.
-      this.#held.set(live.record.id, { engine: engine.id, prompt, attachments });
+      this.#held.set(live.record.id, { engine: chosen.id, prompt, attachments: sending });
       this.#append(live, { type: 'turn.held', reason: 'offline' });
       await this.#persist(live);
       if (autoTitle) void this.#autoTitle(live, engine, titleSource(input.text, attachments));
@@ -411,7 +429,7 @@ export class ConversationManager {
     live.abort = new AbortController();
     this.#setStatus(live, 'running');
     await this.#persist(live);
-    void this.#answer(live, engine, prompt, attachments);
+    void this.#answer(live, engine, prompt, sending);
     if (autoTitle) void this.#autoTitle(live, engine, titleSource(input.text, attachments));
     return summary(live.record);
   }
@@ -587,7 +605,12 @@ export class ConversationManager {
       return result;
     }
     if (next.engine.id === engine.id || !next.routed) return result;
-    this.#append(live, { type: 'turn.routed', from: engine.id, to: next.engine.id, ...next.routed });
+    this.#append(live, {
+      type: 'turn.routed',
+      from: engine.id,
+      to: next.engine.id,
+      ...next.routed,
+    });
     live.abort = new AbortController();
     this.#setStatus(live, 'running');
     await this.#persist(live);
@@ -692,7 +715,7 @@ export class ConversationManager {
     );
     // This provider's own session, and whatever it missed while others answered.
     const session = live.record.sessions?.[engine.id];
-    const asked = live.events.findLast((e) => e.type === 'user.message')?.seq ?? live.seq;
+    const asked = askedSeq(live.events) ?? live.seq;
     const missed = handoff(live.events, { afterSeq: session?.seq ?? -1, beforeSeq: asked });
     let answeredWith: string | undefined;
     const integrations = this.deps.integrations;
@@ -1114,14 +1137,47 @@ function titleSource(text: string, attachments: readonly Attachment[]): string {
 function heldFromLog(events: readonly ConversationEvent[]): Held | undefined {
   const last = events.findLastIndex((e) => e.type === 'turn.held');
   if (last === -1) return undefined;
-  if (events.slice(last + 1).some((e) => e.type === 'assistant.delta' || e.type === 'turn.completed'))
+  if (
+    events.slice(last + 1).some((e) => e.type === 'assistant.delta' || e.type === 'turn.completed')
+  )
     return undefined;
-  const said = events.slice(0, last).findLast((e) => e.type === 'user.message');
-  if (said?.type !== 'user.message') return undefined;
-  const engine = events.findLast((e) => e.type === 'turn.completed');
+  // Every message since the last answer waited; they go together.
+  const answered = events.slice(0, last).findLastIndex((e) => e.type === 'turn.completed');
+  const said = events
+    .slice(answered + 1, last)
+    .flatMap((e) => (e.type === 'user.message' ? [e] : []));
+  if (!said.length) return undefined;
+  const options = events.findLast((e) => e.type === 'options');
   return {
-    engine: (engine?.type === 'turn.completed' && engine.engine) || 'claude-code',
-    prompt: said.text,
-    attachments: said.attachments ?? [],
+    ...(options?.type === 'options' &&
+      options.options.engine && { engine: options.options.engine }),
+    prompt: said
+      .map((m) => m.text)
+      .filter(Boolean)
+      .join('\n\n'),
+    attachments: said.flatMap((m) => m.attachments ?? []),
   };
+}
+
+/** What can sit between messages that waited for the internet together. */
+const BETWEEN_WAITING = new Set<ConversationEvent['type']>([
+  'turn.held',
+  'skill.used',
+  'options',
+  'title',
+]);
+
+/**
+ * Where the message(s) this turn answers begin: usually the last one you sent;
+ * several, when they waited for the internet together. Everything before it is
+ * what a provider that missed it gets handed.
+ */
+function askedSeq(events: readonly ConversationEvent[]): number | undefined {
+  let at: number | undefined;
+  for (let i = events.length - 1; i >= 0; i--) {
+    const event = events[i];
+    if (event?.type === 'user.message') at = event.seq;
+    else if (at !== undefined && event && !BETWEEN_WAITING.has(event.type)) break;
+  }
+  return at;
 }

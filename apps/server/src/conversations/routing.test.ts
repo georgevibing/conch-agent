@@ -147,6 +147,22 @@ describe('offline and at a limit (ADR 0018)', () => {
     expect(after.at(-2)).toMatchObject({ type: 'turn.completed', outcome: 'success' });
   });
 
+  it('two messages sent while offline wait together, and go as one', async () => {
+    const { manager, claude, world } = await setup();
+    world.online = false;
+    world.localAnswers = false;
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'first thought' });
+    await manager.send({ conversationId: convo.id, clientMessageId: 'u2', text: 'second thought' });
+
+    world.online = true;
+    expect(await manager.releaseHeld()).toBe(1);
+    await idle(manager, convo.id);
+    expect(claude.turns).toHaveLength(1);
+    expect(claude.turns[0]?.prompt).toBe(
+      'first thought' + String.fromCharCode(10, 10) + 'second thought',
+    );
+  });
+
   it('offline, the model on this computer answers — and says so', async () => {
     const { manager, claude, ollama, world } = await setup();
     world.online = false;
@@ -191,6 +207,8 @@ describe('offline and at a limit (ADR 0018)', () => {
     expect(router.turns).toHaveLength(1);
     // OpenRouter is told what happened before (the hand-over) and gets the message.
     expect(router.turns[0]?.prompt.endsWith('keep going')).toBe(true);
+    // …once: the message it answers isn't also handed over as history.
+    expect(router.turns[0]?.prompt).not.toContain('User: keep going');
     const events = await log(manager, convo.id);
     expect(events.find((e) => e.type === 'turn.routed')).toMatchObject({
       from: 'claude-code',
