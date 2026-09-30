@@ -127,13 +127,15 @@ function useConnect() {
         setId(made.id);
       });
     } catch (e) {
+      // The same key isn't tried again by itself (that would loop); a changed one is.
       setError(errorText(e, 'Couldn’t connect it.'));
-      tried.current = undefined;
     } finally {
       setBusy(false);
     }
   };
-  return { channel, connect, busy, error, dialog };
+  /** A new key is a new try: forget the last one's failure. */
+  const reset = () => setError(undefined);
+  return { channel, connect, busy, error, reset, dialog };
 }
 
 function Answer({ label, value }: { label: string; value: string }) {
@@ -179,7 +181,7 @@ function TelegramSetup() {
   const [token, setToken] = useState('');
   const body = token.trim() ? ({ kind: 'telegram', token } as const) : undefined;
   const { status, check } = useKeyCheck(body, token);
-  const { channel, connect, busy, error, dialog } = useConnect();
+  const { channel, connect, busy, error, reset, dialog } = useConnect();
 
   // A good key connects straight away: there's nothing else to decide.
   useEffect(() => {
@@ -257,7 +259,10 @@ function TelegramSetup() {
           <KeyField
             label="Bot key"
             value={token}
-            onValueChange={setToken}
+            onValueChange={(v) => {
+              reset();
+              setToken(v);
+            }}
             status={error ? 'error' : status}
             placeholder="123456789:ABC…"
             checkingLabel="Checking with Telegram…"
@@ -381,7 +386,7 @@ function DiscordSetup() {
   const [skipInvite, setSkipInvite] = useState(false);
   const body = token.trim() ? ({ kind: 'discord', token } as const) : undefined;
   const { status, check } = useKeyCheck(body, token);
-  const { channel, connect, busy, error, dialog } = useConnect();
+  const { channel, connect, busy, error, reset, dialog } = useConnect();
 
   useEffect(() => {
     if (status === 'ok' && !channel) void connect({ kind: 'discord', token });
@@ -436,7 +441,10 @@ function DiscordSetup() {
           <KeyField
             label="Bot token"
             value={token}
-            onValueChange={setToken}
+            onValueChange={(v) => {
+              reset();
+              setToken(v);
+            }}
             status={error ? 'error' : status}
             placeholder="MTEw…"
             checkingLabel="Checking with Discord…"
@@ -612,7 +620,7 @@ function SlackSetup() {
     appToken.trim() ? { kind: 'slack', botToken: botToken || undefined, appToken } : undefined,
     appToken,
   );
-  const { channel, connect, busy, error, dialog } = useConnect();
+  const { channel, connect, busy, error, reset, dialog } = useConnect();
   useEffect(() => {
     if (botCheck.status === 'ok' && appCheck.status === 'ok' && !channel)
       void connect({ kind: 'slack', botToken, appToken });
@@ -707,7 +715,10 @@ function SlackSetup() {
           <KeyField
             label="App-level token"
             value={appToken}
-            onValueChange={(v) => place(v, 'app')}
+            onValueChange={(v) => {
+              reset();
+              place(v, 'app');
+            }}
             status={error ? 'error' : appCheck.status}
             placeholder="xapp-…"
             checkingLabel="Checking with Slack…"

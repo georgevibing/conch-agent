@@ -311,3 +311,34 @@ describe('Guides', () => {
     expect(JSON.parse(url.searchParams.get('manifest_json') ?? '{}')).toEqual(manifest);
   });
 });
+
+describe('When connecting fails', () => {
+  it('says why once, and tries again only for a different key', async () => {
+    let creates = 0;
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'POST /api/channels/check': () => ({ ok: true, bot: channel().bot, checked: ['token'] }),
+      'POST /api/channels': () => {
+        creates++;
+        return new Response(
+          JSON.stringify({ error: 'internal', message: 'Conch had a problem.' }),
+          {
+            status: 500,
+          },
+        );
+      },
+    });
+    renderApp(<ConnectChannel kind="telegram" />, { route: '/channels/new/telegram' });
+    await userEvent.click(await screen.findByRole('button', { name: 'I have the key' }));
+    const field = screen.getByLabelText('Bot key');
+    await userEvent.type(field, '123456789:' + 'AAHmockmockmockmockmockmockmockmock1');
+    expect(await screen.findByText('Conch had a problem.')).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 600));
+    expect(creates).toBe(1);
+    // A different key is a new try.
+    await userEvent.type(field, '2');
+    await waitFor(() => expect(creates).toBe(2));
+    expect(calls.filter((c) => c.method === 'POST' && c.path === '/api/channels')).toHaveLength(2);
+  });
+});
