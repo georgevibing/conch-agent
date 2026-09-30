@@ -111,6 +111,19 @@ should flow, never stutter.
   to the text colour, like wet ink. Half-arrived Markdown is closed so raw `**` never
   flashes. The wait holds its place and the reply replaces it in place, with no jump.
 
+### Attachments (chat)
+
+A paste, a picture and a PDF each look like what they are before anyone opens
+them (`AttachmentCard`). A paste is a slip of paper set in type, with its first
+lines fading out; a picture is its own thumbnail; every other file gets a glyph
+and a badge tinted by family (PDF red, sheets green, documents blue, slides amber,
+archives grey). In the composer every card is the same small size, in one row
+that scrolls sideways; in the transcript pictures show their true shape. Cards
+lift on hover, breathe while uploading (a ring in the corner, or the middle of a
+picture), turn red with a Retry when they fail, and wear a small amber dot when
+the chosen model can't use them. `AttachmentPreview` is the closer look;
+`DropOverlay` dims the chat and gathers a pearl halo while files are dragged over.
+
 ### The browser (chat)
 
 The browser panel shows someone else's page, so Nacre stays out of its way. The page

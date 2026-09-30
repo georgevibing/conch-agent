@@ -90,6 +90,7 @@ src/
   settings/store.ts           ~/.conch/settings.json and secrets.json (0600)
   memory/                     file-per-memory store, prompt builder, memory tools
   conversations/              manager (turns, permissions, events) + JSONL store
+  attachments/                uploads: sniffing, storage + sweep, per-engine prompt, sandboxed serving (ADR 0017)
   engines/
     types.ts                  Engine / HostTool / EngineEvent contracts
     claude-code/              detect, login, env scrub, SDK → EngineEvent translator
@@ -314,6 +315,11 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   and a reconnecting WebSocket client.
 - First run is a short, skippable flow: welcome → connect Claude Code (install /
   sign-in / API key, with live re-checks) → personality and "about you" → chat.
+- **Attachments** (ADR 0017). Long pastes (over 1 000 characters or 20 lines) fold
+  into cards; files come from the attach button, a drop anywhere on the chat, a pasted
+  screenshot or ⌘K. Each uploads at once to `POST /api/attachments` and the message
+  sends their ids. Cards open a preview (edit a paste, CSV as a table, PDFs, code,
+  pictures), and warn when the chosen provider can't use them.
 - Assistant output: markdown → Nacre `Prose`, fenced code → `CodeBlock`, tool calls →
   `ToolCall`, permission requests → inline approval cards, memory saves → inline pills
   with undo.
