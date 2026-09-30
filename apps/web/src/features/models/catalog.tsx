@@ -119,7 +119,7 @@ export const providerLogos: Record<EngineId, ProviderId> = {
   'anthropic-api': 'claude',
   'codex-cli': 'openai',
   openrouter: 'openrouter',
-  ollama: 'generic',
+  ollama: 'local',
   mock: 'claude',
 };
 

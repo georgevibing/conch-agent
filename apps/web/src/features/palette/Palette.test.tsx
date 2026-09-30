@@ -361,4 +361,26 @@ describe('Palette search', () => {
     await user.click(await screen.findByRole('option', { name: /Attach files/ }));
     expect(useUi.getState().attachRequest).toBe(before + 1);
   });
+
+  it('finds the model on this computer by the words people use for it', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    renderApp(<Palette />);
+    for (const words of ['offline', 'ollama', 'private model', 'local']) {
+      act(() => useUi.getState().setPalette(true));
+      const box = await screen.findByRole('combobox');
+      await user.clear(box);
+      await user.type(box, words);
+      expect(
+        await screen.findByRole('option', { name: /Model on this computer/ }),
+      ).toBeInTheDocument();
+    }
+    await user.click(screen.getByRole('option', { name: /Model on this computer/ }));
+    // Straight to its setup page.
+    expect(useUi.getState()).toMatchObject({ settings: 'providers', settingsFocus: 'ollama' });
+  });
 });

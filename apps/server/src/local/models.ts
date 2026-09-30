@@ -165,6 +165,7 @@ export function minutesFor(sizeBytes: number, bytesPerSecond = TYPICAL_BYTES_PER
 }
 
 export function gigabytes(bytes: number): string {
+  if (bytes < GB) return `${Math.max(1, Math.round(bytes / 1_000_000))} MB`;
   const gb = bytes / GB;
   return `${gb >= 10 ? Math.round(gb) : gb.toFixed(1)} GB`;
 }

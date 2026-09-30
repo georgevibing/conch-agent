@@ -23,6 +23,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 
 import { api } from '../../api/client';
 import { useLiveStore } from '../../live/store';
+import { LocalSetup } from '../local/LocalSetup';
 import { GetIt } from '../setup/GetIt';
 import { useNeed } from '../setup/useNeed';
 import { providersApi } from './api';
@@ -422,7 +423,13 @@ function useProviderWatch(provider: Provider | undefined) {
 }
 
 const titleOf = (provider: Provider) =>
-  provider.status.state === 'ready' ? `${provider.name} is connected` : `Connect ${provider.name}`;
+  provider.local
+    ? provider.status.state === 'ready'
+      ? 'Your model on this computer'
+      : 'Run a model on this computer'
+    : provider.status.state === 'ready'
+      ? `${provider.name} is connected`
+      : `Connect ${provider.name}`;
 
 /** Every way a provider connects — install it, sign in, or give it a key — and what's true once it does. */
 function ProviderBody({
@@ -434,6 +441,18 @@ function ProviderBody({
 }) {
   const state = provider.status.state;
   const fix = provider.status.fix;
+  // A model on this computer is one flow of its own: Ollama, a model, done.
+  if (provider.local) {
+    return (
+      <Stack gap={5}>
+        <LocalSetup provider={provider} />
+        {state === 'ready' && <Connected provider={provider} />}
+        {provider.limits.map((limit) => (
+          <ProviderCaution key={limit}>{limit}</ProviderCaution>
+        ))}
+      </Stack>
+    );
+  }
   return (
     <Stack gap={5}>
       {state === 'error' && provider.status.message && (

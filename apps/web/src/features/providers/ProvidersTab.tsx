@@ -29,6 +29,16 @@ function metaOf(provider: Provider): string {
   return parts.filter(Boolean).join(' · ') || 'Connected';
 }
 
+/**
+ * A model on this computer that's only waiting for a model isn't "not on this
+ * computer": it says what it's waiting for.
+ */
+function stateLabelOf(provider: Provider): string | undefined {
+  if (provider.local && provider.status.state === 'not-installed' && !provider.status.fix)
+    return 'Needs a model';
+  return undefined;
+}
+
 /** The default first, then the others that are connected, then the rest. */
 function order(a: Provider, b: Provider) {
   const rank = (p: Provider) => (p.active ? 0 : p.status.state === 'ready' ? 1 : 2);
@@ -111,6 +121,7 @@ export function ProvidersTab({
                   color={provider.color}
                   tagline={provider.tagline}
                   state={provider.status.state}
+                  stateLabel={stateLabelOf(provider)}
                   active={provider.active}
                   experimental={provider.experimental}
                   meta={metaOf(provider)}
@@ -137,8 +148,9 @@ export function ProvidersTab({
                             loading: busy,
                           }
                         : {
-                            label:
-                              provider.status.fix?.kind === 'install'
+                            label: provider.local
+                              ? 'Set up'
+                              : provider.status.fix?.kind === 'install'
                                 ? 'Install'
                                 : provider.status.fix?.kind === 'update'
                                   ? 'Update'

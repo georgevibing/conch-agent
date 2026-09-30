@@ -8,6 +8,7 @@ import {
   Gauge,
   Globe,
   HeartPulse,
+  Laptop,
   Palette as PaletteIcon,
   Paperclip,
   SquareTerminal,
@@ -76,7 +77,7 @@ const settingsPlaces: { tab: SettingsTab; label: string; keywords: string; icon:
   {
     tab: 'providers',
     label: 'Providers',
-    keywords: 'claude codex openrouter anthropic api key connect',
+    keywords: 'claude codex openrouter anthropic api key connect ollama local offline',
     icon: <Cpu />,
   },
   {
@@ -331,6 +332,14 @@ export function useFindables(query: string, conversationId: string | undefined):
             run: () => newTerminal(),
           },
         ]),
+    {
+      // A model on this computer (ADR 0018): straight to its setup page.
+      id: 'local-model',
+      label: 'Model on this computer',
+      keywords: 'local offline private free model ollama llama qwen download run laptop',
+      icon: <Laptop />,
+      run: () => openSettings('providers', 'ollama'),
+    },
     ...settingsPlaces.map((p) => ({
       id: `settings-${p.tab}`,
       label: `Settings: ${p.label}`,
