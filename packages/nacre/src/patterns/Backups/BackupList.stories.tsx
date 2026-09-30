@@ -30,6 +30,7 @@ export const Playground: Story = {};
 
 export const OneBackup: Story = { args: { backups: backups.slice(0, 1) } };
 
+/** None yet: a short line, since the overview above says when the first is made. */
 export const Empty: Story = { args: { backups: [] } };
 
 export const Narrow: Story = {

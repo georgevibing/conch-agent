@@ -18,7 +18,9 @@ export async function bootId(): Promise<string | undefined> {
  * Start Conch again (after an update or a restore). The page rests on a calm
  * screen and comes back by itself when Conch does. Returns a sentence to show
  * instead when Conch can't restart itself here (it isn't running under
- * `pnpm start`).
+ * `pnpm start`). The gateway asks for a recent password or key first
+ * (`verify-required`: run it through `useVerify`'s `guard`), and says `busy`
+ * while a chat is working.
  */
 export async function restartConch(title = 'Restarting Conch'): Promise<string | undefined> {
   const from = await bootId();

@@ -138,6 +138,11 @@ export interface ConchCheck {
   problem?: string;
   /** The upstream was reached just now. */
   fetched: boolean;
+  /**
+   * The upstream commit this check read, once: the counts and "What's new"
+   * are about exactly it, and an update moves to exactly it.
+   */
+  target?: string;
 }
 
 export interface UpdateProgressReport {
@@ -197,6 +202,22 @@ export function explainFetch(result: RunResult, remoteUrl = ''): string {
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * The files git won't write over, from a merge it refused ("The following
+ * untracked working tree files would be overwritten by merge:", one per
+ * line, indented). Empty when that isn't why.
+ */
+export function overwritten(output: string): string[] {
+  const at = output.search(/would be overwritten by (merge|checkout)/i);
+  if (at === -1) return [];
+  const files: string[] = [];
+  for (const line of output.slice(at).split(/\r?\n/).slice(1)) {
+    if (!/^\s+\S/.test(line)) break;
+    files.push(line.trim());
+  }
+  return files;
+}
 
 /** Conch's own folder: checking it for updates, and moving it forward. */
 export class ConchCheckout {
@@ -300,12 +321,24 @@ export class ConchCheckout {
       }
     } else if (fetch) fetched = true;
 
-    const counts = await git(['rev-list', '--left-right', '--count', 'HEAD...@{upstream}']);
+    // The upstream as one commit, read once: a fetch landing meanwhile (the
+    // daily check, a terminal) can't make the counts, "What's new" and the
+    // update disagree about what arrives.
+    const resolved = await git(['rev-parse', '--verify', '--quiet', '@{upstream}^{commit}']);
+    const target = resolved.stdout.trim();
+    if (resolved.code !== 0 || !/^[0-9a-f]{40,64}$/.test(target))
+      return {
+        ...base,
+        fetched,
+        problem: problem ?? 'Conch couldn’t read the newest version it got.',
+      };
+    const head = state.head;
+    const counts = await git(['rev-list', '--left-right', '--count', `${head}...${target}`]);
     const [ahead = 0, behind = 0] = counts.stdout.trim().split(/\s+/).map(Number);
     const subjects =
       behind > 0
         ? (
-            await git(['log', '--no-merges', '--format=%s', `-n${SUBJECTS}`, 'HEAD..@{upstream}'])
+            await git(['log', '--no-merges', '--format=%s', `-n${SUBJECTS}`, `${head}..${target}`])
           ).stdout
             .split('\n')
             .filter(Boolean)
@@ -318,6 +351,7 @@ export class ConchCheckout {
       improvements: lines.length,
       whatsNew: lines.slice(0, 8),
       fetched,
+      target,
       ...(problem && { problem }),
     };
     if (behind > 0 && ahead > 0)
@@ -363,16 +397,27 @@ export class ConchCheckout {
     if (check.behind === 0 || !check.head) return { kind: 'current' };
     const from = check.head;
     // Exactly the commit that was checked: what "What's new" listed is what arrives.
-    const target = await git(['rev-parse', '@{upstream}']);
-    const to = target.stdout.trim();
-    if (target.code !== 0 || !to)
-      return { kind: 'failed', message: 'Conch couldn’t read the update it just got.' };
+    const to = check.target;
+    if (!to) return { kind: 'failed', message: 'Conch couldn’t read the update it just got.' };
 
-    const moved = await git(['merge', '--ff-only', '--quiet', to]);
-    if (moved.code !== 0)
+    // `--no-overwrite-ignore`: a file git ignores (a `.env`, your own notes)
+    // that the new version adds is never replaced; the update stops instead.
+    const moved = await git(['merge', '--ff-only', '--no-overwrite-ignore', '--quiet', to]);
+    if (moved.code !== 0) {
+      const inTheWay = overwritten(`${moved.stderr}\n${moved.stdout}`);
+      if (inTheWay.length) {
+        const one = inTheWay.length === 1;
+        const names = `${inTheWay.slice(0, 3).join(', ')}${inTheWay.length > 3 ? ', …' : ''}`;
+        return {
+          kind: 'refused',
+          reason: `The update would replace ${one ? 'a file' : `${inTheWay.length} files`} of yours in Conch’s folder (${names}), so Conch left everything as it is. Move ${one ? 'it' : 'them'} somewhere else, then update.`,
+          command: this.byHand('git pull --ff-only', 'pnpm install'),
+        };
+      }
       return this.#rollback(git, pnpm, from, { install: false, build: false }, onProgress, {
         why: 'the new version couldn’t be put in Conch’s folder',
       });
+    }
 
     say('install', 'Installing', 2, 0);
     const run = this.deps.stream ?? stream;

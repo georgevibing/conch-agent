@@ -11,6 +11,7 @@ import {
   explainFetch,
   findCheckout,
   installProgress,
+  overwritten,
   type UpdateProgressReport,
 } from './conch';
 
@@ -280,6 +281,50 @@ describe('updating Conch itself', () => {
     expect(await log()).toBe('install 2\nbuild 2\ninstall 1\nbuild 1');
   });
 
+  it('moves to exactly the commit it checked, even when more arrives meanwhile', async () => {
+    const { checkout, conch, release, log } = await world();
+    await release('feat: what was listed', { 'version.txt': '2\n' });
+    const check = checkout.check.bind(checkout);
+    let listed: Awaited<ReturnType<typeof checkout.check>> | undefined;
+    // Right after the check, another fetch (the daily one, a terminal) brings a newer commit.
+    vi.spyOn(checkout, 'check').mockImplementation(async (options) => {
+      listed = await check(options);
+      await release('feat: arrived after the check', { 'version.txt': '3\n' });
+      git(conch, 'fetch', '--quiet', 'origin');
+      return listed;
+    });
+    const result = await checkout.update(() => undefined);
+    expect(listed).toMatchObject({ behind: 1, whatsNew: ['What was listed'] });
+    expect(listed?.target).toMatch(/^[0-9a-f]{40}$/);
+    expect(result).toMatchObject({
+      kind: 'updated',
+      to: listed?.target,
+      whatsNew: ['What was listed'],
+    });
+    // What arrived is what was listed, not the commit fetched after it.
+    expect(git(conch, 'rev-parse', 'HEAD')).toBe(listed?.target);
+    expect(git(conch, 'rev-parse', 'HEAD')).not.toBe(git(conch, 'rev-parse', 'origin/main'));
+    expect((await readFile(join(conch, 'version.txt'), 'utf8')).trim()).toBe('2');
+    expect(await log()).toBe('install 2\nbuild 2');
+  });
+
+  it('never writes over a file git ignores, and says what to move', async () => {
+    const { checkout, conch, release, log } = await world();
+    // Yours, ignored by git in this folder: a `.env` with your own settings.
+    await writeFile(join(conch, '.git', 'info', 'exclude'), '.env\n');
+    await writeFile(join(conch, '.env'), 'MINE=1\n');
+    const before = git(conch, 'rev-parse', 'HEAD');
+    await release('feat: ships an example .env', { '.env': 'THEIRS=1\n', 'version.txt': '2\n' });
+    const result = await checkout.update(() => undefined);
+    expect(result).toMatchObject({
+      kind: 'refused',
+      reason: expect.stringMatching(/would replace a file of yours in Conch’s folder \(\.env\)/),
+    });
+    expect(await readFile(join(conch, '.env'), 'utf8')).toBe('MINE=1\n');
+    expect(git(conch, 'rev-parse', 'HEAD')).toBe(before);
+    expect(await log()).toBe('');
+  });
+
   it('leaves the folder alone if it changed while updating, and says what to run', async () => {
     const { conch, release } = await world();
     await release('feat: a broken release', { 'version.txt': '2\n', 'fail-install': 'x' });
@@ -306,6 +351,15 @@ describe('finding Conch’s folder', () => {
     const root = findCheckout(import.meta.dirname);
     expect(root && existsSync(join(root, 'pnpm-workspace.yaml'))).toBe(true);
     expect(findCheckout(import.meta.dirname, '/somewhere/else')).toMatch(/somewhere[\\/]else$/);
+  });
+
+  it('reads which files git won’t write over', () => {
+    expect(
+      overwritten(
+        'error: The following untracked working tree files would be overwritten by merge:\n\t.env\n\tnotes/todo.md\nPlease move or remove them before you merge.\nAborting\n',
+      ),
+    ).toEqual(['.env', 'notes/todo.md']);
+    expect(overwritten('fatal: Not possible to fast-forward, aborting.')).toEqual([]);
   });
 
   it('reads pnpm’s install progress', () => {

@@ -22,7 +22,10 @@ export interface BackupListProps extends Omit<ComponentProps<'ul'>, 'children'> 
   onRestore?: (backup: BackupListItem) => void;
   /** Offered for automatic backups (an Undo copy never leaves this computer). */
   onDownload?: (backup: BackupListItem) => void;
-  /** Shown when there are none yet. */
+  /**
+   * Shown when there are none yet. Short: the overview above already says
+   * when the first one is made.
+   */
   empty?: ReactNode;
 }
 
@@ -34,7 +37,7 @@ export function BackupList({
   backups,
   onRestore,
   onDownload,
-  empty = 'No backups yet. The first one is made soon, while Conch isn’t busy.',
+  empty = 'None yet.',
   className,
   ...props
 }: BackupListProps) {

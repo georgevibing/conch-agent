@@ -14,7 +14,7 @@ import { gunzipSync, gzipSync } from 'node:zlib';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { BackupError, padding, paxRecord, tarHeader } from './archive';
+import { BackupError, MAX_TRAILING, padding, paxRecord, readTar, tarHeader } from './archive';
 import { credentialsOnly, extractBackup, FORMAT_VERSION, readHeader, writeBackup } from './format';
 import { groupsFor } from './manifest';
 import { safeJoinPath, validRelPath } from './paths';
@@ -165,6 +165,28 @@ describe('backing up and reading it back', () => {
     // No keys, no sign-in, no search index.
     expect(await files(join(staging, 'files'))).not.toContain('secrets.json');
     expect(await files(join(staging, 'files'))).not.toContain('search.db');
+  });
+
+  it('checks one through for a preview without writing anything or asking for the passphrase', async () => {
+    const from = await home();
+    const path = await backup(from, 'passphrase');
+    const read = await extractBackup(path, { capture: (p) => p === 'settings.json' });
+    expect(read.files).toEqual([
+      'conversations/c_1.jsonl',
+      'conversations/index.json',
+      'memory/m_1.md',
+      'settings.json',
+    ]);
+    expect(read.secrets).toEqual([]);
+    expect(read.captured.get('settings.json')?.toString()).toContain('Shelly');
+    expect([...read.captured.keys()]).toEqual(['settings.json']);
+    // The same checks as a restore: a changed file is caught.
+    const bytes = gunzipSync(await readFile(path));
+    const at = bytes.indexOf('Likes lemon tea.');
+    bytes.write('Likes lemon pie.', at);
+    const changed = join(await temp(), 'changed.conchbackup');
+    await writeFile(changed, gzipSync(bytes));
+    await expect(extractBackup(changed, {})).rejects.toMatchObject({ code: 'damaged' });
   });
 
   it('is a real tar.gz that any tar can open', async () => {
@@ -432,6 +454,55 @@ describe('hostile archives', () => {
     ]);
     await writeFile(path, gzipSync(body));
     await refused(path, 'damaged');
+  });
+
+  it('reads no further than a record of zeros after the end: a bomb of zeros stops there', async () => {
+    const archive = tar([{ name: 'conch-backup.json', data: validHeader() }]);
+    // Endless zeros after the end marker (what a small gzip file can inflate to).
+    let pulled = 0;
+    async function* endless() {
+      yield archive;
+      for (let i = 0; i < 4096; i++) {
+        pulled++;
+        yield Buffer.alloc(1024 * 1024);
+      }
+    }
+    await expect(readTar(endless(), () => 'skip')).rejects.toMatchObject({ code: 'damaged' });
+    expect(pulled).toBe(1);
+
+    // The same, as a file: 256 MB of zeros in well under a megabyte.
+    const path = join(await temp(), 'zeros.conchbackup');
+    await writeFile(path, gzipSync(Buffer.concat([archive, Buffer.alloc(256 * 1024 * 1024)])));
+    expect((await readFile(path)).length).toBeLessThan(1024 * 1024);
+    await refused(path, 'damaged');
+  });
+
+  it('accepts the padding tar itself adds after the end (a 10 KiB record)', async () => {
+    const archive = tar([{ name: 'conch-backup.json', data: validHeader() }]);
+    const padded = Buffer.concat([archive, Buffer.alloc(MAX_TRAILING - 1024)]);
+    await expect(
+      readTar(
+        (async function* () {
+          yield padded;
+        })(),
+        () => 'skip',
+      ),
+    ).resolves.toBeUndefined();
+    const over = Buffer.concat([archive, Buffer.alloc(MAX_TRAILING + 1)]);
+    await expect(
+      readTar(
+        (async function* () {
+          yield over;
+        })(),
+        () => 'skip',
+      ),
+    ).rejects.toMatchObject({ code: 'damaged' });
+  });
+
+  it('stops at the room the disk has, and says it’s the disk', async () => {
+    const path = await crafted([{ name: 'files/memory/m_1.md', data: 'x'.repeat(4096) }]);
+    const staging = await refused(path, 'no-space', { limits: { roomBytes: 2048 } });
+    expect(await files(join(staging, 'files'))).toEqual([]);
   });
 });
 

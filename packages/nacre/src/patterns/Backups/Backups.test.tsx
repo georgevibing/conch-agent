@@ -8,8 +8,9 @@ import { BackupContents } from './BackupContents';
 import { BackupList } from './BackupList';
 import { BackupOptions } from './BackupOptions';
 import { BackupOverview } from './BackupOverview';
-import { backups, daily, everything, light } from './fixtures';
-import { describeBackup, formatBackupDate } from './format';
+import { BackupPowers } from './BackupPowers';
+import { backups, daily, everything, light, powers } from './fixtures';
+import { describeBackup, formatBackupDate, powerWords } from './format';
 import { RestorePreview } from './RestorePreview';
 
 describe('BackupOverview', () => {
@@ -47,6 +48,59 @@ describe('BackupOverview', () => {
   });
 });
 
+describe('BackupPowers', () => {
+  it('says what in a backup can act for you, in plain words, with the command as code', async () => {
+    const { container } = renderNacre(<BackupPowers powers={powers} more={2} />);
+    const list = screen.getByRole('list', { name: 'This backup lets Conch act for you' });
+    const items = within(list).getAllByRole('listitem');
+    expect(items).toHaveLength(powers.length);
+    expect(items[0]).toHaveTextContent('Files');
+    expect(items[0]).toHaveTextContent('Runs a program on this computer:');
+    const command = within(items[0] as HTMLElement).getByText(
+      'npx -y @modelcontextprotocol/server-filesystem "/Users/ada/My notes"',
+    );
+    expect(command.tagName).toBe('CODE');
+    expect(items[1]).toHaveTextContent('GmailLets Conch act without asking you first');
+    expect(items[2]).toHaveTextContent(
+      'Lets Conch use “Delete an event” and “Send an invite” without asking you first',
+    );
+    expect(items[3]).toHaveTextContent('New chatsLet Conch act without asking you first');
+    expect(items[4]).toHaveTextContent('Nightly tidyRuns by itself');
+    expect(items[5]).toHaveTextContent(
+      'Acts on “bank.example” and “shop.example” without asking you first',
+    );
+    expect(items[7]).toHaveTextContent('Other devices can open a terminal on this computer');
+    expect(screen.getByText('And 2 more.')).toBeInTheDocument();
+    expect(screen.getByText('Restore it only if you set these up yourself.')).toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
+  it('shows a name from the file as text, never as markup', () => {
+    renderNacre(
+      <BackupPowers
+        powers={[{ kind: 'integration-never-asks', name: '<img src=x onerror=alert(1)>' }]}
+      />,
+    );
+    expect(screen.getByText('<img src=x onerror=alert(1)>')).toBeInTheDocument();
+    expect(document.querySelector('img')).toBeNull();
+  });
+
+  it('shows nothing when nothing can act for you', () => {
+    renderNacre(<BackupPowers powers={[]} />);
+    expect(screen.queryByRole('list')).toBeNull();
+    expect(screen.queryByText(/act for you/)).toBeNull();
+  });
+
+  it('counts what it doesn’t name', () => {
+    expect(
+      powerWords({ kind: 'tools-never-ask', name: 'Calendar', tools: ['A', 'B'], more: 4 }).text,
+    ).toBe('Lets Conch use “A”, “B” and 4 more without asking you first');
+    expect(powerWords({ kind: 'browser-sites', sites: ['one.example'] }).text).toBe(
+      'Acts on “one.example” without asking you first',
+    );
+  });
+});
+
 describe('BackupList', () => {
   it('lists backups with Restore… and a download for automatic ones only', async () => {
     const user = userEvent.setup();
@@ -73,9 +127,10 @@ describe('BackupList', () => {
     await expectAccessible(container);
   });
 
-  it('says so when there are none yet', () => {
+  it('says so briefly when there are none yet (the overview says when the first comes)', () => {
     renderNacre(<BackupList backups={[]} />);
-    expect(screen.getByText(/first one is made soon/)).toBeInTheDocument();
+    expect(screen.getByText('None yet.')).toBeInTheDocument();
+    expect(screen.queryByText(/made soon/)).toBeNull();
   });
 });
 
@@ -159,6 +214,37 @@ describe('RestorePreview', () => {
   it('asks for nothing when there are no locked keys', () => {
     renderNacre(<RestorePreview contents={daily} />);
     expect(screen.queryByLabelText('Passphrase')).toBeNull();
+  });
+
+  it('shows what can act for you before the button, and that your password and keys stay', async () => {
+    const user = userEvent.setup();
+    function KeepsSignIn() {
+      const [skip, setSkip] = useState(false);
+      return (
+        <RestorePreview
+          contents={everything}
+          powers={powers}
+          signInStays
+          skipSecrets={skip}
+          onSkipSecretsChange={setSkip}
+        />
+      );
+    }
+    const { container } = renderNacre(<KeepsSignIn />);
+    expect(
+      screen.getByRole('list', { name: 'This backup lets Conch act for you' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Your current password and keys stay.')).toBeInTheDocument();
+    await expectAccessible(container);
+    // Leaving the keys and sign-ins out says that by itself.
+    await user.click(screen.getByRole('button', { name: /Forgot it\?/ }));
+    expect(screen.queryByText('Your current password and keys stay.')).toBeNull();
+  });
+
+  it('says nothing about sign-in when the backup has no keys in it', () => {
+    renderNacre(<RestorePreview contents={daily} signInStays />);
+    expect(screen.queryByText('Your current password and keys stay.')).toBeNull();
+    expect(screen.queryByRole('list', { name: /act for you/ })).toBeNull();
   });
 });
 

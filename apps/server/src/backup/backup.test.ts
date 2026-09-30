@@ -5,15 +5,20 @@
  * automatic backups, what's kept, the Repair everything check, and the
  * routes' guards.
  */
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { createHash } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
+
+import { BackupPreview } from '@conch/protocol';
+
 import { cookieOf, gateway, PASSWORD, useConch, type Gateway } from '../test/session';
-import { BackupError } from './archive';
+import { BackupError, padding, tarHeader } from './archive';
 import { backupCheck, OVERDUE_MS } from './doctor';
 import { applyPendingRestore, applyPlan, mergeUsage, Plan, stagingDir } from './restore';
 import { dayOf, retain, retainUndo, weekOf } from './retention';
@@ -123,6 +128,11 @@ describe('back up, restore on another computer, undo', () => {
       },
     });
 
+    // A new computer has no sign-in of its own, so the backup's comes back.
+    const before = BackupPreview.parse(
+      json(await b.app.inject(`/api/backups/${String(preview.id)}/preview`)),
+    );
+    expect(before).toMatchObject({ contents: preview.contents, signInStays: false });
     const wrong = await b.app.inject({
       method: 'POST',
       url: `/api/backups/${String(preview.id)}/restore`,
@@ -277,16 +287,38 @@ describe('back up, restore on another computer, undo', () => {
     expect((await b.services.integrations.store.secrets(integration?.id ?? '')).values).toEqual({});
   });
 
-  it('keeps the device restoring signed in, and signs the others out', async () => {
+  it('never brings back an old password: the one in use now stays, and every device', async () => {
     const a = await open();
     const { cookie } = await useConch(a);
-    const phone = await signIn(a.app);
     const made = json(
       await a.app.inject({
         method: 'POST',
         url: '/api/backups',
         headers: { cookie },
         payload: { chats: false, passphrase: PASSPHRASE },
+      }),
+    );
+    // The password leaked, so it was changed after the backup.
+    const NEW = 'a brand new sentence nobody knows';
+    const changed = await a.app.inject({
+      method: 'PUT',
+      url: '/api/access/password',
+      headers: { cookie },
+      payload: { username: 'ada', password: NEW },
+    });
+    expect(changed.statusCode).toBe(200);
+    // The preview says so before anything happens.
+    const preview = BackupPreview.parse(
+      json(
+        await a.app.inject({ url: `/api/backups/${String(made.id)}/preview`, headers: { cookie } }),
+      ),
+    );
+    expect(preview).toMatchObject({ contents: { secrets: 'passphrase' }, signInStays: true });
+    const phone = cookieOf(
+      await a.app.inject({
+        method: 'POST',
+        url: '/api/auth/sign-in',
+        payload: { with: 'password', username: 'ada', password: NEW },
       }),
     );
     const restored = await a.app.inject({
@@ -297,12 +329,262 @@ describe('back up, restore on another computer, undo', () => {
     });
     expect(restored.statusCode).toBe(200);
     const b = (await restart(a)).g;
+    const signInWith = (password: string) =>
+      b.app.inject({
+        method: 'POST',
+        url: '/api/auth/sign-in',
+        payload: { with: 'password', username: 'ada', password },
+      });
+    // The leaked password stays dead; the new one still opens it.
+    expect((await signInWith(PASSWORD)).statusCode).not.toBe(200);
+    expect((await signInWith(NEW)).statusCode).toBe(200);
+    // Sign-in here wasn't touched: every device stays signed in.
     expect((await b.app.inject({ url: '/api/state', headers: { cookie } })).statusCode).toBe(200);
     expect((await b.app.inject({ url: '/api/state', headers: { cookie: phone } })).statusCode).toBe(
-      401,
+      200,
     );
+    // The rest of the keys and sign-ins did come back.
+    expect(await b.services.settings.providerSecret('openrouter')).toMatchObject({
+      value: 'sk-or-v1-0123456789abcdef',
+    });
     // A backup without chats left the chats alone.
     expect((await b.services.conversations.list()).length).toBeGreaterThan(0);
+  });
+
+  it('never brings back a revoked access key', async () => {
+    const a = await open();
+    const { cookie } = await useConch(a);
+    const addKey = async (name: string) =>
+      json(
+        await a.app.inject({
+          method: 'POST',
+          url: '/api/access/keys',
+          headers: { cookie },
+          payload: { name },
+        }),
+      ) as { key: string; info: { id: string } };
+    const laptop = await addKey('Laptop');
+    const lost = await addKey('Lost phone');
+    const made = json(
+      await a.app.inject({
+        method: 'POST',
+        url: '/api/backups',
+        headers: { cookie },
+        payload: { chats: false, passphrase: PASSPHRASE },
+      }),
+    );
+    // The phone was lost after the backup: its key is revoked.
+    const revoked = await a.app.inject({
+      method: 'DELETE',
+      url: `/api/access/keys/${lost.info.id}`,
+      headers: { cookie },
+    });
+    expect(revoked.statusCode).toBe(200);
+    const restored = await a.app.inject({
+      method: 'POST',
+      url: `/api/backups/${String(made.id)}/restore`,
+      headers: { cookie },
+      payload: { passphrase: PASSPHRASE },
+    });
+    expect(restored.statusCode).toBe(200);
+    const b = (await restart(a)).g;
+    const withKey = (key: string) =>
+      b.app.inject({ url: '/api/state', headers: { authorization: `Bearer ${key}` } });
+    expect((await withKey(lost.key)).statusCode).toBe(401);
+    expect((await withKey(laptop.key)).statusCode).toBe(200);
+    const access = JSON.parse(await readFile(join(b.home, 'access.json'), 'utf8')) as {
+      keys: { id: string }[];
+    };
+    expect(access.keys.map((k) => k.id)).toEqual([laptop.info.id]);
+  });
+});
+
+/**
+ * A backup made by hand, the way anyone can: every file sealed properly, and
+ * a header that says whatever it likes about what's inside.
+ */
+function forged(files: Record<string, string>, claims: Record<string, unknown>): Buffer {
+  const entries: [string, Buffer][] = [];
+  const header = {
+    format: 'conch-backup',
+    version: 1,
+    createdAt: Date.parse('2026-09-01T10:00:00'),
+    conchVersion: '0.2.0',
+    kind: 'manual',
+    groups: ['settings', 'memory', 'commands', 'routines', 'skills', 'integrations'],
+    dirs: [],
+    contents: {
+      settings: false,
+      memories: 0,
+      commands: 0,
+      routines: 0,
+      skills: 0,
+      integrations: 0,
+      integrationsSigningIn: 0,
+      ...claims,
+    },
+  };
+  entries.push(['conch-backup.json', Buffer.from(JSON.stringify(header))]);
+  const seal: { path: string; size: number; sha256: string }[] = [];
+  for (const [path, text] of Object.entries(files)) {
+    const data = Buffer.from(text);
+    entries.push([`files/${path}`, data]);
+    seal.push({ path, size: data.length, sha256: createHash('sha256').update(data).digest('hex') });
+  }
+  entries.push(['seal.json', Buffer.from(JSON.stringify({ files: seal }))]);
+  const blocks = entries.flatMap(([name, data]) => [
+    tarHeader(name, data.length, '0'),
+    data,
+    Buffer.alloc(padding(data.length)),
+  ]);
+  return gzipSync(Buffer.concat([...blocks, Buffer.alloc(1024)]));
+}
+
+const integration = (over: Record<string, unknown>) => ({
+  id: `i_${String(over.server)}`,
+  auth: 'none',
+  enabled: true,
+  policy: 'ask',
+  health: { state: 'ok' },
+  tools: [],
+  values: {},
+  secrets: [],
+  createdAt: 1,
+  updatedAt: 1,
+  ...over,
+});
+
+describe('the preview before a restore', () => {
+  it('counts what’s really in a file, never what its header claims, and lists what can act for you', async () => {
+    const g = await open();
+    const file = forged(
+      {
+        'settings.json': JSON.stringify({ preferences: { permissionMode: 'bypassPermissions' } }),
+        'integrations.json': JSON.stringify({
+          version: 1,
+          integrations: [
+            integration({
+              name: 'Files',
+              server: 'files',
+              transport: {
+                type: 'stdio',
+                command: 'npx',
+                args: ['-y', '@someone/server', '/Users/ada/My notes'],
+              },
+            }),
+            integration({
+              name: 'Mail',
+              server: 'mail',
+              auth: 'oauth',
+              policy: 'trust',
+              transport: { type: 'http', url: 'https://mail.example/mcp' },
+            }),
+            integration({
+              name: 'Calendar',
+              server: 'calendar',
+              transport: { type: 'http', url: 'https://calendar.example/mcp' },
+              tools: [
+                { name: 'list_events', access: 'read' },
+                {
+                  name: 'delete_event',
+                  title: 'Delete an event',
+                  access: 'write',
+                  policy: 'allow',
+                },
+              ],
+            }),
+            // Turned off: it runs nothing until you turn it on.
+            integration({
+              name: 'Old helper',
+              server: 'old',
+              enabled: false,
+              transport: { type: 'stdio', command: 'old-helper', args: [] },
+            }),
+          ],
+        }),
+        'routines/r_1.json': JSON.stringify({
+          id: 'r_1',
+          title: 'Nightly tidy',
+          trust: 'full',
+          status: 'active',
+        }),
+        'routines/r_2.json': JSON.stringify({
+          id: 'r_2',
+          title: 'An idea',
+          trust: 'full',
+          status: 'draft',
+        }),
+        'browser.json': JSON.stringify({
+          settings: { allowLocal: true },
+          sites: [{ site: 'bank.example', grantedAt: 1 }],
+        }),
+        'terminal.json': JSON.stringify({ settings: { allowRemote: true } }),
+        'memory/m_1.md': 'Likes lemon tea.',
+      },
+      // What the header claims: settings only, nothing that acts.
+      { settings: true },
+    );
+    const uploaded = await upload(g.app, file);
+    expect(uploaded.statusCode).toBe(200);
+    const summary = json(uploaded);
+    expect(summary.contents).toMatchObject({
+      settings: true,
+      memories: 1,
+      routines: 2,
+      integrations: 4,
+      integrationsSigningIn: 1,
+    });
+    const preview = BackupPreview.parse(
+      json(await g.app.inject(`/api/backups/${String(summary.id)}/preview`)),
+    );
+    expect(preview.contents).toEqual(summary.contents);
+    expect(preview.powers).toEqual([
+      {
+        kind: 'runs-program',
+        name: 'Files',
+        command: 'npx -y @someone/server "/Users/ada/My notes"',
+      },
+      { kind: 'integration-never-asks', name: 'Mail' },
+      { kind: 'tools-never-ask', name: 'Calendar', tools: ['Delete an event'], more: 0 },
+      { kind: 'chats-never-ask' },
+      { kind: 'routine-never-asks', name: 'Nightly tidy' },
+      { kind: 'browser-sites', sites: ['bank.example'], more: 0 },
+      { kind: 'browser-local' },
+      { kind: 'terminal-remote' },
+    ]);
+    expect(preview.morePowers).toBe(0);
+    // No keys in it: nothing to say about sign-in.
+    expect(preview.signInStays).toBe(false);
+  });
+
+  it('refuses a file too big for the preview to read, so nothing hides in it', async () => {
+    const g = await open();
+    const padded = JSON.stringify({
+      integrations: [
+        integration({
+          name: 'Hidden',
+          server: 'hidden',
+          transport: { type: 'stdio', command: 'x', args: [] },
+        }),
+      ],
+      padding: ' '.repeat(9 * 1024 * 1024),
+    });
+    const res = await upload(g.app, forged({ 'integrations.json': padded }, {}));
+    expect(res.statusCode).toBe(400);
+    expect(json(res).error).toBe('damaged');
+  });
+
+  it('previews a daily backup the same way, from its files', async () => {
+    const g = await open();
+    const { cookie } = await useConch(g);
+    const [daily] = await g.services.backups.list();
+    const preview = BackupPreview.parse(
+      json(
+        await g.app.inject({ url: `/api/backups/${daily?.id ?? ''}/preview`, headers: { cookie } }),
+      ),
+    );
+    expect(preview.contents).toEqual(daily?.contents);
+    expect(preview.powers).toEqual([]);
   });
 });
 
@@ -375,7 +657,9 @@ describe('guards', () => {
     });
     expect(huge.statusCode).toBe(413);
     await expect(
-      g.services.backups.receive(Readable.from([Buffer.alloc(600), Buffer.alloc(600)]), 1000),
+      g.services.backups.receive(Readable.from([Buffer.alloc(600), Buffer.alloc(600)]), {
+        maxBytes: 1000,
+      }),
     ).rejects.toMatchObject({ code: 'too-big' });
 
     const json400 = await g.app.inject({
@@ -386,6 +670,46 @@ describe('guards', () => {
     expect(json400.statusCode).toBe(415);
     for (const id of ['..%2F..%2Fsettings', 'auto-1.x', 'nope'])
       expect([404, 400]).toContain((await g.app.inject(`/api/backups/${id}`)).statusCode);
+  });
+
+  it('refuses an upload the disk can’t hold with a gigabyte to spare, before and while it arrives', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-backup-space-'));
+    let free = 1.5 * 1024 ** 3;
+    const backups = new BackupService({
+      home,
+      conchVersion: '0.0.0-test',
+      busy: () => false,
+      lastActivity: () => 0,
+      emit: () => undefined,
+      freeBytes: async () => free,
+    });
+    const refused = { code: 'no-space', message: expect.stringMatching(/enough free space/) };
+    // 600 MB said, 1.5 GB free: not a gigabyte to spare. Nothing is read or written.
+    let pulled = 0;
+    const body = (async function* () {
+      pulled++;
+      yield Buffer.alloc(10);
+    })();
+    await expect(backups.receive(body, { size: 600 * 1024 ** 2 })).rejects.toMatchObject(refused);
+    expect(pulled).toBe(0);
+    // A file that says nothing about its size is cut off once it passes the room there is.
+    free = 1024 ** 3 + 1000;
+    await expect(
+      backups.receive(Readable.from([Buffer.alloc(600), Buffer.alloc(600)])),
+    ).rejects.toMatchObject(refused);
+    expect(await readdir(backups.dir)).toEqual([]);
+    await rm(home, { recursive: true, force: true });
+  });
+
+  it('passes the size an upload says it is on to the space check', async () => {
+    const g = await open();
+    const receive = vi
+      .spyOn(g.services.backups, 'receive')
+      .mockRejectedValue(new BackupError('no-space', 'There isn’t enough free space.'));
+    const res = await upload(g.app, Buffer.from('x'.repeat(2048)));
+    expect(res.statusCode).toBe(507);
+    expect(json(res).error).toBe('no-space');
+    expect(receive).toHaveBeenCalledWith(expect.anything(), { size: 2048 });
   });
 
   it('won’t restore while a chat is working, and leaves everything as it was', async () => {
@@ -409,12 +733,20 @@ describe('guards', () => {
     const [daily] = await g.services.backups.list();
     const bytes = await readFile(g.services.backups.pathOf(daily?.id ?? ''));
     const cut = bytes.subarray(0, bytes.length - 40);
+    // The header still reads, but an upload is checked all through before it's offered.
     const uploaded = await upload(g.app, cut);
-    // The header still reads, so it's offered; the full check at restore catches it.
-    expect(uploaded.statusCode).toBe(200);
+    expect(uploaded.statusCode).toBe(400);
+    expect(json(uploaded).error).toBe('damaged');
+    expect((await readdir(g.services.backups.dir)).filter((n) => n.startsWith('upload-'))).toEqual(
+      [],
+    );
+    // One damaged on this disk: its preview and the restore both catch it.
+    await writeFile(g.services.backups.pathOf(daily?.id ?? ''), cut);
+    const preview = await g.app.inject(`/api/backups/${daily?.id ?? ''}/preview`);
+    expect(preview.statusCode).toBe(400);
     const res = await g.app.inject({
       method: 'POST',
-      url: `/api/backups/${String(json(uploaded).id)}/restore`,
+      url: `/api/backups/${daily?.id ?? ''}/restore`,
       payload: {},
     });
     expect(res.statusCode).toBe(400);
@@ -545,6 +877,33 @@ describe('automatic backups', () => {
     free = 10 * 1024 ** 3;
     expect(await s.tick()).toBe('made');
     expect((await s.status()).problem).toBeUndefined();
+  });
+
+  it('won’t start a restore the disk can’t hold, and stages nothing', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-full-restore-'));
+    await writeFile(join(home, 'settings.json'), '{}');
+    await mkdir(join(home, 'memory'));
+    await writeFile(join(home, 'memory', 'm_1.md'), 'x'.repeat(200_000));
+    let free = 10 * 1024 ** 3;
+    const { s } = await service(home, { freeBytes: async () => free });
+    const made = await s.backupNow();
+    const before = await readdir(s.dir);
+    // Just short of what staging and the Undo copy need together.
+    free = 64 * 1024 * 1024 + 200_000;
+    const error = await s.restore(made.id).catch((e: unknown) => e);
+    expect(error).toMatchObject({
+      code: 'no-space',
+      message: expect.stringMatching(/enough free space on this computer to restore/),
+    });
+    // Nothing was staged, and no Undo copy was made.
+    expect(await readdir(s.dir)).toEqual(before);
+    expect((await s.status()).pending).toBeUndefined();
+    // Room enough for the file, not for what it unpacks to: stops there, and clears up.
+    free = 64 * 1024 * 1024 + 200_000 + made.size + 1_000;
+    await expect(s.restore(made.id)).rejects.toMatchObject({ code: 'no-space' });
+    expect(await readdir(s.dir)).toEqual(before);
+    free = 10 * 1024 ** 3;
+    await expect(s.restore(made.id)).resolves.toMatchObject({ kind: 'automatic' });
   });
 
   it('keeps 7 dailies and 4 weeklies, and lets the rest go', async () => {

@@ -129,12 +129,28 @@ looked up online until a person presses Get.
 ## Security
 
 - **Loopback only.** Conch reads `OLLAMA_HOST` but follows it only to this
-  computer (`127.0.0.0/8`, `::1`, `localhost`, or the every-address binding,
-  dialled as `127.0.0.1`/`[::1]`), always as an IP literal. Anything else —
-  a LAN address, a host name, credentials, another scheme — is refused, and the
-  page says what to change. `send(…, local: true)` refuses any non-loopback URL
-  and follows no redirect. Reaching an Ollama on another machine would need an
-  explicit, explained setting; there is none.
+  computer (`127.0.0.0/8`, `::1`, `localhost`, or the every-address binding —
+  `0.0.0.0`, `::`, or a bare `:port` — dialled as `127.0.0.1`), always as an
+  IP literal. Anything else — a LAN address, a host name, credentials, another
+  scheme — is refused, and the page says what to change. `send(…, local: true)`
+  refuses any non-loopback URL and follows no redirect. Reaching an Ollama on
+  another machine would need an explicit, explained setting; there is none.
+- **What Conch starts answers this computer only.** Every Ollama Conch starts
+  gets `OLLAMA_HOST=<the loopback address it dials>` in its environment,
+  whatever the person's variable says, and with an every-address variable it
+  runs `ollama serve` itself rather than the Mac app (which reads its settings
+  from launchd, not from Conch). An every-address `OLLAMA_HOST` still opens an
+  Ollama started elsewhere (at sign-in, from the app) to the whole network —
+  anyone there could chat with the models, pull more or delete them — so
+  Repair everything warns (`local-model:network`), in those words, with the
+  command that sets it back to `127.0.0.1` (`setx` on Windows,
+  `launchctl setenv` on a Mac).
+- **Cloud models are never "on this computer".** Ollama lists the cloud
+  models someone pulled (`gpt-oss:120b-cloud`) next to real ones, but every
+  chat with them goes to ollama.com. Conch leaves out any tag with
+  `remote_host` or `remote_model` set, and any name ending in `-cloud` or
+  `:cloud` (for an Ollama that doesn't say), so they're never listed,
+  chosen, or used for an offline answer.
 - **Names are validated** (`LocalModelName`): each part starts with a letter or
   digit, so `.`/`..` can't be a part; no backslashes, spaces, `%`, `?`; at most
   three parts before the tag. **Only models on Conch's list can be downloaded**

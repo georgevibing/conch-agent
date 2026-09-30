@@ -12,7 +12,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { mkdir, readdir, readFile, rename, rm, stat, statfs } from 'node:fs/promises';
+import { mkdir, readdir, rename, rm, stat, statfs } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Readable, Transform } from 'node:stream';
@@ -20,7 +20,9 @@ import { Readable, Transform } from 'node:stream';
 import {
   BACKUP_EXTENSION,
   BACKUP_LIMITS,
+  type BackupContents,
   type BackupKind,
+  type BackupPreview,
   type BackupStatus,
   type BackupSummary,
   Id,
@@ -30,10 +32,12 @@ import { z } from 'zod';
 
 import { Mutex, readJson, safeJoin, writeJson } from '../lib/fs';
 import { readStore, type Heal } from '../lib/recover';
-import { BackupError } from './archive';
+import { BackupError, NO_ROOM } from './archive';
 import { extractBackup, readHeader, writeBackup, type Header } from './format';
-import { groupsFor, walk, type BackupGroup } from './manifest';
+import { countContents, groupsFor, walk, type BackupGroup } from './manifest';
+import { powersOf, previewReads } from './powers';
 import { backupsDir, Journal, journalPath, Plan, stagingDir } from './restore';
+import { currentAccess, hasSignIn, signInAfterRestore, stagedAccess } from './signin';
 import { dayOf, retain, retainUndo } from './retention';
 
 /** How long nothing must have happened in a chat before a backup starts. */
@@ -51,6 +55,8 @@ const TRANSIENT_MS = 60 * 60_000;
 const UNDO_OFFER_MS = 24 * 60 * 60_000;
 /** Room left free on the disk besides the backup itself. */
 const SPARE_BYTES = 64 * 1024 * 1024;
+/** Room left free besides a file uploaded to restore from: restoring it needs space too. */
+const UPLOAD_SPARE_BYTES = 1024 ** 3;
 
 const PREFIX: Record<BackupKind, string> = {
   automatic: 'auto',
@@ -60,6 +66,15 @@ const PREFIX: Record<BackupKind, string> = {
 };
 const kindOf = (id: string): BackupKind | undefined =>
   (Object.entries(PREFIX) as [BackupKind, string][]).find(([, p]) => id.startsWith(`${p}-`))?.[0];
+
+/** What a backup's files hold, read for the preview. */
+interface Inspection {
+  header: Header;
+  contents: BackupContents;
+  powers: BackupPreview['powers'];
+}
+/** The most things-that-act-for-you a preview lists; the rest are counted. */
+const MAX_POWERS = 40;
 
 const SettingsFile = z.object({
   version: z.literal(1).default(1),
@@ -112,6 +127,7 @@ export class BackupService {
   #problem?: string;
   #settings?: Promise<Settings>;
   #summaries = new Map<string, { mtimeMs: number; summary: BackupSummary }>();
+  #inspected = new Map<string, { mtimeMs: number; size: number; inspection: Inspection }>();
   #timer?: NodeJS.Timeout;
   #first?: NodeJS.Timeout;
 
@@ -184,7 +200,64 @@ export class BackupService {
       .filter((id) => Id.safeParse(id).success && kindOf(id) !== undefined);
   }
 
-  /** One backup, from its header (cached until the file changes). */
+  /**
+   * What a backup really holds, from its files (cached until the file
+   * changes): checked through like a restore — paths, kinds, sizes, sums —
+   * but nothing written and no passphrase needed. Never what its header
+   * says: anyone can write a header.
+   */
+  async #inspect(id: string): Promise<Inspection> {
+    const kind = kindOf(id);
+    if (!kind || !Id.safeParse(id).success)
+      throw new BackupError('not-found', 'That backup is gone.');
+    const path = this.pathOf(id);
+    const info = await stat(path).catch(() => undefined);
+    if (!info?.isFile()) throw new BackupError('not-found', 'That backup is gone.');
+    const cached = this.#inspected.get(id);
+    if (cached?.mtimeMs === info.mtimeMs && cached.size === info.size) return cached.inspection;
+    const { header, files, captured } = await extractBackup(path, {
+      allowLocal: kind === 'before-restore',
+      capture: previewReads,
+    });
+    const read = (p: string) => captured.get(p);
+    const contents: BackupContents = {
+      ...(await countContents(
+        files.map((p) => ({ path: p })),
+        async (p) => read(p),
+        { chats: header.groups.includes('chats') },
+      )),
+      ...(header.secrets && { secrets: header.secrets.mode }),
+    };
+    const inspection: Inspection = { header, contents, powers: powersOf(files, read) };
+    this.#inspected.set(id, { mtimeMs: info.mtimeMs, size: info.size, inspection });
+    return inspection;
+  }
+
+  /**
+   * What restoring a backup brings, for the preview a person sees before
+   * they confirm: counted from its files, what in it can act for them, and
+   * whether sign-in here stays as it is.
+   */
+  async preview(id: string): Promise<BackupPreview> {
+    const { header, contents, powers } = await this.#inspect(id);
+    const listed = powers.slice(0, MAX_POWERS);
+    return {
+      id,
+      contents,
+      powers: listed,
+      morePowers: powers.length - listed.length,
+      signInStays:
+        header.secrets !== undefined &&
+        kindOf(id) !== 'before-restore' &&
+        (await this.signInStays()),
+    };
+  }
+
+  /**
+   * One backup (cached until the file changes). A file uploaded to restore
+   * from is checked through, and what it holds is counted from its files;
+   * one this computer made says what it holds in its header.
+   */
   async summary(id: string): Promise<BackupSummary> {
     const kind = kindOf(id);
     if (!kind || !Id.safeParse(id).success)
@@ -194,14 +267,14 @@ export class BackupService {
     if (!info?.isFile()) throw new BackupError('not-found', 'That backup is gone.');
     const cached = this.#summaries.get(id);
     if (cached?.mtimeMs === info.mtimeMs) return cached.summary;
-    const header = await readHeader(path);
+    const header = kind === 'uploaded' ? (await this.#inspect(id)).header : await readHeader(path);
     const summary: BackupSummary = {
       id,
       kind,
       createdAt: header.createdAt,
       conchVersion: header.conchVersion,
       size: info.size,
-      contents: header.contents,
+      contents: kind === 'uploaded' ? (await this.#inspect(id)).contents : header.contents,
       // An Undo copy may hold keys unlocked: it never leaves this computer.
       downloadable: kind === 'automatic' || kind === 'manual',
     };
@@ -333,6 +406,25 @@ export class BackupService {
       );
   }
 
+  /**
+   * Room to restore `path`, looked at before a byte is staged: the backup
+   * unpacked (at least as big as the file), then an Undo copy of what it
+   * replaces here. Throws `no-space` when there isn't; otherwise the room
+   * left for what's unpacked, so extracting stops at the disk too.
+   */
+  async #roomToRestore(path: string, size: number): Promise<number | undefined> {
+    const header = await readHeader(path);
+    const here = (await walk(this.deps.home))
+      .filter((f) => f.rule?.group !== undefined && header.groups.includes(f.rule.group))
+      .reduce((sum, f) => sum + f.size, 0);
+    await mkdir(this.dir, { recursive: true, mode: 0o700 });
+    const free = await (this.deps.freeBytes ?? diskFree)(this.dir);
+    if (free === undefined) return undefined;
+    const room = free - here - SPARE_BYTES;
+    if (room < size) throw new BackupError('no-space', NO_ROOM);
+    return room;
+  }
+
   /** Back up now into the backups folder (automatic), chats included. */
   backupNow(): Promise<BackupSummary> {
     return this.#exclusive('backing-up', async () => {
@@ -372,13 +464,24 @@ export class BackupService {
   /**
    * A file you chose to restore from, streamed to disk as it arrives and
    * refused past the size limit. It's checked (the header) before it's kept.
+   * Refused before a byte lands when the disk can't hold it and a gigabyte
+   * more (`size`: what the upload says it is), and cut off if it grows past
+   * that while it arrives.
    */
   async receive(
     body: Readable | AsyncIterable<Buffer>,
-    maxBytes: number = BACKUP_LIMITS.maxArchiveBytes,
+    options: { maxBytes?: number; size?: number } = {},
   ): Promise<BackupSummary> {
+    const maxBytes = options.maxBytes ?? BACKUP_LIMITS.maxArchiveBytes;
     await mkdir(this.dir, { recursive: true, mode: 0o700 });
     await this.#sweep();
+    const free = await (this.deps.freeBytes ?? diskFree)(this.dir);
+    const noSpace = () =>
+      new BackupError(
+        'no-space',
+        'There isn’t enough free space on this computer to restore that backup. Free up some space, then try again.',
+      );
+    if (free !== undefined && free < (options.size ?? 0) + UPLOAD_SPARE_BYTES) throw noSpace();
     const id = this.#newId('uploaded', this.#now, new Set());
     const path = this.pathOf(id);
     const tmp = `${path}.tmp`;
@@ -388,6 +491,7 @@ export class BackupService {
         received += chunk.length;
         if (received > maxBytes)
           done(new BackupError('too-big', 'That file is over 2 GB, too big to be a Conch backup.'));
+        else if (free !== undefined && received + UPLOAD_SPARE_BYTES > free) done(noSpace());
         else done(null, chunk);
       },
     });
@@ -411,6 +515,7 @@ export class BackupService {
     if (kindOf(id) !== 'uploaded' && kindOf(id) !== 'manual') return false;
     await rm(this.pathOf(id), { force: true });
     this.#summaries.delete(id);
+    this.#inspected.delete(id);
     return true;
   }
 
@@ -431,6 +536,7 @@ export class BackupService {
       if (!kept) {
         await rm(this.pathOf(backup.id), { force: true });
         this.#summaries.delete(backup.id);
+        this.#inspected.delete(backup.id);
       }
     }
     await this.#sweep();
@@ -506,6 +612,8 @@ export class BackupService {
       const source = await this.summary(id);
       const path = this.pathOf(id);
       const staging = stagingDir(this.deps.home);
+      // Before anything is staged: a full disk says so, rather than fill up.
+      const room = await this.#roomToRestore(path, source.size);
       await rm(staging, { recursive: true, force: true });
       await mkdir(staging, { recursive: true, mode: 0o700 });
       try {
@@ -514,14 +622,19 @@ export class BackupService {
           passphrase: options.passphrase,
           skipSecrets: options.skipSecrets,
           allowLocal: kind === 'before-restore',
+          ...(room !== undefined && { limits: { roomBytes: room } }),
         });
         const { header } = extracted;
         const withSecrets =
           header.secrets !== undefined &&
           !(header.secrets.mode === 'passphrase' && options.skipSecrets);
         const groups = header.groups.filter((g) => g !== 'secrets' || withSecrets);
-        const files = [...extracted.files, ...extracted.secrets];
-        if (files.includes('access.json')) await this.#keepSession(staging, options.keepSessionId);
+        let files = [...extracted.files, ...extracted.secrets];
+        const keep: string[] = [];
+        if (files.includes('access.json') && (await this.#signIn(staging, options, kind))) {
+          files = files.filter((f) => f !== 'access.json');
+          keep.push('access.json');
+        }
 
         // What's here now, exactly what the restore replaces: Undo puts it back.
         await this.#roomFor(groups);
@@ -539,10 +652,15 @@ export class BackupService {
           files,
           undoId: undo.id,
           exact: kind === 'before-restore',
+          keep,
         };
         // Written last: its presence is what makes the restore pending.
         await writeJson(join(staging, 'plan.json'), plan);
-        if (kind === 'uploaded') await rm(path, { force: true });
+        if (kind === 'uploaded') {
+          await rm(path, { force: true });
+          this.#summaries.delete(id);
+          this.#inspected.delete(id);
+        }
         await this.#prune();
         return from;
       } catch (error) {
@@ -553,24 +671,36 @@ export class BackupService {
   }
 
   /**
-   * Sign-in from a backup brings back who may sign in (the password, the
-   * keys) but no signed-in devices: those could be ones you signed out since.
-   * The device restoring stays signed in; every other one signs in again.
+   * Who may sign in after this restore (`signin.ts`): a Conch with sign-in
+   * set up keeps its own password, keys and signed-in devices; one without
+   * (a new computer) takes the backup's, minus any key it doesn't have, with
+   * only the device restoring signed in. Says whether sign-in stays exactly
+   * as it is here (then the staged copy goes).
    */
-  async #keepSession(staging: string, sessionId: string | undefined): Promise<void> {
+  async #signIn(
+    staging: string,
+    options: { keepSessionId?: string },
+    kind: BackupKind | undefined,
+  ): Promise<boolean> {
     const target = join(staging, 'files', 'access.json');
-    const restored = JSON.parse(await readFile(target, 'utf8')) as Record<string, unknown>;
-    let sessions: unknown[] = [];
-    if (sessionId) {
-      const current = await readJson<{ sessions?: unknown }>(
-        join(this.deps.home, 'access.json'),
-      ).catch(() => undefined);
-      const list = Array.isArray(current?.sessions) ? current.sessions : [];
-      sessions = list.filter(
-        (s) => typeof s === 'object' && s !== null && (s as { id?: unknown }).id === sessionId,
-      );
+    const incoming = await stagedAccess(target);
+    const outcome = incoming
+      ? signInAfterRestore(await currentAccess(this.deps.home), incoming, {
+          exact: kind === 'before-restore',
+          keepSessionId: options.keepSessionId,
+        })
+      : ({ kind: 'kept' } as const);
+    if (outcome.kind === 'kept') {
+      await rm(target, { force: true });
+      return true;
     }
-    await writeJson(target, { ...restored, sessions, pairings: [] });
+    await writeJson(target, outcome.file);
+    return false;
+  }
+
+  /** Sign-in stays as it is here when a backup is restored: it's set up already. */
+  async signInStays(): Promise<boolean> {
+    return hasSignIn(await currentAccess(this.deps.home));
   }
 
   /** Forget a restore that's waiting for Conch to start again. */

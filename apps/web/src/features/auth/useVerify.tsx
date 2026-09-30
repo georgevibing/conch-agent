@@ -17,7 +17,11 @@ type Task = () => Promise<unknown>;
 export function useVerify(method: AccessMethod) {
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
-  const pending = useRef<{ task: Task; resolve: (ok: boolean) => void }>(undefined);
+  const pending = useRef<{
+    task: Task;
+    resolve: (ok: boolean) => void;
+    reject: (error: unknown) => void;
+  }>(undefined);
 
   const guard = async (task: Task): Promise<boolean> => {
     try {
@@ -25,8 +29,8 @@ export function useVerify(method: AccessMethod) {
       return true;
     } catch (error) {
       if (!(error instanceof ApiError && error.code === 'verify-required')) throw error;
-      return new Promise<boolean>((resolve) => {
-        pending.current = { task, resolve };
+      return new Promise<boolean>((resolve, reject) => {
+        pending.current = { task, resolve, reject };
         setOpen(true);
       });
     }
@@ -38,8 +42,13 @@ export function useVerify(method: AccessMethod) {
     pending.current = undefined;
     if (!current) return;
     if (!verified) return current.resolve(false);
-    await current.task();
-    current.resolve(true);
+    // The task's own failure (a chat still working) goes back to whoever asked.
+    try {
+      await current.task();
+      current.resolve(true);
+    } catch (error) {
+      current.reject(error);
+    }
   };
 
   const dialog = (

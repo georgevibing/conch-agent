@@ -11,7 +11,7 @@ import { BackupList } from './BackupList';
 import { BackupOptions } from './BackupOptions';
 import { BackupOverview } from './BackupOverview';
 import { RestorePreview } from './RestorePreview';
-import { backups, daily, everything } from './fixtures';
+import { backups, daily, everything, onePower, powers } from './fixtures';
 
 const meta = {
   title: 'Patterns/Backups/Dialogs',
@@ -88,6 +88,47 @@ export const Restore: Story = {
   },
 };
 
+/**
+ * A file from somewhere else that can act for you: said plainly, before the
+ * button, in one calm list. Restore it only if you set these up yourself.
+ */
+export const RestoreThatActsForYou: Story = {
+  render: () => (
+    <Shell
+      title="Restore this backup?"
+      description="From Tuesday 1 Sept, 10:00"
+      action={<Button>Restore</Button>}
+    >
+      <RestorePreview contents={daily} powers={powers} morePowers={3} />
+    </Shell>
+  ),
+};
+
+/**
+ * Your own backup on a Conch that has sign-in set up: its other keys and
+ * sign-ins come back, and the password and keys you use now stay.
+ */
+export const RestoreKeepsSignIn: Story = {
+  render: () => {
+    const [passphrase, setPassphrase] = useState('');
+    return (
+      <Shell
+        title="Restore this backup?"
+        description="From Tuesday 30 Sept, 14:02"
+        action={<Button disabled={!passphrase}>Restore</Button>}
+      >
+        <RestorePreview
+          contents={everything}
+          powers={onePower}
+          signInStays
+          passphrase={passphrase}
+          onPassphraseChange={setPassphrase}
+        />
+      </Shell>
+    );
+  },
+};
+
 export const WrongPassphrase: Story = {
   render: (args) => (
     <Shell
@@ -136,6 +177,38 @@ export const CheckingAFile: Story = {
   render: () => (
     <Shell title="Restore from a file" action={<Button disabled>Restore</Button>}>
       <Progress value={64} label="Checking Conch backup 2026-09-30.conchbackup…" showValue />
+    </Shell>
+  ),
+};
+
+/** Reading a backup through before the preview (every file, no passphrase needed). */
+export const CheckingABackup: Story = {
+  render: () => (
+    <Shell
+      title="Restore this backup?"
+      description="From today at 3:12 AM"
+      action={<Button disabled>Restore</Button>}
+    >
+      <Progress label="Checking what’s in it…" />
+    </Shell>
+  ),
+};
+
+/** No room for the file: it says so, in its own words. */
+export const NoRoom: Story = {
+  render: () => (
+    <Shell
+      title="Restore from a file"
+      action={
+        <Button variant="surface" leadingIcon={<Upload />}>
+          Choose another file
+        </Button>
+      }
+    >
+      <Callout
+        tone="danger"
+        title="There isn’t enough free space on this computer to restore that backup. Free up some space, then try again."
+      />
     </Shell>
   ),
 };
@@ -221,6 +294,33 @@ export const BackUp: Story = { render: () => <BackUpNow /> };
 
 export const BackUpWithKeys: Story = {
   render: () => <BackUpNow secrets typed="seven lemons sail past the harbour" />,
+};
+
+/**
+ * The first day: the overview says when the first backup comes, so the empty
+ * list below says only that there are none yet — nothing twice.
+ */
+export const SectionBeforeTheFirst: Story = {
+  parameters: { layout: 'padded' },
+  render: () => (
+    <div style={{ maxInlineSize: 640 }}>
+      <Stack gap={4}>
+        <BackupOverview
+          automatic
+          onAutomaticChange={() => undefined}
+          detail="The first backup is made soon, while Conch isn’t busy."
+        >
+          <Button size="sm" leadingIcon={<Download />}>
+            Back up now
+          </Button>
+          <Button size="sm" variant="surface" leadingIcon={<Upload />}>
+            Restore from a file…
+          </Button>
+        </BackupOverview>
+        <BackupList backups={[]} />
+      </Stack>
+    </div>
+  ),
 };
 
 /** Settings → Health → Backups, put together. */

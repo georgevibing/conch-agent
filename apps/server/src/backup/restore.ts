@@ -52,6 +52,11 @@ export const Plan = z.object({
    * which is exactly how things were; any other backup leaves them be.
    */
   exact: z.boolean().default(false),
+  /**
+   * Files that stay exactly as they are here, even on an exact restore: this
+   * computer's own sign-in (`access.json`) when it has one (`signin.ts`).
+   */
+  keep: z.array(z.string()).default([]),
 });
 export type Plan = z.infer<typeof Plan>;
 
@@ -101,7 +106,8 @@ export function mergeUsage(current: Buffer | undefined, restored: Buffer): Buffe
 export async function applyPlan(home: string, plan: Plan): Promise<void> {
   const groups = new Set<BackupGroup>(plan.groups);
   const staged = join(stagingDir(home), 'files');
-  const incoming = new Set(plan.files);
+  const keep = new Set(plan.keep);
+  const incoming = new Set(plan.files.filter((path) => !keep.has(path)));
 
   // What's here now in those groups goes: what was added since the backup too.
   for (const group of groups)
@@ -109,7 +115,7 @@ export async function applyPlan(home: string, plan: Plan): Promise<void> {
       await rm(safeJoinPath(home, dir), { recursive: true, force: true });
   for (const file of await walk(home)) {
     const rule = file.rule;
-    if (!rule?.group || !groups.has(rule.group) || rule.merge) continue;
+    if (!rule?.group || !groups.has(rule.group) || rule.merge || keep.has(file.path)) continue;
     if (rule.class !== 'kept' && rule.class !== 'secret') continue;
     // Keys and sign-in the backup doesn't have stay as they are (except on Undo).
     if (rule.class === 'secret' && !incoming.has(file.path) && !plan.exact) continue;
@@ -121,7 +127,7 @@ export async function applyPlan(home: string, plan: Plan): Promise<void> {
     if (owned) await mkdir(safeJoinPath(home, dir), { recursive: true, mode: 0o700 });
   }
 
-  for (const path of plan.files) {
+  for (const path of incoming) {
     const rule = classify(path);
     // Checked when staged; checked again here, in case the staging folder was touched.
     if (!validRelPath(path) || !rule?.group || !groups.has(rule.group)) continue;

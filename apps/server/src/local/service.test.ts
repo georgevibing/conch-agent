@@ -169,6 +169,77 @@ describe('finding Ollama', () => {
     );
     expect(heal).toHaveBeenCalledWith('Ollama wasn’t running, so Conch started it.');
     expect(onChange).toHaveBeenCalled();
+    // For this computer only, whatever the environment says.
+    const [, , options] = spawn.mock.calls[0] as unknown as [
+      string,
+      string[],
+      { env: NodeJS.ProcessEnv },
+    ];
+    expect(options.env.OLLAMA_HOST).toBe('127.0.0.1:11434');
+  });
+
+  it('never starts an Ollama that answers the network, even when OLLAMA_HOST says every address', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'conch-ollama-app-'));
+    await writeFile(join(dir, 'ollama app.exe'), '');
+    const { local, spawn, calls } = await service({
+      program: join(dir, 'ollama.exe'),
+      env: { OLLAMA_HOST: '0.0.0.0:11500' },
+    });
+    expect(await local.ensureRunning({ note: false })).toBe(true);
+    // Not the app (it keeps its own settings): the server itself, on loopback.
+    expect(spawn.mock.calls.map(([command, args]) => [command, args])).toEqual([
+      [join(dir, 'ollama.exe'), ['serve']],
+    ]);
+    const [, , options] = spawn.mock.calls[0] as unknown as [
+      string,
+      string[],
+      { env: NodeJS.ProcessEnv },
+    ];
+    expect(options.env.OLLAMA_HOST).toBe('127.0.0.1:11500');
+    expect(calls.every((c) => c.url.startsWith('http://127.0.0.1:11500/'))).toBe(true);
+  });
+
+  it('warns in Repair everything when OLLAMA_HOST opens Ollama to the network', async () => {
+    const { local } = await service({
+      env: { OLLAMA_HOST: '0.0.0.0' },
+      world: { running: true, tags: [QWEN_TAG] },
+    });
+    const items = await local
+      .doctorCheck()
+      .run({ repair: false, signal: new AbortController().signal });
+    expect(items[0]).toMatchObject({ id: 'local-model:ollama', state: 'ok' });
+    expect(items[1]).toMatchObject({
+      id: 'local-model:network',
+      state: 'warning',
+      message: expect.stringMatching(
+        /Other computers on your network can reach Ollama.*127\.0\.0\.1/,
+      ),
+      action: { kind: 'command', command: 'setx OLLAMA_HOST 127.0.0.1' },
+    });
+    // The Mac says it its own way; nothing to warn about when it's this computer only.
+    const mac = await service({
+      platform: 'darwin',
+      env: { OLLAMA_HOST: '[::]:11434' },
+      world: { running: true, tags: [QWEN_TAG] },
+    });
+    const [, macItem] = await mac.local
+      .doctorCheck()
+      .run({ repair: false, signal: new AbortController().signal });
+    expect(macItem?.action).toMatchObject({ command: 'launchctl setenv OLLAMA_HOST 127.0.0.1' });
+    const safe = await service({
+      env: { OLLAMA_HOST: '127.0.0.1' },
+      world: { running: true, tags: [QWEN_TAG] },
+    });
+    expect(
+      await safe.local.doctorCheck().run({ repair: false, signal: new AbortController().signal }),
+    ).toHaveLength(1);
+    // Not installed: nothing listens, so nothing to warn about.
+    const missing = await service({ installed: false, env: { OLLAMA_HOST: '0.0.0.0' } });
+    expect(
+      await missing.local
+        .doctorCheck()
+        .run({ repair: false, signal: new AbortController().signal }),
+    ).toHaveLength(1);
   });
 
   it('starts the Windows app hidden in the tray when it’s there', async () => {
@@ -276,6 +347,36 @@ describe('finding Ollama', () => {
     expect(calls.every((c) => c.url.startsWith('http://127.0.0.1:11434/'))).toBe(true);
     // 32K on a 16 GB computer, well inside what the model can read.
     expect(local.contextFor('qwen3:4b-instruct')).toBe(32_768);
+  });
+
+  it('never lists a cloud model as one on this computer', async () => {
+    // What `/api/tags` says once someone has signed in to ollama.com and pulled cloud models.
+    const cloud = [
+      {
+        name: 'gpt-oss:120b-cloud',
+        model: 'gpt-oss:120b-cloud',
+        remote_model: 'gpt-oss:120b',
+        remote_host: 'https://ollama.com:443',
+        size: 384,
+        digest: 'c1',
+        details: { family: 'gptoss', parameter_size: '116.8B' },
+      },
+      // An Ollama that doesn't say where it goes: the name still tells.
+      { name: 'qwen3-coder:480b-cloud', size: 382, digest: 'c2' },
+      { name: 'glm-4.6:cloud', size: 380, digest: 'c3' },
+      // Only the host set, with an ordinary-looking name.
+      { name: 'kimi-k2:latest', remote_host: 'https://ollama.com:443', size: 390, digest: 'c4' },
+    ];
+    const { local, calls } = await service({
+      world: { running: true, tags: [...cloud, QWEN_TAG] },
+    });
+    expect((await local.models()).map((m) => m.name)).toEqual(['qwen3:4b-instruct']);
+    // Not even asked about: nothing about them is shown.
+    const shown = calls
+      .filter((c) => c.url.endsWith('/api/show'))
+      .map((c) => (c.body as { model: string }).model);
+    expect(shown).toEqual(['qwen3:4b-instruct']);
+    await expect(local.choose('gpt-oss:120b-cloud')).rejects.toThrow(/isn’t on this computer/);
   });
 
   it('asks for less context on a small computer, and never more than the model reads', async () => {

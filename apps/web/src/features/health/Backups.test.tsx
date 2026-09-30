@@ -1,4 +1,4 @@
-import type { BackupStatus, BackupSummary } from '@conch/protocol';
+import type { BackupPreview, BackupStatus, BackupSummary } from '@conch/protocol';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -56,12 +56,25 @@ const health = {
 };
 const auth = { method: 'none', signedIn: true, setupRequired: false, secure: true };
 
+/** What the gateway reads from a backup's files for the preview. */
+const previewOf = (b: BackupSummary, patch: Partial<BackupPreview> = {}): BackupPreview => ({
+  id: b.id,
+  contents: b.contents,
+  powers: [],
+  morePowers: 0,
+  signInStays: false,
+  ...patch,
+});
+
 function routes(current: BackupStatus, extra: Record<string, (body: unknown) => unknown> = {}) {
   return mockFetch({
     'GET /api/backups': () => current,
     'GET /api/health': () => health,
     'GET /api/auth': () => auth,
     'GET /api/access': () => ({}),
+    ...Object.fromEntries(
+      current.backups.map((b) => [`GET /api/backups/${b.id}/preview`, () => previewOf(b)]),
+    ),
     ...extra,
   });
 }
@@ -105,6 +118,16 @@ describe('Settings → Health → Backups', () => {
     expect(
       await screen.findByRole('region', { name: 'Automatic backups are off' }),
     ).toBeInTheDocument();
+  });
+
+  it('says once when the first backup comes, not again under it', async () => {
+    routes(status({ backups: [], lastAutomaticAt: undefined }));
+    renderApp(<BackupSection />);
+    expect(
+      await screen.findByText('The first backup is made soon, while Conch isn’t busy.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('None yet.')).toBeInTheDocument();
+    expect(screen.getAllByText(/made soon/)).toHaveLength(1);
   });
 
   it('says why the last backup didn’t happen, calmly', async () => {
@@ -220,7 +243,8 @@ describe('restoring', () => {
     );
     const dialog = await screen.findByRole('dialog', { name: 'Restore this backup?' });
     expect(within(dialog).getByText(/^From /)).toBeInTheDocument();
-    const list = within(dialog).getByRole('list', { name: 'What this backup brings back' });
+    // Read from its files first, then shown.
+    const list = await within(dialog).findByRole('list', { name: 'What this backup brings back' });
     expect(list).toHaveTextContent('12 memories');
     expect(list).toHaveTextContent('5 integrations · you’ll sign in to them again');
     expect(list).toHaveTextContent('240 chats');
@@ -275,6 +299,7 @@ describe('restoring', () => {
                 'Your backup is ready to restore. Restart Conch to finish: stop it (Ctrl+C) and run pnpm start again.',
             },
       'DELETE /api/backups/upload-1a2b3c': () => ({ ok: true }),
+      'GET /api/backups/upload-1a2b3c/preview': () => previewOf(uploaded),
     });
     const { container } = renderApp(<BackupSection />);
     const input = container.querySelector<HTMLInputElement>('input[type="file"]');
@@ -287,7 +312,7 @@ describe('restoring', () => {
     act(() => resolveUpload(uploaded));
 
     const dialog = await screen.findByRole('dialog', { name: 'Restore this backup?' });
-    expect(within(dialog).getByRole('list')).toHaveTextContent(
+    expect(await within(dialog).findByRole('list')).toHaveTextContent(
       'Your keys and sign-ins · with your passphrase',
     );
     const restore = within(dialog).getByRole('button', { name: 'Restore' });
@@ -317,21 +342,23 @@ describe('restoring', () => {
 
   it('goes on without the keys when the passphrase is forgotten, and lets go of an unused upload', async () => {
     const user = userEvent.setup();
-    upload.mockResolvedValue(
-      backup({
-        id: 'upload-1a2b3c',
-        kind: 'uploaded',
-        downloadable: false,
-        contents: { ...contents, secrets: 'passphrase' },
-      }),
-    );
-    const calls = routes(status(), { 'DELETE /api/backups/upload-1a2b3c': () => ({ ok: true }) });
+    const uploaded = backup({
+      id: 'upload-1a2b3c',
+      kind: 'uploaded',
+      downloadable: false,
+      contents: { ...contents, secrets: 'passphrase' },
+    });
+    upload.mockResolvedValue(uploaded);
+    const calls = routes(status(), {
+      'DELETE /api/backups/upload-1a2b3c': () => ({ ok: true }),
+      'GET /api/backups/upload-1a2b3c/preview': () => previewOf(uploaded),
+    });
     const { container } = renderApp(<BackupSection />);
     const input = container.querySelector<HTMLInputElement>('input[type="file"]');
     if (!input) throw new Error('no file input');
     await user.upload(input, new File(['x'], 'b.conchbackup'));
     const dialog = await screen.findByRole('dialog', { name: 'Restore this backup?' });
-    await user.click(within(dialog).getByRole('button', { name: /Forgot it\?/ }));
+    await user.click(await within(dialog).findByRole('button', { name: /Forgot it\?/ }));
     expect(within(dialog).getByRole('list')).toHaveTextContent('Keys and sign-ins left out');
     expect(within(dialog).getByRole('button', { name: 'Restore' })).toBeEnabled();
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
@@ -342,6 +369,76 @@ describe('restoring', () => {
         body: undefined,
       }),
     );
+  });
+
+  it('previews from what’s in the file, with what in it can act for you, before you restore', async () => {
+    const user = userEvent.setup();
+    // Its header says settings only; its files say otherwise.
+    const uploaded = backup({
+      id: 'upload-9f8e7d',
+      kind: 'uploaded',
+      downloadable: false,
+      contents: {
+        settings: true,
+        memories: 0,
+        commands: 0,
+        routines: 0,
+        skills: 0,
+        integrations: 0,
+        integrationsSigningIn: 0,
+        secrets: 'passphrase',
+      },
+    });
+    upload.mockResolvedValue(uploaded);
+    routes(status(), {
+      'DELETE /api/backups/upload-9f8e7d': () => ({ ok: true }),
+      'GET /api/backups/upload-9f8e7d/preview': () =>
+        previewOf(uploaded, {
+          contents: { ...uploaded.contents, integrations: 2, routines: 1 },
+          powers: [
+            { kind: 'runs-program', name: 'Files', command: 'npx -y @someone/server' },
+            { kind: 'chats-never-ask' },
+          ],
+          signInStays: true,
+        }),
+    });
+    const { container } = renderApp(<BackupSection />);
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!input) throw new Error('no file input');
+    await user.upload(input, new File(['x'], 'b.conchbackup'));
+    const dialog = await screen.findByRole('dialog', { name: 'Restore this backup?' });
+    const brings = await within(dialog).findByRole('list', {
+      name: 'What this backup brings back',
+    });
+    expect(brings).toHaveTextContent('2 integrations');
+    expect(brings).toHaveTextContent('1 routine');
+    const acts = within(dialog).getByRole('list', { name: 'This backup lets Conch act for you' });
+    expect(acts).toHaveTextContent('FilesRuns a program on this computer:npx -y @someone/server');
+    expect(acts).toHaveTextContent('New chatsLet Conch act without asking you first');
+    expect(within(dialog).getByText('Your current password and keys stay.')).toBeInTheDocument();
+  });
+
+  it('says so when a backup here won’t read, and never offers to restore it', async () => {
+    const user = userEvent.setup();
+    routes(status(), {
+      'GET /api/backups/auto-20260930-031200/preview': () =>
+        new Response(
+          JSON.stringify({
+            error: 'damaged',
+            message: 'This backup is damaged, or was changed after it was made. Try another one.',
+          }),
+          { status: 400 },
+        ),
+    });
+    renderApp(<BackupSection />);
+    await user.click(
+      await screen.findByRole('button', { name: /^Restore the backup from Today at/ }),
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Restore this backup?' });
+    expect(await within(dialog).findByText(/This backup is damaged/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/ends in \.conchbackup/)).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: 'Restore' })).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: 'Choose another file' })).toBeNull();
   });
 
   it('says plainly when a file isn’t a backup, and offers another', async () => {
@@ -357,6 +454,22 @@ describe('restoring', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Restore from a file' });
     expect(await within(dialog).findByText('That file isn’t a Conch backup.')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Choose another file' })).toBeInTheDocument();
+  });
+
+  it('says there isn’t room for a file, without calling it the wrong kind', async () => {
+    const user = userEvent.setup();
+    const { ApiError } = await import('../../api/client');
+    const message =
+      'There isn’t enough free space on this computer to restore that backup. Free up some space, then try again.';
+    upload.mockRejectedValue(new ApiError(507, 'no-space', message));
+    routes(status());
+    const { container } = renderApp(<BackupSection />);
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!input) throw new Error('no file input');
+    await user.upload(input, new File(['x'], 'b.conchbackup'));
+    const dialog = await screen.findByRole('dialog', { name: 'Restore from a file' });
+    expect(await within(dialog).findByText(message)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/ends in \.conchbackup/)).toBeNull();
   });
 
   it('offers Undo after a restore, through the same preview', async () => {
@@ -386,7 +499,9 @@ describe('restoring', () => {
     await user.click(screen.getByRole('button', { name: 'Undo restore' }));
     const dialog = await screen.findByRole('dialog', { name: 'Undo the restore?' });
     expect(dialog).toHaveTextContent('just before the restore');
-    await user.click(within(dialog).getByRole('button', { name: 'Undo restore' }));
+    const confirm = within(dialog).getByRole('button', { name: 'Undo restore' });
+    await waitFor(() => expect(confirm).toBeEnabled());
+    await user.click(confirm);
     await waitFor(() =>
       expect(calls.some((c) => c.path === `/api/backups/${undo.id}/restore`)).toBe(true),
     );
@@ -416,6 +531,50 @@ describe('restoring', () => {
         body: undefined,
       }),
     );
+  });
+
+  it('asks you to confirm it’s you before restarting to finish, when it’s been a while', async () => {
+    const user = userEvent.setup();
+    let verified = false;
+    const calls = routes(status({ pending: { kind: 'uploaded', createdAt: Date.now() - HOUR } }), {
+      'GET /api/auth': () => ({ ...auth, method: 'password' }),
+      'POST /api/gateway/restart': () =>
+        verified
+          ? { ok: true }
+          : new Response(
+              JSON.stringify({
+                error: 'verify-required',
+                message: 'Confirm it’s you to restart Conch.',
+              }),
+              { status: 403 },
+            ),
+      'POST /api/access/verify': () => {
+        verified = true;
+        return {
+          method: 'password',
+          username: 'ada',
+          suggestedUsername: 'ada',
+          keys: [],
+          sessions: [],
+          checkup: [],
+          exposure: 'local',
+          port: 4317,
+          urls: [],
+          verified: true,
+        };
+      },
+    });
+    renderApp(<BackupSection />);
+    await user.click(await screen.findByRole('button', { name: 'Restart now' }));
+    const confirm = await screen.findByRole('dialog', { name: 'Confirm it’s you' });
+    await user.type(within(confirm).getByLabelText('Password'), 'purple otters juggle at dawn');
+    await user.click(within(confirm).getByRole('button', { name: 'Confirm' }));
+    await waitFor(() =>
+      expect(useUi.getState().restarting).toEqual({ title: 'Restoring your Conch…', from: 'b1' }),
+    );
+    expect(calls.filter((c) => c.path === '/api/gateway/restart')).toHaveLength(2);
+    expect(sessionStorage.getItem('conch.restoring')).not.toBeNull();
+    sessionStorage.removeItem('conch.restoring');
   });
 
   it('says how to finish by hand where Conch can’t start itself again', async () => {

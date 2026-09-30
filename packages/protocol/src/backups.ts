@@ -75,11 +75,72 @@ export const BackupSummary = z.object({
   conchVersion: z.string(),
   /** The file's size in bytes. */
   size: z.number().nonnegative(),
+  /**
+   * What it holds. For a file you uploaded, counted from the files in it;
+   * for one this computer made, as it said when it made it. A restore is
+   * always previewed from the files themselves (`BackupPreview`).
+   */
   contents: BackupContents,
   /** It can be downloaded (not an Undo copy, which may hold keys unlocked). */
   downloadable: z.boolean(),
 });
 export type BackupSummary = z.infer<typeof BackupSummary>;
+
+/** Longest name or command a preview carries (they come from the file, so they're cut). */
+export const POWER_TEXT_MAX = 300;
+const PowerText = z.string().max(POWER_TEXT_MAX);
+
+/**
+ * Something in a backup that lets Conch act for you, shown before you
+ * restore it — read from the files in it, never from what it says it holds.
+ */
+export const BackupPower = z.discriminatedUnion('kind', [
+  /** An integration that runs a program on this computer (a local MCP server), with its command. */
+  z.object({ kind: z.literal('runs-program'), name: PowerText, command: PowerText }),
+  /** An integration set to “Don't ask”. */
+  z.object({ kind: z.literal('integration-never-asks'), name: PowerText }),
+  /** Some of an integration's tools set to always allow. */
+  z.object({
+    kind: z.literal('tools-never-ask'),
+    name: PowerText,
+    tools: z.array(PowerText).max(20),
+    /** More tools than listed. */
+    more: z.number().int().nonnegative().default(0),
+  }),
+  /** New chats start in a mode that never asks (“Full trust”). */
+  z.object({ kind: z.literal('chats-never-ask') }),
+  /** A routine that runs by itself, and never asks. */
+  z.object({ kind: z.literal('routine-never-asks'), name: PowerText }),
+  /** Sites the browser acts on without asking. */
+  z.object({
+    kind: z.literal('browser-sites'),
+    sites: z.array(PowerText).max(20),
+    more: z.number().int().nonnegative().default(0),
+  }),
+  /** The browser can open apps on this computer and the network. */
+  z.object({ kind: z.literal('browser-local') }),
+  /** Other devices can open a terminal on this computer. */
+  z.object({ kind: z.literal('terminal-remote') }),
+]);
+export type BackupPower = z.infer<typeof BackupPower>;
+
+/**
+ * `GET /api/backups/:id/preview`: what restoring it brings, in plain words,
+ * from the files in it — checked through first, with no passphrase needed.
+ */
+export const BackupPreview = z.object({
+  id: Id,
+  contents: BackupContents,
+  /** What in it can act for you, one line each (at most 40; `morePowers` counts the rest). */
+  powers: z.array(BackupPower).max(40),
+  morePowers: z.number().int().nonnegative().default(0),
+  /**
+   * This Conch has sign-in set up, so its password and keys stay as they
+   * are: the backup's aren't restored (ADR 0020).
+   */
+  signInStays: z.boolean(),
+});
+export type BackupPreview = z.infer<typeof BackupPreview>;
 
 /** Which backup a restore came from, in words the page can format. */
 export const RestoredFrom = z.object({ kind: BackupKind, createdAt: z.number() });

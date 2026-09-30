@@ -332,8 +332,12 @@ src/
   `backups/` when nothing is busy (7 dailies + 4 weeklies, no keys). A restore
   (sudo mode) is checked whole into `backups/restoring/`, what it replaces is
   kept as an Undo copy, and the files go into place in `main.ts` before any
-  store reads them, after `restart()`. `GET /api/backups`, `POST /api/backups`
-  (+ `/:id/download`), `POST /api/backups/upload` (raw bytes, streamed, capped),
+  store reads them, after `restart()`. The preview a person confirms is read
+  from the backup's files, never its header (`GET /api/backups/:id/preview`:
+  counts, and what in it can act for you — `powers.ts`), and a Conch with
+  sign-in set up keeps its own password and keys (`signin.ts`).
+  `GET /api/backups`, `POST /api/backups` (+ `/:id/download`),
+  `POST /api/backups/upload` (raw bytes, streamed, capped, checked for room),
   `POST /api/backups/:id/restore`, `DELETE /api/backups/pending`; Repair
   everything's `backups` check.
 - **A port that's taken** (`port.ts`). Before anything starts, the port is probed. A
@@ -353,7 +357,9 @@ src/
 
 - **Conch keeps itself running** (`supervisor.ts`). `pnpm start` runs the gateway
   as a child with `CONCH_SUPERVISED=1`. Exit code 75 means "start me again"
-  (`POST /api/gateway/restart`, after an update or a restore); any other exit is a
+  (`POST /api/gateway/restart`, after an update or a restore: it cuts every
+  device off, so it needs a recent password or key and waits while a chat is
+  working); any other exit is a
   crash, restarted after 1 s, 3 s, 10 s, then 30 s, and given up after five crashes
   in ten minutes. A restart after a crash leaves a note in "Fixed on its own".
   `/api/health` carries the run's `bootId` and whether it's `restartable`; the web
@@ -392,7 +398,8 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   backup today at 03:12” with its switch, **Back up now** (a file to download;
   chats in or out, keys only with a passphrase typed twice), the backups kept
   on this computer with **Restore…**, and **Restore from a file…**. A restore
-  is always previewed in plain words in one dialog, then Conch starts again on
+  is always previewed in plain words in one dialog — with what in the backup
+  can act for you (Nacre `BackupPowers`) — then Conch starts again on
   the calm restart screen and the page offers **Undo**. ⌘K has “Back up now”
   and “Restore a backup”.
 - Assistant output: markdown → Nacre `Prose`, fenced code → `CodeBlock`, tool calls →

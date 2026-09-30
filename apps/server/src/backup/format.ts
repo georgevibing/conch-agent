@@ -55,6 +55,12 @@ const FILES = 'files/';
 const MAX_HEADER = 1024 * 1024;
 const MAX_SEAL = 64 * 1024 * 1024;
 const MAX_SECRETS = 16 * 1024 * 1024;
+/**
+ * The most a file the preview reads may hold (`integrations.json`, a
+ * routine). One Conch wrote is a few kilobytes; a bigger one is refused
+ * rather than left unread, so nothing in it can hide from the preview.
+ */
+export const MAX_CAPTURE = 8 * 1024 * 1024;
 
 const Group = z.enum([
   'settings',
@@ -337,26 +343,38 @@ export interface Extracted {
   files: string[];
   /** Keys and sign-ins opened with the passphrase, also written there. */
   secrets: string[];
+  /** The bytes of the files `capture` asked for, by path, once checked against the seal. */
+  captured: Map<string, Buffer>;
 }
 
 export interface ExtractOptions {
-  /** Where the files go, never `CONCH_HOME` itself. */
-  staging: string;
+  /**
+   * Where the files go, never `CONCH_HOME` itself. Without it, every file is
+   * read and checked just the same, and nothing is written: a preview.
+   */
+  staging?: string;
   passphrase?: string;
   /** Leave the keys and sign-ins out (a forgotten passphrase). */
   skipSecrets?: boolean;
   /** Keys that aren't locked are accepted: only for Undo copies this computer made. */
   allowLocal?: boolean;
-  /** Tighter limits than `BACKUP_LIMITS` (tests). */
+  /** Tighter limits than `BACKUP_LIMITS` (tests), and the room on the disk. */
   limits?: ReadLimits;
+  /** Files also kept in memory, for the preview to read (at most `MAX_CAPTURE` each). */
+  capture?: (path: string) => boolean;
 }
 
 /**
  * Check a backup through and write its files under `staging`. Throws
  * `BackupError` — and has written nothing outside `staging` — on anything
  * wrong: an unsafe path, a link, damage, too much, a wrong passphrase.
+ * Without `staging` it only reads (the preview): the same checks, the files
+ * it holds, and the few the preview reads, from the file itself — never
+ * what its header says it holds.
  */
 export async function extractBackup(path: string, options: ExtractOptions): Promise<Extracted> {
+  // Only a restore opens the locked keys: they have to be written somewhere.
+  if (!options.staging) options = { ...options, skipSecrets: true };
   // Assigned in callbacks: cast so the checks below aren't narrowed to `undefined`.
   let header = undefined as Header | undefined;
   let headerBytes = undefined as Buffer | undefined;
@@ -365,29 +383,42 @@ export async function extractBackup(path: string, options: ExtractOptions): Prom
   let key = undefined as Buffer | undefined;
   const staged: SealEntry[] = [];
   const seen = new Set<string>();
-  const files = join(options.staging, 'files');
-  await mkdir(files, { recursive: true, mode: 0o700 });
+  const captured = new Map<string, Buffer>();
+  const files = options.staging ? join(options.staging, 'files') : undefined;
+  if (files) await mkdir(files, { recursive: true, mode: 0o700 });
 
   const unsafe = () =>
     new BackupError('unsafe', 'This backup tries to write where Conch never restores to.');
 
   const fileSink = async (rel: string, size: number): Promise<EntrySink> => {
-    const target = safeJoinPath(files, rel);
-    await mkdir(dirname(target), { recursive: true, mode: 0o700 });
-    // `wx`: never through something already there (a link, a second copy).
-    const handle = await open(target, 'wx', 0o600);
+    let handle: Awaited<ReturnType<typeof open>> | undefined;
+    if (files) {
+      const target = safeJoinPath(files, rel);
+      await mkdir(dirname(target), { recursive: true, mode: 0o700 });
+      // `wx`: never through something already there (a link, a second copy).
+      handle = await open(target, 'wx', 0o600);
+    }
+    const keep = options.capture?.(rel) ? ([] as Buffer[]) : undefined;
+    // Too big to read for the preview is too big to be real: nothing may hide in it.
+    if (keep && size > MAX_CAPTURE) {
+      await handle?.close();
+      throw new BackupError('damaged', DAMAGED);
+    }
     const hash = createHash('sha256');
     let written = 0;
     return {
       async write(chunk) {
         written += chunk.length;
+        if (keep && written > MAX_CAPTURE) throw new BackupError('damaged', DAMAGED);
         hash.update(chunk);
-        await handle.write(chunk);
+        keep?.push(Buffer.from(chunk));
+        await handle?.write(chunk);
       },
       async end() {
-        await handle.close();
+        await handle?.close();
         if (written !== size) throw new BackupError('damaged', DAMAGED);
         staged.push({ path: rel, size, sha256: hash.digest('hex') });
+        if (keep) captured.set(rel, Buffer.concat(keep));
       },
     };
   };
@@ -483,6 +514,7 @@ export async function extractBackup(path: string, options: ExtractOptions): Prom
     } catch {
       throw new BackupError('damaged', DAMAGED);
     }
+    if (!files) throw new BackupError('damaged', DAMAGED);
     for (const file of payload.files) {
       if (!validRelPath(file.path) || classify(file.path)?.class !== 'secret') throw unsafe();
       const target = safeJoinPath(files, file.path);
@@ -494,5 +526,5 @@ export async function extractBackup(path: string, options: ExtractOptions): Prom
       secrets.push(file.path);
     }
   }
-  return { header, files: staged.map((s) => s.path), secrets };
+  return { header, files: staged.map((s) => s.path), secrets, captured };
 }
