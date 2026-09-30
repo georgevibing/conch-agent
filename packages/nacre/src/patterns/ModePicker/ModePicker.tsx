@@ -28,10 +28,12 @@ export interface ModePickerProps {
   onOpenChange?(open: boolean): void;
   side?: 'top' | 'bottom';
   className?: string;
+  /** Who the modes are about, in the confirmation: the assistant's name. */
+  name?: string;
 }
 
 /**
- * How much Claude may do without asking. The chip wears the mode's tone, so
+ * How much the assistant may do without asking. The chip wears the mode's tone, so
  * a trusting mode always looks armed; switching into a `danger` mode needs a
  * second, deliberate confirmation.
  */
@@ -46,6 +48,7 @@ export function ModePicker({
   onOpenChange,
   side = 'top',
   className,
+  name = 'the assistant',
 }: ModePickerProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = openProp ?? uncontrolledOpen;
@@ -109,7 +112,7 @@ export function ModePicker({
               <ShieldAlert />
             </span>
             <p id={`${listId}-confirm`} className={styles.confirmText}>
-              <strong>{confirming.label}</strong> lets Claude run anything without asking. Turn it
+              <strong>{confirming.label}</strong> lets {name} run anything without asking. Turn it
               on?
             </p>
             <div className={styles.confirmActions}>

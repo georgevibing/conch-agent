@@ -21,13 +21,20 @@ describe('ModePicker', () => {
     const onValueChange = vi.fn();
     const user = userEvent.setup();
     renderNacre(
-      <ModePicker options={modes} value="default" onValueChange={onValueChange} isDefault />,
+      <ModePicker
+        options={modes}
+        value="default"
+        onValueChange={onValueChange}
+        isDefault
+        name="Pearl"
+      />,
     );
     await user.click(screen.getByRole('button', { name: 'Mode: Ask first' }));
     await user.click(await screen.findByRole('radio', { name: /Full trust/ }));
     expect(onValueChange).not.toHaveBeenCalled();
     const dialog = await screen.findByRole('alertdialog');
-    expect(dialog).toHaveTextContent('lets Claude run anything without asking');
+    // The assistant's own name, whichever provider answers.
+    expect(dialog).toHaveTextContent('lets Pearl run anything without asking');
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onValueChange).not.toHaveBeenCalled();
     await user.click(await screen.findByRole('radio', { name: /Full trust/ }));
