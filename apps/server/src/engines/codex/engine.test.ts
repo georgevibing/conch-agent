@@ -79,8 +79,8 @@ describe('Codex turns', () => {
       'exec',
       '--json',
       '--skip-git-repo-check',
-      '--sandbox',
-      'read-only',
+      '-c',
+      'sandbox_mode="read-only"',
     ]);
     // Conch's briefing rides at the top of the prompt, which comes last.
     expect(exec?.at(-1)).toBe(
@@ -102,10 +102,13 @@ describe('Codex turns', () => {
       ),
     );
     expect(events.some((event) => event.type === 'notice')).toBe(false);
+    expect(events.at(-1)).toMatchObject({ type: 'done', outcome: 'success' });
 
     const exec = (await codex.calls()).find((call) => call[0] === 'exec');
     expect(exec?.slice(0, 3)).toEqual(['exec', 'resume', 'thread-1']);
-    expect(exec).toContain('workspace-write');
+    // `exec resume` takes no --sandbox, so the mode travels as config — every
+    // turn, or a resumed thread would fall back to whatever config.toml says.
+    expect(exec).toContain('sandbox_mode="workspace-write"');
     expect(exec).toContain('model_reasoning_effort="high"');
     // This process hasn't briefed the thread yet, so it says who it is once.
     expect(exec?.at(-1)).toContain('You are Pearl.');
@@ -129,7 +132,7 @@ describe('Codex turns', () => {
     const exec = (await codex.calls()).find((call) => call[0] === 'exec') ?? [];
     expect(exec).toContain('-m');
     expect(exec).toContain('gpt-5.3-codex');
-    expect(exec).toContain('danger-full-access');
+    expect(exec).toContain('sandbox_mode="danger-full-access"');
     expect(exec.some((arg) => arg.includes('model_reasoning_effort'))).toBe(false);
   });
 

@@ -139,6 +139,17 @@ describe('Codex translator', () => {
     ).toEqual([{ type: 'notice', code: 'error', message: 'Couldn’t read a file.' }]);
   });
 
+  it('keeps Codex’s own config housekeeping out of the chat', () => {
+    // Printed on every turn by a config.toml that still works; nothing for the user to do mid-chat.
+    expect(
+      translateAll([
+        '{"type":"thread.started","thread_id":"t1"}',
+        '{"type":"item.completed","item":{"id":"item_0","type":"error","message":"`[features].codex_hooks` is deprecated. Use `[features].hooks` instead. (Enable it with `--enable hooks` or `[features].hooks` in config.toml. See https://developers.openai.com/codex/config-basic#feature-flags for details.)"}}',
+        '{"type":"turn.started"}',
+      ]),
+    ).toEqual([{ type: 'session', resumeId: 't1' }]);
+  });
+
   it('mentions the plan only when it changes', () => {
     const plan = (done: boolean) =>
       `{"type":"item.updated","item":{"id":"p","type":"todo_list","items":[{"text":"a","completed":${done}},{"text":"b","completed":false}]}}`;

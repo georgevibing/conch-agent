@@ -5,7 +5,7 @@
  * exits when the turn is done. That shapes what this engine can and can't do:
  *
  * - **No approvals.** `codex exec` forces `approval_policy = never`, so Conch
- *   can't ask before a step. Safety comes from `--sandbox`, and the user is
+ *   can't ask before a step. Safety comes from the sandbox, and the user is
  *   told in plain words on the first turn of every conversation.
  * - **No host tools.** Conch's own tools (memory) reach an engine through MCP or
  *   function calling; `codex exec` offers neither, so they are left out rather
@@ -410,10 +410,14 @@ export interface TurnArgs {
 /**
  * The command line for one turn. The prompt goes last, and a prompt that starts
  * with a dash is separated with `--` so it can never be read as an option.
+ *
+ * The sandbox is set as config, not `--sandbox`: `exec resume` rejects that
+ * flag, and it must be set on every turn — a resumed thread otherwise runs
+ * with whatever `sandbox_mode` the user's own config.toml has.
  */
 export function turnArgs(options: TurnArgs): string[] {
   const args = options.resumeId ? ['exec', 'resume', options.resumeId] : ['exec'];
-  args.push('--json', '--skip-git-repo-check', '--sandbox', options.sandbox);
+  args.push('--json', '--skip-git-repo-check', '-c', `sandbox_mode=${toml(options.sandbox)}`);
   if (options.model) args.push('-m', options.model);
   if (options.effort && options.effort !== 'auto') {
     args.push('-c', `model_reasoning_effort=${toml(options.effort)}`);

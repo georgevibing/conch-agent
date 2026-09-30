@@ -19,6 +19,9 @@ import type { EngineEvent } from '../types';
 /** Tool output we keep. Enough to read, small enough to store and send. */
 const OUTPUT_CAP = 20_000;
 
+/** A Codex warning that a setting has a new name — housekeeping, not news. */
+const DEPRECATION_RE = /\bis deprecated\b/i;
+
 // ── The wire ────────────────────────────────────────────────────────────────
 
 /** Every line starts as this much; the rest depends on `type`. */
@@ -330,6 +333,9 @@ export class Translator {
       case 'error': {
         if (this.#reported.has(item.id)) return [];
         this.#reported.add(item.id);
+        // Codex warns about an outdated config.toml key on every turn. The key
+        // still works and nothing in this chat can change it: not worth a word.
+        if (DEPRECATION_RE.test(item.message)) return [];
         return [
           { type: 'notice', code: 'error', message: item.message || 'Codex reported a problem.' },
         ];

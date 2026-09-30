@@ -112,6 +112,11 @@ switch (args[0]) {
     });
     break;
   case 'exec':
+    // Like the real CLI, \`exec resume\` has no --sandbox of its own.
+    if (args[1] === 'resume' && args.some((arg) => arg === '--sandbox' || arg === '-s')) {
+      fail("error: unexpected argument '--sandbox' found", 2);
+      break;
+    }
     fs.writeFileSync(
       path.join(DIR, 'env'),
       Object.entries(process.env).map(([key, value]) => key + '=' + value + '\\n').join(''),
