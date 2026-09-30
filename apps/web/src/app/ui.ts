@@ -32,6 +32,8 @@ interface UiState {
   sidebarOpen: boolean;
   mobileSidebarOpen: boolean;
   settings: SettingsTab | null;
+  /** Conch is starting itself again (an update, a restore): the page rests until it's back. */
+  restarting?: { title: string; from?: string };
   /** Something to open inside the settings tab (a provider's page), once. */
   settingsFocus?: string;
   paletteOpen: boolean;
@@ -55,6 +57,7 @@ interface UiState {
   setMobileSidebar(open: boolean): void;
   /** `focus`: open this inside the tab straight away (e.g. a provider, to sign in). */
   openSettings(tab?: SettingsTab, focus?: string): void;
+  setRestarting(restarting: UiState['restarting']): void;
   closeSettings(): void;
   setPalette(open: boolean): void;
   openFind(conversationId: string, query?: string, target?: string): void;
@@ -129,6 +132,7 @@ export const useUi = create<UiState>((set) => ({
   setMobileSidebar: (mobileSidebarOpen) => set({ mobileSidebarOpen }),
   openSettings: (tab = 'personality', focus) =>
     set({ settings: tab, settingsFocus: focus, paletteOpen: false }),
+  setRestarting: (restarting) => set({ restarting }),
   closeSettings: () => set({ settings: null }),
   setPalette: (paletteOpen) => set({ paletteOpen }),
   openFind: (conversationId, query, target) =>

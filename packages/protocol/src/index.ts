@@ -138,6 +138,10 @@ export const Health = z.object({
   ok: z.literal(true),
   serverVersion: z.string(),
   protocolVersion: z.number(),
+  /** Changes every time the gateway starts: the page knows a restart has finished. */
+  bootId: z.string().optional(),
+  /** Conch can start itself again (it runs under `pnpm start`'s supervisor). */
+  restartable: z.boolean().optional(),
 });
 export type Health = z.infer<typeof Health>;
 

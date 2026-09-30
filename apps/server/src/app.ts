@@ -43,6 +43,7 @@ import { registerAttachmentRoutes } from './attachments/routes';
 import { AttachmentError } from './attachments/store';
 import { isLoopbackAddress } from './auth/network';
 import { ConversationError } from './conversations/manager';
+import { BOOT_ID, restart, restartable } from './lib/lifecycle';
 import { IntegrationError, type SignIn } from './integrations/service';
 import { preview } from './routines/schedule';
 import { RoutineError } from './routines/service';
@@ -173,7 +174,18 @@ export async function buildApp(services: Services) {
     ok: true,
     serverVersion: SERVER_VERSION,
     protocolVersion: PROTOCOL_VERSION,
+    bootId: BOOT_ID,
+    restartable: restartable(),
   }));
+  /** Start Conch again, when it can (after an update or a restore). */
+  app.post('/api/gateway/restart', (_request, reply) =>
+    restart()
+      ? reply.code(202).send({ ok: true })
+      : reply.code(409).send({
+          error: 'not-restartable',
+          message: 'Conch can’t restart itself here. Stop it (Ctrl+C) and run pnpm start again.',
+        }),
+  );
   app.get('/api/state', appState);
   /** What Conch fixed on its own, newest first. */
   app.get('/api/healed', async () => ({ notes: await services.healed.list() }));

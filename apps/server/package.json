@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch --import tsx src/main.ts",
-    "start": "CONCH_OPEN=${CONCH_OPEN:-1} tsx src/main.ts",
+    "start": "CONCH_OPEN=${CONCH_OPEN:-1} CONCH_SUPERVISE=1 tsx src/start.ts",
     "conch": "tsx src/cli.ts",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json",

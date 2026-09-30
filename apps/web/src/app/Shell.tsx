@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 
 import { useConversations } from '../api/queries';
+import { RestartWatch } from '../features/health/RestartWatch';
 import { ChatView } from '../features/chat/ChatView';
 import { EnginePill } from '../features/engine/EnginePill';
 import { IntegrationDetailView } from '../features/integrations/IntegrationDetailView';
@@ -173,6 +174,7 @@ export function Shell() {
       </main>
       <Settings />
       <Palette />
+      <RestartWatch />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { buildApp } from './app';
 import { checkup, secureHome, workspaceRules } from './auth/checkup';
 import { exposure } from './auth/network';
 import { loadConfig, portIsExplicit } from './config';
+import { setRestartHandler } from './lib/lifecycle';
 import { openInBrowser } from './lib/open';
 import {
   choosePort,
@@ -13,6 +14,7 @@ import {
   whoHolds,
 } from './port';
 import { Services } from './services';
+import { RESTART_CODE } from './supervisor';
 
 const config = loadConfig();
 const addressOf = (port: number) =>
@@ -101,7 +103,20 @@ for (const item of findings) {
   if (item.command) console.warn(`      → ${item.command}`);
 }
 if (findings.length) console.warn('\n  Settings → Security in Conch has the details.\n');
-if (config.CONCH_OPEN) void openInBrowser(url);
+// Started again by the supervisor after a crash: say so, quietly.
+if (process.env.CONCH_STARTED_BECAUSE === 'crash')
+  void services.healed.note('gateway', 'Conch stopped unexpectedly, so it started itself again.');
+// A restart (after an update or a restore) doesn't open another browser tab.
+if (config.CONCH_OPEN && !process.env.CONCH_STARTED_BECAUSE?.match(/restart|crash/))
+  void openInBrowser(url);
+
+// An update or a restore can ask to start again; the supervisor does it.
+setRestartHandler(async () => {
+  services.routines.stop();
+  setTimeout(() => process.exit(RESTART_CODE), 1500).unref();
+  await app.close().catch(() => undefined);
+  process.exit(RESTART_CODE);
+});
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {

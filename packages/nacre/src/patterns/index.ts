@@ -26,3 +26,4 @@ export * from './Browser';
 export * from './Terminal';
 export * from './Setup';
 export * from './Healed';
+export * from './Restart';
