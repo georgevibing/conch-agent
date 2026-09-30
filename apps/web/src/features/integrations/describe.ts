@@ -28,6 +28,8 @@ export function fixLabel(integration: Integration): string | undefined {
       return 'Try again';
     case 'turn-on':
       return 'Turn on';
+    case 'setup':
+      return 'Finish setup';
     default:
       return undefined;
   }

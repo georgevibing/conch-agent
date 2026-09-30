@@ -12,13 +12,14 @@ import {
   type HandshakePhase,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowUpRight, Check, KeyRound, MessageSquare, Monitor, RotateCw } from 'lucide-react';
-import { useEffect, useState, type FormEvent } from 'react';
+import { ArrowUpRight, Check, KeyRound, MessageSquare, RotateCw } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 
 import { integrationsApi } from './api';
 import { accountConnected } from './describe';
 import styles from './Integrations.module.css';
+import { useLocalSetup } from './LocalSetup';
 import {
   errorText,
   integrationKeys,
@@ -30,6 +31,8 @@ import {
 import { useSignIn } from './useSignIn';
 
 function phaseOf(integration: Integration | undefined): HandshakePhase {
+  // Waiting on something to install or switch on isn't a failure: the checklist says what.
+  if (integration?.health.action === 'setup') return 'idle';
   switch (integration?.health.state) {
     case undefined:
       return 'idle';
@@ -100,10 +103,13 @@ export function TryIt({
  */
 export function ConnectDialog({
   entry,
+  existingId,
   onOpenChange,
   onAlternative,
 }: {
   entry: CatalogEntry | undefined;
+  /** Finish setting up one that's already added (its card said “Finish setup”). */
+  existingId?: string;
   onOpenChange: (open: boolean) => void;
   /** Switch to another catalog entry (e.g. Zapier, to reach a service with every model). */
   onAlternative?: (catalogId: string) => void;
@@ -116,6 +122,7 @@ export function ConnectDialog({
           <ConnectFlow
             key={entry.id}
             entry={entry}
+            existingId={existingId}
             onClose={() => onOpenChange(false)}
             onAlternative={onAlternative}
           />
@@ -127,10 +134,12 @@ export function ConnectDialog({
 
 function ConnectFlow({
   entry,
+  existingId,
   onClose,
   onAlternative,
 }: {
   entry: CatalogEntry;
+  existingId?: string;
   onClose: () => void;
   onAlternative?: (catalogId: string) => void;
 }) {
@@ -138,7 +147,9 @@ function ConnectFlow({
   const navigate = useNavigate();
   const signIn = useSignIn();
   const { data } = useIntegrations();
-  const [startedId, setStartedId] = useState<string>();
+  const [startedId, setStartedId] = useState<string | undefined>(existingId);
+  /** Added in this dialog (not one you came back to finish). */
+  const createdHere = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [values, setValues] = useState<Record<string, string>>({});
@@ -174,13 +185,20 @@ function ConnectFlow({
     return () => document.removeEventListener('visibilitychange', recheck);
   }, [viaAccount, client]);
 
-  // A first attempt that never worked leaves nothing behind when you walk away.
+  // A first attempt that never worked leaves nothing behind when you walk away —
+  // unless it's only waiting on something being installed or switched on.
   useEffect(
     () => () => {
+      if (!createdHere.current) return;
       const item = client
         .getQueryData<{ integrations: Integration[] }>(integrationKeys.all)
         ?.integrations.find((i) => i.id === startedId);
-      if (item && !item.health.okAt && ['needs-auth', 'error'].includes(item.health.state)) {
+      if (
+        item &&
+        !item.health.okAt &&
+        item.health.action !== 'setup' &&
+        ['needs-auth', 'error'].includes(item.health.state)
+      ) {
         void integrationsApi.remove(item.id).catch(() => undefined);
       }
     },
@@ -194,6 +212,7 @@ function ConnectFlow({
 
   const startOAuth = async () => {
     setError(undefined);
+    if (!current) createdHere.current = true;
     const result = await signIn((display) =>
       current
         ? integrationsApi.connect(current.id, display)
@@ -206,6 +225,7 @@ function ConnectFlow({
     event?.preventDefault();
     setBusy(true);
     setError(undefined);
+    if (!current) createdHere.current = true;
     try {
       const integration = current
         ? await integrationsApi.update(current.id, { values })
@@ -219,7 +239,11 @@ function ConnectFlow({
     }
   };
 
-  const failure = !viaAccount && phase === 'failed' ? current?.health.message : undefined;
+  const setup = useLocalSetup(entry, current, () => void submit());
+  const failure =
+    !viaAccount && phase === 'failed' && current?.health.action !== 'setup'
+      ? current?.health.message
+      : undefined;
   const title =
     phase === 'connected'
       ? `${entry.name} is connected`
@@ -267,17 +291,7 @@ function ConnectFlow({
         ) : (
           <Stack gap={5}>
             <AccessList entry={entry} />
-            {entry.command && (
-              <Callout tone="info" icon={<Monitor />} title="Runs on this computer">
-                <Stack gap={2}>
-                  <span>
-                    Conch will start this program for {assistant}, as you
-                    {entry.requires ? `. It needs ${entry.requires}.` : '.'}
-                  </span>
-                  <code className={styles.command}>{entry.command}</code>
-                </Stack>
-              </Callout>
-            )}
+            {setup.checklist}
             {entry.auth === 'token' && (
               <TokenForm
                 entry={entry}
@@ -287,9 +301,9 @@ function ConnectFlow({
                 error={error ?? failure}
               />
             )}
-            {entry.auth !== 'token' && (error ?? failure) && (
+            {entry.auth !== 'token' && (error ?? setup.error ?? failure) && (
               <Callout tone="danger" live="polite">
-                {error ?? failure}
+                {error ?? setup.error ?? failure}
               </Callout>
             )}
             {phase === 'waiting' && entry.auth === 'oauth' && (
@@ -377,16 +391,23 @@ function ConnectFlow({
             Connect
           </Button>
         ) : (
-          <Button
-            size="lg"
-            block
-            onClick={() => void submit()}
-            loading={busy || phase === 'waiting'}
-          >
-            {phase === 'failed' ? 'Try again' : `Add ${entry.name}`}
-          </Button>
+          (setup.primary ?? (
+            <Button
+              size="lg"
+              block
+              onClick={() => void submit()}
+              loading={busy || phase === 'waiting' || current?.health.state === 'checking'}
+            >
+              {phase === 'failed'
+                ? 'Try again'
+                : current?.health.action === 'setup'
+                  ? 'Check again'
+                  : `Add ${entry.name}`}
+            </Button>
+          ))
         )}
       </Dialog.Footer>
+      {setup.dialog}
     </>
   );
 }

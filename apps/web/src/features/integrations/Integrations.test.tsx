@@ -216,6 +216,164 @@ describe('Integrations page', () => {
     expect(screen.getByRole('button', { name: 'Find my notes' })).toBeInTheDocument();
   });
 
+  describe('apps that run on this computer', () => {
+    const onePassword = entry({
+      id: '1password',
+      name: '1Password',
+      auth: 'none',
+      local: true,
+      category: 'developer',
+      command: '1password-mcp',
+      steps: ['In 1Password, open Settings → Labs and turn on “Enable local MCP server”.'],
+    });
+    const app = {
+      id: '1password-app',
+      name: 'The 1Password app',
+      short: '1Password',
+      openable: false,
+    };
+    const server = {
+      id: '1password-mcp',
+      name: '1Password’s MCP server',
+      short: '1Password’s MCP server',
+      openable: false,
+    };
+    const install = {
+      label: 'Install 1Password',
+      command: 'winget install --id AgileBits.1Password',
+    };
+    const added = (patch: Partial<Integration> = {}) =>
+      integration({
+        id: 'int_1p',
+        catalogId: '1password',
+        name: '1Password',
+        server: '1password',
+        transport: { type: 'stdio', command: '1password-mcp', args: [] },
+        auth: 'none',
+        ...patch,
+      });
+
+    it('offers to install what’s missing, then connects by itself', async () => {
+      let stage: 'missing' | 'installing' | 'ready' = 'missing';
+      const readiness = () => ({
+        ready: stage === 'ready',
+        needs:
+          stage === 'missing'
+            ? [
+                { ...app, state: 'missing', install },
+                { ...server, state: 'missing', message: 'Comes with the 1Password app.' },
+              ]
+            : stage === 'installing'
+              ? [
+                  {
+                    ...app,
+                    state: 'installing',
+                    progress: { percent: 40, label: 'Downloading 1Password · 40%' },
+                  },
+                  { ...server, state: 'installing' },
+                ]
+              : [
+                  { ...app, state: 'ready', openable: true },
+                  { ...server, state: 'ready', openable: true },
+                ],
+      });
+      const calls = mockFetch({
+        'GET /api/integrations': () => ({
+          catalog: [onePassword],
+          providers: [provider],
+          integrations: [],
+        }),
+        'GET /api/integrations/external': () => external,
+        'GET /api/integrations/catalog/1password/needs': () => {
+          const now = readiness();
+          if (stage === 'installing') stage = 'ready';
+          return now;
+        },
+        'POST /api/integrations/catalog/1password/needs/1password-app/install': () => {
+          stage = 'installing';
+          return readiness();
+        },
+        'POST /api/integrations': () => ({ integration: added() }),
+      });
+      renderApp(<IntegrationsView />, { route: '/integrations' });
+      await userEvent.click(await screen.findByRole('button', { name: '1Password' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Connect 1Password' });
+      const needs = await within(dialog).findByRole('list', { name: 'What 1Password needs' });
+      expect(
+        within(needs)
+          .getAllByRole('listitem')
+          .map((li) => li.textContent),
+      ).toEqual([
+        'To do: The 1Password appConch can install it for you. It takes a minute or two.',
+        'Later: 1Password’s MCP serverComes with the 1Password app.',
+        'Later: Turn it on',
+      ]);
+      // What will run is there to read before you agree.
+      expect(
+        within(dialog).getByText('winget install --id AgileBits.1Password'),
+      ).toBeInTheDocument();
+
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Install 1Password' }));
+      expect(
+        await within(dialog).findByRole('progressbar', { name: 'Downloading 1Password · 40%' }),
+      ).toBeInTheDocument();
+      // Nobody presses anything: once it's installed, Conch connects it.
+      expect(
+        await screen.findByRole('heading', { name: '1Password is connected' }, { timeout: 5000 }),
+      ).toBeInTheDocument();
+      expect(calls.filter((c) => c.method === 'POST').map((c) => c.path)).toEqual([
+        '/api/integrations/catalog/1password/needs/1password-app/install',
+        '/api/integrations?display=popup',
+      ]);
+    });
+
+    it('finishes one that’s waiting on a switch, and notices when you come back', async () => {
+      const off = added({
+        health: {
+          state: 'error',
+          message: 'Turn on the MCP server in 1Password.',
+          action: 'setup',
+        },
+      });
+      const calls = mockFetch({
+        'GET /api/integrations': () => ({
+          catalog: [onePassword],
+          providers: [provider],
+          integrations: [off],
+        }),
+        'GET /api/integrations/external': () => external,
+        'GET /api/integrations/catalog/1password/needs': () => ({
+          ready: true,
+          needs: [
+            { ...app, state: 'ready', openable: true },
+            { ...server, state: 'ready', openable: true },
+          ],
+        }),
+        'POST /api/integrations/catalog/1password/needs/1password-app/open': () => ({
+          ready: true,
+          needs: [],
+        }),
+        'POST /api/integrations/int_1p/check': () => added(),
+      });
+      renderApp(<IntegrationsView />, { route: '/integrations' });
+      expect(await screen.findByText('Turn on the MCP server in 1Password.')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Finish setup' }));
+
+      const dialog = await screen.findByRole('dialog', { name: 'Connect 1Password' });
+      expect(await within(dialog).findByText(/Settings → Labs/)).toBeInTheDocument();
+      // Waiting on you isn't a failure: no red error box.
+      expect(within(dialog).queryByText('Turn on the MCP server in 1Password.')).toBeNull();
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Open 1Password' }));
+      expect(calls.some((c) => c.path.endsWith('/needs/1password-app/open'))).toBe(true);
+
+      // Back from 1Password: Conch looks again by itself.
+      act(() => window.dispatchEvent(new Event('focus')));
+      expect(
+        await screen.findByRole('heading', { name: '1Password is connected' }),
+      ).toBeInTheDocument();
+    });
+  });
+
   it('never sends the browser to anything but a web page', async () => {
     const popup = { closed: false, location: { href: '' }, focus: vi.fn(), close: vi.fn() };
     vi.stubGlobal(

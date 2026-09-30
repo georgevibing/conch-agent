@@ -3,6 +3,7 @@ import {
   Integration,
   IntegrationResult,
   IntegrationsList,
+  Readiness,
   type CreateIntegrationBody,
   type UpdateIntegrationBody,
 } from '@conch/protocol';
@@ -34,4 +35,19 @@ export const integrationsApi = {
     request(Integration, `/api/integrations/${id}/cancel`, { method: 'POST', body: {} }),
   check: (id: string) =>
     request(Integration, `/api/integrations/${id}/check`, { method: 'POST', body: {} }),
+  /** What a catalog entry needs from this computer (an app, a program), and whether it's here. */
+  needs: (catalogId: string) =>
+    request(Readiness, `/api/integrations/catalog/${encodeURIComponent(catalogId)}/needs`),
+  installNeed: (catalogId: string, needId: string) =>
+    request(
+      Readiness,
+      `/api/integrations/catalog/${encodeURIComponent(catalogId)}/needs/${encodeURIComponent(needId)}/install`,
+      { method: 'POST', body: {} },
+    ),
+  openNeed: (catalogId: string, needId: string) =>
+    request(
+      Readiness,
+      `/api/integrations/catalog/${encodeURIComponent(catalogId)}/needs/${encodeURIComponent(needId)}/open`,
+      { method: 'POST', body: {} },
+    ),
 };

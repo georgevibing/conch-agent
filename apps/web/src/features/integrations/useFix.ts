@@ -23,6 +23,9 @@ export function useFix() {
           return void navigate(`/integrations/${integration.id}`, { state: { focus: 'token' } });
         case 'turn-on':
           return update.mutate({ id: integration.id, patch: { enabled: true } });
+        case 'setup':
+          // Its connect dialog shows what's missing and offers to get it.
+          return void navigate(`/integrations?setup=${integration.id}`);
         default:
           return check.mutate(integration.id);
       }

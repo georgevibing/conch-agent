@@ -9,6 +9,7 @@ import { integrationsApi } from './api';
 export const integrationKeys = {
   all: ['integrations'] as const,
   external: ['integrations', 'external'] as const,
+  needs: (catalogId: string) => ['integrations', 'needs', catalogId] as const,
 };
 
 export function useIntegrations() {
@@ -26,6 +27,25 @@ export function useExternal(enabled = true) {
     queryFn: () => integrationsApi.external(),
     staleTime: 60_000,
     enabled,
+  });
+}
+
+/**
+ * What an app that runs on this computer needs, kept fresh while you look:
+ * every second while something installs, every few seconds while something's
+ * missing (you may be installing it yourself), and whenever you come back.
+ */
+export function useNeeds(catalogId: string, enabled = true) {
+  return useQuery({
+    queryKey: integrationKeys.needs(catalogId),
+    queryFn: () => integrationsApi.needs(catalogId),
+    enabled,
+    refetchOnWindowFocus: 'always',
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data || data.ready) return false;
+      return data.needs.some((n) => n.state === 'installing') ? 1000 : 4000;
+    },
   });
 }
 

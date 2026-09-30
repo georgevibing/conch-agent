@@ -128,6 +128,9 @@ export function IntegrationsView() {
   const linked = connectId
     ? catalog.find((c) => c.id === connectId && !integrations.some((i) => i.catalogId === c.id))
     : undefined;
+  // `?setup=<id>` (a card's “Finish setup”): finish the one you already added.
+  const unfinished = integrations.find((i) => i.id === params.get('setup'));
+  const unfinishedEntry = catalog.find((c) => c.id === unfinished?.catalogId);
   // Already connected: open it instead.
   useEffect(() => {
     if (!connectId) return;
@@ -298,11 +301,12 @@ export function IntegrationsView() {
       </footer>
 
       <ConnectDialog
-        entry={connecting ?? linked}
+        entry={connecting ?? linked ?? unfinishedEntry}
+        existingId={connecting || linked ? undefined : unfinished?.id}
         onOpenChange={(open) => {
           if (open) return;
           setConnecting(undefined);
-          if (connectId) setParams({}, { replace: true });
+          if (connectId || unfinished) setParams({}, { replace: true });
         }}
         onAlternative={(id) => setConnecting(catalog.find((c) => c.id === id))}
       />
