@@ -101,6 +101,8 @@ export const UpdatesStatus = z.object({
   auto: z.boolean(),
   /** This gateway's boot id, so the page knows when a restart has finished. */
   bootId: z.string().optional(),
+  /** Conch can start itself again (it runs under `pnpm start`), so an update finishes by itself. */
+  restartable: z.boolean().default(false),
 });
 export type UpdatesStatus = z.infer<typeof UpdatesStatus>;
 

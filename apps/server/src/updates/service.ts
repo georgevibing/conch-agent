@@ -194,6 +194,7 @@ export class UpdatesService {
       checkedAt: this.#cache.checkedAt,
       auto: this.#cache.auto,
       bootId: this.deps.bootId,
+      restartable: this.deps.restartable(),
     };
   }
 
