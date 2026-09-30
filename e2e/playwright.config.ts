@@ -30,9 +30,23 @@ const scenarios = {
     port: 4393,
     env: { CONCH_MOCK_STATE: 'not-installed', CONCH_MOCK_INSTALL_AFTER: '2' },
   },
-} as const;
+  // A model on this computer, against a pretend Ollama (e2e/fake-ollama.ts) on a port the
+  // system picks. The only provider is Ollama; nothing here reaches the internet.
+  local: {
+    port: 4384,
+    env: { CONCH_ENGINE: 'ollama' },
+    command: 'node --import tsx ../../e2e/local-gateway.ts',
+  },
+} as const satisfies Record<
+  string,
+  { port: number; env: Record<string, string>; command?: string }
+>;
 
 const root = join(import.meta.dirname, '..');
+
+/** `CONCH_E2E_ONLY=local,ready` runs just those journeys, and starts only their gateways. */
+const only = process.env.CONCH_E2E_ONLY?.split(',').map((name) => name.trim());
+const chosen = Object.entries(scenarios).filter(([name]) => !only || only.includes(name));
 
 export default defineConfig({
   testDir: '.',
@@ -48,7 +62,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: Object.entries(scenarios).map(([name, s]) => ({
+  projects: chosen.map(([name, s]) => ({
     name,
     testMatch: `${name}.spec.ts`,
     use: { baseURL: `http://localhost:${s.port}` },
@@ -56,18 +70,20 @@ export default defineConfig({
     // timing-sensitive specs (password hashing, streaming) flake if they run
     // alongside it. They go last.
     dependencies:
-      name === 'browser' ? Object.keys(scenarios).filter((other) => other !== 'browser') : [],
+      name === 'browser'
+        ? chosen.map(([other]) => other).filter((other) => other !== 'browser')
+        : [],
   })),
-  webServer: Object.values(scenarios).map((s) => ({
+  webServer: chosen.map(([, s]) => ({
     // Node itself (not pnpm or tsx's CLI) so Playwright's shutdown signal reaches the
     // server; Windows runs this through cmd.exe, which can't start `./node_modules/.bin/tsx`.
-    command: 'node --import tsx src/main.ts',
+    command: 'command' in s ? s.command : 'node --import tsx src/main.ts',
     cwd: join(root, 'apps/server'),
     url: `http://localhost:${s.port}/api/health`,
     reuseExistingServer: false,
     env: {
-      ...s.env,
       CONCH_ENGINE: 'mock',
+      ...s.env,
       CONCH_MOCK_SPEED: '0.25',
       CONCH_PORT: String(s.port),
       CONCH_HOME: mkdtempSync(join(tmpdir(), 'conch-e2e-')),
