@@ -30,6 +30,7 @@ import { useVerify } from '../auth/useVerify';
 import { integrationsApi } from './api';
 import { TryIt } from './ConnectDialog';
 import { fixLabel, needsAttention } from './describe';
+import { GetIt } from '../setup/GetIt';
 import styles from './Integrations.module.css';
 import { useSignInResult } from './IntegrationsView';
 import {
@@ -165,13 +166,20 @@ function Detail({
           title={health.message}
           live="polite"
           action={
-            label && (
+            label &&
+            !health.need && (
               <Button size="sm" onClick={() => fix(integration)} loading={check.isPending}>
                 {label}
               </Button>
             )
           }
         >
+          {health.need && (
+            <GetIt
+              needId={health.need}
+              lead="It runs with a program that isn’t on this computer yet. Conch can install it, then connects by itself."
+            />
+          )}
           {(health.okAt || health.detail || health.retryAt) && (
             <Stack gap={2}>
               {health.okAt && <span>It last worked {relativeTime(health.okAt)}.</span>}

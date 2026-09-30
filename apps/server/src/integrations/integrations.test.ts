@@ -448,6 +448,40 @@ describe('integrations that need something on this computer', () => {
     });
   });
 
+  it('says a program you added needs uv, and looks again once it’s installed', async () => {
+    const found: { uv?: string } = {};
+    const spec: NeedSpec = {
+      id: 'uv',
+      name: 'uv (runs Python tools)',
+      short: 'uv',
+      find: () => Promise.resolve(found.uv),
+    };
+    const needs = new Setup(new Map([[spec.id, spec]]), { platform: 'win32' });
+    const { service } = await setup({ needs });
+    const created = await service.create(
+      {
+        custom: {
+          type: 'stdio',
+          name: 'Fetch',
+          command: 'uvx',
+          args: ['mcp-server-fetch'],
+          env: {},
+        },
+      },
+      REDIRECT,
+    );
+    expect(created.integration.health).toMatchObject({
+      state: 'error',
+      message: 'Needs uv (runs Python tools).',
+      action: 'setup',
+      need: 'uv',
+    });
+    // Installed: the integration waiting on it is checked straight away.
+    found.uv = 'C:/Users/ada/.local/bin/uvx.exe';
+    await service.recheckNeeding('uv');
+    expect((await service.get(created.integration.id)).health.need).toBeUndefined();
+  });
+
   it('only installs or opens what that integration needs', async () => {
     const { service } = await onePassword(serveFixture);
     await expect(service.installNeed('notion', '1password-app')).rejects.toThrow(/doesn’t need/);

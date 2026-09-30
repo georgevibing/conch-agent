@@ -24,7 +24,10 @@ export function useFix() {
         case 'turn-on':
           return update.mutate({ id: integration.id, patch: { enabled: true } });
         case 'setup':
-          // Its connect dialog shows what's missing and offers to get it.
+          // One you added yourself: its page offers to get the program it runs with.
+          if (integration.health.need && !integration.catalogId)
+            return void navigate(`/integrations/${integration.id}`);
+          // From the catalog: its connect dialog shows what's missing and offers to get it.
           return void navigate(`/integrations?setup=${integration.id}`);
         default:
           return check.mutate(integration.id);

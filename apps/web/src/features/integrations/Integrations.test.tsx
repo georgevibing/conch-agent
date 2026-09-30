@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { reduceAll } from '../../live/reducer';
 import { FakeSocket, mockFetch, renderApp } from '../../test/harness';
 import { splitCommand } from './CustomDialog';
+import { IntegrationDetailView } from './IntegrationDetailView';
 import { IntegrationsView } from './IntegrationsView';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -372,6 +373,53 @@ describe('Integrations page', () => {
         await screen.findByRole('heading', { name: '1Password is connected' }),
       ).toBeInTheDocument();
     });
+  });
+
+  it('offers to install the program one you added runs with', async () => {
+    const fetchServer = integration({
+      id: 'int_fetch',
+      catalogId: undefined,
+      name: 'Fetch',
+      server: 'fetch',
+      transport: { type: 'stdio', command: 'uvx', args: ['mcp-server-fetch'] },
+      auth: 'none',
+      health: {
+        state: 'error',
+        message: 'Needs uv (runs Python tools).',
+        action: 'setup',
+        need: 'uv',
+      },
+      tools: [],
+    });
+    const calls = mockFetch({
+      'GET /api/integrations': () => ({
+        catalog,
+        providers: [provider],
+        integrations: [fetchServer],
+      }),
+      'GET /api/needs/uv': () => ({
+        ready: false,
+        needs: [
+          {
+            id: 'uv',
+            name: 'uv (runs Python tools)',
+            short: 'uv',
+            openable: false,
+            state: 'missing',
+            install: { label: 'Install uv', command: 'winget install --id astral-sh.uv' },
+          },
+        ],
+      }),
+      'POST /api/needs/uv/install': () => ({ ready: false, needs: [] }),
+    });
+    renderApp(<IntegrationDetailView integrationId="int_fetch" />, {
+      route: '/integrations/int_fetch',
+    });
+    expect(await screen.findByText('Needs uv (runs Python tools).')).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Install uv' }));
+    expect(calls.some((c) => c.method === 'POST' && c.path === '/api/needs/uv/install')).toBe(true);
+    // No "Try again" next to it: pressing it again changes nothing until uv is here.
+    expect(screen.queryByRole('button', { name: 'Finish setup' })).toBeNull();
   });
 
   it('never sends the browser to anything but a web page', async () => {

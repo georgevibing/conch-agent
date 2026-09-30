@@ -13,20 +13,21 @@ import { useNeed } from './useNeed';
 export function GetIt({
   needId,
   kind = 'install',
-  name,
+  name: given,
   lead,
   children,
 }: {
   needId: string;
   kind?: 'install' | 'update';
-  /** "Codex" */
-  name: string;
+  /** "Codex"; the need's own short name when left out. */
+  name?: string;
   /** One sentence above the button. */
   lead?: ReactNode;
   /** Another way to do it by hand (commands to copy), folded under the button. */
   children?: ReactNode;
 }) {
   const { need, running, starting, error, act, dialog } = useNeed(needId);
+  const name = given ?? need?.short ?? 'it';
   const label = kind === 'update' ? `Update ${name}` : `Install ${name}`;
   // Nothing Conch can run here (no winget, Homebrew or npm): the website it is.
   const canRun = kind === 'update' || Boolean(need?.install);

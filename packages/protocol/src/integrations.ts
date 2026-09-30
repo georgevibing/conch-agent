@@ -161,6 +161,8 @@ export const IntegrationHealth = z.object({
   okAt: z.number().optional(),
   /** Conch will look again by itself at this time (a failure that usually passes). */
   retryAt: z.number().optional(),
+  /** Something Conch can get for it (`GET /api/needs/:id`), when that's what's missing. */
+  need: z.string().optional(),
 });
 export type IntegrationHealth = z.infer<typeof IntegrationHealth>;
 

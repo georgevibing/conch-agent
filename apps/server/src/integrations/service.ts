@@ -27,6 +27,7 @@ import {
   type ResolvedCatalogItem,
 } from './catalog';
 import { type Bridge, openBridge } from './bridge';
+import { needFor, nodeFallback } from './commands';
 import { checkEndpoint, EndpointError, guardedFetch, type Reach, reachOf } from './net';
 import { type FlowDisplay, NeedsAuthError, OAuthFlows, TransientAuthError } from './oauth';
 import { probe as realProbe, type ProbeResult, scrub } from './probe';
@@ -345,6 +346,13 @@ export class IntegrationService {
     return this.readiness(catalogId);
   }
 
+  /** Something Conch installed has landed: check the integrations that were waiting on it. */
+  async recheckNeeding(needId: string) {
+    for (const item of await this.store.all())
+      if (item.enabled && item.health.need === needId)
+        await this.check(item.id).catch(() => undefined);
+  }
+
   async #recheck(catalogId: string) {
     for (const item of await this.store.all())
       if (item.catalogId === catalogId && item.enabled)
@@ -355,6 +363,25 @@ export class IntegrationService {
   async #waiting(item: StoredIntegration): Promise<IntegrationHealth | undefined> {
     const entry = item.catalogId ? CATALOG.get(item.catalogId) : undefined;
     const needs = entry ? this.#needs(entry) : [];
+    // A program you added that runs with something Conch can install (uvx, docker).
+    const needId = item.transport.type === 'stdio' ? needFor(item.transport.command) : undefined;
+    const program = !needs.length && needId ? this.setup.spec(needId) : undefined;
+    if (program) {
+      const found = await this.setup.readiness([program]);
+      const need = found.needs[0];
+      if (!need || need.state === 'ready') return undefined;
+      return {
+        state: 'error',
+        message:
+          need.state === 'installing'
+            ? `Installing ${need.short}…`
+            : `Needs ${need.name.replace(/^The /, 'the ')}.`,
+        action: 'setup',
+        need: need.id,
+        checkedAt: Date.now(),
+        okAt: item.health.okAt,
+      };
+    }
     if (!needs.length) return undefined;
     const readiness = await this.setup.readiness(needs);
     const need = readiness.needs.find((n) => n.state !== 'ready');
@@ -988,7 +1015,13 @@ export class IntegrationService {
           : undefined;
       const command = (program && (await this.setup.path(program))) ?? item.transport.command;
       return {
-        server: { type: 'stdio', command, args: item.transport.args, env },
+        server: {
+          type: 'stdio',
+          command,
+          args: item.transport.args,
+          // `npx` with no Node on PATH: Conch's own Node runs it.
+          env: await nodeFallback(command, env),
+        },
         secrets: Object.values(env),
         reach: 'private',
       };

@@ -114,8 +114,8 @@ export function explain(
         state: 'error',
         message:
           server.command === 'npx' || server.command === 'node'
-            ? 'Node.js isn’t installed on this computer. Install it from nodejs.org, then try again.'
-            : `Couldn’t find “${server.command}” on this computer.`,
+            ? 'Node.js couldn’t be started on this computer. Reinstall it from nodejs.org, then try again.'
+            : `Couldn’t find “${server.command}” on this computer. Check it’s installed, or give its full path.`,
         action: 'retry',
       });
     if (

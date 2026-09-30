@@ -261,6 +261,7 @@ export class Services {
     if (id === 'op') await this.keys.vault.onePassword.state({ force: true });
     const engine = { codex: 'codex-cli', 'claude-code': 'claude-code' }[id] as EngineId | undefined;
     if (engine) await this.engines.get(engine)?.detect({ force: true });
+    await this.integrations.recheckNeeding(id);
   }
 
   async engineStatus(force = false) {
