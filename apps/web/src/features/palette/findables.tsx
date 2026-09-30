@@ -7,6 +7,7 @@ import {
   Cpu,
   Gauge,
   Globe,
+  HeartPulse,
   Palette as PaletteIcon,
   Paperclip,
   SquareTerminal,
@@ -60,9 +61,16 @@ const settingsPlaces: { tab: SettingsTab; label: string; keywords: string; icon:
   { tab: 'commands', label: 'Commands', keywords: 'slash prompts', icon: <SquareSlash /> },
   { tab: 'usage', label: 'Usage', keywords: 'limits spend budget plan', icon: <BatteryMedium /> },
   {
+    tab: 'health',
+    label: 'Health',
+    keywords:
+      'repair everything fix doctor checkup broken updates update upgrade backup back up restore fixed healed',
+    icon: <HeartPulse />,
+  },
+  {
     tab: 'security',
     label: 'Security',
-    keywords: 'password keys devices sign in checkup health fixed repairs healed',
+    keywords: 'password keys devices sign in checkup',
     icon: <ShieldCheck />,
   },
   {

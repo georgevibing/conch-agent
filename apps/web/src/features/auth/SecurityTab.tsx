@@ -54,7 +54,6 @@ import { ApiError, api } from '../../api/client';
 import { keys } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { relativeTime } from '../../lib/time';
-import { HealedSection } from '../settings/HealedSection';
 import { Section } from '../settings/Section';
 import styles from './Security.module.css';
 import { applySignedIn } from './signedIn';
@@ -824,7 +823,6 @@ export function SecurityTab() {
       <Section title="Security" description="Keep Conch — and this computer — safe.">
         <SecurityCheckup items={items} />
       </Section>
-      <HealedSection />
       <SignInSection access={data} guard={guard} focus={fix.focus} />
       {data.method !== 'none' && <DevicesSection access={data} guard={guard} />}
       <ReachSection access={data} focus={fix.focus} />

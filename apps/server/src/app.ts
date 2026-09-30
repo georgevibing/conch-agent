@@ -177,6 +177,24 @@ export async function buildApp(services: Services) {
   app.get('/api/state', appState);
   /** What Conch fixed on its own, newest first. */
   app.get('/api/healed', async () => ({ notes: await services.healed.list() }));
+
+  // ── Repair everything ───────────────────────────────────────────────────
+  // Looking changes nothing; repairing only tries safe fixes (no wiping, no
+  // signing out), so neither needs a recent password. Both answer at once and
+  // the report fills in over the `doctor.report` event.
+  app.get('/api/doctor', () => {
+    const report = services.doctor.report;
+    if (!report.checkedAt && !report.running) void services.doctor.run();
+    return services.doctor.report;
+  });
+  app.post('/api/doctor/check', () => {
+    void services.doctor.run();
+    return services.doctor.report;
+  });
+  app.post('/api/doctor/repair', () => {
+    void services.doctor.run({ repair: true });
+    return services.doctor.report;
+  });
   app.patch('/api/settings', async (request, reply) => {
     const body = parse(UpdateSettingsBody, request.body, reply);
     if (!body) return;

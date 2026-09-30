@@ -18,6 +18,7 @@ import {
   TurnProblem,
   Usage,
 } from './common';
+import { DoctorReport } from './doctor';
 import { EngineStatus, LoginState } from './engine';
 import { HealNote } from './healed';
 import { Integration } from './integrations';
@@ -31,6 +32,7 @@ export * from './engine';
 export * from './healed';
 export * from './integrations';
 export * from './common';
+export * from './doctor';
 export * from './providers';
 export * from './routines';
 export * from './search';
@@ -425,6 +427,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('terminal.changed') }),
   /** The browser started, stopped, is installing (with progress), healed itself or needs you. */
   z.object({ type: z.literal('browser.status'), status: BrowserStatus }),
+  /** Repair everything: the report as it fills in. */
+  z.object({ type: z.literal('doctor.report'), report: DoctorReport }),
   /** Conch fixed something on its own: a quiet note, never an alert. */
   z.object({ type: z.literal('healed'), note: HealNote }),
   z.object({ type: z.literal('pong') }),

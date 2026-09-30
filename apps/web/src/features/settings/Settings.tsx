@@ -30,6 +30,7 @@ import {
   Cpu,
   Gauge,
   Globe,
+  HeartPulse,
   Monitor,
   SquareTerminal,
   Moon,
@@ -51,6 +52,7 @@ import { relativeTime } from '../../lib/time';
 import { useAutoFocus } from '../../lib/useAutoFocus';
 import { SecurityTab } from '../auth/SecurityTab';
 import { BrowserSettings } from '../browser/BrowserSettings';
+import { HealthTab } from '../health/HealthTab';
 import { TerminalSettings } from '../terminal/TerminalSettings';
 import { toneOptions } from '../onboarding/tones';
 import { ProvidersTab } from '../providers/ProvidersTab';
@@ -422,6 +424,7 @@ const tabs: { value: SettingsTab; label: string; icon: ReactNode }[] = [
   { value: 'models', label: 'Models & modes', icon: <Gauge /> },
   { value: 'commands', label: 'Commands', icon: <SquareSlash /> },
   { value: 'usage', label: 'Usage', icon: <BatteryMedium /> },
+  { value: 'health', label: 'Health', icon: <HeartPulse /> },
   { value: 'security', label: 'Security', icon: <ShieldCheck /> },
   { value: 'providers', label: 'Providers', icon: <Cpu /> },
   { value: 'browser', label: 'Browser', icon: <Globe /> },
@@ -478,6 +481,9 @@ export function Settings() {
               </Tabs.Content>
               <Tabs.Content value="usage">
                 <UsageTab />
+              </Tabs.Content>
+              <Tabs.Content value="health">
+                <HealthTab />
               </Tabs.Content>
               <Tabs.Content value="security">
                 <SecurityTab />

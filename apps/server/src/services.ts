@@ -17,6 +17,7 @@ import { CodexEngine } from './engines/codex/engine';
 import { MockEngine } from './engines/mock/engine';
 import type { Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
+import { Doctor } from './doctor/service';
 import { Healed } from './lib/healed';
 import type { Heal } from './lib/recover';
 import { KNOWN_NEEDS } from './setup/known';
@@ -58,6 +59,8 @@ export class Services {
   readonly healed: Healed;
   /** What features need from this computer, and getting it (ADR 0016). */
   readonly setup: Setup;
+  /** Repair everything: every part's check, run at once (see `doctor/`). */
+  readonly doctor: Doctor;
   readonly settings: SettingsStore;
   /** Who may sign in (`~/.conch/access.json`). */
   readonly access: AccessStore;
@@ -93,6 +96,10 @@ export class Services {
       this.broadcast.emit({ type: 'healed', note }),
     );
     this.setup = new Setup(KNOWN_NEEDS);
+    this.doctor = new Doctor({
+      emit: (report) => this.broadcast.emit({ type: 'doctor.report', report }),
+      onHeal: (message) => void this.healed.note('gateway', message),
+    });
     /** Every store that repairs itself says so here (AGENTS.md agreement 11). */
     const heal: Heal = (area, message) => void this.healed.note(area, message);
     this.settings = new SettingsStore(config.CONCH_HOME, heal);
