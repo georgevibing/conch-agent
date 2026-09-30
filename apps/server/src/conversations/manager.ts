@@ -11,7 +11,7 @@ import type {
   Usage,
 } from '@conch/protocol';
 
-import type { PermissionMode } from '@conch/protocol';
+import { honouredMode, type PermissionMode } from '@conch/protocol';
 
 import type {
   BridgedTool,
@@ -162,6 +162,27 @@ const MAX_LIVE = 50;
 
 /** How long an unattended run (a routine) waits for a permission answer. */
 const UNATTENDED_PERMISSION_MS = 60 * 60 * 1000;
+
+/**
+ * How long a turn waits to learn which modes its provider honours. The answer
+ * is almost always cached; past this, the engine's own cautious reading holds.
+ */
+const MODES_WAIT_MS = 2000;
+
+/** The modes an engine honours, or undefined if it can't say quickly. */
+async function honouredModes(engine: Engine): Promise<PermissionMode[] | undefined> {
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<undefined>((resolve) => {
+    timer = setTimeout(() => resolve(undefined), MODES_WAIT_MS);
+    timer.unref?.();
+  });
+  try {
+    const capabilities = await Promise.race([engine.capabilities().catch(() => undefined), late]);
+    return capabilities?.permissionModes;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /**
  * Owns every conversation's live state: the event log, the running turn, and
@@ -412,6 +433,8 @@ export class ConversationManager {
     const defaults = { ...settings.preferences, engine: this.deps.engine().id };
     const resolved = resolveOptions(live.record.options, defaults, engine.id);
     if (extras?.permissionMode) resolved.permissionMode = extras.permissionMode;
+    // The mode the chat shows for this provider is the one it runs in.
+    resolved.permissionMode = honouredMode(resolved.permissionMode, await honouredModes(engine));
 
     /** Puts a question to the user and waits; expires (deny) if the turn stops first. */
     const askUser = (

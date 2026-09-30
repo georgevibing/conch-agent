@@ -54,7 +54,10 @@ const STDERR_TAIL = 8000;
 /** Grace between asking Codex to stop and insisting. */
 const KILL_GRACE_MS = 2000;
 
-/** Modes Codex can actually honour. It has no "ask me first", so Conch doesn't offer one. */
+/**
+ * Modes Codex can actually honour, safest first. It has no "ask me first", so
+ * Conch doesn't offer one: a chat set to it runs as Plan only.
+ */
 const PERMISSION_MODES: PermissionMode[] = ['plan', 'acceptEdits', 'bypassPermissions'];
 
 const EFFORTS = EffortChoice.exclude(['auto']).options;
@@ -62,19 +65,18 @@ const EFFORTS = EffortChoice.exclude(['auto']).options;
 export type Sandbox = 'read-only' | 'workspace-write' | 'danger-full-access';
 
 /**
- * How much of the computer Codex may touch. Because Conch can't ask before each
- * step here, every mode takes its cautious reading: "ask me first" becomes
- * read-only rather than a silent licence to write.
+ * How much of the computer Codex may touch. The gateway only sends modes Codex
+ * offers, but should another arrive it takes the cautious reading: "ask me
+ * first" or "ask when risky" become read-only, never a silent licence to write.
  */
 export function sandboxFor(mode: PermissionMode): Sandbox {
   switch (mode) {
     case 'bypassPermissions':
       return 'danger-full-access';
     case 'acceptEdits':
-    case 'auto':
       return 'workspace-write';
-    // `plan` is read-only by definition, and `default` means "ask me first" —
-    // which Codex can't do, so it gets the cautious reading too.
+    // `plan` is read-only by definition; `default` and `auto` need Codex to
+    // ask or judge risk, which it can't, so they get the cautious reading too.
     default:
       return 'read-only';
   }

@@ -2,7 +2,13 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { Capabilities, EngineId, EngineStatus, ServerEvent } from '@conch/protocol';
+import type {
+  Capabilities,
+  EngineId,
+  EngineStatus,
+  PermissionMode,
+  ServerEvent,
+} from '@conch/protocol';
 import { describe, expect, it } from 'vitest';
 
 import type { Engine, EngineEvent, TurnInput } from '../engines/types';
@@ -20,6 +26,7 @@ class FakeEngine implements Engine {
   constructor(
     readonly id: EngineId,
     readonly label: string,
+    readonly modes: PermissionMode[] = ['default'],
   ) {}
 
   async detect(): Promise<EngineStatus> {
@@ -39,7 +46,7 @@ class FakeEngine implements Engine {
       label: this.label,
       models: [],
       commands: [],
-      permissionModes: ['default'],
+      permissionModes: this.modes,
     };
   }
 
@@ -60,9 +67,12 @@ async function setup() {
   const home = await mkdtemp(join(tmpdir(), 'conch-providers-'));
   const claude = new FakeEngine('claude-code', 'Claude Code');
   const router = new FakeEngine('openrouter', 'OpenRouter');
+  // Like Codex: it can't ask first or judge risk, so it offers neither.
+  const codex = new FakeEngine('codex-cli', 'Codex', ['plan', 'acceptEdits', 'bypassPermissions']);
   const engines = new Map<EngineId, FakeEngine>([
     ['claude-code', claude],
     ['openrouter', router],
+    ['codex-cli', codex],
   ]);
   const settings = new SettingsStore(home);
   await settings.update({
@@ -76,7 +86,7 @@ async function setup() {
   });
   const events: ServerEvent[] = [];
   manager.events.on((e) => events.push(e));
-  return { manager, claude, router, events };
+  return { manager, claude, router, codex, events };
 }
 
 async function idle(manager: ConversationManager, id: string) {
@@ -148,6 +158,28 @@ describe('every provider at once', () => {
       'claude-code:sonnet',
       'claude-code:sonnet',
     ]);
+  });
+
+  it('gives each provider the mode the chat shows: one it can’t honour becomes its safest', async () => {
+    const { manager, codex } = await setup();
+    // "Auto" is a Claude Code mode; the chat shows Codex's first mode, Plan only.
+    const convo = await manager.send({
+      clientMessageId: 'u1',
+      text: 'look around',
+      options: { engine: 'codex-cli', permissionMode: 'auto' },
+    });
+    await idle(manager, convo.id);
+    expect(codex.turns[0]?.options.permissionMode).toBe('plan');
+
+    // A mode it does honour goes through untouched.
+    await manager.send({
+      conversationId: convo.id,
+      clientMessageId: 'u2',
+      text: 'now fix it',
+      options: { permissionMode: 'acceptEdits' },
+    });
+    await idle(manager, convo.id);
+    expect(codex.turns[1]?.options.permissionMode).toBe('acceptEdits');
   });
 
   it('starts a new chat with the provider it names', async () => {

@@ -6,7 +6,7 @@ import type {
   ProviderModels,
   TurnOptions,
 } from '@conch/protocol';
-import { EngineId as EngineIdSchema } from '@conch/protocol';
+import { EngineId as EngineIdSchema, honouredMode } from '@conch/protocol';
 
 import { useAppState, useConversations, useModels, useUpdateSettings } from '../../api/queries';
 import { useUi } from '../../app/ui';
@@ -98,7 +98,8 @@ export function useTurnOptions(conversationId?: string) {
     permissionMode: overrides.permissionMode ?? defaults.permissionMode,
   };
   // Keep choices valid for the chosen model and provider: unsupported effort
-  // falls back to auto, fast to off, and a mode it can't honour to its first.
+  // falls back to auto, fast to off, and a mode it can't honour to its safest,
+  // exactly as the gateway will run it.
   const modes = provider?.permissionModes ?? [];
   const effective: ResolvedTurnOptions = {
     ...resolved,
@@ -107,10 +108,7 @@ export function useTurnOptions(conversationId?: string) {
         ? 'auto'
         : resolved.effort,
     fastMode: resolved.fastMode && Boolean(model?.supportsFastMode),
-    permissionMode:
-      modes.length && !modes.includes(resolved.permissionMode)
-        ? (modes[0] as PermissionMode)
-        : resolved.permissionMode,
+    permissionMode: honouredMode(resolved.permissionMode, modes),
   };
 
   const set = (patch: TurnOptions) => {

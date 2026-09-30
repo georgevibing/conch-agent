@@ -125,9 +125,24 @@ export const Capabilities = z.object({
   label: z.string(),
   models: z.array(ModelInfo),
   commands: z.array(EngineCommand),
+  /** The modes this provider honours, safest first (see `honouredMode`). */
   permissionModes: z.array(PermissionMode),
 });
 export type Capabilities = z.infer<typeof Capabilities>;
+
+/**
+ * The mode a provider actually runs in. Every mode means the same thing with
+ * every provider, so one it can't honour isn't stretched to fit: it becomes the
+ * provider's first mode, which engines list as their safest. The chat shows
+ * this, and the gateway runs it, so the two can never disagree.
+ */
+export function honouredMode(
+  wanted: PermissionMode,
+  honoured: readonly PermissionMode[] | undefined,
+): PermissionMode {
+  const first = honoured?.[0];
+  return first && !honoured.includes(wanted) ? first : wanted;
+}
 
 /** One provider's offer in the model picker: its capabilities, and why they're empty if they are. */
 export const ProviderModels = Capabilities.extend({

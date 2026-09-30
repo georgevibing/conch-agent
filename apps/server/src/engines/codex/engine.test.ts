@@ -280,7 +280,8 @@ describe('Codex arguments', () => {
   it('maps every permission mode to the safer sandbox', () => {
     expect(sandboxFor('plan')).toBe('read-only');
     expect(sandboxFor('default')).toBe('read-only');
-    expect(sandboxFor('auto')).toBe('workspace-write');
+    // Codex can't judge risk either: a mode it doesn't offer never becomes a licence to write.
+    expect(sandboxFor('auto')).toBe('read-only');
     expect(sandboxFor('acceptEdits')).toBe('workspace-write');
     expect(sandboxFor('bypassPermissions')).toBe('danger-full-access');
   });
