@@ -113,6 +113,8 @@ export const ModelInfo = z.object({
   efforts: z.array(EffortChoice.exclude(['auto'])).default([]),
   supportsFastMode: z.boolean().default(false),
   supportsAutoMode: z.boolean().default(false),
+  /** Whether it can look at images. Unset = the provider's `attachments.images`. */
+  images: z.boolean().optional(),
 });
 export type ModelInfo = z.infer<typeof ModelInfo>;
 
@@ -134,6 +136,12 @@ export const Capabilities = z.object({
   commands: z.array(EngineCommand),
   /** The modes this provider honours, safest first (see `honouredMode`). */
   permissionModes: z.array(PermissionMode),
+  /**
+   * What it can do with attachments (ADR 0017). Text always reaches it; `images`:
+   * it can look at pictures; `files`: it can open files on this computer (a PDF,
+   * a spreadsheet) with its own tools. Absent means neither.
+   */
+  attachments: z.object({ images: z.boolean(), files: z.boolean() }).optional(),
 });
 export type Capabilities = z.infer<typeof Capabilities>;
 

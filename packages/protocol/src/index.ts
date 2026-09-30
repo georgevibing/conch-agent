@@ -7,6 +7,7 @@
  */
 import { z } from 'zod';
 
+import { ATTACHMENT_LIMITS, Attachment } from './attachments';
 import { BrowserHandoff, BrowserPermission, BrowserStatus, BrowserStep } from './browser';
 import {
   EffortChoice,
@@ -24,6 +25,7 @@ import { Routine, RoutineRun } from './routines';
 import { UsageSnapshot } from './usage';
 
 export * from './access';
+export * from './attachments';
 export * from './browser';
 export * from './engine';
 export * from './healed';
@@ -37,7 +39,7 @@ export * from './skills';
 export * from './terminal';
 export * from './usage';
 
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 
 /** A user-defined slash command: a reusable prompt. `{{input}}` is replaced by what follows the command. */
 export const CommandName = z
@@ -222,7 +224,14 @@ const logged = {
  * them, replays them on subscribe, and the client folds them into a view.
  */
 export const ConversationEvent = z.discriminatedUnion('type', [
-  z.object({ ...logged, type: z.literal('user.message'), messageId: z.string(), text: z.string() }),
+  z.object({
+    ...logged,
+    type: z.literal('user.message'),
+    messageId: z.string(),
+    text: z.string(),
+    /** Files and long pastes sent with it, in the order they were added. */
+    attachments: z.array(Attachment).optional(),
+  }),
   z.object({
     ...logged,
     type: z.literal('assistant.delta'),
@@ -345,16 +354,23 @@ export type ConversationDetail = z.infer<typeof ConversationDetail>;
 // ── WebSocket: client → server ──────────────────────────────────────────────
 
 export const ClientCommand = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('conversation.send'),
-    /** Omit to start a new conversation. */
-    conversationId: Id.optional(),
-    /** Client-generated id so the UI can reconcile optimistic messages. */
-    clientMessageId: z.string().min(1).max(128),
-    text: z.string().trim().min(1).max(200_000),
-    /** Model/effort/mode for this and later turns of the conversation. */
-    options: TurnOptions.optional(),
-  }),
+  z
+    .object({
+      type: z.literal('conversation.send'),
+      /** Omit to start a new conversation. */
+      conversationId: Id.optional(),
+      /** Client-generated id so the UI can reconcile optimistic messages. */
+      clientMessageId: z.string().min(1).max(128),
+      /** May be empty when the message is only attachments. */
+      text: z.string().trim().max(200_000),
+      /** Ids from `POST /api/attachments`, in order. */
+      attachments: z.array(Id).max(ATTACHMENT_LIMITS.maxCount).optional(),
+      /** Model/effort/mode for this and later turns of the conversation. */
+      options: TurnOptions.optional(),
+    })
+    .refine((command) => command.text.length > 0 || Boolean(command.attachments?.length), {
+      message: 'Write a message or attach something.',
+    }),
   z.object({
     type: z.literal('conversation.configure'),
     conversationId: Id,
