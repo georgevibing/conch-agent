@@ -442,6 +442,35 @@ export async function buildApp(services: Services) {
       return services.integrations.get(request.params.id);
     }),
   );
+  // Anything Conch knows how to get (ADR 0016): a provider's CLI, the 1Password
+  // CLI, uv. Only needs in `setup/known.ts` exist here; installing or updating
+  // runs a package manager as you, so it needs a recent password or key.
+  const needOf = (reply: FastifyReply, id: string) => {
+    const spec = services.setup.spec(id);
+    if (!spec)
+      void reply.code(404).send({ error: 'not-found', message: 'Nothing like that to get.' });
+    return spec;
+  };
+  app.get<{ Params: { needId: string } }>('/api/needs/:needId', async (request, reply) => {
+    const spec = needOf(reply, request.params.needId);
+    return spec && services.setup.readiness([spec]);
+  });
+  for (const action of ['install', 'update', 'open'] as const) {
+    app.post<{ Params: { needId: string } }>(
+      `/api/needs/:needId/${action}`,
+      async (request, reply) => {
+        const spec = needOf(reply, request.params.needId);
+        if (!spec) return;
+        if (action !== 'open' && verifyRequired(request, reply)) return;
+        try {
+          await services.setup[action](spec);
+        } catch (error) {
+          return reply.code(503).send({ error: 'unavailable', message: (error as Error).message });
+        }
+        return services.setup.readiness([spec]);
+      },
+    );
+  }
   // What a catalog entry needs from this computer (ADR 0016). Installing
   // software runs a package manager as you, so it needs a recent password or key.
   app.get<{ Params: { catalogId: string } }>(

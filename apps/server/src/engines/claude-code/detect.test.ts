@@ -41,6 +41,87 @@ describe('Claude Code detection', () => {
     });
   });
 
+  describe('the Claude Code that comes with Conch', () => {
+    it('is used when none is installed: then only a sign-in is left', async () => {
+      const bundled = await fakeClaude({ loggedIn: false });
+      const status = await detectClaude({
+        find: () => Promise.resolve(undefined),
+        bundled: () => bundled.bin,
+      });
+      expect(status).toMatchObject({
+        state: 'signed-out',
+        bundled: true,
+        executablePath: bundled.bin,
+      });
+      expect(status.fix).toBeUndefined();
+    });
+
+    it('stands in for an installed one that won’t start, and says so once, quietly', async () => {
+      const broken = await fakeClaude({ broken: true });
+      const bundled = await fakeClaude({ loggedIn: true });
+      const notes: string[] = [];
+      const status = await detectClaude({
+        find: () => Promise.resolve(broken.bin),
+        bundled: () => bundled.bin,
+        onHeal: (message) => notes.push(message),
+      });
+      expect(status).toMatchObject({ state: 'ready', bundled: true, executablePath: bundled.bin });
+      expect(notes).toEqual([
+        'The Claude Code on this computer wouldn’t start, so Conch is using the one that comes with it.',
+      ]);
+    });
+
+    it('stands in for one too old to say who’s signed in', async () => {
+      const old = await fakeClaude({ old: true, loggedIn: true });
+      const bundled = await fakeClaude({ loggedIn: true });
+      const notes: string[] = [];
+      const status = await detectClaude({
+        find: () => Promise.resolve(old.bin),
+        bundled: () => bundled.bin,
+        onHeal: (message) => notes.push(message),
+      });
+      expect(status).toMatchObject({ state: 'ready', bundled: true });
+      expect(notes[0]).toMatch(/too old/);
+    });
+
+    it('keeps the installed one when it works', async () => {
+      const installed = await fakeClaude({ loggedIn: true });
+      const bundled = await fakeClaude({ loggedIn: true });
+      const status = await detectClaude({
+        find: () => Promise.resolve(installed.bin),
+        bundled: () => bundled.bin,
+      });
+      expect(status).toMatchObject({ executablePath: installed.bin, bundled: false });
+    });
+
+    it('offers to install or update when there’s nothing to fall back on', async () => {
+      const none = await detectClaude({
+        find: () => Promise.resolve(undefined),
+        bundled: () => undefined,
+      });
+      expect(none).toMatchObject({
+        state: 'not-installed',
+        fix: { need: 'claude-code', kind: 'install' },
+      });
+      const broken = await fakeClaude({ broken: true });
+      const stuck = await detectClaude({
+        find: () => Promise.resolve(broken.bin),
+        bundled: () => undefined,
+      });
+      expect(stuck).toMatchObject({ state: 'error', fix: { need: 'claude-code', kind: 'update' } });
+    });
+
+    it('never swaps in for a path you set yourself', async () => {
+      const bundled = await fakeClaude({ loggedIn: true });
+      const status = await detectClaude({
+        explicitPath: '/nonexistent/claude',
+        bundled: () => bundled.bin,
+      });
+      expect(status.state).toBe('not-installed');
+      expect(status.fix).toBeUndefined();
+    });
+  });
+
   it('treats a stored API key as signed in', async () => {
     const out = await fakeClaude({ loggedIn: false });
     const status = await detectClaude({ explicitPath: out.bin, apiKey: 'sk-test-123456' });

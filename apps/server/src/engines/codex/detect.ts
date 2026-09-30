@@ -20,16 +20,18 @@ export const DOCS_URL = 'https://developers.openai.com/codex/cli';
 /**
  * Codex changed the shape of `codex exec --json` in 0.44.0. Conch reads the new
  * events, so an older install would look silent rather than broken — better to
- * say so and give the one command that fixes it.
+ * say so and offer to update it (the `codex` need).
  */
 export const MIN_VERSION = '0.44.0';
-export const UPDATE_COMMAND = 'npm install -g @openai/codex@latest';
 
 const PROBE_TIMEOUT_MS = 15_000;
 
 export function installHints(): InstallHint[] {
-  const hints: InstallHint[] = [{ label: 'npm', command: 'npm install -g @openai/codex' }];
+  const hints: InstallHint[] = [];
+  if (platform() === 'win32')
+    hints.push({ label: 'winget', command: 'winget install --exact --id OpenAI.Codex' });
   if (platform() === 'darwin') hints.push({ label: 'Homebrew', command: 'brew install codex' });
+  hints.push({ label: 'npm', command: 'npm install -g @openai/codex' });
   return hints;
 }
 
@@ -129,6 +131,7 @@ export async function detectCodex(options: {
       message: options.explicitPath
         ? `No executable found at ${options.explicitPath}.`
         : 'Codex isn’t installed on this computer yet.',
+      ...(!options.explicitPath && { fix: { need: 'codex', kind: 'install' as const } }),
     };
   }
 
@@ -141,6 +144,7 @@ export async function detectCodex(options: {
       state: 'error',
       executablePath,
       message: `Codex is installed but didn’t start: ${detail}`,
+      fix: { need: 'codex', kind: 'update' },
     };
   }
 
@@ -151,7 +155,8 @@ export async function detectCodex(options: {
       state: 'error',
       version,
       executablePath,
-      message: `Conch needs Codex ${MIN_VERSION} or newer to read its replies, and this is ${version}. Update it with: ${UPDATE_COMMAND}`,
+      message: `Conch needs Codex ${MIN_VERSION} or newer to read its replies, and this is ${version}.`,
+      fix: { need: 'codex', kind: 'update' },
     };
   }
 

@@ -122,10 +122,14 @@ export class ClaudeCodeEngine implements Engine {
   #mcp?: { value: EngineMcpStatus[]; at: number };
   #mcpProbe?: Promise<EngineMcpStatus[]>;
 
+  #healed = new Set<string>();
+
   constructor(
     private readonly settings: SettingsStore,
     private readonly keys: ProviderKeys,
     private readonly explicitPath?: string,
+    /** Leaves a “fixed on its own” note. */
+    private readonly onHeal?: (message: string) => void,
   ) {}
 
   /**
@@ -143,6 +147,12 @@ export class ClaudeCodeEngine implements Engine {
       const status = await detectClaude({
         explicitPath: this.explicitPath,
         apiKey: await this.#apiKey({ peek: true }),
+        // Detection runs every few seconds; the note is worth saying once.
+        onHeal: (message) => {
+          if (this.#healed.has(message)) return;
+          this.#healed.add(message);
+          this.onHeal?.(message);
+        },
       });
       this.#cache = { status, at: Date.now() };
       return status;

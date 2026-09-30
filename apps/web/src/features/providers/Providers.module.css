@@ -23,6 +23,12 @@
     overflow-wrap: anywhere;
   }
 
+  /* “Or install it yourself”: a quiet way to the commands, folded under the button. */
+  .byHand {
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
   /* Install commands: one line each, with the copy button where the eye lands. */
   .commands {
     display: flex;

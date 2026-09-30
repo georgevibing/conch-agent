@@ -132,11 +132,15 @@ export function ProvidersTab({
                           }
                         : {
                             label:
-                              provider.status.state === 'not-installed'
-                                ? 'How to install'
-                                : provider.status.state === 'error'
-                                  ? 'Try again'
-                                  : 'Connect',
+                              provider.status.fix?.kind === 'install'
+                                ? 'Install'
+                                : provider.status.fix?.kind === 'update'
+                                  ? 'Update'
+                                  : provider.status.state === 'not-installed'
+                                    ? 'How to install'
+                                    : provider.status.state === 'error'
+                                      ? 'Try again'
+                                      : 'Connect',
                             onClick: () => setConnecting(provider.id),
                           }
                   }

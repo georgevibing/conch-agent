@@ -64,7 +64,8 @@ describe('Codex detection', () => {
     const status = await detectCodex({ explicitPath: codex.bin });
     expect(status).toMatchObject({ state: 'error', version: '0.43.2' });
     expect(status.message).toContain('0.44.0 or newer');
-    expect(status.message).toContain('npm install -g @openai/codex@latest');
+    // One button updates it the way it was installed; nothing to copy into a terminal.
+    expect(status.fix).toEqual({ need: 'codex', kind: 'update' });
   });
 
   it('reports signed-out from the exit code of `login status`', async () => {

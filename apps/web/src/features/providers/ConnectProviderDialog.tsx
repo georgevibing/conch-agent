@@ -2,6 +2,7 @@ import type { Provider, ProvidersList, SecretSource } from '@conch/protocol';
 import {
   Button,
   Callout,
+  Collapsible,
   CopyButton,
   Dialog,
   Field,
@@ -22,6 +23,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 
 import { api } from '../../api/client';
 import { useLiveStore } from '../../live/store';
+import { GetIt } from '../setup/GetIt';
 import { providersApi } from './api';
 import styles from './Providers.module.css';
 import {
@@ -40,23 +42,56 @@ function phaseOf(provider: Provider, busy: boolean): HandshakePhase {
   return 'idle';
 }
 
-/** Install instructions, with Conch watching for the program to appear. */
+/** The commands to install it by hand, to copy. */
+function Commands({ provider }: { provider: Provider }) {
+  return (
+    <ul className={styles.commands}>
+      {provider.install.map((hint) => (
+        <li key={hint.command} className={styles.command}>
+          <span className={styles.commandLabel}>{hint.label}</span>
+          <code className={styles.commandText}>{hint.command}</code>
+          <CopyButton value={hint.command} label={`Copy ${hint.label} command`} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * Not on this computer yet: Conch offers to install it (one button, with
+ * progress), and the commands stay folded underneath for anyone who'd rather.
+ * Either way Conch notices the moment it's there and moves on to signing in.
+ */
 function Install({ provider }: { provider: Provider }) {
+  const fix = provider.status.fix;
   return (
     <Stack gap={4}>
-      <Text tone="muted">
-        {provider.name} isn’t on this computer yet. Run one of these in Terminal — Conch notices the
-        moment it’s ready.
-      </Text>
-      <ul className={styles.commands}>
-        {provider.install.map((hint) => (
-          <li key={hint.command} className={styles.command}>
-            <span className={styles.commandLabel}>{hint.label}</span>
-            <code className={styles.commandText}>{hint.command}</code>
-            <CopyButton value={hint.command} label={`Copy ${hint.label} command`} />
-          </li>
-        ))}
-      </ul>
+      {fix?.kind === 'install' ? (
+        <GetIt
+          needId={fix.need}
+          name={provider.name}
+          lead={`${provider.name} isn’t on this computer yet. Conch can install it for you — it takes a minute or two.`}
+        >
+          {provider.install.length > 0 && (
+            <Collapsible>
+              <Collapsible.Trigger className={styles.byHand}>
+                Or install it yourself
+              </Collapsible.Trigger>
+              <Collapsible.Content>
+                <Commands provider={provider} />
+              </Collapsible.Content>
+            </Collapsible>
+          )}
+        </GetIt>
+      ) : (
+        <>
+          <Text tone="muted">
+            {provider.name} isn’t on this computer yet. Run one of these in Terminal — Conch notices
+            the moment it’s ready.
+          </Text>
+          <Commands provider={provider} />
+        </>
+      )}
       <div className={styles.waiting}>
         <Spinner size="xs" label={null} />
         <Text as="span" size="sm" tone="muted">
@@ -298,11 +333,18 @@ function Connected({ provider }: { provider: Provider }) {
             <dd>{status.version}</dd>
           </>
         )}
-        {status.executablePath && (
+        {status.bundled ? (
           <>
             <dt>Location</dt>
-            <dd className={styles.mono}>{status.executablePath}</dd>
+            <dd>Comes with Conch — nothing to install or update.</dd>
           </>
+        ) : (
+          status.executablePath && (
+            <>
+              <dt>Location</dt>
+              <dd className={styles.mono}>{status.executablePath}</dd>
+            </>
+          )
         )}
       </dl>
       <Stack direction="row" gap={2} wrap>
@@ -361,11 +403,30 @@ function ProviderBody({
   onePassword: ProvidersList['onePassword'];
 }) {
   const state = provider.status.state;
+  const fix = provider.status.fix;
   return (
     <Stack gap={5}>
       {state === 'error' && provider.status.message && (
-        <Callout tone="danger" title={`${provider.name} didn’t answer`}>
+        <Callout
+          tone={fix?.kind === 'update' ? 'warning' : 'danger'}
+          title={
+            fix?.kind === 'update'
+              ? `${provider.name} needs an update`
+              : `${provider.name} didn’t answer`
+          }
+        >
           {provider.status.message}
+        </Callout>
+      )}
+      {state === 'error' && fix?.kind === 'update' && (
+        <GetIt needId={fix.need} kind="update" name={provider.name} />
+      )}
+      {state === 'ready' && fix?.kind === 'update' && (
+        <Callout
+          tone="info"
+          title={provider.status.message ?? `A newer ${provider.name} is available`}
+        >
+          <GetIt needId={fix.need} kind="update" name={provider.name} />
         </Callout>
       )}
       {state === 'ready' ? (

@@ -36,6 +36,63 @@ describe('Providers settings', () => {
     expect(within(openrouter).getByRole('button', { name: 'Connect' })).toBeInTheDocument();
   });
 
+  it('installs a provider’s program with one button, showing its progress', async () => {
+    const codex = baseProviders.providers.find((p) => p.id === 'codex-cli');
+    if (!codex) throw new Error('fixture');
+    const installable = {
+      ...codex,
+      status: { ...codex.status, fix: { need: 'codex', kind: 'install' as const } },
+    };
+    let installing = false;
+    const need = () => ({
+      ready: false,
+      needs: [
+        installing
+          ? {
+              id: 'codex',
+              name: 'Codex',
+              short: 'Codex',
+              openable: false,
+              state: 'installing',
+              progress: { percent: 30, label: 'Downloading Codex · 30%' },
+            }
+          : {
+              id: 'codex',
+              name: 'Codex',
+              short: 'Codex',
+              openable: false,
+              state: 'missing',
+              install: { label: 'Install Codex', command: 'winget install --id OpenAI.Codex' },
+            },
+      ],
+    });
+    const calls = mockFetch(
+      routes({
+        'GET /api/providers': () => ({
+          ...baseProviders,
+          providers: baseProviders.providers.map((p) => (p.id === 'codex-cli' ? installable : p)),
+        }),
+        'GET /api/needs/codex': need,
+        'POST /api/needs/codex/install': () => {
+          installing = true;
+          return need();
+        },
+      }),
+    );
+    render();
+    const card = await screen.findByRole('article', { name: 'Codex' });
+    await userEvent.click(within(card).getByRole('button', { name: 'Install' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Install Codex' }));
+    expect(
+      await screen.findByRole('progressbar', { name: 'Downloading Codex · 30%' }),
+    ).toBeInTheDocument();
+    expect(calls.some((c) => c.method === 'POST' && c.path === '/api/needs/codex/install')).toBe(
+      true,
+    );
+    // The commands are still there for anyone who'd rather, folded away.
+    expect(screen.getByRole('button', { name: 'Or install it yourself' })).toBeInTheDocument();
+  });
+
   it('changes the default provider', async () => {
     const second = provider({
       id: 'anthropic-api',

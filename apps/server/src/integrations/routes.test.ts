@@ -169,6 +169,26 @@ describe('integrations over HTTP', () => {
       payload: {},
     });
     expect(install.json().error).toBe('verify-required');
+    for (const action of ['install', 'update']) {
+      const provider = await app.inject({
+        method: 'POST',
+        url: `/api/needs/codex/${action}`,
+        headers: { cookie },
+        payload: {},
+      });
+      expect(provider.json().error).toBe('verify-required');
+    }
+    // Only what Conch knows how to get exists at all.
+    const unknown = await app.inject({
+      method: 'POST',
+      url: '/api/needs/..%2F..%2Fcalc/open',
+      headers: { cookie },
+      payload: {},
+    });
+    expect(unknown.statusCode).toBe(404);
+    expect((await app.inject({ url: '/api/needs/nope', headers: { cookie } })).statusCode).toBe(
+      404,
+    );
     // Everyday changes don't ask.
     const ask = await app.inject({
       method: 'PATCH',

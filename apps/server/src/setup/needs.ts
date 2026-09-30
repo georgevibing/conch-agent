@@ -3,23 +3,45 @@
  *
  * A need knows where it really lives — on `PATH`, behind a Windows app alias,
  * inside a macOS app bundle — and, where the computer has a package manager
- * that works without an administrator (winget, Homebrew), how to install
- * itself. Conch offers that install as one button, shows its progress, and
+ * that works without an administrator (winget, Homebrew, or npm through
+ * Conch's own Node), how to install or update itself. Conch offers that install as one button, shows its progress, and
  * looks again by itself when it's done. What Conch can't install, it links to.
  */
 import { spawn as nodeSpawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { platform as osPlatform } from 'node:os';
+import { dirname, join } from 'node:path';
 
 import type { Need, Readiness } from '@conch/protocol';
 
-import { agentEnv, findExecutable } from '../lib/proc';
+import { agentEnv, findExecutable, launch, type Launch } from '../lib/proc';
 
 export type Platform = 'win32' | 'darwin' | 'linux';
 
 /** An install through the computer's own package manager, run as you. */
 export interface InstallRecipe {
-  manager: 'winget' | 'brew';
+  manager: 'winget' | 'brew' | 'npm';
   args: string[];
+}
+
+type Recipes = InstallRecipe | InstallRecipe[];
+
+/**
+ * npm as Conch's own Node has it, so an npm install works even when no npm is
+ * on PATH (Conch runs on Node, so there always is one). Falls back to PATH.
+ */
+export async function ownNpm(): Promise<string | undefined> {
+  const node = dirname(process.execPath);
+  const candidates = [
+    join(node, 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    join(node, '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+  ];
+  return candidates.find((path) => existsSync(path)) ?? (await findExecutable('npm'));
+}
+
+/** How to start a package manager found at `path` (a `.js` runs with Conch's own Node). */
+function launchOf(path: string): Launch {
+  return /\.[cm]?js$/i.test(path) ? { command: process.execPath, prefix: [path] } : launch(path);
 }
 
 export interface NeedSpec {
@@ -32,7 +54,10 @@ export interface NeedSpec {
   platforms?: Platform[];
   /** Its absolute path, when it's here. */
   find(platform: Platform): Promise<string | undefined>;
-  install?: Partial<Record<Platform, InstallRecipe>>;
+  /** How to install it here, best first; the first whose package manager is present is used. */
+  install?: Partial<Record<Platform, Recipes>>;
+  /** How to bring the copy at `path` up to date: the same way it was installed. */
+  update?: (path: string, platform: Platform) => InstallRecipe[];
   download?: Partial<Record<Platform, string>>;
   /** The need whose app Conch opens so you can change a setting (often itself). */
   opens?: string;
@@ -54,9 +79,13 @@ export interface SetupDeps {
 }
 
 interface Job {
+  kind: 'install' | 'update';
   progress: { percent?: number; label: string };
   done: Promise<void>;
 }
+
+const list = (recipes: Recipes | undefined): InstallRecipe[] =>
+  recipes === undefined ? [] : Array.isArray(recipes) ? recipes : [recipes];
 
 const INSTALL_TIMEOUT_MS = 15 * 60_000;
 
@@ -144,8 +173,12 @@ export class Setup {
     const openable = Boolean(opener && has(opener.id));
     const job =
       this.#jobs.get(spec.id) ?? (spec.comesWith ? this.#jobs.get(spec.comesWith) : undefined);
-    if (has(spec.id)) return { ...base, state: 'ready', openable };
+    // An update runs while the old copy is still here, so the job comes first.
     if (job) return { ...base, state: 'installing', progress: job.progress, openable };
+    if (has(spec.id)) {
+      const failed = this.#failed.get(spec.id);
+      return { ...base, state: 'ready', openable, ...(failed && { message: failed }) };
+    }
     const recipe = await this.#recipe(spec);
     const download = spec.download?.[this.platform];
     const failed = this.#failed.get(spec.id);
@@ -162,15 +195,19 @@ export class Setup {
     };
   }
 
-  /** The install recipe to offer here: only when its package manager is on this computer. */
-  async #recipe(spec: NeedSpec): Promise<InstallRecipe | undefined> {
-    const recipe = spec.install?.[this.platform];
-    if (!recipe) return undefined;
-    return (await this.#manager(recipe.manager)) ? recipe : undefined;
+  /** The install recipe to offer here: the first whose package manager is on this computer. */
+  #recipe(spec: NeedSpec): Promise<InstallRecipe | undefined> {
+    return this.#first(list(spec.install?.[this.platform]));
+  }
+
+  async #first(recipes: InstallRecipe[]): Promise<InstallRecipe | undefined> {
+    for (const recipe of recipes) if (await this.#manager(recipe.manager)) return recipe;
+    return undefined;
   }
 
   #manager(name: InstallRecipe['manager']): Promise<string | undefined> {
-    return (this.deps.manager ?? ((n) => findExecutable(n)))(name);
+    if (this.deps.manager) return this.deps.manager(name);
+    return name === 'npm' ? ownNpm() : findExecutable(name);
   }
 
   /**
@@ -179,16 +216,36 @@ export class Setup {
    */
   async install(spec: NeedSpec): Promise<void> {
     const recipe = await this.#recipe(spec);
-    const manager = recipe && (await this.#manager(recipe.manager));
-    if (!recipe || !manager) throw new Error(`Conch can’t install ${spec.short} on this computer.`);
+    if (!recipe) throw new Error(`Conch can’t install ${spec.short} on this computer.`);
+    await this.#start(spec, recipe, 'install');
+  }
+
+  /**
+   * Bring an installed copy up to date, the way it was installed (winget,
+   * Homebrew or npm). Like `install`, it resolves once started.
+   */
+  async update(spec: NeedSpec): Promise<void> {
+    const path = await this.path(spec);
+    const recipes = path && spec.update ? spec.update(path, this.platform) : [];
+    const recipe = (await this.#first(recipes)) ?? (await this.#recipe(spec));
+    if (!recipe) throw new Error(`Conch can’t update ${spec.short} on this computer.`);
+    await this.#start(spec, recipe, 'update');
+  }
+
+  async #start(spec: NeedSpec, recipe: InstallRecipe, kind: Job['kind']): Promise<void> {
+    const manager = await this.#manager(recipe.manager);
+    if (!manager) throw new Error(`Conch can’t ${kind} ${spec.short} on this computer.`);
     // Checked after the awaits, so two presses can't both start one.
     if (this.#jobs.has(spec.id)) return;
     this.#failed.delete(spec.id);
     const job: Job = {
-      progress: { label: `Getting ${spec.short} ready…` },
+      kind,
+      progress: {
+        label: kind === 'update' ? `Updating ${spec.short}…` : `Getting ${spec.short} ready…`,
+      },
       done: Promise.resolve(),
     };
-    job.done = this.#run(spec, manager, recipe.args, job)
+    job.done = this.#run(spec, launchOf(manager), recipe.args, job)
       .then(async () => {
         if (!(await this.path(spec)))
           this.#failed.set(
@@ -206,10 +263,11 @@ export class Setup {
     await this.#jobs.get(id)?.done;
   }
 
-  #run(spec: NeedSpec, manager: string, args: string[], job: Job): Promise<void> {
+  #run(spec: NeedSpec, manager: Launch, args: string[], job: Job): Promise<void> {
     const spawn = this.deps.spawn ?? nodeSpawn;
+    const verb = job.kind === 'update' ? 'Updating' : 'Installing';
     return new Promise<void>((resolve, reject) => {
-      const child = spawn(manager, args, {
+      const child = spawn(manager.command, [...manager.prefix, ...args], {
         env: agentEnv(),
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
@@ -219,8 +277,12 @@ export class Setup {
         const text = String(chunk);
         tail = (tail + text).slice(-4_000);
         for (const line of text.split(/[\r\n]+/)) {
-          if (/install(ing)?\b|starting package install|==> Installing|Moving App/i.test(line))
-            job.progress = { label: `Installing ${spec.short}…` };
+          if (
+            /install(ing)?\b|starting package install|==> Installing|Moving App|added \d+ package/i.test(
+              line,
+            )
+          )
+            job.progress = { label: `${verb} ${spec.short}…` };
           const percent = readProgress(line);
           if (percent !== undefined)
             job.progress = { percent, label: `Downloading ${spec.short} · ${percent}%` };

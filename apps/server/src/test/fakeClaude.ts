@@ -6,9 +6,12 @@ import { fakeProgram } from './fakeProgram';
 
 /**
  * A stand-in `claude` executable for tests. Its sign-in state lives in a file
- * so `auth login` can flip it, exactly like the real CLI would.
+ * so `auth login` can flip it, exactly like the real CLI would. `broken` fails
+ * to start; `old` predates `auth status`.
  */
-export async function fakeClaude(options: { loggedIn?: boolean; banner?: boolean } = {}) {
+export async function fakeClaude(
+  options: { loggedIn?: boolean; banner?: boolean; broken?: boolean; old?: boolean } = {},
+) {
   const dir = await mkdtemp(join(tmpdir(), 'fake-claude-'));
   const state = join(dir, 'state');
   await writeFile(state, options.loggedIn ? '1' : '0');
@@ -19,6 +22,8 @@ export async function fakeClaude(options: { loggedIn?: boolean; banner?: boolean
 const STATE = ${JSON.stringify(state)};
 const [first = '', second = ''] = process.argv.slice(2);
 ${options.banner ? `console.log('claude: info: registering helpers...');` : ''}
+${options.broken ? `console.error('Error: Cannot find module ./cli.js'); process.exitCode = 1; return;` : ''}
+${options.old ? `if (first === 'auth') { console.error("error: unknown command 'auth'"); process.exitCode = 1; return; }` : ''}
 switch (\`\${first} \${second}\`) {
   case '--version ':
     console.log('2.1.284 (Claude Code)');

@@ -1,12 +1,12 @@
 import { execFile } from 'node:child_process';
-import { access, constants } from 'node:fs/promises';
 import { homedir, platform } from 'node:os';
-import { delimiter, join } from 'node:path';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import type { AuthMethod, EngineStatus, InstallHint } from '@conch/protocol';
 
-import { launch } from '../../lib/proc';
+import { findExecutable, launch } from '../../lib/proc';
+import { bundledClaude } from './bundled';
 import { childEnv } from './env';
 
 const exec = promisify(execFile);
@@ -26,37 +26,9 @@ export function installHints(): InstallHint[] {
   return hints;
 }
 
-async function isExecutable(path: string): Promise<boolean> {
-  try {
-    await access(path, constants.X_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Find `claude` on PATH, then in the places installers put it. */
-export async function findClaude(explicit?: string): Promise<string | undefined> {
-  if (explicit) return (await isExecutable(explicit)) ? explicit : undefined;
-  const names = platform() === 'win32' ? ['claude.exe', 'claude.cmd'] : ['claude'];
-  const home = homedir();
-  const dirs = [
-    ...(process.env.PATH ?? '').split(delimiter).filter(Boolean),
-    join(home, '.claude', 'local'),
-    join(home, '.local', 'bin'),
-    join(home, '.npm-global', 'bin'),
-    join(home, '.volta', 'bin'),
-    join(home, '.bun', 'bin'),
-    '/opt/homebrew/bin',
-    '/usr/local/bin',
-  ];
-  for (const dir of dirs) {
-    for (const name of names) {
-      const candidate = join(dir, name);
-      if (await isExecutable(candidate)) return candidate;
-    }
-  }
-  return undefined;
+/** Find an installed `claude`: on PATH (fresh on Windows), then where its installers put it. */
+export function findClaude(explicit?: string): Promise<string | undefined> {
+  return findExecutable('claude', { explicit, extraDirs: [join(homedir(), '.claude', 'local')] });
 }
 
 /** `claude auth status --json`, as documented by Claude Code. Unknown fields are ignored. */
@@ -111,45 +83,19 @@ export function describeAuth(
   return { method: 'other', description: status.authMethod ?? 'Signed in', email };
 }
 
-export async function detectClaude(options: {
-  explicitPath?: string;
-  apiKey?: string;
-}): Promise<EngineStatus> {
-  const base = {
-    engine: 'claude-code' as const,
-    label: 'Claude Code',
-    install: installHints(),
-    docsUrl: DOCS_URL,
-    canSignIn: true,
-    checkedAt: Date.now(),
-  };
+type Probe = { ok: true; version?: string; auth?: ClaudeAuthStatus } | { ok: false; error: string };
 
-  const executablePath = await findClaude(options.explicitPath);
-  if (!executablePath) {
-    return {
-      ...base,
-      state: 'not-installed',
-      message: options.explicitPath
-        ? `No executable found at ${options.explicitPath}.`
-        : "Claude Code isn't installed on this computer yet.",
-    };
-  }
-
-  const env = childEnv({ ANTHROPIC_API_KEY: options.apiKey });
+/** Ask one copy of Claude Code its version and who it's signed in as. Spends nothing. */
+async function probeClaude(executablePath: string, apiKey?: string): Promise<Probe> {
+  const env = childEnv({ ANTHROPIC_API_KEY: apiKey });
   let version: string | undefined;
   try {
     const { command, prefix } = launch(executablePath);
     const { stdout } = await exec(command, [...prefix, '--version'], { env, timeout: 15_000 });
     version = /\d+\.\d+\.\d+/.exec(stdout)?.[0];
   } catch (error) {
-    return {
-      ...base,
-      state: 'error',
-      executablePath,
-      message: `Claude Code is installed but didn't start: ${(error as Error).message.split('\n')[0]}`,
-    };
+    return { ok: false, error: (error as Error).message.split('\n')[0] ?? 'it didn’t start' };
   }
-
   let auth: ClaudeAuthStatus | undefined;
   try {
     const { command, prefix } = launch(executablePath);
@@ -162,27 +108,94 @@ export async function detectClaude(options: {
     // `auth status` exits non-zero when signed out on some versions; its stdout still has JSON.
     auth = parseAuthStatus((error as { stdout?: string }).stdout ?? '');
   }
+  return { ok: true, version, auth };
+}
+
+export async function detectClaude(options: {
+  explicitPath?: string;
+  apiKey?: string;
+  /** Leave a “fixed on its own” note (Conch fell back to its own copy). */
+  onHeal?: (message: string) => void;
+  /** Where the copy that comes with Conch is; overridable for tests. */
+  bundled?: () => string | undefined;
+  /** How to find an installed copy; overridable for tests (the real one looks everywhere). */
+  find?: () => Promise<string | undefined>;
+}): Promise<EngineStatus> {
+  const base = {
+    engine: 'claude-code' as const,
+    label: 'Claude Code',
+    install: installHints(),
+    docsUrl: DOCS_URL,
+    canSignIn: true,
+    checkedAt: Date.now(),
+  };
+
+  const installed = options.find ? await options.find() : await findClaude(options.explicitPath);
+  // A path you set yourself is what you get: no quiet substitutes.
+  const bundled = options.explicitPath ? undefined : (options.bundled ?? bundledClaude)();
+  if (!installed && !bundled) {
+    return {
+      ...base,
+      state: 'not-installed',
+      message: options.explicitPath
+        ? `No executable found at ${options.explicitPath}.`
+        : "Claude Code isn't installed on this computer yet.",
+      ...(!options.explicitPath && { fix: { need: 'claude-code', kind: 'install' as const } }),
+    };
+  }
+
+  let executablePath = installed ?? bundled ?? '';
+  let probe = await probeClaude(executablePath, options.apiKey);
+  let usingBundled = !installed;
+  // The copy on this computer won't start, or is too old to say who's signed in:
+  // the one that comes with Conch is current, so use it and say so quietly.
+  if (installed && bundled && (!probe.ok || !probe.auth)) {
+    const fallback = await probeClaude(bundled, options.apiKey);
+    if (fallback.ok && fallback.auth) {
+      options.onHeal?.(
+        probe.ok
+          ? 'The Claude Code on this computer is too old for Conch, so it’s using the one that comes with Conch.'
+          : 'The Claude Code on this computer wouldn’t start, so Conch is using the one that comes with it.',
+      );
+      executablePath = bundled;
+      probe = fallback;
+      usingBundled = true;
+    }
+  }
+  const origin = { executablePath, bundled: usingBundled };
+
+  if (!probe.ok) {
+    return {
+      ...base,
+      ...origin,
+      state: 'error',
+      message: `Claude Code is installed but didn't start: ${probe.error}`,
+      fix: { need: 'claude-code', kind: 'update' },
+    };
+  }
+  const { version, auth } = probe;
 
   if (!auth) {
     // Older Claude Code without `auth status`: we can't tell, so let the first turn decide.
     return {
       ...base,
+      ...origin,
       state: 'ready',
       version,
-      executablePath,
       auth: { method: 'other', description: 'Sign-in not verified' },
       message: 'Update Claude Code to let Conch check your sign-in.',
+      fix: { need: 'claude-code', kind: 'update' },
     };
   }
 
   if (!auth.loggedIn && !options.apiKey) {
-    return { ...base, state: 'signed-out', version, executablePath };
+    return { ...base, ...origin, state: 'signed-out', version };
   }
   return {
     ...base,
+    ...origin,
     state: 'ready',
     version,
-    executablePath,
     auth: describeAuth(auth, Boolean(options.apiKey)),
   };
 }

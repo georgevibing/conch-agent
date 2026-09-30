@@ -59,6 +59,13 @@ export const EngineStatus = z.object({
   docsUrl: z.string().optional(),
   /** Whether the engine supports signing in from Conch. */
   canSignIn: z.boolean().default(false),
+  /** Conch is using the copy of the program that comes with it: nothing to install. */
+  bundled: z.boolean().optional(),
+  /**
+   * Conch can install or update it itself: the need to offer (see `Readiness`),
+   * shown as one button instead of commands to copy.
+   */
+  fix: z.object({ need: z.string(), kind: z.enum(['install', 'update']) }).optional(),
   checkedAt: z.number(),
 });
 export type EngineStatus = z.infer<typeof EngineStatus>;

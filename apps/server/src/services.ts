@@ -17,6 +17,8 @@ import { MockEngine } from './engines/mock/engine';
 import type { Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
 import { Healed } from './lib/healed';
+import { KNOWN_NEEDS } from './setup/known';
+import { Setup } from './setup/needs';
 import { ProviderKeys } from './providers/keys';
 import { ProviderService } from './providers/service';
 import { SecretVault } from './secrets/vault';
@@ -53,6 +55,8 @@ export class Services {
   readonly broadcast = new Emitter<ServerEvent>();
   /** What Conch fixed on its own, for the quiet list in Settings. */
   readonly healed: Healed;
+  /** What features need from this computer, and getting it (ADR 0016). */
+  readonly setup: Setup;
   readonly settings: SettingsStore;
   /** Who may sign in (`~/.conch/access.json`). */
   readonly access: AccessStore;
@@ -84,6 +88,7 @@ export class Services {
     this.healed = new Healed(config.CONCH_HOME, (note) =>
       this.broadcast.emit({ type: 'healed', note }),
     );
+    this.setup = new Setup(KNOWN_NEEDS);
     this.settings = new SettingsStore(config.CONCH_HOME);
     this.access = new AccessStore(config.CONCH_HOME);
     this.gate = new Gatekeeper(config, this.access);
@@ -91,7 +96,15 @@ export class Services {
     this.commands = new CommandStore(join(config.CONCH_HOME, 'commands'));
     this.keys = new ProviderKeys(this.settings, new SecretVault());
     this.engines = new Map<EngineId, Engine>([
-      ['claude-code', new ClaudeCodeEngine(this.settings, this.keys, config.CONCH_CLAUDE_PATH)],
+      [
+        'claude-code',
+        new ClaudeCodeEngine(
+          this.settings,
+          this.keys,
+          config.CONCH_CLAUDE_PATH,
+          (message) => void this.healed.note('providers', message),
+        ),
+      ],
       ['codex-cli', new CodexEngine(this.settings, this.keys, config.CONCH_CODEX_PATH)],
       [
         'openrouter',
@@ -130,6 +143,7 @@ export class Services {
       engines: () => this.providers.ready(),
       cwd: () => this.settings.workspace(),
       blueprints: this.mockVendor && mockBlueprints(this.mockVendor),
+      setup: this.setup,
     });
     // Other agents' skill folders are read unless turned off; test runs (the mock engine) don't look.
     const skillSources =
