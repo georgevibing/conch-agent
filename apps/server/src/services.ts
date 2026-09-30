@@ -102,6 +102,8 @@ export class Services {
     this.setup = new Setup(KNOWN_NEEDS);
     this.network = new NetworkWatch({
       emit: (network) => this.broadcast.emit({ type: 'network.status', network }),
+      // The scripted engine needs no internet: online unless a test pretends otherwise.
+      ...(config.CONCH_ENGINE === 'mock' && { probe: async () => true }),
     });
     this.doctor = new Doctor({
       emit: (report) => this.broadcast.emit({ type: 'doctor.report', report }),
