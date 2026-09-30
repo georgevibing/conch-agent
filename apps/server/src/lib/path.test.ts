@@ -1,5 +1,3 @@
-import { delimiter } from 'node:path';
-
 import { describe, expect, it } from 'vitest';
 
 import { expandVars, missingDirs, parseRegValues, refreshPath } from './path';
@@ -26,7 +24,8 @@ describe('the PATH as it is now', () => {
   });
 
   it('adds only folders it doesn’t have, however they’re spelled', () => {
-    const current = ['C:\\Windows', 'C:\\Tools\\'].join(delimiter);
+    // Windows' separator on every machine, so the test means the same on Linux CI.
+    const current = ['C:\\Windows', 'C:\\Tools\\'].join(';');
     expect(
       missingDirs(current, ['c:\\windows', 'C:\\Tools', 'C:\\New', 'C:\\New\\', '%UNSET%']),
     ).toEqual(['C:\\New']);

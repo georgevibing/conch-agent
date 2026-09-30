@@ -40,10 +40,14 @@ export function expandVars(text: string, vars: Record<string, string | undefined
   return text.replace(/%([^%]+)%/g, (whole, name: string) => lookup(name) ?? whole);
 }
 
-/** Folders in `extra` that `current` doesn't have yet (Windows compares without case or trailing slashes). */
-export function missingDirs(current: string, extra: string[]): string[] {
+/**
+ * Folders in `extra` that `current` doesn't have yet (Windows compares without
+ * case or trailing slashes). `separator` is Windows' `;` whatever this machine
+ * uses: `C:\Tools` would fall apart on a `:`.
+ */
+export function missingDirs(current: string, extra: string[], separator = ';'): string[] {
   const key = (dir: string) => dir.replace(/[\\/]+$/, '').toLowerCase();
-  const have = new Set(current.split(delimiter).filter(Boolean).map(key));
+  const have = new Set(current.split(separator).filter(Boolean).map(key));
   const out: string[] = [];
   for (const dir of extra) {
     const k = key(dir);
