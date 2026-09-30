@@ -45,7 +45,7 @@ export function SignIn({ status, notice }: { status: AuthStatus; notice?: string
       const next = await api.signIn(
         usesKey ? { with: 'key', key: value } : { with: 'password', username, password: value },
       );
-      applySignedIn(client, next);
+      await applySignedIn(client, next);
     } catch (e) {
       const err = e as ApiError;
       if (err.code === 'rate-limited') {

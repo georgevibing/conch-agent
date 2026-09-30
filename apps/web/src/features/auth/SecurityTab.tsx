@@ -361,7 +361,7 @@ function TurnOff({ guard }: { guard: Guard }) {
               onClick={() =>
                 void guard(async () => {
                   await api.disableSignIn();
-                  applySignedIn(client, await api.auth());
+                  await applySignedIn(client, await api.auth());
                   toast('Sign-in is off');
                 }).catch(fail)
               }
