@@ -1,7 +1,14 @@
 import type { ConversationEvent, ConversationEventInput } from '@conch/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { emptyView, lastUserText, pendingPermission, reduce, reduceAll } from './reducer';
+import {
+  emptyView,
+  heldMessage,
+  lastUserText,
+  pendingPermission,
+  reduce,
+  reduceAll,
+} from './reducer';
 
 function log(...inputs: ConversationEventInput[]): ConversationEvent[] {
   return inputs.map(
@@ -132,5 +139,79 @@ describe('transcript reducer', () => {
       e(3, { type: 'assistant.delta', messageId: 'm', kind: 'text', delta: 'Hello' }),
     );
     expect(view.notice).toBeUndefined();
+  });
+});
+
+describe('offline and at a limit (ADR 0018)', () => {
+  it('a message waiting for the internet is one card, counting what waits, until it goes', () => {
+    const waiting = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'first' },
+        { type: 'turn.held', reason: 'offline' },
+        { type: 'user.message', messageId: 'u2', text: 'second' },
+        { type: 'turn.held', reason: 'offline' },
+      ),
+    );
+    expect(waiting.items.map((i) => i.kind)).toEqual(['user', 'user', 'held']);
+    expect(heldMessage(waiting)).toMatchObject({ kind: 'held', count: 2 });
+
+    // Back online, it goes by itself: the card becomes a quiet "sent" line.
+    const sent = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'first' },
+        { type: 'turn.held', reason: 'offline' },
+        { type: 'status', status: 'running' },
+        { type: 'assistant.delta', messageId: 'm1', kind: 'text', delta: 'Hi' },
+      ),
+    );
+    expect(sent.items[1]).toMatchObject({ kind: 'held', sent: true });
+    expect(heldMessage(sent)).toBeUndefined();
+  });
+
+  it('a provider that couldn’t be reached, then waiting: the card says it, not an error', () => {
+    const view = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'hi' },
+        { type: 'turn.completed', outcome: 'error', error: 'fetch failed', problem: 'unavailable' },
+        { type: 'status', status: 'error' },
+        { type: 'turn.held', reason: 'offline' },
+      ),
+    );
+    expect(view.items.map((i) => i.kind)).toEqual(['user', 'held']);
+  });
+
+  it('another provider answering replaces the failure (or the wait) with one quiet line', () => {
+    const view = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'go on' },
+        { type: 'turn.completed', outcome: 'error', error: 'limit', problem: 'limit' },
+        { type: 'status', status: 'error' },
+        {
+          type: 'turn.routed',
+          from: 'claude-code',
+          to: 'openrouter',
+          reason: 'limit',
+          message: 'Claude Code reached its limit for now, so OpenRouter answered.',
+        },
+        { type: 'status', status: 'running' },
+      ),
+    );
+    expect(view.items.map((i) => i.kind)).toEqual(['user', 'routed']);
+    expect(view.items[1]).toMatchObject({ reason: 'limit', to: 'openrouter' });
+
+    const released = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'hi' },
+        { type: 'turn.held', reason: 'offline' },
+        {
+          type: 'turn.routed',
+          from: 'claude-code',
+          to: 'mock',
+          reason: 'offline',
+          message: 'You were offline, so Ollama on this computer answered.',
+        },
+      ),
+    );
+    expect(released.items.map((i) => i.kind)).toEqual(['user', 'routed']);
   });
 });

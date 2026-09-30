@@ -340,7 +340,9 @@ export class Services {
     if (!engine.local) {
       // A provider that stopped answering is the moment to look again.
       const online =
-        context.failed === 'unavailable' ? (await this.network.check()).online : this.network.online;
+        context.failed === 'unavailable'
+          ? (await this.network.check()).online
+          : this.network.online;
       if (!online) {
         const local = preferences.offlineFallback ? await this.localReady() : undefined;
         return local
@@ -358,7 +360,9 @@ export class Services {
     const fallback = preferences.limitFallback;
     if (fallback && fallback !== engine.id) {
       const usage =
-        engine.id === this.engine().id ? await this.usage.snapshot().catch(() => undefined) : undefined;
+        engine.id === this.engine().id
+          ? await this.usage.snapshot().catch(() => undefined)
+          : undefined;
       if (context.failed === 'limit' || usage?.blocked) {
         const other = this.providers.engineFor(fallback);
         if ((await other.detect().catch(() => undefined))?.state === 'ready') {

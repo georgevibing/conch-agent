@@ -1,0 +1,191 @@
+@layer nacre.components {
+  /* ── Notice (above the composer) ─────────────────────────────────── */
+  .notice {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-block-size: var(--nc-control-sm);
+    padding: var(--nc-space-1) var(--nc-space-1) var(--nc-space-1) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-wash-1);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    animation: nc-surface-in var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .noticeIcon {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    color: var(--nc-text-subtle);
+  }
+
+  .noticeIcon svg {
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
+  }
+
+  .noticeText {
+    flex: 1;
+    min-inline-size: 0;
+    padding-block: var(--nc-space-1);
+    line-height: var(--nc-leading-snug);
+  }
+
+  .noticeTitle {
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .noticeAction {
+    flex-shrink: 0;
+  }
+
+  /* ── Waiting (in the conversation) ───────────────────────────────── */
+  .waiting {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-3) var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge);
+    animation: nc-surface-in var(--nc-duration-slow) var(--nc-ease-out) both;
+  }
+
+  .waitingIcon {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 2rem;
+    block-size: 2rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-wash-2);
+    color: var(--nc-text-muted);
+  }
+
+  .waitingIcon svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  /* It's waiting, not stuck: a slow breath says "still here". */
+  @media (prefers-reduced-motion: no-preference) {
+    .waitingIcon svg {
+      animation: nc-breathe 3.2s var(--nc-ease-in-out) infinite;
+    }
+
+    :global([data-nacre-motion='reduced']) .waitingIcon svg {
+      animation: none;
+    }
+  }
+
+  .waitingWords {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-inline-size: 12rem;
+  }
+
+  .waitingTitle {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .waitingBody {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+  }
+
+  .waitingAction {
+    flex-shrink: 0;
+  }
+
+  .sent {
+    display: inline-flex;
+    align-items: center;
+    align-self: center;
+    gap: var(--nc-space-1-5);
+    font-size: var(--nc-text-xs);
+    letter-spacing: 0.02em;
+    color: var(--nc-text-subtle);
+    animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) both;
+  }
+
+  .sent svg {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+  }
+
+  /* ── Routed (another provider answered) ─────────────────────────── */
+  .routed {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    align-self: flex-start;
+    gap: var(--nc-space-1) var(--nc-space-2);
+    max-inline-size: 100%;
+    padding: var(--nc-space-1) var(--nc-space-2-5) var(--nc-space-1) var(--nc-space-1);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-wash-1);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+    animation: nc-surface-in var(--nc-duration-base) var(--nc-ease-out) both;
+  }
+
+  .routedIcon {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text-muted);
+  }
+
+  .routedIcon svg {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  .routedLink {
+    appearance: none;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--nc-text);
+    font: inherit;
+    font-weight: var(--nc-weight-medium);
+    text-decoration: underline;
+    text-decoration-color: var(--nc-border);
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+
+  @media (hover: hover) {
+    .routedLink:hover {
+      text-decoration-color: currentColor;
+    }
+  }
+
+  .routedLink:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+    border-radius: var(--nc-radius-xs);
+  }
+}

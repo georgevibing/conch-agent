@@ -1,4 +1,10 @@
-import type { Attachment, ConversationSummary, HealLog, TurnOptions } from '@conch/protocol';
+import type {
+  AppState,
+  Attachment,
+  ConversationSummary,
+  HealLog,
+  TurnOptions,
+} from '@conch/protocol';
 import { toast } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
@@ -129,6 +135,12 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           break;
         case 'skills.changed':
           void client.invalidateQueries({ queryKey: skillKeys.all });
+          break;
+        case 'network.status':
+          // Offline and back: the composer and waiting messages say what happens.
+          client.setQueryData<AppState>(keys.state, (state) =>
+            state ? { ...state, network: event.network } : state,
+          );
           break;
         case 'doctor.report':
           client.setQueryData(healthKeys.doctor, event.report);

@@ -154,9 +154,11 @@ export function appState(patch: Partial<AppState> = {}): AppState {
       effort: 'auto',
       fastMode: false,
       permissionMode: 'default',
+      offlineFallback: true,
     },
     engine: baseEngine,
     workspace: '/home/ada/.conch/workspace',
+    network: { online: true },
     ...patch,
   };
 }

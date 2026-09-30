@@ -168,6 +168,13 @@
     margin-inline-start: 2.75rem;
   }
 
+  /* Where the reply would be: waiting for the internet, or who answered instead. */
+  .aside {
+    display: flex;
+    flex-direction: column;
+    margin-inline-start: 2.75rem;
+  }
+
   .memory {
     display: inline-flex;
     align-items: center;
@@ -228,6 +235,7 @@
     .permission,
     .resolved,
     .memory,
+    .aside,
     .skillUsed {
       margin-inline-start: 0;
     }

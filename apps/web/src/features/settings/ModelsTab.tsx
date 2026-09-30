@@ -16,6 +16,7 @@ import { useAppState, useModels, useUpdateSettings } from '../../api/queries';
 import { availableModes, effortOptions, pickerProviders } from '../models/catalog';
 import { findModel, modelKey, parseModelKey } from '../models/useTurnOptions';
 import { fuzzyMatch } from '../search/fuzzy';
+import { FallbackSection } from './FallbackSection';
 import { Section } from './Section';
 import styles from './Settings.module.css';
 
@@ -136,6 +137,8 @@ export function ModelsTab() {
           </Stack>
         )}
       </Section>
+
+      <FallbackSection />
 
       <Section
         title={`How much ${assistant} can do on its own`}

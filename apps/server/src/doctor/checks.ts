@@ -267,7 +267,10 @@ export function networkCheck(services: Services): DoctorCheck {
     title: 'Internet',
     async run() {
       const { online } = await services.network.check();
-      if (online) return [{ id: 'network', group: COMPUTER, title: 'Internet', state: 'ok', message: 'Online.' }];
+      if (online)
+        return [
+          { id: 'network', group: COMPUTER, title: 'Internet', state: 'ok', message: 'Online.' },
+        ];
       const local = await services.localReady();
       return [
         {

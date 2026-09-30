@@ -19,6 +19,7 @@ import {
 } from './TranscriptItems';
 import { BrowserApprovalItem, BrowserTrailItem, HandoffItem } from '../browser/ChatCards';
 import { IntegrationIssue } from '../integrations/ChatBits';
+import { HeldItem, RoutedItem } from './OfflineBits';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
 import { RoutineInstruction } from '../routines/RunBanner';
 import styles from './Transcript.module.css';
@@ -149,6 +150,7 @@ export function Transcript({
       last?.kind === 'skill' ||
       last?.kind === 'routine' ||
       last?.kind === 'integration-issue' ||
+      last?.kind === 'routed' ||
       (last?.kind === 'browser' && last.step.status !== 'running') ||
       (last?.kind === 'handoff' && last.handoff.state !== 'waiting') ||
       (last?.kind === 'permission' && Boolean(last.decision)) ||
@@ -213,6 +215,10 @@ export function Transcript({
               />
             )}
             {block.item?.kind === 'integration-issue' && <IntegrationIssue item={block.item} />}
+            {block.item?.kind === 'held' && (
+              <HeldItem item={block.item} conversationId={conversationId} />
+            )}
+            {block.item?.kind === 'routed' && <RoutedItem item={block.item} />}
             {block.item?.kind === 'turn-end' && (
               <TurnEnd
                 item={block.item}

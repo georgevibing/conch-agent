@@ -47,6 +47,7 @@ import { attachmentUrl } from './uploads';
 
 const attachmentSrc = (attachment: Attachment) => attachmentUrl(attachment.id);
 import { AttachmentViewer, type Viewable } from './AttachmentViewer';
+import { ComposerOffline } from './OfflineBits';
 import { Transcript } from './Transcript';
 import type { TurnRecovery } from './TranscriptItems';
 import { type Draft, useDraftAttachments } from './useDraftAttachments';
@@ -391,6 +392,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
       {/* Another connected provider can answer while the default one is away. */}
       <EngineIssue status={chosenReady ? undefined : engine} issue={engineIssue} />
       <UsageComposerNotice />
+      <ComposerOffline />
       {view.notice && running && (
         // Only a retry is "still trying"; anything else is just a note.
         <Callout

@@ -292,6 +292,12 @@ describe('Palette search', () => {
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'backup');
     expect(await screen.findByRole('option', { name: /Settings: Health/ })).toBeInTheDocument();
+    // Offline, or at a limit: "offline" finds where to choose what happens.
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'offline');
+    expect(
+      await screen.findByRole('option', { name: /When a provider can’t answer/ }),
+    ).toBeInTheDocument();
 
     // Keywords count by whole-word prefix, not scattered letters.
     await user.clear(screen.getByRole('combobox'));

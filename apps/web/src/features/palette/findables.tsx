@@ -18,6 +18,7 @@ import {
   SquareSlash,
   User,
   WandSparkles,
+  WifiOff,
   Wrench,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -25,6 +26,7 @@ import { useNavigate } from 'react-router';
 
 import { useUi, type SettingsTab } from '../../app/ui';
 import { doctorApi } from '../health/api';
+import { FALLBACK_FOCUS } from '../settings/FallbackSection';
 import { useIntegrations } from '../integrations/queries';
 import { modelLabel, providerLogos } from '../models/catalog';
 import { modelKey, useTurnOptions } from '../models/useTurnOptions';
@@ -50,7 +52,14 @@ export interface FindableGroup {
   items: Findable[];
 }
 
-const settingsPlaces: { tab: SettingsTab; label: string; keywords: string; icon: ReactNode }[] = [
+const settingsPlaces: {
+  tab: SettingsTab;
+  /** A place inside the tab (see `openSettings`). */
+  focus?: string;
+  label: string;
+  keywords: string;
+  icon: ReactNode;
+}[] = [
   { tab: 'personality', label: 'Personality', keywords: 'name tone persona', icon: <Sparkles /> },
   { tab: 'about', label: 'About you', keywords: 'profile me', icon: <User /> },
   { tab: 'memory', label: 'Memory', keywords: 'remember forget', icon: <Brain /> },
@@ -59,6 +68,14 @@ const settingsPlaces: { tab: SettingsTab; label: string; keywords: string; icon:
     label: 'Models & modes',
     keywords: 'default model thinking effort permissions',
     icon: <Gauge />,
+  },
+  {
+    tab: 'models',
+    focus: FALLBACK_FOCUS,
+    label: 'When a provider can’t answer',
+    keywords:
+      'offline internet wifi limit reached fallback continue switch local model ollama wait',
+    icon: <WifiOff />,
   },
   { tab: 'commands', label: 'Commands', keywords: 'slash prompts', icon: <SquareSlash /> },
   { tab: 'usage', label: 'Usage', keywords: 'limits spend budget plan', icon: <BatteryMedium /> },
@@ -345,11 +362,11 @@ export function useFindables(query: string, conversationId: string | undefined):
       },
     },
     ...settingsPlaces.map((p) => ({
-      id: `settings-${p.tab}`,
+      id: `settings-${p.tab}${p.focus ? `-${p.focus}` : ''}`,
       label: `Settings: ${p.label}`,
       keywords: p.keywords,
       icon: p.icon,
-      run: () => openSettings(p.tab),
+      run: () => openSettings(p.tab, p.focus),
     })),
   ];
   const placeItems = find(

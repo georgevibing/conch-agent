@@ -152,6 +152,12 @@ export const api = {
   renameConversation: (id: string, title: string) =>
     request(Ok, `/api/conversations/${id}`, { method: 'PATCH', body: { title } }),
   deleteConversation: (id: string) => request(Ok, `/api/conversations/${id}`, { method: 'DELETE' }),
+  /** A message waiting for the internet goes now — with `engine` (the model on this computer), if given. */
+  releaseTurn: (id: string, engine?: EngineId) =>
+    request(Ok, `/api/conversations/${id}/release`, {
+      method: 'POST',
+      body: engine ? { engine } : {},
+    }),
 
   search: (q: string, options: { in?: string; limit?: number; signal?: AbortSignal } = {}) => {
     const params = new URLSearchParams({ q });

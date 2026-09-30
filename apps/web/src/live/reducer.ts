@@ -94,6 +94,24 @@ export type TranscriptItem =
       by: 'user' | 'assistant';
     }
   | {
+      /** Waiting for the internet (ADR 0018); `sent` once it went by itself. */
+      kind: 'held';
+      id: string;
+      at: number;
+      /** How many messages wait together (they go as one). */
+      count: number;
+      sent?: boolean;
+    }
+  | {
+      /** Another provider answered for this chat's own: offline, or at a usage limit. */
+      kind: 'routed';
+      id: string;
+      from: EngineId;
+      to: EngineId;
+      reason: 'offline' | 'limit';
+      message: string;
+    }
+  | {
       kind: 'turn-end';
       id: string;
       outcome: 'success' | 'interrupted' | 'error';
@@ -301,7 +319,53 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         ],
       };
     case 'status':
-      return { ...base, status: event.status };
+      // A waiting message that starts running went by itself: say so, quietly.
+      return {
+        ...base,
+        status: event.status,
+        items: event.status === 'running' ? sendHeld(items) : items,
+      };
+    case 'turn.held': {
+      // One card, at the end, counting what waits: a failure that led here
+      // (the provider couldn't be reached) is said by the card instead.
+      const waiting = items.findLast((i) => i.kind === 'held' && !i.sent);
+      const kept = items.filter(
+        (i, n) =>
+          i !== waiting &&
+          !(n === items.length - 1 && i.kind === 'turn-end' && i.outcome === 'error' && i.problem),
+      );
+      const since = kept.findLastIndex((i) => i.kind === 'turn-end' || i.kind === 'assistant');
+      const count = kept.slice(since + 1).filter((i) => i.kind === 'user').length;
+      return {
+        ...base,
+        items: [
+          ...kept,
+          { kind: 'held', id: `held-${event.seq}`, at: event.at, count: Math.max(1, count) },
+        ],
+      };
+    }
+    case 'turn.routed': {
+      // The routed line says what happened: no waiting card, no failure card before it.
+      const kept = items.filter(
+        (i, n) =>
+          !(i.kind === 'held' && !i.sent) &&
+          !(n === items.length - 1 && i.kind === 'turn-end' && i.outcome === 'error' && i.problem),
+      );
+      return {
+        ...base,
+        items: [
+          ...kept,
+          {
+            kind: 'routed',
+            id: `routed-${event.seq}`,
+            from: event.from,
+            to: event.to,
+            reason: event.reason,
+            message: event.message,
+          },
+        ],
+      };
+    }
     case 'turn.completed': {
       // Any assistant message still open is finished now.
       const closed = items.map((i) =>
@@ -409,6 +473,21 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         ],
       };
   }
+}
+
+/** The waiting card becomes "sent when you were back online". */
+function sendHeld(items: TranscriptItem[]): TranscriptItem[] {
+  const index = items.findLastIndex((i) => i.kind === 'held' && !i.sent);
+  if (index === -1) return items;
+  const next = items.slice();
+  next[index] = { ...(items[index] as Extract<TranscriptItem, { kind: 'held' }>), sent: true };
+  return next;
+}
+
+/** A message waiting for the internet, if the chat has one. */
+export function heldMessage(view: ConversationView) {
+  const last = view.items.findLast((i) => i.kind === 'held');
+  return last?.kind === 'held' && !last.sent ? last : undefined;
 }
 
 export function reduceAll(events: ConversationEvent[], view = emptyView): ConversationView {
