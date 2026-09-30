@@ -230,9 +230,13 @@ describe('ChannelService — Telegram', () => {
       async () => (await s.conversations.list()).find((c) => c.origin?.kind === 'channel'),
       'conversation',
     );
-    const events = await s.conversations.eventsAfter(conversation.id);
-    const message = events.find((e) => e.type === 'user.message');
-    expect(message?.type === 'user.message' && message.attachments?.[0]).toMatchObject({
+    // The chat is listed a moment before its first message is logged.
+    const message = await until(
+      async () =>
+        (await s.conversations.eventsAfter(conversation.id)).find((e) => e.type === 'user.message'),
+      'the message',
+    );
+    expect(message.type === 'user.message' && message.attachments?.[0]).toMatchObject({
       kind: 'image',
     });
   });
@@ -263,7 +267,8 @@ describe('ChannelService — while it works', () => {
   }, 30_000);
 
   it('stops the turn when Stop is pressed under the draft', async () => {
-    const { s, telegram } = await paired('0.5');
+    // A slow turn, so Stop lands while it's still going however busy the machine is.
+    const { s, telegram } = await paired('3');
     telegram.say('Tell me something long');
     const draft = await until(() => telegram.drafts.find((d) => d.can_stop), 'draft');
     telegram.stopDraft(draft.draft_id);
