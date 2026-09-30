@@ -50,9 +50,13 @@ export function ChannelTile({
     >
       <IntegrationLogo brand={brand} name={name} color={color} size="lg" decorative />
       <h3 id={titleId} className={styles.title}>
-        <button type="button" className={styles.open} onClick={onConnect}>
+        <button
+          type="button"
+          className={styles.open}
+          onClick={onConnect}
+          aria-label={'Connect ' + name}
+        >
           {name}
-          <span className="nc-visually-hidden">: connect</span>
         </button>
       </h3>
       <p className={styles.tagline}>{tagline}</p>

@@ -41,7 +41,7 @@ describe('ChannelTile', () => {
         onConnect={onConnect}
       />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Telegram: connect' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Connect Telegram' }));
     expect(onConnect).toHaveBeenCalledOnce();
     expect(screen.getByText('About 2 minutes')).toBeInTheDocument();
     await expectAccessible(container);

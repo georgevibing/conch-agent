@@ -4,6 +4,9 @@ import { useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 
 import { useConversations } from '../api/queries';
+import { ChannelDetailView } from '../features/channels/ChannelDetailView';
+import { ChannelsView } from '../features/channels/ChannelsView';
+import { ConnectChannel } from '../features/channels/ConnectChannel';
 import { ChatView } from '../features/chat/ChatView';
 import { EnginePill } from '../features/engine/EnginePill';
 import { IntegrationDetailView } from '../features/integrations/IntegrationDetailView';
@@ -40,12 +43,13 @@ function Reconnecting() {
 }
 
 export function Shell() {
-  const { conversationId, routineId, integrationId, skillId } = useParams();
+  const { conversationId, routineId, integrationId, skillId, channelId, channelKind } = useParams();
   const navigate = useNavigate();
   const path = useLocation().pathname;
   const routinesArea = path.startsWith('/routines');
   const integrationsArea = path.startsWith('/integrations');
   const skillsArea = path.startsWith('/skills');
+  const channelsArea = path.startsWith('/channels');
 
   // Toasts and notifications raised outside the router ask us to navigate.
   useEffect(() => {
@@ -69,7 +73,9 @@ export function Shell() {
       ? 'Integrations'
       : skillsArea
         ? 'Skills'
-        : (current?.title ?? (conversationId ? '' : 'New chat'));
+        : channelsArea
+          ? 'Channels'
+          : (current?.title ?? (conversationId ? '' : 'New chat'));
 
   useEffect(() => {
     document.title = current ? `${current.title} · Conch` : 'Conch';
@@ -123,7 +129,13 @@ export function Shell() {
           )}
           <Text as="div" weight="medium" className={styles.title}>
             <LiveTitle
-              pending={!routinesArea && !integrationsArea && !skillsArea && current?.titling}
+              pending={
+                !routinesArea &&
+                !integrationsArea &&
+                !skillsArea &&
+                !channelsArea &&
+                current?.titling
+              }
             >
               {title}
             </LiveTitle>
@@ -145,7 +157,15 @@ export function Shell() {
         <Reconnecting />
         {/* The page; it steps aside while the terminal fills the screen. */}
         <div className={styles.area} data-covered={terminalMax || undefined}>
-          {skillsArea ? (
+          {channelsArea ? (
+            channelKind ? (
+              <ConnectChannel key={channelKind} kind={channelKind} />
+            ) : channelId ? (
+              <ChannelDetailView key={channelId} channelId={channelId} />
+            ) : (
+              <ChannelsView />
+            )
+          ) : skillsArea ? (
             path === '/skills/new' ? (
               <NewSkill />
             ) : skillId ? (

@@ -151,7 +151,7 @@
 
   .button[data-tone='primary'] {
     color: var(--nc-text-inverse);
-    background: color-mix(in oklch, var(--hs-brand) 88%, var(--nc-gray-12));
+    background: color-mix(in oklab, var(--hs-brand) 88%, var(--nc-gray-12));
     box-shadow: none;
   }
 
@@ -226,7 +226,7 @@
     font-weight: var(--nc-weight-semibold);
     letter-spacing: 0.02em;
     color: var(--hs-brand);
-    background: color-mix(in oklch, var(--hs-brand) 12%, var(--nc-surface));
+    background: color-mix(in oklab, var(--hs-brand) 12%, var(--nc-surface));
   }
 
   /* A slow ring asks to be pressed; it's the one moving thing on the phone. */
@@ -235,7 +235,7 @@
     position: absolute;
     inset: -3px;
     border-radius: inherit;
-    box-shadow: 0 0 0 2px color-mix(in oklch, var(--hs-brand) 55%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--hs-brand) 55%, transparent);
     animation: hs-call 2.2s var(--nc-ease-out) infinite;
   }
 

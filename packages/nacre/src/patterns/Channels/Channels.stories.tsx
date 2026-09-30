@@ -333,9 +333,13 @@ export const StepsAtEachStage: Story = {
 function Key() {
   const [value, setValue] = useState('');
   const [status, setStatus] = useState<KeyFieldStatus>('idle');
+  // The check starts when the value changes, like the app's does.
+  const change = (next: string) => {
+    setValue(next);
+    setStatus(next ? 'checking' : 'idle');
+  };
   useEffect(() => {
-    if (!value) return setStatus('idle');
-    setStatus('checking');
+    if (!value) return;
     const t = setTimeout(() => setStatus(/\d+:[\w-]{30,}/.test(value) ? 'ok' : 'error'), 900);
     return () => clearTimeout(t);
   }, [value]);
@@ -343,7 +347,7 @@ function Key() {
     <KeyField
       label="Bot key"
       value={value}
-      onValueChange={setValue}
+      onValueChange={change}
       status={status}
       placeholder="123456789:ABC…"
       checkingLabel="Checking with Telegram…"

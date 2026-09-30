@@ -24,7 +24,8 @@ export interface KeyFieldProps {
   found?: ReactNode;
   /** When wrong: what's wrong and what to do. */
   error?: string;
-  autoFocus?: boolean;
+  /** Take focus when shown: the step opened because you finished the one before, and this is its only field. */
+  focusOnShow?: boolean;
   className?: string;
 }
 
@@ -44,7 +45,7 @@ export function KeyField({
   checkingLabel = 'Checking…',
   found,
   error,
-  autoFocus,
+  focusOnShow,
   className,
 }: KeyFieldProps) {
   const input = useRef<HTMLInputElement>(null);
@@ -79,7 +80,7 @@ export function KeyField({
           placeholder={placeholder}
           autoComplete="off"
           // eslint-disable-next-line jsx-a11y/no-autofocus -- the one thing to do on this step
-          autoFocus={autoFocus}
+          autoFocus={focusOnShow}
           data-status={status}
           className={styles.input}
         />

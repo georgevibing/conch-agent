@@ -6,6 +6,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode }
 import { keys, setEngineStatus } from '../api/queries';
 import { browserKeys } from '../features/browser/queries';
 import { terminalKeys } from '../features/terminal/queries';
+import { applyChannelEvent } from '../features/channels/queries';
 import { applyIntegrationEvent } from '../features/integrations/queries';
 import { applyRoutineEvent } from '../features/routines/queries';
 import { skillKeys } from '../features/skills/queries';
@@ -69,16 +70,23 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         case 'conversation.event':
           live.apply(event.event);
           break;
-        case 'conversation.created':
-          live.markCreated(event.clientMessageId, event.conversation.id);
-          watching.current.set(
-            event.conversation.id,
-            (watching.current.get(event.conversation.id) ?? 0) + 1,
+        case 'conversation.created': {
+          // Only the tab that sent the first message is subscribed by the gateway. A chat
+          // started elsewhere (another tab, Telegram) is subscribed when someone opens it.
+          const ours = (live.pending[NEW] ?? []).some(
+            (p) => p.clientMessageId === event.clientMessageId,
           );
+          live.markCreated(event.clientMessageId, event.conversation.id);
+          if (ours)
+            watching.current.set(
+              event.conversation.id,
+              (watching.current.get(event.conversation.id) ?? 0) + 1,
+            );
           client.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>
             upsertSummary(list, event.conversation),
           );
           break;
+        }
         case 'conversation.updated':
           client.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>
             upsertSummary(list, event.conversation),
@@ -133,6 +141,12 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           // Quiet on purpose: it only updates the list in Settings, never a toast.
           client.setQueryData<HealLog>(keys.healed, (log) =>
             log ? { notes: [event.note, ...log.notes.filter((n) => n.id !== event.note.id)] } : log,
+          );
+          break;
+        case 'channel.changed':
+        case 'channel.deleted':
+          applyChannelEvent(client, event, (to) =>
+            window.dispatchEvent(new CustomEvent('conch:navigate', { detail: to })),
           );
           break;
         case 'integration.changed':

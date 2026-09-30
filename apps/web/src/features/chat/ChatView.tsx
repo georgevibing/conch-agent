@@ -33,6 +33,7 @@ import { useLive } from '../../live/LiveProvider';
 import { emptyView, lastUserMessage, type ConversationView } from '../../live/reducer';
 import { NEW, useLiveStore } from '../../live/store';
 import { useSlashCommands } from '../commands/useSlashCommands';
+import { ChannelBanner } from '../channels/ChannelBanner';
 import { RunBanner } from '../routines/RunBanner';
 import { ComposerControls } from '../models/ComposerControls';
 import { modeInfo } from '../models/catalog';
@@ -514,6 +515,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
     <div className={styles.chat} {...drop.props}>
       {dropOverlay}
       <RunBanner conversationId={conversationId} />
+      <ChannelBanner conversationId={conversationId} />
       <Transcript
         view={view}
         conversationId={conversationId}
