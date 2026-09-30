@@ -31,6 +31,7 @@ working agreement 11: _fix it before you ask_.
 | Lint / TS config shared across packages                         | `packages/eslint-config/`, `packages/tsconfig/`                                                                                                                                                   |
 | Integrations (apps/MCP servers, OAuth, the catalog)             | `apps/server/src/integrations/` + [ADR 0009](./docs/adr/0009-integrations.md) — security-relevant                                                                                                 |
 | Providers (which engine runs, connecting them, keys)            | `apps/server/src/providers/`, `apps/server/src/secrets/` + [ADR 0010](./docs/adr/0010-providers.md), [ADR 0012](./docs/adr/0012-every-provider-at-once.md) — security-relevant                    |
+| A model on this computer (Ollama, pulls, offline)               | `apps/server/src/local/`, `engines/api/ollama.ts`, `apps/web/src/features/local/` + [ADR 0022](./docs/adr/0022-a-model-on-this-computer.md) — security-relevant                                   |
 | Skills (SKILL.md, other agents' folders, `use_skill`)           | `apps/server/src/skills/` + [ADR 0013](./docs/adr/0013-skills.md) — security-relevant                                                                                                             |
 | The browser (live view, takeover, per-site permissions)         | `apps/server/src/browser/`, `apps/web/src/features/browser/`, `packages/nacre/src/patterns/Browser/` + [ADR 0014](./docs/adr/0014-browser.md) — security-relevant                                 |
 | The terminal (shells on the host, the drawer, who may open one) | `apps/server/src/terminal/`, `apps/web/src/features/terminal/`, `packages/nacre/src/patterns/Terminal/` + [ADR 0015](./docs/adr/0015-terminal.md) — security-relevant                             |
@@ -256,6 +257,7 @@ threat model. Hold every change to the bar of a FAANG security review:
 - [ ] Security-relevant? Threat-modelled, abuse cases tested, checkup updated, sources cited
 - [ ] Fails well (working agreement 11)? Foreseeable failures heal themselves or end in one plain next step, and the healing paths are tested
 - [ ] Needs something outside Conch? It's declared as a need that Conch finds, installs or links to, and notices when it arrives. It's never a “Couldn't find X” message.
+- [ ] A provider whose model runs on this computer sets `Engine.local`: offline mode and Repair everything pick it up (ADR 0022).
 
 <!-- BEGIN:turborepo-agent-rules -->
 
