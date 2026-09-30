@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import {
+  AdoptIntegrationBody,
   ApiKeyBody,
   AppState,
   ClientCommand,
@@ -414,6 +415,11 @@ export async function buildApp(services: Services) {
     if (!body) return;
     if ('custom' in body && body.custom.type === 'stdio' && verifyRequired(request, reply)) return;
     return guarded(reply, () => services.integrations.create(body, signInFor(request)));
+  });
+  app.post('/api/integrations/adopt', async (request, reply) => {
+    const body = parse(AdoptIntegrationBody, request.body, reply);
+    if (!body) return;
+    return guarded(reply, () => services.integrations.adopt(body, signInFor(request)));
   });
   app.get<{ Params: { id: string } }>('/api/integrations/:id', (request, reply) =>
     guarded(reply, () => services.integrations.get(request.params.id)),

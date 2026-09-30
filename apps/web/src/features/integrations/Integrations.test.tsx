@@ -88,6 +88,7 @@ const external: ExternalList = {
       source: 'engine',
       state: 'ok',
       toolCount: 11,
+      adoptable: false,
     },
   ],
   checkedAt: 1,
@@ -373,6 +374,50 @@ describe('Integrations page', () => {
         await screen.findByRole('heading', { name: '1Password is connected' }),
       ).toBeInTheDocument();
     });
+  });
+
+  it('brings a provider’s own web server into Conch, for every model', async () => {
+    const withWiki: ExternalList = {
+      ...external,
+      servers: [
+        ...external.servers,
+        {
+          name: 'Team wiki',
+          provider: 'claude-code',
+          providerName: 'Claude Code',
+          source: 'engine',
+          state: 'ok',
+          toolCount: 3,
+          adoptable: true,
+        },
+      ],
+    };
+    const calls = mockFetch({
+      'GET /api/integrations': () => ({ catalog, providers: [provider], integrations: [] }),
+      'GET /api/integrations/external': () => withWiki,
+      'POST /api/integrations/adopt': () => ({
+        integration: integration({
+          id: 'int_wiki',
+          catalogId: undefined,
+          name: 'Team wiki',
+          server: 'team-wiki',
+          auth: 'none',
+        }),
+      }),
+    });
+    vi.stubGlobal(
+      'open',
+      vi.fn(() => null),
+    );
+    renderApp(<IntegrationsView />, { route: '/integrations' });
+    await userEvent.click(await screen.findByRole('button', { name: /Claude Code/ }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Use with every model' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.path.startsWith('/api/integrations/adopt'))?.body).toEqual({
+        provider: 'claude-code',
+        name: 'Team wiki',
+      }),
+    );
   });
 
   it('offers to install the program one you added runs with', async () => {

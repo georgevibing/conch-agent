@@ -1,4 +1,5 @@
 import {
+  type AdoptIntegrationBody,
   type CreateIntegrationBody,
   type ExternalIntegration,
   type ExternalList,
@@ -68,6 +69,27 @@ const STARTUP_DELAY_MS = 4_000;
 function parseToolName(name: string): { server: string; tool: string } | undefined {
   const match = /^mcp__([a-z0-9_-]+?)__(.+)$/.exec(name);
   return match?.[1] && match[2] ? { server: match[1], tool: match[2] } : undefined;
+}
+
+/** Query names that usually carry a credential: such an address is added by hand, if at all. */
+const SECRET_PARAM =
+  /^(key|api[-_]?key|token|access[-_]?token|secret|auth|sig|signature|password)$/i;
+
+/** An address Conch can connect to itself: https (or http on this computer), nothing secret in it. */
+export function adoptableUrl(url: string | undefined): boolean {
+  if (!url || !IntegrationUrl.safeParse(url).success) return false;
+  const parsed = new URL(url);
+  return ![...parsed.searchParams.keys()].some((key) => SECRET_PARAM.test(key));
+}
+
+/** Two spellings of one address compare equal. */
+function sameAddress(url: string): string {
+  try {
+    const u = new URL(url);
+    return `${u.protocol}//${u.host.toLowerCase()}${u.pathname.replace(/\/+$/, '')}${u.search}`;
+  } catch {
+    return url;
+  }
 }
 
 function slug(name: string): string {
@@ -231,7 +253,12 @@ export class IntegrationService {
     if (!force && this.#external && Date.now() - this.#external.checkedAt < 60_000)
       return this.#external;
     const engines = (await this.deps.engines().catch(() => [])).filter((e) => e.mcpStatus);
-    const lists = await Promise.all(engines.map((engine) => this.#externalOf(engine)));
+    const mine = new Set(
+      (await this.store.all()).flatMap((i) =>
+        i.transport.type === 'http' ? [sameAddress(i.transport.url)] : [],
+      ),
+    );
+    const lists = await Promise.all(engines.map((engine) => this.#externalOf(engine, mine)));
     this.#external = {
       servers: lists.flatMap((l) => l.servers),
       message: lists.flatMap((l) => (l.message ? [l.message] : [])).join(' ') || undefined,
@@ -240,7 +267,10 @@ export class IntegrationService {
     return this.#external;
   }
 
-  async #externalOf(engine: Engine): Promise<{ servers: ExternalIntegration[]; message?: string }> {
+  async #externalOf(
+    engine: Engine,
+    mine: Set<string>,
+  ): Promise<{ servers: ExternalIntegration[]; message?: string }> {
     let statuses: EngineMcpStatus[];
     try {
       statuses = (await engine.mcpStatus?.()) ?? [];
@@ -288,9 +318,39 @@ export class IntegrationService {
         toolCount: s.toolCount,
         plugin: s.plugin,
         catalogId: matchCatalog(name, s.url),
+        adoptable:
+          source !== 'account' && adoptableUrl(s.url) && !mine.has(sameAddress(s.url ?? '')),
       };
     });
     return { servers };
+  }
+
+  /**
+   * Bring a server a provider set up by itself into Conch, so every model can
+   * use it: Conch connects to the same address itself (signing in with its own
+   * OAuth when the server asks). Looked up by name on the gateway, so the
+   * address — which may say more than it should — never goes to the browser.
+   */
+  async adopt(body: AdoptIntegrationBody, signIn: SignIn): Promise<IntegrationResult> {
+    const engine = (await this.deps.engines().catch(() => [])).find((e) => e.id === body.provider);
+    const statuses = (await engine?.mcpStatus?.().catch(() => [])) ?? [];
+    const server = statuses.find((s) => s.name === body.name && s.source !== 'account');
+    if (!engine || !server)
+      throw new IntegrationError(
+        'not-found',
+        `${body.name} isn’t set up in that provider any more.`,
+      );
+    if (!adoptableUrl(server.url))
+      throw new IntegrationError(
+        'invalid',
+        `${server.name} isn’t a web address Conch can connect to. Add it yourself from “Add your own”.`,
+      );
+    const result = await this.create(
+      { custom: { type: 'http', name: server.name.slice(0, 40), url: server.url ?? '' } },
+      signIn,
+    );
+    this.#external = undefined;
+    return result;
   }
 
   // ── What local integrations need from this computer (ADR 0016) ──────────

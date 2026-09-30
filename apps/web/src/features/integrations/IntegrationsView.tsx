@@ -18,10 +18,12 @@ import {
   Text,
   toast,
 } from '@conch/nacre';
+import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, ShieldCheck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
+import { integrationsApi } from './api';
 import { ConnectDialog } from './ConnectDialog';
 import { CustomDialog } from './CustomDialog';
 import {
@@ -33,8 +35,15 @@ import {
   sourceLabel,
 } from './describe';
 import styles from './Integrations.module.css';
-import { useAssistantName, useExternal, useIntegrations, useUpdateIntegration } from './queries';
+import {
+  integrationKeys,
+  useAssistantName,
+  useExternal,
+  useIntegrations,
+  useUpdateIntegration,
+} from './queries';
 import { useFix } from './useFix';
+import { useSignIn } from './useSignIn';
 
 const results: Record<string, { tone: 'success' | 'error' | 'info'; text: string }> = {
   connected: { tone: 'success', text: 'Connected' },
@@ -79,6 +88,8 @@ export function IntegrationsView() {
   const update = useUpdateIntegration();
   const { fix, pending } = useFix();
   const navigate = useNavigate();
+  const signIn = useSignIn();
+  const client = useQueryClient();
   const [connecting, setConnecting] = useState<CatalogEntry>();
   const [custom, setCustom] = useState(false);
   const [category, setCategory] = useState<Category>('all');
@@ -290,6 +301,15 @@ export function IntegrationsView() {
         connected={integrations}
         message={external.data?.message}
         onUseEverywhere={setConnecting}
+        onAdopt={(server) =>
+          void signIn((display) =>
+            integrationsApi.adopt({ provider: server.provider, name: server.name }, display),
+          ).then((result) => {
+            if (!result) return;
+            void client.invalidateQueries({ queryKey: integrationKeys.external });
+            if (!result.authorizeUrl) toast.success(`${server.name} works with every model now.`);
+          })
+        }
       />
 
       <footer className={styles.pageFooter}>
@@ -329,6 +349,7 @@ function ProviderServers({
   connected,
   message,
   onUseEverywhere,
+  onAdopt,
 }: {
   providers: IntegrationProvider[];
   loading: boolean;
@@ -337,6 +358,8 @@ function ProviderServers({
   connected: Integration[];
   message?: string;
   onUseEverywhere: (entry: CatalogEntry) => void;
+  /** Connect a provider's own web server from Conch, so every model gets it. */
+  onAdopt: (server: ExternalIntegration) => void;
 }) {
   if (!loading && !servers.length && !message) return null;
   const groups = providers
@@ -411,7 +434,7 @@ function ProviderServers({
                               {server.message ? ` · ${server.message}` : ''}
                             </Text>
                           </span>
-                          {portable && (
+                          {portable ? (
                             <Button
                               size="sm"
                               variant="ghost"
@@ -419,6 +442,12 @@ function ProviderServers({
                             >
                               Use with every model
                             </Button>
+                          ) : (
+                            server.adoptable && (
+                              <Button size="sm" variant="ghost" onClick={() => onAdopt(server)}>
+                                Use with every model
+                              </Button>
+                            )
                           )}
                           <IntegrationStatusBadge state={server.state} />
                         </li>

@@ -4,6 +4,7 @@ import {
   IntegrationResult,
   IntegrationsList,
   Readiness,
+  type AdoptIntegrationBody,
   type CreateIntegrationBody,
   type UpdateIntegrationBody,
 } from '@conch/protocol';
@@ -23,6 +24,12 @@ export const integrationsApi = {
   get: (id: string) => request(Integration, `/api/integrations/${id}`),
   create: (body: z.input<typeof CreateIntegrationBody>, display: SignInDisplay = 'popup') =>
     request(IntegrationResult, `/api/integrations?display=${display}`, { method: 'POST', body }),
+  /** Bring a server a provider set up by itself into Conch (it may ask to sign in). */
+  adopt: (body: AdoptIntegrationBody, display: SignInDisplay = 'popup') =>
+    request(IntegrationResult, `/api/integrations/adopt?display=${display}`, {
+      method: 'POST',
+      body,
+    }),
   update: (id: string, body: UpdateIntegrationBody) =>
     request(Integration, `/api/integrations/${id}`, { method: 'PATCH', body }),
   remove: (id: string) => request(Ok, `/api/integrations/${id}`, { method: 'DELETE' }),

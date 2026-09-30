@@ -227,6 +227,11 @@ export const ExternalIntegration = z.object({
   plugin: z.string().optional(),
   /** A catalog entry it looks like, for its logo. */
   catalogId: z.string().optional(),
+  /**
+   * A server on the web that Conch can connect to itself, so it works with every
+   * model (`POST /api/integrations/adopt`). Its address stays on the gateway.
+   */
+  adoptable: z.boolean().default(false),
 });
 export type ExternalIntegration = z.infer<typeof ExternalIntegration>;
 
@@ -321,6 +326,13 @@ export const CustomIntegration = z.discriminatedUnion('type', [
   }),
 ]);
 export type CustomIntegration = z.infer<typeof CustomIntegration>;
+
+/** Bring a server a provider set up by itself into Conch, by the provider and its name. */
+export const AdoptIntegrationBody = z.object({
+  provider: EngineId,
+  name: z.string().min(1).max(200),
+});
+export type AdoptIntegrationBody = z.infer<typeof AdoptIntegrationBody>;
 
 export const CreateIntegrationBody = z.union([
   z.object({ catalogId: z.string().min(1).max(64), values: FieldValues.default({}) }),

@@ -9,6 +9,7 @@ import type { ServerEvent } from '@conch/protocol';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { MockEngine } from '../engines/mock/engine';
+import type { Engine, EngineMcpStatus } from '../engines/types';
 import { type NeedSpec, Setup } from '../setup/needs';
 import { fakeProgram } from '../test/fakeProgram';
 import { CATALOG } from './catalog';
@@ -37,6 +38,7 @@ async function setup(
     needs?: Setup;
     onHeal?: (message: string) => void;
     retryAfterMs?: number[];
+    engines?: () => Promise<Engine[]>;
   } = {},
 ) {
   const home = await mkdtemp(join(tmpdir(), 'conch-int-'));
@@ -44,7 +46,7 @@ async function setup(
   const service = new IntegrationService({
     home,
     emit: (event) => events.push(event),
-    engines: async () => [new MockEngine()],
+    engines: options.engines ?? (async () => [new MockEngine()]),
     cwd: async () => home,
     manualChecks: true,
     setup: options.needs,
@@ -558,6 +560,54 @@ describe('claude.ai connectors and Claude Code’s own servers', () => {
     const { service } = await setup();
     await expect(service.create({ catalogId: 'gmail', values: {} }, REDIRECT)).rejects.toThrow(
       /through your AI provider’s account/,
+    );
+  });
+
+  it('brings a provider’s own web server into Conch, keeping its address on the gateway', async () => {
+    const engine = Object.assign(new MockEngine(), {
+      mcpStatus: async (): Promise<EngineMcpStatus[]> => [
+        {
+          name: 'Team wiki',
+          status: 'connected',
+          source: 'engine',
+          toolCount: 3,
+          url: vendor.url('wiki'),
+        },
+        {
+          name: 'Keyed',
+          status: 'connected',
+          source: 'engine',
+          toolCount: 1,
+          url: 'https://mcp.example.com/mcp?api_key=abc123',
+        },
+        {
+          name: 'Drive',
+          status: 'connected',
+          source: 'account',
+          toolCount: 4,
+          url: 'https://x.example/mcp',
+        },
+        { name: 'files', status: 'connected', source: 'engine', toolCount: 9 },
+      ],
+    });
+    const { service: withEngine } = await setup({ engines: async () => [engine] });
+    const list = await withEngine.external(true);
+    const adoptable = Object.fromEntries(list.servers.map((s) => [s.name, s.adoptable]));
+    expect(adoptable).toEqual({ 'Team wiki': true, Keyed: false, Drive: false, files: false });
+    expect(JSON.stringify(list)).not.toContain('api_key');
+
+    const adopted = await withEngine.adopt({ provider: 'mock', name: 'Team wiki' }, REDIRECT);
+    expect(adopted.integration).toMatchObject({ name: 'Team wiki', transport: { type: 'http' } });
+    // It wanted a sign-in: Conch's own OAuth starts, and the server is Conch's now.
+    expect(adopted.authorizeUrl).toContain('/authorize');
+    expect(
+      (await withEngine.external(true)).servers.find((s) => s.name === 'Team wiki')?.adoptable,
+    ).toBe(false);
+    await expect(withEngine.adopt({ provider: 'mock', name: 'Keyed' }, REDIRECT)).rejects.toThrow(
+      /Add it yourself/,
+    );
+    await expect(withEngine.adopt({ provider: 'mock', name: 'Drive' }, REDIRECT)).rejects.toThrow(
+      /isn’t set up/,
     );
   });
 
