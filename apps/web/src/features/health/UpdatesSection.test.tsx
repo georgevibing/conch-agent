@@ -7,6 +7,7 @@ import { useUi } from '../../app/ui';
 import { appState, FakeSocket, mockFetch, renderApp } from '../../test/harness';
 import { Sidebar } from '../sidebar/Sidebar';
 import { HealthTab } from './HealthTab';
+import { RestartWatch } from './RestartWatch';
 import { UpdatesSection } from './UpdatesSection';
 
 afterEach(() => {
@@ -116,6 +117,7 @@ describe('Settings → Health → Updates', () => {
 
   it('rests on “Updating Conch…” while Conch starts itself again on the new version', async () => {
     mockFetch({ 'GET /api/updates': () => status({}, ready) });
+    useUi.setState({ settings: 'health' });
     renderApp(<UpdatesSection />);
     await screen.findByRole('region', { name: 'An update is ready' });
     act(() =>
@@ -127,9 +129,24 @@ describe('Settings → Health → Updates', () => {
         ),
       }),
     );
+    // Settings steps aside for the calm screen, and comes back after the reload.
     await waitFor(() =>
-      expect(useUi.getState().restarting).toEqual({ title: 'Updating Conch…', from: 'boot-1' }),
+      expect(useUi.getState().restarting).toEqual({
+        title: 'Updating Conch…',
+        from: 'boot-1',
+        reopen: 'health',
+      }),
     );
+    expect(useUi.getState().settings).toBeNull();
+  });
+
+  it('opens Health again once the page is back from the restart', async () => {
+    mockFetch({ 'GET /api/updates': () => status() });
+    sessionStorage.setItem('conch.reopenAfterRestart', 'health');
+    renderApp(<RestartWatch />);
+    await waitFor(() => expect(useUi.getState().settings).toBe('health'));
+    expect(sessionStorage.getItem('conch.reopenAfterRestart')).toBeNull();
+    useUi.setState({ settings: null });
   });
 
   it('says why one press can’t do it, with the command to run by hand', async () => {
@@ -186,6 +203,36 @@ describe('Settings → Health → Updates', () => {
     const card = await screen.findByRole('region', { name: 'Restart Conch to finish' });
     expect(card).toHaveTextContent('Stop Conch and run pnpm start');
     expect(within(card).queryByRole('button', { name: 'Restart Conch' })).toBeNull();
+  });
+
+  it('offers to restart when the folder moved on under a Conch that can restart itself', async () => {
+    const user = userEvent.setup();
+    const calls = mockFetch({
+      'GET /api/updates': () => status({}, { restartNeeded: true }),
+      'GET /api/health': () => ({
+        ok: true,
+        serverVersion: '0.2.0',
+        protocolVersion: 7,
+        bootId: 'boot-1',
+      }),
+      'POST /api/gateway/restart': () => ({ ok: true }),
+    });
+    renderApp(<UpdatesSection />);
+    const card = await screen.findByRole('region', { name: 'Restart Conch to finish' });
+    await user.click(within(card).getByRole('button', { name: 'Restart Conch' }));
+    await waitFor(() =>
+      expect(useUi.getState().restarting).toMatchObject({
+        title: 'Updating Conch…',
+        from: 'boot-1',
+      }),
+    );
+    expect(calls.some((c) => c.method === 'POST' && c.path === '/api/gateway/restart')).toBe(true);
+  });
+
+  it('offers the update rather than a restart when something newer waits', async () => {
+    mockFetch({ 'GET /api/updates': () => status({}, { ...ready, restartNeeded: true }) });
+    renderApp(<UpdatesSection />);
+    expect(await screen.findByRole('region', { name: 'An update is ready' })).toBeInTheDocument();
   });
 
   it('shows that it just updated, and what that brought', async () => {

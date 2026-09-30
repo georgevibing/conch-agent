@@ -35,7 +35,11 @@ export function followRestart(status: UpdatesStatus): void {
   if (status.conch.running?.phase !== 'restart') return;
   const ui = useUi.getState();
   if (ui.restarting) return;
-  ui.setRestarting({ title: 'Updating Conch…', from: status.bootId });
+  // The calm screen, not a dialog on top of it; Health opens again afterwards.
+  const reopen = ui.settings ?? undefined;
+  ui.closeSettings();
+  ui.setPalette(false);
+  ui.setRestarting({ title: 'Updating Conch…', from: status.bootId, reopen });
 }
 
 /**

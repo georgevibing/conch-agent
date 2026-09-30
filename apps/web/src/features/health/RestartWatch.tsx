@@ -1,11 +1,13 @@
 import { RestartScreen } from '@conch/nacre';
 import { useEffect, useState } from 'react';
 
-import { useUi } from '../../app/ui';
+import { useUi, type SettingsTab } from '../../app/ui';
 import { bootId } from './restart';
 
 /** Taking longer than this, the screen says what to do. */
 const SLOW_MS = 60_000;
+/** The settings tab to show again once the page is back (sessionStorage). */
+const REOPEN = 'conch.reopenAfterRestart';
 
 /**
  * While Conch starts itself again: a calm screen, and a quiet look every
@@ -15,6 +17,18 @@ const SLOW_MS = 60_000;
 export function RestartWatch() {
   const restarting = useUi((s) => s.restarting);
   const [slow, setSlow] = useState(false);
+
+  // Back from a restart: where you were (Settings → Health, after an update).
+  useEffect(() => {
+    let tab: string | null = null;
+    try {
+      tab = sessionStorage.getItem(REOPEN);
+      sessionStorage.removeItem(REOPEN);
+    } catch {
+      // Private windows: the page simply comes back where it starts.
+    }
+    if (tab) useUi.getState().openSettings(tab as SettingsTab);
+  }, []);
 
   useEffect(() => {
     if (!restarting) return;
@@ -26,6 +40,11 @@ export function RestartWatch() {
       if (done) return;
       if (now && now !== restarting.from) {
         done = true;
+        try {
+          if (restarting.reopen) sessionStorage.setItem(REOPEN, restarting.reopen);
+        } catch {
+          // Not remembered; nothing else changes.
+        }
         window.location.reload();
         return;
       }

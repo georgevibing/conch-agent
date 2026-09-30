@@ -64,9 +64,14 @@ export function conchCard(
     return {
       state: 'updating',
       title: phase === 'rollback' ? 'Going back to the version you had' : 'Updating Conch',
-      detail: phase === 'rollback' ? 'Nothing of yours changes.' : changes(conch),
+      detail:
+        phase === 'rollback'
+          ? 'The update didn’t work. Nothing of yours changes.'
+          : phase === 'restart'
+            ? 'Starting again on the new version. Your chats are safe.'
+            : changes(conch),
       progress: {
-        label,
+        label: phase === 'rollback' ? 'Putting things back' : label,
         value,
         ...(phase !== 'restart' && phase !== 'rollback' && { step, steps }),
       },
@@ -74,6 +79,26 @@ export function conchCard(
   }
   if (!conch.checkable)
     return { state: 'unavailable', title: `Conch ${conch.version}`, detail: conch.problem };
+  if (conch.behind > 0) {
+    const listed = conch.whatsNew.slice(0, LINES);
+    return {
+      state: 'available',
+      title: 'An update is ready',
+      detail: [changes(conch), checked].filter(Boolean).join(' · '),
+      whatsNew: listed,
+      more: Math.max(0, conch.improvements - listed.length),
+      blocked: conch.blocked,
+      // Refused now: why is the one thing worth saying, not how the last try went.
+      notice: conch.blocked ? undefined : notice,
+      footnote: conch.blocked
+        ? undefined
+        : options.restartable
+          ? 'Conch restarts by itself when it’s done. Your chats are safe.'
+          : 'You’ll restart Conch once it’s done. Your chats are safe.',
+      offer: conch.blocked ? undefined : notice ? 'retry' : 'update',
+    };
+  }
+  // Only when nothing newer waits: updating restarts Conch anyway.
   if (conch.restartNeeded)
     return {
       state: 'current',
@@ -84,24 +109,6 @@ export function conchCard(
       whatsNew: outcome?.whatsNew.slice(0, LINES),
       offer: options.restartable ? 'restart' : undefined,
     };
-  if (conch.behind > 0) {
-    const listed = conch.whatsNew.slice(0, LINES);
-    return {
-      state: 'available',
-      title: 'An update is ready',
-      detail: [changes(conch), checked].filter(Boolean).join(' · '),
-      whatsNew: listed,
-      more: Math.max(0, conch.improvements - listed.length),
-      blocked: conch.blocked,
-      notice,
-      footnote: conch.blocked
-        ? undefined
-        : options.restartable
-          ? 'Conch restarts by itself when it’s done. Your chats are safe.'
-          : 'You’ll restart Conch once it’s done. Your chats are safe.',
-      offer: conch.blocked ? undefined : notice ? 'retry' : 'update',
-    };
-  }
   if (conch.blocked)
     return {
       state: 'unavailable',
@@ -133,7 +140,6 @@ function programRow(
     return {
       ...base,
       state: 'updating',
-      status: 'Updating…',
       progress: {
         value: program.progress?.percent,
         label: program.progress?.label ?? `Updating ${program.name}…`,
@@ -224,17 +230,12 @@ export function UpdatesSection() {
 
   const programs = status.programs;
   const updatable = programs.filter((p) => p.available && p.canUpdate && p.state === 'idle');
-  const lastChecked = status.checkedAt ?? status.conch.checkedAt;
 
   return (
     <Section
       ref={ref}
       title="Updates"
-      description={
-        lastChecked
-          ? `Conch looks once a day, quietly. Checked ${relativeTime(lastChecked, now)}.`
-          : 'Conch looks once a day, quietly.'
-      }
+      description="Conch looks once a day, quietly, and tells you here."
       status={
         <Button
           size="sm"
