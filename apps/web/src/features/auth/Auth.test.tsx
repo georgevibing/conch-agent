@@ -1,9 +1,11 @@
-import type { AccessSettings, AuthStatus } from '@conch/protocol';
-import { screen, waitFor, within } from '@testing-library/react';
+import type { AccessSettings, AuthStatus, CheckupItem } from '@conch/protocol';
+import { Toaster } from '@conch/nacre';
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { mockFetch, renderApp } from '../../test/harness';
+import { useUi } from '../../app/ui';
+import { appState, mockFetch, renderApp } from '../../test/harness';
 import { SecurityTab } from './SecurityTab';
 import { SignIn } from './SignIn';
 
@@ -175,12 +177,14 @@ describe('SecurityTab', () => {
   it('shows a new access key once', async () => {
     const user = userEvent.setup();
     const key = `conch_${'z'.repeat(43)}`;
-    mockFetch({
-      'GET /api/access': () => settings(),
-      'POST /api/access/keys': () => ({
-        key,
-        info: { id: 'key_1', name: 'My devices', hint: 'zzzz', createdAt: Date.now() },
-      }),
+    const info = { id: 'key_1', name: 'My devices', hint: 'zzzz', createdAt: Date.now() };
+    let created = false;
+    const calls = mockFetch({
+      'GET /api/access': () => (created ? settings({ method: 'key', keys: [info] }) : settings()),
+      'POST /api/access/keys': () => {
+        created = true;
+        return { key, info };
+      },
       'GET /api/auth': () => status({ method: 'key', signedIn: true }),
     });
     renderApp(<SecurityTab />);
@@ -188,8 +192,208 @@ describe('SecurityTab', () => {
     await user.click(screen.getByRole('button', { name: 'Create key & turn on' }));
     expect(await screen.findByText(key)).toBeInTheDocument();
     expect(screen.getByText(/won’t be shown again/)).toBeInTheDocument();
+    // Sign-in just switched to keys: the key stays until you say you've saved it.
+    await waitFor(() =>
+      expect(calls.filter((c) => c.path === '/api/access').length).toBeGreaterThan(1),
+    );
+    expect(await screen.findByRole('list', { name: 'Access keys' })).toBeInTheDocument();
+    expect(screen.getByText(key)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'I’ve saved it' }));
     expect(screen.queryByText(key)).toBeNull();
+  });
+
+  it('turns a risky setting off in one click, then the finding goes away', async () => {
+    const user = userEvent.setup();
+    const finding: CheckupItem = {
+      id: 'browser-local',
+      level: 'warn',
+      title: 'The browser can open local apps',
+      detail: 'If you don’t need it, turn it off.',
+      fix: { kind: 'act', label: 'Turn off', action: 'browser-local-off' },
+    };
+    const calls = mockFetch({
+      'GET /api/access': () => settings({ checkup: [finding] }),
+      'POST /api/access/fix': () => ({
+        done: 'The browser can’t open local apps now.',
+        access: settings({ checkup: [] }),
+      }),
+      'GET /api/state': () => appState(),
+    });
+    renderApp(
+      <>
+        <SecurityTab />
+        <Toaster />
+      </>,
+    );
+    const button = await screen.findByRole('button', { name: 'Turn off' });
+    expect(button).toHaveAccessibleDescription(/The browser can open local apps/);
+    await user.click(button);
+    expect(await screen.findByText('The browser can’t open local apps now.')).toBeInTheDocument();
+    expect(calls.find((c) => c.path === '/api/access/fix')?.body).toEqual({
+      action: 'browser-local-off',
+    });
+    expect(screen.queryByText('The browser can open local apps')).toBeNull();
+    expect(screen.getByText('Looking good')).toBeInTheDocument();
+  });
+
+  it('confirms it’s you first when that setting needs it', async () => {
+    const user = userEvent.setup();
+    let verified = false;
+    const finding: CheckupItem = {
+      id: 'terminal-remote',
+      level: 'warn',
+      title: 'Other devices can open a terminal',
+      detail: 'Turn it off if you don’t use it.',
+      fix: { kind: 'act', label: 'Turn off', action: 'terminal-remote-off' },
+    };
+    const calls = mockFetch({
+      'GET /api/access': () =>
+        settings({ method: 'password', username: 'ada', checkup: [finding], verified }),
+      'POST /api/access/verify': () => {
+        verified = true;
+        return settings({ method: 'password', username: 'ada', checkup: [finding], verified });
+      },
+      'POST /api/access/fix': () =>
+        verified
+          ? {
+              done: 'Other devices can’t open a terminal now.',
+              access: settings({ method: 'password', username: 'ada', checkup: [], verified }),
+            }
+          : json({ error: 'verify-required', message: 'Confirm it’s you.' }, 403),
+      'GET /api/state': () => appState(),
+    });
+    renderApp(<SecurityTab />);
+    await user.click(await screen.findByRole('button', { name: 'Turn off' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Confirm it’s you' });
+    await user.type(within(dialog).getByLabelText('Password', { selector: 'input' }), 'my words');
+    await user.click(within(dialog).getByRole('button', { name: 'Confirm' }));
+    await waitFor(() => expect(screen.queryByText('Other devices can open a terminal')).toBeNull());
+    expect(calls.filter((c) => c.path === '/api/access/fix')).toHaveLength(2);
+  });
+
+  it('says so when a fix couldn’t finish, and keeps the finding', async () => {
+    const user = userEvent.setup();
+    const finding: CheckupItem = {
+      id: 'files',
+      level: 'danger',
+      title: 'Other people on this computer may read your Conch files',
+      detail: 'If making them private doesn’t work, run:',
+      command: 'chmod -R go-rwx /home/ada/.conch',
+      fix: { kind: 'act', label: 'Make them private', action: 'secure-files' },
+    };
+    mockFetch({
+      'GET /api/access': () => settings({ checkup: [finding] }),
+      'POST /api/access/fix': () =>
+        json({ error: 'unfixed', message: 'Run the command shown to fix it.' }, 409),
+    });
+    renderApp(
+      <>
+        <SecurityTab />
+        <Toaster />
+      </>,
+    );
+    const button = await screen.findByRole('button', { name: 'Make them private' });
+    await user.click(button);
+    expect(await screen.findByText('Run the command shown to fix it.')).toBeInTheDocument();
+    expect(screen.getByText(finding.title)).toBeInTheDocument();
+    await waitFor(() => expect(button).not.toHaveAttribute('aria-busy'));
+  });
+
+  it('takes you to what needs deciding: a new key, old keys, a password, or Tailscale', async () => {
+    const user = userEvent.setup();
+    const old = Date.now() - 200 * 24 * 60 * 60 * 1000;
+    const checkup: CheckupItem[] = [
+      {
+        id: 'env-token',
+        level: 'warn',
+        title: 'An access key is set in CONCH_TOKEN',
+        detail: 'Create an access key here first.',
+        command: 'unset CONCH_TOKEN',
+        fix: { kind: 'open', label: 'Create a key', place: 'keys' },
+      },
+      {
+        id: 'sign-in',
+        level: 'info',
+        title: 'No sign-in on this computer',
+        detail: 'Add a password.',
+        fix: { kind: 'open', label: 'Add a password', place: 'sign-in' },
+      },
+      {
+        id: 'encryption',
+        level: 'danger',
+        title: 'Your network can see Conch traffic',
+        detail: 'Use Tailscale.',
+        command: 'tailscale serve --bg 4317',
+        fix: { kind: 'open', label: 'Show me how', place: 'reach' },
+      },
+    ];
+    mockFetch({ 'GET /api/access': () => settings({ checkup }) });
+    renderApp(<SecurityTab />);
+
+    await user.click(await screen.findByRole('button', { name: 'Create a key' }));
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Name' })).toHaveFocus());
+    expect(screen.getByRole('radio', { name: /Access key/ })).toBeChecked();
+
+    await user.click(screen.getByRole('button', { name: 'Add a password' }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('Password', { selector: 'input' })).toHaveFocus(),
+    );
+
+    await user.click(screen.getByRole('button', { name: /Show me how/ }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Tailscale — anywhere/ })).toHaveFocus(),
+    );
+    expect(screen.getByText(/tailscale.com\/download/)).toBeVisible();
+
+    // Old keys: straight to the first one that hasn't been used.
+    cleanup();
+    mockFetch({
+      'GET /api/access': () =>
+        settings({
+          method: 'key',
+          keys: [
+            { id: 'key_new', name: 'Phone', hint: 'aaaa', createdAt: Date.now() },
+            { id: 'key_old', name: 'Old laptop', hint: 'bbbb', createdAt: old },
+          ],
+          checkup: [
+            {
+              id: 'stale-keys',
+              level: 'info',
+              title: 'An access key hasn’t been used in 90 days',
+              detail: 'Revoke keys you no longer need.',
+              fix: { kind: 'open', label: 'Review keys', place: 'keys' },
+            },
+          ],
+        }),
+    });
+    renderApp(<SecurityTab />);
+    await user.click(await screen.findByRole('button', { name: 'Review keys' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Revoke Old laptop' })).toHaveFocus(),
+    );
+    expect(screen.getByText('Not used in 90 days')).toBeInTheDocument();
+  });
+
+  it('opens Models & modes for a choice made there', async () => {
+    const user = userEvent.setup();
+    useUi.setState({ settings: 'security' });
+    mockFetch({
+      'GET /api/access': () =>
+        settings({
+          checkup: [
+            {
+              id: 'provider-prompts',
+              level: 'warn',
+              title: 'Codex can’t ask you before each step',
+              detail: 'Keep it to reading only.',
+              fix: { kind: 'open', label: 'Review', place: 'models' },
+            },
+          ],
+        }),
+    });
+    renderApp(<SecurityTab />);
+    await user.click(await screen.findByRole('button', { name: /Review/ }));
+    expect(useUi.getState().settings).toBe('models');
   });
 
   it('asks for a restart when the gateway is older than the page', async () => {

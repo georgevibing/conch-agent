@@ -1,8 +1,11 @@
 import {
   checkPassword,
+  isStaleKey,
   suggestPassword,
   type AccessMethod,
   type AccessSettings,
+  type CheckupFix,
+  type CheckupPlace,
   type CreatedKey,
   type SessionInfo,
 } from '@conch/protocol';
@@ -45,7 +48,7 @@ import {
   Trash2,
   Wifi,
 } from 'lucide-react';
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 
 import { ApiError, api } from '../../api/client';
 import { keys } from '../../api/queries';
@@ -75,6 +78,23 @@ function useApply() {
 }
 
 const fail = (error: unknown) => toast.error((error as Error).message);
+
+/** A part of this tab a checkup fix can bring you to. */
+type Place = Exclude<CheckupPlace, 'models'>;
+
+/** A request to bring one part into view; the part calls `done` once it has. */
+interface Focus {
+  place: Place;
+  done: () => void;
+}
+
+/** Bring a section into view and put the keyboard where the fix happens. */
+function reveal(section: HTMLElement | null, target: HTMLElement | null | undefined) {
+  if (!section) return;
+  const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  section.scrollIntoView({ block: 'start', behavior: calm ? 'auto' : 'smooth' });
+  target?.focus({ preventScroll: true });
+}
 
 // ── Sign-in method ─────────────────────────────────────────────────────────
 
@@ -243,6 +263,7 @@ function NewKey({ access, guard }: { access: AccessSettings; guard: Guard }) {
       <Field className={styles.grow}>
         <Field.Label>Name</Field.Label>
         <Input
+          name="key-name"
           value={name}
           maxLength={40}
           placeholder="e.g. iPhone, work laptop"
@@ -267,7 +288,7 @@ function KeyList({ access }: { access: AccessSettings }) {
   return (
     <ul className={styles.keys} aria-label="Access keys">
       {access.keys.map((key) => (
-        <li key={key.id} className={styles.key}>
+        <li key={key.id} className={styles.key} data-stale={isStaleKey(key) || undefined}>
           <KeyRound aria-hidden className={styles.keyIcon} />
           <div className={styles.grow}>
             <Text as="p" size="sm" weight="medium">
@@ -275,6 +296,14 @@ function KeyList({ access }: { access: AccessSettings }) {
               <Text as="span" size="xs" tone="subtle" className={styles.mono}>
                 …{key.hint}
               </Text>
+              {isStaleKey(key) && (
+                <>
+                  {' '}
+                  <Badge size="sm" tone="warning" variant="soft">
+                    Not used in 90 days
+                  </Badge>
+                </>
+              )}
             </Text>
             <Text as="p" size="xs" tone="subtle">
               Created {relativeTime(key.createdAt)} ·{' '}
@@ -347,15 +376,54 @@ function TurnOff({ guard }: { guard: Guard }) {
   );
 }
 
-function SignInSection({ access, guard }: { access: AccessSettings; guard: Guard }) {
+function SignInSection({
+  access,
+  guard,
+  focus,
+}: {
+  access: AccessSettings;
+  guard: Guard;
+  /** A checkup fix asked for this section: a password to choose, or the keys. */
+  focus?: Focus;
+}) {
   const [choice, setChoice] = useState<AccessMethod>(
     access.method === 'none' ? 'password' : access.method,
   );
   const [changing, setChanging] = useState(false);
+  // The choice follows the method when it changes. Not by re-mounting: a new
+  // access key is on screen right then, and it's shown only once.
+  const [method, setMethod] = useState(access.method);
+  if (method !== access.method) {
+    setMethod(access.method);
+    setChoice(access.method === 'none' ? 'password' : access.method);
+    setChanging(false);
+  }
+  // A checkup fix asked for a form: show it first, then bring it into view.
+  const wanted: AccessMethod | undefined =
+    focus?.place === 'keys' ? 'key' : focus?.place === 'sign-in' ? 'password' : undefined;
+  if (wanted && choice !== wanted) {
+    setChoice(wanted);
+    setChanging(false);
+  }
   const current = choice === access.method;
+  const ref = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (focus?.place !== 'sign-in' && focus?.place !== 'keys') return;
+    focus.done();
+    const section = ref.current;
+    reveal(
+      section,
+      focus.place === 'keys'
+        ? (section?.querySelector<HTMLElement>('[data-stale] button') ??
+            section?.querySelector<HTMLElement>('input[name="key-name"]'))
+        : section?.querySelector<HTMLElement>('input[name="new-password"]'),
+    );
+  }, [focus]);
 
   return (
     <Section
+      ref={ref}
       title="How you sign in"
       description={
         access.method === 'none'
@@ -583,10 +651,22 @@ function Command({ children }: { children: string }) {
   );
 }
 
-function ReachSection({ access }: { access: AccessSettings }) {
+function ReachSection({ access, focus }: { access: AccessSettings; focus?: Focus }) {
   const { tailscale } = access;
+  const [open, setOpen] = useState(tailscale ? '' : 'tailscale');
+  const ref = useRef<HTMLElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  if (focus?.place === 'reach' && open !== 'tailscale') setOpen('tailscale');
+
+  useEffect(() => {
+    if (focus?.place !== 'reach') return;
+    focus.done();
+    reveal(ref.current, trigger.current);
+  }, [focus]);
+
   return (
     <Section
+      ref={ref}
       title="Use Conch on your phone"
       description={
         tailscale
@@ -596,9 +676,10 @@ function ReachSection({ access }: { access: AccessSettings }) {
             : 'Right now only this computer can reach Conch. Pick a way to connect:'
       }
     >
-      <Accordion type="single" collapsible defaultValue={tailscale ? undefined : 'tailscale'}>
+      <Accordion type="single" collapsible value={open} onValueChange={setOpen}>
         <Accordion.Item value="tailscale">
           <Accordion.Trigger
+            ref={trigger}
             icon={<Globe />}
             meta={
               <Badge size="sm" tone="success" variant="soft">
@@ -673,10 +754,42 @@ function ReachSection({ access }: { access: AccessSettings }) {
 
 // ── Tab ────────────────────────────────────────────────────────────────────
 
+/**
+ * Each checkup finding's one fix. `open` goes where the decision is made;
+ * `act` asks the gateway to make the change (only ever towards asking, off
+ * or private), confirming it's you first wherever that setting's own route
+ * would. Once it works the finding leaves the list and a quiet toast says
+ * what changed.
+ */
+function useCheckupFix(guard: Guard) {
+  const client = useQueryClient();
+  const apply = useApply();
+  const openSettings = useUi((s) => s.openSettings);
+  const [focus, setFocus] = useState<Focus>();
+
+  const run = (fix: CheckupFix): Promise<unknown> | undefined => {
+    if (fix.kind === 'open') {
+      if (fix.place === 'models') openSettings('models');
+      else setFocus({ place: fix.place, done: () => setFocus(undefined) });
+      return undefined;
+    }
+    return guard(async () => {
+      const { done, access } = await api.fixCheckup(fix.action);
+      // A refetch that started before the fix (say, after confirming it's you) is already stale.
+      await client.cancelQueries({ queryKey: keys.access });
+      apply(access);
+      // "Ask first" changes the default mode shown in Models & modes.
+      void client.invalidateQueries({ queryKey: keys.state });
+      toast.success(done);
+    }).catch(fail);
+  };
+  return { run, focus };
+}
+
 export function SecurityTab() {
   const access = useAccess();
-  const openSettings = useUi((s) => s.openSettings);
   const { guard, dialog } = useVerify(access.data?.method ?? 'none');
+  const fix = useCheckupFix(guard);
 
   if (access.isPending)
     return (
@@ -701,15 +814,9 @@ export function SecurityTab() {
   }
 
   const data = access.data;
-  const items: CheckItem[] = data.checkup.map((item) => ({
+  const items: CheckItem[] = data.checkup.map(({ fix: wire, ...item }) => ({
     ...item,
-    ...(item.id === 'full-trust' && {
-      action: (
-        <Button size="sm" variant="surface" onClick={() => openSettings('models')}>
-          Change
-        </Button>
-      ),
-    }),
+    ...(wire && { fix: { label: wire.label, kind: wire.kind, onFix: () => fix.run(wire) } }),
   }));
 
   return (
@@ -718,10 +825,9 @@ export function SecurityTab() {
         <SecurityCheckup items={items} />
       </Section>
       <HealedSection />
-      {/* Re-mount when the method changes so the choice follows it. */}
-      <SignInSection key={data.method} access={data} guard={guard} />
+      <SignInSection access={data} guard={guard} focus={fix.focus} />
       {data.method !== 'none' && <DevicesSection access={data} guard={guard} />}
-      <ReachSection access={data} />
+      <ReachSection access={data} focus={fix.focus} />
       {dialog}
       <Text size="xs" tone="subtle" className={styles.footnote}>
         <Laptop aria-hidden /> Forgot your password? On this computer, run{' '}

@@ -88,6 +88,13 @@ tells you, in plain words, when something is risky:
 | Other people may read your Conch files         | `~/.conch` holds every conversation.                            |
 | Your work folder has its own Claude Code rules | A downloaded project's hooks could run commands without asking. |
 
+In Settings, each warning has one button to fix it. A button that changes something
+only ever makes Conch safer — back to asking, off, or private — and asks you to
+confirm it's you where that setting would. Anything that gives the assistant more
+room is never one click away: you choose it yourself, where it lives. When only you
+can fix something (your shell's environment, say), the warning shows the one line to
+copy.
+
 ## Connecting apps (integrations)
 
 - **Sign-ins happen on the app's own page.** Conch never sees your password, and it

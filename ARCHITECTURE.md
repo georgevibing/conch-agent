@@ -377,13 +377,20 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
 - **Logs** never contain query strings, headers or bodies. There is no telemetry.
 - **Checkup:** `auth/checkup.ts` turns the configuration into plain-language
   warnings, shown in Settings → Security, at start-up and in `pnpm conch status`.
+  Every warning carries one fix (`CheckupFix`): `open` a named place in the app
+  (a closed list, never a URL), or `act` — `POST /api/access/fix` runs one of
+  `CheckupAction` (`auth/fixes.ts`). Actions only take trust away (back to
+  asking, off, private; work-folder rules are renamed, never deleted) and keep
+  the verification their own route asks for; nothing that grants trust is ever
+  one click from the checkup. Only the route imports them; no agent tool can.
+  When only a person can fix it, the warning shows the one line to copy.
 
 Known limits:
 
 - With sign-in off, other OS users on the same machine can reach loopback. The
   checkup suggests a password.
 - The agent can read `ANTHROPIC_API_KEY`, which it needs.
-- Claude Code loads the workspace's own `.claude/` settings; the checkup warns when they add hooks, auto-allowed tools or MCP servers.
+- Claude Code loads the workspace's own `.claude/` settings; the checkup warns when they add hooks, auto-allowed tools or MCP servers, and can set those files aside.
 - Breached-password checks use a local blocklist only.
 - The browser: a site you allowed could still inject instructions that steer the
   agent within that site, or leak what it read through the addresses it opens.

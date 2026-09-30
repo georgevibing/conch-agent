@@ -162,6 +162,27 @@
     align-self: center;
   }
 
+  /* On a phone the fix goes under the words, lined up with them, instead of squeezing them. */
+  .checks {
+    container-type: inline-size;
+  }
+
+  @container (max-width: 30rem) {
+    .check {
+      flex-wrap: wrap;
+      row-gap: var(--nc-space-2);
+    }
+
+    .checkBody {
+      flex-basis: calc(100% - 1rem - var(--nc-space-2-5));
+    }
+
+    .checkAction {
+      align-self: flex-start;
+      margin-inline-start: calc(1rem + var(--nc-space-2-5));
+    }
+  }
+
   /* ── Secret reveal ────────────────────────────────────────────────── */
   .reveal {
     display: flex;
