@@ -7,6 +7,7 @@ import {
   AdoptIntegrationBody,
   ApiKeyBody,
   AppState,
+  CatalogId,
   ClientCommand,
   CommandName,
   CreateIntegrationBody,
@@ -701,6 +702,20 @@ export async function buildApp(services: Services) {
     await services.conversations.remove(request.params.id);
     return { ok: true };
   });
+  // “Not now” on an offer to connect an app, for the rest of this conversation.
+  app.post<{ Params: { id: string; catalogId: string } }>(
+    '/api/conversations/:id/suggestions/:catalogId/dismiss',
+    async (request, reply) => {
+      if (!CatalogId.safeParse(request.params.catalogId).success)
+        return reply.code(404).send({ error: 'not-found', message: 'Not found.' });
+      try {
+        await services.conversations.dismissSuggestion(request.params.id, request.params.catalogId);
+        return { ok: true };
+      } catch (error) {
+        return sendError(reply, error);
+      }
+    },
+  );
 
   // ── Live stream ────────────────────────────────────────────────────────
   app.get('/ws', { websocket: true }, (socket, request) => {
