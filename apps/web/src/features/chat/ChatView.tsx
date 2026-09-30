@@ -202,7 +202,7 @@ function useTurnRecovery(
               if (first) turn.choose(modelKey(other.engine, first.id));
               else turn.set({ engine: other.engine });
               send(text, attached);
-              // Once is a choice; the second time it should just happen (ADR 0018).
+              // Once is a choice; the second time it should just happen (ADR 0023).
               if (last.problem === 'limit' && !app?.preferences.limitFallback)
                 toast(`Answering with ${other.label}`, {
                   description: `Next time ${name(failed)} reaches a limit, carry on with ${other.label} by itself?`,

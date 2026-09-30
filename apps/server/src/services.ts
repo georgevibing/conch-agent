@@ -73,7 +73,7 @@ export class Services {
   readonly setup: Setup;
   /** Repair everything: every part's check, run at once (see `doctor/`). */
   readonly doctor: Doctor;
-  /** Whether Conch can reach the internet (ADR 0018). */
+  /** Whether Conch can reach the internet (ADR 0023). */
   readonly network: NetworkWatch;
   /** A model on this computer: Ollama, found, started and fed models (ADR 0022). */
   readonly local: LocalService;
@@ -413,7 +413,7 @@ export class Services {
   }
 
   /**
-   * Who answers a turn (ADR 0018). Offline, the model on this computer answers
+   * Who answers a turn (ADR 0023). Offline, the model on this computer answers
    * (if you let it) or the message waits for the internet; at a usage limit,
    * your pick carries on until it resets. Otherwise, the chat's own provider.
    */

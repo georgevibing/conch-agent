@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 /**
- * Offline (ADR 0018): nothing breaks. A message sent with no internet waits in
+ * Offline (ADR 0023): nothing breaks. A message sent with no internet waits in
  * the chat, says so calmly, and goes by itself the moment Conch is back online.
  * (Mock mode can pretend the internet is gone: POST /api/mock/network.)
  */

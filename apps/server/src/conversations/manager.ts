@@ -99,14 +99,14 @@ export interface TurnResult {
   error?: string;
   /** Why it failed, when Conch can tell. */
   problem?: TurnProblem;
-  /** Who answers instead, when the failure was one someone else can answer (ADR 0018). */
+  /** Who answers instead, when the failure was one someone else can answer (ADR 0023). */
   next?: TurnRoute;
   /** Text of the last assistant message in the turn. */
   finalText: string;
 }
 
 /**
- * Who answers a turn (ADR 0018): the chat's own provider, another one (the
+ * Who answers a turn (ADR 0023): the chat's own provider, another one (the
  * model on this computer while offline; your pick when a limit is reached),
  * or nobody yet — offline, the message waits and goes when the internet's back.
  */
@@ -415,7 +415,7 @@ export class ConversationManager {
     if (existing?.abort)
       throw new ConversationError('busy', 'Still replying to your last message.');
     // Whichever provider the conversation (or this message) chose answers —
-    // unless it's offline or at its limit, and something else can (ADR 0018).
+    // unless it's offline or at its limit, and something else can (ADR 0023).
     const chosen = this.deps.engine(input.options?.engine ?? existing?.record.options.engine);
     const route = (await this.deps.route?.(chosen, {}).catch(() => undefined)) ?? {
       kind: 'use' as const,
@@ -1063,7 +1063,7 @@ export class ConversationManager {
         tail,
       );
       // A limit or an outage someone else can answer is decided now, before the chat
-      // hears the turn ended — so it never shows a failure it's about to fix (ADR 0018).
+      // hears the turn ended — so it never shows a failure it's about to fix (ADR 0023).
       const after =
         retry && (problem === 'limit' || problem === 'unavailable') && !abort.signal.aborted
           ? await retry(problem).catch(() => undefined)

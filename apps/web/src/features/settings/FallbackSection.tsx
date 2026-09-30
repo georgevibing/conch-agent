@@ -13,7 +13,7 @@ export const FALLBACK_FOCUS = 'fallback';
 const WAIT = 'wait';
 
 /**
- * When the chat's provider can't answer (ADR 0018): at a usage limit, another
+ * When the chat's provider can't answer (ADR 0023): at a usage limit, another
  * one you picked carries on; offline, the model on this computer answers, or
  * messages wait and go by themselves when the internet's back.
  */

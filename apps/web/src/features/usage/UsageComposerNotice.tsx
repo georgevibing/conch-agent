@@ -8,7 +8,7 @@ import { useProviders } from '../providers/queries';
 /**
  * Speaks up above the composer only when a limit is close or reached. Dismissing
  * hides it until things get worse (e.g. warning → critical → used up). At the
- * limit, it says who carries on when you chose someone (ADR 0018).
+ * limit, it says who carries on when you chose someone (ADR 0023).
  */
 export function UsageComposerNotice() {
   const { data: app } = useAppState();

@@ -224,7 +224,7 @@ export interface Engine {
   readonly label: string;
   /**
    * The model runs on this computer: it works with no internet and spends
-   * nothing. Offline, Conch answers with it (see ADR 0018).
+   * nothing. Offline, Conch answers with it (see ADR 0023).
    */
   readonly local?: boolean;
   /** Probe installation and credentials. Cheap to call; results may be cached briefly. */

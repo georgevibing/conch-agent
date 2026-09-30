@@ -1,5 +1,5 @@
 /**
- * Is Conch online? (ADR 0018: offline, answer or wait.)
+ * Is Conch online? (ADR 0023: offline, answer or wait.)
  *
  * Conch asks a few well-known addresses — the providers' own, and one made for
  * connectivity checks — and counts as offline only when none answers: one

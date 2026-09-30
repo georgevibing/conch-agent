@@ -1,4 +1,4 @@
-# 0018 — Offline and at a limit: answer, or wait
+# 0023 — Offline and at a limit: answer, or wait
 
 - Status: accepted
 - Date: 2026-09-30

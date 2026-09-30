@@ -31,7 +31,7 @@ function push(socket: FakeSocket | undefined, seq: number, event: Record<string,
   } as never);
 }
 
-describe('offline (ADR 0018)', () => {
+describe('offline (ADR 0023)', () => {
   it('says what happens to what you send, live, as the internet goes and comes back', async () => {
     mockFetch({
       'GET /api/state': () => appState(),

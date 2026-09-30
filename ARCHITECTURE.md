@@ -104,7 +104,7 @@ src/
   lib/lifecycle.ts            this run's `BOOT_ID`; `restart()` (exit 75, the supervisor starts it again)
   start.ts, supervisor.ts     `pnpm start` runs Conch as a child it restarts (on request, or after a crash)
   doctor/                     Repair everything: every part's `DoctorCheck`, run at once (`doctor.report`)
-  network/watch.ts            online or not (`network.status`); offline routing (ADR 0018)
+  network/watch.ts            online or not (`network.status`); offline routing (ADR 0023)
   lib/path.ts                 the PATH as it is now (Windows registry), refreshed before lookups
 ```
 
@@ -371,7 +371,7 @@ group, title, run({ repair, signal })}` (working agreement 12). `GET /api/doctor
   stream in as `checking` → a result over `doctor.report`, and every `fixed` item
   becomes a heal note. A check that throws becomes "Conch couldn't check this",
   never a broken report.
-- **Offline and at a limit** ([ADR 0018](./docs/adr/0018-offline-and-limits.md)).
+- **Offline and at a limit** ([ADR 0023](./docs/adr/0023-offline-and-limits.md)).
   `Services.route(engine, { failed? })` decides who answers each turn: the chat's
   provider, the model on this computer while offline (`Engine.local`,
   `preferences.offlineFallback`), your pick at a usage limit

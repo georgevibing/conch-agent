@@ -142,7 +142,7 @@ describe('transcript reducer', () => {
   });
 });
 
-describe('offline and at a limit (ADR 0018)', () => {
+describe('offline and at a limit (ADR 0023)', () => {
   it('a message waiting for the internet is one card, counting what waits, until it goes', () => {
     const waiting = reduceAll(
       log(

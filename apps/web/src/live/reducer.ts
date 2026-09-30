@@ -109,7 +109,7 @@ export type TranscriptItem =
       by: 'user' | 'assistant';
     }
   | {
-      /** Waiting for the internet (ADR 0018); `sent` once it went by itself. */
+      /** Waiting for the internet (ADR 0023); `sent` once it went by itself. */
       kind: 'held';
       id: string;
       at: number;

@@ -4,7 +4,7 @@
 - Date: 2026-09-30
 - Builds on: [ADR 0010](./0010-providers.md), [ADR 0012](./0012-every-provider-at-once.md),
   [ADR 0016](./0016-getting-what-a-feature-needs.md). Offline routing, which picks
-  a local provider when the internet is down, is ADR 0018.
+  a local provider when the internet is down, is ADR 0023.
 
 ## Context
 

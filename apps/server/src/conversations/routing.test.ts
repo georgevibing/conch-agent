@@ -123,7 +123,7 @@ async function log(manager: ConversationManager, id: string): Promise<Conversati
   return (await manager.detail(id)).events;
 }
 
-describe('offline and at a limit (ADR 0018)', () => {
+describe('offline and at a limit (ADR 0023)', () => {
   it('offline with nothing local, a message waits — and goes when the internet is back', async () => {
     const { manager, claude, world } = await setup();
     world.online = false;

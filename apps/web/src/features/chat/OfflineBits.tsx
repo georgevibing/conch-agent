@@ -9,7 +9,7 @@ import { useProviders } from '../providers/queries';
 import { FALLBACK_FOCUS } from '../settings/FallbackSection';
 import styles from './Transcript.module.css';
 
-/** The model on this computer, when it's ready to answer (ADR 0018). */
+/** The model on this computer, when it's ready to answer (ADR 0023). */
 export function useLocalModel() {
   const { data } = useProviders();
   return data?.providers.find((p) => p.local && p.ready);
