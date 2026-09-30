@@ -245,6 +245,13 @@ export class ConversationManager {
     },
   ) {}
 
+  /** Something is running or waiting on someone: a turn, a title being written, a permission. */
+  busy(): boolean {
+    for (const live of this.#live.values())
+      if (live.abort || live.extras || live.titling || live.permissions.size > 0) return true;
+    return false;
+  }
+
   async list(): Promise<ConversationSummary[]> {
     const records = await this.deps.store.list();
     return records.map((r) => summary(this.#live.get(r.id)?.record ?? r));

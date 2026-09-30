@@ -32,7 +32,7 @@ function decoded(value: string | undefined): string | undefined {
 }
 
 /** RFC 6266 / 5987: an ASCII fallback plus the real name, so no name can break the header. */
-function disposition(kind: 'inline' | 'attachment', name: string): string {
+export function disposition(kind: 'inline' | 'attachment', name: string): string {
   const ascii = name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
   const encoded = encodeURIComponent(name).replace(
     /['()*]/g,

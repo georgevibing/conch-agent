@@ -4,6 +4,8 @@ import type { EngineId, LoginState, ServerEvent, SkillSource } from '@conch/prot
 
 import { AttachmentStore } from './attachments/store';
 import { AccessStore } from './auth/store';
+import { backupCheck } from './backup/doctor';
+import { BackupService } from './backup/service';
 import { BrowserService } from './browser/service';
 import { TerminalService } from './terminal/service';
 import { Gatekeeper } from './security';
@@ -37,7 +39,9 @@ import { SkillService } from './skills/service';
 import { externalRoots, SkillStore } from './skills/store';
 import { UsageService } from './usage/service';
 
-export { SERVER_VERSION } from './version';
+import { SERVER_VERSION } from './version';
+
+export { SERVER_VERSION };
 
 /** Every past turn's cost, oldest conversations included. */
 async function turnCosts(store: ConversationStore) {
@@ -88,6 +92,10 @@ export class Services {
   readonly mockVendor?: MockVendor;
   /** Full-text search over every conversation; rebuilds its index when it breaks. */
   readonly search: SearchService;
+  /** Back up and restore your Conch; a daily backup by itself (ADR 0020). */
+  readonly backups: BackupService;
+  /** When a chat last did anything: backups wait for a quiet moment. */
+  #lastActivity = Date.now();
   #login?: { handle: LoginHandle; state: LoginState };
   #sweeper?: NodeJS.Timeout;
 
@@ -255,6 +263,18 @@ export class Services {
     });
     this.conversations.events.on((event) => this.search.onEvent(event));
     this.search.open();
+    this.conversations.events.on((event) => {
+      if (event.type === 'conversation.event') this.#lastActivity = Date.now();
+    });
+    this.backups = new BackupService({
+      home: config.CONCH_HOME,
+      conchVersion: SERVER_VERSION,
+      busy: () => this.conversations.busy(),
+      lastActivity: () => this.#lastActivity,
+      emit: () => this.broadcast.emit({ type: 'backups.changed' }),
+      heal,
+    });
+    this.doctor.register(backupCheck(this.backups));
   }
 
   /** The default provider: your choice, or `CONCH_ENGINE` when it's set. */
@@ -289,11 +309,15 @@ export class Services {
       60 * 60 * 1000,
     );
     this.#sweeper.unref();
+    this.backups.start();
   }
 
   stop() {
     clearInterval(this.#sweeper);
     this.#sweeper = undefined;
+    this.backups.stop();
+    // Let go of the index file, so a restore (or a test) can replace it.
+    this.search.close();
   }
 
   /**

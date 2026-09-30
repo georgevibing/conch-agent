@@ -1,5 +1,6 @@
 import { buildApp } from './app';
 import { checkup, secureHome, workspaceRules } from './auth/checkup';
+import { applyPendingRestore } from './backup/restore';
 import { exposure } from './auth/network';
 import { loadConfig, portIsExplicit } from './config';
 import { setRestartHandler } from './lib/lifecycle';
@@ -42,6 +43,12 @@ if (choice.kind === 'taken') {
 }
 // Everything below (the browser's guard, pairing links, the checkup) uses the port it's really on.
 config.CONCH_PORT = choice.port;
+
+// A restore waiting for this start goes into place before any store reads a file (ADR 0020).
+const restored = await applyPendingRestore(config.CONCH_HOME);
+if (restored.kind === 'applied') console.warn('\n  🐚  Your backup is restored.');
+if (restored.kind === 'failed')
+  console.error(`\n  Conch couldn’t finish restoring your backup: ${restored.error}`);
 
 const services = new Services(config);
 services.homeProblems = await secureHome(config.CONCH_HOME);
