@@ -77,7 +77,8 @@ export default defineConfig({
   fullyParallel: false,
   // Every journey has its own gateway and Chrome; more than a few at once starves the
   // timing-sensitive ones (streaming, sign-in, the terminal) — and ends sooner, not later.
-  workers: 3,
+  // CI's runner has four cores.
+  workers: process.env.CI ? 2 : 3,
   reporter: [['list']],
   use: {
     ...devices['Desktop Chrome'],

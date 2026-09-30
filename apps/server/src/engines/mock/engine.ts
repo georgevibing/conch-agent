@@ -26,13 +26,24 @@ import type {
   TurnInput,
 } from '../types';
 
+/**
+ * A pause that ends early on Stop. A Stop that came while the engine was busy
+ * between pauses counts too: the abort event has already fired by then, so it
+ * must be read from the signal, not waited for.
+ */
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
-    const t = setTimeout(resolve, ms);
-    signal?.addEventListener('abort', () => {
+    const aborted = () => reject(new DOMException('Aborted', 'AbortError'));
+    if (signal?.aborted) return aborted();
+    const t = setTimeout(() => {
+      signal?.removeEventListener('abort', stop);
+      resolve();
+    }, ms);
+    const stop = () => {
       clearTimeout(t);
-      reject(new DOMException('Aborted', 'AbortError'));
-    });
+      aborted();
+    };
+    signal?.addEventListener('abort', stop, { once: true });
   });
 
 /**
