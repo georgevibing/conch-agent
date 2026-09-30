@@ -1,5 +1,6 @@
 import {
   BACKUP_LIMITS,
+  Health,
   BackupStatus,
   BackupSummary,
   type CreateBackupBody,
@@ -31,6 +32,16 @@ export const backupApi = {
 };
 
 export const backupKeys = { status: ['backups'] as const };
+
+/** Whether Conch can start itself again (it runs under `pnpm start`). */
+export function useRestartable() {
+  return useQuery({
+    queryKey: ['backups', 'restartable'],
+    queryFn: () => request(Health, '/api/health'),
+    staleTime: 60_000,
+    select: (health) => health.restartable,
+  });
+}
 
 /** Where backups stand, kept fresh by the `backups.changed` event. */
 export function useBackups() {

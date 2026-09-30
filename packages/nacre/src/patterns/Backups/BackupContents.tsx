@@ -90,7 +90,7 @@ export function BackupContents({
       : {
           key: 'chats',
           icon: <MessagesSquare />,
-          text: count(contents.chats, 'chat'),
+          text: contents.chats === 0 ? 'No chats' : count(contents.chats, 'chat'),
           note: contents.attachments
             ? `with ${count(contents.attachments, 'file')} sent in them`
             : undefined,

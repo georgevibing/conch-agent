@@ -25,6 +25,15 @@ export type RestoreSource = { id: string } & ({ file: File } | { backup: BackupS
 /** Set just before Conch restarts to restore, so the page can say how it went once it's back. */
 export const RESTORING_KEY = 'conch.restoring';
 
+/** Remember that a restore is finishing, for `RestoredNotice` once the page is back. */
+export function markRestoring(): void {
+  try {
+    sessionStorage.setItem(RESTORING_KEY, JSON.stringify({ at: Date.now() }));
+  } catch {
+    // Only a nicety: Settings says it's restored either way.
+  }
+}
+
 type Step =
   | { kind: 'checking'; name: string; progress: number }
   | { kind: 'failed'; message: string }
@@ -140,11 +149,7 @@ function RestoreFlow({
       if (!done || !result) return;
       restored.current = true;
       if (result.restarting) {
-        try {
-          sessionStorage.setItem(RESTORING_KEY, JSON.stringify({ at: Date.now() }));
-        } catch {
-          // Only a nicety: Settings says it's restored either way.
-        }
+        markRestoring();
         setRestarting({ title: 'Restoring your Conch…', from });
         onClose();
       } else {

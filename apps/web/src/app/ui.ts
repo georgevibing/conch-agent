@@ -132,7 +132,9 @@ export const useUi = create<UiState>((set) => ({
   setMobileSidebar: (mobileSidebarOpen) => set({ mobileSidebarOpen }),
   openSettings: (tab = 'personality', focus) =>
     set({ settings: tab, settingsFocus: focus, paletteOpen: false }),
-  setRestarting: (restarting) => set({ restarting }),
+  // The whole page rests while Conch starts again: nothing stays open over the calm screen.
+  setRestarting: (restarting) =>
+    set(restarting ? { restarting, settings: null, paletteOpen: false } : { restarting }),
   closeSettings: () => set({ settings: null }),
   setPalette: (paletteOpen) => set({ paletteOpen }),
   openFind: (conversationId, query, target) =>

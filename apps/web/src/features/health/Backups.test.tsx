@@ -379,7 +379,7 @@ describe('restoring', () => {
       { [`POST /api/backups/${undo.id}/restore`]: () => ({ restarting: true }) },
     );
     renderApp(<BackupSection />);
-    expect(await screen.findByText(/^Restored from a backup from/)).toBeInTheDocument();
+    expect(await screen.findByText(/^Restored a backup from/)).toBeInTheDocument();
     // The Undo copy is in the list too, and never offered for download.
     expect(screen.getByText('Before a restore')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Download the backup from .* 2:02/ })).toBeNull();
@@ -397,9 +397,17 @@ describe('restoring', () => {
     const user = userEvent.setup();
     const calls = routes(status({ pending: { kind: 'uploaded', createdAt: Date.now() - HOUR } }), {
       'DELETE /api/backups/pending': () => ({ ok: true }),
+      'POST /api/gateway/restart': () => ({ ok: true }),
     });
     renderApp(<BackupSection />);
     expect(await screen.findByText('Restart Conch to finish restoring')).toBeInTheDocument();
+    // This Conch can start itself again, so that's one button.
+    await user.click(await screen.findByRole('button', { name: 'Restart now' }));
+    await waitFor(() =>
+      expect(useUi.getState().restarting).toEqual({ title: 'Restoring your Conch…', from: 'b1' }),
+    );
+    expect(calls.some((c) => c.method === 'POST' && c.path === '/api/gateway/restart')).toBe(true);
+    act(() => useUi.setState({ restarting: undefined }));
     await user.click(screen.getByRole('button', { name: 'Cancel restore' }));
     await waitFor(() =>
       expect(calls).toContainEqual({
@@ -408,6 +416,17 @@ describe('restoring', () => {
         body: undefined,
       }),
     );
+  });
+
+  it('says how to finish by hand where Conch can’t start itself again', async () => {
+    routes(status({ pending: { kind: 'uploaded', createdAt: Date.now() - HOUR } }), {
+      'GET /api/health': () => ({ ...health, restartable: false }),
+    });
+    renderApp(<BackupSection />);
+    expect(
+      await screen.findByText(/Stop Conch \(Ctrl\+C\) and run pnpm start again/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Restart now' })).toBeNull();
   });
 
   it('opens Back up now from ⌘K, by name', async () => {

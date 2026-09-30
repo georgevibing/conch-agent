@@ -23,14 +23,18 @@ import { useUi } from '../../app/ui';
 import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
 import { Section } from '../settings/Section';
-import { backupApi, backupKeys, downloadBackup, useBackups } from './backups';
+import { backupApi, backupKeys, downloadBackup, useBackups, useRestartable } from './backups';
+import { restartConch } from './restart';
 import { BackUpDialog } from './BackUpDialog';
-import { RestoreDialog, type RestoreSource } from './RestoreDialog';
+import { markRestoring, RestoreDialog, type RestoreSource } from './RestoreDialog';
 import styles from './Backups.module.css';
 
-function fromWords(from: RestoredFrom): string {
+/** “Restored the backup from Sunday 27 Sept, 03:12”. */
+function restoredTitle(from: RestoredFrom): string {
   const when = formatBackupDate(from.createdAt);
-  return from.kind === 'automatic' ? `the backup from ${when}` : `a backup from ${when}`;
+  return from.kind === 'automatic'
+    ? `Restored the backup from ${when}`
+    : `Restored a backup from ${when}`;
 }
 
 function overview(status: BackupStatus): {
@@ -65,6 +69,7 @@ function overview(status: BackupStatus): {
  */
 export function BackupSection() {
   const { data: status } = useBackups();
+  const { data: restartable } = useRestartable();
   const client = useQueryClient();
   const auth = useAuth();
   const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
@@ -115,6 +120,12 @@ export function BackupSection() {
     }
   };
 
+  const finishPending = async () => {
+    markRestoring();
+    const message = await restartConch('Restoring your Conch…').catch(() => undefined);
+    if (message) toast(message);
+  };
+
   const cancelPending = async () => {
     await backupApi.cancelPending().catch(() => undefined);
     void client.invalidateQueries({ queryKey: backupKeys.status });
@@ -135,12 +146,20 @@ export function BackupSection() {
             tone="info"
             title="Restart Conch to finish restoring"
             action={
-              <Button size="sm" variant="ghost" onClick={() => void cancelPending()}>
-                Cancel restore
-              </Button>
+              <Stack direction="row" gap={1}>
+                <Button size="sm" variant="ghost" onClick={() => void cancelPending()}>
+                  Cancel restore
+                </Button>
+                {restartable && (
+                  <Button size="sm" variant="surface" onClick={() => void finishPending()}>
+                    Restart now
+                  </Button>
+                )}
+              </Stack>
             }
           >
-            {`Your backup from ${formatBackupDate(status.pending.createdAt)} is ready. Stop Conch (Ctrl+C) and run pnpm start again.`}
+            {`Your backup from ${formatBackupDate(status.pending.createdAt)} is ready.`}
+            {restartable ? '' : ' Stop Conch (Ctrl+C) and run pnpm start again.'}
           </Callout>
         )}
         {restored &&
@@ -151,7 +170,7 @@ export function BackupSection() {
           ) : (
             <Callout
               tone="success"
-              title={`Restored from ${fromWords(restored.from)}`}
+              title={restoredTitle(restored.from)}
               action={
                 undoCopy && (
                   <Button
