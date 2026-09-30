@@ -7,6 +7,7 @@ import type {
   EngineId,
   ToolStatus,
   TurnOptions,
+  TurnProblem,
   Usage,
 } from '@conch/protocol';
 
@@ -88,6 +89,8 @@ export type TranscriptItem =
       id: string;
       outcome: 'success' | 'interrupted' | 'error';
       error?: string;
+      /** Why it failed, when Conch can tell: decides what the chat offers. */
+      problem?: TurnProblem;
       usage?: Usage;
       /** Which provider answered, and with which model. */
       engine?: EngineId;
@@ -299,6 +302,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             id: `end-${event.seq}`,
             outcome: event.outcome,
             error: event.error,
+            ...(event.problem && { problem: event.problem }),
             usage: event.usage,
             engine: event.engine,
             model: event.model,

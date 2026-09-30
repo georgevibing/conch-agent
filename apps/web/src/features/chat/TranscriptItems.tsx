@@ -347,9 +347,81 @@ export function SkillUsedLine({ item }: { item: Of<'skill'> }) {
   );
 }
 
-export function TurnEnd({ item, onRetry }: { item: Of<'turn-end'>; onRetry?: () => void }) {
+/** What the chat can do about a failed turn (built by the chat, which knows the providers). */
+export interface TurnRecovery {
+  /** The provider that failed, by name. */
+  label: string;
+  /** Sign in to it; the message goes again by itself once it's back. */
+  signIn?: () => void;
+  /** Signed in is what we're waiting for: the message goes again by itself. */
+  waiting?: boolean;
+  /** Another provider that's ready: answer with it instead, for now. */
+  alternative?: { label: string; use: () => void };
+  /** Open 1Password so it can be unlocked. */
+  openOnePassword?: () => void;
+}
+
+const problemTitle = (problem: NonNullable<Of<'turn-end'>['problem']>, label: string) =>
+  ({
+    'signed-out': `${label} signed you out`,
+    unavailable: `${label} isn’t answering right now`,
+    limit: `You’ve reached your ${label} limit for now`,
+    'key-locked': '1Password is locked',
+  })[problem];
+
+export function TurnEnd({
+  item,
+  onRetry,
+  recover,
+}: {
+  item: Of<'turn-end'>;
+  onRetry?: () => void;
+  recover?: TurnRecovery;
+}) {
   if (item.outcome === 'interrupted') {
     return <div className={styles.stopped}>Stopped</div>;
+  }
+  if (item.outcome === 'error' && item.problem && recover && onRetry) {
+    const { problem } = item;
+    const retry = (
+      <Button size="sm" variant="ghost" onClick={onRetry}>
+        Try again
+      </Button>
+    );
+    const other = recover.alternative && (
+      <Button size="sm" variant="surface" onClick={recover.alternative.use}>
+        Answer with {recover.alternative.label} for now
+      </Button>
+    );
+    const primary =
+      problem === 'signed-out' && recover.signIn ? (
+        <Button size="sm" onClick={recover.signIn} loading={recover.waiting}>
+          Sign in to {recover.label}
+        </Button>
+      ) : problem === 'key-locked' && recover.openOnePassword ? (
+        <Button size="sm" onClick={recover.openOnePassword}>
+          Open 1Password
+        </Button>
+      ) : undefined;
+    return (
+      <Callout
+        tone={problem === 'signed-out' || problem === 'key-locked' ? 'warning' : 'danger'}
+        title={problemTitle(problem, recover.label)}
+      >
+        <Stack gap={3}>
+          <span>
+            {recover.waiting
+              ? 'Sign in, and your message goes again by itself.'
+              : (item.error ?? 'Something went wrong while working on that.')}
+          </span>
+          <Stack direction="row" gap={2} wrap align="center">
+            {primary}
+            {other}
+            {retry}
+          </Stack>
+        </Stack>
+      </Callout>
+    );
   }
   if (item.outcome === 'error') {
     return (

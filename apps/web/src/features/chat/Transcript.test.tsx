@@ -1,9 +1,11 @@
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ConversationView, TranscriptItem } from '../../live/reducer';
 import { appState, mockFetch, renderApp } from '../../test/harness';
 import { Transcript } from './Transcript';
+import type { TurnRecovery } from './TranscriptItems';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -31,6 +33,70 @@ function show(view: Partial<ConversationView>) {
     />,
   );
 }
+
+function failed(problem: 'signed-out' | 'unavailable' | 'key-locked', recover: TurnRecovery) {
+  mockFetch({ 'GET /api/state': () => appState() });
+  return renderApp(
+    <Transcript
+      view={{
+        lastSeq: 2,
+        status: 'idle',
+        items: [
+          user,
+          {
+            kind: 'turn-end',
+            id: 'end-2',
+            outcome: 'error',
+            error: 'Claude Code is signed out or its credentials expired.',
+            problem,
+            engine: 'claude-code',
+          },
+        ],
+      }}
+      pending={[]}
+      name="Claude"
+      onRespond={() => {}}
+      onRetry={() => {}}
+      recover={recover}
+    />,
+  );
+}
+
+describe('a turn that failed', () => {
+  it('offers to sign in, or to answer with another provider for now', async () => {
+    const signIn = vi.fn();
+    const use = vi.fn();
+    failed('signed-out', {
+      label: 'Claude Code',
+      signIn,
+      alternative: { label: 'OpenRouter', use },
+    });
+    expect(screen.getByText('Claude Code signed you out')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in to Claude Code' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Answer with OpenRouter for now' }));
+    expect(signIn).toHaveBeenCalledOnce();
+    expect(use).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
+  it('says the message goes again by itself while it waits for the sign-in', () => {
+    failed('signed-out', { label: 'Claude Code', signIn: () => {}, waiting: true });
+    expect(screen.getByText('Sign in, and your message goes again by itself.')).toBeInTheDocument();
+  });
+
+  it('opens 1Password when the key is locked in it', async () => {
+    const openOnePassword = vi.fn();
+    failed('key-locked', { label: 'OpenRouter', openOnePassword });
+    expect(screen.getByText('1Password is locked')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Open 1Password' }));
+    expect(openOnePassword).toHaveBeenCalledOnce();
+  });
+
+  it('says a provider isn’t answering, in its name', () => {
+    failed('unavailable', { label: 'Codex' });
+    expect(screen.getByText('Codex isn’t answering right now')).toBeInTheDocument();
+  });
+});
 
 describe('Transcript', () => {
   it('keeps the wait up while the model reasons in private (empty deltas)', () => {

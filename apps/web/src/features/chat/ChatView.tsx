@@ -1,4 +1,4 @@
-import type { EngineStatus } from '@conch/protocol';
+import type { EngineId, EngineStatus } from '@conch/protocol';
 import {
   Button,
   Callout,
@@ -10,26 +10,32 @@ import {
   Stack,
   Text,
   Tooltip,
+  toast,
 } from '@conch/nacre';
 import { ArrowRight, Folder } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router';
 
 import { useAppState, useConversations } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { greeting } from '../../lib/time';
 import { useLive } from '../../live/LiveProvider';
-import { emptyView, lastUserText } from '../../live/reducer';
+import { emptyView, lastUserText, type ConversationView } from '../../live/reducer';
 import { NEW, useLiveStore } from '../../live/store';
 import { useSlashCommands } from '../commands/useSlashCommands';
 import { RunBanner } from '../routines/RunBanner';
 import { ComposerControls } from '../models/ComposerControls';
 import { modeInfo } from '../models/catalog';
 import { ChatFind } from '../search/ChatFind';
-import { useTurnOptions } from '../models/useTurnOptions';
+import { modelKey, useTurnOptions } from '../models/useTurnOptions';
+import { providersApi } from '../providers/api';
+import { putProvider, useProviders } from '../providers/queries';
+import { useNeed } from '../setup/useNeed';
 import { UsageComposerNotice } from '../usage/UsageComposerNotice';
 import styles from './ChatView.module.css';
 import { Transcript } from './Transcript';
+import type { TurnRecovery } from './TranscriptItems';
 import { useIntegrations } from '../integrations/queries';
 import { BrowserDock } from '../browser/BrowserDock';
 
@@ -91,6 +97,87 @@ function EngineIssue({ status, issue }: { status?: EngineStatus; issue?: string 
         : 'I can’t reply until it’s ready — your message is safe. It only takes a minute.'}
     </Callout>
   );
+}
+
+/**
+ * What the chat can do about its last failed turn (AGENTS.md agreement 11):
+ * sign in to the provider — and the message goes again by itself once it's
+ * back — answer with another provider that's ready, or open 1Password.
+ */
+function useTurnRecovery(
+  view: ConversationView,
+  turn: ReturnType<typeof useTurnOptions>,
+  send: (text: string) => void,
+): TurnRecovery | undefined {
+  const openSettings = useUi((s) => s.openSettings);
+  const client = useQueryClient();
+  const { data: providers } = useProviders();
+  const onePassword = useNeed('1password-app');
+  const [waitingFor, setWaitingFor] = useState<{ engine: EngineId; text: string }>();
+  const sendRef = useRef(send);
+  useEffect(() => {
+    sendRef.current = send;
+  });
+  // While a sign-in happens in another window: a real check every few seconds,
+  // and whenever you come back. Once it's ready, the message goes again.
+  useEffect(() => {
+    if (!waitingFor) return;
+    let done = false;
+    const look = async () => {
+      const provider = await providersApi.check(waitingFor.engine).catch(() => undefined);
+      if (done || !provider) return;
+      putProvider(client, provider);
+      if (provider.status.state !== 'ready') return;
+      done = true;
+      setWaitingFor(undefined);
+      toast.success(`Signed in to ${provider.name} — sending your message again.`);
+      sendRef.current(waitingFor.text);
+    };
+    const timer = setInterval(() => void look(), 3000);
+    const onFocus = () => void look();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      done = true;
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [waitingFor, client]);
+
+  const last = [...view.items].reverse().find((i) => i.kind === 'turn-end');
+  if (last?.kind !== 'turn-end' || last.outcome !== 'error' || !last.problem) return undefined;
+  const failed = last.engine ?? turn.options.engine;
+  const name = (id: string | undefined) =>
+    providers?.providers.find((p) => p.id === id)?.name ??
+    turn.catalog?.providers.find((p) => p.engine === id)?.label ??
+    'Your provider';
+  const other = turn.catalog?.providers.find(
+    (p) => p.engine !== failed && p.models.length > 0 && !p.message,
+  );
+  const text = lastUserText(view);
+  return {
+    label: name(failed),
+    waiting: Boolean(waitingFor),
+    signIn:
+      failed && text
+        ? () => {
+            setWaitingFor({ engine: failed, text });
+            openSettings('providers');
+          }
+        : undefined,
+    alternative:
+      other && text
+        ? {
+            label: other.label,
+            use: () => {
+              const first = other.models[0];
+              if (first) turn.choose(modelKey(other.engine, first.id));
+              else turn.set({ engine: other.engine });
+              send(text);
+            },
+          }
+        : undefined,
+    openOnePassword: onePassword.need?.openable ? () => void onePassword.act('open') : undefined,
+  };
 }
 
 export function ChatView({ conversationId }: { conversationId?: string }) {
@@ -182,6 +269,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   };
 
   const slash = useSlashCommands({ draft, setDraft, send, turn });
+  const recover = useTurnRecovery(view, turn, send);
   const chosenReady = Boolean(
     turn.catalog?.providers.some((p) => p.engine === turn.options.engine),
   );
@@ -303,6 +391,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
           const text = lastUserText(view);
           if (text) send(text);
         }}
+        recover={recover}
       />
       <div className={styles.dock}>{composer}</div>
     </div>

@@ -14,6 +14,7 @@ import {
   TurnEnd,
   UserMessage,
   Waiting,
+  type TurnRecovery,
   type Wait,
 } from './TranscriptItems';
 import { BrowserApprovalItem, BrowserTrailItem, HandoffItem } from '../browser/ChatCards';
@@ -28,6 +29,8 @@ export interface TranscriptProps {
   name: string;
   onRespond: (permissionId: string, decision: 'allow' | 'allow-always' | 'deny') => void;
   onRetry: () => void;
+  /** What the chat can offer about the last failed turn (sign in, another provider…). */
+  recover?: TurnRecovery;
   footer?: ReactNode;
   /** Layered over the scrolling log (find bar, match rail). */
   overlay?: ReactNode;
@@ -87,6 +90,7 @@ export function Transcript({
   name,
   onRespond,
   onRetry,
+  recover,
   footer,
   overlay,
   columnRef,
@@ -211,6 +215,7 @@ export function Transcript({
               <TurnEnd
                 item={block.item}
                 onRetry={block.item.id === lastErrorId && !running ? onRetry : undefined}
+                recover={block.item.id === lastErrorId && !running ? recover : undefined}
               />
             )}
           </Arrival>

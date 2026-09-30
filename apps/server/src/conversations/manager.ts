@@ -8,6 +8,7 @@ import type {
   Preferences,
   ServerEvent,
   TurnOptions,
+  TurnProblem,
   Usage,
 } from '@conch/protocol';
 
@@ -31,6 +32,36 @@ import { handoff } from './handoff';
 import type { ConversationRecord, ConversationStore } from './store';
 import { summarizeToolUse, titleFrom } from './summarize';
 import { generateTitle } from './title';
+
+/**
+ * Why a turn failed, for engines that don't say: the key's in a locked
+ * 1Password, the provider signed out (asked again now — its answer is cached),
+ * or the words of the error.
+ */
+export async function turnProblem(
+  engine: Pick<Engine, 'detect'>,
+  error: string | undefined,
+): Promise<TurnProblem | undefined> {
+  const text = error ?? '';
+  if (/1Password (is locked|didn’t answer)/i.test(text)) return 'key-locked';
+  const status = await engine.detect({ force: true }).catch(() => undefined);
+  if (status?.state === 'signed-out') return 'signed-out';
+  if (
+    /signed out|credentials expired|not logged in|\b401\b|unauthori[sz]ed|invalid api key/i.test(
+      text,
+    )
+  )
+    return 'signed-out';
+  if (/usage limit|rate.?limit|\b429\b|quota|too many requests/i.test(text)) return 'limit';
+  if (
+    /overloaded|\b50[0-9]\b|unavailable|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|network|timed? ?out|isn’t responding/i.test(
+      text,
+    )
+  )
+    return 'unavailable';
+  if (status && status.state !== 'ready') return 'unavailable';
+  return undefined;
+}
 
 interface PendingPermission {
   resolve: (decision: PermissionDecision) => void;
@@ -424,7 +455,7 @@ export class ConversationManager {
     const memories = await this.deps.memory.list();
     const started = new Map<string, number>();
     let outcome: 'success' | 'interrupted' | 'error' = 'success';
-    let completed: { usage?: Usage; error?: string } | undefined;
+    let completed: { usage?: Usage; error?: string; problem?: TurnProblem } | undefined;
     const extras = live.extras;
     let finalText = '';
     let finalMessageId: string | undefined;
@@ -672,7 +703,7 @@ export class ConversationManager {
             break;
           case 'done':
             outcome = event.outcome;
-            completed = { usage: event.usage, error: event.error };
+            completed = { usage: event.usage, error: event.error, problem: event.problem };
             break;
         }
       }
@@ -703,12 +734,18 @@ export class ConversationManager {
           );
         }
       }
+      // Why it failed decides what the chat offers: sign in, another provider, 1Password.
+      const problem =
+        outcome === 'error'
+          ? (completed?.problem ?? (await turnProblem(engine, completed?.error)))
+          : undefined;
       this.#append(
         live,
         {
           type: 'turn.completed',
           outcome,
           usage: completed?.usage,
+          ...(problem && { problem }),
           error:
             outcome === 'error'
               ? (completed?.error ?? `${engine.label} stopped unexpectedly.`)

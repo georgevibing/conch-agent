@@ -8,7 +8,15 @@
 import { z } from 'zod';
 
 import { BrowserHandoff, BrowserPermission, BrowserStatus, BrowserStep } from './browser';
-import { EffortChoice, EngineId, Id, PermissionMode, TurnOptions, Usage } from './common';
+import {
+  EffortChoice,
+  EngineId,
+  Id,
+  PermissionMode,
+  TurnOptions,
+  TurnProblem,
+  Usage,
+} from './common';
 import { EngineStatus, LoginState } from './engine';
 import { HealNote } from './healed';
 import { Integration } from './integrations';
@@ -261,6 +269,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     outcome: z.enum(['success', 'interrupted', 'error']),
     usage: Usage.optional(),
     error: z.string().optional(),
+    /** Why it failed, when Conch can tell (see `TurnProblem`). */
+    problem: TurnProblem.optional(),
     /** Which provider answered, and with which model when it said. */
     engine: EngineId.optional(),
     model: z.string().optional(),

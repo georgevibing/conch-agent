@@ -1,4 +1,5 @@
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+import type { TurnProblem } from '@conch/protocol';
 
 import type { EngineEvent } from '../types';
 
@@ -15,6 +16,15 @@ const friendlyErrors: Record<string, string> = {
   cloud_credential_error: 'Your cloud provider credentials (e.g. AWS or GCP) need refreshing.',
   server_error: 'Claude hit a server error. Try again in a moment.',
   max_output_tokens: 'The reply was too long and got cut off.',
+};
+
+/** The problem class of Claude's own error codes: what the chat can offer about it. */
+const problems: Record<string, TurnProblem> = {
+  authentication_failed: 'signed-out',
+  cloud_credential_error: 'signed-out',
+  rate_limit: 'limit',
+  overloaded: 'unavailable',
+  server_error: 'unavailable',
 };
 
 export function friendlyError(code: string | undefined): string | undefined {
@@ -45,6 +55,7 @@ export class Translator {
   #streamed = new Set<string>();
   #current?: string;
   #error?: string;
+  #problem?: TurnProblem;
 
   translate(msg: SDKMessage): EngineEvent[] {
     switch (msg.type) {
@@ -100,6 +111,7 @@ export class Translator {
         if (msg.error) {
           // The CLI also renders the raw API error as assistant text; show our friendly one instead.
           this.#error = friendlyError(msg.error);
+          this.#problem = msg.error ? problems[msg.error] : undefined;
           return out;
         }
         const id = msg.message.id;
@@ -160,6 +172,7 @@ export class Translator {
             error:
               this.#error ??
               (detail || ('result' in msg ? String(msg.result) : 'Something went wrong.')),
+            ...(this.#problem && { problem: this.#problem }),
           },
         ];
       }

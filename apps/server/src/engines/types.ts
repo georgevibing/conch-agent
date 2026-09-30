@@ -3,12 +3,13 @@ import type {
   EffortChoice,
   EngineId,
   EngineStatus,
+  ExtraUsage,
   LoginMethod,
   LoginState,
   PermissionMode,
   SkillSource,
-  ExtraUsage,
   ToolStatus,
+  TurnProblem,
   Usage,
   UsageKind,
   UsageWindow,
@@ -152,7 +153,14 @@ export type EngineEvent =
   | { type: 'notice'; code: string; message: string }
   /** Integrations that failed to connect at the start of the turn. */
   | { type: 'mcp-status'; failed: { name: string; error: string }[] }
-  | { type: 'done'; outcome: 'success' | 'interrupted' | 'error'; usage?: Usage; error?: string };
+  | {
+      type: 'done';
+      outcome: 'success' | 'interrupted' | 'error';
+      usage?: Usage;
+      error?: string;
+      /** Why it failed, when the engine knows (a signed-out account, an overloaded service). */
+      problem?: TurnProblem;
+    };
 
 /** A one-shot, tool-less request for small housekeeping jobs (e.g. naming a chat). */
 export interface CompletionInput {

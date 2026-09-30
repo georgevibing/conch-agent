@@ -7,7 +7,7 @@
  */
 import { z } from 'zod';
 
-import { TurnOptions, Usage } from './common';
+import { EngineId, TurnOptions, Usage } from './common';
 
 export const Weekday = z.enum(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
 export type Weekday = z.infer<typeof Weekday>;
@@ -78,6 +78,11 @@ export const RoutineRun = z.object({
   outcome: z.string().optional(),
   error: z.string().optional(),
   usage: Usage.optional(),
+  /**
+   * It didn't run because this provider wasn't ready (signed out, say). Conch
+   * runs it once the provider is back — sign in and it goes.
+   */
+  waitingFor: EngineId.optional(),
 });
 export type RoutineRun = z.infer<typeof RoutineRun>;
 

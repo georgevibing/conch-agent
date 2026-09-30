@@ -22,6 +22,7 @@ import { ArrowLeft, Copy, MessageSquare, MoreHorizontal, Pencil, Play, Trash2 } 
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 
+import { useUi } from '../../app/ui';
 import { routineIcon } from './icon';
 import { useDeleteRoutine, useRoutine, useRunRoutine, useUpdateRoutine } from './queries';
 import { RoutineEditor } from './RoutineEditor';
@@ -75,6 +76,7 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
   const run = useRunRoutine();
   const remove = useDeleteRoutine();
   const navigate = useNavigate();
+  const openSettings = useUi((s) => s.openSettings);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [now] = useState(Date.now);
@@ -207,6 +209,20 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
           }
         >
           It won’t run until you turn it on. Try it once first if you like.
+        </Callout>
+      )}
+      {runs[0]?.status === 'failed' && runs[0].waitingFor && (
+        // Held, not lost: it runs by itself once the provider is back.
+        <Callout
+          tone="warning"
+          title="Waiting for its provider"
+          action={
+            <Button size="sm" onClick={() => openSettings('providers')}>
+              Sign in
+            </Button>
+          }
+        >
+          {runs[0].error}
         </Callout>
       )}
       {runs[0]?.status === 'needs-you' && (

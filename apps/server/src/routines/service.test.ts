@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { ConversationEvent, RoutineRun } from '@conch/protocol';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 import { loadConfig } from '../config';
@@ -150,6 +150,36 @@ describe('RoutineService', () => {
     );
     const run = await s.routines.runNow(r.id);
     expect(run).toMatchObject({ status: 'failed', error: expect.stringContaining('signed out') });
+  });
+
+  it('runs a routine it held for a signed-out provider as soon as it’s back', async () => {
+    const s = await setup('signed-out');
+    const r = await s.routines.create(
+      { ...base, schedule: { type: 'daily', time: '08:00' } },
+      { createdBy: 'user' },
+    );
+    const held = await s.routines.runNow(r.id);
+    expect(held).toMatchObject({
+      status: 'failed',
+      error: expect.stringContaining('runs as soon as you sign in'),
+      waitingFor: expect.any(String),
+    });
+    // Still signed out: nothing happens.
+    await s.routines.checkNow();
+    expect((await s.routines.detail(r.id)).runs).toHaveLength(1);
+
+    const engine = s.providers.engineFor(undefined);
+    engine.login?.('subscription', () => undefined);
+    await vi.waitFor(async () => expect((await engine.detect()).state).toBe('ready'), {
+      timeout: 5_000,
+    });
+    await s.routines.checkNow();
+    const run = await settled(s, r.id);
+    expect(run).toMatchObject({ trigger: 'catch-up', status: 'succeeded' });
+    expect((await s.healed.list())[0]?.message).toMatch(/ran once .* was back/);
+    // Once is enough.
+    await s.routines.checkNow();
+    expect((await s.routines.detail(r.id)).runs).toHaveLength(2);
   });
 
   it('completes one-off routines after they run', async () => {

@@ -51,3 +51,20 @@ export const Usage = z.object({
   durationMs: z.number().nonnegative().optional(),
 });
 export type Usage = z.infer<typeof Usage>;
+
+/**
+ * Why a turn failed, when Conch can tell — so the chat offers the one thing
+ * that helps (sign in, answer with another provider, open 1Password) instead
+ * of a bare "Try again".
+ */
+export const TurnProblem = z.enum([
+  /** The provider's sign-in ended or was refused. */
+  'signed-out',
+  /** The provider couldn't be reached, or is overloaded. */
+  'unavailable',
+  /** A usage limit was reached for now. */
+  'limit',
+  /** The key lives in 1Password, which is locked. */
+  'key-locked',
+]);
+export type TurnProblem = z.infer<typeof TurnProblem>;

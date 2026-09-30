@@ -202,6 +202,7 @@ export class Services {
       conversations: this.conversations,
       engine: (id) => this.providers.engineFor(id),
       emit: (event) => this.broadcast.emit(event),
+      onHeal: (message) => void this.healed.note('routines', message),
     });
     this.conversations.events.on((event) => this.broadcast.emit(event));
     // A deleted chat takes its browser tab and thumbnails with it.

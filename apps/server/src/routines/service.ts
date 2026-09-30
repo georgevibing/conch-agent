@@ -21,6 +21,8 @@ import type { RoutineStore, StoredRoutine } from './store';
 
 /** Re-check at least this often, so sleep/wake and clock changes are noticed. */
 const TICK_MS = 30_000;
+/** A run held for a provider that wasn't ready still runs if it comes back within this. */
+const WAIT_FOR_PROVIDER_MS = 12 * 60 * 60_000;
 /** A run starting this late counts as a catch-up rather than on time. */
 const LATE_MS = 5 * 60_000;
 const MAX_CONCURRENT = 2;
@@ -52,6 +54,11 @@ export function localTimezone(): string {
 export class RoutineService {
   #timer?: NodeJS.Timeout;
   #running = new Map<string, string>(); // routineId → runId
+  /** Runs held back because their provider wasn't ready: they go once it is. */
+  #waiting = new Map<
+    string,
+    { engine: EngineId; since: number; scheduledFor?: number; runId: string }
+  >();
   #started = false;
 
   constructor(
@@ -62,6 +69,8 @@ export class RoutineService {
       engine: (id?: EngineId) => Engine;
       emit: (event: ServerEvent) => void;
       now?: () => number;
+      /** Leaves a “fixed on its own” note (a held run went once its provider came back). */
+      onHeal?: (message: string) => void;
     },
   ) {}
 
@@ -169,7 +178,29 @@ export class RoutineService {
 
   // ── Scheduling ─────────────────────────────────────────────────────────
 
+  /** Runs held for a provider that's ready now go, once each. */
+  async #resumeWaiting() {
+    for (const [routineId, held] of this.#waiting) {
+      if (this.#now - held.since > WAIT_FOR_PROVIDER_MS) {
+        this.#waiting.delete(routineId);
+        continue;
+      }
+      const engine = this.deps.engine(held.engine);
+      const ready = (await engine.detect().catch(() => undefined))?.state === 'ready';
+      if (!ready) continue;
+      this.#waiting.delete(routineId);
+      const routine = await this.deps.store.get(routineId).catch(() => undefined);
+      if (!routine || routine.status !== 'active') continue;
+      const run = await this.#execute(routine, 'catch-up', held.scheduledFor);
+      if (run)
+        this.deps.onHeal?.(
+          `“${routine.title}” didn’t run while ${engine.label} was signed out, so it ran once ${engine.label} was back.`,
+        );
+    }
+  }
+
   async #tick() {
+    await this.#resumeWaiting();
     const now = this.#now;
     for (const routine of await this.deps.store.all()) {
       if (routine.status !== 'active') continue;
@@ -245,19 +276,29 @@ export class RoutineService {
     if (status.state !== 'ready') {
       const reason =
         status.state === 'signed-out'
-          ? `${engine.label} was signed out, so this didn’t run.`
+          ? `${engine.label} was signed out, so this didn’t run. It runs as soon as you sign in.`
           : status.state === 'not-installed'
-            ? `${engine.label} isn’t installed, so this didn’t run.`
-            : `${engine.label} wasn’t available, so this didn’t run.`;
+            ? `${engine.label} isn’t installed, so this didn’t run. It runs once it’s there.`
+            : `${engine.label} wasn’t available, so this didn’t run. It runs once it’s back.`;
       const run = await this.#record(routine, {
         trigger,
         status: 'failed',
         scheduledFor,
         error: reason,
+        waitingFor: engine.id,
       });
+      // Held, not lost: it runs once the provider is ready again (checked every tick).
+      if (run)
+        this.#waiting.set(routine.id, {
+          engine: engine.id,
+          since: this.#now,
+          scheduledFor,
+          runId: run.id,
+        });
       await this.#afterRun(routine.id);
       return run;
     }
+    this.#waiting.delete(routine.id);
 
     let run: RoutineRun = {
       id: newId('run'),
