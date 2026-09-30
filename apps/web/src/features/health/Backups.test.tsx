@@ -243,7 +243,8 @@ describe('restoring', () => {
     );
     const dialog = await screen.findByRole('dialog', { name: 'Restore this backup?' });
     expect(within(dialog).getByText(/^From /)).toBeInTheDocument();
-    const list = within(dialog).getByRole('list', { name: 'What this backup brings back' });
+    // Read from its files first, then shown.
+    const list = await within(dialog).findByRole('list', { name: 'What this backup brings back' });
     expect(list).toHaveTextContent('12 memories');
     expect(list).toHaveTextContent('5 integrations · you’ll sign in to them again');
     expect(list).toHaveTextContent('240 chats');
@@ -311,7 +312,7 @@ describe('restoring', () => {
     act(() => resolveUpload(uploaded));
 
     const dialog = await screen.findByRole('dialog', { name: 'Restore this backup?' });
-    expect(within(dialog).getByRole('list')).toHaveTextContent(
+    expect(await within(dialog).findByRole('list')).toHaveTextContent(
       'Your keys and sign-ins · with your passphrase',
     );
     const restore = within(dialog).getByRole('button', { name: 'Restore' });
@@ -357,7 +358,7 @@ describe('restoring', () => {
     if (!input) throw new Error('no file input');
     await user.upload(input, new File(['x'], 'b.conchbackup'));
     const dialog = await screen.findByRole('dialog', { name: 'Restore this backup?' });
-    await user.click(within(dialog).getByRole('button', { name: /Forgot it\?/ }));
+    await user.click(await within(dialog).findByRole('button', { name: /Forgot it\?/ }));
     expect(within(dialog).getByRole('list')).toHaveTextContent('Keys and sign-ins left out');
     expect(within(dialog).getByRole('button', { name: 'Restore' })).toBeEnabled();
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
@@ -406,7 +407,9 @@ describe('restoring', () => {
     if (!input) throw new Error('no file input');
     await user.upload(input, new File(['x'], 'b.conchbackup'));
     const dialog = await screen.findByRole('dialog', { name: 'Restore this backup?' });
-    const brings = within(dialog).getByRole('list', { name: 'What this backup brings back' });
+    const brings = await within(dialog).findByRole('list', {
+      name: 'What this backup brings back',
+    });
     expect(brings).toHaveTextContent('2 integrations');
     expect(brings).toHaveTextContent('1 routine');
     const acts = within(dialog).getByRole('list', { name: 'This backup lets Conch act for you' });
@@ -496,7 +499,9 @@ describe('restoring', () => {
     await user.click(screen.getByRole('button', { name: 'Undo restore' }));
     const dialog = await screen.findByRole('dialog', { name: 'Undo the restore?' });
     expect(dialog).toHaveTextContent('just before the restore');
-    await user.click(within(dialog).getByRole('button', { name: 'Undo restore' }));
+    const confirm = within(dialog).getByRole('button', { name: 'Undo restore' });
+    await waitFor(() => expect(confirm).toBeEnabled());
+    await user.click(confirm);
     await waitFor(() =>
       expect(calls.some((c) => c.path === `/api/backups/${undo.id}/restore`)).toBe(true),
     );
