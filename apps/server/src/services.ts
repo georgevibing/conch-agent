@@ -5,7 +5,9 @@ import type { EngineId, LoginState, ServerEvent, SkillSource } from '@conch/prot
 import { AttachmentStore } from './attachments/store';
 import { AccessStore } from './auth/store';
 import { BrowserService } from './browser/service';
-import { adapterFor, type ChannelEndpoints } from './channels/adapters';
+import { adapterFor, type ChannelEndpoints, slackCheckFor } from './channels/adapters';
+import { MockDiscord } from './channels/mock/discord';
+import { MockSlack } from './channels/mock/slack';
 import { MockTelegram } from './channels/mock/telegram';
 import { ChannelService } from './channels/service';
 import { ChannelStore } from './channels/store';
@@ -91,8 +93,10 @@ export class Services {
   readonly search: SearchService;
   /** Telegram, Discord and Slack bots that reach your assistant (ADR 0018). */
   readonly channels: ChannelService;
-  /** The pretend Telegram used with the mock engine. */
+  /** The pretend Telegram and Discord used with the mock engine. */
   readonly mockTelegram?: MockTelegram;
+  readonly mockDiscord?: MockDiscord;
+  readonly mockSlack?: MockSlack;
   #login?: { handle: LoginHandle; state: LoginState };
   #sweeper?: NodeJS.Timeout;
 
@@ -259,6 +263,8 @@ export class Services {
 
     // With the mock engine, channels talk to a pretend Telegram on this machine.
     this.mockTelegram = config.CONCH_ENGINE === 'mock' ? new MockTelegram() : undefined;
+    this.mockDiscord = config.CONCH_ENGINE === 'mock' ? new MockDiscord() : undefined;
+    this.mockSlack = config.CONCH_ENGINE === 'mock' ? new MockSlack() : undefined;
     const endpoints: ChannelEndpoints = {};
     this.channels = new ChannelService({
       store: new ChannelStore(config.CONCH_HOME, heal),
@@ -266,6 +272,7 @@ export class Services {
       attachments: this.attachments,
       settings: this.settings,
       adapter: (secrets) => adapterFor(secrets, endpoints),
+      slack: (parts) => slackCheckFor(parts, endpoints),
       emit: (event) => this.broadcast.emit(event),
       onHeal: (message) => void this.healed.note('channels', message),
       routineTitle: async (id) =>
@@ -277,6 +284,14 @@ export class Services {
       if (this.mockTelegram) {
         const port = Number(process.env.CONCH_MOCK_TELEGRAM_PORT ?? 0);
         endpoints.telegram = await this.mockTelegram.start(port);
+      }
+      if (this.mockDiscord) {
+        await this.mockDiscord.start(Number(process.env.CONCH_MOCK_DISCORD_PORT ?? 0));
+        endpoints.discord = this.mockDiscord.api;
+      }
+      if (this.mockSlack) {
+        await this.mockSlack.start(Number(process.env.CONCH_MOCK_SLACK_PORT ?? 0));
+        endpoints.slack = this.mockSlack.api;
       }
     })();
   }
@@ -322,6 +337,8 @@ export class Services {
   stop() {
     this.channels.stop();
     void this.mockTelegram?.stop();
+    void this.mockDiscord?.stop();
+    void this.mockSlack?.stop();
     clearInterval(this.#sweeper);
     this.#sweeper = undefined;
   }

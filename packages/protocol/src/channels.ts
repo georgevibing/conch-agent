@@ -70,6 +70,8 @@ export const ChannelBot = z.object({
   chatUrl: z.string().max(2000).optional(),
   /** Adds the bot to Discord (its invite link). */
   inviteUrl: z.string().max(2000).optional(),
+  /** Discord: how many servers it's in (people can only message it from a server they share with it). */
+  servers: z.number().int().nonnegative().optional(),
 });
 export type ChannelBot = z.infer<typeof ChannelBot>;
 
