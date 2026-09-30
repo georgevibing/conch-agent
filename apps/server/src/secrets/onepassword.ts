@@ -10,12 +10,23 @@
  * unlock (Touch ID); on a server it's `OP_SERVICE_ACCOUNT_TOKEN`, which we pass
  * through from Conch's own environment if it's set.
  */
+import { platform } from 'node:os';
+
 import { SecretReference } from '@conch/protocol';
 
 import { agentEnv, findExecutable, run } from '../lib/proc';
 
 const DOCS_URL = 'https://www.1password.dev/cli/secret-reference-syntax/';
-export const INSTALL_COMMAND = 'brew install 1password-cli';
+
+/**
+ * How to get `op` here, as one command a person can paste. Linux needs `sudo`
+ * and a package repository, so it gets the docs link instead.
+ */
+export function installCommand(os: NodeJS.Platform = platform()): string | undefined {
+  if (os === 'win32') return 'winget install --exact --id AgileBits.1Password.CLI';
+  if (os === 'darwin') return 'brew install 1password-cli';
+  return undefined;
+}
 
 /** How long a resolved value is kept in memory, so one turn isn't ten unlock prompts. */
 const CACHE_MS = 5 * 60_000;
@@ -101,7 +112,7 @@ export class OnePassword {
       value = {
         available: false,
         message: 'Install the 1Password command line tool to keep keys in 1Password.',
-        installCommand: INSTALL_COMMAND,
+        installCommand: installCommand(),
         docsUrl: DOCS_URL,
       };
     } else {

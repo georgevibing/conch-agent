@@ -6,7 +6,7 @@ import type { Capabilities, EngineId, EngineStatus, ServerEvent } from '@conch/p
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Engine, EngineEvent, TurnInput } from '../engines/types';
-import { OnePassword } from '../secrets/onepassword';
+import { installCommand, OnePassword } from '../secrets/onepassword';
 import { SecretVault } from '../secrets/vault';
 import { SettingsStore } from '../settings/store';
 import { fakeOp } from '../test/fakeOp';
@@ -239,7 +239,10 @@ describe('keys in 1Password', () => {
     const onePassword = new OnePassword({ find: async () => undefined });
     const state = await onePassword.state();
     expect(state.available).toBe(false);
-    expect(state.installCommand).toBe('brew install 1password-cli');
+    expect(state.installCommand).toBe(installCommand());
+    expect(installCommand('win32')).toBe('winget install --exact --id AgileBits.1Password.CLI');
+    expect(installCommand('darwin')).toBe('brew install 1password-cli');
+    expect(installCommand('linux')).toBeUndefined();
     // Describing a saved secret must not ask 1Password for anything.
     const vault = new SecretVault(onePassword);
     const described = await vault.describe({
