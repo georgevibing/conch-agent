@@ -27,3 +27,4 @@ export * from './Terminal';
 export * from './Setup';
 export * from './Healed';
 export * from './Restart';
+export * from './Updates';
