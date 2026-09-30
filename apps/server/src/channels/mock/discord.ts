@@ -155,7 +155,14 @@ export class MockDiscord {
       return { ok: true };
     });
 
-    await app.listen({ port, host: '127.0.0.1' });
+    try {
+      await app.listen({ port, host: '127.0.0.1' });
+    } catch (error) {
+      // The port asked for is taken (another program, another test run): any free one will do.
+      await app.close().catch(() => undefined);
+      if (port === 0) throw error;
+      return this.start(0);
+    }
     this.base = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
     return this.base;
   }

@@ -80,7 +80,17 @@ export class MockTelegram {
         res.writeHead(500).end(String(error));
       });
     });
-    await new Promise<void>((resolve) => this.#server?.listen(port, '127.0.0.1', resolve));
+    const server = this.#server;
+    const listening = await new Promise<boolean>((resolve) => {
+      server.once('error', () => resolve(false));
+      server.listen(port, '127.0.0.1', () => resolve(true));
+    });
+    // The port asked for is taken (another program, another test run): any free one will do.
+    if (!listening) {
+      if (port === 0) throw new Error('The pretend Telegram couldn’t start.');
+      server.close();
+      return this.start(0);
+    }
     this.base = `http://127.0.0.1:${(this.#server.address() as AddressInfo).port}`;
     return this.base;
   }

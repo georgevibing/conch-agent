@@ -711,9 +711,7 @@ export class ChannelService {
     // seem broken, say so there (at most every half hour per group).
     if (!message.direct) {
       const key = `${id}:group:${message.chatId}`;
-      const last = this.#answered.get(key);
-      if (last !== undefined && this.#now - last < REPLY_TO_STRANGERS_MS) return;
-      this.#answered.set(key, this.#now);
+      if (!this.#mayAnswer(key)) return;
       const where = stored.bot.username ? ` Message @${stored.bot.username} directly.` : '';
       await live.connection
         .send(
@@ -831,6 +829,21 @@ export class ChannelService {
     }
   }
 
+  /**
+   * Whether to answer someone (or a group) not let in: once every half hour at
+   * most. Old entries are dropped, so a flood of strangers can't fill memory.
+   */
+  #mayAnswer(key: string): boolean {
+    const now = this.#now;
+    const last = this.#answered.get(key);
+    if (last !== undefined && now - last < REPLY_TO_STRANGERS_MS) return false;
+    if (this.#answered.size > 1000)
+      for (const [k, at] of this.#answered)
+        if (now - at >= REPLY_TO_STRANGERS_MS) this.#answered.delete(k);
+    this.#answered.set(key, now);
+    return true;
+  }
+
   /** Bumped by /new, so a conversation still being created doesn't become the current one again. */
   #epoch(id: string, personId: string) {
     return this.#epochs.get(`${id}:${personId}`) ?? 0;
@@ -864,9 +877,7 @@ export class ChannelService {
     });
     await this.#emit(stored.id);
     const key = `${stored.id}:${message.user.id}`;
-    const last = this.#answered.get(key);
-    if (last !== undefined && this.#now - last < REPLY_TO_STRANGERS_MS) return;
-    this.#answered.set(key, this.#now);
+    if (!this.#mayAnswer(key)) return;
     const hello = firstName(message.user.name);
     await live.connection
       .send(

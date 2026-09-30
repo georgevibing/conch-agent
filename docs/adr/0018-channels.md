@@ -174,6 +174,8 @@ between you and your bot, with standing power over its token.
   for 24 hours, so they're answered when Conch comes back; Discord and
   Slack don't redeliver DMs sent while it was off.
 - Each app has a pretend version for tests, e2e and `pnpm dev:mock`
-  (`channels/mock/`). `CONCH_MOCK_TELEGRAM_PORT`, `CONCH_MOCK_DISCORD_PORT`
-  and `CONCH_MOCK_SLACK_PORT` fix their ports. They start only with
-  `CONCH_ENGINE=mock`.
+  (`channels/mock/`). They start only with `CONCH_ENGINE=mock`.
+  `CONCH_MOCK_TELEGRAM_PORT`, `CONCH_MOCK_DISCORD_PORT` and
+  `CONCH_MOCK_SLACK_PORT` ask for a port; a taken one falls back to any free
+  port. `GET /api/channels/mock`, which exists in mock mode only, says where
+  they are.

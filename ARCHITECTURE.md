@@ -314,7 +314,9 @@ src/
     `DELETE /api/channels/:id/people/:personId`.
     `channel.changed` / `channel.deleted` go out on the socket.
   - **Mocks.** With the mock engine, a pretend Telegram, Discord and Slack
-    start too (`channels/mock/`, ports via `CONCH_MOCK_*_PORT`).
+    start too (`channels/mock/`). `CONCH_MOCK_*_PORT` asks for a port, and a
+    taken one falls back to any free port. `GET /api/channels/mock` (mock mode
+    only) says where they are.
 - **Search.** `search/` keeps a SQLite FTS5 (trigram) index of every message in
   `~/.conch/search.db`, fed by the conversation event stream and caught up on start;
   `GET /api/search` ranks and groups hits with snippets, `GET /api/search/preview`

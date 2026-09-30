@@ -2,12 +2,13 @@ import { expect, test, type APIRequestContext } from '@playwright/test';
 
 /**
  * With the mock engine, channels talk to a pretend Telegram, Discord and Slack
- * on this machine (fixed ports in playwright.config.ts). The tests speak for
- * the person on their phone through each pretend app's /__control endpoints.
+ * on this machine; the gateway says where (`GET /api/channels/mock`, mock
+ * engine only). The tests speak for the person on their phone through each
+ * pretend app's /__control endpoints.
  */
-const TELEGRAM = 'http://127.0.0.1:4386';
-const DISCORD = 'http://127.0.0.1:4385';
-const SLACK = 'http://127.0.0.1:4384';
+let TELEGRAM = '';
+let DISCORD = '';
+let SLACK = '';
 
 const BOTFATHER = `Done! Congratulations on your new bot. You will find it at t.me/my_conch_bot.
 Use this token to access the HTTP API:
@@ -25,6 +26,10 @@ const telegramSent = async (request: APIRequestContext): Promise<Sent[]> =>
   (await request.post(`${TELEGRAM}/__control/sent`)).json() as Promise<Sent[]>;
 
 test.beforeEach(async ({ request }) => {
+  const mocks = (await (await request.get('/api/channels/mock')).json()) as Record<string, string>;
+  TELEGRAM = mocks.telegram ?? '';
+  DISCORD = mocks.discord ?? '';
+  SLACK = mocks.slack ?? '';
   await request.patch('/api/settings', {
     data: { onboarded: true, profile: { name: 'Ada Lovelace' } },
   });

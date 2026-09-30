@@ -76,3 +76,23 @@ describe('TelegramAdapter', () => {
     connection.close();
   });
 });
+
+describe('the pretend apps', () => {
+  it('start on any free port when the one asked for is taken', async () => {
+    const { createServer } = await import('node:net');
+    const { MockDiscord } = await import('./mock/discord');
+    const blocker = createServer();
+    await new Promise<void>((resolve) => blocker.listen(0, '127.0.0.1', resolve));
+    const taken = (blocker.address() as { port: number }).port;
+    const pretendTelegram = new MockTelegram();
+    const pretendDiscord = new MockDiscord();
+    try {
+      expect(await pretendTelegram.start(taken)).not.toContain(`:${taken}`);
+      expect(await pretendDiscord.start(taken)).not.toContain(`:${taken}`);
+    } finally {
+      await pretendTelegram.stop();
+      await pretendDiscord.stop();
+      blocker.close();
+    }
+  });
+});

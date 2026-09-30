@@ -30,6 +30,8 @@ export function registerChannelRoutes(
   app: FastifyInstance,
   channels: ChannelService,
   gate: Gatekeeper,
+  /** With the mock engine only: where the pretend apps are, for tests and demos. */
+  mocks?: () => Record<'telegram' | 'discord' | 'slack', string | undefined>,
 ) {
   const parse = <T extends z.ZodType>(schema: T, value: unknown, reply: FastifyReply) => {
     const result = schema.safeParse(value);
@@ -63,6 +65,8 @@ export function registerChannelRoutes(
   };
 
   app.get('/api/channels', () => channels.list());
+
+  if (mocks) app.get('/api/channels/mock', () => mocks());
 
   app.post('/api/channels/check', async (request, reply) => {
     const body = parse(CheckChannelBody, request.body, reply);

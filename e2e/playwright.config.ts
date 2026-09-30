@@ -21,15 +21,7 @@ const scenarios = {
   terminal: { port: 4390, env: { CONCH_MOCK_STATE: 'ready' } },
   recovery: { port: 4388, env: { CONCH_MOCK_STATE: 'ready' } },
   attachments: { port: 4389, env: { CONCH_MOCK_STATE: 'ready' } },
-  channels: {
-    port: 4387,
-    env: {
-      CONCH_MOCK_STATE: 'ready',
-      CONCH_MOCK_TELEGRAM_PORT: '4386',
-      CONCH_MOCK_DISCORD_PORT: '4385',
-      CONCH_MOCK_SLACK_PORT: '4384',
-    },
-  },
+  channels: { port: 4387, env: { CONCH_MOCK_STATE: 'ready' } },
   security: {
     port: 4397,
     env: { CONCH_MOCK_STATE: 'ready', CONCH_ALLOWED_HOSTS: 'studio-mac.tail1234.ts.net' },

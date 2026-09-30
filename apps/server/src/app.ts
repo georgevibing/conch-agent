@@ -137,7 +137,17 @@ export async function buildApp(services: Services) {
   registerBrowserRoutes(app, services, gate);
   registerTerminalRoutes(app, services, gate);
   registerAttachmentRoutes(app, services.attachments);
-  registerChannelRoutes(app, services.channels, gate);
+  registerChannelRoutes(
+    app,
+    services.channels,
+    gate,
+    services.mockTelegram &&
+      (() => ({
+        telegram: services.mockTelegram?.base,
+        discord: services.mockDiscord?.base,
+        slack: services.mockSlack?.base,
+      })),
+  );
   app.addHook('onClose', () => services.browser.stop());
   app.addHook('onClose', async () => services.stop());
   app.addHook('onClose', async () => services.terminal.stop());
