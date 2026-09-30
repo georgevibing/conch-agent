@@ -333,7 +333,7 @@ export function useFindables(query: string, conversationId: string | undefined):
           },
         ]),
     {
-      // A model on this computer (ADR 0018): straight to its setup page.
+      // A model on this computer (ADR 0022): straight to its setup page.
       id: 'local-model',
       label: 'Model on this computer',
       keywords: 'local offline private free model ollama llama qwen download run laptop',

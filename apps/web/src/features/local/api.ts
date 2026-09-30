@@ -2,7 +2,7 @@ import { LocalStatus } from '@conch/protocol';
 
 import { request } from '../../api/client';
 
-/** A model on this computer (ADR 0018): Ollama, and the models it runs. */
+/** A model on this computer (ADR 0022): Ollama, and the models it runs. */
 export const localApi = {
   status: () => request(LocalStatus, '/api/local'),
   /** Needs a recent password or key (sudo mode): it's a big download that stays here. */

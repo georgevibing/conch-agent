@@ -172,7 +172,9 @@ describe('A model on this computer', () => {
     expect(steps).toHaveTextContent('To do: Ollama');
     expect(steps).toHaveTextContent('Later: Get Qwen3 4B');
     expect(steps).toHaveTextContent('2.5 GB, about 4 minutes to download.');
-    expect(page).toHaveTextContent('Installs Ollama (winget install --id Ollama.Ollama…)');
+    expect(page).toHaveTextContent('Installs Ollama first, then downloads Qwen3 4B');
+    // The exact command, before it runs.
+    expect(page).toHaveTextContent('Runs winget install --id Ollama.Ollama …');
 
     // One press: Ollama installs, with the installer's own progress…
     await userEvent.click(within(page).getByRole('button', { name: 'Get Qwen3 4B' }));

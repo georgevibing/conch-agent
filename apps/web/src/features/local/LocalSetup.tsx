@@ -164,7 +164,7 @@ function PullStep({
 }
 
 /**
- * A model on this computer, set up as one flow (ADR 0018): get Ollama, get
+ * A model on this computer, set up as one flow (ADR 0022): get Ollama, get
  * the model this computer suits, and chat. One button does all of it — Conch
  * installs Ollama if it has to, then carries straight on to the download —
  * and the checklist shows each step as it happens. Once there's a model, it's
@@ -182,6 +182,8 @@ export function LocalSetup({ provider }: { provider: Provider }) {
   /** You pressed Get while Ollama wasn't here: this model downloads as soon as it is. */
   const carryOn = useRef<string>(undefined);
   const modelsId = useId();
+  /** Where the steps are, so pressing Get brings them into view. */
+  const steps = useRef<HTMLOListElement>(null);
 
   const put = (next: LocalStatus) => client.setQueryData(localKeys.status, next);
   const refreshElsewhere = () => {
@@ -198,6 +200,7 @@ export function LocalSetup({ provider }: { provider: Provider }) {
   const get = async (name: string) => {
     setError(undefined);
     setBusy(true);
+    steps.current?.scrollIntoView({ block: 'nearest' });
     try {
       const ok = await guard(async () => {
         if (local?.ollama.state === 'missing') {
@@ -236,12 +239,14 @@ export function LocalSetup({ provider }: { provider: Provider }) {
   }, [needState, ollamaState, client]);
   useEffect(() => {
     const name = carryOn.current;
-    if (!name || !ollamaState || ollamaState === 'missing' || ollamaState === 'elsewhere') return;
+    // The program appears on disk before the installer is done: wait for it to finish.
+    if (!name || needState === 'installing') return;
+    if (!ollamaState || ollamaState === 'missing' || ollamaState === 'elsewhere') return;
     carryOn.current = undefined;
     void get(name);
-    // Only the moment Ollama is here matters.
+    // Only the moment Ollama is here, and installed, matters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ollamaState]);
+  }, [ollamaState, needState]);
 
   // A model landed: the provider card and the model picker see it now.
   const pullState = local?.pull?.state;
@@ -260,7 +265,8 @@ export function LocalSetup({ provider }: { provider: Provider }) {
   }
 
   const offers = local.offers;
-  const available = offers.filter((o) => o.fits && !o.installed);
+  // A handful to choose from, not the whole catalogue: the pick first, then the biggest that fit.
+  const available = offers.filter((o) => o.fits && !o.installed).slice(0, 5);
   const recommended = offers.find((o) => o.recommended);
   const choice =
     offers.find((o) => o.name === picked) ??
@@ -372,7 +378,7 @@ export function LocalSetup({ provider }: { provider: Provider }) {
   return (
     <Stack gap={5}>
       {!hasModel ? (
-        <SetupChecklist aria-label="What a model on this computer needs">
+        <SetupChecklist ref={steps} aria-label="What a model on this computer needs">
           <SetupChecklist.Step
             state={ollamaStep}
             title="Ollama"
@@ -411,9 +417,14 @@ export function LocalSetup({ provider }: { provider: Provider }) {
           </div>
           <Text size="xs" tone="subtle">
             {byWinget
-              ? `Installs Ollama (${need?.install?.command.split(' ').slice(0, 4).join(' ')}…), then downloads ${choice.label} from Ollama’s library. After that, it never needs the internet.`
+              ? `Installs Ollama first, then downloads ${choice.label} from Ollama’s library. After that, it never needs the internet.`
               : `Downloads ${choice.label} from Ollama’s library. After that, it never needs the internet.`}
           </Text>
+          {byWinget && need?.install && (
+            <Text size="xs" tone="subtle" title={need.install.command}>
+              Runs <code>{need.install.command.split(' ').slice(0, 4).join(' ')} …</code>
+            </Text>
+          )}
         </Stack>
       )}
 
@@ -423,7 +434,8 @@ export function LocalSetup({ provider }: { provider: Provider }) {
         </Callout>
       )}
 
-      {!hasModel && !active && available.length > 1 && (
+      {/* Choosing is for before it starts: once it's on its way, the steps are what matter. */}
+      {!hasModel && !active && !installing && available.length > 1 && (
         <Collapsible>
           <Collapsible.Trigger chevron>Other models</Collapsible.Trigger>
           <Collapsible.Content>
