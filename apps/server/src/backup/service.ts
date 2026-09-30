@@ -44,8 +44,11 @@ const TICK_MS = 10 * 60_000;
 const FIRST_TICK_MS = 2 * 60_000;
 /** Files to download and files uploaded to restore are cleared after this. */
 const TRANSIENT_MS = 60 * 60_000;
-/** A restore is offered to be undone for this long. */
-const UNDO_OFFER_MS = 7 * 24 * 60 * 60_000;
+/**
+ * A restore is mentioned, with Undo, for a day. Its Undo copy stays in the
+ * list longer (see `retainUndo`).
+ */
+const UNDO_OFFER_MS = 24 * 60 * 60_000;
 /** Room left free on the disk besides the backup itself. */
 const SPARE_BYTES = 64 * 1024 * 1024;
 
