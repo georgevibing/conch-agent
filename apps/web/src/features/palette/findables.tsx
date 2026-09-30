@@ -1,6 +1,7 @@
 import type { TextRange } from '@conch/protocol';
 import { IntegrationLogo, ProviderLogo, SkillIcon, toast } from '@conch/nacre';
 import {
+  Archive,
   BatteryMedium,
   Blocks,
   Brain,
@@ -8,6 +9,7 @@ import {
   Gauge,
   Globe,
   HeartPulse,
+  History,
   Palette as PaletteIcon,
   Paperclip,
   SquareTerminal,
@@ -272,6 +274,20 @@ export function useFindables(query: string, conversationId: string | undefined):
       keywords: 'upload file picture image photo pdf document add paperclip',
       icon: <Paperclip />,
       run: () => useUi.getState().requestAttach(),
+    },
+    {
+      id: 'backup-now',
+      label: 'Back up now',
+      keywords: 'backup back up save copy export download archive keep safe',
+      icon: <Archive />,
+      run: () => openSettings('health', 'backup'),
+    },
+    {
+      id: 'restore-backup',
+      label: 'Restore a backup',
+      keywords: 'restore backup undo go back recover import upload file conchbackup',
+      icon: <History />,
+      run: () => openSettings('health', 'restore'),
     },
     {
       id: 'skills',

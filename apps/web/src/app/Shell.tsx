@@ -5,6 +5,7 @@ import { useLocation, useNavigate, useParams } from 'react-router';
 
 import { useConversations } from '../api/queries';
 import { RestartWatch } from '../features/health/RestartWatch';
+import { RestoredNotice } from '../features/health/RestoredNotice';
 import { ChatView } from '../features/chat/ChatView';
 import { EnginePill } from '../features/engine/EnginePill';
 import { IntegrationDetailView } from '../features/integrations/IntegrationDetailView';
@@ -175,6 +176,7 @@ export function Shell() {
       <Settings />
       <Palette />
       <RestartWatch />
+      <RestoredNotice />
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { browserKeys } from '../features/browser/queries';
 import { terminalKeys } from '../features/terminal/queries';
 import { applyIntegrationEvent } from '../features/integrations/queries';
 import { healthKeys } from '../features/health/api';
+import { backupKeys } from '../features/health/backups';
 import { applyRoutineEvent } from '../features/routines/queries';
 import { skillKeys } from '../features/skills/queries';
 import { LiveSocket, socketUrl } from './socket';
@@ -129,6 +130,9 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           break;
         case 'skills.changed':
           void client.invalidateQueries({ queryKey: skillKeys.all });
+          break;
+        case 'backups.changed':
+          void client.invalidateQueries({ queryKey: backupKeys.status });
           break;
         case 'doctor.report':
           client.setQueryData(healthKeys.doctor, event.report);
