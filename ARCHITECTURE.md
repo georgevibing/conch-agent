@@ -134,8 +134,12 @@ src/
   `~/.claude/skills`, `~/.openclaw/skills` and `~/.hermes/skills` are listed
   read-only and start Off. `frontmatter.ts` reads and rewrites only the keys Conch
   owns, so other products' metadata survives. `POST /api/skills/draft` writes a title
-  and a ≤160-character description on the default provider's cheapest model.
-  Automatic skills are listed as `<available_skills>` in the system prompt and loaded
+  and a ≤160-character description on the default provider's cheapest model. A
+  skill with a problem says which (`problemKind`); for one of yours that lacks a
+  description, `POST /api/skills/:id/describe` drafts one from its own words (the
+  first sentence when no model is connected) for the person to check and save —
+  only the front matter changes. Other apps' skills are refused (409) and offer a
+  copy instead. Automatic skills are listed as `<available_skills>` in the system prompt and loaded
   with the `use_skill` host tool (or read from their path by engines without host
   tools); `skill.used` shows it in the chat.
 - **Routines** (`routines/`): structured schedules (croner for calendar maths,
@@ -303,7 +307,9 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   the title and description are written for you (Nacre `SkillCard` shimmers, then
   writes them in) and stay editable; `/skills/:id` edits it (autosaved), chooses
   Automatically · When I ask · Off, copies someone else's skill to edit, or tries it
-  in a chat. Skills are in the `/` menu and in ⌘K.
+  in a chat. A broken skill shows Nacre `SkillProblem` with its one fix: “Write the
+  description for me”, “Make a copy I can edit”, or “Look again”. Skills are in the
+  `/` menu and in ⌘K.
 - **Search.** ⌘K (or Search in the sidebar) is one box for everything: fuzzy chat
   titles (client-side), full-text message hits from every conversation, and — from
   `palette/findables.tsx` — skills (into the composer), models from every provider

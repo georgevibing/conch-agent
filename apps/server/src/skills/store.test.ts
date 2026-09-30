@@ -317,3 +317,112 @@ describe('SkillService', () => {
     expect((await skills.draft('Tidy it again')).name).toBe('tidy-downloads-2');
   });
 });
+
+describe('writing a missing description', () => {
+  const service = (store: SkillStore, engines: Engine[] = []) =>
+    new SkillService({ store, engines: async () => engines, emit: () => undefined });
+  const model = (text: string) => fakeEngine({ complete: async () => ({ text }) });
+
+  it('says which fix fits: a description to write, or a file to look at', async () => {
+    const { home, store } = await setup();
+    await write(join(home, 'skills', 'plain', 'SKILL.md'), '---\nname: plain\n---\n\nDo it.\n');
+    await write(
+      join(home, 'skills', 'huge', 'SKILL.md'),
+      `---\nname: huge\n---\n${'x'.repeat(300_000)}`,
+    );
+    const { skills } = await store.list({ fresh: true });
+    const kind = (id: string) => skills.find((s) => s.id === id)?.problemKind;
+    expect(kind('agents_broken')).toBe('no-front-matter');
+    expect(kind('plain')).toBe('no-description');
+    expect(kind('huge')).toBe('unreadable');
+    expect(kind('openclaw_gh-triage')).toBeUndefined();
+  });
+
+  it('drafts it from the skill’s own words and saves only the front matter', async () => {
+    const { home, store } = await setup();
+    const body = 'Tidy the Downloads folder.\n\n- Sort files into folders by type.\n';
+    await write(join(home, 'skills', 'tidy', 'SKILL.md'), body);
+    const prompts: string[] = [];
+    const skills = new SkillService({
+      store,
+      engines: async () => [
+        fakeEngine({
+          complete: async (input) => {
+            prompts.push(input.prompt);
+            return {
+              text: '{"title":"Tidy downloads","does":"Sorts the Downloads folder by type","when":"Use when asked to clean up downloads"}',
+            };
+          },
+        }),
+      ],
+      emit: () => undefined,
+    });
+    const draft = await skills.describe('tidy');
+    expect(draft).toEqual({
+      description: 'Sorts the Downloads folder by type. Use when asked to clean up downloads.',
+      from: 'model',
+      noModel: false,
+    });
+    expect(prompts[0]).toContain('Sort files into folders by type.');
+
+    const saved = await skills.update('tidy', { description: draft.description });
+    expect(saved.problem).toBeUndefined();
+    expect(saved.mode).toBe('auto');
+    // What the person wrote is untouched: no heading added, nothing reflowed.
+    expect(await readFile(join(home, 'skills', 'tidy', 'SKILL.md'), 'utf8')).toBe(
+      `---\nname: tidy\ndescription: Sorts the Downloads folder by type. Use when asked to clean up downloads.\n---\n\n${body}`,
+    );
+  });
+
+  it('says when no model can write it, and starts from the first sentence', async () => {
+    const { home, store } = await setup();
+    await write(
+      join(home, 'skills', 'notes', 'SKILL.md'),
+      '---\nname: notes\n---\n# Meeting notes\n\nTurn a transcript into action items. Then email them.\n',
+    );
+    expect(await service(store).describe('notes')).toEqual({
+      description: 'Turn a transcript into action items.',
+      from: 'text',
+      noModel: true,
+    });
+    // A model that fails is not the same as no model at all.
+    const broken = fakeEngine({
+      complete: async () => {
+        throw new Error('offline');
+      },
+    });
+    expect(await service(store, [broken]).describe('notes')).toMatchObject({
+      from: 'text',
+      noModel: false,
+    });
+    await write(join(home, 'skills', 'empty', 'SKILL.md'), '---\nname: empty\n---\n');
+    store.invalidate();
+    expect(await service(store, [model('{}')]).describe('empty')).toEqual({
+      description: '',
+      from: 'none',
+      noModel: false,
+    });
+  });
+
+  it('never writes into another app’s folder, but its copy can be fixed', async () => {
+    const { user, store } = await setup();
+    const skills = service(store, [
+      model('{"title":"Broken","does":"Explains what broke","when":"Use when something breaks"}'),
+    ]);
+    await expect(skills.describe('agents_broken')).rejects.toMatchObject({ code: 'read-only' });
+    await expect(skills.update('agents_broken', { description: 'x' })).rejects.toBeInstanceOf(
+      SkillError,
+    );
+    expect(await readFile(join(user, '.agents', 'skills', 'broken', 'SKILL.md'), 'utf8')).toBe(
+      'no front matter here',
+    );
+
+    const copy = await skills.copy('agents_broken');
+    expect(copy).toMatchObject({ editable: true, problemKind: 'no-description' });
+    const draft = await skills.describe(copy.id);
+    expect(draft.from).toBe('model');
+    expect((await skills.update(copy.id, { description: draft.description })).problem).toBe(
+      undefined,
+    );
+  });
+});

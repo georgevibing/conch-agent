@@ -187,3 +187,136 @@ describe('One skill', () => {
     );
   });
 });
+
+describe('A skill that can’t be used yet', () => {
+  const NO_DESCRIPTION = 'It has no description, so an assistant wouldn’t know when to use it.';
+  const broken: SkillDetail = {
+    ...skill({ id: 'tidy', name: 'tidy', title: 'Tidy' }),
+    description: '',
+    problem: NO_DESCRIPTION,
+    problemKind: 'no-description',
+    instructions: 'Sort the Downloads folder by type.',
+  };
+
+  it('writes the description for you, and one Save fixes it', async () => {
+    const user = userEvent.setup();
+    let saved: SkillDetail | undefined;
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/skills/tidy': () => saved ?? broken,
+      'POST /api/skills/tidy/describe': () => ({
+        description: 'Sorts the Downloads folder by type. Use when asked to tidy downloads.',
+        from: 'model',
+        noModel: false,
+      }),
+      'PATCH /api/skills/tidy': (body) => {
+        const { description } = body as { description: string };
+        saved = { ...broken, description, problem: undefined, problemKind: undefined };
+        return saved;
+      },
+    });
+    renderApp(<SkillDetailView skillId="tidy" />, { route: '/skills/tidy' });
+    expect(await screen.findByText(NO_DESCRIPTION)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Write the description for me' }));
+    const field = await screen.findByRole('textbox', {
+      name: 'Description',
+      description: /Written/,
+    });
+    expect(field).toHaveValue(
+      'Sorts the Downloads folder by type. Use when asked to tidy downloads.',
+    );
+    await user.clear(field);
+    await user.type(field, 'Sorts downloads. Use when asked to tidy.');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(screen.queryByText(NO_DESCRIPTION)).toBeNull());
+    const patches = calls.filter((c) => c.method === 'PATCH');
+    expect(patches.map((c) => c.body)).toEqual([
+      { description: 'Sorts downloads. Use when asked to tidy.' },
+    ]);
+    // The details below show it too, and it isn't saved a second time.
+    const details = screen.getAllByRole('textbox', { name: 'Description' });
+    expect(details.at(-1)).toHaveValue('Sorts downloads. Use when asked to tidy.');
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    expect(calls.filter((c) => c.method === 'PATCH')).toHaveLength(1);
+  });
+
+  it('says so when no model is connected, and lets you type it', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/skills/tidy': () => broken,
+      'POST /api/skills/tidy/describe': () => ({
+        description: 'Sort the Downloads folder by type.',
+        from: 'text',
+        noModel: true,
+      }),
+    });
+    renderApp(<SkillDetailView skillId="tidy" />, { route: '/skills/tidy' });
+    await user.click(await screen.findByRole('button', { name: 'Write the description for me' }));
+    expect(
+      await screen.findByRole('textbox', {
+        name: 'Description',
+        description: /No model is connected/,
+      }),
+    ).toHaveValue('Sort the Downloads folder by type.');
+  });
+
+  it('won’t edit another app’s skill where it lives, and offers a copy that can be fixed', async () => {
+    const user = userEvent.setup();
+    const theirs: SkillDetail = {
+      ...broken,
+      id: 'claude_tidy',
+      source: 'claude',
+      sourceLabel: 'Claude Code',
+      editable: false,
+      path: '/home/ada/.claude/skills/tidy',
+    };
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/skills/claude_tidy': () => theirs,
+      'POST /api/skills/claude_tidy/copy': () => ({ ...broken, id: 'tidy-2', name: 'tidy-2' }),
+      'GET /api/skills/tidy-2': () => ({ ...broken, id: 'tidy-2', name: 'tidy-2' }),
+    });
+    renderApp(
+      <Routes>
+        <Route path="/skills/:id" element={<SkillDetailView skillId="claude_tidy" />} />
+      </Routes>,
+      { route: '/skills/claude_tidy' },
+    );
+    expect(
+      await screen.findByText(/lives in Claude Code’s folder, and Conch won’t change it there/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Write the description for me' })).toBeNull();
+    // One button, not two.
+    expect(screen.queryByRole('button', { name: 'Make a copy to edit' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Make a copy I can edit' }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.path === '/api/skills/claude_tidy/copy')).toBe(true),
+    );
+    expect(calls.some((c) => c.path.endsWith('/describe'))).toBe(false);
+  });
+
+  it('offers to look again at a file it couldn’t read', async () => {
+    const user = userEvent.setup();
+    let fixed = false;
+    const unreadable: SkillDetail = {
+      ...broken,
+      problem: 'SKILL.md is too big to read.',
+      problemKind: 'unreadable',
+    };
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/skills': () => {
+        fixed = true;
+        return list;
+      },
+      'GET /api/skills/tidy': () =>
+        fixed ? { ...broken, description: 'Tidies.', problem: undefined } : unreadable,
+    });
+    renderApp(<SkillDetailView skillId="tidy" />, { route: '/skills/tidy' });
+    await user.click(await screen.findByRole('button', { name: 'Look again' }));
+    await waitFor(() => expect(screen.queryByText(/too big to read/)).toBeNull());
+    expect(calls.some((c) => c.path === '/api/skills?refresh=1')).toBe(true);
+  });
+});

@@ -1,18 +1,21 @@
-import type {
-  ConversationEventInput,
-  CreateSkillBody,
-  ServerEvent,
-  SkillDetail,
-  SkillDraft,
-  SkillsList,
-  UpdateSkillBody,
-  Usage,
+import {
+  SKILL_DESCRIPTION_MAX,
+  type ConversationEventInput,
+  type CreateSkillBody,
+  type ServerEvent,
+  type SkillDescriptionDraft,
+  type SkillDetail,
+  type SkillDraft,
+  type SkillsList,
+  type UpdateSkillBody,
+  type Usage,
 } from '@conch/protocol';
 import { z } from 'zod';
 
 import type { Engine, HostTool } from '../engines/types';
 import { draftSkill } from './draft';
 import { slugify } from './draft';
+import { withTitle } from './frontmatter';
 import { publicSkill, SkillError, type LoadedSkill, type SkillStore } from './store';
 
 /** What the prompt may spend listing skills; the rest are still usable by name. */
@@ -55,6 +58,32 @@ export class SkillService {
     const { draft, usage } = await draftSkill(engine, instructions, signal);
     if (usage) this.deps.onSpend?.(usage);
     return { ...draft, name: await this.deps.store.freeName(slugify(draft.title)) };
+  }
+
+  /**
+   * The missing description of one of your skills, written from its own
+   * title and instructions by the cheapest model that can — or, with none
+   * connected, their first sentence — for you to look over and save.
+   * Never for a skill another app owns: Conch doesn't write there.
+   */
+  async describe(id: string, signal?: AbortSignal): Promise<SkillDescriptionDraft> {
+    const skill = await this.deps.store.get(id);
+    if (!skill.editable)
+      throw new SkillError(
+        'read-only',
+        `${skill.sourceLabel} owns this skill, so Conch won’t change it there. Make a copy to edit it.`,
+      );
+    const engines = await this.deps.engines().catch(() => []);
+    const engine = engines.find((e) => e.complete);
+    const { instructions } = await this.deps.store.detail(id);
+    if (!instructions.trim()) return { description: '', from: 'none', noModel: !engine };
+    const { draft, usage } = await draftSkill(engine, withTitle(skill.title, instructions), signal);
+    if (usage) this.deps.onSpend?.(usage);
+    return {
+      description: draft.description.slice(0, SKILL_DESCRIPTION_MAX),
+      from: draft.generated ? 'model' : 'text',
+      noModel: !engine,
+    };
   }
 
   async create(body: CreateSkillBody): Promise<SkillDetail> {

@@ -8,6 +8,7 @@ import {
   SkillName,
   type Skill,
   type SkillDetail,
+  type SkillProblemKind,
   type SkillSource,
   type SkillSourceInfo,
 } from '@conch/protocol';
@@ -333,11 +334,13 @@ export class SkillStore {
             ]
           : []),
       ]);
-      await writeFileAtomic(
-        skill.file,
-        joinSkill({ front, body: withTitle(title, instructions) }),
-        0o600,
-      );
+      // Only a new title or new instructions rewrite the body; anything else
+      // (a description, the mode) leaves what the person wrote exactly as it was.
+      const body =
+        patch.title === undefined && patch.instructions === undefined
+          ? file.body
+          : withTitle(title, instructions);
+      await writeFileAtomic(skill.file, joinSkill({ front, body }), 0o600);
       if (patch.mode !== undefined)
         await this.#setMode(skill.id, mode === 'off' ? 'off' : undefined);
       this.invalidate();
@@ -432,6 +435,7 @@ export class SkillStore {
     const folderName = folder.slice(folder.lastIndexOf(sep) + 1);
     let parsed: { front: string | undefined; body: string } = { front: undefined, body: '' };
     let problem: string | undefined;
+    let problemKind: SkillProblemKind | undefined;
     let updatedAt = Date.now();
     try {
       const info = await lstat(file);
@@ -440,13 +444,17 @@ export class SkillStore {
     } catch (error) {
       problem =
         error instanceof SkillError ? error.message : 'Conch couldn’t read this skill’s SKILL.md.';
+      problemKind = 'unreadable';
     }
     const name = readKey(parsed.front, 'name')?.trim() || folderName;
     const description = readKey(parsed.front, 'description')?.replace(/\s+/g, ' ').trim() ?? '';
-    if (!problem && parsed.front === undefined)
+    if (!problem && parsed.front === undefined) {
       problem = 'Its SKILL.md has no front matter (the --- block with a name and description).';
-    else if (!problem && !description)
+      problemKind = 'no-front-matter';
+    } else if (!problem && !description) {
       problem = 'It has no description, so an assistant wouldn’t know when to use it.';
+      problemKind = 'no-description';
+    }
     const { title } = splitTitle(parsed.body);
     const fileMode = readFlag(parsed.front, 'disable-model-invocation') ? 'manual' : 'auto';
 
@@ -471,6 +479,7 @@ export class SkillStore {
       files: await listFiles(folder),
       ...(loadedBy && { loadedBy }),
       ...(problem && { problem }),
+      ...(problemKind && { problemKind }),
       updatedAt,
       file,
       fileMode,
