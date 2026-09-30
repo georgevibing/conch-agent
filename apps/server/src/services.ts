@@ -4,6 +4,8 @@ import type { EngineId, LoginState, ServerEvent, SkillSource, TurnProblem } from
 
 import { AttachmentStore } from './attachments/store';
 import { AccessStore } from './auth/store';
+import { backupCheck } from './backup/doctor';
+import { BackupService } from './backup/service';
 import { BrowserService } from './browser/service';
 import { TerminalService } from './terminal/service';
 import { Gatekeeper } from './security';
@@ -47,7 +49,7 @@ import { UpdatesService } from './updates/service';
 import { UsageService } from './usage/service';
 import { SERVER_VERSION } from './version';
 
-export { SERVER_VERSION } from './version';
+export { SERVER_VERSION };
 
 /** Every past turn's cost, oldest conversations included. */
 async function turnCosts(store: ConversationStore) {
@@ -104,6 +106,10 @@ export class Services {
   readonly search: SearchService;
   /** Updates for Conch and the programs it uses (ADR 0019). */
   readonly updates: UpdatesService;
+  /** Back up and restore your Conch; a daily backup by itself (ADR 0020). */
+  readonly backups: BackupService;
+  /** When a chat last did anything: backups wait for a quiet moment. */
+  #lastActivity = Date.now();
   #login?: { handle: LoginHandle; state: LoginState };
   #sweeper?: NodeJS.Timeout;
 
@@ -308,6 +314,18 @@ export class Services {
     });
     this.updates = this.#updates(config);
     this.doctor.register(updatesCheck(this.updates));
+    this.conversations.events.on((event) => {
+      if (event.type === 'conversation.event') this.#lastActivity = Date.now();
+    });
+    this.backups = new BackupService({
+      home: config.CONCH_HOME,
+      conchVersion: SERVER_VERSION,
+      busy: () => this.conversations.busy(),
+      lastActivity: () => this.#lastActivity,
+      emit: () => this.broadcast.emit({ type: 'backups.changed' }),
+      heal,
+    });
+    this.doctor.register(backupCheck(this.backups));
   }
 
   /**
@@ -373,6 +391,7 @@ export class Services {
     );
     this.#sweeper.unref();
     this.updates.start();
+    this.backups.start();
   }
 
   stop() {
@@ -380,6 +399,9 @@ export class Services {
     this.#sweeper = undefined;
     this.network.stop();
     this.updates.stop();
+    this.backups.stop();
+    // Let go of the index file, so a restore (or a test) can replace it.
+    this.search.close();
   }
 
   /** A provider on this computer that's ready to answer, for when the internet isn't there. */

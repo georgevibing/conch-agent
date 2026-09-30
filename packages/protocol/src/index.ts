@@ -28,6 +28,7 @@ import { UsageSnapshot } from './usage';
 
 export * from './access';
 export * from './attachments';
+export * from './backups';
 export * from './browser';
 export * from './engine';
 export * from './healed';
@@ -522,6 +523,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('updates.changed'), status: UpdatesStatus }),
   /** Conch fixed something on its own: a quiet note, never an alert. */
   z.object({ type: z.literal('healed'), note: HealNote }),
+  /** A backup was made, kept or let go, or a restore got ready: refetch the list. */
+  z.object({ type: z.literal('backups.changed') }),
   z.object({ type: z.literal('pong') }),
   z.object({
     type: z.literal('error'),

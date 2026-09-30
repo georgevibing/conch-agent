@@ -23,6 +23,7 @@ export const HealArea = z.enum([
   'skills',
   'usage',
   'updates',
+  'backups',
 ]);
 export type HealArea = z.infer<typeof HealArea>;
 

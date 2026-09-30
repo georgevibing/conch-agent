@@ -69,6 +69,21 @@ export function dummyHash(): Promise<string> {
   return dummy;
 }
 
+/**
+ * A key from a passphrase, for encrypting a backup (ADR 0020): the same scrypt
+ * and NFKC normalisation as passwords, with the cost stored beside the salt so
+ * a later Conch can raise it and still open older backups.
+ */
+export function deriveKey(
+  passphrase: string,
+  salt: Buffer,
+  cost: { N: number; r: number; p: number } = SCRYPT,
+  keylen = 32,
+): Promise<Buffer> {
+  const { N, r, p } = cost;
+  return scrypt(passphrase, salt, keylen, { N, r, p, maxmem: 256 * N * r });
+}
+
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
   const [scheme, n, r, p, salt, hash] = stored.split('$');
   if (scheme !== 'scrypt' || !n || !r || !p || !salt || !hash) return false;

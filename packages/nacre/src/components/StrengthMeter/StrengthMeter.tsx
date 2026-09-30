@@ -12,6 +12,8 @@ export interface StrengthMeterProps extends Omit<ComponentProps<'div'>, 'childre
   message?: string;
   /** Nothing typed yet: show an empty, quiet meter. */
   empty?: boolean;
+  /** What it measures, for screen readers. */
+  meterLabel?: string;
 }
 
 /**
@@ -23,6 +25,7 @@ export function StrengthMeter({
   label,
   message,
   empty,
+  meterLabel = 'Password strength',
   className,
   ...props
 }: StrengthMeterProps) {
@@ -32,7 +35,7 @@ export function StrengthMeter({
       <div className={styles.row}>
         <div
           role="meter"
-          aria-label="Password strength"
+          aria-label={meterLabel}
           aria-valuemin={0}
           aria-valuemax={4}
           aria-valuenow={empty ? 0 : score}

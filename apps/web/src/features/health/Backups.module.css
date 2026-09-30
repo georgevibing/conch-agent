@@ -1,0 +1,17 @@
+@layer nacre.components {
+  .kept {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+  }
+
+  /* The file picker is opened by its button; the input itself is never seen. */
+  .file {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

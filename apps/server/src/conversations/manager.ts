@@ -334,6 +334,24 @@ export class ConversationManager {
     },
   ) {}
 
+  /**
+   * Something is running or waiting on someone, somewhere: a turn, a title
+   * being written, a permission. Updates and backups wait for a quiet moment.
+   */
+  busy(): boolean {
+    for (const live of this.#live.values())
+      if (
+        live.abort ||
+        live.extras ||
+        live.titling ||
+        live.permissions.size > 0 ||
+        live.record.status === 'running' ||
+        live.record.status === 'awaiting-permission'
+      )
+        return true;
+    return false;
+  }
+
   async list(): Promise<ConversationSummary[]> {
     const records = await this.deps.store.list();
     return records.map((r) => summary(this.#live.get(r.id)?.record ?? r));
@@ -1153,14 +1171,6 @@ export class ConversationManager {
     this.#live.set(id, live);
     this.#evict();
     return live;
-  }
-
-  /** A turn is running, or waiting on someone's answer, somewhere (updates wait for it). */
-  busy(): boolean {
-    for (const live of this.#live.values())
-      if (live.record.status === 'running' || live.record.status === 'awaiting-permission')
-        return true;
-    return false;
   }
 
   /**

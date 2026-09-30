@@ -51,6 +51,7 @@ import { IntegrationError, type SignIn } from './integrations/service';
 import { preview } from './routines/schedule';
 import { RoutineError } from './routines/service';
 import { registerAuthRoutes } from './auth/routes';
+import { registerBackupRoutes } from './backup/routes';
 import { registerBrowserRoutes } from './browser/routes';
 import { registerTerminalRoutes } from './terminal/routes';
 import { registerLocalRoutes } from './local/routes';
@@ -147,6 +148,7 @@ export async function buildApp(services: Services) {
   registerTerminalRoutes(app, services, gate);
   registerLocalRoutes(app, services, gate);
   registerAttachmentRoutes(app, services.attachments);
+  registerBackupRoutes(app, services.backups, gate);
   app.addHook('onClose', () => services.browser.stop());
   app.addHook('onClose', async () => services.stop());
   app.addHook('onClose', async () => services.terminal.stop());

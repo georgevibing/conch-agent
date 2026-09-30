@@ -196,11 +196,12 @@ export function previewModeOf(info: AttachmentInfo): PreviewMode {
   return 'text';
 }
 
-/** "2.4 MB", "812 KB", "96 B". */
+/** "2.4 MB", "812 KB", "96 B", "1.3 GB". */
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   const mb = bytes / 1024 / 1024;
+  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
   return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`;
 }
 

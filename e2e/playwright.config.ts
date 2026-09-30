@@ -23,6 +23,8 @@ const scenarios = {
   offline: { port: 4387, env: { CONCH_MOCK_STATE: 'ready' } },
   attachments: { port: 4389, env: { CONCH_MOCK_STATE: 'ready' } },
   suggest: { port: 4383, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Runs under the supervisor (`pnpm start`), so a restore can start Conch again.
+  backups: { port: 4382, env: { CONCH_MOCK_STATE: 'ready', CONCH_SUPERVISE: '1' }, entry: 'start' },
   security: {
     port: 4397,
     env: { CONCH_MOCK_STATE: 'ready', CONCH_ALLOWED_HOSTS: 'studio-mac.tail1234.ts.net' },
@@ -41,7 +43,7 @@ const scenarios = {
   },
 } as const satisfies Record<
   string,
-  { port: number; env: Record<string, string>; command?: string }
+  { port: number; env: Record<string, string>; command?: string; entry?: 'main' | 'start' }
 >;
 
 const root = join(import.meta.dirname, '..');
@@ -96,7 +98,8 @@ export default defineConfig({
   webServer: chosen.map(([, s]) => ({
     // Node itself (not pnpm or tsx's CLI) so Playwright's shutdown signal reaches the
     // server; Windows runs this through cmd.exe, which can't start `./node_modules/.bin/tsx`.
-    command: 'command' in s ? s.command : 'node --import tsx src/main.ts',
+    command:
+      'command' in s ? s.command : `node --import tsx src/${'entry' in s ? s.entry : 'main'}.ts`,
     cwd: join(root, 'apps/server'),
     url: `http://localhost:${s.port}/api/health`,
     reuseExistingServer: false,

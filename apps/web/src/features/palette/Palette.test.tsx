@@ -324,6 +324,36 @@ describe('Palette search', () => {
     await waitFor(() => expect(useUi.getState().settings).toBe('browser'));
   });
 
+  it('backs up and restores by name, straight into Settings → Health', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'back up');
+    expect(await screen.findByRole('option', { name: /Back up now/ })).toBeInTheDocument();
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect(useUi.getState()).toMatchObject({ settings: 'health', settingsFocus: 'backup' }),
+    );
+
+    act(() => useUi.getState().setPalette(true));
+    // The words people use: restore, undo, go back, a file they have.
+    for (const words of ['restore', 'go back', 'conchbackup']) {
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(await screen.findByRole('option', { name: /Restore a backup/ })).toBeInTheDocument();
+    }
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect(useUi.getState()).toMatchObject({ settings: 'health', settingsFocus: 'restore' }),
+    );
+    act(() => useUi.setState({ settings: null, settingsFocus: undefined }));
+  });
+
   it('opens the terminal by the words people use for it, and hides it while it’s off', async () => {
     const user = userEvent.setup();
     const terminal = (enabled: boolean): TerminalStatus => ({
