@@ -24,6 +24,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { api } from '../../api/client';
 import { useLiveStore } from '../../live/store';
 import { GetIt } from '../setup/GetIt';
+import { useNeed } from '../setup/useNeed';
 import { providersApi } from './api';
 import styles from './Providers.module.css';
 import {
@@ -220,6 +221,19 @@ function SignInProgram({ provider }: { provider: Provider }) {
   );
 }
 
+/** 1Password is locked: open it, so you can unlock it. Conch reads the key again when you're back. */
+function OpenOnePassword() {
+  const { need, act } = useNeed('1password-app');
+  if (!need?.openable) return null;
+  return (
+    <div>
+      <Button variant="surface" size="sm" onClick={() => void act('open')}>
+        Open 1Password
+      </Button>
+    </div>
+  );
+}
+
 /** A provider you hold a key for. One click if it can make the key itself. */
 function KeyForm({
   provider,
@@ -252,6 +266,13 @@ function KeyForm({
   const typed = value.trim();
   const looksWrong =
     source === 'conch' && form.pattern && typed.length > 3 && !new RegExp(form.pattern).test(typed);
+  // Keeping it in 1Password needs the `op` command: Conch offers to get it
+  // instead of showing a command to copy.
+  const opFix =
+    !onePassword.available && (source === '1password' || provider.key?.source === '1password')
+      ? onePassword.fix
+      : undefined;
+  const locked = /locked|unlock/i.test(error ?? provider.key?.problem ?? '');
 
   return (
     <Stack gap={5}>
@@ -284,9 +305,18 @@ function KeyForm({
             help={form.help}
             url={form.url}
             error={error ?? (looksWrong ? form.patternHint : undefined)}
-            onePassword={onePassword}
+            onePassword={opFix ? { ...onePassword, installCommand: undefined } : onePassword}
             saved={provider.key}
           />
+          {opFix && (
+            <GetIt
+              needId={opFix.need}
+              kind={opFix.kind}
+              name="the 1Password CLI"
+              lead="Conch reads keys from 1Password with its command-line tool. Conch can install it for you."
+            />
+          )}
+          {locked && <OpenOnePassword />}
           <div>
             <Button
               type="submit"

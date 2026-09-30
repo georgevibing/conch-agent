@@ -226,7 +226,9 @@ describe('keys in 1Password', () => {
     const op = await fakeOp({ locked: true });
     const onePassword = new OnePassword({ find: async () => op.bin });
     const { providers } = await harness({ op: onePassword });
-    await expect(providers.setKey('openrouter', op.reference)).rejects.toThrow(/Unlock 1Password/);
+    await expect(providers.setKey('openrouter', op.reference)).rejects.toThrow(
+      /1Password is locked/,
+    );
   });
 
   it('refuses a reference that isn’t one', async () => {

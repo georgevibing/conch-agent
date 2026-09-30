@@ -113,6 +113,8 @@ export const OnePasswordStatus = z.object({
   message: z.string().optional(),
   installCommand: z.string().optional(),
   docsUrl: z.string().optional(),
+  /** Conch can install (or repair) the `op` command itself: the need to offer. */
+  fix: z.object({ need: z.string(), kind: z.enum(['install', 'update']) }).optional(),
 });
 export type OnePasswordStatus = z.infer<typeof OnePasswordStatus>;
 

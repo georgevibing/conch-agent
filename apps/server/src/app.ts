@@ -464,6 +464,9 @@ export async function buildApp(services: Services) {
         if (action !== 'open' && verifyRequired(request, reply)) return;
         try {
           await services.setup[action](spec);
+          // Whatever was waiting on it looks again as soon as it lands, not on its next check.
+          if (action !== 'open')
+            void services.setup.settled(spec.id).then(() => services.needLanded(spec.id));
         } catch (error) {
           return reply.code(503).send({ error: 'unavailable', message: (error as Error).message });
         }

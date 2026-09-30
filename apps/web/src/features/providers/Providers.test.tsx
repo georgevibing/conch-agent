@@ -93,6 +93,44 @@ describe('Providers settings', () => {
     expect(screen.getByRole('button', { name: 'Or install it yourself' })).toBeInTheDocument();
   });
 
+  it('offers to install the 1Password CLI when you keep a key in 1Password', async () => {
+    const calls = mockFetch(
+      routes({
+        'GET /api/providers': () => ({
+          ...baseProviders,
+          onePassword: { ...baseProviders.onePassword, fix: { need: 'op', kind: 'install' } },
+        }),
+        'GET /api/needs/op': () => ({
+          ready: false,
+          needs: [
+            {
+              id: 'op',
+              name: 'The 1Password command-line tool',
+              short: '1Password CLI',
+              openable: false,
+              state: 'missing',
+              install: {
+                label: 'Install 1Password CLI',
+                command: 'winget install --id AgileBits.1Password.CLI',
+              },
+            },
+          ],
+        }),
+      }),
+    );
+    render();
+    const card = await screen.findByRole('article', { name: 'OpenRouter' });
+    await userEvent.click(within(card).getByRole('button', { name: 'Connect' }));
+    const dialog = await screen.findByRole('region', { name: /^Connect / });
+    await userEvent.click(within(dialog).getByRole('radio', { name: '1Password' }));
+    expect(
+      await within(dialog).findByRole('button', { name: 'Install the 1Password CLI' }),
+    ).toBeInTheDocument();
+    // No command to copy when Conch can do it.
+    expect(within(dialog).queryByRole('button', { name: 'Copy install command' })).toBeNull();
+    expect(calls.some((c) => c.path === '/api/needs/op')).toBe(true);
+  });
+
   it('changes the default provider', async () => {
     const second = provider({
       id: 'anthropic-api',

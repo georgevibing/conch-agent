@@ -41,6 +41,7 @@ export interface OnePasswordState {
   message?: string;
   installCommand?: string;
   docsUrl?: string;
+  fix?: { need: string; kind: 'install' | 'update' };
 }
 
 /** Raised with a sentence a person can act on. Never contains the secret. */
@@ -70,7 +71,7 @@ function explain(stderr: string, reference: string): string {
   const text = (message ?? '').toLowerCase();
   const item = reference.split('/')[3] ?? 'that item';
   if (/signed in|signin|sign-in|locked|unlock|authoriz|authenticat|session|biometric/.test(text))
-    return 'Unlock 1Password (open the app, or run `op signin`) and try again.';
+    return '1Password is locked. Open it and unlock it, then try again.';
   if (/isn't a vault|no vault|vault.*not found/.test(text))
     return `1Password has no vault called “${reference.split('/')[2] ?? ''}”. Check the reference.`;
   if (/isn't an item|no item|item.*not found|doesn't exist/.test(text))
@@ -114,6 +115,7 @@ export class OnePassword {
         message: 'Install the 1Password command line tool to keep keys in 1Password.',
         installCommand: installCommand(),
         docsUrl: DOCS_URL,
+        fix: { need: 'op', kind: 'install' },
       };
     } else {
       const { stdout, code } = await exec(path, ['--version'], { env: opEnv(), timeout: 10_000 });
@@ -125,6 +127,7 @@ export class OnePassword {
               available: false,
               message: 'The 1Password command line tool is installed but didn’t start.',
               docsUrl: DOCS_URL,
+              fix: { need: 'op', kind: 'update' },
             };
     }
     this.#path = path;
@@ -158,7 +161,9 @@ export class OnePassword {
     if (code !== 0 || !stdout.trim()) {
       // A timeout leaves no exit code: that's an unlock prompt nobody answered.
       if (code === undefined && !stderr.trim())
-        throw new OnePasswordError('1Password didn’t answer. Unlock it and try again.');
+        throw new OnePasswordError(
+          '1Password didn’t answer. Open it and unlock it, then try again.',
+        );
       throw new OnePasswordError(explain(stderr, ref));
     }
     const value = stdout.trim();

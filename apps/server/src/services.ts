@@ -251,6 +251,17 @@ export class Services {
     await this.providers.load();
   }
 
+  /**
+   * Something Conch installed has landed: whatever was waiting on it looks
+   * again now, instead of on its next check (the `op` state is cached for
+   * half a minute, provider detection for twenty seconds).
+   */
+  async needLanded(id: string): Promise<void> {
+    if (id === 'op') await this.keys.vault.onePassword.state({ force: true });
+    const engine = { codex: 'codex-cli', 'claude-code': 'claude-code' }[id] as EngineId | undefined;
+    if (engine) await this.engines.get(engine)?.detect({ force: true });
+  }
+
   async engineStatus(force = false) {
     const status = await this.engine().detect({ force });
     if (force) {
