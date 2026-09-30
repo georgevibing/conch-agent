@@ -36,6 +36,7 @@ working agreement 11: _fix it before you ask_.
 | The terminal (shells on the host, the drawer, who may open one) | `apps/server/src/terminal/`, `apps/web/src/features/terminal/`, `packages/nacre/src/patterns/Terminal/` + [ADR 0015](./docs/adr/0015-terminal.md) — security-relevant                             |
 | Something a feature needs installed (apps, CLIs, runtimes)      | `apps/server/src/setup/`, Nacre `SetupChecklist` + [ADR 0016](./docs/adr/0016-getting-what-a-feature-needs.md) — security-relevant                                                                |
 | Attachments (long pastes, files, pictures, drop, previews)      | `apps/server/src/attachments/`, `apps/web/src/features/chat/`, Nacre `Attachments` + [ADR 0017](./docs/adr/0017-attachments.md) — security-relevant                                               |
+| Channels (Telegram, Discord, Slack: reaching your assistant)    | `apps/server/src/channels/`, `apps/web/src/features/channels/`, Nacre `Channels` + [ADR 0018](./docs/adr/0018-channels.md), [§ Adding a channel](#adding-a-channel) — security-relevant           |
 | What ⌘K can find by name                                        | `apps/web/src/features/palette/` (`findables.tsx`) — see working agreement 10                                                                                                                     |
 | A decision that changes architecture or adds a dependency       | Write an ADR in [`docs/adr/`](./docs/adr/) first                                                                                                                                                  |
 | Security, auth, exposing the gateway beyond localhost           | [§ Security engineering](#security-engineering) below → [ARCHITECTURE.md § Security](./ARCHITECTURE.md#security-model) → [ADR 0008](./docs/adr/0008-access-and-hardening.md) — treat as high-risk |
@@ -246,6 +247,37 @@ threat model. Hold every change to the bar of a FAANG security review:
    `apps/server/src/auth/auth.test.ts` and `e2e/security.spec.ts`.
 9. **Warn people in their words.** Every security message says what could happen
    and what to do next, never jargon alone.
+
+## Adding a channel
+
+Channels are chat apps your assistant can be reached from (ADR 0018). More are
+coming, and each one follows the same shape:
+
+1. **Outbound only.** Connect from this computer (long polling, a WebSocket
+   the app offers). Never require a public address, webhook or tunnel. An app
+   that only offers webhooks waits.
+2. **An adapter.** Put it in `apps/server/src/channels/<app>.ts`, implementing `ChannelAdapter`:
+   - `identify()` checks the keys with a real call and says who the bot is.
+   - `connect()` runs and reconnects by itself, and reports `state`. It ends
+     on `needs-token` only when the app refuses the key.
+   - Map every error to a plain `ChannelError`, turning the app's own error
+     codes into the setting to change.
+   - Never put a key in a message or a URL you log (`redact`).
+   - Private chats only. One channel's failure never reaches another.
+3. **A pretend app** in `channels/mock/<app>.ts`, with `/__control/…` endpoints.
+   Unit tests, e2e and `pnpm dev:mock` use it. Test the healing paths: a
+   dropped connection, a refused key, a rate limit, and the app's own quirks.
+4. **The words and pictures**: a `CHANNEL_CATALOG` entry, the logo in Nacre's
+   `brands.ts` (Simple Icons; keep a brand's own colours when its rules ask),
+   and a setup in `ConnectChannel.tsx`:
+   - numbered steps that say which button to press;
+   - beside them, a `Handset` for a chat or a `PortalSketch` for a web page;
+   - everything worked out for the person that can be: names, settings, links;
+   - keys accepted when pasted anywhere on the page, and checked as they land;
+   - a last step, a hello that recognises the owner.
+5. **Nobody gets in by default.** Only two things admit anyone: the owner's
+   hello (a one-time code, or **That's me** in Conch), or a person pressing
+   **Let in**.
 
 ## Definition of done
 

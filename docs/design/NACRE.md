@@ -146,6 +146,40 @@ assistant's presence, and it wears the pearl:
 The screen is a `<button>` (take over) with a hidden `<textarea>` for the keys, so it
 stays within jsx-a11y strict and works with input methods and phone keyboards.
 
+### Channels (setting up a chat app)
+
+Connecting Telegram, Discord or Slack means going back and forth between
+Conch and another app, so Nacre shows the other app. It never describes it.
+
+- **The phone** (`Handset`). A porcelain handset shows the chat as it will
+  look, with the app's colour as a whisper over the screen:
+  - BotFather's reply, with the key to copy lit in pearl;
+  - the Start button, called by one slow ring (the only moving thing on it);
+  - the bot's first hello.
+
+  Messages rise in one after another, once. Tints mix in Oklab, so a blue
+  brand over warm porcelain stays blue and never turns lilac.
+
+- **The page** (`PortalSketch`). For steps in a web portal (Discord's
+  Developer Portal, Slack's app settings) it draws a sketch, not a
+  screenshot: the address, the menu with the right item marked, and the
+  button to press in the brand's colour, with the same calling ring.
+- **The path** (`GuideSteps`). Numbered, because it is a sequence. Only the
+  current step is open. A finished step folds to one line saying what was
+  done, with a quiet **Change**, and the steps ahead wait in grey. The thread
+  between the markers is solid behind you.
+- **The key** (`KeyField`) is masked, with **Paste**, which reads the
+  clipboard in one tap. It's checked as it lands, and the answer comes in the
+  words of the app it belongs to.
+- **The hello** (`HelloCard`). A QR code whose rim slowly orbits while it
+  waits, beside the button that opens the app. Your hello turns it into a
+  welcome with a settling check. `ChannelRequest` asks **Is this you?** in
+  the display serif for the owner's first message, and is a plain card for
+  anyone else.
+- **Logos** come from Simple Icons, drawn white on the brand colour. Slack's
+  brand rules forbid recolouring its mark, so it keeps its four colours on a
+  porcelain tile (`brandArt`).
+
 ### The terminal
 
 The terminal is a tool you reach for, so it is plain, quick and quiet. It is a drawer

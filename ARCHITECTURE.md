@@ -91,6 +91,7 @@ src/
   memory/                     file-per-memory store, prompt builder, memory tools
   conversations/              manager (turns, permissions, events) + JSONL store
   attachments/                uploads: sniffing, storage + sweep, per-engine prompt, sandboxed serving (ADR 0017)
+  channels/                   Telegram, Discord and Slack bots that reach your assistant; pairing, relay, healing (ADR 0018)
   engines/
     types.ts                  Engine / HostTool / EngineEvent contracts
     claude-code/              detect, login, env scrub, SDK → EngineEvent translator
@@ -272,6 +273,48 @@ src/
     `terminal.changed` is broadcast on every change.
   - **Limits.** 12 terminals. One nobody watched and that printed nothing for 24 h
     is ended, and an ended one is forgotten after 10 minutes.
+- **Channels** (`channels/`, [ADR 0018](./docs/adr/0018-channels.md)).
+  - **Connections, all outbound.** A bot you own in each app, one adapter per
+    app behind `ChannelAdapter`:
+    - `telegram.ts`: long polling (`getUpdates`);
+    - `discord.ts`: the Gateway over Node's own WebSocket, DM intents only;
+    - `slack.ts`: Socket Mode.
+
+    Keys live in `channels.secrets.json`. `store.ts` keeps who may talk and
+    each person's current conversation.
+
+  - **Relay** (`service.ts`). A message from someone let in becomes
+    `ConversationManager.send({ origin: { kind: 'channel' } })`. The service
+    watches `broadcast` for that conversation's events and sends back:
+    - finished assistant messages, formatted for each app by `format.ts`;
+    - a streaming draft (Telegram), typing… (Discord) or 👀 (Slack) while it works;
+    - permission questions as buttons, edited once answered anywhere.
+
+    It also handles:
+    - `/new`, `/stop` and `/help`;
+    - messages sent close together, merged into one;
+    - messages sent mid-turn, queued for the next one;
+    - photos and files, downloaded as attachments;
+    - routine results and questions (`routine.run`), sent to channel owners.
+
+  - **Who may talk.** Telegram lets the owner in with a one-time
+    `t.me/<bot>?start=<code>` (96-bit, 10 minutes, hashed). On Discord and
+    Slack the owner sends a message and confirms "That's me" in Conch. Anyone
+    else becomes a request, answered from the page. Private chats only.
+  - **Health** (`ChannelHealth`): `connecting`, `online`, `reconnecting` (with
+    `retryAt`), `needs-token`, `conflict`, `error`, `off`. Each adapter
+    reconnects by itself: backoff, Discord resume and zombie detection,
+    Telegram webhook removal and 409 handling, Slack's routine refreshes.
+    `POST /api/channels/:id/repair` tries again at once.
+  - **REST.** `GET /api/channels` (channels + catalog),
+    `POST /api/channels/check` (is this key good? nothing is saved),
+    `POST /api/channels`, `PATCH|DELETE /api/channels/:id`,
+    `PUT /api/channels/:id/token`, `POST /api/channels/:id/pair|repair|test`,
+    `POST /api/channels/:id/requests/:personId`,
+    `DELETE /api/channels/:id/people/:personId`.
+    `channel.changed` / `channel.deleted` go out on the socket.
+  - **Mocks.** With the mock engine, a pretend Telegram, Discord and Slack
+    start too (`channels/mock/`, ports via `CONCH_MOCK_*_PORT`).
 - **Search.** `search/` keeps a SQLite FTS5 (trigram) index of every message in
   `~/.conch/search.db`, fed by the conversation event stream and caught up on start;
   `GET /api/search` ranks and groups hits with snippets, `GET /api/search/preview`
@@ -288,7 +331,8 @@ src/
   transcript a plain model API needs, since it keeps no session of its own),
   `browser.json` (browser settings, sites you always allow) + `browser/profile/` +
   `browser/shots/`, `terminal.json` (terminal settings; terminals themselves are never
-  written to disk), `gateway.json` (where it's listening, while it runs), `workspace/`
+  written to disk), `channels.json` + `channels.secrets.json` (bots, who may talk to
+  them, their keys), `gateway.json` (where it's listening, while it runs), `workspace/`
   (default cwd).
 - **A port that's taken** (`port.ts`). Before anything starts, the port is probed. A
   Conch already there (its `/api/health` says so) is opened instead, and so is this
@@ -347,6 +391,17 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   turn's callout offers the fix for its `problem` and resends by itself after a
   sign-in; Settings → Security lists what was "Fixed on its own". Broken
   integrations show inline in chats (`integration.issue`) and as a sidebar count.
+- **Channels.** `/channels` lists your bots (what needs you first, each with its
+  one button: Say hello, Paste the new key, Repair, Review) and the apps you
+  can add. `/channels/new/<app>` is a numbered `GuideSteps` path beside a
+  `Handset` (the chat app as you'll see it) or a `PortalSketch` (the web page,
+  with the button to press lit up).
+  - Keys are checked as they're pasted, anywhere on the page, and connect
+    without a Save button.
+  - The last step is a `HelloCard` (link + QR code) or "Is this you?".
+  - `/channels/:id` holds requests, people, the channel's chats, **Routine
+    results**, the replacement key field, and Disconnect.
+  - Chats from a channel wear its logo in the sidebar and a note at the top.
 - **Skills.** `/skills` lists yours and those found in other agents' folders (with
   a switch each, and fuzzy search); `/skills/new` is one text box — as you pause,
   the title and description are written for you (Nacre `SkillCard` shimmers, then
@@ -420,6 +475,10 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
     never sees secret fields: you type them after a handoff.
   - the agent has no way into your terminals, and a shell's environment has no
     `CONCH_*` variables.
+  - the agent can't let anyone talk to it from a chat app: connecting a bot,
+    letting someone in and making a hello link are routes that need a person
+    (and, from another device, a recent password or key). Channels answer
+    private chats only, and never pass a stranger's message to a model.
 - **Terminal guards:** other devices need `allowRemote` (itself behind recent
   verification, and flagged by the checkup) plus a fresh verification per open and
   attach; one-time owner-bound socket tickets; sign-out and key revocation end the
