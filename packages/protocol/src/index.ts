@@ -21,7 +21,7 @@ import {
 import { DoctorReport } from './doctor';
 import { EngineStatus, LoginState } from './engine';
 import { HealNote } from './healed';
-import { Integration } from './integrations';
+import { CatalogId, Integration } from './integrations';
 import { Routine, RoutineRun } from './routines';
 import { UsageSnapshot } from './usage';
 
@@ -85,6 +85,12 @@ export const Profile = z.object({
 });
 export type Profile = z.infer<typeof Profile>;
 
+/** Catalog ids, each once. */
+const MutedSuggestions = z
+  .array(CatalogId)
+  .max(100)
+  .transform((ids) => [...new Set(ids)]);
+
 export const Preferences = z.object({
   /** Folder Claude works in. Defaults to the Conch workspace. */
   workspace: z.string().max(4096).optional(),
@@ -99,6 +105,8 @@ export const Preferences = z.object({
   effort: EffortChoice.default('auto'),
   fastMode: z.boolean().default(false),
   permissionMode: PermissionMode.default('default'),
+  /** Apps the chat never offers to connect ("Don't suggest Linear"), by catalog id. */
+  mutedSuggestions: MutedSuggestions.default([]),
 });
 export type Preferences = z.infer<typeof Preferences>;
 
@@ -179,6 +187,7 @@ export const UpdateSettingsBody = z.object({
       effort: EffortChoice,
       fastMode: z.boolean(),
       permissionMode: PermissionMode,
+      mutedSuggestions: MutedSuggestions,
     })
     .partial()
     .optional(),
@@ -343,6 +352,35 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     catalogId: z.string().optional(),
     state: z.enum(['needs-auth', 'error']),
     message: z.string(),
+  }),
+  /**
+   * The message was clearly about an app in the catalog that isn't connected,
+   * so the chat offers to connect it right there. At most once per app per
+   * conversation; the assistant was told it can't see the app yet.
+   */
+  z.object({
+    ...logged,
+    type: z.literal('integration.suggestion'),
+    catalogId: CatalogId,
+    name: z.string().min(1).max(80),
+    /** What it would let the assistant do: the catalog's one line. */
+    description: z.string().max(300),
+    /** Brand colour for the logo tile (hex). */
+    color: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/)
+      .optional(),
+    /**
+     * Connected through another catalog entry (`zapier`), because the provider
+     * answering can't reach this app by itself.
+     */
+    via: CatalogId.optional(),
+  }),
+  /** “Not now”: the offer is put away for the rest of this conversation. */
+  z.object({
+    ...logged,
+    type: z.literal('integration.suggestion.dismissed'),
+    catalogId: CatalogId,
   }),
 ]);
 export type ConversationEvent = z.infer<typeof ConversationEvent>;

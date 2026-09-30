@@ -61,6 +61,10 @@ export const IntegrationField = z.object({
 });
 export type IntegrationField = z.infer<typeof IntegrationField>;
 
+/** A catalog entry's id: `linear`, `google-calendar`. */
+export const CatalogId = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/, 'Unknown app.');
+export type CatalogId = z.infer<typeof CatalogId>;
+
 /** A well-known integration Conch knows how to set up. */
 export const CatalogEntry = z.object({
   id: z.string(),
