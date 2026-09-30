@@ -1,5 +1,5 @@
 import type { BackupListItem } from './BackupList';
-import type { BackupContentsInfo } from './format';
+import type { BackupContentsInfo, BackupPowerInfo } from './format';
 
 export const everything: BackupContentsInfo = {
   settings: true,
@@ -25,6 +25,31 @@ export const light: BackupContentsInfo = {
   secrets: undefined,
   integrationsSigningIn: 3,
 };
+
+/** A file from somewhere else that can act for you: one of each kind. */
+export const powers: BackupPowerInfo[] = [
+  {
+    kind: 'runs-program',
+    name: 'Files',
+    command: 'npx -y @modelcontextprotocol/server-filesystem "/Users/ada/My notes"',
+  },
+  { kind: 'integration-never-asks', name: 'Gmail' },
+  { kind: 'tools-never-ask', name: 'Calendar', tools: ['Delete an event', 'Send an invite'] },
+  { kind: 'chats-never-ask' },
+  { kind: 'routine-never-asks', name: 'Nightly tidy' },
+  { kind: 'browser-sites', sites: ['bank.example', 'shop.example'] },
+  { kind: 'browser-local' },
+  { kind: 'terminal-remote' },
+];
+
+/** What most people's own backups say: one local program they added. */
+export const onePower: BackupPowerInfo[] = [
+  {
+    kind: 'runs-program',
+    name: 'Files',
+    command: 'npx -y @modelcontextprotocol/server-filesystem',
+  },
+];
 
 export const backups: BackupListItem[] = [
   {

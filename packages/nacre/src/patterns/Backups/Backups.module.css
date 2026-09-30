@@ -248,6 +248,137 @@
     color: var(--nc-text-subtle);
   }
 
+  /* ── What a backup lets Conch do, before a restore ─────────────────── */
+
+  .powers {
+    --bp-h: var(--nc-warning-h);
+    --bp-c: 0.12;
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2-5);
+    padding: var(--nc-space-3-5) var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: light-dark(
+      oklch(0.976 calc(var(--bp-c) * 0.16) var(--bp-h)),
+      oklch(0.235 calc(var(--bp-c) * 0.26) var(--bp-h))
+    );
+    box-shadow: inset 0 0 0 1px
+      light-dark(
+        oklch(0.88 calc(var(--bp-c) * 0.45) var(--bp-h)),
+        oklch(0.38 calc(var(--bp-c) * 0.5) var(--bp-h))
+      );
+    animation: nc-surface-in var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .powersHead {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2-5);
+    margin: 0;
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    text-wrap: balance;
+  }
+
+  .powersHead > svg {
+    flex-shrink: 0;
+    inline-size: 1rem;
+    block-size: calc(var(--nc-text-sm) * 1.35);
+    color: light-dark(
+      oklch(0.56 var(--bp-c) var(--bp-h)),
+      oklch(0.8 calc(var(--bp-c) * 0.85) var(--bp-h))
+    );
+  }
+
+  .powersList {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .power {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2-5);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+  }
+
+  .powerIcon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    block-size: calc(var(--nc-text-sm) * 1.35);
+    color: var(--nc-text-muted);
+  }
+
+  .powerIcon > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .powerText {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    min-inline-size: 0;
+  }
+
+  .powerSubject {
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-medium);
+    overflow-wrap: anywhere;
+  }
+
+  .powerWhat {
+    color: var(--nc-text-muted);
+    overflow-wrap: anywhere;
+    text-wrap: pretty;
+  }
+
+  /* With nothing named before it, the sentence is the line itself. */
+  .powerWhat:first-child {
+    color: var(--nc-text);
+  }
+
+  .powerCode {
+    align-self: flex-start;
+    max-inline-size: 100%;
+    margin-block-start: var(--nc-space-0-5);
+    padding: var(--nc-space-0-5) var(--nc-space-1-5);
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .powersMore,
+  .powersNote {
+    margin: 0;
+    padding-inline-start: calc(1rem + var(--nc-space-2-5));
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    text-wrap: pretty;
+  }
+
+  .powersNote {
+    color: var(--nc-text);
+  }
+
   /* ── Restore preview and backup options (inside a dialog) ──────────── */
 
   .preview,
@@ -278,6 +409,12 @@
     inline-size: 1rem;
     block-size: calc(var(--nc-text-sm) * 1.5);
     color: var(--nc-text-accent);
+  }
+
+  .notes {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
   }
 
   .passphrase {
