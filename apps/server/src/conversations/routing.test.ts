@@ -9,7 +9,7 @@ import type {
   EngineStatus,
   TurnProblem,
 } from '@conch/protocol';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { Engine, EngineEvent, TurnInput } from '../engines/types';
 import { MemoryStore } from '../memory/store';
@@ -254,5 +254,50 @@ describe('offline and at a limit (ADR 0018)', () => {
     expect(await manager.releaseHeld()).toBe(1);
     await idle(manager, convo.id);
     expect(claude.turns.at(-1)?.prompt).toContain('are you there');
+  });
+
+  it('two releases at once send a waiting message once', async () => {
+    const { manager, claude, world } = await setup();
+    world.online = false;
+    world.localAnswers = false;
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'only once' });
+    world.online = true;
+    const sent = await Promise.all([manager.release(convo.id), manager.release(convo.id)]);
+    expect(sent.filter(Boolean)).toHaveLength(1);
+    await idle(manager, convo.id);
+    expect(claude.turns.map((t) => t.prompt)).toEqual(['only once']);
+  });
+});
+
+describe('Stop, pressed a moment early', () => {
+  it('stops the turn that was about to start, without running it', async () => {
+    const { manager, claude } = await setup();
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'first' });
+    await idle(manager, convo.id);
+    // Stop lands before the next turn has begun (right after pressing Enter).
+    await manager.interrupt(convo.id);
+    await manager.send({ conversationId: convo.id, clientMessageId: 'u2', text: 'second' });
+    await idle(manager, convo.id);
+    expect(claude.turns.map((t) => t.prompt)).toEqual(['first']);
+    const events = await log(manager, convo.id);
+    expect(events.findLast((e) => e.type === 'turn.completed')).toMatchObject({
+      outcome: 'interrupted',
+    });
+  });
+
+  it('a Stop from long ago doesn’t stop the next message', async () => {
+    const { manager, claude } = await setup();
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'first' });
+    await idle(manager, convo.id);
+    await manager.interrupt(convo.id);
+    const later = Date.now() + 60_000;
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(later);
+    try {
+      await manager.send({ conversationId: convo.id, clientMessageId: 'u2', text: 'second' });
+    } finally {
+      clock.mockRestore();
+    }
+    await idle(manager, convo.id);
+    expect(claude.turns.map((t) => t.prompt).at(-1)).toContain('second');
   });
 });

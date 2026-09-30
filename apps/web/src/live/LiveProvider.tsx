@@ -32,7 +32,8 @@ interface LiveApi {
   ): string;
   /** Change a conversation's model/effort/mode. */
   configure(conversationId: string, options: TurnOptions): void;
-  interrupt(conversationId: string): void;
+  /** Stop the running reply. A new chat's (no id yet) stops as soon as it has one. */
+  interrupt(conversationId: string | undefined): void;
   respond(
     conversationId: string,
     permissionId: string,
@@ -53,6 +54,8 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
   const client = useQueryClient();
   const watching = useRef(new Map<string, number>());
   const socketRef = useRef<LiveSocket | null>(null);
+  /** Messages whose new chat should stop the moment it exists (Stop pressed right after sending). */
+  const stopWhenCreated = useRef(new Set<string>());
 
   useEffect(() => {
     const store = useLiveStore.getState();
@@ -81,6 +84,11 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           break;
         case 'conversation.created':
           live.markCreated(event.clientMessageId, event.conversation.id);
+          if (stopWhenCreated.current.delete(event.clientMessageId))
+            socketRef.current?.send({
+              type: 'conversation.interrupt',
+              conversationId: event.conversation.id,
+            });
           watching.current.set(
             event.conversation.id,
             (watching.current.get(event.conversation.id) ?? 0) + 1,
@@ -217,7 +225,12 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         socketRef.current?.send({ type: 'conversation.configure', conversationId, options });
       },
       interrupt(conversationId) {
-        socketRef.current?.send({ type: 'conversation.interrupt', conversationId });
+        if (conversationId) {
+          socketRef.current?.send({ type: 'conversation.interrupt', conversationId });
+          return;
+        }
+        for (const message of useLiveStore.getState().pending[NEW] ?? [])
+          stopWhenCreated.current.add(message.clientMessageId);
       },
       respond(conversationId, permissionId, decision) {
         socketRef.current?.send({

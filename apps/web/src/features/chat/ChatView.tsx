@@ -447,9 +447,14 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
         }}
         textareaProps={slash.menu.inputProps}
         overlay={<CommandMenu {...slash.menu.menuProps} />}
-        onStop={() => conversationId && live.interrupt(conversationId)}
-        running={running}
-        placeholder={running ? `${name} is working…` : `Message ${name}, or type / for commands`}
+        // Stop is there the moment you send, not once the reply begins.
+        onStop={() => live.interrupt(conversationId)}
+        running={running || pending.length > 0}
+        placeholder={
+          running || pending.length > 0
+            ? `${name} is working…`
+            : `Message ${name}, or type / for commands`
+        }
         label={`Message ${name}`}
         toolbar={
           <>

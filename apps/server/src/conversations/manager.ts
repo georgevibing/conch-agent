@@ -18,6 +18,7 @@ import { honouredMode, type PermissionMode } from '@conch/protocol';
 import type {
   BridgedTool,
   Engine,
+  EngineEvent,
   EngineMcpServer,
   HostTool,
   PermissionDecision,
@@ -259,7 +260,15 @@ interface Live {
   alwaysAllow: Set<string>;
   /** Cancels an in-flight title (e.g. the user renamed it first). */
   titling?: AbortController;
+  /** When Stop was pressed with no turn running yet: the one about to start stops. */
+  stopAt?: number;
 }
+
+/** How long a Stop pressed just before a turn starts still counts. */
+const STOP_GRACE_MS = 10_000;
+
+/** A turn that was stopped before it began: nothing to run. */
+async function* nothing(): AsyncIterable<EngineEvent> {}
 
 export class ConversationError extends Error {
   constructor(
@@ -438,6 +447,9 @@ export class ConversationManager {
     let live: Live;
     let autoTitle = false;
     if (existing) {
+      // Checked again after the waits above: another message may have started meanwhile.
+      if (existing.abort)
+        throw new ConversationError('busy', 'Still replying to your last message.');
       live = existing;
       if (input.options) this.#applyOptions(live, input.options);
     } else {
@@ -492,7 +504,7 @@ export class ConversationManager {
     }
     if (route.routed)
       this.#append(live, { type: 'turn.routed', from: chosen.id, to: engine.id, ...route.routed });
-    live.abort = new AbortController();
+    this.#claim(live);
     this.#setStatus(live, 'running');
     await this.#persist(live);
     void this.#answer(live, engine, prompt, sending);
@@ -561,7 +573,7 @@ export class ConversationManager {
     this.events.emit({ type: 'conversation.updated', conversation: summary(record) });
     this.#append(live, { type: 'user.message', messageId: newId('u'), text: input.text });
     if (expanded?.skill) this.#append(live, { type: 'skill.used', ...expanded.skill, by: 'user' });
-    live.abort = new AbortController();
+    this.#claim(live);
     live.extras = input.extras;
     this.#setStatus(live, 'running');
     await this.#persist(live);
@@ -588,7 +600,21 @@ export class ConversationManager {
 
   async interrupt(id: string) {
     const live = await this.#get(id);
-    live.abort?.abort();
+    // Stop pressed right after sending, before the turn began: it stops as it starts.
+    if (live.abort) live.abort.abort();
+    else live.stopAt = Date.now();
+  }
+
+  /**
+   * The chat is busy from here: one turn at a time. Claimed with no wait in
+   * between the check and the claim, so two sends (or releases) never both run.
+   */
+  #claim(live: Live): AbortController {
+    const abort = new AbortController();
+    if (live.stopAt && Date.now() - live.stopAt < STOP_GRACE_MS) abort.abort();
+    live.stopAt = undefined;
+    live.abort = abort;
+    return abort;
   }
 
   async respond(id: string, permissionId: string, decision: PermissionDecision) {
@@ -628,6 +654,11 @@ export class ConversationManager {
           engine: chosen,
         });
     if (route.kind === 'hold') return false;
+    // A provider you named must be ready, as for any message you send.
+    if (engineId && (await chosen.detect().catch(() => undefined))?.state !== 'ready')
+      throw new ConversationError('engine-unavailable', `${chosen.label} isn’t ready.`);
+    // Nothing waits from here to the claim: two releases at once send it once.
+    if (live.abort || !(this.#held.get(id) ?? heldFromLog(live.events))) return false;
     this.#held.delete(id);
     const from = this.deps.engine(held.engine);
     if (route.engine.id !== from.id)
@@ -635,12 +666,14 @@ export class ConversationManager {
         type: 'turn.routed',
         from: from.id,
         to: route.engine.id,
-        reason: route.kind === 'use' && route.routed ? route.routed.reason : 'offline',
+        reason: route.routed?.reason ?? 'offline',
         message:
           route.routed?.message ??
-          `You were offline, so ${route.engine.label} on this computer answered.`,
+          (route.engine.local
+            ? `You were offline, so ${route.engine.label} on this computer answered.`
+            : `${route.engine.label} answered while you were offline.`),
       });
-    live.abort = new AbortController();
+    this.#claim(live);
     this.#setStatus(live, 'running');
     await this.#persist(live);
     void this.#answer(live, route.engine, held.prompt, held.attachments);
@@ -868,38 +901,40 @@ export class ConversationManager {
         },
       }));
 
-      const stream = engine.runTurn({
-        conversationId,
-        prompt: missed ? `${missed}\n\n${prompt}` : prompt,
-        ...(attached?.images.length && { images: attached.images }),
-        ...(readableDirs.length && { readableDirs }),
-        resumeId: session?.resumeId,
-        systemAppend: [
-          buildSystemAppend({
-            persona: settings.persona,
-            profile: settings.profile,
-            memories,
-            autoMemory: settings.preferences.autoMemory,
-            tools: engine.hostTools !== false,
-          }),
-          await this.deps.context?.(engine),
-          notConnectedPrompt(
-            apps.unseen,
-            apps.offers.map((o) => o.name),
-          ),
-          extras?.systemExtra,
-        ]
-          .filter(Boolean)
-          .join('\n\n'),
-        cwd: await this.deps.settings.workspace(),
-        tools,
-        options: resolved,
-        mcpServers: engine.integrations.mode === 'native' ? loaded?.servers : undefined,
-        disallowedTools: loaded?.disallowedTools,
-        bridgedTools,
-        signal: abort.signal,
-        requestPermission,
-      });
+      const stream = abort.signal.aborted
+        ? nothing()
+        : engine.runTurn({
+            conversationId,
+            prompt: missed ? `${missed}\n\n${prompt}` : prompt,
+            ...(attached?.images.length && { images: attached.images }),
+            ...(readableDirs.length && { readableDirs }),
+            resumeId: session?.resumeId,
+            systemAppend: [
+              buildSystemAppend({
+                persona: settings.persona,
+                profile: settings.profile,
+                memories,
+                autoMemory: settings.preferences.autoMemory,
+                tools: engine.hostTools !== false,
+              }),
+              await this.deps.context?.(engine),
+              notConnectedPrompt(
+                apps.unseen,
+                apps.offers.map((o) => o.name),
+              ),
+              extras?.systemExtra,
+            ]
+              .filter(Boolean)
+              .join('\n\n'),
+            cwd: await this.deps.settings.workspace(),
+            tools,
+            options: resolved,
+            mcpServers: engine.integrations.mode === 'native' ? loaded?.servers : undefined,
+            disallowedTools: loaded?.disallowedTools,
+            bridgedTools,
+            signal: abort.signal,
+            requestPermission,
+          });
 
       for await (const event of stream) {
         switch (event.type) {

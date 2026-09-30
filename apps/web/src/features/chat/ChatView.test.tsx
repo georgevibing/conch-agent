@@ -4,6 +4,7 @@ import { Toaster } from '@conch/nacre';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useUi } from '../../app/ui';
+import { useLiveStore } from '../../live/store';
 import { appState, FakeSocket, mockFetch, renderApp } from '../../test/harness';
 import { ChatView } from './ChatView';
 
@@ -11,6 +12,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
   // The composer's pickers and a new chat's choices live in a shared store.
   useUi.setState({ picker: null, draftOptions: {} });
+  // A message one test sent and never saw acknowledged mustn't still be "sending" in the next.
+  useLiveStore.setState({ pending: {} });
 });
 
 describe('ChatView', () => {
@@ -284,5 +287,46 @@ describe('ChatView', () => {
         }),
       ),
     );
+  });
+
+  it('Stop works the moment you send — a new chat stops as soon as it exists', async () => {
+    mockFetch({ 'GET /api/state': () => appState(), 'GET /api/conversations': () => [] });
+    renderApp(<ChatView />);
+    await userEvent.type(
+      await screen.findByRole('textbox', { name: 'Message Conch' }),
+      'Write me a long story{Enter}',
+    );
+    const socket = FakeSocket.last;
+    const sent = await waitFor(() => {
+      const message = socket?.sent.find(
+        (m) => (m as { type: string }).type === 'conversation.send',
+      ) as { clientMessageId: string } | undefined;
+      expect(message).toBeDefined();
+      return message as { clientMessageId: string };
+    });
+    // Before the server has even created the chat.
+    await userEvent.click(screen.getByRole('button', { name: /Stop/ }));
+    expect(
+      socket?.sent.some((m) => (m as { type: string }).type === 'conversation.interrupt'),
+    ).toBe(false);
+    act(() =>
+      socket?.push({
+        type: 'conversation.created',
+        clientMessageId: sent.clientMessageId,
+        conversation: {
+          id: 'c-stop',
+          title: 'Write me a long story',
+          preview: '',
+          createdAt: 1,
+          updatedAt: 1,
+          status: 'running',
+          options: {},
+        },
+      }),
+    );
+    expect(socket?.sent).toContainEqual({
+      type: 'conversation.interrupt',
+      conversationId: 'c-stop',
+    });
   });
 });
