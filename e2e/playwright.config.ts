@@ -49,6 +49,11 @@ export default defineConfig({
     name,
     testMatch: `${name}.spec.ts`,
     use: { baseURL: `http://localhost:${s.port}` },
+    // The browser journeys drive a real Chrome, which is heavy enough to make the
+    // timing-sensitive specs (password hashing, streaming) flake if they run
+    // alongside it. They go last.
+    dependencies:
+      name === 'browser' ? Object.keys(scenarios).filter((other) => other !== 'browser') : [],
   })),
   webServer: Object.values(scenarios).map((s) => ({
     // Node itself (not pnpm or tsx's CLI) so Playwright's shutdown signal reaches the
