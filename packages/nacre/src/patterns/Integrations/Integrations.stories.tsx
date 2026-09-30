@@ -117,6 +117,17 @@ export const ConnectedCards: Story = {
       />
       <IntegrationCard
         variant="connected"
+        name="1Password"
+        brand="1password"
+        color="#145FE4"
+        state="error"
+        message="Needs the 1Password app."
+        action={{ label: 'Finish setup', onClick: () => {} }}
+        enabled
+        onToggle={() => {}}
+      />
+      <IntegrationCard
+        variant="connected"
         name="Linear"
         brand="linear"
         color="#5E6AD2"

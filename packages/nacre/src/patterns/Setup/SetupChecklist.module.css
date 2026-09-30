@@ -1,0 +1,159 @@
+@layer nacre.components {
+  .list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .row + .row {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .step {
+    --sc-marker: 1.375rem;
+
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-3) var(--nc-space-3-5);
+  }
+
+  /* ── Marker: a number to do, a check when done ───────────────────────── */
+  .marker {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: var(--sc-marker);
+    block-size: var(--sc-marker);
+    margin-block-start: 0.0625rem;
+    border-radius: var(--nc-radius-full);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-semibold);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-subtle);
+    box-shadow: inset 0 0 0 1.5px var(--nc-border);
+    transition:
+      background-color var(--nc-duration-base) var(--nc-ease-out),
+      color var(--nc-duration-base) var(--nc-ease-out),
+      box-shadow var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .marker svg {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+    stroke-width: 2.5;
+  }
+
+  .step:is([data-state='current'], [data-state='waiting']) .marker::before {
+    content: var(--sc-n);
+  }
+
+  .step[data-state='current'] .marker {
+    color: var(--nc-text-accent);
+    box-shadow: inset 0 0 0 1.5px var(--nc-accent-9);
+  }
+
+  .step[data-state='done'] .marker {
+    background: light-dark(
+      oklch(0.95 0.04 var(--nc-success-h)),
+      oklch(0.35 0.06 var(--nc-success-h))
+    );
+    color: light-dark(oklch(0.5 0.13 var(--nc-success-h)), oklch(0.82 0.12 var(--nc-success-h)));
+    box-shadow: none;
+    animation: sc-pop var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .step[data-state='working'] .marker {
+    color: var(--nc-text-accent);
+    box-shadow: none;
+  }
+
+  .step[data-state='failed'] .marker {
+    color: light-dark(oklch(0.56 0.2 var(--nc-danger-h)), oklch(0.74 0.16 var(--nc-danger-h)));
+    box-shadow: none;
+  }
+
+  .step[data-state='unavailable'] .marker {
+    box-shadow: none;
+  }
+
+  /* ── Words ────────────────────────────────────────────────────────── */
+  .body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+  }
+
+  .title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--nc-space-1) var(--nc-space-3);
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+  }
+
+  .step:is([data-state='waiting'], [data-state='unavailable']) .title {
+    color: var(--nc-text-muted);
+  }
+
+  .note {
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-regular);
+    color: var(--nc-text-subtle);
+  }
+
+  .description {
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  .description :is(p, ol, ul) {
+    margin: 0;
+  }
+
+  .description :is(ol, ul) {
+    padding-inline-start: 1.1em;
+  }
+
+  .description li + li {
+    margin-block-start: var(--nc-space-0-5);
+  }
+
+  .progress {
+    margin-block-start: var(--nc-space-1);
+  }
+
+  .action {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-2);
+    margin-block-start: var(--nc-space-1-5);
+  }
+
+  @keyframes sc-pop {
+    from {
+      transform: scale(0.6);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .step[data-state='done'] .marker {
+      animation: none;
+    }
+  }
+}

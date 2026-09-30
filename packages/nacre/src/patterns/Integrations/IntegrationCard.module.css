@@ -165,13 +165,57 @@
   }
 
   /* ── Connected card ────────────────────────────────────────────────── */
+
+  /*
+   * The switch sits on the name's line, so what's wrong (and the button that
+   * fixes it) can run the full width beneath both instead of squeezing into
+   * a column beside the switch.
+   */
   .connected {
+    display: grid;
+    /* The flexible rows above and below take the logo's extra height, so the lines stay together. */
+    grid-template-areas:
+      'logo . .'
+      'logo title toggle'
+      'logo status status'
+      'logo action action'
+      'logo . .';
+    grid-template-rows: 1fr auto auto auto 1fr;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0 var(--nc-space-3);
     padding: var(--nc-space-4);
   }
 
-  /* With a fix button the card grows; keep the logo at the top with the name. */
+  .connected > :first-child {
+    grid-area: logo;
+    align-self: center;
+  }
+
+  /* With a fix button the card grows: everything starts at the top, with the name. */
   .connected:has(.action) {
-    align-items: flex-start;
+    grid-template-rows: 0 auto auto auto 1fr;
+  }
+
+  .connected .text {
+    display: contents;
+  }
+
+  .connected .title {
+    grid-area: title;
+    align-self: center;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .connected .status {
+    grid-area: status;
+    margin-block-start: 0.125rem;
+  }
+
+  .connected:has(.action) > :first-child {
+    align-self: start;
   }
 
   .connected[data-state='off'] {
@@ -213,9 +257,14 @@
     stroke-width: 2.2;
   }
 
+  /* A card is a glance: two lines at most. The whole sentence is on its page. */
   .statusText {
+    display: -webkit-box;
     min-inline-size: 0;
+    overflow: hidden;
     text-wrap: pretty;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 
   .status[data-tone='warning'] {
@@ -237,12 +286,16 @@
   .action {
     position: relative;
     z-index: 2;
-    margin-block-start: var(--nc-space-2);
+    grid-area: action;
+    justify-self: start;
+    margin-block-start: var(--nc-space-2-5);
   }
 
   .toggle {
     position: relative;
     z-index: 2;
+    display: flex;
+    grid-area: toggle;
     align-self: center;
   }
 

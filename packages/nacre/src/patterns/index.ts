@@ -23,3 +23,4 @@ export * from './Providers';
 export * from './Skills';
 export * from './Browser';
 export * from './Terminal';
+export * from './Setup';
