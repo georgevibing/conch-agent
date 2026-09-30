@@ -1,0 +1,123 @@
+@layer nacre.components {
+  /* Folds away on “Not now”: rows collapse to nothing while the card fades. */
+  .shell {
+    display: grid;
+    grid-template-rows: 1fr;
+    max-inline-size: 34rem;
+    transition:
+      grid-template-rows var(--nc-spring-soft-duration) var(--nc-spring-soft),
+      opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .shell[data-state='dismissed'] {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+
+  .card {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-3);
+    min-block-size: 0;
+    padding: var(--nc-space-3) var(--nc-space-3-5) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow:
+      var(--nc-glaze-edge),
+      inset 0 0 0 1px var(--nc-border-subtle);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .shell[data-state='dismissed'] .card {
+    overflow: hidden;
+  }
+
+  .logo {
+    flex: none;
+    margin-block-start: 0.125rem;
+  }
+
+  .body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+  }
+
+  .message {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  /* Connected: a confirmation, one step quieter than the offer. */
+  .card[data-state='connected'] .title {
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+  }
+
+  /* “Don’t suggest”: the quietest thing on the card, out to the side. */
+  .mute {
+    margin-inline-start: auto;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .muted {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    max-inline-size: 34rem;
+    padding-inline: var(--nc-space-1);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .mutedIcon {
+    flex: none;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .mutedText {
+    flex: 0 1 auto;
+    min-inline-size: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shell {
+      transition: none;
+    }
+
+    .card,
+    .muted {
+      animation: none;
+    }
+  }
+}
