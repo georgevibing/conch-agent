@@ -285,9 +285,8 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   }, [conversationId]);
 
   const turn = useTurnOptions(conversationId);
-  const isRoutineRun = Boolean(
-    useConversations().data?.find((c) => c.id === conversationId)?.origin,
-  );
+  const isRoutineRun =
+    useConversations().data?.find((c) => c.id === conversationId)?.origin?.kind === 'routine';
 
   /** Send words, and whatever is attached (the draft's cards unless given). */
   const send = (text: string, attached: Attachment[] = attachments.ready) => {

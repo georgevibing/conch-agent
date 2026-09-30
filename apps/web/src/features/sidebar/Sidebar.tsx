@@ -197,7 +197,7 @@ export function Sidebar({
 
   const groups = new Map<DayGroup, ConversationSummary[]>();
   // Routine runs live under Routines, not in your chat list.
-  for (const c of (conversations ?? []).filter((c) => !c.origin)) {
+  for (const c of (conversations ?? []).filter((c) => c.origin?.kind !== 'routine')) {
     const g = dayGroup(c.updatedAt);
     groups.set(g, [...(groups.get(g) ?? []), c]);
   }

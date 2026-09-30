@@ -5,6 +5,10 @@ import type { EngineId, LoginState, ServerEvent, SkillSource } from '@conch/prot
 import { AttachmentStore } from './attachments/store';
 import { AccessStore } from './auth/store';
 import { BrowserService } from './browser/service';
+import { adapterFor, type ChannelEndpoints } from './channels/adapters';
+import { MockTelegram } from './channels/mock/telegram';
+import { ChannelService } from './channels/service';
+import { ChannelStore } from './channels/store';
 import { TerminalService } from './terminal/service';
 import { Gatekeeper } from './security';
 import type { Config } from './config';
@@ -85,6 +89,10 @@ export class Services {
   readonly mockVendor?: MockVendor;
   /** Full-text search over every conversation; rebuilds its index when it breaks. */
   readonly search: SearchService;
+  /** Telegram, Discord and Slack bots that reach your assistant (ADR 0018). */
+  readonly channels: ChannelService;
+  /** The pretend Telegram used with the mock engine. */
+  readonly mockTelegram?: MockTelegram;
   #login?: { handle: LoginHandle; state: LoginState };
   #sweeper?: NodeJS.Timeout;
 
@@ -248,7 +256,32 @@ export class Services {
     });
     this.conversations.events.on((event) => this.search.onEvent(event));
     this.search.open();
+
+    // With the mock engine, channels talk to a pretend Telegram on this machine.
+    this.mockTelegram = config.CONCH_ENGINE === 'mock' ? new MockTelegram() : undefined;
+    const endpoints: ChannelEndpoints = {};
+    this.channels = new ChannelService({
+      store: new ChannelStore(config.CONCH_HOME, heal),
+      conversations: this.conversations,
+      attachments: this.attachments,
+      settings: this.settings,
+      adapter: (secrets) => adapterFor(secrets, endpoints),
+      emit: (event) => this.broadcast.emit(event),
+      onHeal: (message) => void this.healed.note('channels', message),
+      routineTitle: async (id) =>
+        (await this.routines.detail(id).catch(() => undefined))?.routine.title,
+    });
+    // Conversations and routine runs reach the channels through the same stream as the web app.
+    this.broadcast.on((event) => this.channels.onEvent(event));
+    this.#channelsReady = (async () => {
+      if (this.mockTelegram) {
+        const port = Number(process.env.CONCH_MOCK_TELEGRAM_PORT ?? 0);
+        endpoints.telegram = await this.mockTelegram.start(port);
+      }
+    })();
   }
+
+  #channelsReady: Promise<void>;
 
   /** The default provider: your choice, or `CONCH_ENGINE` when it's set. */
   engine(): Engine {
@@ -275,6 +308,8 @@ export class Services {
   /** Read the remembered provider before the first request arrives. */
   async start() {
     await this.providers.load();
+    await this.#channelsReady;
+    void this.channels.start().catch((error: unknown) => console.error('[channels]', error));
     // Uploads nobody sent (a closed tab, a dropped draft) are cleared on start and hourly.
     void this.attachments.sweep().catch(() => undefined);
     this.#sweeper ??= setInterval(
@@ -285,6 +320,8 @@ export class Services {
   }
 
   stop() {
+    this.channels.stop();
+    void this.mockTelegram?.stop();
     clearInterval(this.#sweeper);
     this.#sweeper = undefined;
   }
