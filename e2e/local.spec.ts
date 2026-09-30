@@ -11,8 +11,10 @@ test.beforeEach(async ({ request }) => {
 
 test('gets a model with progress, then chats with it', async ({ page }) => {
   await page.goto('/');
+  // The app is up (its shortcuts listen) once the message box is there.
+  await expect(page.getByRole('textbox', { name: /Message/ })).toBeVisible();
   // ⌘K finds it by the words people use.
-  await page.keyboard.press('Control+k');
+  await page.keyboard.press('ControlOrMeta+k');
   await page.getByRole('combobox').fill('offline');
   await page.getByRole('option', { name: /Model on this computer/ }).click();
 
@@ -43,7 +45,8 @@ test('gets a model with progress, then chats with it', async ({ page }) => {
   await composer.fill('Hello?');
   await composer.press('Enter');
   const reply = page.getByText(/Hello from the model on this computer\. I have (\d+) tools/);
-  await expect(reply).toBeVisible();
+  // Read it once it has finished arriving, not mid-stream.
+  await expect(reply).toContainText(/tokens of context\./);
   // Conch's own tools reach a local model, with room for them in the context.
   const text = (await reply.textContent()) ?? '';
   expect(Number(/I have (\d+) tools/.exec(text)?.[1])).toBeGreaterThan(0);
