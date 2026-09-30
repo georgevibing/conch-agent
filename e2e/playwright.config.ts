@@ -74,6 +74,9 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
+  // Every journey has its own gateway and Chrome; more than a few at once starves the
+  // timing-sensitive ones (streaming, sign-in, the terminal) — and ends sooner, not later.
+  workers: 3,
   reporter: [['list']],
   use: {
     ...devices['Desktop Chrome'],
