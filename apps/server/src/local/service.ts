@@ -1,5 +1,5 @@
 /**
- * A model on this computer, kept working (ADR 0018).
+ * A model on this computer, kept working (ADR 0022).
  *
  * The one place that knows where Ollama is and how it is: installed, running,
  * which models it has. It starts Ollama quietly when it has stopped (and says
@@ -223,43 +223,67 @@ export class LocalService implements OllamaLink {
   async #start(note: boolean): Promise<boolean> {
     if (this.host().refused) return false;
     if (await this.running()) return true;
+    // The program is on disk before its installer is done; starting it then
+    // leaves an app with no server behind. Wait for the install instead.
+    if (await this.#installing()) return false;
     const program = await this.program();
     if (!program) return false;
-    this.#launch(program);
-    const deadline = (this.deps.now ?? Date.now)() + (this.deps.startTimeoutMs ?? START_TIMEOUT_MS);
-    while ((this.deps.now ?? Date.now)() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      if (await this.running()) {
-        if (note) this.deps.heal?.('Ollama wasn’t running, so Conch started it.');
-        this.deps.onChange?.();
-        return true;
+    const now = this.deps.now ?? Date.now;
+    const timeout = this.deps.startTimeoutMs ?? START_TIMEOUT_MS;
+    const up = async (until: number) => {
+      while (now() < until) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        if (await this.running()) return true;
       }
+      return false;
+    };
+    const quiet = this.#launch(program);
+    // The app may be there already without its server (it exits when another
+    // copy runs): then `ollama serve` itself is the next good option.
+    let started = await up(now() + (quiet ? timeout / 2 : timeout));
+    if (!started && quiet) {
+      this.#spawn(program, ['serve']);
+      started = await up(now() + timeout / 2);
     }
-    return false;
+    if (!started) return false;
+    if (note) this.deps.heal?.('Ollama wasn’t running, so Conch started it.');
+    this.deps.onChange?.();
+    return true;
+  }
+
+  async #installing(): Promise<boolean> {
+    const need = this.#need();
+    if (!need) return false;
+    const readiness = await this.deps.setup.readiness([need]).catch(() => undefined);
+    return readiness?.needs[0]?.state === 'installing';
   }
 
   /**
    * Start it the quiet way for each system: the Windows app hidden in the
-   * tray, the Mac app hidden, else `ollama serve` in the background. Detached,
-   * so it outlives Conch, with Conch's own settings kept out of its environment.
+   * tray, the Mac app hidden, else `ollama serve` in the background. Says
+   * whether it was the app (which can fail quietly) rather than the server.
    */
-  #launch(program: string): void {
-    const spawn = this.deps.spawn ?? nodeSpawn;
-    let command = program;
-    let args = ['serve'];
+  #launch(program: string): boolean {
     if (this.#platform === 'win32') {
       const app = join(dirname(program), 'ollama app.exe');
       if (presentSync(app)) {
-        command = app;
-        args = ['--hide', '--fast-startup'];
+        this.#spawn(app, ['--hide', '--fast-startup']);
+        return true;
       }
     } else if (this.#platform === 'darwin') {
-      const bundle = /\/Ollama\.app\/Contents\/Resources\/ollama$/.exec(program);
-      if (bundle) {
-        command = 'open';
-        args = ['-j', '-a', program.slice(0, program.indexOf('/Contents/Resources'))];
+      const at = program.indexOf('/Ollama.app/Contents/Resources/');
+      if (at !== -1) {
+        this.#spawn('open', ['-j', '-a', program.slice(0, at + '/Ollama.app'.length)]);
+        return true;
       }
     }
+    this.#spawn(program, ['serve']);
+    return false;
+  }
+
+  /** Detached, so it outlives Conch, with Conch's own settings kept out of its environment. */
+  #spawn(command: string, args: string[]): void {
+    const spawn = this.deps.spawn ?? nodeSpawn;
     try {
       const child = spawn(command, args, {
         env: agentEnv(),
@@ -417,7 +441,7 @@ export class LocalService implements OllamaLink {
     const ollama = await this.#ollama({ heal: true });
     const paths = {
       ...(ollama.path && { executablePath: ollama.path }),
-      ...(ollama.version && { version: ollama.version }),
+      ...(ollama.version && { version: `Ollama ${ollama.version}` }),
     };
     if (ollama.state === 'elsewhere') return { ...base, state: 'error', message: ollama.message };
     if (ollama.state === 'missing') {

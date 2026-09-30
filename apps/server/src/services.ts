@@ -62,7 +62,7 @@ export class Services {
   readonly setup: Setup;
   /** Repair everything: every part's check, run at once (see `doctor/`). */
   readonly doctor: Doctor;
-  /** A model on this computer: Ollama, found, started and fed models (ADR 0018). */
+  /** A model on this computer: Ollama, found, started and fed models (ADR 0022). */
   readonly local: LocalService;
   readonly settings: SettingsStore;
   /** Who may sign in (`~/.conch/access.json`). */

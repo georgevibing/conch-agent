@@ -1,5 +1,5 @@
 /**
- * Ollama — a model on this computer (ADR 0018).
+ * Ollama — a model on this computer (ADR 0022).
  *
  * Conch speaks Ollama's native `POST /api/chat`, not its OpenAI-compatible
  * `/v1/chat/completions`, because only the native API lets it set the context

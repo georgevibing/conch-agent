@@ -63,9 +63,9 @@ function pullLines(...lines: unknown[]): Response {
   return new Response(lines.map((l) => JSON.stringify(l)).join('\n') + '\n', { status: 200 });
 }
 
-function fakeSpawn(onStart: () => void) {
+function fakeSpawn(onStart: (command: string, args: string[]) => void) {
   return vi.fn((command: string, args: string[]) => {
-    onStart();
+    onStart(command, args);
     const child = new EventEmitter() as EventEmitter & { unref(): void };
     child.unref = () => undefined;
     void command;
@@ -85,6 +85,8 @@ async function service(
     freeDisk?: number;
     env?: NodeJS.ProcessEnv;
     startsOk?: boolean;
+    /** Only `ollama serve` brings the server up (the app is stuck without one). */
+    appStuck?: boolean;
   } = {},
 ) {
   const home = await mkdtemp(join(tmpdir(), 'conch-local-'));
@@ -104,7 +106,8 @@ async function service(
   };
   const heal = vi.fn();
   const onChange = vi.fn();
-  const spawn = fakeSpawn(() => {
+  const spawn = fakeSpawn((_command, args) => {
+    if (options.appStuck && args[0] !== 'serve') return;
     if (options.startsOk !== false) world.running = true;
   });
   const deps: LocalDeps = {
@@ -155,7 +158,7 @@ describe('finding Ollama', () => {
     const status = await local.engineStatus();
     expect(status).toMatchObject({
       state: 'ready',
-      version: '0.35.0',
+      version: 'Ollama 0.35.0',
       auth: { description: 'Qwen3 4B · works offline' },
     });
     // No `ollama app.exe` next to it here, so `ollama serve`, detached and hidden.
@@ -178,6 +181,34 @@ describe('finding Ollama', () => {
       ['--hide', '--fast-startup'],
       expect.anything(),
     );
+  });
+
+  it('falls back to `ollama serve` when the app is there but its server isn’t', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'conch-ollama-app-'));
+    await writeFile(join(dir, 'ollama app.exe'), '');
+    const { local, spawn, heal } = await service({
+      program: join(dir, 'ollama.exe'),
+      appStuck: true,
+    });
+    expect(await local.ensureRunning({ note: true })).toBe(true);
+    expect(spawn.mock.calls.map(([command, args]) => [command, args])).toEqual([
+      [join(dir, 'ollama app.exe'), ['--hide', '--fast-startup']],
+      [join(dir, 'ollama.exe'), ['serve']],
+    ]);
+    expect(heal).toHaveBeenCalledWith('Ollama wasn’t running, so Conch started it.');
+  });
+
+  it('never starts Ollama while its installer is still running', async () => {
+    const { local, spawn } = await service({ models: true });
+    vi.spyOn(Setup.prototype, 'readiness').mockResolvedValue({
+      ready: false,
+      needs: [
+        { id: 'ollama', name: 'Ollama', short: 'Ollama', openable: false, state: 'installing' },
+      ],
+    });
+    expect(await local.ensureRunning({ note: true })).toBe(false);
+    expect(spawn).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
   });
 
   it('opens the Mac app hidden', async () => {

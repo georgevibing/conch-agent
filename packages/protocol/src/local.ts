@@ -1,5 +1,5 @@
 /**
- * A model on this computer (ADR 0018).
+ * A model on this computer (ADR 0022).
  *
  * Conch runs an open model through Ollama, on this computer: private, free, and
  * it keeps working with the internet unplugged. Setting it up is three steps —

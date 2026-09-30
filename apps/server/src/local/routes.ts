@@ -7,7 +7,7 @@ import type { Services } from '../services';
 import { LocalError } from './service';
 
 /**
- * A model on this computer (ADR 0018). All under `/api`, so the gateway's host,
+ * A model on this computer (ADR 0022). All under `/api`, so the gateway's host,
  * origin and sign-in checks cover them like everything else.
  *
  * Downloading a model persists something big on this computer that runs as

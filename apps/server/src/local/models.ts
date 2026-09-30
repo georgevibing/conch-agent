@@ -2,7 +2,7 @@
  * Which model to suggest, for which computer.
  *
  * A short list Conch stands behind, checked against Ollama's library in
- * September 2026 (sizes are the registry's own manifests, ADR 0018). Each one
+ * September 2026 (sizes are the registry's own manifests, ADR 0022). Each one
  * calls tools — that's what lets a local model use your apps, memory and the
  * browser — and the pick depends on how much memory this computer has: a model
  * that doesn't fit in memory doesn't answer slowly, it doesn't answer.
@@ -34,14 +34,14 @@ export const LOCAL_CATALOG: readonly CatalogModel[] = [
     name: 'qwen3:1.7b',
     label: 'Qwen3 1.7B',
     sizeBytes: 1_359_293_444,
-    blurb: 'The smallest that still uses your apps, for a computer with little memory.',
+    blurb: 'The smallest that still uses your apps. For a computer with little memory.',
     tools: true,
   },
   {
     name: 'qwen3.5:2b-q4_K_M',
     label: 'Qwen3.5 2B',
     sizeBytes: 1_945_323_638,
-    blurb: 'Small and quick, and it still uses your apps and looks at pictures.',
+    blurb: 'Small and quick. It uses your apps and looks at pictures.',
     tools: true,
     minVersion: '0.17.1',
   },
@@ -56,14 +56,14 @@ export const LOCAL_CATALOG: readonly CatalogModel[] = [
     name: 'qwen3:4b-instruct',
     label: 'Qwen3 4B',
     sizeBytes: 2_497_293_803,
-    blurb: 'Quick on a computer like this one, and good at using your apps.',
+    blurb: 'Quick, and good at using your apps.',
     tools: true,
   },
   {
     name: 'qwen3.5:4b',
     label: 'Qwen3.5 4B',
     sizeBytes: 3_389_983_735,
-    blurb: 'A little bigger and a little smarter, and it looks at pictures.',
+    blurb: 'A little bigger and smarter, and it looks at pictures.',
     tools: true,
     minVersion: '0.17.1',
   },
@@ -86,7 +86,7 @@ export const LOCAL_CATALOG: readonly CatalogModel[] = [
     name: 'gpt-oss:20b',
     label: 'gpt-oss 20B',
     sizeBytes: 13_793_441_244,
-    blurb: 'OpenAI’s open model. It thinks before it answers, and wants plenty of memory.',
+    blurb: 'OpenAI’s open model. It thinks before it answers.',
     tools: true,
     minVersion: '0.11.0',
   },
@@ -207,8 +207,10 @@ export function offersFor(input: {
       tools: model.tools,
     };
   });
-  // The recommended one first, then the rest smallest first.
-  return offers.sort((a, b) => Number(b.recommended) - Number(a.recommended));
+  // The recommended one first, then the rest biggest first (bigger is usually better).
+  return offers.sort(
+    (a, b) => Number(b.recommended) - Number(a.recommended) || b.sizeBytes - a.sizeBytes,
+  );
 }
 
 /**

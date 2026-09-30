@@ -199,7 +199,7 @@ list.push(
     },
   },
   {
-    // A model on this computer (ADR 0018). Ollama for Windows installs per
+    // A model on this computer (ADR 0022). Ollama for Windows installs per
     // user (no administrator) and puts itself on the user's PATH; the Mac app
     // keeps its command-line tool inside the bundle. Linux gets the page:
     // its installer is a script that needs sudo, and Conch never pipes one
