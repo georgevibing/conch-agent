@@ -5,7 +5,7 @@
  * automatic backups, what's kept, the Repair everything check, and the
  * routes' guards.
  */
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -587,6 +587,33 @@ describe('automatic backups', () => {
     free = 10 * 1024 ** 3;
     expect(await s.tick()).toBe('made');
     expect((await s.status()).problem).toBeUndefined();
+  });
+
+  it('won’t start a restore the disk can’t hold, and stages nothing', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-full-restore-'));
+    await writeFile(join(home, 'settings.json'), '{}');
+    await mkdir(join(home, 'memory'));
+    await writeFile(join(home, 'memory', 'm_1.md'), 'x'.repeat(200_000));
+    let free = 10 * 1024 ** 3;
+    const { s } = await service(home, { freeBytes: async () => free });
+    const made = await s.backupNow();
+    const before = await readdir(s.dir);
+    // Just short of what staging and the Undo copy need together.
+    free = 64 * 1024 * 1024 + 200_000;
+    const error = await s.restore(made.id).catch((e: unknown) => e);
+    expect(error).toMatchObject({
+      code: 'no-space',
+      message: expect.stringMatching(/enough free space on this computer to restore/),
+    });
+    // Nothing was staged, and no Undo copy was made.
+    expect(await readdir(s.dir)).toEqual(before);
+    expect((await s.status()).pending).toBeUndefined();
+    // Room enough for the file, not for what it unpacks to: stops there, and clears up.
+    free = 64 * 1024 * 1024 + 200_000 + made.size + 1_000;
+    await expect(s.restore(made.id)).rejects.toMatchObject({ code: 'no-space' });
+    expect(await readdir(s.dir)).toEqual(before);
+    free = 10 * 1024 ** 3;
+    await expect(s.restore(made.id)).resolves.toMatchObject({ kind: 'automatic' });
   });
 
   it('keeps 7 dailies and 4 weeklies, and lets the rest go', async () => {

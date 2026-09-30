@@ -120,7 +120,10 @@ now), or “Daily backups are off” (off, nobody's problem).
    what comes back in plain words and what stays as it is (“Keys and sign-ins
    aren't in it · yours stay as they are”), with the passphrase when there
    are locked keys. One dialog, one primary button.
-2. **Restore** needs a recent sign-in (sudo mode). The whole file is checked
+2. **Restore** needs a recent sign-in (sudo mode). First, before a byte is
+   staged, Conch checks (`statfs`) there's room for the backup unpacked and
+   an Undo copy of what it replaces, and says so in one sentence if there
+   isn't; unpacking stops at the room there is, too. The whole file is checked
    — every entry, path, size, sum and the passphrase — into a staging folder
    inside `backups/`; nothing in the live home is touched until it passes.
    Then what the restore replaces is saved as a **Before restoring** copy
@@ -158,8 +161,10 @@ Validation Cheat Sheets, and the “Zip Slip” research (Snyk, 2018):
   accepted from an Undo copy this computer made.
 - **Only regular files.** Links (hard or symbolic), folders, devices, pipes,
   GNU long names and global pax headers are refused; tar header sums are
-  checked; nothing but zeros may follow the end. Staged files are opened
-  with `wx`, so nothing is written through something already there.
+  checked; after the end, only the zeros `tar` pads a record with (10 KiB)
+  may follow, and nothing past them is unpacked, so a bomb of zeros after
+  the end stops there. Staged files are opened with `wx`, so nothing is
+  written through something already there.
 - **Limits** (`BACKUP_LIMITS`): 2 GB uploaded (streamed to disk, cut off at
   the limit), 8 GB unpacked, 1 GB a file, 250,000 files, 512-character paths;
   a bomb stops at the cap. A crafted lock can't ask scrypt for more than

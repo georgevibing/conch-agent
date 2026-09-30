@@ -5,8 +5,9 @@
  *
  * Reading is strict because a backup can come from anywhere: only regular
  * files (never links, devices or folders), checked header sums, a size cap
- * on everything unpacked (a “zip bomb” stops at the cap), and nothing but
- * zeros after the end.
+ * on everything unpacked (a “zip bomb” stops at the cap), and after the end
+ * nothing but a tar record's worth of zeros (a bomb of zeros after the end
+ * stops there too).
  */
 import { createGzip, type Gzip } from 'node:zlib';
 
@@ -42,6 +43,11 @@ const NOT_BACKUP = 'That file isn’t a Conch backup.';
 
 const BLOCK = 512;
 const ZEROS = Buffer.alloc(BLOCK * 2);
+/**
+ * Zeros allowed after the end: `tar` pads its output to a whole record of 20
+ * blocks (10 KiB). Anything more is refused, and nothing past it is unpacked.
+ */
+export const MAX_TRAILING = 20 * BLOCK;
 /** A pax header only ever carries a name here; anything bigger is refused. */
 const MAX_PAX = 64 * 1024;
 
@@ -178,7 +184,12 @@ export interface ReadLimits {
   maxUnpackedBytes?: number;
   maxFileBytes?: number;
   maxFiles?: number;
+  /** Free space for what's unpacked: past it, `no-space` (the disk, not the backup). */
+  roomBytes?: number;
 }
+
+export const NO_ROOM =
+  'There isn’t enough free space on this computer to restore this backup. Free up some space, then try again.';
 
 /**
  * Read a tar from gunzipped chunks, handing each regular file to `visit`.
@@ -200,6 +211,7 @@ export async function readTar(
   let nextName: string | undefined;
   let zeros = 0;
   let ended = false;
+  let trailing = 0;
   type State =
     | { kind: 'header' }
     | { kind: 'data'; remaining: number; pad: number; sink?: EntrySink }
@@ -238,6 +250,8 @@ export async function readTar(
     unpacked += size;
     if (unpacked > maxUnpacked)
       throw new BackupError('too-big', 'This backup is bigger than Conch restores.');
+    if (limits.roomBytes !== undefined && unpacked > limits.roomBytes)
+      throw new BackupError('no-space', NO_ROOM);
     const got = await visit({ name, size });
     if (got === 'stop') return 'stop';
     const sink = got === 'skip' ? undefined : got;
@@ -252,8 +266,12 @@ export async function readTar(
     let offset = 0;
     while (offset < chunk.length) {
       if (ended) {
-        // Only zeros may follow the end: nothing is hidden after it.
-        if (chunk.subarray(offset).some((b) => b !== 0)) throw new BackupError('damaged', DAMAGED);
+        // Only a record's padding of zeros may follow the end: nothing is
+        // hidden after it, and a bomb of zeros isn't unpacked past it.
+        const rest = chunk.subarray(offset);
+        trailing += rest.length;
+        if (trailing > MAX_TRAILING || rest.some((b) => b !== 0))
+          throw new BackupError('damaged', DAMAGED);
         offset = chunk.length;
         break;
       }

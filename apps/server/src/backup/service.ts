@@ -30,7 +30,7 @@ import { z } from 'zod';
 
 import { Mutex, readJson, safeJoin, writeJson } from '../lib/fs';
 import { readStore, type Heal } from '../lib/recover';
-import { BackupError } from './archive';
+import { BackupError, NO_ROOM } from './archive';
 import { extractBackup, readHeader, writeBackup, type Header } from './format';
 import { groupsFor, walk, type BackupGroup } from './manifest';
 import { backupsDir, Journal, journalPath, Plan, stagingDir } from './restore';
@@ -335,6 +335,25 @@ export class BackupService {
       );
   }
 
+  /**
+   * Room to restore `path`, looked at before a byte is staged: the backup
+   * unpacked (at least as big as the file), then an Undo copy of what it
+   * replaces here. Throws `no-space` when there isn't; otherwise the room
+   * left for what's unpacked, so extracting stops at the disk too.
+   */
+  async #roomToRestore(path: string, size: number): Promise<number | undefined> {
+    const header = await readHeader(path);
+    const here = (await walk(this.deps.home))
+      .filter((f) => f.rule?.group !== undefined && header.groups.includes(f.rule.group))
+      .reduce((sum, f) => sum + f.size, 0);
+    await mkdir(this.dir, { recursive: true, mode: 0o700 });
+    const free = await (this.deps.freeBytes ?? diskFree)(this.dir);
+    if (free === undefined) return undefined;
+    const room = free - here - SPARE_BYTES;
+    if (room < size) throw new BackupError('no-space', NO_ROOM);
+    return room;
+  }
+
   /** Back up now into the backups folder (automatic), chats included. */
   backupNow(): Promise<BackupSummary> {
     return this.#exclusive('backing-up', async () => {
@@ -520,6 +539,8 @@ export class BackupService {
       const source = await this.summary(id);
       const path = this.pathOf(id);
       const staging = stagingDir(this.deps.home);
+      // Before anything is staged: a full disk says so, rather than fill up.
+      const room = await this.#roomToRestore(path, source.size);
       await rm(staging, { recursive: true, force: true });
       await mkdir(staging, { recursive: true, mode: 0o700 });
       try {
@@ -528,6 +549,7 @@ export class BackupService {
           passphrase: options.passphrase,
           skipSecrets: options.skipSecrets,
           allowLocal: kind === 'before-restore',
+          ...(room !== undefined && { limits: { roomBytes: room } }),
         });
         const { header } = extracted;
         const withSecrets =
