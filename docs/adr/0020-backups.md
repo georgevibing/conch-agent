@@ -133,10 +133,28 @@ now), or “Daily backups are off” (off, nobody's problem).
 
 ### Restore
 
-1. **Preview first.** Choosing an automatic backup, or uploading a file, shows
-   what comes back in plain words and what stays as it is (“Keys and sign-ins
-   aren't in it · yours stay as they are”), with the passphrase when there
-   are locked keys. One dialog, one primary button.
+1. **Preview first** (`GET /api/backups/:id/preview`). Choosing an automatic
+   backup, or uploading a file, shows what comes back in plain words and what
+   stays as it is (“Keys and sign-ins aren't in it · yours stay as they
+   are”), with the passphrase when there are locked keys. One dialog, one
+   primary button. The preview is **read from the backup's files, never its
+   header**: the header's counts are unauthenticated without a passphrase,
+   so a backup could claim “Settings only” while holding anything. The file
+   is checked through first exactly as a restore would (paths, kinds, sizes,
+   the seal), writing nothing and needing no passphrase; an upload is
+   checked this way before it's offered at all. Then the counts come from
+   the files it holds (`countContents`), and **what in it can act for you**
+   is listed before the button (`powers.ts`, Nacre `BackupPowers`): an
+   integration that runs a program on this computer, with its command; an
+   integration or tools set to “Don't ask”; new chats in Full trust; a
+   routine that runs by itself with it; sites the browser acts on; the
+   browser opening local apps; other devices opening a terminal. It's read
+   more eagerly than the stores read it (anything a store would still load
+   is listed), and a file it reads that's too big to be real (8 MB) is
+   refused rather than skipped. Calm — the warning hue, low chroma, never
+   danger red — and it ends with what to do: “Restore it only if you set
+   these up yourself.” When this Conch keeps its own sign-in (below), it
+   says “Your current password and keys stay.”
 2. **Restore** needs a recent sign-in (sudo mode). First, before a byte is
    staged, Conch checks (`statfs`) there's room for the backup unpacked and
    an Undo copy of what it replaces, and says so in one sentence if there

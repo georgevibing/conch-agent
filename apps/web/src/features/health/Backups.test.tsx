@@ -1,4 +1,4 @@
-import type { BackupStatus, BackupSummary } from '@conch/protocol';
+import type { BackupPreview, BackupStatus, BackupSummary } from '@conch/protocol';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -56,12 +56,25 @@ const health = {
 };
 const auth = { method: 'none', signedIn: true, setupRequired: false, secure: true };
 
+/** What the gateway reads from a backup's files for the preview. */
+const previewOf = (b: BackupSummary, patch: Partial<BackupPreview> = {}): BackupPreview => ({
+  id: b.id,
+  contents: b.contents,
+  powers: [],
+  morePowers: 0,
+  signInStays: false,
+  ...patch,
+});
+
 function routes(current: BackupStatus, extra: Record<string, (body: unknown) => unknown> = {}) {
   return mockFetch({
     'GET /api/backups': () => current,
     'GET /api/health': () => health,
     'GET /api/auth': () => auth,
     'GET /api/access': () => ({}),
+    ...Object.fromEntries(
+      current.backups.map((b) => [`GET /api/backups/${b.id}/preview`, () => previewOf(b)]),
+    ),
     ...extra,
   });
 }
@@ -285,6 +298,7 @@ describe('restoring', () => {
                 'Your backup is ready to restore. Restart Conch to finish: stop it (Ctrl+C) and run pnpm start again.',
             },
       'DELETE /api/backups/upload-1a2b3c': () => ({ ok: true }),
+      'GET /api/backups/upload-1a2b3c/preview': () => previewOf(uploaded),
     });
     const { container } = renderApp(<BackupSection />);
     const input = container.querySelector<HTMLInputElement>('input[type="file"]');
@@ -327,15 +341,17 @@ describe('restoring', () => {
 
   it('goes on without the keys when the passphrase is forgotten, and lets go of an unused upload', async () => {
     const user = userEvent.setup();
-    upload.mockResolvedValue(
-      backup({
-        id: 'upload-1a2b3c',
-        kind: 'uploaded',
-        downloadable: false,
-        contents: { ...contents, secrets: 'passphrase' },
-      }),
-    );
-    const calls = routes(status(), { 'DELETE /api/backups/upload-1a2b3c': () => ({ ok: true }) });
+    const uploaded = backup({
+      id: 'upload-1a2b3c',
+      kind: 'uploaded',
+      downloadable: false,
+      contents: { ...contents, secrets: 'passphrase' },
+    });
+    upload.mockResolvedValue(uploaded);
+    const calls = routes(status(), {
+      'DELETE /api/backups/upload-1a2b3c': () => ({ ok: true }),
+      'GET /api/backups/upload-1a2b3c/preview': () => previewOf(uploaded),
+    });
     const { container } = renderApp(<BackupSection />);
     const input = container.querySelector<HTMLInputElement>('input[type="file"]');
     if (!input) throw new Error('no file input');
@@ -352,6 +368,74 @@ describe('restoring', () => {
         body: undefined,
       }),
     );
+  });
+
+  it('previews from what’s in the file, with what in it can act for you, before you restore', async () => {
+    const user = userEvent.setup();
+    // Its header says settings only; its files say otherwise.
+    const uploaded = backup({
+      id: 'upload-9f8e7d',
+      kind: 'uploaded',
+      downloadable: false,
+      contents: {
+        settings: true,
+        memories: 0,
+        commands: 0,
+        routines: 0,
+        skills: 0,
+        integrations: 0,
+        integrationsSigningIn: 0,
+        secrets: 'passphrase',
+      },
+    });
+    upload.mockResolvedValue(uploaded);
+    routes(status(), {
+      'DELETE /api/backups/upload-9f8e7d': () => ({ ok: true }),
+      'GET /api/backups/upload-9f8e7d/preview': () =>
+        previewOf(uploaded, {
+          contents: { ...uploaded.contents, integrations: 2, routines: 1 },
+          powers: [
+            { kind: 'runs-program', name: 'Files', command: 'npx -y @someone/server' },
+            { kind: 'chats-never-ask' },
+          ],
+          signInStays: true,
+        }),
+    });
+    const { container } = renderApp(<BackupSection />);
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!input) throw new Error('no file input');
+    await user.upload(input, new File(['x'], 'b.conchbackup'));
+    const dialog = await screen.findByRole('dialog', { name: 'Restore this backup?' });
+    const brings = within(dialog).getByRole('list', { name: 'What this backup brings back' });
+    expect(brings).toHaveTextContent('2 integrations');
+    expect(brings).toHaveTextContent('1 routine');
+    const acts = within(dialog).getByRole('list', { name: 'This backup lets Conch act for you' });
+    expect(acts).toHaveTextContent('FilesRuns a program on this computer:npx -y @someone/server');
+    expect(acts).toHaveTextContent('New chatsLet Conch act without asking you first');
+    expect(within(dialog).getByText('Your current password and keys stay.')).toBeInTheDocument();
+  });
+
+  it('says so when a backup here won’t read, and never offers to restore it', async () => {
+    const user = userEvent.setup();
+    routes(status(), {
+      'GET /api/backups/auto-20260930-031200/preview': () =>
+        new Response(
+          JSON.stringify({
+            error: 'damaged',
+            message: 'This backup is damaged, or was changed after it was made. Try another one.',
+          }),
+          { status: 400 },
+        ),
+    });
+    renderApp(<BackupSection />);
+    await user.click(
+      await screen.findByRole('button', { name: /^Restore the backup from Today at/ }),
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Restore this backup?' });
+    expect(await within(dialog).findByText(/This backup is damaged/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/ends in \.conchbackup/)).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: 'Restore' })).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: 'Choose another file' })).toBeNull();
   });
 
   it('says plainly when a file isn’t a backup, and offers another', async () => {

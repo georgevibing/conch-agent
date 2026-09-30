@@ -1,6 +1,7 @@
 import {
   BACKUP_LIMITS,
   Health,
+  BackupPreview,
   BackupStatus,
   BackupSummary,
   type CreateBackupBody,
@@ -24,6 +25,8 @@ export const backupApi = {
   create: (body: CreateBackupBody) =>
     request(CreatedBackup, '/api/backups', { method: 'POST', body }),
   summary: (id: string) => request(BackupSummary, path(id)),
+  /** What restoring it brings, read from its files (and what in it can act for you). */
+  preview: (id: string) => request(BackupPreview, `${path(id)}/preview`),
   restore: (id: string, body: RestoreBackupBody) =>
     request(RestoreResult, `${path(id)}/restore`, { method: 'POST', body }),
   cancelPending: () => request(Ok, '/api/backups/pending', { method: 'DELETE' }),

@@ -1,4 +1,4 @@
-import type { BackupSummary } from '@conch/protocol';
+import type { BackupPreview, BackupSummary } from '@conch/protocol';
 import {
   Button,
   Callout,
@@ -35,18 +35,22 @@ export function markRestoring(): void {
 }
 
 type Step =
+  /** A file on its way up, checked as it lands. */
   | { kind: 'checking'; name: string; progress: number }
+  /** Reading what's in it, from its files. */
+  | { kind: 'inspecting'; backup: BackupSummary }
   | { kind: 'failed'; message: string; code?: string }
-  | { kind: 'preview'; backup: BackupSummary }
+  | { kind: 'preview'; backup: BackupSummary; preview: BackupPreview }
   | { kind: 'restart'; message: string };
 
 type Guard = (task: () => Promise<unknown>) => Promise<boolean>;
 
 /**
  * Restore, in one dialog with one clear button: a file is checked first
- * (with progress), then what comes back is shown in plain words, with the
- * passphrase when the backup's keys are locked. Restoring needs a recent
- * sign-in (`guard`); then Conch starts again and the page waits for it.
+ * (with progress), then what comes back is shown in plain words — read from
+ * the backup's files, with what in it can act for you — and the passphrase
+ * when the backup's keys are locked. Restoring needs a recent sign-in
+ * (`guard`); then Conch starts again and the page waits for it.
  */
 export function RestoreDialog({
   source,
@@ -89,7 +93,7 @@ function RestoreFlow({
 }) {
   const [step, setStep] = useState<Step>(() =>
     'backup' in source
-      ? { kind: 'preview', backup: source.backup }
+      ? { kind: 'inspecting', backup: source.backup }
       : { kind: 'checking', name: source.file.name, progress: 0 },
   );
   const [passphrase, setPassphrase] = useState('');
@@ -110,7 +114,7 @@ function RestoreFlow({
     }).then(
       (backup) => {
         uploaded.current = backup.id;
-        setStep({ kind: 'preview', backup });
+        setStep({ kind: 'inspecting', backup });
       },
       (failure: unknown) => {
         if (controller.signal.aborted) return;
@@ -129,10 +133,34 @@ function RestoreFlow({
     };
   }, [source]);
 
-  const backup = step.kind === 'preview' ? step.backup : undefined;
-  const locked = backup?.contents.secrets === 'passphrase';
-  const undo = backup?.kind === 'before-restore';
-  const when = backup ? formatBackupDate(backup.createdAt) : '';
+  // What the preview shows comes from the backup's files, never its header.
+  const inspecting = step.kind === 'inspecting' ? step.backup : undefined;
+  useEffect(() => {
+    if (!inspecting) return;
+    let current = true;
+    backupApi.preview(inspecting.id).then(
+      (preview) => current && setStep({ kind: 'preview', backup: inspecting, preview }),
+      (failure: unknown) =>
+        current &&
+        setStep({
+          kind: 'failed',
+          message:
+            failure instanceof ApiError ? failure.message : 'Couldn’t read that backup. Try again.',
+          ...(failure instanceof ApiError && { code: failure.code }),
+        }),
+    );
+    return () => {
+      current = false;
+    };
+  }, [inspecting]);
+
+  const backup = step.kind === 'preview' || step.kind === 'inspecting' ? step.backup : undefined;
+  const preview = step.kind === 'preview' ? step.preview : undefined;
+  const locked = preview?.contents.secrets === 'passphrase';
+  // A backup from the list keeps its title even when it won't read.
+  const named = backup ?? ('backup' in source ? source.backup : undefined);
+  const undo = named?.kind === 'before-restore';
+  const when = named ? formatBackupDate(named.createdAt) : '';
 
   const restore = async (target: BackupSummary) => {
     setBusy(true);
@@ -169,20 +197,20 @@ function RestoreFlow({
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        if (backup) void restore(backup);
+        if (backup && preview) void restore(backup);
       }}
     >
       <Dialog.Header>
         <Dialog.Title>
           {step.kind === 'restart'
             ? 'Almost done'
-            : !backup
+            : !named
               ? 'Restore from a file'
               : undo
                 ? 'Undo the restore?'
                 : 'Restore this backup?'}
         </Dialog.Title>
-        {backup && (
+        {named && step.kind !== 'restart' && (
           <Dialog.Description>
             {undo
               ? `Your Conch goes back to how it was on ${when}, just before the restore.`
@@ -199,12 +227,13 @@ function RestoreFlow({
               showValue
             />
           )}
+          {step.kind === 'inspecting' && <Progress label="Checking what’s in it…" />}
           {step.kind === 'failed' && (
             <Callout tone="danger" title={step.message} live="assertive">
               {/* Low disk space or a file too big says what to do in its own words. */}
-              {step.code === 'no-space' || step.code === 'too-big'
-                ? undefined
-                : 'Choose a Conch backup: a file that ends in .conchbackup.'}
+              {'file' in source && step.code !== 'no-space' && step.code !== 'too-big'
+                ? 'Choose a Conch backup: a file that ends in .conchbackup.'
+                : undefined}
             </Callout>
           )}
           {step.kind === 'restart' && (
@@ -212,9 +241,12 @@ function RestoreFlow({
               {step.message}
             </Callout>
           )}
-          {backup && (
+          {preview && (
             <RestorePreview
-              contents={backup.contents}
+              contents={preview.contents}
+              powers={preview.powers}
+              morePowers={preview.morePowers}
+              signInStays={preview.signInStays}
               passphrase={passphrase}
               onPassphraseChange={(value) => {
                 setPassphrase(value);
@@ -246,14 +278,16 @@ function RestoreFlow({
               <Button variant="ghost">Cancel</Button>
             </Dialog.Close>
             {step.kind === 'failed' ? (
-              <Button variant="surface" leadingIcon={<Upload />} onClick={onPickAnother}>
-                Choose another file
-              </Button>
+              'file' in source && (
+                <Button variant="surface" leadingIcon={<Upload />} onClick={onPickAnother}>
+                  Choose another file
+                </Button>
+              )
             ) : (
               <Button
                 type="submit"
                 loading={busy}
-                disabled={!backup || (locked && !skipSecrets && !passphrase)}
+                disabled={!preview || (locked && !skipSecrets && !passphrase)}
               >
                 {undo ? 'Undo restore' : 'Restore'}
               </Button>
