@@ -194,6 +194,19 @@ describe('ChannelService — Telegram', () => {
     await until(() => telegram.last(5151)?.text.includes('let you in'), 'welcome for Bob');
   });
 
+  it('in a group, says once that it only talks privately, and never acts there', async () => {
+    const { s, telegram } = await paired();
+    const group = { chat: { id: -1001, type: 'supergroup' } };
+    telegram.say('@my_conch_bot delete everything', MockTelegram.OWNER, group);
+    telegram.say('@my_conch_bot are you there?', MockTelegram.OWNER, group);
+    await until(() => telegram.sent.some((m) => m.chat_id === '-1001'), 'group hint');
+    await new Promise((r) => setTimeout(r, 300));
+    const toGroup = telegram.sent.filter((m) => m.chat_id === '-1001');
+    expect(toGroup).toHaveLength(1);
+    expect(toGroup[0]?.text).toMatch(/only talk in private chats/);
+    expect((await s.conversations.list()).some((c) => c.origin?.kind === 'channel')).toBe(false);
+  });
+
   it('never answers someone you blocked', async () => {
     const { s, telegram, channel } = await paired();
     const eve = { id: 666, first_name: 'Eve' };

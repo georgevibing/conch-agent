@@ -707,8 +707,22 @@ export class ChannelService {
     const stored = await this.deps.store.get(id);
     const live = this.#live.get(id);
     if (!stored?.enabled || !live) return;
-    // Private chats only: in a group, anyone could speak for you.
-    if (!message.direct) return;
+    // Private chats only: in a group, anyone could speak for you. Rather than
+    // seem broken, say so there (at most every half hour per group).
+    if (!message.direct) {
+      const key = `${id}:group:${message.chatId}`;
+      const last = this.#answered.get(key);
+      if (last !== undefined && this.#now - last < REPLY_TO_STRANGERS_MS) return;
+      this.#answered.set(key, this.#now);
+      const where = stored.bot.username ? ` Message @${stored.bot.username} directly.` : '';
+      await live.connection
+        .send(
+          message.chatId,
+          `I only talk in private chats, so nobody can speak for anyone else.${where}`,
+        )
+        .catch(() => undefined);
+      return;
+    }
     if (stored.blocked.includes(message.user.id)) return;
     const text = message.text.trim();
 

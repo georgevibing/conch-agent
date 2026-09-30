@@ -93,7 +93,9 @@ questions with their buttons, go to the owner of every channel that has
   names no one, and appears as a request you can **Let in**, **Block** or
   clear. Blocked people get nothing, ever. Requests are capped at 20.
 - **Private chats only**: groups and servers are ignored, because anyone in
-  them could speak for you.
+  them could speak for you. So that it never looks broken there, a message
+  that reaches the bot in a group gets one reply pointing to a private chat,
+  at most every 30 minutes.
 
 **Setup is a guided path beside a picture.** `/channels/new/<app>` is a
 numbered `GuideSteps` path. Next to it, Nacre's `Handset` shows the chat app
