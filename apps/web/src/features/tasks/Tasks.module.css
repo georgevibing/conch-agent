@@ -1,0 +1,51 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-6);
+  inline-size: 100%;
+  max-inline-size: 46rem;
+  margin-inline: auto;
+  padding: var(--nc-space-8) var(--nc-space-5) var(--nc-space-12);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-3);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chatCard {
+  max-inline-size: 36rem;
+}
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--nc-space-2);
+  max-inline-size: 48rem;
+  margin: var(--nc-space-3) auto 0;
+  padding: var(--nc-space-2) var(--nc-space-3);
+  border-radius: var(--nc-radius-md);
+  corner-shape: var(--nc-corner-shape);
+  background: var(--nc-surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  font-size: var(--nc-text-sm);
+  color: var(--nc-text-muted);
+}
+
+.banner a {
+  flex-shrink: 0;
+  margin-inline-start: auto;
+  color: var(--nc-text-accent);
+  font-weight: var(--nc-weight-medium);
+  text-decoration: none;
+}

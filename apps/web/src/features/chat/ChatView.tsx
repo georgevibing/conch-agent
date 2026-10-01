@@ -22,8 +22,8 @@ import {
   toast,
   useFileDrop,
 } from '@conch/nacre';
-import { ArrowRight, AudioLines, Folder } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRight, AudioLines, Folder, ListPlus } from 'lucide-react';
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router';
 
@@ -38,6 +38,8 @@ import { useSlashCommands } from '../commands/useSlashCommands';
 import { ChannelBanner } from '../channels/ChannelBanner';
 import { useChannels } from '../channels/queries';
 import { RunBanner } from '../routines/RunBanner';
+import { TaskBanner } from '../tasks/TaskBanner';
+import { useStartTask } from '../tasks/queries';
 import { ComposerControls } from '../models/ComposerControls';
 import { modeInfo } from '../models/catalog';
 import { ChatFind } from '../search/ChatFind';
@@ -348,6 +350,44 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
     if (attached === attachments.ready) attachments.clear();
   };
 
+  /** Send the draft off to be done in the background (ADR 0033); you keep chatting here. */
+  const startTask = useStartTask();
+  const sendAway = () => {
+    const text = draft.trim();
+    if (!text) {
+      toast('Write what you’d like done, then send it to the background.');
+      composerRef.current?.focus();
+      return;
+    }
+    if (attachments.ready.length) {
+      toast('A background task can’t take attachments yet. Send it as a message instead.');
+      return;
+    }
+    startTask.mutate(
+      { text, ...(conversationId && { conversationId }), options: turn.options },
+      {
+        onSuccess: (task) => {
+          setDraft('');
+          toast(`Working on “${task.title}” in the background`, {
+            description: conversationId
+              ? 'Its result will come back to this chat.'
+              : 'You’ll be told when it’s done.',
+            action: { label: 'Tasks', onClick: () => void navigate('/tasks') },
+          });
+        },
+      },
+    );
+  };
+  // ⌘K "Do it in the background" sends what's written here.
+  const onBackground = useEffectEvent(sendAway);
+  useEffect(
+    () =>
+      useUi.subscribe((state, before) => {
+        if (state.backgroundRequest !== before.backgroundRequest) onBackground();
+      }),
+    [],
+  );
+
   // ⌘K "Attach files" opens the picker here (still inside the keypress, so the browser allows it).
   const picker = useRef<HTMLInputElement>(null);
   useEffect(
@@ -484,6 +524,11 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
               : undefined
         }
         onTextareaKeyDown={(e) => {
+          if (e.key === 'Enter' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            sendAway();
+            return;
+          }
           slash.menu.onKeyDown(e);
         }}
         textareaProps={slash.menu.inputProps}
@@ -499,6 +544,17 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
         label={`Message ${name}`}
         actions={
           <>
+            {draft.trim() && (
+              <IconButton
+                label="Do it in the background"
+                shortcut="mod+shift+enter"
+                shape="circle"
+                loading={startTask.isPending}
+                onClick={sendAway}
+              >
+                <ListPlus />
+              </IconButton>
+            )}
             <Dictate draft={draft} setDraft={setDraft} />
             {canTalk && (
               <IconButton
@@ -603,6 +659,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
     <div className={styles.chat} {...drop.props}>
       {dropOverlay}
       <RunBanner conversationId={conversationId} />
+      <TaskBanner conversationId={conversationId} />
       <ChannelBanner conversationId={conversationId} />
       <Transcript
         view={view}

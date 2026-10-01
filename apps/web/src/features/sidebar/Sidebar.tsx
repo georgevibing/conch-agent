@@ -42,6 +42,7 @@ import { APPS } from '../channels/describe';
 import { IntegrationsLink } from '../integrations/IntegrationsLink';
 import { RoutinesLink } from '../routines/RoutinesLink';
 import { SkillsLink } from '../skills/SkillsLink';
+import { TasksLink } from '../tasks/TasksLink';
 import { updatesWaiting, useUpdates } from '../updates/queries';
 import styles from './Sidebar.module.css';
 
@@ -214,9 +215,10 @@ export function Sidebar({
   const updates = updatesWaiting(useUpdates().data);
 
   const groups = new Map<DayGroup, ConversationSummary[]>();
-  // Routine runs live under Routines, and refreshes under their app, not in your chat list.
+  // Routine runs live under Routines, and tasks under Tasks and refreshes under their app, not in your chat list.
   for (const c of (conversations ?? []).filter(
-    (c) => c.origin?.kind !== 'routine' && c.origin?.kind !== 'artifact',
+    (c) =>
+      c.origin?.kind !== 'routine' && c.origin?.kind !== 'artifact' && c.origin?.kind !== 'task',
   )) {
     const g = dayGroup(c.updatedAt);
     groups.set(g, [...(groups.get(g) ?? []), c]);
@@ -267,6 +269,7 @@ export function Sidebar({
           Search
           <Kbd keys="mod+k" size="sm" aria-hidden />
         </Button>
+        <TasksLink onNavigate={onNavigate} />
         <RoutinesLink onNavigate={onNavigate} />
         <SkillsLink onNavigate={onNavigate} />
         <IntegrationsLink onNavigate={onNavigate} />

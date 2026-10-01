@@ -37,6 +37,20 @@ describe('transcript reducer', () => {
     });
   });
 
+  it('keeps one card per task, brought up to date where it first appeared', () => {
+    const task = { type: 'task', taskId: 't1', title: 'Tidy', kind: 'background' } as const;
+    const view = reduceAll(
+      log(
+        { ...task, state: 'queued' },
+        { type: 'user.message', messageId: 'u1', text: 'Meanwhile…' },
+        { ...task, state: 'running' },
+        { ...task, state: 'done', summary: 'Tidied.' },
+      ),
+    );
+    expect(view.items.map((i) => i.kind)).toEqual(['task', 'user']);
+    expect(view.items[0]).toMatchObject({ taskId: 't1', state: 'done', summary: 'Tidied.' });
+  });
+
   it('keeps chronological order when tools interleave with text', () => {
     const view = reduceAll(
       log(

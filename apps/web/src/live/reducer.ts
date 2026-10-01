@@ -11,6 +11,8 @@ import type {
   ConversationEvent,
   ConversationStatus,
   EngineId,
+  TaskKind,
+  TaskStatus,
   ToolStatus,
   TurnOptions,
   TurnProblem,
@@ -125,6 +127,16 @@ export type TranscriptItem =
       routineId: string;
       action: 'proposed' | 'updated' | 'paused' | 'deleted';
       title: string;
+    }
+  | {
+      /** A task sent from this chat, or a helper working on part of it: one card, kept current. */
+      kind: 'task';
+      id: string;
+      taskId: string;
+      title: string;
+      taskKind: TaskKind;
+      state: TaskStatus;
+      summary?: string;
     }
   | {
       kind: 'integration-issue';
@@ -616,6 +628,22 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
           },
         ],
       };
+    case 'task': {
+      const card = {
+        kind: 'task' as const,
+        id: `task-${event.taskId}`,
+        taskId: event.taskId,
+        title: event.title,
+        taskKind: event.kind,
+        state: event.state,
+        ...(event.summary && { summary: event.summary }),
+      };
+      const at = items.findIndex((i) => i.kind === 'task' && i.taskId === event.taskId);
+      if (at === -1) return { ...base, items: [...items, card] };
+      const next = items.slice();
+      next[at] = card;
+      return { ...base, items: next };
+    }
     case 'routine':
       return {
         ...base,

@@ -21,6 +21,7 @@ import { backupKeys } from '../features/health/backups';
 import { useImportProgress } from '../features/import/api';
 import { applyArtifactEvent } from '../features/artifacts/queries';
 import { applyRoutineEvent } from '../features/routines/queries';
+import { applyTaskEvent, taskKeys } from '../features/tasks/queries';
 import { skillKeys } from '../features/skills/queries';
 import { vaultKeys } from '../features/passwords/queries';
 import { updateKeys } from '../features/updates/api';
@@ -89,6 +90,8 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           });
         }
         void client.invalidateQueries({ queryKey: keys.conversations });
+        // Tasks carry on while the page is away: catch up on what they did meanwhile.
+        void client.invalidateQueries({ queryKey: taskKeys.all });
       },
     });
     socketRef.current = socket;
@@ -239,6 +242,12 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         case 'artifact.changed':
         case 'artifact.deleted':
           applyArtifactEvent(client, event);
+          break;
+        case 'task.changed':
+        case 'task.deleted':
+          applyTaskEvent(client, event, (to) =>
+            window.dispatchEvent(new CustomEvent('conch:navigate', { detail: to })),
+          );
           break;
         case 'routine.changed':
         case 'routine.deleted':

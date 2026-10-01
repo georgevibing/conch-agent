@@ -24,6 +24,7 @@ import { IntegrationsView } from '../features/integrations/IntegrationsView';
 import { Palette } from '../features/palette/Palette';
 import { RoutineDetailView } from '../features/routines/RoutineDetailView';
 import { RoutinesView } from '../features/routines/RoutinesView';
+import { TasksView } from '../features/tasks/TasksView';
 import { NewSkill } from '../features/skills/NewSkill';
 import { SkillDetailView } from '../features/skills/SkillDetailView';
 import { SkillsView } from '../features/skills/SkillsView';
@@ -74,6 +75,7 @@ export function Shell() {
   const appsArea = path.startsWith('/apps/');
   const { data: app } = useArtifact(appsArea ? artifactId : undefined);
   const memoryArea = path.startsWith('/memory');
+  const tasksArea = path.startsWith('/tasks');
 
   // Toasts and notifications raised outside the router ask us to navigate.
   useEffect(() => {
@@ -107,7 +109,9 @@ export function Shell() {
                 ? (app?.title ?? '')
                 : memoryArea
                   ? 'What Conch knows'
-                  : (current?.title ?? (conversationId ? '' : 'New chat'));
+                  : tasksArea
+                    ? 'Tasks'
+                    : (current?.title ?? (conversationId ? '' : 'New chat'));
 
   useEffect(() => {
     document.title = current ? `${current.title} · Conch` : 'Conch';
@@ -168,6 +172,7 @@ export function Shell() {
                 !channelsArea &&
                 !passwordsArea &&
                 !appsArea &&
+                !tasksArea &&
                 current?.titling
               }
             >
@@ -195,6 +200,8 @@ export function Shell() {
             <AppView key={artifactId} artifactId={artifactId} />
           ) : memoryArea ? (
             <MemoryView />
+          ) : tasksArea ? (
+            <TasksView />
           ) : activityArea ? (
             <ActivityView />
           ) : passwordsArea ? (

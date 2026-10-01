@@ -618,6 +618,25 @@ describe('Palette search', () => {
     expect(useUi.getState().attachRequest).toBe(before + 1);
   });
 
+  it('sends the draft to the background, and finds Tasks', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'GET /api/tasks': () => ({ tasks: [], concurrent: 3 }),
+    });
+    renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'background');
+    const before = useUi.getState().backgroundRequest;
+    await user.click(await screen.findByRole('option', { name: /Do it in the background/ }));
+    expect(useUi.getState().backgroundRequest).toBe(before + 1);
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'tasks');
+    expect(await screen.findByRole('option', { name: /^Tasks/ })).toBeInTheDocument();
+  });
+
   it('finds the model on this computer by the words people use for it', async () => {
     const user = userEvent.setup();
     mockFetch({

@@ -1,4 +1,4 @@
-import { generatePassword, type TextRange } from '@conch/protocol';
+import { generatePassword, type TaskList, type TextRange } from '@conch/protocol';
 import {
   ARTIFACT_KINDS,
   IntegrationLogo,
@@ -22,6 +22,8 @@ import {
   Globe,
   HeartPulse,
   Laptop,
+  ListChecks,
+  ListPlus,
   History,
   KeyRound,
   Palette as PaletteIcon,
@@ -44,6 +46,7 @@ import {
   Wrench,
   House,
 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -62,6 +65,7 @@ import { modelLabel, providerLogos } from '../models/catalog';
 import { modelKey, useTurnOptions } from '../models/useTurnOptions';
 import { useArtifacts } from '../artifacts/queries';
 import { useRoutines } from '../routines/queries';
+import { taskKeys } from '../tasks/queries';
 import { fuzzyFilter, type FuzzyMatch } from '../search/fuzzy';
 import { useSkills } from '../skills/queries';
 import { useTerminalStatus } from '../terminal/queries';
@@ -245,6 +249,8 @@ export function useFindables(query: string, conversationId: string | undefined):
   const { data: routines } = useRoutines();
   const { data: artifacts } = useArtifacts();
   const openArtifact = useUi((s) => s.openArtifact);
+  // The sidebar keeps the tasks loaded; reading them here costs no fetch of its own.
+  const tasks = useQueryClient().getQueryData<TaskList>(taskKeys.all);
   const { data: vault } = useVault();
   const { data: channels } = useChannels();
   const { data: terminal } = useTerminalStatus();
@@ -443,6 +449,20 @@ export function useFindables(query: string, conversationId: string | undefined):
       void navigate(`/c/${item.conversationId}`);
     },
   }));
+  const taskItems = find(
+    (tasks?.tasks ?? []).filter((t) => t.kind === 'background' && t.conversationId),
+    q,
+    (t) => t.title,
+    (t) => t.summary ?? '',
+    4,
+  ).map(({ item, match }): Findable => ({
+    id: `task:${item.id}`,
+    label: item.title,
+    ranges: match.ranges,
+    description: item.summary,
+    icon: <ListChecks />,
+    run: () => void navigate(`/c/${item.conversationId}`),
+  }));
 
   const places: {
     id: string;
@@ -457,6 +477,26 @@ export function useFindables(query: string, conversationId: string | undefined):
       keywords: 'upload file picture image photo pdf document add paperclip',
       icon: <Paperclip />,
       run: () => useUi.getState().requestAttach(),
+    },
+    {
+      id: 'background-task',
+      label: 'Do it in the background',
+      keywords: 'background task later async send away hand off delegate queue while i work',
+      icon: <ListPlus />,
+      run: () => {
+        // It sends what's written in the open chat; elsewhere there's nothing written yet.
+        if (/^\/(c\/|$)/.test(window.location.pathname))
+          return useUi.getState().requestBackground();
+        void navigate('/');
+        toast('Write what you’d like done, then choose “Do it in the background”.');
+      },
+    },
+    {
+      id: 'tasks',
+      label: 'Tasks',
+      keywords: 'tasks background jobs running working queue helpers progress',
+      icon: <ListChecks />,
+      run: () => void navigate('/tasks'),
     },
     {
       id: 'backup-now',
@@ -698,5 +738,6 @@ export function useFindables(query: string, conversationId: string | undefined):
     { heading: 'Channels', items: channelItems },
     { heading: 'Routines', items: routineItems },
     { heading: 'Made for you', items: artifactItems },
+    { heading: 'Tasks', items: taskItems },
   ].filter((group) => group.items.length > 0);
 }

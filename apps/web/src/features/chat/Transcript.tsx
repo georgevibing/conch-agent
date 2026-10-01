@@ -24,6 +24,7 @@ import { HeldItem, RoutedItem } from './OfflineBits';
 import { ArtifactChatCard } from '../artifacts/ArtifactChatCard';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
 import { ChatFiles, turnChanges } from '../undo/ChatFiles';
+import { TaskChatCard } from '../tasks/TaskChatCard';
 import { RoutineInstruction } from '../routines/RunBanner';
 import styles from './Transcript.module.css';
 import { VaultApprovalItem, VaultRequestItem } from './VaultItems';
@@ -195,6 +196,7 @@ export function Transcript({
       last?.kind === 'skill' ||
       last?.kind === 'routine' ||
       last?.kind === 'artifact' ||
+      last?.kind === 'task' ||
       last?.kind === 'integration-issue' ||
       last?.kind === 'routed' ||
       (last?.kind === 'browser' && last.step.status !== 'running') ||
@@ -285,6 +287,15 @@ export function Transcript({
             )}
             {block.item?.kind === 'artifact' && conversationId && (
               <ArtifactChatCard conversationId={conversationId} item={block.item} />
+            )}
+            {block.item?.kind === 'task' && (
+              <TaskChatCard
+                taskId={block.item.taskId}
+                title={block.item.title}
+                kind={block.item.taskKind}
+                state={block.item.state}
+                summary={block.item.summary}
+              />
             )}
             {block.item?.kind === 'integration-issue' && <IntegrationIssue item={block.item} />}
             {block.item?.kind === 'held' && (

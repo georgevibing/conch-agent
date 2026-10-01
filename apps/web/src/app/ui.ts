@@ -70,6 +70,9 @@ interface UiState {
   /** Bumped to open the chat's file picker (⌘K "Attach files"). */
   attachRequest: number;
   requestAttach(): void;
+  /** Bumped to send the open chat's draft off as a background task (⌘K, ⌘⇧↩). */
+  backgroundRequest: number;
+  requestBackground(): void;
   setPicker(picker: Picker): void;
   setDraftOptions(options: TurnOptions): void;
   toggleSidebar(): void;
@@ -149,6 +152,8 @@ export const useUi = create<UiState>((set) => ({
   setComposerText: (composerText) => set({ composerText }),
   attachRequest: 0,
   requestAttach: () => set((state) => ({ attachRequest: state.attachRequest + 1 })),
+  backgroundRequest: 0,
+  requestBackground: () => set((state) => ({ backgroundRequest: state.backgroundRequest + 1 })),
   setPicker: (picker) => set({ picker }),
   setDraftOptions: (draftOptions) => set({ draftOptions }),
   toggleSidebar: () =>

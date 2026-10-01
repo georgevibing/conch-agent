@@ -41,6 +41,11 @@ const TOPICS: { key: keyof PushPrefs; label: string; description?: string }[] = 
     label: 'When a routine runs',
     description: 'What it found, or that it didn’t finish.',
   },
+  {
+    key: 'tasks',
+    label: 'When a background task finishes',
+    description: 'With its result, or why it didn’t finish.',
+  },
   { key: 'devices', label: 'When a new device wants to sign in' },
   {
     key: 'previews',

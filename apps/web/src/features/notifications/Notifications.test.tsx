@@ -80,7 +80,14 @@ const device = (patch: Partial<PushStatus['devices'][number]> = {}) => ({
   name: 'Chrome on Mac',
   current: true,
   createdAt: 1,
-  prefs: { approvals: true, replies: true, routines: true, devices: true, previews: true },
+  prefs: {
+    approvals: true,
+    replies: true,
+    routines: true,
+    tasks: true,
+    devices: true,
+    previews: true,
+  },
   ...patch,
 });
 
