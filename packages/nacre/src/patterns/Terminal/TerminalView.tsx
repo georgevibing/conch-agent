@@ -81,6 +81,8 @@ export function TerminalView({
   const fit = useRef<FitAddon | null>(null);
   const search = useRef<SearchAddon | null>(null);
   const queue = useRef<(Uint8Array | string)[]>([]);
+  // Asked to focus before xterm has loaded: focus it once it has.
+  const wantsFocus = useRef(false);
   // The latest callbacks, without re-creating the terminal when they change.
   const handlers = useRef({
     onInput,
@@ -112,7 +114,10 @@ export function TerminalView({
       queue.current = [];
       term.current?.reset();
     },
-    focus: () => term.current?.focus(),
+    focus: () => {
+      if (term.current) term.current.focus();
+      else wantsFocus.current = true;
+    },
     paste: (text) => term.current?.paste(text),
     selection: () => term.current?.getSelection() ?? '',
     findNext: (query) =>
@@ -235,6 +240,10 @@ export function TerminalView({
 
       for (const data of queue.current) terminal.write(data);
       queue.current = [];
+      if (wantsFocus.current) {
+        wantsFocus.current = false;
+        terminal.focus();
+      }
 
       // Fit now, again once the font has loaded (its metrics change), and on every resize.
       const refit = () => {

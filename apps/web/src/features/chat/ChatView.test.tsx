@@ -17,6 +17,18 @@ afterEach(() => {
 });
 
 describe('ChatView', () => {
+  it('doesn’t take focus from a field you’re already typing in', async () => {
+    mockFetch({ 'GET /api/state': () => appState(), 'GET /api/conversations': () => [] });
+    const elsewhere = document.createElement('textarea');
+    elsewhere.setAttribute('aria-label', 'Terminal input');
+    document.body.append(elsewhere);
+    elsewhere.focus();
+    renderApp(<ChatView />);
+    await screen.findByRole('textbox', { name: 'Message Conch' });
+    expect(document.activeElement).toBe(elsewhere);
+    elsewhere.remove();
+  });
+
   it('greets, sends a new conversation and renders the streamed reply', async () => {
     mockFetch({ 'GET /api/state': () => appState(), 'GET /api/conversations': () => [] });
     renderApp(<ChatView />);

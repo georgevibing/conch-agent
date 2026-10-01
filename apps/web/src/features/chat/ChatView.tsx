@@ -332,6 +332,8 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   useEffect(() => {
     // Arriving from search, the find field has focus; don't take it away.
     if (conversationId && useUi.getState().find?.conversationId === conversationId) return;
+    // Nor from somewhere you're already typing (the terminal opened while the chat loaded).
+    if (typingElsewhere(composerRef.current)) return;
     composerRef.current?.focus();
   }, [conversationId]);
 
@@ -702,5 +704,16 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
     </BrowserDock>
   ) : (
     chat
+  );
+}
+
+/** Focus is in a field other than the composer: someone is typing there. */
+function typingElsewhere(composer: HTMLElement | null): boolean {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement) || active === composer) return false;
+  return (
+    active.isContentEditable ||
+    active instanceof HTMLTextAreaElement ||
+    (active instanceof HTMLInputElement && !['button', 'checkbox', 'radio'].includes(active.type))
   );
 }
