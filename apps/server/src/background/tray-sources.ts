@@ -19,6 +19,11 @@
 export interface TraySpec {
   /** Where Conch answers: `http://localhost:4317`. */
   url: string;
+  /**
+   * Where the helper asks how things are, when that's best not `url`: the
+   * loopback address by number (`http://127.0.0.1:4317`). Pages still open at `url`.
+   */
+  ask?: string;
   /** The file holding the helper's token (0600). */
   tokenFile: string;
   /** Starts Conch when it isn't running (the computer's own way, or the launcher). */
@@ -176,55 +181,97 @@ app.run()
 
 const ps = (value: string) => `'${value.replaceAll("'", "''")}'`;
 
-/** Windows: a NotifyIcon in the tray, from PowerShell and Windows Forms (no install). */
+/**
+ * Windows: a NotifyIcon in the tray, from PowerShell and Windows Forms (no install).
+ *
+ * Four things make it sit in the tray like anything else there:
+ * - The file starts with a byte-order mark. Windows PowerShell reads one
+ *   without it in the computer's old code page, and "isn’t" comes out garbled.
+ * - It asks Conch by number (`ask`). `localhost` is tried as `::1` first, and
+ *   Windows takes two seconds to give up on that: longer than the helper waits.
+ * - It asks in the background. Windows also takes two seconds to say nothing
+ *   is listening, and a menu on the thread that waits would freeze with it.
+ * - The menu is Windows' own, put together as it opens, in a process that
+ *   says it draws at the screen's scale, so it's sharp, and dark when Windows is.
+ */
 export function powershellSource(spec: TraySpec): string {
-  return [
+  return `\uFEFF${[
     '# Conch in the tray (ADR 0029). Written by Conch; changes here don’t last.',
     'Add-Type -AssemblyName System.Windows.Forms, System.Drawing',
+    '# Before any window: draw at the screen’s own scale, and let menus follow Windows into the dark.',
+    'try {',
+    "  Add-Type -Namespace Conch -Name Native -MemberDefinition @'",
+    '[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();',
+    '[DllImport("uxtheme.dll", EntryPoint = "#135")] public static extern int SetPreferredAppMode(int mode);',
+    '[DllImport("uxtheme.dll", EntryPoint = "#136")] public static extern void FlushMenuThemes();',
+    "'@",
+    '  [void][Conch.Native]::SetProcessDPIAware()',
+    '  if ([Environment]::OSVersion.Version.Build -ge 18362) { [void][Conch.Native]::SetPreferredAppMode(1); [Conch.Native]::FlushMenuThemes() }',
+    '} catch {}',
+    '[System.Windows.Forms.Application]::EnableVisualStyles()',
     `$base = ${ps(spec.url)}`,
+    `$api = ${ps(spec.ask ?? spec.url)}`,
     `$tokenFile = ${ps(spec.tokenFile)}`,
     `$startScript = ${ps(spec.startScript)}`,
     `$iconFile = ${ps(spec.icon ?? '')}`,
     '$icon = New-Object System.Windows.Forms.NotifyIcon',
     'if ($iconFile -and (Test-Path $iconFile)) { $icon.Icon = New-Object System.Drawing.Icon($iconFile) } else { $icon.Icon = [System.Drawing.SystemIcons]::Application }',
     '$icon.Text = "Conch"',
+    '$menu = New-Object System.Windows.Forms.ContextMenu',
+    '$icon.ContextMenu = $menu',
     '$icon.Visible = $true',
-    '$menu = New-Object System.Windows.Forms.ContextMenuStrip',
-    '$icon.ContextMenuStrip = $menu',
     '$script:info = $null',
+    '$script:waited = 0',
     'function Token { if (Test-Path $tokenFile) { (Get-Content $tokenFile -Raw).Trim() } else { "" } }',
+    '# For a press in the menu, when Conch is there to answer at once.',
     'function Ask($path, $method = "GET") {',
-    '  try { Invoke-RestMethod -Uri ($base + $path) -Method $method -Headers @{ "X-Conch-Tray" = (Token) } -TimeoutSec 2 } catch { $null }',
+    '  try { Invoke-RestMethod -Uri ($api + $path) -Method $method -Headers @{ "X-Conch-Tray" = (Token) } -TimeoutSec 2 } catch { $null }',
     '}',
     'function OpenPage($path) { Start-Process ($base + $path) }',
     'function Add($text, $action) {',
-    '  $entry = $menu.Items.Add($text)',
+    '  $entry = New-Object System.Windows.Forms.MenuItem($text)',
     '  if ($action) { $entry.add_Click($action) } else { $entry.Enabled = $false }',
+    '  [void]$menu.MenuItems.Add($entry)',
     '}',
     'function Build {',
-    '  $menu.Items.Clear()',
+    '  $menu.MenuItems.Clear()',
     '  $i = $script:info',
     '  if ($i) {',
     '    Add ($(if ($i.alwaysOn) { "$($i.name) is running · Always on" } else { "$($i.name) is running" })) $null',
     '    if ($i.approvals -gt 0) { Add "$($i.approvals) waiting for you" { OpenPage "/" } }',
     '    if ($i.devices -gt 0) { Add "A new device wants to sign in" { OpenPage "/?open=devices" } }',
-    '    [void]$menu.Items.Add("-")',
+    '    [void]$menu.MenuItems.Add("-")',
     '    Add "Open Conch" { OpenPage "/" }',
     '    Add ($(if ($i.alwaysOn) { "Always on: On…" } else { "Always on: Off…" })) { OpenPage "/?open=background" }',
-    '    [void]$menu.Items.Add("-")',
+    '    [void]$menu.MenuItems.Add("-")',
     '    Add "Quit Conch" { if (-not (Ask "/api/tray/quit" "POST")) { OpenPage "/?open=background" } }',
     '  } else {',
     '    Add "Conch isn’t running" $null',
-    '    [void]$menu.Items.Add("-")',
+    '    [void]$menu.MenuItems.Add("-")',
     '    Add "Start Conch" { Start-Process -WindowStyle Hidden -FilePath $startScript }',
     '  }',
     '  Add "Hide from the tray" { [void](Ask "/api/tray/hide" "POST"); $icon.Visible = $false; [System.Windows.Forms.Application]::Exit() }',
     '}',
-    'function Refresh {',
-    '  $script:info = Ask "/api/tray/status"',
+    '# Put together as it opens, from the last answer: never changed while it’s showing.',
+    '$menu.add_Popup({ Build })',
+    '# How things are, asked in the background. The answer has to come back to this thread (PowerShell',
+    '# only runs here), and nothing else says so: a tray icon and its menu aren’t Windows Forms controls.',
+    '[System.Threading.SynchronizationContext]::SetSynchronizationContext((New-Object System.Windows.Forms.WindowsFormsSynchronizationContext))',
+    '$client = New-Object System.Net.WebClient',
+    '$client.Encoding = [System.Text.Encoding]::UTF8',
+    '$client.Proxy = $null',
+    '$client.add_DownloadStringCompleted({',
+    '  param($s, $e)',
+    '  $script:info = $(if ($e.Cancelled -or $e.Error) { $null } else { try { $e.Result | ConvertFrom-Json } catch { $null } })',
     '  $needs = $script:info -and (($script:info.approvals + $script:info.devices) -gt 0)',
     '  $icon.Text = $(if (-not $script:info) { "Conch isn’t running" } elseif ($needs) { "Conch needs you" } else { "Conch is running" })',
-    '  Build',
+    '})',
+    'function Refresh {',
+    '  # Still waiting for the last answer: give up on one that never comes.',
+    '  if ($client.IsBusy) { $script:waited++; if ($script:waited -ge 3) { $client.CancelAsync() }; return }',
+    '  $script:waited = 0',
+    '  $client.Headers.Set("X-Conch-Tray", (Token))',
+    '  $client.DownloadStringAsync([Uri]($api + "/api/tray/status"))',
     '}',
     '$icon.add_MouseClick({ param($s, $e) if ($e.Button -eq "Left") { OpenPage "/" } })',
     '$timer = New-Object System.Windows.Forms.Timer',
@@ -234,7 +281,7 @@ export function powershellSource(spec: TraySpec): string {
     'Refresh',
     '[System.Windows.Forms.Application]::Run()',
     '',
-  ].join('\r\n');
+  ].join('\r\n')}`;
 }
 
 const py = (value: string) => JSON.stringify(value);

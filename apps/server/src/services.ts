@@ -29,7 +29,7 @@ import { carriedEnv } from './background/files';
 import { backendFor, BackgroundService, runningAs } from './background/service';
 import { AfterLogout, KeepAwake, pretendLittle } from './background/little';
 import { Shortcut } from './background/shortcut';
-import { pretendTray, trayCheck, TrayService } from './background/tray';
+import { askUrl, pretendTray, trayCheck, TrayService } from './background/tray';
 import { pretendTailscale } from './network/mock-tailscale';
 import { Tailscale } from './network/tailscale';
 import { pushCheck } from './push/doctor';
@@ -678,6 +678,7 @@ export class Services {
       home: config.CONCH_HOME,
       checkout: mock ? (checkout ?? config.CONCH_HOME) : checkout,
       url,
+      ask: askUrl(config.CONCH_HOST, config.CONCH_PORT),
       spec,
       wanted: async () => (await this.settings.get()).preferences.menuBar,
       setWanted: async (on) => void (await this.settings.update({ preferences: { menuBar: on } })),

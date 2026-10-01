@@ -73,6 +73,24 @@ helper gets a hidden console of its own and outlives Quit. A helper that has
 gone a moment after starting counts as not started, so Repair everything
 never says "back in the tray" for one that isn't there.
 
+**How it asks, and its menu, on Windows.** Windows PowerShell brings four
+things a Mac and Linux don't:
+
+- It reads a script without a byte-order mark in the computer's old code page,
+  so "isn’t" came out garbled. The script starts with one.
+- `localhost` is tried as `::1` first, and when Conch listens on 127.0.0.1
+  Windows takes two seconds to give up on that — as long as the helper
+  waits, so it said "Conch isn’t running" to a Conch that was. It asks by
+  number (`askUrl`); pages still open at `localhost`, where you signed in.
+- Windows also takes two seconds to say nothing is listening, and the menu
+  lives on the thread that would wait. So how things are is asked in the
+  background (`WebClient`, with the answer handed back to that thread), and
+  the menu is put together as it opens, from the last answer.
+- The menu is Windows' own (`ContextMenu`), in a process that says it draws
+  at the screen's scale and lets menus follow Windows into the dark
+  (`SetProcessDPIAware`, and uxtheme's `SetPreferredAppMode`, which has no
+  name, only a number: guarded, and the menu is merely light without it).
+
 **It only shows where it can.** Over SSH a Mac has no menu bar
 (`launchctl managername` isn't `Aqua`), and a Linux box with no `DISPLAY` or
 `WAYLAND_DISPLAY` has no panel. There, Conch says so, offers no switch, and

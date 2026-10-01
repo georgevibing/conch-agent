@@ -39,6 +39,19 @@ export const trayDir = (home: string) => join(home, 'tray');
 export const trayIconIn = (checkout: string) =>
   join(checkout, 'apps', 'web', 'public', 'icons', 'conch-tray-256.png');
 
+/**
+ * Where a helper asks Conch how things are: the loopback address Conch
+ * listens on, by number. By name, `localhost` is tried as `::1` first, and
+ * when Conch listens on 127.0.0.1 Windows takes two seconds to give up on
+ * that: longer than the helper waits, so it would say Conch isn't running.
+ */
+export function askUrl(host: string, port: number): string {
+  const bind = host.toLowerCase();
+  if (bind === '::1' || bind === '::') return `http://[::1]:${port}`;
+  if (bind === 'localhost') return `http://localhost:${port}`;
+  return `http://${/^127\./.test(bind) ? bind : '127.0.0.1'}:${port}`;
+}
+
 export type Exec = (file: string, args: string[], timeout?: number) => Promise<RunResult>;
 const exec: Exec = (file, args, timeout = 10_000) => run(file, args, { timeout });
 
@@ -119,6 +132,8 @@ export interface TrayDeps {
   checkout?: string;
   /** Where Conch answers on this computer. */
   url: string;
+  /** Where the helper asks it how things are (`askUrl`). Without it, `url`. */
+  ask?: string;
   /** What the launcher needs (Node, PATH, environment). */
   spec: Omit<LaunchSpec, 'checkout' | 'home' | 'log'>;
   /** The person wants it (`preferences.menuBar`). */
@@ -281,6 +296,7 @@ nohup /bin/sh ${shQuote(join(this.#dir, 'launch'))} >/dev/null 2>&1 &
     const png = trayIconIn(checkout);
     const spec: TraySpec = {
       url: this.deps.url,
+      ...(this.deps.ask && { ask: this.deps.ask }),
       tokenFile: join(this.#dir, 'token'),
       startScript: start.path,
     };

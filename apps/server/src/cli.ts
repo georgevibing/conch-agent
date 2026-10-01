@@ -18,7 +18,7 @@ import { carriedEnv } from './background/files';
 import { backendFor, BackgroundService, lastWords } from './background/service';
 import { AfterLogout } from './background/little';
 import { Shortcut } from './background/shortcut';
-import { TrayService } from './background/tray';
+import { askUrl, TrayService } from './background/tray';
 import { Tailscale } from './network/tailscale';
 import { SERVER_VERSION } from './version';
 import { HostPolicy, exposure } from './auth/network';
@@ -303,6 +303,7 @@ function trayService() {
     home: config.CONCH_HOME,
     checkout: findCheckout(import.meta.dirname, config.CONCH_CHECKOUT),
     url: `http://localhost:${config.CONCH_PORT}`,
+    ask: askUrl(config.CONCH_HOST, config.CONCH_PORT),
     spec: { node: process.execPath, env: carriedEnv(process.env), path: process.env.PATH ?? '' },
     wanted: async () => (await settings.get()).preferences.menuBar,
     setWanted: async (on) => void (await settings.update({ preferences: { menuBar: on } })),
