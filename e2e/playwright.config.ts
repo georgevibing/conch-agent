@@ -31,6 +31,7 @@ const scenarios = {
   recovery: { port: 4388, env: { CONCH_MOCK_STATE: 'ready' } },
   offline: { port: 4385, env: { CONCH_MOCK_STATE: 'ready' } },
   attachments: { port: 4389, env: { CONCH_MOCK_STATE: 'ready' } },
+  passwords: { port: 4386, env: { CONCH_MOCK_STATE: 'ready' } },
   suggest: { port: 4383, env: { CONCH_MOCK_STATE: 'ready' } },
   // Runs under the supervisor (`pnpm start`), so a restore can start Conch again.
   backups: { port: 4382, env: { CONCH_MOCK_STATE: 'ready', CONCH_SUPERVISE: '1' }, entry: 'start' },
