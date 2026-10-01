@@ -13,6 +13,10 @@ export function protectedPaths(home: string): string[] {
     join(home, 'integrations.secrets.json'),
     join(home, 'channels.secrets.json'),
     join(home, 'access.json'),
+    // Whose skills are trusted, and your signing key (ADR 0031): an assistant
+    // that could write the one would vouch for its own skills.
+    join(home, 'skills.trust.json'),
+    join(home, 'skills.signing.json'),
   ];
 }
 

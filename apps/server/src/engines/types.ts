@@ -162,7 +162,10 @@ export interface TurnInput {
    * mode would skip asking must still consult it (Claude Code: a PreToolUse hook).
    */
   guard?: (request: PermissionRequest) => Promise<GuardDecision | undefined>;
-  /** The chat has read something untrusted: engines that can't ask (Codex) run tighter. */
+  /**
+   * The chat has read something untrusted, or a skill in use doesn't say it
+   * may run any command (ADR 0031): engines that can't ask (Codex) run tighter.
+   */
   tainted?: boolean;
   /**
    * Run commands in the computer's own sandbox (ADR 0028), for engines that

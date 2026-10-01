@@ -13,6 +13,8 @@ import type {
   Preferences,
   ChangedFile,
   ServerEvent,
+  SkillCapability,
+  SkillPermissions,
   TaintSource,
   TurnOptions,
   TurnProblem,
@@ -42,10 +44,13 @@ import type { SettingsStore } from '../settings/store';
 import { handoff } from './handoff';
 import type { ConversationRecord, ConversationStore } from './store';
 import { summarizeToolUse, titleFrom } from './summarize';
+import { allows, missing, needs } from '../skills/permissions';
 import { describeTaint, leavesSandbox, sinkReason, taintFrom } from './taint';
 import { didWhat } from '../activity/service';
 import { changedFiles, type UndoService } from '../undo/service';
 import { shownPath } from '../undo/tracker';
+
+type SkillNeed = ReturnType<typeof needs>;
 import { generateTitle } from './title';
 
 /**
@@ -259,6 +264,8 @@ export interface ToolContext {
    * Tools that would act without asking (a trusted site) ask once instead.
    */
   untrusted?: () => string | undefined;
+  /** A skill in use doesn't say it needs this (ADR 0031): why, in a sentence. */
+  restricted?: (capability: SkillCapability) => Promise<string | undefined>;
 }
 
 /** Tools every conversation gets from other parts of Conch (e.g. routines, skills, the browser). */
@@ -386,6 +393,10 @@ export class ConversationManager {
       sandbox?: (workspace: string) => { allowWrite: string[]; denyRead: string[] } | undefined;
       /** Undo (ADR 0030): keeps what each turn changes, so it can be put back. */
       undo?: UndoService;
+      /** What a skill may do while it's in use (ADR 0031), by its id. */
+      skillPermissions?: (
+        skillId: string,
+      ) => Promise<{ title: string; permissions: SkillPermissions } | undefined>;
     },
   ) {}
 
@@ -884,6 +895,7 @@ export class ConversationManager {
             permissionMode: resolved.permissionMode,
             ask: (request) => askUser({ ...request, remember: false }, abort.signal),
             signal: abort.signal,
+            restricted: (capability) => skillLimit({ capability }),
             untrusted: () => {
               const tainted = settings.preferences.checkAfterReading ? this.#tainted(live) : [];
               return tainted.length ? describeTaint(tainted) : undefined;
@@ -951,12 +963,48 @@ export class ConversationManager {
      * read something untrusted and this could send it out or change the
      * computer, or a command wants out of the sealed box.
      */
+    // The skills in use this turn are held to what they say they need (ADR 0031).
+    const turnFrom = live.events.findLast((e) => e.type === 'user.message')?.seq ?? -1;
+    const skillLimit = async (need: SkillNeed | undefined): Promise<string | undefined> => {
+      if (!need) return undefined;
+      const used = new Set(
+        live.events.flatMap((e) =>
+          e.type === 'skill.used' && e.seq >= turnFrom ? [e.skillId] : [],
+        ),
+      );
+      for (const skillId of used) {
+        const info = await this.deps.skillPermissions?.(skillId).catch(() => undefined);
+        if (info && !allows(info.permissions, need))
+          return `The “${info.title}” skill is in use, and it doesn’t say it needs to ${missing(need)}. So I’m checking first.`;
+      }
+      return undefined;
+    };
+
+    // Engines that can't ask (Codex) run tighter while a skill that doesn't say it may run any command is in use.
+    const skillTightens = async () => {
+      for (const e of live.events) {
+        if (e.type !== 'skill.used' || e.seq < turnFrom) continue;
+        const info = await this.deps.skillPermissions?.(e.skillId).catch(() => undefined);
+        if (
+          info &&
+          !(info.permissions.capabilities.includes('commands') && !info.permissions.commands)
+        )
+          return true;
+      }
+      return false;
+    };
+
     const mustAsk = async (request: {
       toolName: string;
       input: Record<string, unknown>;
     }): Promise<string | undefined> => {
       if (leavesSandbox(request.toolName, request.input))
         return 'This command wants to run outside the sealed box, where it could reach anything on this computer.';
+      const server = /^mcp__([a-z0-9_-]+?)__/.exec(request.toolName)?.[1];
+      const limited = await skillLimit(
+        needs(request.toolName, request.input, { workspace, server }),
+      );
+      if (limited) return limited;
       const tainted = guardOn ? this.#tainted(live) : [];
       if (!tainted.length) return undefined;
       const described = request.toolName.startsWith('mcp__')
@@ -1114,7 +1162,7 @@ export class ConversationManager {
             signal: abort.signal,
             requestPermission,
             guard,
-            tainted: guardOn && this.#tainted(live).length > 0,
+            tainted: (guardOn && this.#tainted(live).length > 0) || (await skillTightens()),
             ...(settings.preferences.sealedCommands && { sandbox: this.deps.sandbox?.(workspace) }),
           });
 

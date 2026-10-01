@@ -20,6 +20,8 @@ describe('what in a backup can act for you', () => {
         'routines/r_1.runs.jsonl',
         'memory/m_1.md',
         'integrations.secrets.json',
+        'skills.trust.json',
+        'skills.signing.json',
       ].filter(previewReads),
     ).toEqual([
       'integrations.json',
@@ -28,7 +30,25 @@ describe('what in a backup can act for you', () => {
       'terminal.json',
       'channels.json',
       'routines/r_1.json',
+      'skills.trust.json',
     ]);
+  });
+
+  it('names whose skills it trusts, so a backup can’t quietly vouch for someone (ADR 0031)', () => {
+    const powers = powersOf(
+      ['skills.trust.json'],
+      reader({
+        'skills.trust.json': {
+          publishers: [
+            { fingerprint: 'A', key: 'k', name: 'Me', trustedAt: 1, you: true },
+            { fingerprint: 'B', key: 'k', name: 'Ada', trustedAt: 2 },
+          ],
+        },
+      }),
+    );
+    // Your own key isn't someone else's power.
+    expect(powers).toEqual([{ kind: 'trusted-publishers', names: ['Ada'], more: 0 }]);
+    for (const power of powers) expect(BackupPower.safeParse(power).success).toBe(true);
   });
 
   it('names who a bot will talk to, so an old backup can’t quietly let someone back in', () => {

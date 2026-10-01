@@ -6,7 +6,9 @@ import {
   type SkillDescriptionDraft,
   type SkillDetail,
   type SkillDraft,
+  type SkillPermissions,
   type SkillsList,
+  type TrustedPublisher,
   type UpdateSkillBody,
   type Usage,
 } from '@conch/protocol';
@@ -16,7 +18,9 @@ import type { Engine, HostTool } from '../engines/types';
 import { draftSkill } from './draft';
 import { slugify } from './draft';
 import { withTitle } from './frontmatter';
+import { readPermissions } from './permissions';
 import { publicSkill, SkillError, type LoadedSkill, type SkillStore } from './store';
+import type { SkillTrust } from './trust';
 
 /** What the prompt may spend listing skills; the rest are still usable by name. */
 const PROMPT_BUDGET = 8_000;
@@ -28,6 +32,8 @@ export interface SkillServiceDeps {
   emit: (event: ServerEvent) => void;
   /** Money spent writing titles and descriptions, for the usage ledger. */
   onSpend?: (usage: Usage) => void;
+  /** Whose signatures you trust (ADR 0031). */
+  trust?: SkillTrust;
 }
 
 /**
@@ -45,6 +51,49 @@ export class SkillService {
   async list(fresh = false): Promise<SkillsList> {
     const { skills, sources } = await this.deps.store.list({ fresh });
     return { skills: skills.map(publicSkill), sources };
+  }
+
+  /**
+   * What a skill in use may do (ADR 0031). One that's gone since, or can't be
+   * read, is held to the default list: never to nothing.
+   */
+  async permissions(id: string): Promise<{ title: string; permissions: SkillPermissions }> {
+    const skill = await this.deps.store.get(id).catch(() => undefined);
+    return {
+      title: skill?.title ?? 'skill',
+      permissions: skill?.permissions ?? readPermissions(undefined),
+    };
+  }
+
+  publishers(): Promise<TrustedPublisher[]> {
+    return this.deps.trust?.list() ?? Promise.resolve([]);
+  }
+
+  /**
+   * Trust whoever signed this skill (ADR 0031): the key its signature holds
+   * for, never a key or name sent from the browser. Only for a signature that
+   * holds; the route asks for a recent password or key first.
+   */
+  async trustPublisher(id: string): Promise<SkillDetail> {
+    const skill = await this.deps.store.get(id);
+    if (!this.deps.trust || !skill.signerKey || skill.signature?.state === 'invalid')
+      throw new SkillError('invalid', 'This skill isn’t signed in a way Conch can check.');
+    await this.deps.trust.trust({
+      key: skill.signerKey,
+      name: skill.signature?.publisher ?? 'Unknown',
+    });
+    this.deps.store.invalidate();
+    this.#changed();
+    return this.deps.store.detail(id);
+  }
+
+  async forgetPublisher(fingerprint: string): Promise<boolean> {
+    const forgotten = (await this.deps.trust?.forget(fingerprint)) ?? false;
+    if (forgotten) {
+      this.deps.store.invalidate();
+      this.#changed();
+    }
+    return forgotten;
   }
 
   detail(id: string): Promise<SkillDetail> {

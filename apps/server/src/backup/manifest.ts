@@ -209,6 +209,18 @@ export const RULES: readonly BackupRule[] = [
     why: 'Skill suggestions you turned down, so they stay down.',
   },
   {
+    match: 'skills.trust.json',
+    class: 'kept',
+    group: 'skills',
+    why: 'Whose signed skills you trust (by their key). A restore names them before bringing them back.',
+  },
+  {
+    match: 'skills.signing.json',
+    class: 'secret',
+    group: 'secrets',
+    why: 'Your own key for signing skills: only in a passphrase-locked backup, so skills you signed keep your name.',
+  },
+  {
     match: 'skills.json',
     class: 'kept',
     group: 'skills',

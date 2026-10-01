@@ -169,6 +169,52 @@ export function readKey(front: string | undefined, key: string): string | undefi
   return fold(plain) || undefined;
 }
 
+/**
+ * A top-level key as a list of strings, however it's written: `a, b`,
+ * `[a, "b"]`, or a block of `- a` lines (the Agent Skills `allowed-tools`
+ * comes in all three). Undefined when the key is missing.
+ */
+export function readList(front: string | undefined, key: string): string[] | undefined {
+  if (front === undefined) return undefined;
+  const lines = front.split('\n');
+  const block = blockOf(lines, key);
+  if (!block) return undefined;
+  const line = lines[block.start] as string;
+  const value = line
+    .slice(line.indexOf(':') + 1)
+    .replace(/\s+#.*$/, '')
+    .trim();
+  const unquote = (item: string) =>
+    item
+      .trim()
+      .replace(/^(['"])(.*)\1$/, '$2')
+      .trim();
+  const split = (text: string) => {
+    // Commas inside brackets ("Bash(git add, git commit)") stay with their item.
+    const out: string[] = [];
+    let depth = 0;
+    let current = '';
+    for (const ch of text) {
+      if (ch === '(') depth++;
+      if (ch === ')') depth = Math.max(0, depth - 1);
+      if (ch === ',' && depth === 0) {
+        out.push(current);
+        current = '';
+      } else current += ch;
+    }
+    out.push(current);
+    return out.map(unquote).filter(Boolean);
+  };
+  if (value.startsWith('[')) return split(value.replace(/^\[|\]$/g, ''));
+  if (value) return split(value);
+  return lines
+    .slice(block.start + 1, block.end)
+    .map((l) => /^\s*-\s+(.*)$/.exec(l)?.[1])
+    .filter((item): item is string => item !== undefined)
+    .map(unquote)
+    .filter(Boolean);
+}
+
 /** A boolean key, YAML 1.2 style (`true`/`false`). */
 export function readFlag(front: string | undefined, key: string): boolean | undefined {
   const value = readKey(front, key)?.toLowerCase();

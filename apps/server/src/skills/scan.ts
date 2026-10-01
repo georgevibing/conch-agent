@@ -113,7 +113,10 @@ const SMUGGLED = /[\u202A-\u202E\u2066-\u2069\u{E0000}-\u{E007F}]/u;
 /** Zero-width marks that also turn up in pasted text; worth a word, not an alarm (emoji joiners aren't counted). */
 const ZERO_WIDTH = /[\u200B\u200C\u2060-\u2064]|(?!^)\uFEFF/u;
 
-async function files(folder: string): Promise<{ path: string; size: number; text: boolean }[]> {
+async function files(
+  folder: string,
+  options: { withSignature?: boolean } = {},
+): Promise<{ path: string; size: number; text: boolean }[]> {
   const out: { path: string; size: number; text: boolean }[] = [];
   const visit = async (dir: string, depth: number) => {
     if (out.length >= MAX_FILES || depth > 4) return;
@@ -126,6 +129,8 @@ async function files(folder: string): Promise<{ path: string; size: number; text
     for (const entry of entries) {
       if (out.length >= MAX_FILES) return;
       if (entry.name === '.git' || entry.name === 'node_modules') continue;
+      // The signature is about the rest of the folder, so it isn't part of it (ADR 0031).
+      if (depth === 1 && entry.name === 'SKILL.sig' && !options.withSignature) continue;
       const path = join(dir, entry.name);
       // Links aren't followed: a skill can't make Conch read your files as its own.
       if (entry.isSymbolicLink()) continue;
@@ -141,9 +146,12 @@ async function files(folder: string): Promise<{ path: string; size: number; text
 }
 
 /** Cheap: names, sizes and times. Reading the files again waits until one of them changed. */
-export async function folderSignature(folder: string): Promise<string> {
+export async function folderSignature(
+  folder: string,
+  options: { withSignature?: boolean } = {},
+): Promise<string> {
   const parts: string[] = [];
-  for (const f of await files(folder)) {
+  for (const f of await files(folder, options)) {
     const info = await lstat(f.path).catch(() => undefined);
     parts.push(`${f.path}:${f.size}:${info?.mtimeMs ?? 0}`);
   }

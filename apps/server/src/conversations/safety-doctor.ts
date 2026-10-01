@@ -1,5 +1,5 @@
 /** Repair everything's look at Safe hands (ADR 0028): what holds, and what a person could turn back on. */
-import type { DoctorItem } from '@conch/protocol';
+import type { DoctorItem, SafetyStatus, Skill } from '@conch/protocol';
 
 import type { DoctorCheck } from '../doctor/service';
 import type { SettingsStore } from '../settings/store';
@@ -7,7 +7,16 @@ import { sandboxSupport } from './sandbox';
 
 const GROUP = 'This computer';
 
-export function safetyCheck(settings: SettingsStore, support = sandboxSupport): DoctorCheck {
+export function safetyCheck(
+  settings: SettingsStore,
+  support = sandboxSupport,
+  more: {
+    /** What sealing means for each provider you use (ADR 0031). */
+    providers?: () => Promise<SafetyStatus['providers']>;
+    /** Skills, for one whose signature doesn't hold. */
+    skills?: () => Promise<Skill[]>;
+  } = {},
+): DoctorCheck {
   return {
     id: 'safety',
     group: GROUP,
@@ -56,6 +65,28 @@ export function safetyCheck(settings: SettingsStore, support = sandboxSupport): 
             ? undefined
             : { kind: 'open', label: 'Seal them', place: 'security' },
         );
+      // A provider sealed only partly says what's still in reach, and how to fix it.
+      for (const p of (await more.providers?.().catch(() => [])) ?? [])
+        if (p.state === 'partly')
+          item(
+            `safety:sealed:${p.id}`,
+            `Sealed commands in ${p.label}`,
+            'warning',
+            p.note,
+            p.id === 'codex-cli'
+              ? { kind: 'need', label: 'Update Codex', need: 'codex', mode: 'update' }
+              : undefined,
+          );
+      // Signed, and not what was signed: off, and worth a look (ADR 0031).
+      for (const skill of (await more.skills?.().catch(() => [])) ?? [])
+        if (skill.signature?.state === 'invalid')
+          item(
+            `safety:signature:${skill.id}`,
+            skill.title,
+            'warning',
+            `${skill.signature.problem ?? 'Its signature doesn’t hold.'} It’s off.`,
+            { kind: 'open', label: 'Look at it', place: 'skills', focus: skill.id },
+          );
       return items;
     },
   };

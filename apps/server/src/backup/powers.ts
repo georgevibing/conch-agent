@@ -21,6 +21,7 @@ export function previewReads(path: string): boolean {
     path === 'browser.json' ||
     path === 'terminal.json' ||
     path === 'channels.json' ||
+    path === 'skills.trust.json' ||
     /^routines\/[^/]+(?<!\.runs)\.json$/.test(path)
   );
 }
@@ -147,6 +148,20 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
       more: Math.max(0, people.length - MAX_LISTED),
     });
   }
+
+  // Trusting a publisher lets its signed updates in: an old backup mustn't bring back
+  // someone you stopped trusting.
+  const publishers = json(read, 'skills.trust.json')?.publishers;
+  const names = (Array.isArray(publishers) ? publishers : [])
+    .map(record)
+    .filter((p) => p && p.you !== true)
+    .map((p) => text(p?.name, 'A publisher'));
+  if (names.length)
+    powers.push({
+      kind: 'trusted-publishers',
+      names: names.slice(0, MAX_LISTED),
+      more: Math.max(0, names.length - MAX_LISTED),
+    });
 
   return powers;
 }

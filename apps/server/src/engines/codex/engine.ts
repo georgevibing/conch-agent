@@ -40,7 +40,7 @@ import type {
   LoginHandle,
   TurnInput,
 } from '../types';
-import { detectCodex } from './detect';
+import { detectCodex, isAtLeast } from './detect';
 import { startCodexLogin } from './login';
 import { Translator } from './translate';
 
@@ -93,6 +93,71 @@ export function sandboxNotice(sandbox: Sandbox): string {
     case 'danger-full-access':
       return 'Codex is running with full access: it can’t ask you before each step, and it can change anything on this computer.';
   }
+}
+
+/** Codex reads permission profiles (and so can be kept from reading keys) from here on. */
+export const PROFILES_VERSION = '0.159.0';
+
+/**
+ * The same, sealed: what it can still do, and what it can't reach. Without
+ * permission profiles (an older Codex) it says so, rather than claim keys are
+ * out of reach when they aren't.
+ */
+export function sealedNotice(sandbox: Sandbox, network: boolean, profiles = true): string {
+  const keys = profiles
+    ? 'can’t read where your keys and passwords live'
+    : `this version of Codex can still read where your keys live (Codex ${PROFILES_VERSION} or newer can’t)`;
+  if (sandbox === 'read-only')
+    return `Codex works inside a sealed sandbox and can’t ask you before each step: in this mode it can only read${profiles ? ', and never where your keys and passwords live' : `, though ${keys}`}.`;
+  return `Codex works inside a sealed sandbox and can’t ask you before each step: it can change files in this folder and the caches installs use${network ? ', and reach the internet' : ''}, but ${keys}.`;
+}
+
+/**
+ * Conch's sealed box, the way Codex runs it (ADR 0031). Codex writes only to
+ * the work folder in `workspace-write`; Conch adds the caches installs need
+ * (`writable_roots`), keeps the network as the mode has it — on for Full
+ * trust, off once the chat read something untrusted — and, through a
+ * permission profile (Codex 0.159+), denies reading where keys live. An older
+ * Codex, or a build whose version can't be read, gets only the rest, and the
+ * notice says keys aren't out of reach. Full trust under a seal is
+ * `workspace-write`: "full access" is exactly what sealing takes away.
+ */
+export function sealFor(
+  wanted: Sandbox,
+  seal: { allowWrite: string[]; denyRead: string[] } | undefined,
+  tainted: boolean,
+  profiles = true,
+): { sandbox: Sandbox; overrides: string[]; sealed: boolean } {
+  const tight: Sandbox = tainted && wanted === 'danger-full-access' ? 'workspace-write' : wanted;
+  if (!seal) return { sandbox: tight, overrides: [], sealed: false };
+  const sandbox: Sandbox = wanted === 'danger-full-access' ? 'workspace-write' : wanted;
+  const network = wanted === 'danger-full-access' && !tainted;
+  const filesystem = [
+    ...(sandbox === 'workspace-write' ? seal.allowWrite.map((p) => [p, 'write'] as const) : []),
+    ...seal.denyRead.map((p) => [p, 'deny'] as const),
+  ]
+    .map(([path, mode]) => `${toml(path)}=${toml(mode)}`)
+    .join(',');
+  return {
+    sandbox,
+    sealed: true,
+    overrides: [
+      ...(sandbox === 'workspace-write'
+        ? [
+            `sandbox_workspace_write.writable_roots=${tomlArray(seal.allowWrite)}`,
+            `sandbox_workspace_write.network_access=${network}`,
+          ]
+        : []),
+      ...(profiles
+        ? [
+            'default_permissions="conch"',
+            `permissions.conch.extends=${toml(sandbox === 'read-only' ? ':read-only' : ':workspace')}`,
+            `permissions.conch.filesystem={${filesystem}}`,
+            `permissions.conch.network={enabled=${network}}`,
+          ]
+        : []),
+    ],
+  };
 }
 
 // ── Integrations as config overrides ────────────────────────────────────────
@@ -650,12 +715,21 @@ export class CodexEngine implements Engine {
     if (mcp.skipped.length) yield { type: 'mcp-status', failed: mcp.skipped };
 
     // Codex can't ask before a step: a chat that read something untrusted keeps it
-    // in the work folder with no network (ADR 0028), even in Full trust.
+    // in the work folder with no network (ADR 0028), even in Full trust; sealed,
+    // it can't read where keys live either (ADR 0031).
     const wanted = sandboxFor(input.options.permissionMode);
-    const sandbox = input.tainted && wanted === 'danger-full-access' ? 'workspace-write' : wanted;
+    const profiles = Boolean(status.version && isAtLeast(status.version, PROFILES_VERSION));
+    const seal = sealFor(wanted, input.sandbox, Boolean(input.tainted), profiles);
+    const sandbox = seal.sandbox;
     // Codex can't ask before a step, so the first turn says what it may do.
     if (!input.resumeId) {
-      yield { type: 'notice', code: 'sandbox', message: sandboxNotice(sandbox) };
+      yield {
+        type: 'notice',
+        code: 'sandbox',
+        message: seal.sealed
+          ? sealedNotice(sandbox, wanted === 'danger-full-access' && !input.tainted, profiles)
+          : sandboxNotice(sandbox),
+      };
     }
 
     const prompt = promptFor(input, this.#briefings.get(input.conversationId));
@@ -665,7 +739,7 @@ export class CodexEngine implements Engine {
       sandbox,
       model: input.options.model,
       effort: input.options.effort,
-      overrides: mcp.args,
+      overrides: [...seal.overrides.flatMap((o) => ['-c', o]), ...mcp.args],
     });
 
     this.#briefings.set(input.conversationId, input.systemAppend.trim());

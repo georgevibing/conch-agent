@@ -185,7 +185,10 @@ export async function buildApp(services: Services) {
   registerPhoneRoutes(app, { tailscale: services.tailscale, gate });
   registerPushRoutes(app, { push: services.push, conversations: services.conversations });
   registerVoiceRoutes(app, services.voice);
-  registerSafetyRoutes(app, services.activity);
+  registerSafetyRoutes(app, services.activity, {
+    providers: () => services.providers.ready(),
+    sealing: async () => (await services.settings.get()).preferences.sealedCommands,
+  });
   registerUndoRoutes(app, services.undo);
   registerArtifactRoutes(app, services.artifacts);
   registerTaskRoutes(app, services.tasks);
@@ -683,6 +686,27 @@ export async function buildApp(services: Services) {
     if (!body) return;
     return guarded(reply, () => services.skills.create(body));
   });
+  // Whose signed skills you trust (ADR 0031). Trusting is a lasting power, like sudo.
+  app.get('/api/skills/publishers', async () => ({
+    publishers: await services.skills.publishers(),
+  }));
+  app.post<{ Params: { id: string } }>('/api/skills/:id/trust-publisher', (request, reply) => {
+    if (!gate.verified(request.access))
+      return reply
+        .code(403)
+        .send({ error: 'verify-required', message: 'Confirm it’s you to trust a publisher.' });
+    return guarded(reply, () => services.skills.trustPublisher(request.params.id));
+  });
+  app.delete<{ Params: { fingerprint: string } }>(
+    '/api/skills/publishers/:fingerprint',
+    async (request, reply) => {
+      if (!(await services.skills.forgetPublisher(request.params.fingerprint)))
+        return reply
+          .code(404)
+          .send({ error: 'not-found', message: 'That publisher isn’t trusted.' });
+      return { ok: true };
+    },
+  );
   app.get<{ Params: { id: string } }>('/api/skills/:id', (request, reply) =>
     guarded(reply, () => services.skills.detail(request.params.id)),
   );

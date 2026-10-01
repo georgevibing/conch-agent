@@ -88,6 +88,9 @@ describe('what’s in a backup', () => {
     expect(cls('secrets.json')).toBe('secret');
     expect(cls('access.json')).toBe('secret');
     expect(cls('integrations.secrets.json')).toBe('secret');
+    expect(cls('skills.trust.json')).toBe('kept');
+    expect(classify('skills.trust.json')?.group).toBe('skills');
+    expect(cls('skills.signing.json')).toBe('secret');
     expect(cls('search.db')).toBe('derived');
     expect(cls('search.db-wal')).toBe('derived');
     expect(cls('healed.json')).toBe('derived');

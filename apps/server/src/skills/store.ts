@@ -18,7 +18,10 @@ import { z } from 'zod';
 import { Mutex, safeJoin, writeFileAtomic, writeJson } from '../lib/fs';
 import { readStore, type Heal } from '../lib/recover';
 import { humanize, slugify } from './draft';
+import { readPermissions } from './permissions';
 import { folderSignature, scanSkill } from './scan';
+import { checkSignature, SIG_FILE } from './signing';
+import type { SkillTrust } from './trust';
 import {
   joinSkill,
   readFlag,
@@ -103,6 +106,8 @@ export interface LoadedSkill extends Skill {
   file: string;
   /** From the file (`disable-model-invocation`), before any choice made in Conch. */
   fileMode: 'auto' | 'manual';
+  /** The signing key, when its signature holds: what "Trust this publisher" trusts. */
+  signerKey?: string;
 }
 
 const ModesFile = z.object({
@@ -112,7 +117,17 @@ const ModesFile = z.object({
    * Another app's skill, as it was when you turned it on (ADR 0028): if any
    * file in it changes, it's off again until you look at what it says now.
    */
-  pins: z.record(z.string(), z.object({ hash: z.string(), at: z.number() })).default({}),
+  pins: z
+    .record(
+      z.string(),
+      z.object({
+        hash: z.string(),
+        at: z.number(),
+        /** Signed by a publisher you trust when turned on: its signed updates carry on (ADR 0031). */
+        publisher: z.string().optional(),
+      }),
+    )
+    .default({}),
   /** Skills Conch found worrying that you looked at and turned on anyway, as they were then. */
   acks: z.record(z.string(), z.string()).default({}),
 });
@@ -139,6 +154,8 @@ export class SkillStore {
     /** Folders a connected provider reads by itself, and who that is. */
     private readonly nativelyLoaded: () => Map<SkillSource, string> = () => new Map(),
     private readonly heal?: Heal,
+    /** Whose signatures you trust (ADR 0031). Without it, every signed skill is "untrusted". */
+    private readonly trust?: SkillTrust,
   ) {
     this.dir = join(home, 'skills');
     this.#modesPath = join(home, 'skills.json');
@@ -161,6 +178,9 @@ export class SkillStore {
   async list(options: { fresh?: boolean } = {}) {
     if (!options.fresh && this.#cache && Date.now() - this.#cache.at < 2_000) return this.#cache;
     const { modes, pins, acks } = await this.#choices();
+    const publishers = (await this.trust?.list().catch(() => undefined)) ?? [];
+    const trusted = new Set(publishers.map((p) => p.fingerprint));
+    const trustedNames = new Set(publishers.map((p) => p.name.trim().toLowerCase()));
     const native = this.nativelyLoaded();
     const skills: LoadedSkill[] = [];
     const sources: SkillSourceInfo[] = [];
@@ -176,6 +196,7 @@ export class SkillStore {
           { modes, pins, acks },
           ids,
           native.get(root.source),
+          { fingerprints: trusted, names: trustedNames },
         );
         if (!skill) continue;
         skills.push(skill);
@@ -319,6 +340,7 @@ export class SkillStore {
             rest.mode,
             review.hash,
             review.verdict === 'danger' ? acknowledged : undefined,
+            skill.signature?.state === 'verified' ? skill.signature.fingerprint : undefined,
           );
           this.invalidate();
           return this.get(skill.id);
@@ -509,6 +531,7 @@ export class SkillStore {
     choices: z.infer<typeof ModesFile>,
     taken: Set<string>,
     loadedBy: string | undefined,
+    trusted: { fingerprints: ReadonlySet<string>; names: ReadonlySet<string> },
   ): Promise<LoadedSkill | undefined> {
     const file = join(folder, 'SKILL.md');
     const folderName = folder.slice(folder.lastIndexOf(sep) + 1);
@@ -549,13 +572,33 @@ export class SkillStore {
     // Read through before it steers anything, and held to what you turned on (ADR 0028).
     const review = await this.#review(folder);
     const pin = pins[id];
-    if (review.verdict === 'danger' && acks[id] !== review.hash) {
+    // Who made it, provably (ADR 0031): a signature that doesn't hold turns it off.
+    const signature = await this.#signature(folder, name, trusted.fingerprints);
+    const lookalike =
+      signature.state === 'untrusted' &&
+      trusted.names.has((signature.publisher ?? '').trim().toLowerCase());
+    const followsPublisher =
+      signature.state === 'verified' &&
+      pin?.publisher !== undefined &&
+      pin.publisher === signature.fingerprint;
+    if (signature.state === 'invalid') {
+      mode = 'off';
+      problem ??= `${signature.problem ?? 'Its signature doesn’t hold.'} It’s off so it can’t steer anything.`;
+      problemKind ??= 'bad-signature';
+    } else if (review.verdict === 'danger' && acks[id] !== review.hash) {
       // Worrying, and nobody has looked: never offered to an assistant until someone does.
       mode = 'off';
       const first = review.findings.find((f) => f.severity === 'danger');
       problem ??= `Conch found something worrying in it: ${first?.message.charAt(0).toLowerCase()}${first?.message.slice(1) ?? ''} Look at it before turning it on.`;
       problemKind ??= 'needs-review';
-    } else if (root.source !== 'conch' && mode !== 'off' && pin && pin.hash !== review.hash) {
+    } else if (
+      root.source !== 'conch' &&
+      mode !== 'off' &&
+      pin &&
+      pin.hash !== review.hash &&
+      // An update signed by the publisher you trusted when you turned it on carries on.
+      !followsPublisher
+    ) {
       mode = 'off';
       problem ??= `It changed in ${root.label} since you turned it on, so it’s off until you look at it again.`;
       problemKind ??= 'changed';
@@ -576,9 +619,33 @@ export class SkillStore {
       ...(problemKind && { problemKind }),
       updatedAt,
       review,
+      permissions: readPermissions(parsed.front),
+      signature: {
+        state: signature.state,
+        ...(signature.publisher && { publisher: signature.publisher }),
+        ...(signature.fingerprint && { fingerprint: signature.fingerprint }),
+        ...(signature.problem && { problem: signature.problem }),
+        ...(lookalike && { lookalike }),
+      },
+      ...(signature.key && { signerKey: signature.key }),
       file,
       fileMode,
     };
+  }
+
+  readonly #signatures = new Map<
+    string,
+    { key: string; signature: Awaited<ReturnType<typeof checkSignature>> }
+  >();
+
+  /** A folder's signature, checked again only when a file in it or whom you trust changed. */
+  async #signature(folder: string, name: string, trusted: ReadonlySet<string>) {
+    const key = `${await folderSignature(folder, { withSignature: true })}|${name}|${[...trusted].sort().join(',')}`;
+    const cached = this.#signatures.get(folder);
+    if (cached?.key === key) return cached.signature;
+    const signature = await checkSignature(folder, name, trusted);
+    this.#signatures.set(folder, { key, signature });
+    return signature;
   }
 
   readonly #reviews = new Map<string, { signature: string; review: SkillReview }>();
@@ -619,7 +686,13 @@ export class SkillStore {
    * (`hash`); turning it off lets the pin go, and any OK given to a worrying
    * one (`acknowledged`), so turning it on again means looking again.
    */
-  async #setMode(id: string, mode: SkillMode | undefined, hash?: string, acknowledged?: string) {
+  async #setMode(
+    id: string,
+    mode: SkillMode | undefined,
+    hash?: string,
+    acknowledged?: string,
+    publisher?: string,
+  ) {
     const { modes, pins, acks } = await this.#choices();
     const { [id]: _previous, ...others } = modes;
     const { [id]: _pin, ...otherPins } = pins;
@@ -627,7 +700,10 @@ export class SkillStore {
     const on = mode !== 'off';
     await writeJson(this.#modesPath, {
       modes: mode === undefined ? others : { ...others, [id]: mode },
-      pins: on && mode && hash ? { ...otherPins, [id]: { hash, at: Date.now() } } : otherPins,
+      pins:
+        on && mode && hash
+          ? { ...otherPins, [id]: { hash, at: Date.now(), ...(publisher && { publisher }) } }
+          : otherPins,
       acks: !on ? otherAcks : acknowledged ? { ...otherAcks, [id]: acknowledged } : acks,
     });
   }
@@ -638,6 +714,12 @@ export class SkillStore {
    */
   async #checkReviewed(skill: LoadedSkill, mode: SkillMode | undefined, acknowledged?: string) {
     if (!mode || mode === 'off') return undefined;
+    // What's in it isn't what was signed: nothing turns it on but a new signature (ADR 0031).
+    if (skill.signature?.state === 'invalid')
+      throw new SkillError(
+        'needs-review',
+        `${skill.signature.problem ?? 'Its signature doesn’t hold.'} Get it again from whoever made it.`,
+      );
     const review = await scanSkill(skill.path);
     if (review.verdict !== 'danger') return review;
     if (acknowledged !== review.hash)
@@ -657,7 +739,13 @@ export class SkillStore {
         skill && skill.source !== 'conch'
           ? (review ?? (await scanSkill(skill.path))).hash
           : undefined;
-      await this.#setMode(id, mode, hash, review?.verdict === 'danger' ? acknowledged : undefined);
+      await this.#setMode(
+        id,
+        mode,
+        hash,
+        review?.verdict === 'danger' ? acknowledged : undefined,
+        skill?.signature?.state === 'verified' ? skill.signature.fingerprint : undefined,
+      );
       this.invalidate();
     });
   }
@@ -692,7 +780,7 @@ async function listFiles(folder: string): Promise<string[]> {
       const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
         if (level < 3) await visit(join(at, entry.name), rel, level + 1);
-      } else if (rel !== 'SKILL.md') out.push(rel);
+      } else if (rel !== 'SKILL.md' && rel !== SIG_FILE) out.push(rel); // A signature is about the skill, not in it.
     }
   };
   await visit(folder, '', 1);
@@ -710,6 +798,6 @@ export function fillPlaceholders(text: string, dir: string): string {
 
 /** What the browser may see: everything but where the file is. */
 export function publicSkill(skill: LoadedSkill): Skill {
-  const { file: _file, fileMode: _fileMode, ...rest } = skill;
+  const { file: _file, fileMode: _fileMode, signerKey: _signerKey, ...rest } = skill;
   return rest;
 }

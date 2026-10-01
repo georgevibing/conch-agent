@@ -15,6 +15,8 @@ import {
   parseModels,
   promptFor,
   sandboxFor,
+  sealedNotice,
+  sealFor,
   turnArgs,
 } from './engine';
 import { fakeCodex, type FakeCodex } from '../../test/fakeCodex';
@@ -316,6 +318,63 @@ describe('Codex arguments', () => {
         'Be kind.',
       ),
     ).toContain('<conch-instructions updated="true">');
+  });
+});
+
+describe('Codex sealed (ADR 0031)', () => {
+  const seal = { allowWrite: ['/work', '/Users/me/.npm'], denyRead: ['/Users/me/.ssh'] };
+
+  it('unsealed: as before; a chat that read something untrusted runs in the work folder', () => {
+    expect(sealFor('danger-full-access', undefined, false)).toEqual({
+      sandbox: 'danger-full-access',
+      overrides: [],
+      sealed: false,
+    });
+    expect(sealFor('danger-full-access', undefined, true).sandbox).toBe('workspace-write');
+  });
+
+  it('Full trust under a seal is the work folder, the caches and the network — never keys', () => {
+    const { sandbox, overrides } = sealFor('danger-full-access', seal, false);
+    expect(sandbox).toBe('workspace-write');
+    expect(overrides).toEqual([
+      'sandbox_workspace_write.writable_roots=["/work","/Users/me/.npm"]',
+      'sandbox_workspace_write.network_access=true',
+      'default_permissions="conch"',
+      'permissions.conch.extends=":workspace"',
+      'permissions.conch.filesystem={"/work"="write","/Users/me/.npm"="write","/Users/me/.ssh"="deny"}',
+      'permissions.conch.network={enabled=true}',
+    ]);
+  });
+
+  it('tainted: no network; read-only stays read-only, still denied keys', () => {
+    expect(sealFor('danger-full-access', seal, true).overrides).toContain(
+      'permissions.conch.network={enabled=false}',
+    );
+    const readOnly = sealFor('read-only', seal, false);
+    expect(readOnly.sandbox).toBe('read-only');
+    expect(readOnly.overrides).toEqual([
+      'default_permissions="conch"',
+      'permissions.conch.extends=":read-only"',
+      'permissions.conch.filesystem={"/Users/me/.ssh"="deny"}',
+      'permissions.conch.network={enabled=false}',
+    ]);
+  });
+
+  it('an older Codex gets only what it reads, and the notice doesn’t claim keys are safe', () => {
+    const old = sealFor('danger-full-access', seal, false, false);
+    expect(old.overrides.some((o) => o.startsWith('permissions.'))).toBe(false);
+    expect(old.overrides).toContain('sandbox_workspace_write.network_access=true');
+    expect(sealedNotice('workspace-write', true, false)).toMatch(
+      /can still read where your keys live/,
+    );
+    expect(sealedNotice('workspace-write', true)).toMatch(
+      /can’t read where your keys and passwords live/,
+    );
+  });
+
+  it('a path that would break out of its TOML string stays inside it', () => {
+    const tricky = sealFor('workspace-write', { allowWrite: ['/w/"]x'], denyRead: [] }, false);
+    expect(tricky.overrides[0]).toBe('sandbox_workspace_write.writable_roots=["/w/\\"]x"]');
   });
 });
 

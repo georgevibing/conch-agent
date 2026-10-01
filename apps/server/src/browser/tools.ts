@@ -202,7 +202,8 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
     const kind: BrowserPermission['kind'] =
       request.kind ?? (request.highStakes ? 'high-stakes' : 'site');
     // Read something untrusted (ADR 0028): even a trusted site, or Full trust, asks once per site.
-    const untrusted = kind === 'site' ? ctx.untrusted?.() : undefined;
+    const untrusted =
+      kind === 'site' ? (ctx.untrusted?.() ?? (await ctx.restricted?.('browser'))) : undefined;
     if (kind === 'site') {
       if (tab.sites.has(site)) return;
       if (!untrusted && ctx.permissionMode === 'bypassPermissions') return;

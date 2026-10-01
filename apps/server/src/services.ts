@@ -63,6 +63,7 @@ import { sandboxFor, sandboxSupport, secretPlaces } from './conversations/sandbo
 import { UndoService } from './undo/service';
 import { UndoStore } from './undo/store';
 import { safetyCheck } from './conversations/safety-doctor';
+import { providerCoverage } from './conversations/safety-routes';
 import { registerCoreChecks } from './doctor/checks';
 import { BOOT_ID, restart, restartable, stopSoon } from './lib/lifecycle';
 import { Doctor } from './doctor/service';
@@ -90,6 +91,7 @@ import { RoutineStore } from './routines/store';
 import { SettingsStore } from './settings/store';
 import { SkillService } from './skills/service';
 import { externalRoots, SkillStore } from './skills/store';
+import { SkillTrust } from './skills/trust';
 import { ConchCheckout, findCheckout } from './updates/conch';
 import { updatesCheck } from './updates/doctor';
 import { lookup } from './updates/latest';
@@ -156,6 +158,8 @@ export class Services {
   readonly integrations: IntegrationService;
   /** Skills: Conch's own, and those in other agents' folders (ADR 0013). */
   readonly skills: SkillService;
+  /** Whose signed skills you trust, and your own signing key (ADR 0031). */
+  readonly skillTrust: SkillTrust;
   /** The pretend SaaS vendor used with the mock engine. */
   readonly mockVendor?: MockVendor;
   /** Full-text search over every conversation; rebuilds its index when it breaks. */
@@ -309,16 +313,19 @@ export class Services {
     // Other agents' skill folders are read unless turned off; test runs (the mock engine) don't look.
     const skillSources =
       config.CONCH_SKILL_SOURCES ?? (config.CONCH_ENGINE === 'mock' ? 'off' : 'auto');
+    this.skillTrust = new SkillTrust(config.CONCH_HOME);
     this.skills = new SkillService({
       store: new SkillStore(
         config.CONCH_HOME,
         skillSources === 'auto' ? externalRoots() : [],
         () => this.#nativeSkillSources,
         heal,
+        this.skillTrust,
       ),
       engines: () => this.providers.ready(),
       emit: (event) => this.broadcast.emit(event),
       onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
+      trust: this.skillTrust,
     });
     this.terminal = new TerminalService({
       home: config.CONCH_HOME,
@@ -452,6 +459,7 @@ export class Services {
               home: config.CONCH_HOME,
             })
           : undefined,
+      skillPermissions: (skillId) => this.skills.permissions(skillId),
       // A spend that can't be saved is lost, not fatal: an unhandled rejection would stop Conch.
       onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
     });
@@ -592,7 +600,16 @@ export class Services {
     this.doctor.register(this.artifacts.doctorCheck());
     // A reply from a provider without Conch's tools may carry ```artifact blocks.
     this.broadcast.on((event) => void this.artifacts.onEvent(event).catch(() => undefined));
-    this.doctor.register(safetyCheck(this.settings));
+    this.doctor.register(
+      safetyCheck(this.settings, undefined, {
+        providers: () =>
+          providerCoverage({
+            providers: () => this.providers.ready(),
+            sealing: async () => (await this.settings.get()).preferences.sealedCommands,
+          }),
+        skills: async () => (await this.skills.list()).skills,
+      }),
+    );
     this.doctor.register(this.background.doctorCheck());
     this.doctor.register(trayCheck(this.tray));
     this.imports = this.#imports(config);

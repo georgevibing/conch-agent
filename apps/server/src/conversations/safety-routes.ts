@@ -2,13 +2,86 @@ import { ActivityKind, type SafetyStatus } from '@conch/protocol';
 import type { FastifyInstance } from 'fastify';
 
 import type { Activity } from '../activity/service';
+import { isAtLeast } from '../engines/codex/detect';
+import { PROFILES_VERSION } from '../engines/codex/engine';
+import type { Engine } from '../engines/types';
 import { sandboxSupport, secretPlaces } from './sandbox';
+
+type Coverage = SafetyStatus['providers'][number];
+
+/**
+ * What "Seal commands" means for each provider you use (ADR 0031). Claude
+ * Code seals with the computer's own sandbox; Codex with its own, which reads
+ * Conch's lists from 0.159; API providers run no commands at all. Where the
+ * computer can't seal (Windows, Linux without bubblewrap), it says so.
+ */
+export function coverage(
+  providers: { id: string; label: string; version?: string }[],
+  options: { available: boolean; on: boolean },
+): Coverage[] {
+  return providers.map(({ id, label, version }): Coverage => {
+    const base = { id, label };
+    if (id !== 'claude-code' && id !== 'codex-cli')
+      return {
+        ...base,
+        state: 'no-commands',
+        note: 'Runs no commands on this computer: it uses Conch’s tools, which ask as usual.',
+      };
+    if (!options.available)
+      return { ...base, state: 'not-sealed', note: 'This computer can’t seal its commands yet.' };
+    if (!options.on)
+      return {
+        ...base,
+        state: 'not-sealed',
+        note: 'Sealing is off, so its commands aren’t sealed.',
+      };
+    if (id === 'claude-code')
+      return {
+        ...base,
+        state: 'sealed',
+        note: 'Commands run sealed: your work folder and caches only, never where keys live.',
+      };
+    if (version && isAtLeast(version, PROFILES_VERSION))
+      return {
+        ...base,
+        state: 'sealed',
+        note: 'Runs in Codex’s own sandbox with Conch’s lists: your work folder and caches only, never where keys live. Full trust keeps it in the work folder.',
+      };
+    return {
+      ...base,
+      state: 'partly',
+      note: `Codex keeps to your work folder, but ${version ? `version ${version}` : 'this build'} can still read where keys live. Codex ${PROFILES_VERSION} or newer can’t.`,
+    };
+  });
+}
 
 /**
  * Safe hands (ADR 0028): whether commands can be sealed here and what that
  * protects, and everything the assistant did (the activity timeline).
  */
-export function registerSafetyRoutes(app: FastifyInstance, activity: Activity): void {
+export interface CoverageDeps {
+  providers: () => Promise<Engine[]>;
+  sealing: () => Promise<boolean>;
+}
+
+/** The same, for the providers you use right now. */
+export async function providerCoverage(deps: CoverageDeps, available = sandboxSupport().available) {
+  const engines = await deps.providers().catch(() => []);
+  const providers = await Promise.all(
+    engines.map(async (engine) => ({
+      id: engine.id,
+      label: engine.label,
+      version: (await engine.detect().catch(() => undefined))?.version,
+    })),
+  );
+  return coverage(providers, { available, on: await deps.sealing().catch(() => true) });
+}
+
+export function registerSafetyRoutes(
+  app: FastifyInstance,
+  activity: Activity,
+  deps: CoverageDeps = { providers: async () => [], sealing: async () => true },
+): void {
   app.get<{ Querystring: { before?: string; kind?: string; limit?: string } }>(
     '/api/activity',
     async (request, reply) => {
@@ -25,9 +98,10 @@ export function registerSafetyRoutes(app: FastifyInstance, activity: Activity): 
     },
   );
 
-  app.get('/api/safety', (): SafetyStatus => {
+  app.get('/api/safety', async (): Promise<SafetyStatus> => {
     const support = sandboxSupport();
     return {
+      providers: await providerCoverage(deps, support.available),
       sandbox: {
         available: support.available,
         ...(!support.available && { reason: support.reason }),

@@ -41,6 +41,8 @@ import { SkillStore } from './skills/store';
 import { findCheckout } from './updates/conch';
 import { PROVIDER_COPY } from './providers/catalog';
 import { SettingsStore } from './settings/store';
+import { skillsCommand } from './skills/cli';
+import { SkillTrust } from './skills/trust';
 
 const config = loadConfig();
 // Conch may have started on another port (the usual one was busy): links point where it really is.
@@ -451,6 +453,17 @@ async function shortcut() {
   );
 }
 
+async function skills() {
+  process.exitCode = await skillsCommand(process.argv.slice(3), new SkillTrust(config.CONCH_HOME), {
+    say,
+    bold,
+    dim,
+    green,
+    cwd: process.env.INIT_CWD ?? process.cwd(),
+    defaultName: userInfo().username,
+  });
+}
+
 async function quit() {
   process.exitCode = await quitCommand(backgroundIo);
 }
@@ -475,6 +488,7 @@ function help() {
     ['background after-logout on', 'Keep running after you log out (Linux)'],
     ['phone', 'Give your phone a secure address (Tailscale)'],
     ['import --from <app> [--dry-run]', 'Bring your things from OpenClaw or Hermes'],
+    ['skills sign <folder>', 'Sign a skill you share (skills help)'],
   ];
   for (const [cmd, what] of rows) say(`${cmd.padEnd(24)}${dim(what)}`);
 }
@@ -495,6 +509,7 @@ const commands: Record<string, () => Promise<void> | void> = {
   tray,
   phone,
   import: importFrom,
+  skills,
   help,
 };
 
