@@ -51,7 +51,7 @@ export interface PushDeps {
   persona: () => Promise<string>;
   conversation: (
     id: string,
-  ) => Promise<{ title: string; routine?: boolean; channel?: boolean } | undefined>;
+  ) => Promise<{ title: string; routine?: boolean; channel?: boolean; task?: boolean } | undefined>;
   routineTitle: (id: string) => Promise<string | undefined>;
   /** Still allowed in: signed in, not removed. */
   ownerExists: (owner: string) => Promise<boolean>;
@@ -89,6 +89,8 @@ const clip = (text: string, max = MAX_BODY) => {
 
 export class PushService {
   readonly presence = new Presence();
+  /** Tasks already told about, so a repeated change doesn't notify twice. */
+  readonly #told = new Set<string>();
   /** What each conversation's assistant last said, for "Conch replied". */
   readonly #replies = new Map<string, string>();
 
@@ -237,6 +239,28 @@ export class PushService {
 
   /** Conch's live stream, turned into the notifications that matter. */
   async onEvent(event: ServerEvent): Promise<void> {
+    if (event.type === 'task.changed') {
+      // A task you sent away finished (ADR 0033); a helper's result goes back to its chat instead.
+      const task = event.task;
+      if (task.kind !== 'background' || !['done', 'failed'].includes(task.status)) return;
+      if (this.#told.has(`${task.id}:${task.finishedAt}`)) return;
+      this.#told.add(`${task.id}:${task.finishedAt}`);
+      await this.notify('tasks', {
+        title:
+          task.status === 'done'
+            ? `Done: ${clip(task.title, 60)}`
+            : `Didn’t finish: ${clip(task.title, 60)}`,
+        body: clip(
+          task.status === 'done'
+            ? (task.summary ?? 'It’s ready.')
+            : (task.error ?? 'Something went wrong.'),
+        ),
+        quiet: task.status === 'done' ? 'Your task is done.' : 'Your task didn’t finish.',
+        url: task.parentConversationId ? `/c/${task.parentConversationId}` : `/tasks`,
+        tag: `task-${task.id}`,
+      });
+      return;
+    }
     if (event.type === 'routine.run') {
       const run = event.run;
       // Only what's worth hearing about: it ran and has something, or it didn't finish.
@@ -319,7 +343,7 @@ export class PushService {
       if (e.outcome !== 'success' || !said?.trim()) return;
       const chat = await this.deps.conversation(e.conversationId);
       // A routine's run says so once it's done; a chat app already got its answer there.
-      if (!chat || chat.routine || chat.channel) return;
+      if (!chat || chat.routine || chat.channel || chat.task) return;
       const name = await this.deps.persona();
       await this.notify('replies', {
         title: chat.title ? `${name} · ${clip(chat.title, 60)}` : `${name} replied`,

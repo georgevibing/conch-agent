@@ -449,6 +449,101 @@ export class MockEngine implements Engine {
         yield { type: 'tool-end', toolUseId, status: 'success', output };
       }
 
+      // Hand it off (ADR 0033): "in parallel" splits the job across helpers, "in the
+      // background" sends it away, and a task's own run reports its result.
+      const hostTool = async function* (name: string, args: Record<string, unknown>) {
+        const tool = input.tools.find((t) => t.name === name);
+        const toolUseId = newId('tool');
+        yield { type: 'tool-start', toolUseId, name: `mcp__conch__${name}`, input: args } as const;
+        const output = tool ? hostToolText(await tool.run(args as never)) : '';
+        yield { type: 'tool-end', toolUseId, status: 'success', output } as const;
+        return output;
+      };
+      const speak = async function* (reply: string) {
+        for (const chunk of bursts(reply)) {
+          await wait(chunk.pause);
+          yield { type: 'text', messageId, delta: chunk.text } as const;
+        }
+        yield { type: 'message-done', messageId } as const;
+        yield { type: 'done', outcome: 'success' } as const;
+      };
+      if (/\bin parallel\b/i.test(input.prompt) && input.tools.some((t) => t.name === 'delegate')) {
+        const out = yield* hostTool('delegate', {
+          parts: [
+            {
+              title: 'Read the README',
+              instructions: 'Read the README and say what’s missing.',
+              model: 'fast',
+              worktree: false,
+            },
+            {
+              title: 'Check the tests',
+              instructions: 'Run the tests slowly and say how they went.',
+              model: 'fast',
+              worktree: false,
+            },
+            {
+              title: 'Skim the changelog',
+              instructions: 'Skim the changelog for anything unreleased.',
+              model: 'same',
+              worktree: false,
+            },
+          ],
+        });
+        yield* speak(
+          `I split that into three and ran them side by side. Here’s what came back:\n\n${out}`,
+        );
+        return;
+      }
+      if (
+        /\bin the background\b/i.test(input.prompt) &&
+        input.tools.some((t) => t.name === 'start_background_task')
+      ) {
+        const instructions = input.prompt.replace(/\s*\bin the background\b/i, '').trim();
+        yield* hostTool('start_background_task', {
+          title: instructions.slice(0, 60),
+          instructions,
+        });
+        yield* speak(
+          'I’ve started that in the background. Carry on — I’ll bring the result back here when it’s done.',
+        );
+        return;
+      }
+      const reportResult = input.tools.find((t) => t.name === 'report_result');
+      if (reportResult) {
+        if (/\bslowly\b/i.test(input.prompt))
+          for (const command of ['npm install', 'npm test']) {
+            const toolUseId = newId('tool');
+            yield { type: 'tool-start', toolUseId, name: 'Bash', input: { command } };
+            await wait(1500);
+            yield { type: 'tool-end', toolUseId, status: 'success', output: 'ok' };
+          }
+        // Long enough to stop it, or to restart Conch under it.
+        if (/\bfor a while\b/i.test(input.prompt)) {
+          const toolUseId = newId('tool');
+          yield {
+            type: 'tool-start',
+            toolUseId,
+            name: 'Bash',
+            input: { command: 'npm run watch' },
+          };
+          await wait(240_000);
+          yield { type: 'tool-end', toolUseId, status: 'success', output: 'ok' };
+        }
+        if (/\bask\b/i.test(input.prompt)) {
+          const toolUseId = newId('tool');
+          const decision = await input.requestPermission(
+            { toolName: 'Bash', toolUseId, input: { command: 'git push' } },
+            input.signal,
+          );
+          yield { type: 'tool-start', toolUseId, name: 'Bash', input: { command: 'git push' } };
+          yield { type: 'tool-end', toolUseId, status: decision === 'deny' ? 'error' : 'success' };
+        }
+        await reportResult.run({ summary: `Finished: ${said.trim().slice(0, 80)}` } as never);
+        yield* speak('Done. The result is on its way back to your chat.');
+        return;
+      }
+
       // Passwords (ADR 0025): asking for a credential, and reading one field with a yes.
       const vaultTool = async function* (name: string, args: Record<string, unknown>) {
         const tool = input.tools.find((t) => t.name === name);

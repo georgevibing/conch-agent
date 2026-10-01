@@ -15,6 +15,9 @@ import { importCheck } from './import/doctor';
 import { ImportService } from './import/service';
 import { ArtifactService } from './artifacts/service';
 import { ArtifactStore } from './artifacts/store';
+import { tasksCheck } from './tasks/doctor';
+import { TASKS_PROMPT, TaskService } from './tasks/service';
+import { TaskStore } from './tasks/store';
 import { AttachmentStore } from './attachments/store';
 import { type SystemKey, VaultService } from './vault/service';
 import { vaultTools } from './vault/tools';
@@ -177,6 +180,8 @@ export class Services {
   readonly push: PushService;
   /** Private dictation: whisper.cpp on this computer (ADR 0027). */
   readonly voice: VoiceService;
+  /** Work that runs in the background, and helpers side by side (ADR 0033). */
+  readonly tasks: TaskService;
   /** Everything the assistant did, in one place (ADR 0028). */
   readonly activity: Activity;
   /** Putting back what the assistant changed (ADR 0030). */
@@ -419,6 +424,7 @@ export class Services {
               ...this.browser.tools(ctx),
               ...vaultTools(this.vault, ctx),
               ...this.artifacts.tools(ctx),
+              ...this.tasks.tools(ctx),
             ],
       context: async (engine) =>
         [
@@ -428,6 +434,7 @@ export class Services {
           await this.integrations.promptSection(),
           engine.hostTools === false ? '' : this.vault.promptSection(),
           this.artifacts.promptSection(engine.hostTools !== false),
+          engine.hostTools === false ? '' : TASKS_PROMPT,
         ]
           .filter(Boolean)
           .join('\n\n'),
@@ -455,7 +462,22 @@ export class Services {
       emit: (event) => this.broadcast.emit(event),
       onHeal: (message) => void this.healed.note('routines', message),
     });
+    this.tasks = new TaskService({
+      store: new TaskStore(config.CONCH_HOME, heal),
+      conversations: this.conversations,
+      engine: (id) => this.providers.engineFor(id),
+      settings: this.settings,
+      emit: (event) => this.broadcast.emit(event),
+      home: config.CONCH_HOME,
+      overBudget: async () => {
+        const { spend } = await this.usage.snapshot();
+        return spend.budget !== undefined && spend.month >= spend.budget;
+      },
+    });
+    this.doctor.register(tasksCheck(this.tasks));
     this.conversations.events.on((event) => this.broadcast.emit(event));
+    // Each task follows its own chat: what it's doing, what it did (ADR 0033).
+    this.broadcast.on((event) => this.tasks.onEvent(event));
     // A deleted chat takes its browser tab and thumbnails with it.
     this.conversations.events.on((event) => {
       if (event.type === 'conversation.deleted') void this.browser.forget(event.conversationId);
@@ -723,7 +745,8 @@ export class Services {
         return {
           title: chat.conversation.title,
           routine: origin?.kind === 'routine',
-          channel: origin !== undefined && origin.kind !== 'routine',
+          channel: origin?.kind === 'channel',
+          task: origin?.kind === 'task',
         };
       },
       routineTitle: async (id) =>
@@ -935,6 +958,7 @@ export class Services {
     );
     this.#sweeper.unref();
     this.updates.start();
+    void this.tasks.start().catch((error: unknown) => console.error('[tasks]', error));
     this.backups.start();
   }
 

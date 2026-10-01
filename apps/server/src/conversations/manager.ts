@@ -106,6 +106,10 @@ export interface TurnExtras {
   /** Overrides the conversation's permission mode for this turn. */
   permissionMode?: PermissionMode;
   onStatus?: (status: ConversationStatus) => void;
+  /** Works in this folder instead of the usual one (a helper's own git worktree, ADR 0033). */
+  cwd?: string;
+  /** Starts as wary as the chat it came from (ADR 0028): what that chat had read. */
+  taint?: readonly TaintSource[];
 }
 
 export interface TurnResult {
@@ -621,6 +625,7 @@ export class ConversationManager {
     this.events.emit({ type: 'conversation.updated', conversation: summary(record) });
     this.#append(live, { type: 'user.message', messageId: newId('u'), text: input.text });
     if (expanded?.skill) this.#append(live, { type: 'skill.used', ...expanded.skill, by: 'user' });
+    for (const source of input.extras.taint ?? []) this.#taint(live, source);
     this.#claim(live);
     live.extras = input.extras;
     this.#setStatus(live, 'running');
@@ -667,9 +672,13 @@ export class ConversationManager {
 
   /**
    * Add something to a chat's log from elsewhere in Conch (an artifact read
-   * from a reply, ADR 0034), and save it. Never a message or a tool call.
+   * from a reply, ADR 0034; a task's card, ADR 0033), and save it. Never a
+   * message or a tool call.
    */
-  async note(id: string, event: Extract<ConversationEventInput, { type: 'artifact' }>) {
+  async note(
+    id: string,
+    event: Extract<ConversationEventInput, { type: 'artifact' | 'task' }>,
+  ): Promise<void> {
     const live = await this.#get(id);
     this.#append(live, event);
     await this.#persist(live);
@@ -906,7 +915,7 @@ export class ConversationManager {
       this.#append(live, { type: 'integration.issue', ...issue });
 
     let closeBridge: (() => Promise<void>) | undefined;
-    const workspace = await this.deps.settings.workspace();
+    const workspace = extras?.cwd ?? (await this.deps.settings.workspace());
     // What this turn changes is kept, so it can be undone (ADR 0030).
     const tracker = this.deps.undo?.tracker({
       conversationId,
@@ -1407,6 +1416,18 @@ export class ConversationManager {
     if (known.length >= 12 || known.some((t) => t.kind === source.kind && t.label === source.label))
       return;
     this.#append(live, { type: 'taint', source });
+  }
+
+  /** What untrusted things a chat has read (ADR 0028), for work handed on from it (ADR 0033). */
+  async taintOf(id: string): Promise<TaintSource[]> {
+    return this.#tainted(await this.#get(id));
+  }
+
+  /** Carry what one chat read into another: a helper starts as wary as its parent, and back. */
+  async addTaint(id: string, sources: readonly TaintSource[]): Promise<void> {
+    const live = await this.#get(id);
+    for (const source of sources) this.#taint(live, source);
+    await this.#persist(live);
   }
 
   async #get(id: string): Promise<Live> {

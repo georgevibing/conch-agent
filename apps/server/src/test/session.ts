@@ -110,6 +110,15 @@ export async function useConch(g: Gateway) {
     if (run && !['running', 'needs-you'].includes(run.status)) break;
     await new Promise((r) => setTimeout(r, 20));
   }
+  // A task in the background (ADR 0033): its list, and its own chat.
+  const task = await ok(
+    await app.inject({ method: 'POST', url: '/api/tasks', payload: { text: 'Tidy the notes.' } }),
+  );
+  for (let i = 0; i < 200; i++) {
+    const now = (await services.tasks.get(String(task.id))).status;
+    if (!['queued', 'running', 'needs-you'].includes(now)) break;
+    await new Promise((r) => setTimeout(r, 20));
+  }
   const skill = await ok(
     await app.inject({
       method: 'POST',

@@ -51,6 +51,8 @@ export const PushTopic = z.enum([
   'routines',
   /** A new device is waiting to be approved (ADR 0024). */
   'devices',
+  /** A task you sent to the background finished (ADR 0033). */
+  'tasks',
 ]);
 export type PushTopic = z.infer<typeof PushTopic>;
 
@@ -59,6 +61,7 @@ export const PushPrefs = z.object({
   replies: z.boolean().default(true),
   routines: z.boolean().default(true),
   devices: z.boolean().default(true),
+  tasks: z.boolean().default(true),
   /** Say what it's about ("Run `npm test`"), or only that something needs you. */
   previews: z.boolean().default(true),
 });
@@ -70,6 +73,7 @@ export const PushPrefsPatch = z.object({
   replies: z.boolean().optional(),
   routines: z.boolean().optional(),
   devices: z.boolean().optional(),
+  tasks: z.boolean().optional(),
   previews: z.boolean().optional(),
 });
 export type PushPrefsPatch = z.infer<typeof PushPrefsPatch>;

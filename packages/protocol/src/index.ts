@@ -29,6 +29,7 @@ import { Routine, RoutineRun } from './routines';
 import { VaultPermission, VaultRequest } from './vault';
 import { VoiceStatus } from './phone';
 import { ChangedFile } from './undo';
+import { Task, TaskKind, TaskStatus } from './tasks';
 import { UpdatesStatus } from './updates';
 import { UsageSnapshot } from './usage';
 
@@ -55,6 +56,7 @@ export * from './safety';
 export * from './search';
 export * from './setup';
 export * from './skills';
+export * from './tasks';
 export * from './terminal';
 export * from './undo';
 export * from './updates';
@@ -289,6 +291,8 @@ export const ConversationSummary = z.object({
       z.object({ kind: z.literal('artifact'), artifactId: z.string() }),
       /** You wrote to your assistant from a chat app (Telegram, Discord, Slack). */
       ChannelOrigin,
+      /** A task running in the background (ADR 0033). */
+      z.object({ kind: z.literal('task'), taskId: z.string() }),
     ])
     .optional(),
 });
@@ -412,6 +416,19 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     version: z.number().int().positive(),
     action: z.enum(['created', 'updated']),
     note: z.string().optional(),
+  }),
+  /**
+   * A task sent away from this chat (ADR 0033): where it stands, appended
+   * again each time that changes (the card shows the latest).
+   */
+  z.object({
+    ...logged,
+    type: z.literal('task'),
+    taskId: z.string(),
+    title: z.string(),
+    kind: TaskKind,
+    state: TaskStatus,
+    summary: z.string().optional(),
   }),
   z.object({ ...logged, type: z.literal('status'), status: ConversationStatus }),
   z.object({
@@ -627,6 +644,9 @@ export const ServerEvent = z.discriminatedUnion('type', [
   /** An artifact changed: a new version, pinned, renamed, removed (ADR 0034). */
   z.object({ type: z.literal('artifact.changed'), artifact: Artifact }),
   z.object({ type: z.literal('artifact.deleted'), artifactId: z.string() }),
+  /** A task changed (ADR 0033). */
+  z.object({ type: z.literal('task.changed'), task: Task }),
+  z.object({ type: z.literal('task.deleted'), taskId: z.string() }),
   /** Private dictation changed: its speech model arriving, say (ADR 0027). */
   z.object({ type: z.literal('voice.changed'), status: VoiceStatus }),
   /**

@@ -119,6 +119,16 @@ export const RULES: readonly BackupRule[] = [
     why: 'Private dictation’s speech model (downloaded again when it’s missing) and recordings being read, which are deleted at once.',
   },
   {
+    match: 'tasks.json',
+    class: 'derived',
+    why: 'Where background tasks stand. Each task’s work is its own chat, which is backed up with your chats; a restore has nothing running.',
+  },
+  {
+    match: 'worktrees/**',
+    class: 'outside',
+    why: 'Helpers’ own copies of your work folder (git worktrees). What they changed is on a branch in your repository; back it up with your code.',
+  },
+  {
     match: 'shortcut/**',
     class: 'derived',
     why: 'The Conch app’s files for this computer (the Start menu, the app menu): written again from where Conch is.',
