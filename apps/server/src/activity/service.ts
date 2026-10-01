@@ -11,6 +11,8 @@ import { summarizeToolUse } from '../conversations/summarize';
 export interface ActivitySource {
   list(): Promise<{ id: string; title: string; updatedAt: number; origin?: { kind: string } }[]>;
   events(id: string): Promise<ConversationEvent[]>;
+  /** Where a change set stands now (ADR 0030): undone since, or expired. */
+  undoState?: (changeSetId: string) => Promise<'applied' | 'undone' | 'expired' | undefined>;
 }
 
 const FILE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
@@ -56,6 +58,12 @@ export function entriesOf(
     { name: string; input: Record<string, unknown>; seq: number; at: number }
   >();
   const asked = new Map<string, { summary: string; seq: number }>();
+  // What each tool call changed, to offer Undo on its row.
+  const changes = new Map(
+    events.flatMap((e) =>
+      e.type === 'files.changed' && e.toolUseId ? [[e.toolUseId, e.changeSetId] as const] : [],
+    ),
+  );
   for (const e of events) {
     const base = { conversation };
     switch (e.type) {
@@ -79,9 +87,41 @@ export function entriesOf(
           title: didWhat(call.name, call.input),
           status: e.status === 'success' ? 'done' : 'failed',
           anchor: e.toolUseId,
+          ...(changes.has(e.toolUseId) && {
+            undo: { changeSetId: changes.get(e.toolUseId) ?? '', state: 'applied' as const },
+          }),
         });
         break;
       }
+      case 'files.changed':
+        // A tool call's own row carries it; what a turn changed otherwise gets its own.
+        if (e.toolUseId && started.has(e.toolUseId)) break;
+        out.push({
+          ...base,
+          id: `${chat.id}:${e.seq}`,
+          at: e.at,
+          kind: 'file',
+          title: `${e.label}: ${e.files
+            .slice(0, 3)
+            .map((f) => f.path)
+            .join(', ')}${e.files.length > 3 ? ` and ${e.files.length - 3} more` : ''}`,
+          status: 'done',
+          undo: { changeSetId: e.changeSetId, state: 'applied' },
+        });
+        break;
+      case 'files.restored':
+        out.push({
+          ...base,
+          id: `${chat.id}:${e.seq}`,
+          at: e.at,
+          kind: 'file',
+          title: `${e.direction === 'undo' ? 'You undid' : 'You redid'}: ${e.files
+            .slice(0, 3)
+            .map((f) => f.path)
+            .join(', ')}${e.files.length > 3 ? ` and ${e.files.length - 3} more` : ''}`,
+          status: 'done',
+        });
+        break;
       case 'permission.requested':
         asked.set(e.permissionId, { summary: e.summary, seq: e.seq });
         break;
@@ -123,6 +163,7 @@ export function entriesOf(
           kind: 'memory',
           title: `Remembered: ${e.memory.content.slice(0, 120)}`,
           status: 'done',
+          memory: { id: e.memory.id, content: e.memory.content, action: 'saved' },
         });
         break;
       case 'memory.forgotten':
@@ -133,6 +174,7 @@ export function entriesOf(
           kind: 'memory',
           title: `Forgot: ${e.content.slice(0, 120)}`,
           status: 'done',
+          memory: { id: e.memoryId, content: e.content, action: 'forgotten' },
         });
         break;
       default:
@@ -179,6 +221,13 @@ export class Activity {
     }
     found.sort((a, b) => b.at - a.at || b.id.localeCompare(a.id));
     const entries = found.slice(0, limit);
+    // Undone since, or let go: the row says where it stands now.
+    if (this.source.undoState)
+      for (const entry of entries)
+        if (entry.undo) {
+          const state = await this.source.undoState(entry.undo.changeSetId).catch(() => undefined);
+          entry.undo.state = state ?? 'expired';
+        }
     const more = found.length > limit || chats.some((c) => c.updatedAt < (entries.at(-1)?.at ?? 0));
     return { entries, ...(more && entries.length && { next: entries.at(-1)?.at }) };
   }

@@ -26,6 +26,7 @@ import { CatalogId, Integration } from './integrations';
 import { Routine, RoutineRun } from './routines';
 import { VaultPermission, VaultRequest } from './vault';
 import { VoiceStatus } from './phone';
+import { ChangedFile } from './undo';
 import { UpdatesStatus } from './updates';
 import { UsageSnapshot } from './usage';
 
@@ -49,6 +50,7 @@ export * from './search';
 export * from './setup';
 export * from './skills';
 export * from './terminal';
+export * from './undo';
 export * from './updates';
 export * from './usage';
 export * from './vault';
@@ -376,6 +378,28 @@ export const ConversationEvent = z.discriminatedUnion('type', [
   }),
   /** The chat read something from outside: from here on, sending and changing ask first (ADR 0028). */
   z.object({ ...logged, type: z.literal('taint'), source: TaintSource }),
+  /**
+   * The assistant created, changed or deleted files (ADR 0030): what, and the
+   * change set that puts them back. `toolUseId` when one tool call did it;
+   * unset for what a turn changed some other way (a command, another provider).
+   */
+  z.object({
+    ...logged,
+    type: z.literal('files.changed'),
+    changeSetId: z.string(),
+    toolUseId: z.string().optional(),
+    /** "Changed notes.md", "Ran `npm run format`". */
+    label: z.string(),
+    files: z.array(ChangedFile),
+  }),
+  /** A change set was undone or redone, from the chat or from Activity. */
+  z.object({
+    ...logged,
+    type: z.literal('files.restored'),
+    changeSetId: z.string(),
+    direction: z.enum(['undo', 'redo']),
+    files: z.array(ChangedFile),
+  }),
   z.object({ ...logged, type: z.literal('status'), status: ConversationStatus }),
   z.object({
     ...logged,

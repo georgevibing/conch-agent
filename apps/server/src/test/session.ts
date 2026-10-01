@@ -2,7 +2,7 @@
  * A Conch that's been used for a while, in a temp home: settings, a memory,
  * a command, a routine that ran, a skill, an integration with its token, a
  * chat with an attachment, a model API's transcript, the browser's and
- * terminal's settings, a budget, a password, a provider key, and a backup.
+ * terminal's settings, a note the assistant wrote (and Undo's copy), a budget, a password, a provider key, and a backup.
  * Everything is written by the real services, the way using Conch writes it.
  * The backup tests use it to check nothing Conch writes is left unclassified.
  */
@@ -165,6 +165,8 @@ export async function useConch(g: Gateway) {
   const attachment = upload.attachment as { id: string };
   const convo = await chat(services, 'What’s in this picture?', [attachment.id]);
   await chat(services, 'And another question about the weather');
+  // A file the assistant wrote, which Undo keeps a copy of (ADR 0030).
+  await chat(services, 'write a note to water the plants');
   // A thumbnail of a page the agent looked at, as the browser keeps them.
   await services.browser.saveShot(convo.id, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
   // What a plain model API keeps to carry a chat on.

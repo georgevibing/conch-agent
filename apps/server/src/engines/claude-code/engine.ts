@@ -567,7 +567,11 @@ export class ClaudeCodeEngine implements Engine {
                     });
                     if (touchesProtected(toolInput, input.protectedPaths ?? []))
                       return deny(PROTECTED_MESSAGE);
-                    const verdict = await input.guard?.({ toolName, input: toolInput });
+                    const verdict = await input.guard?.({
+                      toolName,
+                      toolUseId: hookInput.tool_use_id,
+                      input: toolInput,
+                    });
                     if (verdict?.decision === 'deny') return deny(verdict.message);
                     if (verdict?.decision === 'ask')
                       return {

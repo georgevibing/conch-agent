@@ -6,6 +6,9 @@ import type {
   LoginState,
 } from '@conch/protocol';
 
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
 import { newId } from '../../lib/ids';
 import { installHints } from '../claude-code/detect';
 import { friendlyError } from '../claude-code/translate';
@@ -437,6 +440,28 @@ export class MockEngine implements Engine {
         yield { type: 'message-done', messageId };
         yield { type: 'done', outcome: 'success' };
         return;
+      }
+
+      // Writing a file for real (ADR 0030): "write a note …" makes note.md in the
+      // work folder, "change the note" adds a line, so Undo has something to undo.
+      const noteFile = join(input.cwd, 'note.md');
+      const writes = /\bwrite a note\b(.*)/i.exec(input.prompt);
+      const edits = /\bchange the note\b/i.test(input.prompt);
+      if (writes || edits) {
+        const toolUseId = newId('tool');
+        const before = await readFile(noteFile, 'utf8').catch(() => '');
+        const content = writes
+          ? `# Note\n\n${(writes[1] ?? '').trim() || 'Remember the milk.'}\n`
+          : `${before}\nOne more thing, added later.\n`;
+        const toolName = writes ? 'Write' : 'Edit';
+        const args = writes
+          ? { file_path: noteFile, content }
+          : { file_path: noteFile, old_string: before, new_string: content };
+        await input.guard?.({ toolName, toolUseId, input: args });
+        yield { type: 'tool-start', toolUseId, name: toolName, input: args };
+        await mkdir(input.cwd, { recursive: true });
+        await writeFile(noteFile, content);
+        yield { type: 'tool-end', toolUseId, status: 'success', output: 'Done.' };
       }
 
       // Reading a page (ADR 0028): what it brings back is untrusted, so the chat is too.

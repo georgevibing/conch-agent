@@ -109,6 +109,11 @@ export const RULES: readonly BackupRule[] = [
     why: 'The Conch app’s files for this computer (the Start menu, the app menu): written again from where Conch is.',
   },
   {
+    match: 'undo/**',
+    class: 'derived',
+    why: 'What the assistant changed, kept so it can be undone: copies of files on this computer, about this computer’s folders.',
+  },
+  {
     match: 'logs/**',
     class: 'derived',
     why: 'What Conch said while running in the background: about this computer and these runs.',

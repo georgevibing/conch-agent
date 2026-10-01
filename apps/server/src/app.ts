@@ -57,6 +57,7 @@ import { registerPhoneRoutes } from './phone/routes';
 import { pushOwner, registerPushRoutes } from './push/routes';
 import { registerVoiceRoutes } from './voice/routes';
 import { registerSafetyRoutes } from './conversations/safety-routes';
+import { registerUndoRoutes } from './undo/routes';
 import { registerBackgroundRoutes } from './background/routes';
 import { registerBackupRoutes } from './backup/routes';
 import { registerBrowserRoutes } from './browser/routes';
@@ -166,6 +167,7 @@ export async function buildApp(services: Services) {
   registerPushRoutes(app, { push: services.push, conversations: services.conversations });
   registerVoiceRoutes(app, services.voice);
   registerSafetyRoutes(app, services.activity);
+  registerUndoRoutes(app, services.undo);
   registerChannelRoutes(
     app,
     services.channels,

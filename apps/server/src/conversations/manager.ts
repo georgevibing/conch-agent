@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+
 import type {
   Attachment,
   BrowserPermission,
@@ -8,6 +10,7 @@ import type {
   ConversationSummary,
   EngineId,
   Preferences,
+  ChangedFile,
   ServerEvent,
   TaintSource,
   TurnOptions,
@@ -39,6 +42,9 @@ import { handoff } from './handoff';
 import type { ConversationRecord, ConversationStore } from './store';
 import { summarizeToolUse, titleFrom } from './summarize';
 import { describeTaint, leavesSandbox, sinkReason, taintFrom } from './taint';
+import { didWhat } from '../activity/service';
+import { changedFiles, type UndoService } from '../undo/service';
+import { shownPath } from '../undo/tracker';
 import { generateTitle } from './title';
 
 /**
@@ -364,6 +370,8 @@ export class ConversationManager {
        * where commands may write, and where they may never read.
        */
       sandbox?: (workspace: string) => { allowWrite: string[]; denyRead: string[] } | undefined;
+      /** Undo (ADR 0030): keeps what each turn changes, so it can be put back. */
+      undo?: UndoService;
     },
   ) {}
 
@@ -867,6 +875,35 @@ export class ConversationManager {
 
     let closeBridge: (() => Promise<void>) | undefined;
     const workspace = await this.deps.settings.workspace();
+    // What this turn changes is kept, so it can be undone (ADR 0030).
+    const tracker = this.deps.undo?.tracker({
+      conversationId,
+      workspace,
+      // Files by the name a person reads ("notes.md", "~/.zshrc"), not the full path.
+      label: (name, input) =>
+        didWhat(
+          name,
+          typeof input.file_path === 'string'
+            ? { ...input, file_path: shownPath(resolve(workspace, input.file_path), workspace) }
+            : input,
+        ),
+      onChange: (set, toolUseId) =>
+        this.#append(live, {
+          type: 'files.changed',
+          changeSetId: set.id,
+          ...(toolUseId && { toolUseId }),
+          label: set.label,
+          files: changedFiles(set),
+        }),
+    });
+    void tracker?.begin().catch(() => undefined);
+    const keepBefore = async (
+      toolUseId: string | undefined,
+      toolName: string,
+      input: Record<string, unknown>,
+    ) => {
+      if (toolUseId) await tracker?.before(toolUseId, toolName, input).catch(() => undefined);
+    };
     const guardOn = settings.preferences.checkAfterReading;
     /**
      * Why this call must ask whatever was allowed before (ADR 0028): the chat
@@ -896,6 +933,7 @@ export class ConversationManager {
       request: { toolName: string; toolUseId?: string; input: Record<string, unknown> },
       signal: AbortSignal,
     ): Promise<PermissionDecision> => {
+      await keepBefore(request.toolUseId, request.toolName, request.input);
       // Your choices on the Integrations page come first: "Don't ask", or a tool you turned off.
       const policy = await integrations?.decide(request.toolName).catch(() => undefined);
       if (policy === 'off') return 'deny';
@@ -924,8 +962,10 @@ export class ConversationManager {
     /** Before every tool call, in every mode (Claude Code's PreToolUse hook). */
     const guard = async (request: {
       toolName: string;
+      toolUseId?: string;
       input: Record<string, unknown>;
     }): Promise<GuardDecision | undefined> => {
+      await keepBefore(request.toolUseId, request.toolName, request.input);
       if ((await integrations?.decide(request.toolName).catch(() => undefined)) === 'off')
         return {
           decision: 'deny',
@@ -1080,6 +1120,14 @@ export class ConversationManager {
               void integrations?.markUsed(event.name).catch(() => undefined);
             started.set(event.toolUseId, Date.now());
             calls.set(event.toolUseId, { name: event.name, input: event.input });
+            await keepBefore(
+              event.toolUseId,
+              event.name,
+              (event.input && typeof event.input === 'object' ? event.input : {}) as Record<
+                string,
+                unknown
+              >,
+            );
             this.#append(live, {
               type: 'tool.started',
               toolUseId: event.toolUseId,
@@ -1105,6 +1153,7 @@ export class ConversationManager {
               output: event.output,
               durationMs: Date.now() - at,
             });
+            await tracker?.after(event.toolUseId).catch(() => undefined);
             break;
           }
           case 'notice':
@@ -1128,6 +1177,8 @@ export class ConversationManager {
       outcome = 'error';
       completed = { error: (error as Error).message || 'Something went wrong.' };
     } finally {
+      // Whatever else the turn changed, kept before the turn closes.
+      await tracker?.end().catch(() => undefined);
       // The closing events are persisted before they're broadcast, so a client
       // that reloads the moment it sees `turn.completed` finds a complete log.
       const tail: ConversationEvent[] = [];
@@ -1265,6 +1316,17 @@ export class ConversationManager {
     if (dismissed) return;
     this.#append(live, { type: 'integration.suggestion.dismissed', catalogId });
     // A running turn saves the log when it ends; writing it now as well could race.
+    if (!live.abort) await this.#persist(live);
+  }
+
+  /** Files were put back from Activity or the chat (ADR 0030): the chat says so. */
+  async noteRestored(
+    id: string,
+    event: { changeSetId: string; direction: 'undo' | 'redo'; files: ChangedFile[] },
+  ) {
+    const live = await this.#get(id).catch(() => undefined);
+    if (!live) return;
+    this.#append(live, { type: 'files.restored', ...event });
     if (!live.abort) await this.#persist(live);
   }
 

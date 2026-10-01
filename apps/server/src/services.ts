@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { join, resolve } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 
 import type { EngineId, LoginState, ServerEvent, SkillSource, TurnProblem } from '@conch/protocol';
 
@@ -43,7 +43,9 @@ import { MockEngine } from './engines/mock/engine';
 import type { Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
 import { findExecutable } from './lib/proc';
-import { sandboxFor, sandboxSupport } from './conversations/sandbox';
+import { sandboxFor, sandboxSupport, secretPlaces } from './conversations/sandbox';
+import { UndoService } from './undo/service';
+import { UndoStore } from './undo/store';
 import { safetyCheck } from './conversations/safety-doctor';
 import { registerCoreChecks } from './doctor/checks';
 import { BOOT_ID, restart, restartable, stopSoon } from './lib/lifecycle';
@@ -150,6 +152,8 @@ export class Services {
   readonly voice: VoiceService;
   /** Everything the assistant did, in one place (ADR 0028). */
   readonly activity: Activity;
+  /** Putting back what the assistant changed (ADR 0030). */
+  readonly undo: UndoService;
   /** The pretend Telegram and Discord used with the mock engine. */
   readonly mockTelegram?: MockTelegram;
   readonly mockDiscord?: MockDiscord;
@@ -303,6 +307,26 @@ export class Services {
     // The browser fills sign-in fields from Passwords, with your OK (ADR 0025).
     this.browser.passwords = this.vault;
     const conversationStore = new ConversationStore(join(config.CONCH_HOME, 'conversations'), heal);
+    // Undo (ADR 0030): never keeps or writes where keys live, or Conch's own folder.
+    const secret = [...protectedPaths(config.CONCH_HOME), ...secretPlaces().map((p) => p.path)];
+    this.undo = new UndoService({
+      store: new UndoStore(config.CONCH_HOME),
+      // Conch's own files are never kept or put back, except the default work folder inside them.
+      forbidden: (path) => {
+        const full = resolve(path);
+        const under = (p: string) => full === p || full.startsWith(`${p}${sep}`);
+        return (
+          secret.some(under) || (under(config.CONCH_HOME) && !under(this.settings.workspaceDefault))
+        );
+      },
+      restored: (set, direction, files) =>
+        void this.conversations
+          .noteRestored(set.conversationId, { changeSetId: set.id, direction, files })
+          .catch(() => undefined),
+    });
+    this.doctor.register(this.undo.doctorCheck());
+    void this.undo.sweep().catch(() => undefined);
+    setInterval(() => void this.undo.sweep().catch(() => undefined), 6 * 60 * 60_000).unref();
     this.conversations = new ConversationManager({
       store: conversationStore,
       settings: this.settings,
@@ -335,6 +359,7 @@ export class Services {
       redact: this.vault.redactor(),
       protectedPaths: protectedPaths(config.CONCH_HOME),
       // The sealed box, only where this computer can do it (ADR 0028).
+      undo: this.undo,
       sandbox: (workspace) =>
         sandboxSupport().available
           ? sandboxFor(workspace, {
@@ -375,6 +400,7 @@ export class Services {
     this.activity = new Activity({
       list: () => conversationStore.list(),
       events: (id) => conversationStore.events(id),
+      undoState: (id) => this.undo.state(id),
     });
     this.search = new SearchService({
       path: join(config.CONCH_HOME, 'search.db'),

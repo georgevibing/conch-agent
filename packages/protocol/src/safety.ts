@@ -50,6 +50,14 @@ export const ActivityEntry = z.object({
   conversation: z.object({ id: z.string(), title: z.string(), routine: z.boolean().optional() }),
   /** Where in the chat: the `data-anchor` to open at. */
   anchor: z.string().optional(),
+  /** Files it changed can be put back (ADR 0030): which change set, and where it stands. */
+  undo: z
+    .object({ changeSetId: z.string(), state: z.enum(['applied', 'undone', 'expired']) })
+    .optional(),
+  /** A memory it saved or forgot, so Activity can take it back. */
+  memory: z
+    .object({ id: z.string(), content: z.string(), action: z.enum(['saved', 'forgotten']) })
+    .optional(),
 });
 export type ActivityEntry = z.infer<typeof ActivityEntry>;
 
