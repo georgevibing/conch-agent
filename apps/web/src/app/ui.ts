@@ -10,6 +10,8 @@ export type SettingsTab =
   | 'usage'
   | 'health'
   | 'security'
+  | 'notifications'
+  | 'voice'
   | 'providers'
   | 'browser'
   | 'terminal'
@@ -46,6 +48,12 @@ interface UiState {
   /** Something to open inside the settings tab (a provider's page), once. */
   settingsFocus?: string;
   paletteOpen: boolean;
+  /**
+   * Talk mode is open (ADR 0027). `from`: where the answer to what was just
+   * said starts in the chat, so a new chat (which opens on its own page)
+   * still speaks it.
+   */
+  talking?: { from?: number };
   find: FindState | null;
   /** What find last searched for, so ⌘F reopens where you left off. */
   lastFind?: { conversationId: string; query: string };

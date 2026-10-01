@@ -65,6 +65,7 @@ import styles from './Security.module.css';
 import { applySignedIn } from './signedIn';
 import { useCountdown } from './useCountdown';
 import { useVerify } from './useVerify';
+import { PhoneSetup } from '../phone/PhoneSetup';
 
 type Guard = ReturnType<typeof useVerify>['guard'];
 
@@ -505,11 +506,22 @@ const via: Record<SessionInfo['via'], string> = {
   setup: 'Set up sign-in',
 };
 
+/** ⌘K, Notifications and Repair everything open Add a device by this name. */
+export const ADD_DEVICE_FOCUS = 'add-device';
+
 function AddDevice({ access, guard }: { access: AccessSettings; guard: Guard }) {
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState<{ code: string; expiresAt: number }>();
   const choices = isLocalPage() ? access.urls : [window.location.origin, ...access.urls];
-  const [base, setBase] = useState<string | undefined>(choices[0]);
+  const secure = choices.some((url) => url.startsWith('https:'));
+  // Not encrypted (the same Wi-Fi): only when you choose it over setting up a secure address.
+  const [plain, setPlain] = useState(false);
+  const [picked, setBase] = useState<string>();
+  // A secure address that just came on is the one offered, until you pick another.
+  const base =
+    picked && choices.includes(picked)
+      ? picked
+      : (choices.find((u) => u.startsWith('https:')) ?? choices[0]);
   const left = useCountdown(code?.expiresAt);
   const link = code && base ? `${base}/#pair=${code.code}` : undefined;
 
@@ -522,6 +534,16 @@ function AddDevice({ access, guard }: { access: AccessSettings; guard: Guard }) 
       fail(error);
     }
   };
+
+  // "Add your phone" from Notifications and ⌘K, and Repair everything's "Set it up", open it here.
+  const focus = useUi((s) => s.settingsFocus);
+  const opened = useRef(false);
+  useEffect(() => {
+    if (focus !== ADD_DEVICE_FOCUS || opened.current) return;
+    opened.current = true;
+    useUi.setState({ settingsFocus: undefined });
+    void start().finally(() => (opened.current = false));
+  });
 
   return (
     <>
@@ -543,10 +565,19 @@ function AddDevice({ access, guard }: { access: AccessSettings; guard: Guard }) 
             </Dialog.Description>
           </Dialog.Header>
           <Dialog.Body>
-            {!choices.length ? (
-              <Callout tone="info" title="Your phone can’t reach this computer yet">
-                Set up Tailscale first (see “Use Conch on your phone” below), then come back.
-              </Callout>
+            {!secure && !plain ? (
+              <Stack gap={4}>
+                <Text tone="muted">
+                  First, an encrypted way for your phone to reach this computer. It takes a minute,
+                  once.
+                </Text>
+                <PhoneSetup />
+                {choices.length > 0 && (
+                  <Button variant="ghost" size="sm" onClick={() => setPlain(true)}>
+                    Use this Wi-Fi’s address instead (not encrypted)
+                  </Button>
+                )}
+              </Stack>
             ) : link && left > 0 ? (
               <Stack gap={4} align="center">
                 <QRCode value={link} label="Sign-in code for your phone" size={216} />
@@ -901,13 +932,14 @@ function ReachSection({ access, focus }: { access: AccessSettings; focus?: Focus
                 </a>
               </li>
               <li>
-                On this computer, run:
-                <Command>{`tailscale serve --bg ${access.port}`}</Command>
-              </li>
-              <li>
-                Restart Conch, then use <strong>Add a device</strong> above to sign your phone in.
+                Press <strong>Add a device</strong> above. Conch turns on its secure address for
+                you, then shows the code for your phone.
               </li>
             </ol>
+            <Text size="sm" tone="muted">
+              Prefer the terminal? <code>{`tailscale serve --bg ${access.port}`}</code> does the
+              same.
+            </Text>
             <Text size="sm" tone="muted">
               Only your own devices can reach it, over an encrypted connection. Nothing is opened to
               the internet.
@@ -1007,6 +1039,23 @@ export function SecurityTab() {
     useUi.setState({ settingsFocus: undefined });
     focusOn('devices');
   }, [settingsFocus, loaded, focusOn]);
+
+  // "Add your phone" with no sign-in yet: a phone signs in with a password, so
+  // that comes first, and the code for the phone follows by itself once it's set.
+  const method = access.data?.method;
+  const addAfterSignIn = useRef(false);
+  useEffect(() => {
+    if (settingsFocus !== ADD_DEVICE_FOCUS || method !== 'none') return;
+    useUi.setState({ settingsFocus: undefined });
+    addAfterSignIn.current = true;
+    focusOn('sign-in');
+    toast('Your phone signs in with a password. Choose one here, and its code comes next.');
+  }, [settingsFocus, method, focusOn]);
+  useEffect(() => {
+    if (!addAfterSignIn.current || !method || method === 'none') return;
+    addAfterSignIn.current = false;
+    useUi.setState({ settingsFocus: ADD_DEVICE_FOCUS });
+  }, [method]);
 
   if (access.isPending)
     return (

@@ -5,6 +5,8 @@ import { useLocation, useNavigate, useParams } from 'react-router';
 
 import { useConversations } from '../api/queries';
 import { RestartWatch } from '../features/health/RestartWatch';
+import { PushKeeper } from '../features/notifications/PushKeeper';
+import { OpenFromLink } from '../features/pwa/OpenFromLink';
 import { RestoredNotice } from '../features/health/RestoredNotice';
 import { ChannelDetailView } from '../features/channels/ChannelDetailView';
 import { ChannelsView } from '../features/channels/ChannelsView';
@@ -205,6 +207,8 @@ export function Shell() {
       <Palette />
       <RestartWatch />
       <RestoredNotice />
+      <PushKeeper />
+      <OpenFromLink />
     </div>
   );
 }

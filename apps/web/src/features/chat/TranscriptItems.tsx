@@ -30,6 +30,7 @@ import { StreamingMarkdown } from './Markdown';
 import { formatInput, toolDiff, toolSummary } from './tools';
 import styles from './Transcript.module.css';
 import { useToolLabel } from '../integrations/ChatBits';
+import { ReadAloud } from '../voice/ReadAloud';
 
 type Of<K extends TranscriptItem['kind']> = Extract<TranscriptItem, { kind: K }>;
 
@@ -174,7 +175,12 @@ export function AssistantMessage({
       status={streaming ? 'streaming' : 'complete'}
       entrance={entrance}
       actions={
-        item.done && item.text ? <CopyButton value={item.text} label="Copy reply" /> : undefined
+        item.done && item.text ? (
+          <>
+            <ReadAloud text={item.text} />
+            <CopyButton value={item.text} label="Copy reply" />
+          </>
+        ) : undefined
       }
     >
       <Stack gap={2}>

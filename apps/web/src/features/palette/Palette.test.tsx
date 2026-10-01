@@ -413,6 +413,34 @@ describe('Palette search', () => {
     act(() => useUi.setState({ settings: null, settingsFocus: undefined, paletteOpen: false }));
   });
 
+  it('finds notifications and adding a phone by the words people use', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    for (const words of ['notifications', 'push', 'lock screen']) {
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /Settings: Notifications/ }),
+      ).toBeInTheDocument();
+    }
+    for (const words of ['iphone', 'add phone', 'tailscale']) {
+      await user.clear(screen.getByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(await screen.findByRole('option', { name: /Add your phone/ })).toBeInTheDocument();
+    }
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect(useUi.getState()).toMatchObject({ settings: 'security', settingsFocus: 'add-device' }),
+    );
+    act(() => useUi.setState({ settings: null, settingsFocus: undefined, paletteOpen: false }));
+  });
+
   it('opens the terminal by the words people use for it, and hides it while it’s off', async () => {
     const user = userEvent.setup();
     const terminal = (enabled: boolean): TerminalStatus => ({

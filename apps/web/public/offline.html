@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#fbf9f7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#13100e" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>Conch can’t be reached</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        display: grid;
+        place-items: center;
+        padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom);
+        font:
+          16px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          system-ui,
+          sans-serif;
+        background: light-dark(#fbf9f7, #13100e);
+        color: light-dark(#2b2522, #efe8e3);
+        -webkit-font-smoothing: antialiased;
+      }
+      main {
+        display: grid;
+        justify-items: center;
+        gap: 12px;
+        max-width: 26rem;
+        text-align: center;
+      }
+      .pearl {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 38% 32%, #fffaf5, #f6d9cc 45%, #d9d3ee 75%, #c7b7c9);
+        box-shadow: 0 12px 32px -14px rgba(120, 90, 110, 0.55);
+        filter: saturate(0.7);
+        margin-bottom: 8px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      p {
+        margin: 0;
+        color: light-dark(#6d625c, #b6aba4);
+        text-wrap: pretty;
+      }
+      ul {
+        margin: 8px 0 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 6px;
+        text-align: start;
+      }
+      li {
+        display: flex;
+        gap: 10px;
+        color: light-dark(#4a413c, #d2c8c1);
+        font-size: 15px;
+      }
+      li::before {
+        content: '·';
+        color: light-dark(#b39c92, #8a7a72);
+        font-weight: 700;
+      }
+      button {
+        margin-top: 12px;
+        padding: 10px 18px;
+        border: 0;
+        border-radius: 999px;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+        background: light-dark(#2b2522, #efe8e3);
+        color: light-dark(#fbf9f7, #13100e);
+      }
+      .quiet {
+        font-size: 13px;
+        margin-top: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <main role="status" aria-live="polite">
+      <div class="pearl" aria-hidden="true"></div>
+      <h1>Conch can’t be reached right now</h1>
+      <p>It comes back by itself as soon as it can. Usually it’s one of these:</p>
+      <ul>
+        <li>The computer Conch runs on is asleep, off or offline.</li>
+        <li>This device isn’t connected to Tailscale, or to the same network.</li>
+        <li>Conch was quit. Open it again on that computer.</li>
+      </ul>
+      <button type="button" id="retry">Try now</button>
+      <p class="quiet" id="note">Looking again every few seconds…</p>
+    </main>
+    <script src="/offline.js"></script>
+  </body>
+</html>

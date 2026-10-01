@@ -3,6 +3,7 @@ import { IntegrationLogo, ProviderLogo, SkillIcon, toast, VaultKindGlyph } from 
 import {
   Archive,
   BatteryMedium,
+  Bell,
   Blocks,
   Brain,
   CircleArrowUp,
@@ -19,7 +20,9 @@ import {
   Paperclip,
   SquareTerminal,
   Plus,
+  Mic,
   Power,
+  QrCode,
   RefreshCw,
   Repeat,
   ShieldCheck,
@@ -50,6 +53,7 @@ import { fuzzyFilter, type FuzzyMatch } from '../search/fuzzy';
 import { useSkills } from '../skills/queries';
 import { useTerminalStatus } from '../terminal/queries';
 import { useUpdates } from '../updates/queries';
+import { ADD_DEVICE_FOCUS } from '../auth/SecurityTab';
 import { BACKGROUND_FOCUS } from '../background/AlwaysOnSection';
 
 /** Something ⌘K can find and act on that isn't a chat or a message. */
@@ -103,6 +107,27 @@ const settingsPlaces: {
     keywords:
       'repair everything fix doctor checkup broken updates update upgrade backup back up restore fixed healed',
     icon: <HeartPulse />,
+  },
+  {
+    tab: 'notifications',
+    label: 'Notifications',
+    keywords: 'notifications notify push alerts phone bell badge tell me lock screen',
+    icon: <Bell />,
+  },
+  {
+    tab: 'voice',
+    label: 'Voice',
+    keywords:
+      'voice dictation dictate speak talk microphone mic speech whisper read aloud language accent tts stt',
+    icon: <Mic />,
+  },
+  {
+    tab: 'security',
+    focus: ADD_DEVICE_FOCUS,
+    label: 'Add your phone',
+    keywords:
+      'add phone device iphone android tablet qr code pair tailscale secure address mobile home screen',
+    icon: <QrCode />,
   },
   {
     tab: 'health',

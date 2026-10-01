@@ -1,0 +1,29 @@
+{
+  "name": "Conch",
+  "short_name": "Conch",
+  "description": "Your assistant, on your own computer.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fbf9f7",
+  "theme_color": "#fbf9f7",
+  "icons": [
+    {
+      "src": "/icons/conch-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/conch-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/conch-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

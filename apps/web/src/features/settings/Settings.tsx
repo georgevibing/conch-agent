@@ -25,10 +25,12 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import {
   BatteryMedium,
+  Bell,
   Brain,
   Check,
   Cpu,
   Gauge,
+  Mic,
   Globe,
   HeartPulse,
   Monitor,
@@ -54,6 +56,8 @@ import { SecurityTab } from '../auth/SecurityTab';
 import { updatesWaiting, useUpdates } from '../updates/queries';
 import { BrowserSettings } from '../browser/BrowserSettings';
 import { HealthTab } from '../health/HealthTab';
+import { NotificationsTab } from '../notifications/NotificationsTab';
+import { VoiceTab } from '../voice/VoiceTab';
 import { TerminalSettings } from '../terminal/TerminalSettings';
 import { toneOptions } from '../onboarding/tones';
 import { ProvidersTab } from '../providers/ProvidersTab';
@@ -427,6 +431,8 @@ const tabs: { value: SettingsTab; label: string; icon: ReactNode }[] = [
   { value: 'usage', label: 'Usage', icon: <BatteryMedium /> },
   { value: 'health', label: 'Health', icon: <HeartPulse /> },
   { value: 'security', label: 'Security', icon: <ShieldCheck /> },
+  { value: 'notifications', label: 'Notifications', icon: <Bell /> },
+  { value: 'voice', label: 'Voice', icon: <Mic /> },
   { value: 'providers', label: 'Providers', icon: <Cpu /> },
   { value: 'browser', label: 'Browser', icon: <Globe /> },
   { value: 'terminal', label: 'Terminal', icon: <SquareTerminal /> },
@@ -494,6 +500,12 @@ export function Settings() {
               </Tabs.Content>
               <Tabs.Content value="security">
                 <SecurityTab />
+              </Tabs.Content>
+              <Tabs.Content value="notifications">
+                <NotificationsTab />
+              </Tabs.Content>
+              <Tabs.Content value="voice">
+                <VoiceTab />
               </Tabs.Content>
               <Tabs.Content value="providers">
                 <ProvidersTab workspace={app.workspace} workspacePref={app.preferences.workspace} />

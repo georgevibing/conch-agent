@@ -53,6 +53,11 @@ function upsertSummary(list: ConversationSummary[] | undefined, next: Conversati
   return [next, ...rest].sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
+/** In front of someone: the tab is showing and the window has focus. */
+const visibleNow = () =>
+  document.visibilityState === 'visible' &&
+  (typeof document.hasFocus !== 'function' || document.hasFocus());
+
 /** Owns the single WebSocket and routes server events into the store and query cache. */
 export function LiveProvider({ children, url }: { children: ReactNode; url?: string }) {
   const client = useQueryClient();
@@ -70,6 +75,8 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
     const socket = new LiveSocket(url ?? socketUrl(), {
       onState: (state) => store.setConnection(state),
       onOpen: () => {
+        // Whether this page is in front of someone: notifications wait while one is (ADR 0027).
+        socket.send({ type: 'presence', visible: visibleNow() });
         // Resume every watched conversation from the last event we saw.
         for (const id of watching.current.keys()) {
           const lastSeq = useLiveStore.getState().views[id]?.lastSeq;
@@ -83,6 +90,10 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
       },
     });
     socketRef.current = socket;
+    const sayPresence = () => socket.send({ type: 'presence', visible: visibleNow() });
+    document.addEventListener('visibilitychange', sayPresence);
+    window.addEventListener('focus', sayPresence);
+    window.addEventListener('blur', sayPresence);
 
     const off = socket.on((event) => {
       const live = useLiveStore.getState();
@@ -231,6 +242,9 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
 
     socket.connect();
     return () => {
+      document.removeEventListener('visibilitychange', sayPresence);
+      window.removeEventListener('focus', sayPresence);
+      window.removeEventListener('blur', sayPresence);
       off();
       socket.close();
     };

@@ -14,6 +14,7 @@ import {
   ComposerChip,
   DropOverlay,
   Heading,
+  IconButton,
   Pearl,
   Stack,
   Text,
@@ -21,7 +22,7 @@ import {
   toast,
   useFileDrop,
 } from '@conch/nacre';
-import { ArrowRight, Folder } from 'lucide-react';
+import { ArrowRight, AudioLines, Folder } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router';
@@ -56,6 +57,9 @@ import type { TurnRecovery } from './TranscriptItems';
 import { type Draft, useDraftAttachments } from './useDraftAttachments';
 import { useIntegrations } from '../integrations/queries';
 import { BrowserDock } from '../browser/BrowserDock';
+import { Dictate } from '../voice/Dictate';
+import { canSpeak } from '../voice/speak';
+import { Talk } from '../voice/Talk';
 
 const suggestions = [
   { label: 'Plan my week', prompt: 'Help me plan my week. Ask me a couple of questions first.' },
@@ -304,6 +308,8 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   );
 
   const name = app?.persona.name ?? 'Conch';
+  // Talking needs the microphone and a voice to answer with.
+  const canTalk = typeof window !== 'undefined' && window.isSecureContext && canSpeak();
   const engine = app?.engine;
   const running = view.status === 'running' || view.status === 'awaiting-permission';
   const isEmpty = view.items.length === 0 && pending.length === 0;
@@ -490,6 +496,20 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
             : `Message ${name}, or type / for commands`
         }
         label={`Message ${name}`}
+        actions={
+          <>
+            <Dictate draft={draft} setDraft={setDraft} />
+            {canTalk && (
+              <IconButton
+                label={`Talk with ${name}`}
+                shape="circle"
+                onClick={() => useUi.setState({ talking: {} })}
+              >
+                <AudioLines />
+              </IconButton>
+            )}
+          </>
+        }
         toolbar={
           <>
             {(engine?.state === 'ready' || chosenReady) && (
@@ -507,6 +527,9 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
           </>
         }
       />
+      {canTalk && (
+        <Talk conversationId={conversationId} send={(text) => send(text, [])} name={name} />
+      )}
       <Text size="2xs" tone="subtle" align="center" className={styles.hint}>
         {name} can make mistakes, and {modeInfo(turn.options.permissionMode).hint}.
       </Text>
