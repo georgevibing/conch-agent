@@ -39,9 +39,15 @@ internet.
 
 1. Install [Tailscale](https://tailscale.com/download) on your computer and phone,
    and sign in to both.
-2. On your computer: `tailscale serve --bg 4317`
-3. Restart Conch. In **Settings → Security**, press **Add a device** and point your
-   phone's camera at the QR code. That's it — your phone is signed in.
+2. In **Settings → Security**, press **Add a device**. Conch turns on its secure
+   address for you (one press: **Turn on**), then shows a QR code. Point your
+   phone's camera at it. That's it — your phone is signed in.
+
+   (The terminal way still works: `tailscale serve --bg 4317`.)
+
+3. On your phone, add Conch to the Home Screen (Safari: Share → Add to Home
+   Screen). It opens like an app, and can tell you when it needs you
+   (Settings → Notifications).
 
 The QR code works **once**, for **10 minutes**. Whoever opens it is signed in, so
 don't share it. You can also run `pnpm conch pair` to show one in the terminal.

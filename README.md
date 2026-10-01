@@ -50,8 +50,10 @@ pnpm install
 pnpm start          # builds the app and opens http://localhost:4317
 ```
 
-**On your phone, safely:** choose a password in **Settings → Security**, then scan
-the **Add a device** QR code. [docs/SECURITY.md](./docs/SECURITY.md) explains it in
+**On your phone, safely:** choose a password in **Settings → Security**, press **Add a
+device**, and Conch sets up an encrypted address for your phone over Tailscale with
+one press, then shows a QR code to scan. Add Conch to your Home Screen and it's an app,
+with notifications. [docs/SECURITY.md](./docs/SECURITY.md) explains it in
 two minutes (Tailscale recommended; `pnpm conch reset` if you forget). For a second
 lock, turn on **Approve new devices**: a new device then waits, even with the right
 password, until you run `pnpm conch devices approve` on your computer. Or skip the
@@ -102,6 +104,13 @@ pastes fold into a card, and each provider gets them in the way it can use.
 steps — no public address or tunnel — and approve what the assistant asks right
 there. Nobody gets in unless you let them. ([ADR 0018](./docs/adr/0018-channels.md))
 
+**In your pocket.** On your phone Conch is an app, with no app store needed.
+Notifications tell you when it needs your OK, with Deny right there; when an answer
+is ready while you're away; and when a routine has run. They never come while you're
+looking at Conch. Dictate into any message, have answers read aloud, or talk hands
+free. Your voice can stay on your own devices: on the phone itself, or on the
+computer Conch runs on. ([ADR 0027](./docs/adr/0027-in-your-pocket.md))
+
 **Always on, and an app of its own.** Conch starts when you log in and keeps
 running with no window, so routines run on time and your phone and chat apps can
 always reach it. Turning it on from a Terminal window moves Conch to the background
@@ -151,4 +160,4 @@ documents it. For an authenticated HTTPS reverse proxy, see
 - [docs/BROWSER.md](./docs/BROWSER.md) — the browser: watching, taking over, what it asks
 - [docs/TERMINAL.md](./docs/TERMINAL.md) — the terminal: shortcuts, the assistant, other devices
 - [docs/design/NACRE.md](./docs/design/NACRE.md) — the design language
-- [docs/adr](./docs/adr) — decision records (0001–0026)
+- [docs/adr](./docs/adr) — decision records (0001–0027)

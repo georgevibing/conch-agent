@@ -106,6 +106,9 @@ src/
   lib/lifecycle.ts            this run's `BOOT_ID`; `restart()` (exit 75, the supervisor starts it again)
   start.ts, supervisor.ts     `pnpm start` runs Conch as a child it restarts (on request, or after a crash)
   background/                 Always on: login items (launchd, systemd, the Run key), the launcher, the handover, Conch as an app (ADR 0026)
+  network/tailscale.ts        your phone's secure address: `tailscale serve`, looked at and turned on (ADR 0027)
+  push/                       notifications: RFC 8291/8292 Web Push on node:crypto, subscriptions, presence (ADR 0027)
+  voice/                      private dictation: whisper.cpp and its speech model (ADR 0027)
   doctor/                     Repair everything: every part's `DoctorCheck`, run at once (`doctor.report`)
   network/watch.ts            online or not (`network.status`); offline routing (ADR 0023)
   lib/path.ts                 the PATH as it is now (Windows registry), refreshed before lookups
@@ -211,6 +214,17 @@ src/
   first when it isn't answering. The `background` doctor check heals the launcher
   and the app when Node or the folder moved. `scripts/install.sh` and `install.ps1`
   are the one-line installers.
+- **In your pocket** ([ADR 0027](./docs/adr/0027-in-your-pocket.md)). `Tailscale` looks at
+  `tailscale status`/`serve status` and runs `tailscale serve --bg <port>` on one press
+  (waiting on Tailscale's own OK page when it asks); `HostPolicy.urls()` only offers the
+  https name once serve reaches Conch. `PushService` turns the live stream into Web
+  Push notifications (approvals with a Deny action, replies, routines, devices), never
+  while a page reports `presence` visible; subscriptions belong to a device and end
+  with it; endpoints are limited to the browsers' push services (SSRF). `VoiceService`
+  reads 16 kHz WAVs with whisper.cpp and fetches its model (resumable, SHA-256). The
+  web app is installable (manifest, `sw.js` with an offline screen), dictates
+  (on-device, private, or the browser's service with consent), reads aloud, and talks
+  hands free (`Talk`).
 - **Healing** (`lib/healed.ts`): every self-repair leaves one plain note —
   integrations that came back, a renewed sign-in, Claude Code's fallback, a held
   routine that ran once its provider was back. Integrations retry failures that
