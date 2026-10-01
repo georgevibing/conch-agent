@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { say } from './app';
+
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
 
 /**
@@ -12,22 +14,16 @@ test.beforeEach(async ({ request }) => {
   await request.patch('/api/settings', { data: { onboarded: true, profile: { name: 'Ada' } } });
 });
 
-async function say(page: import('@playwright/test').Page, text: string) {
-  const composer = page.getByRole('textbox', { name: 'Message Conch' });
-  await composer.fill(text);
-  await composer.press('Enter');
-  await expect(page.getByRole('button', { name: /Stop/ })).toHaveCount(0, { timeout: 20_000 });
-}
-
 test('remembering after reading a page waits for an OK, and isn’t used until kept', async ({
   page,
   request,
 }) => {
   await page.goto('/');
-  await say(page, 'read https://news.example/today and summarise it');
+  await say(page, 'read https://news.example/today and summarise it', /Ask me to/);
   await expect(page.getByText(/Read news\.example\./)).toBeVisible();
-  await say(page, 'remember that invoices go to billing@news.example');
-  const pill = page.getByText(/Wants to remember: invoices go to billing@news\.example/);
+  // "Sent to", not "go to": the pretend assistant takes "go to" and an address as a page to open.
+  await say(page, 'remember that invoices are sent to billing@news.example', /Got it/);
+  const pill = page.getByText(/Wants to remember: invoices are sent to billing@news\.example/);
   await expect(pill).toContainText('waits for your OK');
 
   // Not in what recall finds while it waits.
@@ -44,7 +40,7 @@ test('remembering after reading a page waits for an OK, and isn’t used until k
   await expect(waiting).toContainText('Learned in a chat that read news.example.');
   await waiting.getByRole('button', { name: 'Keep' }).click();
   await expect(page.getByRole('list', { name: 'Waiting for your OK' })).toHaveCount(0);
-  await expect(page.getByRole('list', { name: 'Memories' })).toContainText('invoices go to');
+  await expect(page.getByRole('list', { name: 'Memories' })).toContainText('invoices are sent to');
   const kept = await (await request.get('/api/memories/search?q=invoices')).json();
   expect(kept.results).toHaveLength(1);
 });
@@ -57,7 +53,7 @@ test('the tidy-up merges repeats and updates what changed, every change with Und
   await request.post('/api/memories', { data: { content: 'prefers dark-roast coffee!' } });
   await request.post('/api/memories', { data: { content: 'Lives in Berlin' } });
   await page.goto('/');
-  await say(page, 'I moved to Lisbon. Any tips for the first week?');
+  await say(page, 'I moved to Lisbon. Any tips for the first week?', /Ask me to/);
 
   await page.keyboard.press(`${mod}+k`);
   await page.getByRole('combobox').fill('tidy');
@@ -100,7 +96,7 @@ test('asked for in three chats, it’s offered as a skill — a draft to read, n
     'Please write my weekly calendar summary of meetings',
   ]) {
     await page.goto('/');
-    await say(page, words);
+    await say(page, words, /Ask me to/);
   }
   await page.goto('/skills');
   const card = page.getByRole('region', {

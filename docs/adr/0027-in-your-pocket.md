@@ -143,6 +143,13 @@ deny), and it uses the device's own sign-in cookie.
 - **Delivery failures.** 404/410 forget the subscription. A busy push service
   (429/5xx, `Retry-After`) is tried twice more. What's left is one sentence on
   the device in Settings → Notifications and in Repair everything.
+- **A browser whose push service is off.** Brave ships with its link to
+  Google's push service switched off, so `pushManager.subscribe()` fails
+  (`AbortError`) even after the person said yes. Only they can change that, and
+  a page can't open `brave://` settings, so the card names the switch (“Use
+  Google services for push messaging”) and keeps saying it while they look,
+  never the browser's own error. Verified in Brave 1.96 with a fresh profile:
+  off fails, on subscribes through FCM.
 
 **iPhone.** Web Push on iOS needs the app on the Home Screen. Notifications
 says exactly that, with Safari's three taps drawn as Safari shows them

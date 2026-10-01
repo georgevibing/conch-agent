@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { say } from './app';
+
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
 
 /**
@@ -16,16 +18,16 @@ test('sent to the background, it works while you chat, and its result comes back
 }) => {
   await page.goto('/');
   const composer = page.getByRole('textbox', { name: 'Message Conch' });
-  await composer.fill('hello');
-  await composer.press('Enter');
+  await say(page, 'hello', /Ask me to/);
   await expect(page).toHaveURL(/\/c\//);
-  await expect(page.getByRole('button', { name: /Stop/ })).toHaveCount(0);
 
   await composer.fill('Run the checks slowly');
   await page.getByRole('button', { name: 'Do it in the background' }).click();
   await expect(composer).toHaveValue('');
   const card = page.getByRole('article', { name: 'Run the checks slowly' });
+  // The sidebar says something's working, while it is: the task is a short one.
   await expect(card).toContainText('Working');
+  await expect(page.getByLabel('1 working')).toBeVisible();
   await expect(card).toContainText(/Running|Ran/);
 
   // The chat is still yours meanwhile.
@@ -33,8 +35,6 @@ test('sent to the background, it works while you chat, and its result comes back
   await composer.press('Enter');
   await expect(page.getByText('what’s the weather like?', { exact: true })).toBeVisible();
 
-  // The sidebar says something's working; Tasks shows it.
-  await expect(page.getByLabel('1 working')).toBeVisible();
   await expect(card).toContainText('Done', { timeout: 15_000 });
   await expect(card).toContainText('Finished: Run the checks slowly');
 
@@ -103,8 +103,7 @@ test('helpers work side by side, each with its own card, and their results come 
 test('a task that needs your OK says so, and waits only for you', async ({ page }) => {
   await page.goto('/');
   const composer = page.getByRole('textbox', { name: 'Message Conch' });
-  await composer.fill('hi');
-  await composer.press('Enter');
+  await say(page, 'hi', /Ask me to/);
   await expect(page).toHaveURL(/\/c\//);
   await composer.fill('Ship it, but ask first');
   await page.keyboard.press(`${mod}+k`);

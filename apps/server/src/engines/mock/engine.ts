@@ -511,11 +511,13 @@ export class MockEngine implements Engine {
       }
       const reportResult = input.tools.find((t) => t.name === 'report_result');
       if (reportResult) {
+        // Three real seconds whatever the speed, so a test that looks while it's
+        // working isn't racing the end of it on a slow machine.
         if (/\bslowly\b/i.test(input.prompt))
           for (const command of ['npm install', 'npm test']) {
             const toolUseId = newId('tool');
             yield { type: 'tool-start', toolUseId, name: 'Bash', input: { command } };
-            await wait(1500);
+            await sleep(1500, input.signal);
             yield { type: 'tool-end', toolUseId, status: 'success', output: 'ok' };
           }
         // Long enough to stop it, or to restart Conch under it.

@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { openConch } from './app';
+
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
 
 /**
@@ -12,7 +14,7 @@ test.beforeEach(async ({ request }) => {
 });
 
 test('the menu bar, keeping running after logout, and keeping awake', async ({ page, request }) => {
-  await page.goto('/');
+  await openConch(page);
   // ⌘K finds it by the words people use.
   await page.keyboard.press(`${mod}+k`);
   await page.getByRole('combobox').fill('system tray');

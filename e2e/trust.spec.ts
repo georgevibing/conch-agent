@@ -6,6 +6,8 @@ import { promisify } from 'node:util';
 
 import { expect, test } from '@playwright/test';
 
+import { openConch } from './app';
+
 /**
  * Skill trust, end to end (ADR 0031): Ada signs a skill with `pnpm conch
  * skills sign` on her computer and shares it; here it says what it can do and
@@ -100,7 +102,7 @@ test('a signed skill: what it can do, trusting who made it, held to it, and chan
 });
 
 test('Safety says what sealing means for each provider, honestly', async ({ page }) => {
-  await page.goto('/');
+  await openConch(page);
   await page.keyboard.press(`${mod}+k`);
   await page.getByRole('combobox').fill('security');
   await page.getByRole('option', { name: /Settings: Security/ }).click();

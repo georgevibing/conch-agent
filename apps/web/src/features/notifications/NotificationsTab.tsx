@@ -19,7 +19,15 @@ import { useUi } from '../../app/ui';
 import { relativeTime } from '../../lib/time';
 import { Section } from '../settings/Section';
 import { pushApi, pushKeys } from './api';
-import { current, matches, permission, pushSupport, subscribe, unsubscribe } from './browser';
+import {
+  current,
+  matches,
+  permission,
+  pushSupport,
+  PushServiceError,
+  subscribe,
+  unsubscribe,
+} from './browser';
 
 export function usePush() {
   return useQuery({ queryKey: pushKeys.status, queryFn: pushApi.status, staleTime: 15_000 });
@@ -73,6 +81,8 @@ export function NotificationsTab() {
   const [subscribed, setSubscribed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState(false);
+  // What to change in the browser first; it stays on the card while they do it.
+  const [problem, setProblem] = useState<string>();
   const openSettings = useUi((s) => s.openSettings);
 
   useEffect(() => {
@@ -87,6 +97,7 @@ export function NotificationsTab() {
   const change = async (on: boolean) => {
     if (!status) return;
     setBusy(true);
+    setProblem(undefined);
     try {
       if (on) {
         put(await pushApi.subscribe(await subscribe(status.publicKey)));
@@ -98,6 +109,7 @@ export function NotificationsTab() {
         setSubscribed(false);
       }
     } catch (failure) {
+      if (failure instanceof PushServiceError) setProblem(failure.message);
       toast.error(
         failure instanceof ApiError || failure instanceof Error
           ? failure.message
@@ -151,7 +163,9 @@ export function NotificationsTab() {
           detail={
             pushSupport() === 'insecure'
               ? 'Notifications need Conch’s secure (https) address. Use Add a device to open Conch on its secure address.'
-              : undefined
+              : state === 'off'
+                ? problem
+                : undefined
           }
         >
           {state === 'install' ? (

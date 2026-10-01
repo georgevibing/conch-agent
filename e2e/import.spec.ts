@@ -6,6 +6,8 @@ import { promisify } from 'node:util';
 
 import { expect, test } from '@playwright/test';
 
+import { openConch } from './app';
+
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
 const run = promisify(execFile);
 const root = join(import.meta.dirname, '..');
@@ -40,7 +42,7 @@ test('previews, brings things over after a backup, says what’s next, and undoe
   request,
 }) => {
   await request.patch('/api/settings', { data: { onboarded: true, profile: { name: 'Ada' } } });
-  await page.goto('/');
+  await openConch(page);
   await page.keyboard.press(`${mod}+k`);
   await page.getByRole('combobox').fill('openclaw');
   await page.getByRole('option', { name: /Bring your things from OpenClaw or Hermes/ }).click();

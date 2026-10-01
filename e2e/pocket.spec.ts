@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { openConch } from './app';
+
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
 
 /**
@@ -57,7 +59,7 @@ test('when Conch can’t be reached, the app says so calmly and comes back by it
 });
 
 test('notifications and voice have their own place in Settings', async ({ page }) => {
-  await page.goto('/');
+  await openConch(page);
   await page.keyboard.press(`${mod}+k`);
   await page.getByRole('combobox').fill('notifications');
   await page.getByRole('option', { name: /Settings: Notifications/ }).click();
@@ -88,7 +90,7 @@ test('notifications and voice have their own place in Settings', async ({ page }
 
 // Last: it turns sign-in on, which the others don't expect.
 test('a secure address for your phone, in one press, then its sign-in code', async ({ page }) => {
-  await page.goto('/');
+  await openConch(page);
   // No sign-in yet: a phone signs in with a password, so that comes first.
   await page.keyboard.press(`${mod}+k`);
   await page.getByRole('combobox').fill('add phone');

@@ -10,8 +10,8 @@
  *
  * It asks the gateway how things are over loopback with its own token
  * (`tray/token`, 0600, compared in constant time, `Gatekeeper.trayAllowed`).
- * It can read a few counts, quit Conch and hide itself; everything else
- * opens the page.
+ * It can read a few counts and quit Conch; everything else opens the page.
+ * Whether it shows at all is a switch in Settings, not something it offers.
  */
 import { spawn as nodeSpawn } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
@@ -26,10 +26,31 @@ import { writeFileAtomic } from '../lib/fs';
 import { run, type RunResult } from '../lib/proc';
 import { serviceLabel, shellLauncher, shQuote, windowsLauncher, type LaunchSpec } from './files';
 import { powershellSource, pythonSource, swiftSource, type TraySpec } from './tray-sources';
-import { icoFromPng, iconIn } from './shortcut';
+import { icoFromPng } from './shortcut';
 import { unitName } from './backends';
 
 export const trayDir = (home: string) => join(home, 'tray');
+
+/**
+ * The helper's picture: the pearl alone, as big as its square allows, on
+ * nothing. A tray or a panel has a few pixels and a ground of its own, so the
+ * app icon's tile would only make the pearl small.
+ */
+export const trayIconIn = (checkout: string) =>
+  join(checkout, 'apps', 'web', 'public', 'icons', 'conch-tray-256.png');
+
+/**
+ * Where a helper asks Conch how things are: the loopback address Conch
+ * listens on, by number. By name, `localhost` is tried as `::1` first, and
+ * when Conch listens on 127.0.0.1 Windows takes two seconds to give up on
+ * that: longer than the helper waits, so it would say Conch isn't running.
+ */
+export function askUrl(host: string, port: number): string {
+  const bind = host.toLowerCase();
+  if (bind === '::1' || bind === '::') return `http://[::1]:${port}`;
+  if (bind === 'localhost') return `http://localhost:${port}`;
+  return `http://${/^127\./.test(bind) ? bind : '127.0.0.1'}:${port}`;
+}
 
 export type Exec = (file: string, args: string[], timeout?: number) => Promise<RunResult>;
 const exec: Exec = (file, args, timeout = 10_000) => run(file, args, { timeout });
@@ -38,8 +59,48 @@ export type Spawn = (
   file: string,
   args: string[],
   env: Record<string, string>,
-) => number | undefined;
-const spawn: Spawn = (file, args, env) => {
+) => number | undefined | Promise<number | undefined>;
+
+/** One argument on a Windows command line, quoted the way the program will read it back. */
+const windowsArg = (arg: string) =>
+  /^[^\s"]+$/.test(arg) ? arg : `"${arg.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1')}"`;
+
+/**
+ * Windows: PowerShell that starts the helper and says its pid. What to start
+ * comes from the environment, so a folder's name is never part of a command.
+ */
+const START_HIDDEN =
+  '(Start-Process -FilePath $env:CONCH_START_FILE -ArgumentList $env:CONCH_START_ARGS -WindowStyle Hidden -PassThru).Id';
+
+/**
+ * Start the helper and let it go: it outlives this process. Returns its pid.
+ *
+ * Windows can't simply detach it. A detached program gets no console, and
+ * `powershell.exe` without one leaves straight away (exit 0, nothing run);
+ * one that isn't detached goes when the gateway does. So a short-lived
+ * PowerShell starts it with `Start-Process`: the helper gets a hidden console
+ * of its own and belongs to nobody.
+ */
+export const startHelper: Spawn = async (file, args, env) => {
+  if (process.platform === 'win32') {
+    const started = await run(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', START_HIDDEN],
+      {
+        timeout: 20_000,
+        env: {
+          ...(Object.fromEntries(
+            Object.entries(process.env).filter(([, value]) => value !== undefined),
+          ) as Record<string, string>),
+          ...env,
+          CONCH_START_FILE: file,
+          CONCH_START_ARGS: args.map(windowsArg).join(' '),
+        },
+      },
+    );
+    const pid = Number(started.stdout.trim());
+    return Number.isInteger(pid) && pid > 0 ? pid : undefined;
+  }
   const child = nodeSpawn(file, args, {
     detached: true,
     stdio: 'ignore',
@@ -71,6 +132,8 @@ export interface TrayDeps {
   checkout?: string;
   /** Where Conch answers on this computer. */
   url: string;
+  /** Where the helper asks it how things are (`askUrl`). Without it, `url`. */
+  ask?: string;
   /** What the launcher needs (Node, PATH, environment). */
   spec: Omit<LaunchSpec, 'checkout' | 'home' | 'log'>;
   /** The person wants it (`preferences.menuBar`). */
@@ -81,6 +144,8 @@ export interface TrayDeps {
   platform?: NodeJS.Platform;
   exec?: Exec;
   spawn?: Spawn;
+  /** How long a helper just started gets before it's believed to have stayed (ms). */
+  settle?: number;
   env?: NodeJS.ProcessEnv;
   heal?: (message: string) => void;
 }
@@ -228,9 +293,10 @@ nohup /bin/sh ${shQuote(join(this.#dir, 'launch'))} >/dev/null 2>&1 &
     await writeFileAtomic(start.path, start.text, 0o700);
     if (this.#platform !== 'win32')
       await writeFileAtomic(join(this.#dir, 'launch'), shellLauncher(launch), 0o700);
-    const png = iconIn(checkout).replace('conch-1024.png', 'conch-256.png');
+    const png = trayIconIn(checkout);
     const spec: TraySpec = {
       url: this.deps.url,
+      ...(this.deps.ask && { ask: this.deps.ask }),
       tokenFile: join(this.#dir, 'token'),
       startScript: start.path,
     };
@@ -311,21 +377,30 @@ nohup /bin/sh ${shQuote(join(this.#dir, 'launch'))} >/dev/null 2>&1 &
         .digest('hex');
       if (before && fresh.trim() === version) return 'running';
       if (before) this.#kill(before);
-      const pid = (this.deps.spawn ?? spawn)(prepared.file, prepared.args, { CONCH_TRAY: '1' });
+      const pid = await (this.deps.spawn ?? startHelper)(prepared.file, prepared.args, {
+        CONCH_TRAY: '1',
+      });
       if (!pid) return 'failed';
       await writeFile(join(this.#dir, 'pid'), String(pid));
       await writeFile(join(this.#dir, 'started'), version);
-      return 'started';
+      // A pid isn't an icon: one that left straight away never showed anything.
+      await new Promise((resolve) => setTimeout(resolve, this.deps.settle ?? 1_500));
+      return alive(pid) ? 'started' : 'failed';
     } catch (error) {
       this.deps.heal?.(`The menu bar helper couldn’t start: ${(error as Error).message}`);
       return 'failed';
     }
   }
 
+  /** What a running helper was started from: its source, and the picture it holds. */
   async #sourceStamp(): Promise<string> {
-    const name =
-      this.#platform === 'darwin' ? 'built' : this.#platform === 'win32' ? 'tray.ps1' : 'tray.py';
-    return readFile(join(this.#dir, name), 'utf8').catch(() => '');
+    if (this.#platform === 'darwin')
+      return readFile(join(this.#dir, 'built'), 'utf8').catch(() => '');
+    const [script, picture] =
+      this.#platform === 'win32' ? ['tray.ps1', 'conch.ico'] : ['tray.py', 'conch.png'];
+    const source = await readFile(join(this.#dir, script), 'utf8').catch(() => '');
+    const drawn = await readFile(join(this.#dir, picture)).catch(() => Buffer.alloc(0));
+    return source + createHash('sha256').update(drawn).digest('hex');
   }
 
   #kill(pid: number) {
@@ -380,11 +455,12 @@ export function menuPlist(): string {
 }
 
 /** A pretend helper for the mock engine: tests never put anything in this computer's menu bar. */
-export function pretendTray(): Pick<TrayDeps, 'exec' | 'spawn' | 'platform'> {
+export function pretendTray(): Pick<TrayDeps, 'exec' | 'spawn' | 'settle' | 'platform'> {
   return {
     platform: 'win32',
     exec: async () => ({ stdout: '', stderr: '', code: 0 }),
     spawn: () => process.pid,
+    settle: 0,
   };
 }
 

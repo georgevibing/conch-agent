@@ -1,15 +1,44 @@
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { inflateSync } from 'node:zlib';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RunResult } from '../lib/proc';
 import { AfterLogout, KeepAwake } from './little';
-import { trayCheck, TrayService, type TrayDeps } from './tray';
+import { askUrl, startHelper, trayCheck, trayIconIn, TrayService, type TrayDeps } from './tray';
 import { powershellSource, pythonSource, swiftSource } from './tray-sources';
 
 const checkout = resolve(import.meta.dirname, '../../../..');
+
+/** How solid one pixel of an 8-bit RGBA PNG is (0 see-through, 255 solid). */
+function alphaAt(png: Buffer, x: number, y: number): number {
+  const stride = png.readUInt32BE(16) * 4;
+  const data: Buffer[] = [];
+  for (let at = 8; at < png.length; at += 12 + png.readUInt32BE(at))
+    if (png.toString('latin1', at + 4, at + 8) === 'IDAT')
+      data.push(png.subarray(at + 8, at + 8 + png.readUInt32BE(at)));
+  const raw = inflateSync(Buffer.concat(data));
+  let above = Buffer.alloc(stride);
+  for (let row = 0; row <= y; row++) {
+    const start = row * (stride + 1);
+    const line = Buffer.from(raw.subarray(start + 1, start + 1 + stride));
+    for (let i = 0; i < stride; i++) {
+      const a = line[i - 4] ?? 0;
+      const b = above[i] ?? 0;
+      const c = above[i - 4] ?? 0;
+      const [da, db, dc] = [Math.abs(b - c), Math.abs(a - c), Math.abs(a + b - 2 * c)];
+      const paeth = da <= db && da <= dc ? a : db <= dc ? b : c;
+      line[i] = ((line[i] ?? 0) + ([0, a, b, (a + b) >> 1, paeth][raw[start] ?? 0] ?? 0)) & 0xff;
+    }
+    above = line;
+  }
+  return above[x * 4 + 3] ?? -1;
+}
 let home: string;
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'conch-tray-'));
@@ -42,6 +71,7 @@ function tray(overrides: Partial<TrayDeps> = {}) {
     },
     // A process that's alive (this one's parent shell would do; the test's own pid is refused).
     spawn: (file) => (spawned.push(file), process.ppid),
+    settle: 0,
     ...overrides,
   });
   return { service, spawned, execs, tokens, setWanted: (on: boolean) => (wanted = on) };
@@ -52,13 +82,14 @@ describe('the menu bar helper', () => {
     const { service, spawned, execs, tokens } = tray();
     expect(await service.ensure()).toBe('started');
     expect(execs.filter((e) => e.startsWith('xcrun swiftc'))).toHaveLength(1);
-    expect(spawned[0]).toMatch(/Conch Menu\.app\/Contents\/MacOS\/ConchMenu$/);
+    expect(spawned[0]).toMatch(/Conch Menu\.app[\\/]Contents[\\/]MacOS[\\/]ConchMenu$/);
     expect(await service.ensure()).toBe('running');
     expect(execs.filter((e) => e.startsWith('xcrun swiftc'))).toHaveLength(1);
     // Its token: random, in a file only its owner reads, told to the gate.
     const token = readFileSync(join(home, 'tray', 'token'), 'utf8').trim();
     expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(statSync(join(home, 'tray', 'token')).mode & 0o077).toBe(0);
+    if (process.platform !== 'win32')
+      expect(statSync(join(home, 'tray', 'token')).mode & 0o077).toBe(0);
     expect(tokens).toEqual([token]);
     expect((await service.status()).running).toBe(true);
   });
@@ -97,6 +128,9 @@ describe('the menu bar helper', () => {
     const ok = tray({ platform: 'linux', env: { WAYLAND_DISPLAY: 'wayland-0' } });
     expect(await ok.service.ensure()).toBe('started');
     expect(ok.spawned).toEqual(['python3']);
+    expect(
+      readFileSync(join(home, 'tray', 'conch.png')).equals(readFileSync(trayIconIn(checkout))),
+    ).toBe(true);
   });
 
   it('on Windows, runs PowerShell hidden, with the pearl as its icon', async () => {
@@ -105,6 +139,76 @@ describe('the menu bar helper', () => {
     expect(spawned).toEqual(['powershell.exe']);
     expect(readFileSync(join(home, 'tray', 'tray.ps1'), 'utf8')).toContain('NotifyIcon');
     expect(readFileSync(join(home, 'tray', 'conch.ico')).readUInt16LE(2)).toBe(1);
+  });
+
+  it('on Windows, asks Conch by number, and still opens its pages by name', async () => {
+    const { service } = tray({ platform: 'win32', ask: askUrl('127.0.0.1', 4317) });
+    await service.ensure();
+    const script = readFileSync(join(home, 'tray', 'tray.ps1'), 'utf8');
+    expect(script).toContain("$api = 'http://127.0.0.1:4317'");
+    expect(script).toContain("$base = 'http://localhost:4317'");
+    // Wherever Conch listens on this computer, a number: a name is tried as ::1 first.
+    expect(askUrl('0.0.0.0', 4317)).toBe('http://127.0.0.1:4317');
+    expect(askUrl('127.0.0.2', 4400)).toBe('http://127.0.0.2:4400');
+    expect(askUrl('::1', 4317)).toBe('http://[::1]:4317');
+    expect(askUrl('::', 4317)).toBe('http://[::1]:4317');
+    expect(askUrl('localhost', 4317)).toBe('http://localhost:4317');
+  });
+
+  it('its picture is the pearl alone: as big as its square allows, on nothing', async () => {
+    const { service } = tray({ platform: 'win32' });
+    await service.ensure();
+    const png = readFileSync(join(home, 'tray', 'conch.ico')).subarray(22);
+    // 256 px square, with see-through pixels (colour type 6).
+    expect([png.readUInt32BE(16), png.readUInt32BE(20), png[25]]).toEqual([256, 256, 6]);
+    // The corners show the taskbar; the pearl reaches every edge.
+    for (const [x, y] of [
+      [0, 0],
+      [255, 0],
+      [0, 255],
+      [255, 255],
+    ] as const)
+      expect(alphaAt(png, x, y)).toBe(0);
+    for (const [x, y] of [
+      [128, 3],
+      [128, 252],
+      [3, 128],
+      [252, 128],
+      [128, 128],
+    ] as const)
+      expect(alphaAt(png, x, y)).toBeGreaterThan(250);
+  });
+
+  it('a new picture replaces the helper that’s showing the old one', async () => {
+    // A checkout of its own, so the picture can change; and helpers that can really be ended.
+    const mine = join(home, 'checkout');
+    mkdirSync(join(mine, 'apps', 'web', 'public', 'icons'), { recursive: true });
+    const picture = readFileSync(trayIconIn(checkout));
+    writeFileSync(trayIconIn(mine), picture);
+    const helpers: ChildProcess[] = [];
+    const { service } = tray({
+      platform: 'win32',
+      checkout: mine,
+      spawn: () => {
+        const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], {
+          stdio: 'ignore',
+        });
+        helpers.push(child);
+        return child.pid;
+      },
+    });
+    try {
+      expect(await service.ensure()).toBe('started');
+      expect(await service.ensure()).toBe('running');
+      writeFileSync(trayIconIn(mine), Buffer.concat([picture, Buffer.from('new')]));
+      expect(await service.ensure()).toBe('started');
+      expect(helpers).toHaveLength(2);
+      await vi.waitFor(() =>
+        expect(helpers[0]?.exitCode ?? helpers[0]?.signalCode ?? null).not.toBeNull(),
+      );
+    } finally {
+      for (const helper of helpers) helper.kill();
+    }
   });
 
   it('turned off, it goes now; and never kills the gateway itself', async () => {
@@ -128,6 +232,154 @@ describe('the menu bar helper', () => {
     });
     expect(alive).toBe(true);
   });
+
+  it('one that leaves straight away isn’t called started, and Repair everything doesn’t say fixed', async () => {
+    // The pid of a program that has already gone.
+    const gone = spawnSync(process.execPath, ['-e', '']).pid;
+    const { service } = tray({ spawn: () => gone });
+    expect(await service.ensure()).toBe('failed');
+    expect((await service.status()).running).toBe(false);
+    const signal = new AbortController().signal;
+    expect((await trayCheck(service).run({ repair: true, signal }))[0]).toMatchObject({
+      state: 'warning',
+      message: 'Conch couldn’t show itself in the menu bar. It tries again by itself.',
+    });
+  });
+});
+
+// Really started, on a real Windows: a pretend spawn can't tell whether the helper stays.
+describe.runIf(process.platform === 'win32')('started for real on Windows', () => {
+  const alive = (pid: number) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  it('PowerShell runs the helper and stays, from a folder with spaces and quotes in its name', async () => {
+    const dir = join(home, "Ada's folder (x86) & $co");
+    mkdirSync(dir);
+    const ran = join(dir, 'ran');
+    const script = join(dir, 'helper.ps1');
+    writeFileSync(
+      script,
+      [
+        `"tray=$env:CONCH_TRAY" | Out-File -Encoding ascii -FilePath '${ran.replaceAll("'", "''")}'`,
+        'Start-Sleep -Seconds 60',
+        '',
+      ].join('\r\n'),
+    );
+    const pid = await startHelper(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-WindowStyle',
+        'Hidden',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        script,
+      ],
+      { CONCH_TRAY: '1' },
+    );
+    try {
+      expect(pid).toBeGreaterThan(0);
+      await vi.waitFor(() => expect(readFileSync(ran, 'utf8')).toContain('tray=1'), {
+        timeout: 15_000,
+        interval: 200,
+      });
+      expect(alive(pid ?? 0)).toBe(true);
+    } finally {
+      if (pid && alive(pid)) process.kill(pid);
+    }
+  }, 30_000);
+
+  it('Windows PowerShell reads the helper whole: no mistakes, and its words as they were written', () => {
+    const script = join(home, 'tray.ps1');
+    writeFileSync(
+      script,
+      powershellSource({
+        url: 'http://localhost:4317',
+        ask: 'http://127.0.0.1:4317',
+        tokenFile: join(home, 'token'),
+        startScript: join(home, 'start.cmd'),
+      }),
+    );
+    // Read, not run: nothing lands in this computer's tray.
+    const read = execFileSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        [
+          '$tokens = $null; $errors = $null',
+          '[void][System.Management.Automation.Language.Parser]::ParseFile($env:CONCH_READ, [ref]$tokens, [ref]$errors)',
+          '$words = @($tokens | Where-Object { $_.Kind -like "String*" } | ForEach-Object { $_.Text }) -join " "',
+          '"mistakes=$($errors.Count) apostrophes=$($words.Contains([string][char]0x2019)) garbled=$($words.Contains([string][char]0xE2))"',
+        ].join('; '),
+      ],
+      { env: { ...process.env, CONCH_READ: script }, windowsHide: true },
+    ).toString();
+    expect(read.trim()).toBe('mistakes=0 apostrophes=True garbled=False');
+  }, 30_000);
+  it('asks a Conch that listens on 127.0.0.1, without the menu waiting, and reads its name as written', async () => {
+    // A pretend Conch, listening the way the real one does.
+    const asked: string[] = [];
+    const server = createServer((request, response) => {
+      asked.push(`${request.url ?? ''} ${String(request.headers['x-conch-tray'])}`);
+      response.setHeader('content-type', 'application/json; charset=utf-8');
+      response.end(
+        JSON.stringify({ name: 'Perle café', alwaysOn: false, approvals: 0, devices: 0 }),
+      );
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    writeFileSync(join(home, 'token'), 'its-token\n');
+    const said = join(home, 'said');
+    const script = join(home, 'tray.ps1');
+    // The helper as Conch writes it, but never shown: it says what its tooltip would, and leaves.
+    const source = powershellSource({
+      url: `http://localhost:${port}`,
+      ask: askUrl('127.0.0.1', port),
+      tokenFile: join(home, 'token'),
+      startScript: join(home, 'start.cmd'),
+    })
+      .replace('$icon.Visible = $true', '$icon.Visible = $false')
+      .replace(
+        '[System.Windows.Forms.Application]::Run()',
+        [
+          '$leave = New-Object System.Windows.Forms.Timer',
+          '$leave.Interval = 4000',
+          `$leave.add_Tick({ "$($icon.Text)|$($script:info.name)" | Out-File -Encoding utf8 '${said}'; [System.Windows.Forms.Application]::Exit() })`,
+          '$leave.Start()',
+          '[System.Windows.Forms.Application]::Run()',
+        ].join('\r\n'),
+      );
+    expect(source).toContain('$icon.Visible = $false');
+    expect(source).toContain('$leave.Start()');
+    writeFileSync(script, source);
+    try {
+      const helper = spawn(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script],
+        { stdio: 'ignore', windowsHide: true },
+      );
+      // An answer that came back on the wrong thread ends PowerShell on the spot.
+      expect(await new Promise((resolve) => helper.on('exit', resolve))).toBe(0);
+    } finally {
+      server.close();
+    }
+    expect(
+      readFileSync(said, 'utf8')
+        .replace(/^\uFEFF/, '')
+        .trim(),
+    ).toBe('Conch is running|Perle café');
+    expect(asked[0]).toBe('/api/tray/status its-token');
+  }, 40_000);
 });
 
 describe('its source', () => {
@@ -148,6 +400,25 @@ describe('its source', () => {
       expect(source).toContain('/?open=background');
       expect(source).not.toMatch(/\/api\/background['"]/);
     }
+  });
+
+  it('offers no way to hide itself: showing it is a switch in Settings', () => {
+    for (const source of [swiftSource(spec), powershellSource(spec), pythonSource(spec)]) {
+      expect(source).not.toMatch(/Hide from/);
+      expect(source).not.toContain('/api/tray/hide');
+    }
+  });
+
+  it('on Windows, never keeps the menu waiting for an answer', () => {
+    const source = powershellSource({ ...spec, ask: 'http://127.0.0.1:4317' });
+    // How things are is asked in the background; the menu is Windows' own, put together as it opens.
+    expect(source).toContain('DownloadStringAsync');
+    const refresh = source.slice(source.indexOf('function Refresh {'));
+    expect(refresh.slice(0, refresh.indexOf('\r\n}'))).not.toContain('Invoke-RestMethod');
+    expect(source).toContain('$menu = New-Object System.Windows.Forms.ContextMenu\r\n');
+    expect(source).toContain('$menu.add_Popup({ Build })');
+    // Windows PowerShell reads a file without this mark in the computer's old code page.
+    expect(source.charCodeAt(0)).toBe(0xfeff);
   });
 });
 

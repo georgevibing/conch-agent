@@ -35,6 +35,12 @@ Each computer runs a small helper that Conch writes and builds there:
 | Windows  | PowerShell with Windows Forms' `NotifyIcon`, using the pearl as an `.ico`.                                                                                                   |
 | Linux    | Python with AppIndicator (Ayatana or the older one), using the pearl as a PNG.                                                                                               |
 
+On Windows and Linux its picture is the pearl alone (`icons/conch-tray.svg`,
+rendered to `conch-tray-256.png`): as big as its square allows, on a
+transparent ground, the way a tray's icons are drawn. The app icon's tile
+would only make the pearl small. A new picture replaces a running helper,
+as new source does.
+
 There is no Electron, nothing is downloaded, and no app store is involved.
 What it needs is a Conch need (`setup/known.ts`):
 
@@ -46,7 +52,9 @@ What it needs is a Conch need (`setup/known.ts`):
 - Whether Conch is running, and whether it's Always on.
 - A dot when a question or a new device is waiting.
 - Open Conch, Start Conch, Quit Conch, and Always on….
-- Hide from the menu bar.
+
+It doesn't offer to hide itself: whether it shows is a switch in
+**Settings → Health → Always on**.
 
 **When it runs.** It's on by default (`preferences.menuBar`). The gateway
 shows it whenever it starts, at login with Always on, and every five minutes
@@ -56,8 +64,33 @@ away. Start runs `tray/start`, which uses the computer's own login item when
 there is one (`launchctl kickstart`, `systemctl --user start`) and the
 launcher otherwise. Everywhere else, Repair everything's `tray` check starts
 it again. **Settings → Health → Always on** and `pnpm conch tray on|off`
-switch it. Hiding it from the helper itself sets the preference, so it stays
-hidden. Uninstalling removes `~/.conch/tray`.
+switch it. Uninstalling removes `~/.conch/tray`.
+
+**How it's started on Windows.** A detached program has no console, and
+`powershell.exe` without one leaves at once (exit 0, nothing run); one that
+isn't detached goes when the gateway does. So a short-lived PowerShell starts
+the helper with `Start-Process -WindowStyle Hidden` and says its pid: the
+helper gets a hidden console of its own and outlives Quit. A helper that has
+gone a moment after starting counts as not started, so Repair everything
+never says "back in the tray" for one that isn't there.
+
+**How it asks, and its menu, on Windows.** Windows PowerShell brings four
+things a Mac and Linux don't:
+
+- It reads a script without a byte-order mark in the computer's old code page,
+  so "isn’t" came out garbled. The script starts with one.
+- `localhost` is tried as `::1` first, and when Conch listens on 127.0.0.1
+  Windows takes two seconds to give up on that — as long as the helper
+  waits, so it said "Conch isn’t running" to a Conch that was. It asks by
+  number (`askUrl`); pages still open at `localhost`, where you signed in.
+- Windows also takes two seconds to say nothing is listening, and the menu
+  lives on the thread that would wait. So how things are is asked in the
+  background (`WebClient`, with the answer handed back to that thread), and
+  the menu is put together as it opens, from the last answer.
+- The menu is Windows' own (`ContextMenu`), in a process that says it draws
+  at the screen's scale and lets menus follow Windows into the dark
+  (`SetProcessDPIAware`, and uxtheme's `SetPreferredAppMode`, which has no
+  name, only a number: guarded, and the menu is merely light without it).
 
 **It only shows where it can.** Over SSH a Mac has no menu bar
 (`launchctl managername` isn't `Aqua`), and a Linux box with no `DISPLAY` or
@@ -68,7 +101,7 @@ doesn't try.
 other:
 
 - It talks only to `http://localhost:<port>`, and only to
-  `GET /api/tray/status`, `POST /api/tray/quit` and `POST /api/tray/hide`.
+  `GET /api/tray/status` and `POST /api/tray/quit`.
 - It carries a 256-bit token from `tray/token` (0600) in `X-Conch-Tray`. The
   gate compares it in constant time and accepts it only from loopback, never
   through a proxy (`Gatekeeper.trayAllowed`, `TRAY_API`).

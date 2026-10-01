@@ -39,7 +39,7 @@ const PUBLIC_API = new Set([
 ]);
 
 /** What the menu bar helper may ask, with its token instead of a sign-in (ADR 0029). */
-const TRAY_API = new Set(['GET /api/tray/status', 'POST /api/tray/quit', 'POST /api/tray/hide']);
+const TRAY_API = new Set(['GET /api/tray/status', 'POST /api/tray/quit']);
 
 const COOKIE = 'conch_session';
 /** `__Host-` cookies must be Secure, host-only and Path=/ — browsers enforce it. */

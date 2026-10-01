@@ -226,7 +226,7 @@ src/
   AppIndicator), starts it detached whenever the gateway starts (`main.ts`, then every
   five minutes), rebuilds it when its source changes and replaces it when Conch updates.
   It polls `GET /api/tray/status` with `X-Conch-Tray` (the token in `tray/token`, 0600);
-  `Gatekeeper.trayAllowed` accepts it from loopback only, for the three `TRAY_API`
+  `Gatekeeper.trayAllowed` accepts it from loopback only, for the two `TRAY_API`
   routes only. `little.ts` has `AfterLogout` (`loginctl enable-linger`, or the one
   `sudo` command) and `KeepAwake` (`caffeinate -s -w <pid>` in the background Conch).
   Both show in `BackgroundStatus` (`tray`, `afterLogout`, `keepAwake`) and in Nacre
