@@ -1,16 +1,42 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { inflateSync } from 'node:zlib';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RunResult } from '../lib/proc';
 import { AfterLogout, KeepAwake } from './little';
-import { startHelper, trayCheck, TrayService, type TrayDeps } from './tray';
+import { startHelper, trayCheck, trayIconIn, TrayService, type TrayDeps } from './tray';
 import { powershellSource, pythonSource, swiftSource } from './tray-sources';
 
 const checkout = resolve(import.meta.dirname, '../../../..');
+
+/** How solid one pixel of an 8-bit RGBA PNG is (0 see-through, 255 solid). */
+function alphaAt(png: Buffer, x: number, y: number): number {
+  const stride = png.readUInt32BE(16) * 4;
+  const data: Buffer[] = [];
+  for (let at = 8; at < png.length; at += 12 + png.readUInt32BE(at))
+    if (png.toString('latin1', at + 4, at + 8) === 'IDAT')
+      data.push(png.subarray(at + 8, at + 8 + png.readUInt32BE(at)));
+  const raw = inflateSync(Buffer.concat(data));
+  let above = Buffer.alloc(stride);
+  for (let row = 0; row <= y; row++) {
+    const start = row * (stride + 1);
+    const line = Buffer.from(raw.subarray(start + 1, start + 1 + stride));
+    for (let i = 0; i < stride; i++) {
+      const a = line[i - 4] ?? 0;
+      const b = above[i] ?? 0;
+      const c = above[i - 4] ?? 0;
+      const [da, db, dc] = [Math.abs(b - c), Math.abs(a - c), Math.abs(a + b - 2 * c)];
+      const paeth = da <= db && da <= dc ? a : db <= dc ? b : c;
+      line[i] = ((line[i] ?? 0) + ([0, a, b, (a + b) >> 1, paeth][raw[start] ?? 0] ?? 0)) & 0xff;
+    }
+    above = line;
+  }
+  return above[x * 4 + 3] ?? -1;
+}
 let home: string;
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'conch-tray-'));
@@ -100,6 +126,9 @@ describe('the menu bar helper', () => {
     const ok = tray({ platform: 'linux', env: { WAYLAND_DISPLAY: 'wayland-0' } });
     expect(await ok.service.ensure()).toBe('started');
     expect(ok.spawned).toEqual(['python3']);
+    expect(
+      readFileSync(join(home, 'tray', 'conch.png')).equals(readFileSync(trayIconIn(checkout))),
+    ).toBe(true);
   });
 
   it('on Windows, runs PowerShell hidden, with the pearl as its icon', async () => {
@@ -108,6 +137,62 @@ describe('the menu bar helper', () => {
     expect(spawned).toEqual(['powershell.exe']);
     expect(readFileSync(join(home, 'tray', 'tray.ps1'), 'utf8')).toContain('NotifyIcon');
     expect(readFileSync(join(home, 'tray', 'conch.ico')).readUInt16LE(2)).toBe(1);
+  });
+
+  it('its picture is the pearl alone: as big as its square allows, on nothing', async () => {
+    const { service } = tray({ platform: 'win32' });
+    await service.ensure();
+    const png = readFileSync(join(home, 'tray', 'conch.ico')).subarray(22);
+    // 256 px square, with see-through pixels (colour type 6).
+    expect([png.readUInt32BE(16), png.readUInt32BE(20), png[25]]).toEqual([256, 256, 6]);
+    // The corners show the taskbar; the pearl reaches every edge.
+    for (const [x, y] of [
+      [0, 0],
+      [255, 0],
+      [0, 255],
+      [255, 255],
+    ] as const)
+      expect(alphaAt(png, x, y)).toBe(0);
+    for (const [x, y] of [
+      [128, 3],
+      [128, 252],
+      [3, 128],
+      [252, 128],
+      [128, 128],
+    ] as const)
+      expect(alphaAt(png, x, y)).toBeGreaterThan(250);
+  });
+
+  it('a new picture replaces the helper that’s showing the old one', async () => {
+    // A checkout of its own, so the picture can change; and helpers that can really be ended.
+    const mine = join(home, 'checkout');
+    mkdirSync(join(mine, 'apps', 'web', 'public', 'icons'), { recursive: true });
+    const picture = readFileSync(trayIconIn(checkout));
+    writeFileSync(trayIconIn(mine), picture);
+    const helpers: ChildProcess[] = [];
+    const { service } = tray({
+      platform: 'win32',
+      checkout: mine,
+      spawn: () => {
+        const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], {
+          stdio: 'ignore',
+        });
+        helpers.push(child);
+        return child.pid;
+      },
+    });
+    try {
+      expect(await service.ensure()).toBe('started');
+      expect(await service.ensure()).toBe('running');
+      writeFileSync(trayIconIn(mine), Buffer.concat([picture, Buffer.from('new')]));
+      expect(await service.ensure()).toBe('started');
+      expect(helpers).toHaveLength(2);
+      await vi.waitFor(() =>
+        expect(helpers[0]?.exitCode ?? helpers[0]?.signalCode ?? null).not.toBeNull(),
+      );
+    } finally {
+      for (const helper of helpers) helper.kill();
+    }
   });
 
   it('turned off, it goes now; and never kills the gateway itself', async () => {

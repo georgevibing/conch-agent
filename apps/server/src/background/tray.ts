@@ -26,10 +26,18 @@ import { writeFileAtomic } from '../lib/fs';
 import { run, type RunResult } from '../lib/proc';
 import { serviceLabel, shellLauncher, shQuote, windowsLauncher, type LaunchSpec } from './files';
 import { powershellSource, pythonSource, swiftSource, type TraySpec } from './tray-sources';
-import { icoFromPng, iconIn } from './shortcut';
+import { icoFromPng } from './shortcut';
 import { unitName } from './backends';
 
 export const trayDir = (home: string) => join(home, 'tray');
+
+/**
+ * The helper's picture: the pearl alone, as big as its square allows, on
+ * nothing. A tray or a panel has a few pixels and a ground of its own, so the
+ * app icon's tile would only make the pearl small.
+ */
+export const trayIconIn = (checkout: string) =>
+  join(checkout, 'apps', 'web', 'public', 'icons', 'conch-tray-256.png');
 
 export type Exec = (file: string, args: string[], timeout?: number) => Promise<RunResult>;
 const exec: Exec = (file, args, timeout = 10_000) => run(file, args, { timeout });
@@ -270,7 +278,7 @@ nohup /bin/sh ${shQuote(join(this.#dir, 'launch'))} >/dev/null 2>&1 &
     await writeFileAtomic(start.path, start.text, 0o700);
     if (this.#platform !== 'win32')
       await writeFileAtomic(join(this.#dir, 'launch'), shellLauncher(launch), 0o700);
-    const png = iconIn(checkout).replace('conch-1024.png', 'conch-256.png');
+    const png = trayIconIn(checkout);
     const spec: TraySpec = {
       url: this.deps.url,
       tokenFile: join(this.#dir, 'token'),
@@ -368,10 +376,15 @@ nohup /bin/sh ${shQuote(join(this.#dir, 'launch'))} >/dev/null 2>&1 &
     }
   }
 
+  /** What a running helper was started from: its source, and the picture it holds. */
   async #sourceStamp(): Promise<string> {
-    const name =
-      this.#platform === 'darwin' ? 'built' : this.#platform === 'win32' ? 'tray.ps1' : 'tray.py';
-    return readFile(join(this.#dir, name), 'utf8').catch(() => '');
+    if (this.#platform === 'darwin')
+      return readFile(join(this.#dir, 'built'), 'utf8').catch(() => '');
+    const [script, picture] =
+      this.#platform === 'win32' ? ['tray.ps1', 'conch.ico'] : ['tray.py', 'conch.png'];
+    const source = await readFile(join(this.#dir, script), 'utf8').catch(() => '');
+    const drawn = await readFile(join(this.#dir, picture)).catch(() => Buffer.alloc(0));
+    return source + createHash('sha256').update(drawn).digest('hex');
   }
 
   #kill(pid: number) {

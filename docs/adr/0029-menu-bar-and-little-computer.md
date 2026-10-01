@@ -35,6 +35,12 @@ Each computer runs a small helper that Conch writes and builds there:
 | Windows  | PowerShell with Windows Forms' `NotifyIcon`, using the pearl as an `.ico`.                                                                                                   |
 | Linux    | Python with AppIndicator (Ayatana or the older one), using the pearl as a PNG.                                                                                               |
 
+On Windows and Linux its picture is the pearl alone (`icons/conch-tray.svg`,
+rendered to `conch-tray-256.png`): as big as its square allows, on a
+transparent ground, the way a tray's icons are drawn. The app icon's tile
+would only make the pearl small. A new picture replaces a running helper,
+as new source does.
+
 There is no Electron, nothing is downloaded, and no app store is involved.
 What it needs is a Conch need (`setup/known.ts`):
 
