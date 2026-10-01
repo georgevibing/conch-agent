@@ -106,14 +106,14 @@ test('password sign-in, pairing a phone, and signing a device out', async ({
   // ── Back on this computer: three devices, sign the laptop out.
   await page.reload();
   await openSecurity(page);
-  const devices = page.getByRole('list', { name: 'Signed-in devices' });
+  const devices = page.getByRole('list', { name: 'Devices' });
   await expect(devices.getByRole('listitem')).toHaveCount(3);
   await expect(devices).toContainText('Safari on iPhone');
   await devices.scrollIntoViewIfNeeded();
   await shot(page, 'security-5-devices.png', true);
   const laptopRow = devices
     .getByRole('listitem')
-    .filter({ hasText: 'Signed in with your password' })
+    .filter({ hasText: 'with your password' })
     .filter({ hasNotText: 'This device' });
   await laptopRow.getByRole('button', { name: /^Sign out/ }).click();
   await expect(devices.getByRole('listitem')).toHaveCount(2);

@@ -11,6 +11,15 @@ import { defineConfig, devices } from '@playwright/test';
  *
  *   pnpm e2e            (builds the web app first)
  */
+/**
+ * The `devices` journey runs `pnpm conch devices` beside its gateway, so it
+ * needs to know where that gateway keeps its files.
+ */
+// Workers load this file again: they inherit the folder the main process made.
+const devicesHome = (process.env.CONCH_E2E_DEVICES_HOME ??= mkdtempSync(
+  join(tmpdir(), 'conch-e2e-devices-'),
+));
+
 const scenarios = {
   ready: { port: 4391, env: { CONCH_MOCK_STATE: 'ready' } },
   models: { port: 4394, env: { CONCH_MOCK_STATE: 'ready' } },
@@ -26,6 +35,8 @@ const scenarios = {
   // Runs under the supervisor (`pnpm start`), so a restore can start Conch again.
   backups: { port: 4382, env: { CONCH_MOCK_STATE: 'ready', CONCH_SUPERVISE: '1' }, entry: 'start' },
   channels: { port: 4387, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Approving new devices: "other devices" arrive through a pretend proxy (X-Forwarded-For).
+  devices: { port: 4381, env: { CONCH_MOCK_STATE: 'ready', CONCH_HOME: devicesHome } },
   security: {
     port: 4397,
     env: { CONCH_MOCK_STATE: 'ready', CONCH_ALLOWED_HOSTS: 'studio-mac.tail1234.ts.net' },
@@ -113,7 +124,8 @@ export default defineConfig({
       ...s.env,
       CONCH_MOCK_SPEED: '0.25',
       CONCH_PORT: String(s.port),
-      CONCH_HOME: mkdtempSync(join(tmpdir(), 'conch-e2e-')),
+      CONCH_HOME:
+        (s.env as Record<string, string>).CONCH_HOME ?? mkdtempSync(join(tmpdir(), 'conch-e2e-')),
       CONCH_WEB_DIST: join(root, 'apps/web/dist'),
       CONCH_LOG_LEVEL: 'warn',
     },
