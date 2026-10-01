@@ -327,6 +327,12 @@ describe('the guard, end to end', () => {
     engine.script.push(readsPage);
     const convo = await before.send({ clientMessageId: 'u1', text: 'read it' });
     await settle(before, convo.id, (e) => e.some((x) => x.type === 'turn.completed'));
+    // The first Conch has written its log to disk before the second reads it.
+    const disk = new ConversationStore(join(home, 'conversations'));
+    for (let i = 0; i < 2000; i++) {
+      if ((await disk.events(convo.id)).some((e) => e.type === 'turn.completed')) break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
 
     const after = make();
     engine.script.push(async function* (input) {
