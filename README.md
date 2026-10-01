@@ -35,7 +35,9 @@ can be _yours_. Requires Node ≥ 24.
 
 **On your phone, safely:** choose a password in **Settings → Security**, then scan
 the **Add a device** QR code. [docs/SECURITY.md](./docs/SECURITY.md) explains it in
-two minutes (Tailscale recommended; `pnpm conch reset` if you forget). Or skip the
+two minutes (Tailscale recommended; `pnpm conch reset` if you forget). For a second
+lock, turn on **Approve new devices**: a new device then waits, even with the right
+password, until you run `pnpm conch devices approve` on your computer. Or skip the
 browser entirely and reach your assistant from Telegram, Discord or Slack.
 
 ## What it does
@@ -126,4 +128,4 @@ documents it. For an authenticated HTTPS reverse proxy, see
 - [docs/BROWSER.md](./docs/BROWSER.md) — the browser: watching, taking over, what it asks
 - [docs/TERMINAL.md](./docs/TERMINAL.md) — the terminal: shortcuts, the assistant, other devices
 - [docs/design/NACRE.md](./docs/design/NACRE.md) — the design language
-- [docs/adr](./docs/adr) — decision records (0001–0023)
+- [docs/adr](./docs/adr) — decision records (0001–0024)

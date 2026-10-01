@@ -534,6 +534,15 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
   revocable per device. Revoking one closes its WebSocket at once. Sensitive changes
   need a password or key from the last 10 minutes. Failed sign-ins back off per
   address and globally, and local sign-in is never locked out.
+- **Devices:** each browser has a long-lived `HttpOnly` device cookie (hashed),
+  so devices are listed across sign-ins. With **Approve new devices** on, a new
+  device from elsewhere waits after the right password or key, holding a
+  waiting session that can do nothing, until it's approved on this computer:
+  `pnpm conch devices approve <code>`, or Settings there. Remote devices can
+  turn devices down but never approve one or switch approval off. A key used
+  by a script from elsewhere is approved once, as that key. Open sockets are
+  checked against `access.json` every 2 s, so the terminal's changes apply at
+  once ([ADR 0024](./docs/adr/0024-approve-new-devices.md)).
 - **Pairing:** one-time, 10-minute codes, passed in the URL _fragment_
   (`/#pair=…`) as a QR code. `pnpm conch` covers every operation from the host,
   including recovery (`pnpm conch reset`).

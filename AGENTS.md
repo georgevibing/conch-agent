@@ -46,6 +46,7 @@ working agreement 11: _fix it before you ask_.
 | Offering to connect an app from the chat (cues, the offer card) | `apps/server/src/integrations/cues.ts`, `catalog.ts`, web `features/integrations/ChatBits.tsx` + [ADR 0021](./docs/adr/0021-connect-from-chat.md) — see working agreement 12                      |
 | Conch restarting itself, surviving a crash                      | `apps/server/src/supervisor.ts`, `lib/lifecycle.ts` (`restart()`), web `features/health/restart.ts`                                                                                               |
 | A decision that changes architecture or adds a dependency       | Write an ADR in [`docs/adr/`](./docs/adr/) first                                                                                                                                                  |
+| Devices, approving new ones (`pnpm conch devices`)              | `apps/server/src/auth/` (`store.ts`, `devicesCli.ts`), `security.ts`, web `features/auth/`, Nacre `DeviceApproval` + [ADR 0024](./docs/adr/0024-approve-new-devices.md) — security-relevant       |
 | Security, auth, exposing the gateway beyond localhost           | [§ Security engineering](#security-engineering) below → [ARCHITECTURE.md § Security](./ARCHITECTURE.md#security-model) → [ADR 0008](./docs/adr/0008-access-and-hardening.md) — treat as high-risk |
 
 **Rule of thumb:** UI goes in Nacre _first_. If an app screen needs a visual element
@@ -73,21 +74,21 @@ scripts/          Repo tooling (e.g. snap.mjs visual QA screenshots)
 
 Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or `npm i -g pnpm`).
 
-| Command                                                                     | What it does                                                                                         |
-| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `pnpm install`                                                              | Install everything                                                                                   |
-| `pnpm dev`                                                                  | Run all dev servers via Turbo                                                                        |
-| `pnpm storybook`                                                            | Nacre Storybook on http://localhost:6006                                                             |
-| `pnpm check`                                                                | Format check + lint + typecheck + tests. **Must pass before every commit.**                          |
-| `pnpm test`                                                                 | All unit tests (Vitest)                                                                              |
-| `pnpm e2e`                                                                  | Builds the web app and runs Playwright journeys against the gateway + mock engine                    |
-| `pnpm dev:mock`                                                             | Dev servers with the scripted mock engine (no Claude usage)                                          |
-| `pnpm start`                                                                | Build and run Conch for real at http://localhost:4317                                                |
-| `pnpm start:network`                                                        | Same, reachable from your network (sign-in required; prefer Tailscale)                               |
-| `pnpm conch <command>`                                                      | Sign-in from the terminal: `status`, `password`, `key`, `pair`, `reset` … (`pnpm conch help`)        |
-| `pnpm --filter @conch/nacre test -- src/components/Button`                  | Tests for one component                                                                              |
-| `pnpm a11y [--filter=button]`                                               | axe (incl. colour contrast) on every story, light + dark, in real Chrome (Storybook must be running) |
-| `node scripts/snap.mjs <story-id> [--mode=dark] [--hover=css] [--clip=css]` | Screenshot a story for visual QA (Storybook must be running)                                         |
+| Command                                                                     | What it does                                                                                             |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `pnpm install`                                                              | Install everything                                                                                       |
+| `pnpm dev`                                                                  | Run all dev servers via Turbo                                                                            |
+| `pnpm storybook`                                                            | Nacre Storybook on http://localhost:6006                                                                 |
+| `pnpm check`                                                                | Format check + lint + typecheck + tests. **Must pass before every commit.**                              |
+| `pnpm test`                                                                 | All unit tests (Vitest)                                                                                  |
+| `pnpm e2e`                                                                  | Builds the web app and runs Playwright journeys against the gateway + mock engine                        |
+| `pnpm dev:mock`                                                             | Dev servers with the scripted mock engine (no Claude usage)                                              |
+| `pnpm start`                                                                | Build and run Conch for real at http://localhost:4317                                                    |
+| `pnpm start:network`                                                        | Same, reachable from your network (sign-in required; prefer Tailscale)                                   |
+| `pnpm conch <command>`                                                      | Sign-in from the terminal: `status`, `password`, `key`, `pair`, `devices`, `reset` … (`pnpm conch help`) |
+| `pnpm --filter @conch/nacre test -- src/components/Button`                  | Tests for one component                                                                                  |
+| `pnpm a11y [--filter=button]`                                               | axe (incl. colour contrast) on every story, light + dark, in real Chrome (Storybook must be running)     |
+| `node scripts/snap.mjs <story-id> [--mode=dark] [--hover=css] [--clip=css]` | Screenshot a story for visual QA (Storybook must be running)                                             |
 
 ## Working agreements
 

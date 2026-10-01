@@ -59,6 +59,51 @@ same Wi-Fi could read your traffic.
 **SSH tunnel** (for developers): `ssh -N -L 4317:localhost:4317 you@your-computer`,
 then open http://localhost:4317.
 
+## Approve new devices (extra protection, if you want it)
+
+A password or key is one thing to keep safe. If someone learns it, they could
+sign in from anywhere. For a second lock, turn on **Settings → Security →
+Devices → Approve new devices** (or run `pnpm conch devices on`).
+
+From then on, a device Conch hasn't seen before still has to be approved
+**on the computer running Conch**, even after the right password or key:
+
+1. On the new device, sign in as usual. It shows a short code, like
+   **K7M-Q2X**, and waits.
+2. On the computer running Conch, open a terminal in the Conch folder and run:
+
+   ```bash
+   pnpm conch devices approve
+   ```
+
+   It shows who is asking, from where, and asks you to confirm. You can also
+   approve it in **Settings → Security** on that computer.
+
+3. The new device opens by itself. Next time, it's recognised and doesn't ask.
+
+Some devices never need approving: the computer running Conch itself, a phone
+you add with the **Add a device** QR code, and the devices already signed in
+when you turn this on (you'll see them listed, so remove any you don't know).
+
+If a device asks and **it isn't yours**, turn it down
+(`pnpm conch devices reject`, or **Turn down** in Settings). Then change your
+password, because someone knows it.
+
+Everything else, from the terminal:
+
+```bash
+pnpm conch devices                 # what has signed in, and who is waiting
+pnpm conch devices approve K7M-Q2X # let one in
+pnpm conch devices reject          # turn one down (--all for every one)
+pnpm conch devices remove <id>     # forget a device and sign it out
+pnpm conch devices rename <id> Kitchen iPad
+pnpm conch devices off             # back to just the password or key
+```
+
+Only the computer running Conch can approve devices or turn this off, so
+someone who got in elsewhere can't let others in. Scripts that use an access
+key from another device are approved once, as that key.
+
 ## Forgot your password? Lost a key?
 
 On the computer running Conch, in the Conch folder:
@@ -70,8 +115,9 @@ pnpm conch password    # choose a new one
 
 Only someone at that computer can do this — that's what keeps it safe.
 
-Lost a phone? **Settings → Security → Signed-in devices → Sign out**. It's
-disconnected instantly.
+Lost a phone? **Settings → Security → Devices → Remove** (or
+`pnpm conch devices remove`). It's disconnected instantly and, with approval
+on, can't get back in without your OK.
 
 ## What Conch warns you about
 
