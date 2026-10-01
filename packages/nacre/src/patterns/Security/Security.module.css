@@ -303,4 +303,119 @@
     font-size: var(--nc-text-xs);
     color: var(--nc-text-subtle);
   }
+
+  .deviceName {
+    flex-wrap: wrap;
+  }
+
+  .deviceActions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--nc-space-1);
+  }
+
+  /* Remembered, not signed in: quieter, but still there to remove. */
+  .device[data-signed-out] .deviceIcon {
+    color: var(--nc-text-subtle);
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  /* ── Waiting for approval ───────────────────────────────────────────── */
+  .requests {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .request {
+    --h: var(--nc-warning-h);
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2-5);
+    padding: var(--nc-space-3);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(
+      180deg,
+      color-mix(
+        in oklch,
+        light-dark(oklch(0.975 0.022 var(--h)), oklch(0.24 0.04 var(--h))),
+        var(--nc-surface-hi) 35%
+      ),
+      light-dark(oklch(0.975 0.022 var(--h)), oklch(0.24 0.04 var(--h)))
+    );
+    box-shadow:
+      inset 0 0 0 1px light-dark(oklch(0.88 0.055 var(--h)), oklch(0.38 0.06 var(--h))),
+      var(--nc-glaze-edge);
+  }
+
+  .request[data-rejected] {
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .request[data-rejected] .deviceName {
+    color: var(--nc-text-muted);
+  }
+
+  .requestMain {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-3);
+  }
+
+  .requestMain .deviceBody {
+    flex: 1 1 12rem;
+  }
+
+  .requestCode {
+    padding: 0 var(--nc-space-1-5);
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-surface-sunken);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: 0.06em;
+    color: var(--nc-text);
+  }
+
+  .requestHint {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    padding-inline-start: calc(2rem + var(--nc-space-3));
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+  }
+
+  .requestCommand {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    padding-inline: var(--nc-space-2-5) var(--nc-space-0-5);
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-surface-sunken);
+  }
+
+  .requestCommand code {
+    flex: 1;
+    min-inline-size: 0;
+    overflow-x: auto;
+    font-family: var(--nc-font-mono);
+    white-space: nowrap;
+    color: var(--nc-text);
+  }
+
+  @media (max-width: 30rem) {
+    .requestHint {
+      padding-inline-start: 0;
+    }
+  }
 }

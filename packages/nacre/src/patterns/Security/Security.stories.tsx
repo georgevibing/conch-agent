@@ -2,10 +2,12 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { Button } from '../../components/Button';
 import { Stack } from '../../components/Stack';
+import { DeviceApproval } from './DeviceApproval';
 import { DeviceList } from './DeviceList';
+import { DeviceRequests } from './DeviceRequests';
 import { SecretReveal } from './SecretReveal';
 import { SecurityCheckup } from './SecurityCheckup';
-import { checkupItems, checkupWithFixes, devices } from './fixtures';
+import { approvedDevices, checkupItems, checkupWithFixes, devices, requests } from './fixtures';
 
 const meta = {
   title: 'Patterns/Security/SecurityCheckup',
@@ -67,4 +69,69 @@ export const Composed: Story = {
       <DeviceList devices={devices} onSignOut={() => undefined} />
     </Stack>
   ),
+};
+
+/** Approval on: signed-in and remembered devices, each removable. */
+export const ApprovedDevices: Story = {
+  render: () => (
+    <DeviceList
+      label="Devices"
+      devices={approvedDevices}
+      onSignOut={() => undefined}
+      onRemove={() => undefined}
+    />
+  ),
+};
+
+/** On the computer running Conch: approve or turn down, right here. */
+export const WaitingHere: Story = {
+  render: () => (
+    <DeviceRequests
+      requests={requests}
+      canApprove
+      onApprove={() => undefined}
+      onReject={() => undefined}
+    />
+  ),
+};
+
+/** On another device: turn down, or the line to run on the computer running Conch. */
+export const WaitingElsewhere: Story = {
+  render: () => (
+    <DeviceRequests requests={requests} canApprove={false} onReject={() => undefined} />
+  ),
+};
+
+const inTenMinutes = () => Date.now() + 9 * 60 * 1000 + 41 * 1000;
+
+/** What the new device sees: its code, and the one line to run. */
+export const ApprovalWaiting: Story = {
+  parameters: { layout: 'centered' },
+  render: () => (
+    <DeviceApproval
+      state="waiting"
+      code="K7M-Q2X"
+      device="Safari on iPhone"
+      expiresAt={inTenMinutes()}
+      onCancel={() => undefined}
+      footnote="Or open Conch on that computer: Settings → Security."
+    />
+  ),
+};
+
+export const ApprovalRejected: Story = {
+  parameters: { layout: 'centered' },
+  render: () => (
+    <DeviceApproval
+      state="rejected"
+      code="K7M-Q2X"
+      device="Safari on iPhone"
+      onRetry={() => undefined}
+    />
+  ),
+};
+
+export const ApprovalApproved: Story = {
+  parameters: { layout: 'centered' },
+  render: () => <DeviceApproval state="approved" code="K7M-Q2X" device="Safari on iPhone" />,
 };

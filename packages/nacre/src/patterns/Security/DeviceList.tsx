@@ -1,8 +1,9 @@
-import { Laptop, Smartphone, Tablet, TerminalSquare } from 'lucide-react';
+import { Laptop, Smartphone, Tablet, TerminalSquare, Trash2 } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
+import { IconButton } from '../../components/IconButton';
 import { cx } from '../../utils/cx';
 import styles from './Security.module.css';
 
@@ -14,29 +15,39 @@ export interface Device {
   /** e.g. "Signed in with a password · active 2 minutes ago". */
   meta: string;
   current?: boolean;
+  /** Signed in now (default). A remembered device that isn't can still be removed. */
+  signedIn?: boolean;
+  /** Not used for a long while: worth removing. */
+  stale?: boolean;
 }
 
 export interface DeviceListProps extends Omit<ComponentProps<'ul'>, 'children'> {
   devices: Device[];
   onSignOut?: (device: Device) => void;
+  /** Forget a device (signing it out); with approval on, it has to be approved again. */
+  onRemove?: (device: Device) => void;
   /** Label for the current device's action. */
   currentActionLabel?: string;
   empty?: ReactNode;
+  /** The list's accessible name. */
+  label?: string;
 }
 
-const icons: Record<Device['kind'], ReactNode> = {
+export const deviceIcons: Record<Device['kind'], ReactNode> = {
   desktop: <Laptop />,
   phone: <Smartphone />,
   tablet: <Tablet />,
   other: <TerminalSquare />,
 };
 
-/** Signed-in devices, this one first, each with a one-click sign out. */
+/** Devices, this one first, each with a one-click sign out (and, when given, remove). */
 export function DeviceList({
   devices,
   onSignOut,
+  onRemove,
   currentActionLabel = 'Sign out',
   empty = 'No devices are signed in.',
+  label = 'Signed-in devices',
   className,
   ...props
 }: DeviceListProps) {
@@ -45,36 +56,56 @@ export function DeviceList({
     (a, b) => Number(Boolean(b.current)) - Number(Boolean(a.current)),
   );
   return (
-    <ul aria-label="Signed-in devices" className={cx(styles.devices, className)} {...props}>
-      {sorted.map((device) => (
-        <li key={device.id} className={styles.device}>
-          <span className={styles.deviceIcon} aria-hidden>
-            {icons[device.kind]}
-          </span>
-          <div className={styles.deviceBody}>
-            <p className={styles.deviceName}>
-              {device.name}
-              {device.current && (
-                <Badge size="sm" tone="accent" variant="soft">
-                  This device
-                </Badge>
+    <ul aria-label={label} className={cx(styles.devices, className)} {...props}>
+      {sorted.map((device) => {
+        const signedIn = device.signedIn ?? true;
+        return (
+          <li key={device.id} className={styles.device} data-signed-out={signedIn ? undefined : ''}>
+            <span className={styles.deviceIcon} aria-hidden>
+              {deviceIcons[device.kind]}
+            </span>
+            <div className={styles.deviceBody}>
+              <p className={styles.deviceName}>
+                {device.name}
+                {device.current && (
+                  <Badge size="sm" tone="accent" variant="soft">
+                    This device
+                  </Badge>
+                )}
+                {device.stale && (
+                  <Badge size="sm" tone="warning" variant="soft">
+                    Not used in 90 days
+                  </Badge>
+                )}
+              </p>
+              <p className={styles.deviceMeta}>{device.meta}</p>
+            </div>
+            <div className={styles.deviceActions}>
+              {onSignOut && signedIn && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  tone={device.current ? 'neutral' : 'danger'}
+                  onClick={() => onSignOut(device)}
+                  aria-label={`${device.current ? currentActionLabel : 'Sign out'} ${device.name}`}
+                >
+                  {device.current ? currentActionLabel : 'Sign out'}
+                </Button>
               )}
-            </p>
-            <p className={styles.deviceMeta}>{device.meta}</p>
-          </div>
-          {onSignOut && (
-            <Button
-              size="sm"
-              variant="ghost"
-              tone={device.current ? 'neutral' : 'danger'}
-              onClick={() => onSignOut(device)}
-              aria-label={`${device.current ? currentActionLabel : 'Sign out'} ${device.name}`}
-            >
-              {device.current ? currentActionLabel : 'Sign out'}
-            </Button>
-          )}
-        </li>
-      ))}
+              {onRemove && !device.current && (
+                <IconButton
+                  size="sm"
+                  tone="danger"
+                  label={`Remove ${device.name}`}
+                  onClick={() => onRemove(device)}
+                >
+                  <Trash2 />
+                </IconButton>
+              )}
+            </div>
+          </li>
+        );
+      })}
     </ul>
   );
 }

@@ -1,4 +1,5 @@
 import type { Device } from './DeviceList';
+import type { DeviceRequestItem } from './DeviceRequests';
 import type { CheckItem } from './SecurityCheckup';
 
 export const checkupItems: CheckItem[] = [
@@ -106,4 +107,52 @@ export const devices: Device[] = [
     current: true,
   },
   { id: 's_curl', name: 'curl', kind: 'other', meta: 'Access key “CI” · active yesterday' },
+];
+
+/** Remembered devices with approval on: signed in, signed out, and one long unused. */
+export const approvedDevices: Device[] = [
+  {
+    id: 'dev_mac',
+    name: 'Chrome on Mac',
+    kind: 'desktop',
+    meta: 'Signed in now · approved on this computer',
+    current: true,
+  },
+  {
+    id: 'dev_phone',
+    name: 'Ada’s iPhone',
+    kind: 'phone',
+    meta: 'Signed in · active 5 minutes ago · approved in the terminal',
+  },
+  {
+    id: 'dev_ipad',
+    name: 'Safari on iPad',
+    kind: 'tablet',
+    meta: 'Signed out · last seen 3 days ago · added with a sign-in link',
+    signedIn: false,
+  },
+  {
+    id: 'dev_old',
+    name: 'Firefox on Windows',
+    kind: 'desktop',
+    meta: 'Signed out · last seen 4 months ago',
+    signedIn: false,
+    stale: true,
+  },
+];
+
+export const requests: DeviceRequestItem[] = [
+  {
+    code: 'K7M-Q2X',
+    device: 'Safari on iPhone',
+    kind: 'phone',
+    meta: 'From 100.64.0.7 · with your password · just now',
+  },
+  {
+    code: 'H4P-W9R',
+    device: 'Scripts using “Home server”',
+    kind: 'other',
+    meta: 'From 100.64.0.20 · with the key “Home server” · 3 minutes ago',
+    rejected: true,
+  },
 ];

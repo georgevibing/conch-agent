@@ -1,0 +1,192 @@
+@layer nacre.components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--nc-space-5);
+    inline-size: 100%;
+    max-inline-size: 30rem;
+    text-align: center;
+  }
+
+  .mark {
+    display: grid;
+    place-items: center;
+    min-block-size: 3.5rem;
+  }
+
+  .done {
+    display: grid;
+    place-items: center;
+    inline-size: 3.5rem;
+    block-size: 3.5rem;
+    border-radius: var(--nc-radius-full);
+    color: var(--nc-accent-contrast);
+    background: var(--nc-accent-9);
+    box-shadow:
+      0 0 0 6px color-mix(in oklch, var(--nc-accent-9) 16%, transparent),
+      var(--nc-glaze-edge);
+    animation: nc-settle var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both;
+  }
+
+  .done > svg {
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+  }
+
+  .head {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+  }
+
+  .title {
+    margin: 0;
+    font-family: var(--nc-font-display);
+    font-size: var(--nc-text-4xl);
+    font-weight: var(--nc-weight-regular);
+    line-height: var(--nc-leading-tight);
+    letter-spacing: -0.015em;
+    color: var(--nc-text);
+    text-wrap: balance;
+  }
+
+  .lead {
+    margin: 0;
+    font-size: var(--nc-text-md);
+    line-height: var(--nc-leading-relaxed);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  .lead strong {
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  /* ── The code: six pearl tiles in two groups ─────────────────────────── */
+  .code {
+    --nc-rim-rest: 0.55;
+    --nc-rim-hover: 0.9;
+
+    position: relative;
+    display: flex;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-3);
+    border-radius: var(--nc-radius-xl);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-2);
+  }
+
+  .code[data-faded] {
+    opacity: 0.55;
+  }
+
+  .code[data-faded] .tile {
+    color: var(--nc-text-subtle);
+  }
+
+  .group {
+    display: flex;
+    gap: var(--nc-space-1-5);
+  }
+
+  .tile {
+    display: grid;
+    place-items: center;
+    inline-size: clamp(2.25rem, 9vw, 2.75rem);
+    block-size: clamp(2.75rem, 11vw, 3.25rem);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 1px 0 color-mix(in oklch, var(--nc-text) 6%, transparent);
+    font-family: var(--nc-font-mono);
+    font-size: clamp(var(--nc-text-xl), 5vw, var(--nc-text-2xl));
+    font-weight: var(--nc-weight-semibold);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text);
+  }
+
+  /* ── What to do ─────────────────────────────────────────────────────── */
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    inline-size: 100%;
+    text-align: start;
+  }
+
+  .step,
+  .footnote {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  .footnote {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .command {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    padding-inline: var(--nc-space-3) var(--nc-space-0-5);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    font-size: var(--nc-text-sm);
+  }
+
+  .command code {
+    flex: 1;
+    min-inline-size: 0;
+    padding-block: var(--nc-space-2);
+    overflow-x: auto;
+    font-family: var(--nc-font-mono);
+    white-space: nowrap;
+    color: var(--nc-text);
+  }
+
+  .foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--nc-space-3);
+  }
+
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  .time {
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-subtle);
+  }
+
+  .dot {
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-9);
+    animation: nc-breathe 2.4s var(--nc-ease-in-out) infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .done,
+    .dot {
+      animation: none;
+    }
+  }
+}

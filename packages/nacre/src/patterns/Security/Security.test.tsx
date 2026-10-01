@@ -3,10 +3,12 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { expectAccessible, renderNacre } from '../../test/render';
+import { DeviceApproval } from './DeviceApproval';
 import { DeviceList } from './DeviceList';
+import { DeviceRequests } from './DeviceRequests';
 import { SecretReveal } from './SecretReveal';
 import { SecurityCheckup } from './SecurityCheckup';
-import { checkupItems, checkupWithFixes, devices } from './fixtures';
+import { approvedDevices, checkupItems, checkupWithFixes, devices, requests } from './fixtures';
 
 describe('SecretReveal', () => {
   it('shows the secret with a copy button', async () => {
@@ -104,6 +106,106 @@ describe('DeviceList', () => {
     expect(items[0]).toHaveTextContent('This device');
     await user.click(screen.getByRole('button', { name: 'Sign out Safari on iPhone' }));
     expect(onSignOut).toHaveBeenCalledWith(expect.objectContaining({ id: 's_phone' }));
+    await expectAccessible(container);
+  });
+});
+
+describe('DeviceList with remembered devices', () => {
+  it('signs out what is signed in, and removes anything but this device', async () => {
+    const user = userEvent.setup();
+    const onSignOut = vi.fn();
+    const onRemove = vi.fn();
+    const { container } = renderNacre(
+      <DeviceList
+        label="Devices"
+        devices={approvedDevices}
+        onSignOut={onSignOut}
+        onRemove={onRemove}
+      />,
+    );
+    const list = screen.getByRole('list', { name: 'Devices' });
+    expect(list.querySelectorAll('li')).toHaveLength(4);
+    // A signed-out device has nothing to sign out of; this device can't remove itself.
+    expect(screen.queryByRole('button', { name: 'Sign out Safari on iPad' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Remove Chrome on Mac' })).toBeNull();
+    expect(screen.getByText('Not used in 90 days')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Remove Safari on iPad' }));
+    expect(onRemove).toHaveBeenCalledWith(expect.objectContaining({ id: 'dev_ipad' }));
+    await user.click(screen.getByRole('button', { name: 'Sign out Ada’s iPhone' }));
+    expect(onSignOut).toHaveBeenCalledWith(expect.objectContaining({ id: 'dev_phone' }));
+    await expectAccessible(container);
+  });
+});
+
+describe('DeviceRequests', () => {
+  it('approves and turns down on the computer running Conch', async () => {
+    const user = userEvent.setup();
+    const onApprove = vi.fn();
+    const onReject = vi.fn();
+    const { container } = renderNacre(
+      <DeviceRequests requests={requests} canApprove onApprove={onApprove} onReject={onReject} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Approve Safari on iPhone (K7M-Q2X)' }));
+    expect(onApprove).toHaveBeenCalledWith(expect.objectContaining({ code: 'K7M-Q2X' }));
+    await user.click(screen.getByRole('button', { name: 'Turn down Safari on iPhone (K7M-Q2X)' }));
+    expect(onReject).toHaveBeenCalled();
+    // One turned down can still be approved, and can't be turned down twice.
+    expect(screen.getByRole('button', { name: /Approve Scripts using/ })).toHaveTextContent(
+      'Approve anyway',
+    );
+    expect(screen.queryByRole('button', { name: /Turn down Scripts using/ })).toBeNull();
+    await expectAccessible(container);
+  });
+
+  it('elsewhere, shows the command to run there instead of approving', async () => {
+    const { container } = renderNacre(
+      <DeviceRequests requests={requests} canApprove={false} onReject={() => undefined} />,
+    );
+    expect(screen.queryByRole('button', { name: /^Approve/ })).toBeNull();
+    expect(screen.getByText('pnpm conch devices approve K7M-Q2X')).toBeInTheDocument();
+    await expectAccessible(container);
+  });
+});
+
+describe('DeviceApproval', () => {
+  it('shows the code and the command, and counts down while it waits', async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    const { container } = renderNacre(
+      <DeviceApproval
+        state="waiting"
+        code="K7M-Q2X"
+        device="Safari on iPhone"
+        expiresAt={Date.now() + 5 * 60 * 1000}
+        onCancel={onCancel}
+      />,
+    );
+    expect(screen.getByRole('heading', { name: 'Approve this device' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Approval code K 7 M - Q 2 X' })).toBeInTheDocument();
+    expect(screen.getByText('pnpm conch devices approve K7M-Q2X')).toBeInTheDocument();
+    expect(screen.getByText(/Waiting for approval/)).toHaveTextContent(/[45]:\d\d left/);
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onCancel).toHaveBeenCalled();
+    await expectAccessible(container);
+  });
+
+  it('says plainly when it was turned down, and offers to ask again', async () => {
+    const user = userEvent.setup();
+    const onRetry = vi.fn();
+    const { container } = renderNacre(
+      <DeviceApproval
+        state="rejected"
+        code="K7M-Q2X"
+        device="Safari on iPhone"
+        onRetry={onRetry}
+      />,
+    );
+    expect(
+      screen.getByRole('heading', { name: 'This device wasn’t approved' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/pnpm conch devices approve/)).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Sign in again' }));
+    expect(onRetry).toHaveBeenCalled();
     await expectAccessible(container);
   });
 });
