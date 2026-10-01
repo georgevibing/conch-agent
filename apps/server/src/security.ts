@@ -1,4 +1,4 @@
-import type { AccessMethod, AuthStatus } from '@conch/protocol';
+import type { AccessMethod, AuthStatus, WaitingApproval } from '@conch/protocol';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import type { Config } from './config';
@@ -22,8 +22,13 @@ export type Access =
 declare module 'fastify' {
   interface FastifyRequest {
     access?: Access;
+    /** A script's key that needs approval to be used from this device. */
+    approval?: WaitingApproval;
   }
 }
+
+/** Who a request is, or why it isn't let in. */
+export type Resolved = Access | 'unauthorized' | 'setup-required' | 'approval-required';
 
 /** Endpoints anyone may call: enough to load the app and sign in. */
 const PUBLIC_API = new Set([
@@ -36,6 +41,13 @@ const PUBLIC_API = new Set([
 const COOKIE = 'conch_session';
 /** `__Host-` cookies must be Secure, host-only and Path=/ — browsers enforce it. */
 const SECURE_COOKIE = `__Host-${COOKIE}`;
+/** Names this browser as a device, across sign-ins. Never cleared by signing out. */
+const DEVICE_COOKIE = 'conch_device';
+const SECURE_DEVICE_COOKIE = `__Host-${DEVICE_COOKIE}`;
+/** Browsers cap a cookie's life at 400 days (RFC 6265bis). */
+const DEVICE_MAX_AGE_S = 400 * 24 * 60 * 60;
+/** How often open sockets are checked against `access.json` (the terminal may have changed it). */
+const SWEEP_MS = 2000;
 
 function hostname(hostHeader: string | undefined): string | undefined {
   if (!hostHeader) return undefined;
@@ -67,6 +79,12 @@ export class Gatekeeper {
   readonly #sockets = new Map<string, Set<{ close(code?: number, reason?: string): void }>>();
   /** Sessions just signed out, so what they started (terminals) can end with them. */
   readonly signedOut = new Emitter<string[]>();
+  /** Devices changed (perhaps from the terminal): `waiting` asking for approval. */
+  readonly devicesChanged = new Emitter<{ waiting: number }>();
+  /** Which open sockets are on this computer, so approval doesn't apply to them. */
+  readonly #localSockets = new WeakSet<object>();
+  #sweep?: ReturnType<typeof setInterval>;
+  #seen = '';
 
   constructor(
     readonly config: Config,
@@ -120,26 +138,65 @@ export class Gatekeeper {
     return ip.includes(':') && !ip.startsWith('::ffff:') ? ip.split(':').slice(0, 4).join(':') : ip;
   }
 
-  #sessionToken(request: FastifyRequest): string | undefined {
+  sessionToken(request: FastifyRequest): string | undefined {
     const cookie = request.headers.cookie;
     return readCookie(cookie, SECURE_COOKIE) ?? readCookie(cookie, COOKIE);
   }
 
-  async resolve(request: FastifyRequest): Promise<Access | 'unauthorized' | 'setup-required'> {
+  deviceToken(request: FastifyRequest): string | undefined {
+    const cookie = request.headers.cookie;
+    return readCookie(cookie, SECURE_DEVICE_COOKIE) ?? readCookie(cookie, DEVICE_COOKIE);
+  }
+
+  /**
+   * New devices need the person's OK for this request: approval is on, and
+   * it doesn't come from this computer (which is where approving happens).
+   */
+  async approvalApplies(request: FastifyRequest): Promise<boolean> {
+    return !this.isLocal(request) && (await this.store.approvalOn());
+  }
+
+  async resolve(request: FastifyRequest): Promise<Resolved> {
     const method = await this.method();
-    const token = this.#sessionToken(request);
+    const token = this.sessionToken(request);
     if (token) {
       const session = await this.store.findSession(token);
-      if (session) return { kind: 'session', session };
+      if (session) {
+        // With approval on, a session from elsewhere counts only on an approved device.
+        if (
+          (await this.approvalApplies(request)) &&
+          !(await this.store.deviceApproved(session.deviceId))
+        )
+          return 'unauthorized';
+        return { kind: 'session', session };
+      }
     }
     const bearer = /^Bearer\s+(\S+)$/i.exec(request.headers.authorization ?? '')?.[1];
     if (bearer) {
       if (this.limiter.retryAfter(this.clientKey(request), this.isLocal(request)) > 0)
         return 'unauthorized';
       const keyId = await this.checkKey(bearer);
-      if (keyId) return { kind: 'bearer', keyId };
-      this.limiter.fail(this.clientKey(request));
-      return 'unauthorized';
+      if (!keyId) {
+        this.limiter.fail(this.clientKey(request));
+        return 'unauthorized';
+      }
+      if (await this.approvalApplies(request)) {
+        const keyName =
+          keyId === 'env'
+            ? 'CONCH_TOKEN'
+            : ((await this.store.keys()).find((k) => k.id === keyId)?.name ?? 'an access key');
+        const access = await this.store.scriptAccess({
+          keyId,
+          keyName,
+          userAgent: request.headers['user-agent'],
+          address: this.clientKey(request),
+        });
+        if (!access.approved) {
+          request.approval = access.request;
+          return 'approval-required';
+        }
+      }
+      return { kind: 'bearer', keyId };
     }
     if (method === 'none') return this.isLocal(request) ? { kind: 'local' } : 'setup-required';
     return 'unauthorized';
@@ -155,6 +212,8 @@ export class Gatekeeper {
   async status(request: FastifyRequest): Promise<AuthStatus> {
     const resolved = request.access ?? (await this.resolve(request));
     const signedIn = typeof resolved === 'object';
+    const token = signedIn ? undefined : this.sessionToken(request);
+    const approval = token ? await this.store.waitingFor(token) : undefined;
     return {
       method: await this.method(),
       signedIn,
@@ -162,6 +221,7 @@ export class Gatekeeper {
       secure: this.isSecure(request),
       // Only those still outside need telling: the way back in is on this computer.
       ...(!signedIn && (await this.store.locked()) && { locked: true }),
+      ...(approval && { approval }),
     };
   }
 
@@ -178,6 +238,13 @@ export class Gatekeeper {
     return `${name}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MAX_AGE_MS / 1000}${secure ? '; Secure' : ''}`;
   }
 
+  /** Long-lived and HttpOnly: page scripts can't read it, so an injected one can't take it away. */
+  deviceCookie(request: FastifyRequest, token: string): string {
+    const secure = this.isSecure(request) && !this.isLocal(request);
+    const name = secure ? SECURE_DEVICE_COOKIE : DEVICE_COOKIE;
+    return `${name}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${DEVICE_MAX_AGE_S}${secure ? '; Secure' : ''}`;
+  }
+
   clearCookies(): string[] {
     return [
       `${COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`,
@@ -185,14 +252,66 @@ export class Gatekeeper {
     ];
   }
 
-  track(sessionId: string, socket: { close(code?: number, reason?: string): void }): () => void {
+  track(
+    sessionId: string,
+    socket: { close(code?: number, reason?: string): void },
+    local = false,
+  ): () => void {
     let set = this.#sockets.get(sessionId);
     if (!set) this.#sockets.set(sessionId, (set = new Set()));
     set.add(socket);
+    if (local) this.#localSockets.add(socket);
+    this.#startSweep();
     return () => {
       set.delete(socket);
       if (!set.size) this.#sockets.delete(sessionId);
+      if (!this.#sockets.size) this.#stopSweep();
     };
+  }
+
+  /**
+   * While anyone is connected, look at `access.json` every couple of seconds:
+   * `pnpm conch` may have signed a device out, removed it, or approved one, in
+   * another process. Closes what was signed out and says when devices changed.
+   */
+  #startSweep() {
+    if (this.#sweep) return;
+    this.#sweep = setInterval(() => void this.sweep().catch(() => undefined), SWEEP_MS);
+    this.#sweep.unref();
+  }
+
+  #stopSweep() {
+    clearInterval(this.#sweep);
+    this.#sweep = undefined;
+  }
+
+  async sweep(): Promise<void> {
+    const file = await this.store.get();
+    const approval = await this.store.approvalOn();
+    const ended: string[] = [];
+    for (const [id, sockets] of this.#sockets) {
+      const session = file.sessions.find((s) => s.id === id);
+      const active = await this.store.sessionActive(id);
+      const approved = !approval || (await this.store.deviceApproved(session?.deviceId));
+      if (!active) ended.push(id);
+      else if (!approved)
+        for (const socket of sockets)
+          if (!this.#localSockets.has(socket)) socket.close(4401, 'Signed out');
+    }
+    if (ended.length) this.disconnect(ended);
+    const now = Date.now();
+    const waiting = file.requests.filter((r) => r.rejectedAt === undefined && r.expiresAt > now);
+    const seen = JSON.stringify([
+      approval,
+      waiting.map((r) => r.code),
+      file.devices.map((d) => [d.id, d.approvedAt, d.label]),
+      file.sessions.filter((s) => !s.pending).map((s) => s.id),
+    ]);
+    if (seen !== this.#seen) {
+      const first = this.#seen === '';
+      this.#seen = seen;
+      if (!first) this.devicesChanged.emit({ waiting: waiting.length });
+    }
   }
 
   /** Disconnect signed-out devices right away. */
@@ -331,6 +450,25 @@ export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
       );
     }
     if (resolved === 'unauthorized') return reject(reply, 401, 'unauthorized', 'Please sign in.');
+    if (resolved === 'approval-required') {
+      const code = request.approval?.code ?? '';
+      return reply.code(403).send({
+        error: 'approval-required',
+        code,
+        message:
+          request.approval?.state === 'rejected'
+            ? 'Using this key from this device was turned down.'
+            : `This key needs your approval to be used from this device. On the computer running Conch, run: pnpm conch devices approve ${code}`,
+      });
+    }
     request.access = resolved;
+    // A browser signed in before Conch kept devices gets its device cookie now.
+    if (resolved.kind === 'session' && !gate.deviceToken(request)) {
+      const adopted = await gate.store.adoptDevice(resolved.session.id, gate.clientKey(request));
+      if (adopted) {
+        resolved.session.deviceId = adopted.deviceId;
+        reply.header('set-cookie', gate.deviceCookie(request, adopted.token));
+      }
+    }
   });
 }

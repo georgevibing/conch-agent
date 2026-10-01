@@ -208,7 +208,7 @@ export const RULES: readonly BackupRule[] = [
     match: 'access.json',
     class: 'secret',
     group: 'secrets',
-    why: 'Who may sign in: the password hash and access keys. Signed-in devices and pairing codes are never backed up.',
+    why: 'Who may sign in: the password hash and access keys. Signed-in devices, approved devices and pairing codes are never backed up.',
   },
 ];
 

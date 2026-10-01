@@ -835,7 +835,7 @@ export async function buildApp(services: Services) {
     const subscribed = new Set<string>();
     // Signing this device out (or its session expiring) closes the socket.
     const session = request.access?.kind === 'session' ? request.access.session : undefined;
-    const untrack = session ? gate.track(session.id, socket) : undefined;
+    const untrack = session ? gate.track(session.id, socket, gate.isLocal(request)) : undefined;
     socket.on('close', () => untrack?.());
     const stillSignedIn = async () => {
       const resolved = await gate.resolve(request);

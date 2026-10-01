@@ -237,6 +237,44 @@ export function checkup(input: CheckupInput): CheckupItem[] {
     });
   }
 
+  if (!input.accessLocked && access.method !== 'none') {
+    const now = Date.now();
+    const waiting = access.requests.filter((r) => r.rejectedAt === undefined && r.expiresAt > now);
+    if (access.approval && waiting.length) {
+      const first = access.devices.find((d) => d.id === waiting[0]?.deviceId);
+      const who = first ? (first.label ?? first.name) : 'A device';
+      items.push({
+        id: 'devices-waiting',
+        level: 'warn',
+        title:
+          waiting.length === 1
+            ? `${who} is waiting for your approval`
+            : `${waiting.length} devices are waiting for your approval`,
+        detail:
+          'Something signed in with your password or key and is asking to be let in. Approve it only if it’s yours. If it isn’t, someone knows your password: turn it down and change it.',
+        command: 'pnpm conch devices',
+        fix: { kind: 'open', label: 'Review', place: 'devices' },
+      });
+    } else if (access.approval) {
+      items.push({
+        id: 'devices',
+        level: 'ok',
+        title: 'New devices need your approval',
+        detail:
+          'Even with the right password or key, a new device can’t use Conch until you approve it on this computer.',
+      });
+    } else if (network || input.tailscale) {
+      items.push({
+        id: 'devices',
+        level: 'info',
+        title: 'Approve new devices for extra protection',
+        detail:
+          'With this on, someone who learns your password still can’t get in: each new device waits until you approve it on this computer.',
+        fix: { kind: 'open', label: 'Turn it on', place: 'devices' },
+      });
+    }
+  }
+
   if (network && !input.secure) {
     items.push({
       id: 'encryption',

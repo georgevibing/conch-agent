@@ -236,6 +236,9 @@ export class Services {
     });
     // A device that's signed out takes the terminals it opened with it.
     this.gate.signedOut.on((ids) => this.terminal.endOwnedBy(ids.map((id) => `session:${id}`)));
+    this.gate.devicesChanged.on(({ waiting }) =>
+      this.broadcast.emit({ type: 'access.changed', waiting }),
+    );
     this.browser = new BrowserService({
       home: config.CONCH_HOME,
       heal,
