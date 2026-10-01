@@ -231,6 +231,31 @@ Both are in **Settings → Security → Safety**, on unless you turn them off. T
 one off asks that it's you, and the checkup will say so. **Activity** (in the
 sidebar) shows everything the assistant did, in every chat and routine.
 
+Sealing works with Claude Code on macOS and Linux, and with Codex (fully from
+Codex 0.159; an older Codex keeps to the work folder but can still read where keys
+live, and Safety says so). Providers that talk to a model over the internet run no
+commands of their own. **Windows can't seal commands yet**, and Safety says that
+too. Conch never shows a protection that isn't there.
+
+## Skills
+
+Every skill is read through before it's used (above), and says what it can do:
+"This skill can: run commands (only `git`), change files in your work folder".
+While it's in use, anything else it tries **asks you first**, in every mode,
+with the skill's name in the question. A skill that doesn't say gets the usual:
+files in your work folder and the web.
+
+A skill can be **signed**. Its `SKILL.sig` proves which key signed exactly these
+files under exactly this name. Trust a publisher once (it asks that it's you)
+and their skills say **Verified: signed by …**, and their signed updates stay
+on. A skill changed after it was signed, or carrying someone else's signature,
+is turned off with the reason. Someone using a name you trust with another key
+is shown as a possible impostor. A name proves nothing; the key does.
+
+Sign your own with `pnpm conch skills sign <folder>`. Share `pnpm conch skills
+key` so people can check it's you. Your private key stays in
+`skills.signing.json`, readable only by you and never by the assistant.
+
 ## Undoing what the assistant changed
 
 Conch keeps a copy of each file just before the assistant changes it, so you can

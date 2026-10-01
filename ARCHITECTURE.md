@@ -306,6 +306,17 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   changed); their taint comes back to the parent, the turn's abort stops them, and over
   budget it refuses. A restart marks running tasks `interrupted` (one-press retry); a limit
   carries on once on `limitFallback`. Push topic `tasks`; doctor check `tasks`.
+
+- **Skill trust** ([ADR 0031](./docs/adr/0031-skill-trust.md)). `skills/permissions.ts`
+  turns `allowed-tools` or `permissions:` into capabilities shown in words; while a
+  skill is in use (`skill.used` this turn), `mustAsk` asks for anything outside them,
+  in every mode. `skills/signing.ts` checks `SKILL.sig` (Ed25519 over a domain line,
+  the name and the folder hash); `skills/trust.ts` keeps trusted keys
+  (`skills.trust.json`) and your own (`skills.signing.json`), both protected paths.
+  An invalid signature turns a skill off; a trusted publisher's signed update keeps
+  it on. Codex follows Seal commands (`sealFor`: writable roots, network, a
+  permission profile denying key folders from 0.159), and `/api/safety` says per
+  provider what's sealed.
 - **Healing** (`lib/healed.ts`): every self-repair leaves one plain note —
   integrations that came back, a renewed sign-in, Claude Code's fallback, a held
   routine that ran once its provider was back. Integrations retry failures that

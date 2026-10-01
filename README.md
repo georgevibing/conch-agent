@@ -168,6 +168,14 @@ assistant can split a job and run the parts side by side on a faster model, each
 in its own copy of the folder if it's code. Helpers ask as you would, stay as
 careful as their chat, and stop when you stop. ([ADR 0033](./docs/adr/0033-hand-it-off.md))
 
+**Skills you can trust.** Every skill says what it can do ("run commands (only
+`git`)"), and while it's in use anything else asks first. Signed skills say who
+made them: trust a publisher once and their skills say **Verified**, and their
+updates carry on. A skill changed after it was signed turns off. Sign your own with
+`pnpm conch skills sign <folder>`. Commands are sealed in Codex too, and
+**Settings → Security → Safety** says plainly which providers are sealed.
+([ADR 0031](./docs/adr/0031-skill-trust.md))
+
 **It looks after itself.** **Settings → Health** has one **Repair everything**
 button, a quiet list of what Conch fixed on its own, daily backups you can restore
 (with a preview and Undo), and one-click updates for Conch and the programs it uses.
