@@ -105,7 +105,7 @@ src/
   lib/healed.ts               "fixed on its own" notes (~/.conch/healed.json, `healed` event)
   lib/lifecycle.ts            this run's `BOOT_ID`; `restart()` (exit 75, the supervisor starts it again)
   start.ts, supervisor.ts     `pnpm start` runs Conch as a child it restarts (on request, or after a crash)
-  background/                 Always on: login items (launchd, systemd, the Run key), the launcher, the handover, Conch as an app (ADR 0026)
+  background/                 Always on: login items (launchd, systemd, the Run key), the launcher, the handover, Conch as an app (ADR 0026); the menu bar helper, lingering, keep-awake (ADR 0029)
   network/tailscale.ts        your phone's secure address: `tailscale serve`, looked at and turned on (ADR 0027)
   push/                       notifications: RFC 8291/8292 Web Push on node:crypto, subscriptions, presence (ADR 0027)
   voice/                      private dictation: whisper.cpp and its speech model (ADR 0027)
@@ -216,6 +216,18 @@ src/
   first when it isn't answering. The `background` doctor check heals the launcher
   and the app when Node or the folder moved. `scripts/install.sh` and `install.ps1`
   are the one-line installers.
+- **The menu bar and a little computer** ([ADR 0029](./docs/adr/0029-menu-bar-and-little-computer.md)).
+  `TrayService` writes a helper from `tray-sources.ts` into `~/.conch/tray` (Swift built
+  with `xcrun swiftc` into `Conch Menu.app`, PowerShell `NotifyIcon`, Python
+  AppIndicator), starts it detached whenever the gateway starts (`main.ts`, then every
+  five minutes), rebuilds it when its source changes and replaces it when Conch updates.
+  It polls `GET /api/tray/status` with `X-Conch-Tray` (the token in `tray/token`, 0600);
+  `Gatekeeper.trayAllowed` accepts it from loopback only, for the three `TRAY_API`
+  routes only. `little.ts` has `AfterLogout` (`loginctl enable-linger`, or the one
+  `sudo` command) and `KeepAwake` (`caffeinate -s -w <pid>` in the background Conch).
+  Both show in `BackgroundStatus` (`tray`, `afterLogout`, `keepAwake`) and in Nacre
+  `AlwaysOn`'s `options` (web `RunningOptions`). `install.sh --server` lingers, asks for a
+  password on the terminal, and runs `conch phone` and `conch pair`.
 - **In your pocket** ([ADR 0027](./docs/adr/0027-in-your-pocket.md)). `Tailscale` looks at
   `tailscale status`/`serve status` and runs `tailscale serve --bg <port>` on one press
   (waiting on Tailscale's own OK page when it asks); `HostPolicy.urls()` only offers the

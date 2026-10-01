@@ -40,7 +40,9 @@ against their checksums, no administrator), builds Conch, keeps it running in th
 background, adds **Conch** to your apps and opens it. Then Conch looks for what you
 already have, helps you connect a provider (and sign in, or install what's missing),
 and asks a couple of optional questions so it can be _yours_. Run the line again to
-update; add `--uninstall` to remove it.
+update; add `--uninstall` to remove it. For a computer that stays on (a Mac mini, a
+Raspberry Pi), add `--server`: no browser, it keeps running after you log out, and it
+prints your phone's secure address and a QR code to sign the phone in.
 
 From a checkout instead (Node ≥ 24):
 
@@ -116,6 +118,12 @@ running with no window, so routines run on time and your phone and chat apps can
 always reach it. Turning it on from a Terminal window moves Conch to the background
 without losing your place. Open **Conch** from Applications, Spotlight or the Start
 menu, and it starts itself first if it has to. ([ADR 0026](./docs/adr/0026-always-on.md))
+
+**In the menu bar.** The pearl in the menu bar (the tray on Windows, the panel on
+Linux) says whether Conch is running, shows a dot when something needs you, and opens,
+starts or quits Conch in one click. On a computer that stays on, Conch keeps running
+after you log out (Linux) and can keep a Mac awake.
+([ADR 0029](./docs/adr/0029-menu-bar-and-little-computer.md))
 
 **Safe hands.** Once a chat has read a web page, an email or someone else's message,
 anything that could send your things out or change your computer asks you first,

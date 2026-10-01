@@ -65,6 +65,11 @@ same Wi-Fi could read your traffic.
 **SSH tunnel** (for developers): `ssh -N -L 4317:localhost:4317 you@your-computer`,
 then open http://localhost:4317.
 
+**A computer that stays on.** Install with `--server` (`sh install.sh --server`) and
+Conch keeps running after you log out, asks you for a password in the terminal, turns
+on the Tailscale address and prints a QR code for your phone. Nothing is opened to the
+internet. Keeping Conch running with nobody logged in asks you to confirm it's you.
+
 ## Approve new devices (extra protection, if you want it)
 
 A password or key is one thing to keep safe. If someone learns it, they could
@@ -221,3 +226,12 @@ Conch never keeps a copy of where your keys and passwords live (SSH keys, your
 saved passwords, Conch's own keys), and an undo never writes through a link or
 into a folder that now points somewhere else. If you've changed a file since,
 Undo says so and leaves it alone unless you choose to replace it.
+
+## Conch in the menu bar
+
+The pearl in your menu bar (tray, panel) is a tiny helper Conch builds on your
+computer. It can only ask how Conch is (counts, never anything from a chat), quit
+Conch and hide itself, and only from the same computer, with a token in a file only
+you can read (`~/.conch/tray/token`). The token isn't a sign-in: it opens nothing
+else, and doesn't work through a proxy or from another device. Anything that needs you
+to confirm it's you opens Conch's page instead.
