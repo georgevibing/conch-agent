@@ -8,7 +8,8 @@
 # any time: it updates Conch and repairs anything that moved.
 #
 # Options (set before running): $env:CONCH_NO_BACKGROUND, $env:CONCH_NO_SHORTCUT,
-# $env:CONCH_NO_OPEN, $env:CONCH_UNINSTALL, $env:CONCH_DIR, $env:CONCH_REPO, $env:CONCH_BRANCH.
+# $env:CONCH_NO_OPEN, $env:CONCH_UNINSTALL, $env:CONCH_DIR, $env:CONCH_REPO, $env:CONCH_BRANCH,
+# $env:CONCH_SERVER (a little computer: no browser, your phone's secure address and code).
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -20,6 +21,7 @@ $Branch = if ($env:CONCH_BRANCH) { $env:CONCH_BRANCH } else { 'main' }
 $ConchHome = if ($env:CONCH_HOME) { $env:CONCH_HOME } else { Join-Path $HOME '.conch' }
 $Dir = if ($env:CONCH_DIR) { $env:CONCH_DIR } else { Join-Path $env:LOCALAPPDATA 'Conch\app' }
 $Runtime = Join-Path $ConchHome 'runtime'
+if ($env:CONCH_SERVER) { $env:CONCH_NO_OPEN = '1'; $env:CONCH_NO_SHORTCUT = '1' }
 
 function Say($text) { Write-Host "  $text" }
 function Ok($text) { Write-Host '  ' -NoNewline; Write-Host ([char]0x2713) -ForegroundColor Green -NoNewline; Write-Host " $text" }
@@ -152,6 +154,7 @@ if ($env:CONCH_UNINSTALL) {
     Invoke-Conch @('quit') | Out-Null
     Invoke-Conch @('background', 'off') | Out-Null
     Invoke-Conch @('shortcut', 'remove') | Out-Null
+    Invoke-Conch @('tray', 'off') | Out-Null
     Ok "Conch has stopped and won't start when you sign in"
   }
   if (Test-Path $Dir) { Remove-Item $Dir -Recurse -Force }
@@ -222,6 +225,13 @@ if (-not $env:CONCH_NO_BACKGROUND) {
   }
   if ($result.Output -match '(http://\S+)') { $url = $Matches[1] }
   Ok 'Conch is running, and starts by itself when you sign in'
+}
+
+if ($env:CONCH_SERVER) {
+  Say 'Windows stops Conch when you sign out: lock the screen instead.'
+  $phone = Invoke-Conch @('phone')
+  $phone.Output -split "`n" | ForEach-Object { Write-Host "  $_" }
+  if ($phone.Ok) { (Invoke-Conch @('pair')).Output -split "`n" | ForEach-Object { Write-Host "  $_" } }
 }
 
 Write-Host ''

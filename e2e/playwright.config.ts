@@ -48,6 +48,12 @@ const scenarios = {
     env: { CONCH_MOCK_STATE: 'ready', CONCH_SUPERVISE: '1' },
     entry: 'start',
   },
+  // The menu bar and a little computer (ADR 0029): a pretend helper, lingering and keep-awake.
+  'little-computer': {
+    port: 4376,
+    env: { CONCH_MOCK_STATE: 'ready', CONCH_SUPERVISE: '1' },
+    entry: 'start',
+  },
   // Approving new devices: "other devices" arrive through a pretend proxy (X-Forwarded-For).
   devices: { port: 4381, env: { CONCH_MOCK_STATE: 'ready', CONCH_HOME: devicesHome } },
   security: {

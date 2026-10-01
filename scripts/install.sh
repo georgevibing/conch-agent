@@ -9,6 +9,7 @@
 # Run it again any time: it updates Conch and repairs anything that moved.
 #
 #   sh install.sh [--no-background] [--no-shortcut] [--no-open] [--dir PATH]
+#   sh install.sh --server     a little computer: headless, keeps running, your phone's address
 #   sh install.sh --uninstall [--delete-data]
 #
 # Settings from the environment: CONCH_REPO, CONCH_BRANCH, CONCH_DIR, CONCH_HOME.
@@ -24,6 +25,7 @@ SHORTCUT=1
 OPEN=1
 UNINSTALL=
 DELETE_DATA=
+SERVER=
 
 case "$(uname -s)" in
   Darwin) OS=darwin; DEFAULT_DIR="$HOME/Library/Application Support/Conch/app" ;;
@@ -40,6 +42,7 @@ while [ $# -gt 0 ]; do
     --dir) shift; DIR=$1 ;;
     --dir=*) DIR=${1#--dir=} ;;
     --uninstall) UNINSTALL=1 ;;
+    --server) SERVER=1; OPEN=; SHORTCUT= ;;
     --delete-data) DELETE_DATA=1 ;;
     -h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $1 (try --help)" >&2; exit 1 ;;
@@ -206,6 +209,7 @@ if [ -n "$UNINSTALL" ]; then
     # Quit first: then turning Always on off also unloads it from the computer.
     conch quit >/dev/null 2>&1 || true
     conch background off >/dev/null 2>&1 || true
+    conch tray off >/dev/null 2>&1 || true
     conch shortcut remove >/dev/null 2>&1 || true
     ok "Conch has stopped and won't start at login"
   fi
@@ -278,6 +282,27 @@ if [ -n "$BACKGROUND" ]; then
   else
     sed 's/^/    /' "$LOG" >&2
     fail "Conch didn't start." "Run it by hand to see why: cd \"$DIR\" && corepack pnpm start"
+  fi
+fi
+
+# A little computer (ADR 0029): keeps going with nobody logged in, and your phone can reach it.
+if [ -n "$SERVER" ]; then
+  if [ "$OS" = linux ]; then
+    if conch background after-logout on >"$LOG" 2>&1; then ok "Conch keeps running after you log out"
+    else sed 's/^/  /' "$LOG"; fi
+  else
+    say "${DIM}A Mac stops Conch when you log out: turn on automatic login in System Settings → Users & Groups.${RESET}"
+  fi
+  if [ -r /dev/tty ] && conch status 2>/dev/null | grep -q 'No sign-in'; then
+    say "Your phone signs in with a password. Choose one now:"
+    conch password < /dev/tty || true
+  fi
+  if conch phone >"$LOG" 2>&1; then
+    sed 's/^/  /' "$LOG"
+    conch pair || true
+  else
+    sed 's/^/  /' "$LOG"
+    say "${DIM}When that's done: pnpm conch phone, then pnpm conch pair.${RESET}"
   fi
 fi
 
