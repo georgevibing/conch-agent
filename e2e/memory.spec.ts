@@ -1,0 +1,125 @@
+import { expect, test } from '@playwright/test';
+
+const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
+
+/**
+ * It learns you, end to end (ADR 0032): a memory learned after reading a page
+ * waits for an OK; the tidy-up merges repeats and updates what changed, with
+ * Undo; what Conch knows is searchable and exportable; something asked for in
+ * three chats is offered as a skill, never saved by itself.
+ */
+test.beforeEach(async ({ request }) => {
+  await request.patch('/api/settings', { data: { onboarded: true, profile: { name: 'Ada' } } });
+});
+
+async function say(page: import('@playwright/test').Page, text: string) {
+  const composer = page.getByRole('textbox', { name: 'Message Conch' });
+  await composer.fill(text);
+  await composer.press('Enter');
+  await expect(page.getByRole('button', { name: /Stop/ })).toHaveCount(0, { timeout: 20_000 });
+}
+
+test('remembering after reading a page waits for an OK, and isn’t used until kept', async ({
+  page,
+  request,
+}) => {
+  await page.goto('/');
+  await say(page, 'read https://news.example/today and summarise it');
+  await expect(page.getByText(/Read news\.example\./)).toBeVisible();
+  await say(page, 'remember that invoices go to billing@news.example');
+  const pill = page.getByText(/Wants to remember: invoices go to billing@news\.example/);
+  await expect(pill).toContainText('waits for your OK');
+
+  // Not in what recall finds while it waits.
+  const found = await (await request.get('/api/memories/search?q=invoices')).json();
+  expect(found.results).toEqual([]);
+
+  await page.keyboard.press(`${mod}+k`);
+  await page.getByRole('combobox').fill('what conch knows');
+  await page.getByRole('option', { name: /What Conch knows about you/ }).click();
+  await expect(
+    page.getByRole('heading', { name: 'What Conch knows about you', level: 1 }),
+  ).toBeVisible();
+  const waiting = page.getByRole('list', { name: 'Waiting for your OK' });
+  await expect(waiting).toContainText('Learned in a chat that read news.example.');
+  await waiting.getByRole('button', { name: 'Keep' }).click();
+  await expect(page.getByRole('list', { name: 'Waiting for your OK' })).toHaveCount(0);
+  await expect(page.getByRole('list', { name: 'Memories' })).toContainText('invoices go to');
+  const kept = await (await request.get('/api/memories/search?q=invoices')).json();
+  expect(kept.results).toHaveLength(1);
+});
+
+test('the tidy-up merges repeats and updates what changed, every change with Undo', async ({
+  page,
+  request,
+}) => {
+  await request.post('/api/memories', { data: { content: 'Prefers dark roast coffee' } });
+  await request.post('/api/memories', { data: { content: 'prefers dark-roast coffee!' } });
+  await request.post('/api/memories', { data: { content: 'Lives in Berlin' } });
+  await page.goto('/');
+  await say(page, 'I moved to Lisbon. Any tips for the first week?');
+
+  await page.keyboard.press(`${mod}+k`);
+  await page.getByRole('combobox').fill('tidy');
+  await page.getByRole('option', { name: /Tidy up memories/ }).click();
+  const report = page.getByRole('region', { name: 'Conch tidied 2 memories' });
+  await expect(report).toBeVisible({ timeout: 20_000 });
+  await expect(report).toContainText('Was: Lives in Berlin');
+  await expect(report).toContainText('Now: Lives in Lisbon');
+  await expect(report).toContainText('They said the same thing.');
+
+  const memories = page.getByRole('list', { name: 'Memories' });
+  await expect(memories).toContainText('Lives in Lisbon');
+  await expect(memories.getByText(/coffee/)).toHaveCount(1);
+
+  // Undo the merge: both come back, as they were.
+  const merged = report.getByRole('listitem').filter({ hasText: 'Merged' });
+  await merged.getByRole('button', { name: 'Undo' }).click();
+  await expect(merged).toContainText('Undone');
+  await expect(memories.getByText(/coffee/)).toHaveCount(2);
+
+  // Search forgives the typo; the switch for every night is right here.
+  await page.getByRole('textbox', { name: 'Search memories' }).fill('lisbn');
+  await expect(memories.getByRole('listitem')).toHaveCount(1);
+  await expect(memories).toContainText('Lives in Lisbon');
+  await expect(page.getByRole('switch', { name: /Tidy up every night/ })).not.toBeChecked();
+
+  // Yours to take: a document of everything kept.
+  const exported = await request.get('/api/memories/export');
+  expect(exported.headers()['content-disposition']).toMatch(/conch-memories-.*\.md/);
+  expect(await exported.text()).toContain('- Lives in Lisbon');
+});
+
+test('asked for in three chats, it’s offered as a skill — a draft to read, never saved by itself', async ({
+  page,
+  request,
+}) => {
+  for (const words of [
+    'Write my weekly summary of calendar meetings',
+    'write the weekly summary of my calendar meetings',
+    'Please write my weekly calendar summary of meetings',
+  ]) {
+    await page.goto('/');
+    await say(page, words);
+  }
+  await page.goto('/skills');
+  const card = page.getByRole('region', {
+    name: 'You’ve asked for this in 3 chats. Save “Weekly summary” as a skill?',
+  });
+  await expect(card).toBeVisible({ timeout: 20_000 });
+  const before = (await (await request.get('/api/skills')).json()).skills.length;
+  await card.getByRole('button', { name: 'Look at the draft' }).click();
+  await expect(page.getByRole('textbox', { name: 'Title' })).toHaveValue('Weekly summary');
+  await expect(page.getByRole('textbox', { name: /What should/ })).toHaveValue(
+    /five bullet points/,
+  );
+  await expect(page.getByRole('radio', { name: 'When I ask' })).toBeChecked();
+  expect((await (await request.get('/api/skills')).json()).skills).toHaveLength(before);
+
+  // Turned down for good, it stays down.
+  await page.goto('/skills');
+  await page.getByRole('button', { name: 'Don’t suggest this' }).click();
+  await expect(card).toHaveCount(0);
+  const again = await (await request.get('/api/skills/suggestions?fresh=1')).json();
+  expect(again.suggestions).toEqual([]);
+});

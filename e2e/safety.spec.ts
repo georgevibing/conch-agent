@@ -37,6 +37,8 @@ test('after reading a page, a command asks — saying why — and there’s no �
   await expect(card.getByRole('button', { name: 'Always allow' })).toHaveCount(0);
   await card.getByRole('button', { name: 'Deny' }).click();
   await expect(page.getByText(/Declined · Run/)).toBeVisible();
+  // The timeline reads what's been saved: the reply finishes first.
+  await expect(page.getByText(/Ask me to/)).toHaveCount(2);
 
   // Everything it did, in one place.
   await page.keyboard.press(`${mod}+k`);
