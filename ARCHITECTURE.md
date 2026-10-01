@@ -646,6 +646,26 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   pickers. Defaults live in Settings → Models; your commands in Settings →
   Commands.
 
+### Documentation (`apps/docs`)
+
+A Vite + React site built from Nacre, started with `pnpm docs:dev` and built to static
+files with `pnpm docs:build`.
+
+- **Guides** are Markdown in `apps/docs/content/<section>/`: a file is a page, and the
+  sidebar, search and "next page" follow from the files. `docs/*.md`, this file and
+  every ADR are pages too, read from where they are (`src/site/pages.ts`), with links
+  resolved the way GitHub resolves them.
+- **Reference** is read from the code, never written: `reference/build.ts` imports the
+  provider, channel and integration catalogs, `cliCommands.ts`, the `Env` schema, the
+  backup manifest, the known needs, the web app's commands and modes and the protocol's
+  schemas, and scans the gateway for its routes. A Vite plugin (`reference/plugin.ts`)
+  runs it in a process of its own and serves the result as `virtual:conch-reference`,
+  again whenever those folders change. Pages place a generated part with
+  `<!-- conch:name -->` (`src/embeds/`).
+- **Checked** by `src/content.test.ts` in `pnpm check`: a provider or channel without a
+  guide, a dead link, an unknown part or an unlisted keyboard shortcut fails with the
+  fix in its message (AGENTS.md working agreement 13).
+
 ## Security model
 
 The gateway can read and write files and run commands on the host **as the user**.

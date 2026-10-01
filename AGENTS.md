@@ -56,6 +56,7 @@ working agreement 11: _fix it before you ask_.
 | Show me: things made beside the chat, sealed pages, pinned apps                                      | `apps/server/src/artifacts/` (`frame.ts` is the seal), web `features/artifacts/`, Nacre `Artifacts` (`SealedFrame`, `ArtifactPanel`, `ArtifactChart`) + [ADR 0034](./docs/adr/0034-show-me.md) — security-relevant                                                                                                                                                                              |
 | Hand it off: background tasks, helpers side by side (`delegate`), worktrees                          | `apps/server/src/tasks/`, web `features/tasks/`, Nacre `TaskCard` + [ADR 0033](./docs/adr/0033-hand-it-off.md) — a task has exactly its chat's powers (mode, guard, budget)                                                                                                                                                                                                                     |
 | Conch restarting itself, surviving a crash                                                           | `apps/server/src/supervisor.ts`, `lib/lifecycle.ts` (`restart()`), web `features/health/restart.ts`                                                                                                                                                                                                                                                                                             |
+| The documentation (guides, the reference read from the code, `pnpm docs:dev`)                        | `apps/docs/` (`content/README.md` for how to write a page), Nacre `Docs` patterns — see working agreement 13                                                                                                                                                                                                                                                                                    |
 | A decision that changes architecture or adds a dependency                                            | Write an ADR in [`docs/adr/`](./docs/adr/) first                                                                                                                                                                                                                                                                                                                                                |
 | Devices, approving new ones (`pnpm conch devices`)                                                   | `apps/server/src/auth/` (`store.ts`, `devicesCli.ts`), `security.ts`, web `features/auth/`, Nacre `DeviceApproval` + [ADR 0024](./docs/adr/0024-approve-new-devices.md) — security-relevant                                                                                                                                                                                                     |
 | Security, auth, exposing the gateway beyond localhost                                                | [§ Security engineering](#security-engineering) below → [ARCHITECTURE.md § Security](./ARCHITECTURE.md#security-model) → [ADR 0008](./docs/adr/0008-access-and-hardening.md) — treat as high-risk                                                                                                                                                                                               |
@@ -70,12 +71,13 @@ it. Apps must not contain bespoke styling beyond layout.
 apps/
   web/            React 19 + Vite SPA (the chat UI)
   server/         Node gateway: HTTP + WebSocket, wraps @anthropic-ai/claude-agent-sdk
+  docs/           The documentation site: guides in Markdown, reference read from the code
 packages/
   nacre/          Design system: tokens, Lustre material, components, patterns, Storybook
   protocol/       Zod schemas + types for every message on the wire
   eslint-config/  Shared flat ESLint configs (base, react)
   tsconfig/       Shared tsconfig bases
-docs/
+docs/             Guides and records kept beside the code; each is a page of apps/docs too
   design/         Design language (NACRE.md)
   adr/            Architecture decision records
 scripts/          Repo tooling (e.g. snap.mjs visual QA screenshots)
@@ -85,21 +87,25 @@ scripts/          Repo tooling (e.g. snap.mjs visual QA screenshots)
 
 Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or `npm i -g pnpm`).
 
-| Command                                                                     | What it does                                                                                                           |
-| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `pnpm install`                                                              | Install everything                                                                                                     |
-| `pnpm dev`                                                                  | Run all dev servers via Turbo                                                                                          |
-| `pnpm storybook`                                                            | Nacre Storybook on http://localhost:6006                                                                               |
-| `pnpm check`                                                                | Format check + lint + typecheck + tests. **Must pass before every commit.**                                            |
-| `pnpm test`                                                                 | All unit tests (Vitest)                                                                                                |
-| `pnpm e2e`                                                                  | Builds the web app and runs Playwright journeys against the gateway + mock engine                                      |
-| `pnpm dev:mock`                                                             | Dev servers with the scripted mock engine (no Claude usage)                                                            |
-| `pnpm start`                                                                | Build and run Conch for real at http://localhost:4317                                                                  |
-| `pnpm start:network`                                                        | Same, reachable from your network (sign-in required; prefer Tailscale)                                                 |
-| `pnpm conch <command>`                                                      | From the terminal: `status`, `password`, `key`, `pair`, `devices`, `background`, `tray`, `phone` … (`pnpm conch help`) |
-| `pnpm --filter @conch/nacre test -- src/components/Button`                  | Tests for one component                                                                                                |
-| `pnpm a11y [--filter=button]`                                               | axe (incl. colour contrast) on every story, light + dark, in real Chrome (Storybook must be running)                   |
-| `node scripts/snap.mjs <story-id> [--mode=dark] [--hover=css] [--clip=css]` | Screenshot a story for visual QA (Storybook must be running)                                                           |
+| Command                                                                       | What it does                                                                                                            |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `pnpm install`                                                                | Install everything                                                                                                      |
+| `pnpm dev`                                                                    | Run all dev servers via Turbo                                                                                           |
+| `pnpm storybook`                                                              | Nacre Storybook on http://localhost:6006                                                                                |
+| `pnpm docs:dev`                                                               | The documentation on http://localhost:4400, redrawn as you write and as the code it reads changes                       |
+| `pnpm docs:build`                                                             | The documentation as a static site in `apps/docs/dist` (`pnpm docs:preview` builds and opens it)                        |
+| `pnpm check`                                                                  | Format check + lint + typecheck + tests. **Must pass before every commit.**                                             |
+| `pnpm test`                                                                   | All unit tests (Vitest)                                                                                                 |
+| `pnpm e2e`                                                                    | Builds the web app and runs Playwright journeys against the gateway + mock engine                                       |
+| `pnpm dev:mock`                                                               | Dev servers with the scripted mock engine (no Claude usage)                                                             |
+| `pnpm start`                                                                  | Build and run Conch for real at http://localhost:4317                                                                   |
+| `pnpm start:network`                                                          | Same, reachable from your network (sign-in required; prefer Tailscale)                                                  |
+| `pnpm conch <command>`                                                        | From the terminal: `status`, `password`, `key`, `pair`, `devices`, `background`, `tray`, `phone` … (`pnpm conch help`)  |
+| `pnpm --filter @conch/nacre test -- src/components/Button`                    | Tests for one component                                                                                                 |
+| `pnpm a11y [--filter=button]`                                                 | axe (incl. colour contrast) on every story, light + dark, in real Chrome (Storybook must be running)                    |
+| `node scripts/snap.mjs <story-id> [--mode=dark] [--hover=css] [--clip=css]`   | Screenshot a story for visual QA (Storybook must be running)                                                            |
+| `node apps/docs/scripts/shot.mjs <page> [--mode=dark] [--width=390] [--full]` | Screenshot a documentation page for visual QA (`pnpm docs:dev` must be running)                                         |
+| `node apps/docs/scripts/a11y.mjs [--filter=providers]`                        | axe (incl. colour contrast) on every documentation page, light + dark, in real Chrome (`pnpm docs:dev` must be running) |
 
 ## Working agreements
 
@@ -246,6 +252,47 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
     you’d want back on a new computer, or would want to know is broken, it belongs
     in one of these features: extend the feature (and this table) rather than
     leave the part out.
+
+13. **The documentation moves with the code.** `apps/docs` is what people read to
+    use Conch (`pnpm docs:dev`). A change that makes a page untrue fixes the page
+    in the same change, without being asked. Two rules keep that cheap:
+    - **What the code can list is never typed.** Providers, channels, the app
+      gallery, `pnpm conch` commands, environment variables, permission modes,
+      slash commands, the files under `CONCH_HOME`, the programs Conch installs,
+      the HTTP routes and the socket's messages are read from the code every time
+      the documentation starts, builds or is tested
+      (`apps/docs/reference/build.ts` → `virtual:conch-reference`). The page shows
+      the words the code already has, so write them well where the thing is
+      defined. To show something new, read it in `reference/build.ts` (shape in
+      `types.ts`), draw it as an embed in `apps/docs/src/embeds/`, and ask for it
+      from a page with `<!-- conch:name -->`. Never copy a list into Markdown.
+    - **What only a person can explain is a guide.** Markdown in
+      `apps/docs/content/<section>/`: a file is a page, and nothing else is listed
+      by hand. Format and voice are in `apps/docs/content/README.md` (short
+      sentences, the app's own button names, nothing that can be taken out).
+      `docs/SECURITY.md`, `BROWSER.md`, `TERMINAL.md`, `REVERSE_PROXY.md`,
+      `ARCHITECTURE.md`, `docs/design/NACRE.md` and every ADR are pages too, shown
+      from where they are: editing one is editing the documentation.
+
+    | You’re adding or changing…                                                                                            | The documentation, in the same change                                                                                                                                                                                                            |
+    | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+    | A provider                                                                                                            | Its card, facts and row in the comparison appear by themselves (`providers/catalog.ts`, and what the engine declares). Write `content/providers/<id>.md` (front matter `provider: <id>`): how to connect it, what it brings, what to know first. |
+    | A channel                                                                                                             | Its tile and facts appear by themselves (`channels/catalog.ts`). Write `content/channels/<id>.md` (`channel: <id>`) with the steps, and draw the other app with Nacre `Handset` / `PortalSketch` in `src/embeds/channels.tsx`.                   |
+    | An app in the catalog, a password manager, a file under `CONCH_HOME`, a program Conch runs, a route, a socket message | Nothing more than the code needs: the gallery, the lists and the reference read `integrations/catalog.ts`, `VaultSourceId`, the manifest rule’s `why`, the need, the routes and the protocol schemas.                                            |
+    | A `pnpm conch` command or subcommand                                                                                  | Its row in `apps/server/src/cliCommands.ts` (`summary`, `detail`). `cli.ts` doesn’t compile without it; help and the reference both read it.                                                                                                     |
+    | An environment variable                                                                                               | Its words in `ENV_ABOUT` (`apps/server/src/config.ts`), which doesn’t compile without them.                                                                                                                                                      |
+    | A slash command, a permission mode, a thinking level                                                                  | Its words where it’s defined (`apps/web/src/features/commands/slash.ts`, `features/models/words.ts`).                                                                                                                                            |
+    | A keyboard shortcut (`useHotkey`)                                                                                     | A row in `content/reference/keyboard.md`.                                                                                                                                                                                                        |
+    | A feature, or anything a person sees or does differently (a button’s name, a default, a limit, a new step)            | Its guide in `content/features/` or `content/care/`, or a new one; and the line about it in README “What it does”.                                                                                                                               |
+    | Something the pages can’t draw yet                                                                                    | A Nacre pattern first (`packages/nacre/src/patterns/Docs/`, with its story and test), then an embed.                                                                                                                                             |
+
+    `apps/docs/src/content.test.ts` runs in `pnpm check` and fails with the fix in
+    its message when a provider or channel has no guide, a link or a heading it
+    points at doesn’t exist, a page asks for a part that isn’t there, a command or
+    setting has no words, or the app listens for a key the keyboard page doesn’t
+    list. The rest is on you: read the page you changed (`pnpm docs:dev`), look
+    at it in light and dark with `apps/docs/scripts/shot.mjs`, and run
+    `apps/docs/scripts/a11y.mjs` when you changed how pages are drawn.
 
 ## Security engineering
 
@@ -404,13 +451,17 @@ coming, and each one follows the same shape:
 5. **Nobody gets in by default.** Only two things admit anyone: the owner's
    hello (a one-time code, or **That's me** in Conch), or a person pressing
    **Let in**.
+6. **Its page in the documentation** (working agreement 13):
+   `apps/docs/content/channels/<app>.md` with the same steps in words, and a
+   picture of the other app in `apps/docs/src/embeds/channels.tsx`. The tile and
+   the facts come from the catalog entry.
 
 ## Definition of done
 
 - [ ] `pnpm check` passes
 - [ ] New/changed UI has stories covering its states, and screenshots were reviewed
 - [ ] New behaviour has tests (unit for logic, play/axe for components)
-- [ ] Docs updated where behaviour or architecture changed (this file, ARCHITECTURE.md, NACRE.md, an ADR)
+- [ ] The documentation says what’s true now (working agreement 13): the guide in `apps/docs/content` for anything a person sees or does differently, and this file, ARCHITECTURE.md, NACRE.md or an ADR for how it’s built
 - [ ] Security-relevant? Threat-modelled, abuse cases tested, checkup updated, sources cited
 - [ ] Never asks anyone to type a file or folder path. Find it first (as `vault/keepass.ts` finds KeePassXC databases), offer it with Nacre `PathPicker`, and use the system's Open dialog (`POST /api/pick`, a new `PickPurpose` per use) for anything else. Typing is only the fallback from another device.
 - [ ] Fails well (working agreement 11)? Foreseeable failures heal themselves or end in one plain next step, and the healing paths are tested
