@@ -32,6 +32,11 @@ const importHome = (process.env.CONCH_E2E_IMPORT_HOME ??= (() => {
   return home;
 })());
 
+/** The `trust` journey puts a signed skill where its gateway looks, and changes it. */
+const trustHome = (process.env.CONCH_E2E_TRUST_HOME ??= mkdtempSync(
+  join(tmpdir(), 'conch-e2e-trust-'),
+));
+
 const scenarios = {
   ready: { port: 4391, env: { CONCH_MOCK_STATE: 'ready' } },
   models: { port: 4394, env: { CONCH_MOCK_STATE: 'ready' } },
@@ -60,6 +65,8 @@ const scenarios = {
   memory: { port: 4373, env: { CONCH_MOCK_STATE: 'ready' } },
   // Hand it off: background tasks, helpers side by side, approvals from a task.
   tasks: { port: 4372, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Skill trust (ADR 0031): a signed skill, trusting its publisher, held to what it says it needs.
+  trust: { port: 4374, env: { CONCH_MOCK_STATE: 'ready', CONCH_HOME: trustHome } },
   // Conch in your pocket: the app, the offline screen, the phone's address (a pretend Tailscale).
   pocket: { port: 4379, env: { CONCH_MOCK_STATE: 'ready' } },
   // Under the supervisor, like `pnpm start`: Conch runs "in a Terminal window", and can quit.
