@@ -1,4 +1,4 @@
-import { Check, Download, Globe, ShieldAlert, X } from 'lucide-react';
+import { Check, Download, Globe, KeyRound, ShieldAlert, X } from 'lucide-react';
 import type { ComponentProps } from 'react';
 
 import { Button } from '../../components/Button';
@@ -6,7 +6,7 @@ import { cx } from '../../utils/cx';
 import styles from './Browser.module.css';
 import type { BrowserBox } from './BrowserWindow';
 
-export type BrowserApprovalKind = 'site' | 'high-stakes' | 'download';
+export type BrowserApprovalKind = 'site' | 'high-stakes' | 'download' | 'fill';
 export type BrowserApprovalDecision = 'allow' | 'allow-always' | 'deny';
 
 export interface BrowserApprovalProps extends Omit<ComponentProps<'div'>, 'title'> {
@@ -28,6 +28,7 @@ export interface BrowserApprovalProps extends Omit<ComponentProps<'div'>, 'title
 
 function heading(kind: BrowserApprovalKind, site: string, action: string, name: string) {
   if (kind === 'site') return `Let ${name} use ${site}?`;
+  if (kind === 'fill') return `${action} on ${site}?`;
   if (kind === 'download')
     return `${name} wants to ${action.charAt(0).toLowerCase()}${action.slice(1)}`;
   return `${action}?`;
@@ -37,6 +38,8 @@ function detail(kind: BrowserApprovalKind, site: string, name: string) {
   if (kind === 'site')
     return `${name} will click and type on ${site} for this task. You can watch, and take over at any time.`;
   if (kind === 'download') return `It goes to the Downloads folder in your working folder.`;
+  if (kind === 'fill')
+    return `Conch types it into the page itself, from your Passwords. ${name} never sees it.`;
   return `On ${site}. This could spend money, send something, or be hard to undo. Nothing happens until you decide.`;
 }
 
@@ -52,6 +55,8 @@ function resolvedText(
     return decision === 'allow-always'
       ? `Always allowed on ${site}`
       : `Allowed on ${site} in this chat`;
+  if (kind === 'fill')
+    return decision === 'allow-always' ? `Filled · always on ${site}` : `Filled · ${action}`;
   return `Allowed once · ${action}`;
 }
 
@@ -87,11 +92,24 @@ export function BrowserApproval({
       </div>
     );
   }
-  const Icon = kind === 'site' ? Globe : kind === 'download' ? Download : ShieldAlert;
+  const Icon =
+    kind === 'site'
+      ? Globe
+      : kind === 'download'
+        ? Download
+        : kind === 'fill'
+          ? KeyRound
+          : ShieldAlert;
   return (
     <div
       role="group"
-      aria-label={kind === 'site' ? `Allow ${site}?` : 'Confirm an action in the browser'}
+      aria-label={
+        kind === 'site'
+          ? `Allow ${site}?`
+          : kind === 'fill'
+            ? `Fill a saved password on ${site}?`
+            : 'Confirm an action in the browser'
+      }
       className={cx(styles.approval, className)}
       data-kind={kind}
       data-lustre=""
@@ -125,9 +143,13 @@ export function BrowserApproval({
         <p className={styles.approvalDetail}>{detail(kind, site, name)}</p>
         <div className={styles.approvalActions}>
           <Button size="sm" variant="ghost" disabled={busy} onClick={() => onDecide?.('deny')}>
-            {kind === 'site' ? 'Not now' : kind === 'download' ? 'Don’t download' : 'Don’t'}
+            {kind === 'site' || kind === 'fill'
+              ? 'Not now'
+              : kind === 'download'
+                ? 'Don’t download'
+                : 'Don’t'}
           </Button>
-          {kind === 'site' && (
+          {(kind === 'site' || kind === 'fill') && (
             <Button
               size="sm"
               variant="surface"
@@ -147,7 +169,9 @@ export function BrowserApproval({
               ? 'Allow in this chat'
               : kind === 'download'
                 ? 'Download'
-                : 'Allow once'}
+                : kind === 'fill'
+                  ? 'Fill'
+                  : 'Allow once'}
           </Button>
         </div>
       </div>
