@@ -111,6 +111,19 @@ should flow, never stutter.
   to the text colour, like wet ink. Half-arrived Markdown is closed so raw `**` never
   flashes. The wait holds its place and the reply replaces it in place, with no jump.
 
+### Passwords
+
+Secrets are dots until you ask, and go back to dots by themselves
+(`VaultFieldRow`): after thirty seconds, or when you switch away. A login wears
+its site's monogram, never a favicon fetched from the web (that would tell the
+site you have an account). Other kinds wear a glyph tinted by kind. A
+one-time code is split for reading ("123 456") beside a ring that empties and
+turns amber in its last five seconds (`TotpCode`). The generator shows its
+password as you change it, digits and symbols coloured so it can be read back
+(`PasswordGenerator`). The Security check (`VaultHealth`) leads with what
+matters most, every tile a filter; with nothing to say, it says the passwords
+look good.
+
 ### Attachments (chat)
 
 A paste, a picture and a PDF each look like what they are before anyone opens

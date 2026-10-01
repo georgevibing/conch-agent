@@ -22,32 +22,33 @@ working agreement 11: _fix it before you ask_.
 
 ## Routing — where to go for what
 
-| If your task involves…                                          | Read / work in                                                                                                                                                                                    |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Any UI component, token, animation, theming, Storybook          | [`packages/nacre/AGENTS.md`](./packages/nacre/AGENTS.md) → [`docs/design/NACRE.md`](./docs/design/NACRE.md)                                                                                       |
-| The web app (routes, state, data fetching, chat screens)        | `apps/web/` + [ARCHITECTURE.md § Web app](./ARCHITECTURE.md#web-app-appsweb)                                                                                                                      |
-| The gateway / Claude Code integration / permissions             | `apps/server/` + [ARCHITECTURE.md § Gateway](./ARCHITECTURE.md#gateway-appsserver)                                                                                                                |
-| Wire protocol between web and gateway                           | `packages/protocol/` + [ARCHITECTURE.md § Protocol](./ARCHITECTURE.md#wire-protocol-packagesprotocol)                                                                                             |
-| Lint / TS config shared across packages                         | `packages/eslint-config/`, `packages/tsconfig/`                                                                                                                                                   |
-| Integrations (apps/MCP servers, OAuth, the catalog)             | `apps/server/src/integrations/` + [ADR 0009](./docs/adr/0009-integrations.md) — security-relevant                                                                                                 |
-| Providers (which engine runs, connecting them, keys)            | `apps/server/src/providers/`, `apps/server/src/secrets/` + [ADR 0010](./docs/adr/0010-providers.md), [ADR 0012](./docs/adr/0012-every-provider-at-once.md) — security-relevant                    |
-| A model on this computer (Ollama, pulls, offline)               | `apps/server/src/local/`, `engines/api/ollama.ts`, `apps/web/src/features/local/` + [ADR 0022](./docs/adr/0022-a-model-on-this-computer.md) — security-relevant                                   |
-| Skills (SKILL.md, other agents' folders, `use_skill`)           | `apps/server/src/skills/` + [ADR 0013](./docs/adr/0013-skills.md) — security-relevant                                                                                                             |
-| The browser (live view, takeover, per-site permissions)         | `apps/server/src/browser/`, `apps/web/src/features/browser/`, `packages/nacre/src/patterns/Browser/` + [ADR 0014](./docs/adr/0014-browser.md) — security-relevant                                 |
-| The terminal (shells on the host, the drawer, who may open one) | `apps/server/src/terminal/`, `apps/web/src/features/terminal/`, `packages/nacre/src/patterns/Terminal/` + [ADR 0015](./docs/adr/0015-terminal.md) — security-relevant                             |
-| Something a feature needs installed (apps, CLIs, runtimes)      | `apps/server/src/setup/`, Nacre `SetupChecklist` + [ADR 0016](./docs/adr/0016-getting-what-a-feature-needs.md) — security-relevant                                                                |
-| Updates (Conch itself, the programs it uses, rollback)          | `apps/server/src/updates/`, `apps/web/src/features/health/UpdatesSection.tsx`, Nacre `SoftwareUpdate` + [ADR 0019](./docs/adr/0019-updates.md) — security-relevant                                |
-| Attachments (long pastes, files, pictures, drop, previews)      | `apps/server/src/attachments/`, `apps/web/src/features/chat/`, Nacre `Attachments` + [ADR 0017](./docs/adr/0017-attachments.md) — security-relevant                                               |
-| Backups (what's in one, the format, restore, automatic backups) | `apps/server/src/backup/`, `apps/web/src/features/health/`, Nacre `Backups` + [ADR 0020](./docs/adr/0020-backups.md) — security-relevant                                                          |
-| Channels (Telegram, Discord, Slack: reaching your assistant)    | `apps/server/src/channels/`, `apps/web/src/features/channels/`, Nacre `Channels` + [ADR 0018](./docs/adr/0018-channels.md), [§ Adding a channel](#adding-a-channel) — security-relevant           |
-| What ⌘K can find by name                                        | `apps/web/src/features/palette/` (`findables.tsx`) — see working agreement 10                                                                                                                     |
-| Repair everything (the whole-Conch checkup, Settings → Health)  | `apps/server/src/doctor/` (`checks.ts`), `apps/web/src/features/health/`, Nacre `RepairPanel` — see working agreement 12                                                                          |
-| Offline, usage limits, who answers a turn                       | `Services.route`, `apps/server/src/network/`, `ConversationManager` + [ADR 0023](./docs/adr/0023-offline-and-limits.md)                                                                           |
-| Offering to connect an app from the chat (cues, the offer card) | `apps/server/src/integrations/cues.ts`, `catalog.ts`, web `features/integrations/ChatBits.tsx` + [ADR 0021](./docs/adr/0021-connect-from-chat.md) — see working agreement 12                      |
-| Conch restarting itself, surviving a crash                      | `apps/server/src/supervisor.ts`, `lib/lifecycle.ts` (`restart()`), web `features/health/restart.ts`                                                                                               |
-| A decision that changes architecture or adds a dependency       | Write an ADR in [`docs/adr/`](./docs/adr/) first                                                                                                                                                  |
-| Devices, approving new ones (`pnpm conch devices`)              | `apps/server/src/auth/` (`store.ts`, `devicesCli.ts`), `security.ts`, web `features/auth/`, Nacre `DeviceApproval` + [ADR 0024](./docs/adr/0024-approve-new-devices.md) — security-relevant       |
-| Security, auth, exposing the gateway beyond localhost           | [§ Security engineering](#security-engineering) below → [ARCHITECTURE.md § Security](./ARCHITECTURE.md#security-model) → [ADR 0008](./docs/adr/0008-access-and-hardening.md) — treat as high-risk |
+| If your task involves…                                           | Read / work in                                                                                                                                                                                            |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Any UI component, token, animation, theming, Storybook           | [`packages/nacre/AGENTS.md`](./packages/nacre/AGENTS.md) → [`docs/design/NACRE.md`](./docs/design/NACRE.md)                                                                                               |
+| The web app (routes, state, data fetching, chat screens)         | `apps/web/` + [ARCHITECTURE.md § Web app](./ARCHITECTURE.md#web-app-appsweb)                                                                                                                              |
+| The gateway / Claude Code integration / permissions              | `apps/server/` + [ARCHITECTURE.md § Gateway](./ARCHITECTURE.md#gateway-appsserver)                                                                                                                        |
+| Wire protocol between web and gateway                            | `packages/protocol/` + [ARCHITECTURE.md § Protocol](./ARCHITECTURE.md#wire-protocol-packagesprotocol)                                                                                                     |
+| Lint / TS config shared across packages                          | `packages/eslint-config/`, `packages/tsconfig/`                                                                                                                                                           |
+| Integrations (apps/MCP servers, OAuth, the catalog)              | `apps/server/src/integrations/` + [ADR 0009](./docs/adr/0009-integrations.md) — security-relevant                                                                                                         |
+| Providers (which engine runs, connecting them, keys)             | `apps/server/src/providers/`, `apps/server/src/secrets/` + [ADR 0010](./docs/adr/0010-providers.md), [ADR 0012](./docs/adr/0012-every-provider-at-once.md) — security-relevant                            |
+| A model on this computer (Ollama, pulls, offline)                | `apps/server/src/local/`, `engines/api/ollama.ts`, `apps/web/src/features/local/` + [ADR 0022](./docs/adr/0022-a-model-on-this-computer.md) — security-relevant                                           |
+| Skills (SKILL.md, other agents' folders, `use_skill`)            | `apps/server/src/skills/` + [ADR 0013](./docs/adr/0013-skills.md) — security-relevant                                                                                                                     |
+| The browser (live view, takeover, per-site permissions)          | `apps/server/src/browser/`, `apps/web/src/features/browser/`, `packages/nacre/src/patterns/Browser/` + [ADR 0014](./docs/adr/0014-browser.md) — security-relevant                                         |
+| The terminal (shells on the host, the drawer, who may open one)  | `apps/server/src/terminal/`, `apps/web/src/features/terminal/`, `packages/nacre/src/patterns/Terminal/` + [ADR 0015](./docs/adr/0015-terminal.md) — security-relevant                                     |
+| Something a feature needs installed (apps, CLIs, runtimes)       | `apps/server/src/setup/`, Nacre `SetupChecklist` + [ADR 0016](./docs/adr/0016-getting-what-a-feature-needs.md) — security-relevant                                                                        |
+| Updates (Conch itself, the programs it uses, rollback)           | `apps/server/src/updates/`, `apps/web/src/features/health/UpdatesSection.tsx`, Nacre `SoftwareUpdate` + [ADR 0019](./docs/adr/0019-updates.md) — security-relevant                                        |
+| Attachments (long pastes, files, pictures, drop, previews)       | `apps/server/src/attachments/`, `apps/web/src/features/chat/`, Nacre `Attachments` + [ADR 0017](./docs/adr/0017-attachments.md) — security-relevant                                                       |
+| Passwords (the vault, other password managers, filling sign-ins) | `apps/server/src/vault/`, `apps/web/src/features/passwords/`, Nacre `Passwords` + [ADR 0025](./docs/adr/0025-passwords.md), [§ Adding a password manager](#adding-a-password-manager) — security-relevant |
+| Backups (what's in one, the format, restore, automatic backups)  | `apps/server/src/backup/`, `apps/web/src/features/health/`, Nacre `Backups` + [ADR 0020](./docs/adr/0020-backups.md) — security-relevant                                                                  |
+| Channels (Telegram, Discord, Slack: reaching your assistant)     | `apps/server/src/channels/`, `apps/web/src/features/channels/`, Nacre `Channels` + [ADR 0018](./docs/adr/0018-channels.md), [§ Adding a channel](#adding-a-channel) — security-relevant                   |
+| What ⌘K can find by name                                         | `apps/web/src/features/palette/` (`findables.tsx`) — see working agreement 10                                                                                                                             |
+| Repair everything (the whole-Conch checkup, Settings → Health)   | `apps/server/src/doctor/` (`checks.ts`), `apps/web/src/features/health/`, Nacre `RepairPanel` — see working agreement 12                                                                                  |
+| Offline, usage limits, who answers a turn                        | `Services.route`, `apps/server/src/network/`, `ConversationManager` + [ADR 0023](./docs/adr/0023-offline-and-limits.md)                                                                                   |
+| Offering to connect an app from the chat (cues, the offer card)  | `apps/server/src/integrations/cues.ts`, `catalog.ts`, web `features/integrations/ChatBits.tsx` + [ADR 0021](./docs/adr/0021-connect-from-chat.md) — see working agreement 12                              |
+| Conch restarting itself, surviving a crash                       | `apps/server/src/supervisor.ts`, `lib/lifecycle.ts` (`restart()`), web `features/health/restart.ts`                                                                                                       |
+| A decision that changes architecture or adds a dependency        | Write an ADR in [`docs/adr/`](./docs/adr/) first                                                                                                                                                          |
+| Devices, approving new ones (`pnpm conch devices`)               | `apps/server/src/auth/` (`store.ts`, `devicesCli.ts`), `security.ts`, web `features/auth/`, Nacre `DeviceApproval` + [ADR 0024](./docs/adr/0024-approve-new-devices.md) — security-relevant               |
+| Security, auth, exposing the gateway beyond localhost            | [§ Security engineering](#security-engineering) below → [ARCHITECTURE.md § Security](./ARCHITECTURE.md#security-model) → [ADR 0008](./docs/adr/0008-access-and-hardening.md) — treat as high-risk         |
 
 **Rule of thumb:** UI goes in Nacre _first_. If an app screen needs a visual element
 that doesn't exist, build it as a Nacre primitive or pattern (with a story), then use
@@ -281,6 +282,73 @@ threat model. Hold every change to the bar of a FAANG security review:
    `apps/server/src/auth/auth.test.ts` and `e2e/security.spec.ts`.
 9. **Warn people in their words.** Every security message says what could happen
    and what to do next, never jargon alone.
+
+## Secrets in a new feature
+
+A feature that needs a key or a password never keeps it in its own file in the
+clear (ADR 0025):
+
+- **A key Conch itself uses** (a provider, an integration, a channel) goes in
+  one of the sealed key files (`lib/sealed.ts` `SEALED_FILES`; add yours
+  there and to the backup manifest as `secret`), and is listed in
+  `Services.#systemKeys` so it shows in Passwords.
+- **A secret the person owns** (a login, a card, a note) lives in Passwords.
+  The agent reaches it only through `passwords_find`, `passwords_request`,
+  `passwords_read` and the browser fill.
+- Add any new place secrets live to `lib/protect.ts`, so the agent's own
+  file tools can't touch it.
+
+## Adding a password manager
+
+Passwords shows Conch's own vault and the password managers people already use,
+as one list (ADR 0025). A new one must play by the same rules as 1Password,
+Bitwarden, KeePassXC, Proton Pass, Dashlane, Keeper and the macOS Keychain:
+
+1. **A `PasswordSource`** in `apps/server/src/vault/sources.ts`, registered in
+   `VaultService`, with an id added to `VaultSourceId` and its id prefix in
+   `PREFIXES` (`service.ts`):
+   - `state()` is cheap and never prompts anybody.
+   - `list()` carries **no secret values**: names, accounts, sites, kinds and
+     where an item sits in its own app. If the program's list includes
+     passwords (Bitwarden's does), drop them while mapping.
+   - `fields()` describes fields, with values only for fields that aren't
+     concealed.
+   - `value()` and `totp()` fetch one value for one use. It's never cached
+     beyond the call, and never written anywhere. When a manager hands over
+     a code's setup rather than the code, compute the code in the gateway
+     (`totpNow`) instead of putting the setup anywhere.
+   - `full()` (optional, for Moving in) reads every value of one item in one
+     call, passkeys included when the program has their private keys. Run
+     everything through `toPasskey`, which keeps only real ES256 keys.
+   - A program that would stop at a prompt gets `input: ''`, so it fails in
+     words instead of hanging. One that asks the person something itself
+     (Touch ID, the keychain's dialog) goes in `PROMPTS`, so its copies only
+     sync while someone's looking at Passwords.
+2. **Through its own program and its own unlock.**
+   - The program is a need (ADR 0016) in `setup/known.ts`, so Conch can find,
+     install or link to it.
+   - A master password or session key goes on stdin or in the program's own
+     environment variable, **never as an argument**, and is kept in memory
+     only.
+   - The `Exec` seam lets a test pretend to be the program.
+3. **Read-only.** Edits happen in the manager's own app. Items come into
+   Conch's vault only when the person imports a file or chooses **Copy into
+   Conch** (`vault/transfer.ts`: one way, one item at a time, through the
+   program, never an export file on disk).
+4. **Ids are id-safe** (`xx_…`, at most 128 characters of `[A-Za-z0-9_-]`) and
+   map back to the item without guessing.
+5. **Reads and fills follow the vault's rules unchanged** (`readPolicy`, `fillPolicy`, an Unlock card when locked): only on the item's own sites
+   (`siteMatches`), with the person's OK, recorded and redacted. A source never
+   bypasses `VaultService.fillPolicy`.
+6. **Words and pictures:** its mark in Nacre's `brands.ts` (Simple Icons) and
+   `SOURCE_*` in `patterns/Passwords`, its name in the web filters, and a
+   one-line unlock explanation in `SourcesDialog`.
+7. **Tests:** a fake program in `vault.test.ts` or `sources.test.ts`, written
+   from the program's own source or docs, proving:
+   - no secret reaches a list or an argument;
+   - locking hides its items;
+   - a fill on another site is refused;
+   - copying it into Conch brings what it should.
 
 ## Adding a channel
 

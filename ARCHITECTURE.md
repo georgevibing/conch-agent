@@ -91,6 +91,7 @@ src/
   memory/                     file-per-memory store, prompt builder, memory tools
   conversations/              manager (turns, permissions, events) + JSONL store
   attachments/                uploads: sniffing, storage + sweep, per-engine prompt, sandboxed serving (ADR 0017)
+  vault/                      Passwords: encrypted vault, keychain, other managers, import, fills (ADR 0025)
   backup/                     what's in a backup (manifest), the .conchbackup format, daily backups, restore (ADR 0020)
   channels/                   Telegram, Discord and Slack bots that reach your assistant; pairing, relay, healing (ADR 0018)
   engines/
@@ -435,6 +436,16 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   and a reconnecting WebSocket client.
 - First run is a short, skippable flow: welcome → connect Claude Code (install /
   sign-in / API key, with live re-checks) → personality and "about you" → chat.
+- **Passwords** (ADR 0025). `/passwords`: one list of Conch's own encrypted vault and the
+  password managers you turn on (1Password, Bitwarden, KeePassXC, Proton Pass, Dashlane,
+  Keeper, the macOS Keychain), with search, filters, the Security check (breached, reused,
+  weak), Recently deleted, import from every major app, and fills the agent asks for but
+  never sees.
+  - **Copy into Conch** brings a manager's items into the vault through its own program,
+    optionally kept up to date one way (`vault/transfer.ts`).
+  - **Passkeys** are kept with logins. Conch's browser signs in with one, after you agree,
+    through a WebAuthn virtual authenticator armed for that site for three minutes
+    (`browser/passkeys.ts`).
 - **Attachments** (ADR 0017). Long pastes (over 1 000 characters or 20 lines) fold
   into cards; files come from the attach button, a drop anywhere on the chat, a pasted
   screenshot or ⌘K. Each uploads at once to `POST /api/attachments` and the message
