@@ -7,6 +7,7 @@
  */
 import { z } from 'zod';
 
+import { Artifact, ArtifactKind } from './artifacts';
 import { ATTACHMENT_LIMITS, Attachment } from './attachments';
 import { BrowserHandoff, BrowserPermission, BrowserStatus, BrowserStep } from './browser';
 import { Channel, ChannelOrigin } from './channels';
@@ -31,6 +32,7 @@ import { UpdatesStatus } from './updates';
 import { UsageSnapshot } from './usage';
 
 export * from './access';
+export * from './artifacts';
 export * from './attachments';
 export * from './background';
 export * from './backups';
@@ -292,6 +294,8 @@ export const ConversationSummary = z.object({
   origin: z
     .discriminatedUnion('kind', [
       z.object({ kind: z.literal('routine'), routineId: z.string(), runId: z.string() }),
+      /** A pinned app fetching fresh data (ADR 0034). */
+      z.object({ kind: z.literal('artifact'), artifactId: z.string() }),
       /** You wrote to your assistant from a chat app (Telegram, Discord, Slack). */
       ChannelOrigin,
     ])
@@ -406,6 +410,17 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     changeSetId: z.string(),
     direction: z.enum(['undo', 'redo']),
     files: z.array(ChangedFile),
+  }),
+  /** Something the assistant made to see and use, or a new version of it (ADR 0034). */
+  z.object({
+    ...logged,
+    type: z.literal('artifact'),
+    artifactId: z.string(),
+    title: z.string(),
+    kind: ArtifactKind,
+    version: z.number().int().positive(),
+    action: z.enum(['created', 'updated']),
+    note: z.string().optional(),
   }),
   z.object({ ...logged, type: z.literal('status'), status: ConversationStatus }),
   z.object({
@@ -618,6 +633,9 @@ export const ServerEvent = z.discriminatedUnion('type', [
     total: z.number().int().min(0),
     current: z.string().max(200),
   }),
+  /** An artifact changed: a new version, pinned, renamed, removed (ADR 0034). */
+  z.object({ type: z.literal('artifact.changed'), artifact: Artifact }),
+  z.object({ type: z.literal('artifact.deleted'), artifactId: z.string() }),
   /** Private dictation changed: its speech model arriving, say (ADR 0027). */
   z.object({ type: z.literal('voice.changed'), status: VoiceStatus }),
   /**

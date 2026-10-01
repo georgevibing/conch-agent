@@ -655,6 +655,16 @@ export class ConversationManager {
     return abort;
   }
 
+  /**
+   * Add something to a chat's log from elsewhere in Conch (an artifact read
+   * from a reply, ADR 0034), and save it. Never a message or a tool call.
+   */
+  async note(id: string, event: Extract<ConversationEventInput, { type: 'artifact' }>) {
+    const live = await this.#get(id);
+    this.#append(live, event);
+    await this.#persist(live);
+  }
+
   async respond(id: string, permissionId: string, decision: PermissionDecision) {
     const live = await this.#get(id);
     const pending = live.permissions.get(permissionId);

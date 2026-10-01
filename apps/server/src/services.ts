@@ -13,6 +13,8 @@ import type {
 import { Activity } from './activity/service';
 import { importCheck } from './import/doctor';
 import { ImportService } from './import/service';
+import { ArtifactService } from './artifacts/service';
+import { ArtifactStore } from './artifacts/store';
 import { AttachmentStore } from './attachments/store';
 import { type SystemKey, VaultService } from './vault/service';
 import { vaultTools } from './vault/tools';
@@ -169,6 +171,8 @@ export class Services {
   readonly activity: Activity;
   /** Putting back what the assistant changed (ADR 0030). */
   readonly undo: UndoService;
+  /** Things the assistant makes to see and use (ADR 0034). */
+  readonly artifacts: ArtifactService;
   /** The pretend Telegram and Discord used with the mock engine. */
   readonly mockTelegram?: MockTelegram;
   readonly mockDiscord?: MockDiscord;
@@ -342,6 +346,11 @@ export class Services {
     this.doctor.register(this.undo.doctorCheck());
     void this.undo.sweep().catch(() => undefined);
     setInterval(() => void this.undo.sweep().catch(() => undefined), 6 * 60 * 60_000).unref();
+    this.artifacts = new ArtifactService({
+      store: new ArtifactStore(config.CONCH_HOME, heal),
+      conversations: () => this.conversations,
+      emit: (event) => this.broadcast.emit(event),
+    });
     this.conversations = new ConversationManager({
       store: conversationStore,
       settings: this.settings,
@@ -357,6 +366,7 @@ export class Services {
               ...this.skills.tools(ctx),
               ...this.browser.tools(ctx),
               ...vaultTools(this.vault, ctx),
+              ...this.artifacts.tools(ctx),
             ],
       context: async (engine) =>
         [
@@ -365,6 +375,7 @@ export class Services {
           await this.browser.promptSection(engine).catch(() => ''),
           await this.integrations.promptSection(),
           engine.hostTools === false ? '' : this.vault.promptSection(),
+          this.artifacts.promptSection(engine.hostTools !== false),
         ]
           .filter(Boolean)
           .join('\n\n'),
@@ -501,6 +512,9 @@ export class Services {
     });
     void this.voice.sweep();
     this.doctor.register(this.voice.doctorCheck());
+    this.doctor.register(this.artifacts.doctorCheck());
+    // A reply from a provider without Conch's tools may carry ```artifact blocks.
+    this.broadcast.on((event) => void this.artifacts.onEvent(event).catch(() => undefined));
     this.doctor.register(safetyCheck(this.settings));
     this.doctor.register(this.background.doctorCheck());
     this.doctor.register(trayCheck(this.tray));

@@ -155,6 +155,19 @@ export function entriesOf(
           status: 'noted',
         });
         break;
+      case 'artifact':
+        out.push({
+          ...base,
+          id: `${chat.id}:${e.seq}`,
+          at: e.at,
+          kind: 'artifact',
+          title:
+            e.action === 'created'
+              ? `Made “${e.title}”`
+              : `Updated “${e.title}” (version ${e.version})${e.note ? `: ${e.note}` : ''}`,
+          status: 'done',
+        });
+        break;
       case 'memory.saved':
         out.push({
           ...base,

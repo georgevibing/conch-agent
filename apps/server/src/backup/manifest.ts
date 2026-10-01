@@ -167,6 +167,12 @@ export const RULES: readonly BackupRule[] = [
     why: 'Your budget, and what you spent (chats you deleted included, so it can’t be rebuilt). Merged on restore: money already spent stays counted.',
   },
   { match: 'memory/*.md', class: 'kept', group: 'memory', why: 'Your memories, one file each.' },
+  {
+    match: 'artifacts/**',
+    class: 'kept',
+    group: 'chats',
+    why: 'What the assistant made for you in your chats (pages, documents, charts) and the apps you pinned, with their versions.',
+  },
   { match: 'commands/*.md', class: 'kept', group: 'commands', why: 'Your slash commands.' },
   { match: 'routines/*.json', class: 'kept', group: 'routines', why: 'Your routines.' },
   {

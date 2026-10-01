@@ -81,6 +81,11 @@ const STOPWORDS = new Set(
  */
 export class MockEngine implements Engine {
   readonly id = 'mock' as const;
+  /** The last thing made in each chat, so "make it …" changes it (ADR 0034). */
+  readonly #artifacts = new Map<
+    string,
+    { id: string; kind: string; title: string; content: string }
+  >();
   readonly label = 'Claude Code';
   /**
    * The mock is a "bridge" engine, like a plain model API would be: Conch
@@ -462,6 +467,134 @@ export class MockEngine implements Engine {
         await mkdir(input.cwd, { recursive: true });
         await writeFile(noteFile, content);
         yield { type: 'tool-end', toolUseId, status: 'success', output: 'Done.' };
+      }
+
+      // Show me (ADR 0034): "make a chart / a page / a document" makes one; "make it …" changes it.
+      const made = /\bmake (?:me )?an? (chart|page|document|diagram|table)\b/i
+        .exec(input.prompt)?.[1]
+        ?.toLowerCase();
+      // A page with a link out: what a prompt-injected page would try (it opens with its code off).
+      const make = made === 'page' && /\bwith a link\b/i.test(input.prompt) ? 'linked' : made;
+      const refreshing = /^Refresh “.+” \(id (a_[A-Za-z0-9]+)\)/.exec(input.prompt)?.[1];
+      const change = /\bmake it (.+?)[.!]?$/i.exec(input.prompt.trim())?.[1];
+      const artifactTool = (name: string) => input.tools.find((t) => t.name === name);
+      if (refreshing && artifactTool('artifact_update')) {
+        // Fresh data: the same chart, a day later. The prompt carries the current version.
+        const toolUseId = newId('tool');
+        const current = /## The current version\n\n```chart\n([\s\S]*?)\n```/.exec(
+          input.systemAppend,
+        )?.[1];
+        let content = current ?? '';
+        try {
+          const spec = JSON.parse(content) as { labels: string[]; series: { values: number[] }[] };
+          spec.labels = [...spec.labels.slice(1), 'Today'];
+          spec.series = spec.series.map((s) => ({ ...s, values: [...s.values.slice(1), 300] }));
+          content = JSON.stringify(spec);
+        } catch {
+          content = `${content}\n\n_Refreshed._\n`;
+        }
+        const args = { id: refreshing, content, note: 'Fresh numbers' };
+        yield {
+          type: 'tool-start',
+          toolUseId,
+          name: 'mcp__conch__artifact_update',
+          input: args,
+        } as const;
+        const out = hostToolText(
+          await (
+            artifactTool('artifact_update') as NonNullable<ReturnType<typeof artifactTool>>
+          ).run(args as never),
+        );
+        yield { type: 'tool-end', toolUseId, status: 'success', output: out } as const;
+      } else if (
+        (make && artifactTool('artifact_create')) ||
+        (change && artifactTool('artifact_update'))
+      ) {
+        const toolUseId = newId('tool');
+        const last = this.#artifacts.get(input.conversationId);
+        const samples: Record<string, { kind: string; title: string; content: string }> = {
+          chart: {
+            kind: 'chart',
+            title: 'Visitors this week',
+            content: JSON.stringify({
+              type: 'bar',
+              title: 'Visitors this week',
+              labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+              series: [{ name: 'Visitors', values: [120, 180, 150, 210, 260] }],
+              unit: 'visitors',
+            }),
+          },
+          page: {
+            kind: 'html',
+            title: 'Tip calculator',
+            content:
+              '<h1>Tip calculator</h1><label>Bill <input id="bill" type="number" value="40"></label><p id="out"></p><script>const b=document.getElementById("bill");const o=document.getElementById("out");const f=()=>{o.textContent="Tip: "+(b.value*0.15).toFixed(2)};b.oninput=f;f();</script>',
+          },
+          document: {
+            kind: 'markdown',
+            title: 'Trip plan',
+            content:
+              '# Trip plan\n\n- Day 1: arrive, walk the old town\n- Day 2: museum, dinner by the river\n',
+          },
+          diagram: {
+            kind: 'mermaid',
+            title: 'How it works',
+            content: 'flowchart LR\n  A[You ask] --> B[Conch thinks] --> C[You see it]',
+          },
+          table: {
+            kind: 'table',
+            title: 'Budget',
+            content: 'Item,Cost\nRent,1200\nFood,400\nTravel,150',
+          },
+          linked: {
+            kind: 'html',
+            title: 'Reading list',
+            content:
+              '<h1>Reading list</h1><p><a href="https://evil.example/?q=everything-you-said">The best article</a></p><script>document.body.dataset.ran="yes"</script>',
+          },
+        };
+        if (make) {
+          const sample = samples[make] ?? samples.document;
+          yield {
+            type: 'tool-start',
+            toolUseId,
+            name: 'mcp__conch__artifact_create',
+            input: sample,
+          } as const;
+          const out = hostToolText(
+            await (
+              artifactTool('artifact_create') as NonNullable<ReturnType<typeof artifactTool>>
+            ).run(sample as never),
+          );
+          const id = /id (a_[A-Za-z0-9]+)/.exec(out)?.[1];
+          if (id)
+            this.#artifacts.set(input.conversationId, {
+              id,
+              ...(sample as { kind: string; title: string; content: string }),
+            });
+          yield { type: 'tool-end', toolUseId, status: 'success', output: out } as const;
+        } else if (last && change) {
+          const content =
+            last.kind === 'html'
+              ? `<div style="background:#1f1a17;color:#f5efe9;padding:16px;border-radius:12px">${last.content}</div>`
+              : last.kind === 'chart'
+                ? last.content.replace('"bar"', '"line"')
+                : `${last.content}\n\n_${change}_\n`;
+          const args = { id: last.id, content, note: `Made it ${change}` };
+          yield {
+            type: 'tool-start',
+            toolUseId,
+            name: 'mcp__conch__artifact_update',
+            input: args,
+          } as const;
+          const out = hostToolText(
+            await (
+              artifactTool('artifact_update') as NonNullable<ReturnType<typeof artifactTool>>
+            ).run(args as never),
+          );
+          this.#artifacts.set(input.conversationId, { ...last, content });
+          yield { type: 'tool-end', toolUseId, status: 'success', output: out } as const;
+        }
       }
 
       // Reading a page (ADR 0028): what it brings back is untrusted, so the chat is too.

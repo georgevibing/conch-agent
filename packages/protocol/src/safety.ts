@@ -36,6 +36,8 @@ export const ActivityKind = z.enum([
   'read',
   /** Something it remembered or forgot. */
   'memory',
+  /** Something it made for you to see and use (ADR 0034). */
+  'artifact',
 ]);
 export type ActivityKind = z.infer<typeof ActivityKind>;
 
