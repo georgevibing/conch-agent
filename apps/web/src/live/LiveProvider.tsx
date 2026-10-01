@@ -10,6 +10,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
 
 import { keys, setEngineStatus } from '../api/queries';
+import { useUi } from '../app/ui';
+import { DEVICES_FOCUS } from '../features/auth/focus';
 import { browserKeys } from '../features/browser/queries';
 import { terminalKeys } from '../features/terminal/queries';
 import { applyChannelEvent } from '../features/channels/queries';
@@ -59,6 +61,8 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
   const stopWhenCreated = useRef(new Set<string>());
   /** New chats started from this tab, newest last, until they've been stopped or answered. */
   const startedNew = useRef<string[]>([]);
+  /** Devices waiting for approval, as last heard, to notice a new one asking. */
+  const waitingDevices = useRef(0);
 
   useEffect(() => {
     const store = useLiveStore.getState();
@@ -164,6 +168,22 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
             state ? { ...state, network: event.network } : state,
           );
           break;
+        case 'access.changed': {
+          void client.invalidateQueries({ queryKey: keys.access });
+          // Someone signed in with the right password or key and is waiting: worth a word,
+          // since only a person can say whether it's theirs.
+          if (event.waiting > waitingDevices.current)
+            toast('A new device is asking to sign in', {
+              description: 'Approve it only if it’s yours.',
+              duration: 20_000,
+              action: {
+                label: 'Review',
+                onClick: () => useUi.getState().openSettings('security', DEVICES_FOCUS),
+              },
+            });
+          waitingDevices.current = event.waiting;
+          break;
+        }
         case 'backups.changed':
           void client.invalidateQueries({ queryKey: backupKeys.status });
           break;

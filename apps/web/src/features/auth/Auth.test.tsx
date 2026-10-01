@@ -27,6 +27,9 @@ const settings = (patch: Partial<AccessSettings> = {}): AccessSettings => ({
   suggestedUsername: 'ada',
   keys: [],
   sessions: [],
+  devices: [],
+  requests: [],
+  approval: { on: false, here: true },
   checkup: [
     {
       id: 'sign-in',

@@ -7,7 +7,10 @@ import {
   type CheckupFix,
   type CheckupPlace,
   type CreatedKey,
+  type DeviceInfo,
+  type DeviceRequest,
   type SessionInfo,
+  isStaleDevice,
 } from '@conch/protocol';
 import {
   Accordion,
@@ -17,6 +20,7 @@ import {
   Callout,
   CopyButton,
   DeviceList,
+  DeviceRequests,
   Dialog,
   Field,
   IconButton,
@@ -30,6 +34,7 @@ import {
   Skeleton,
   Stack,
   StrengthMeter,
+  Switch,
   Text,
   toast,
   type CheckItem,
@@ -55,6 +60,7 @@ import { keys } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { relativeTime } from '../../lib/time';
 import { Section } from '../settings/Section';
+import { DEVICES_FOCUS } from './focus';
 import styles from './Security.module.css';
 import { applySignedIn } from './signedIn';
 import { useCountdown } from './useCountdown';
@@ -588,31 +594,201 @@ function AddDevice({ access, guard }: { access: AccessSettings; guard: Guard }) 
   );
 }
 
-function DevicesSection({ access, guard }: { access: AccessSettings; guard: Guard }) {
+const approvedHow: Record<NonNullable<DeviceInfo['approvedHow']>, string> = {
+  'this-computer': 'approved on this computer',
+  terminal: 'approved in the terminal',
+  settings: 'approved in Settings',
+  link: 'added with a sign-in link',
+  'already-signed-in': 'approved when approval was turned on',
+};
+
+function deviceMeta(d: DeviceInfo, approval: boolean): string {
+  const parts = [
+    d.current
+      ? 'Signed in now'
+      : d.signedIn
+        ? `${d.script ? 'Used' : 'Signed in'} · active ${relativeTime(d.lastSeenAt)}`
+        : `Signed out · last seen ${relativeTime(d.lastSeenAt)}`,
+    !d.current && d.via && !approval && via[d.via].replace('Signed in with', 'with'),
+    approval && d.approvedHow && approvedHow[d.approvedHow],
+    !d.current && d.address && `from ${d.address}`,
+  ];
+  return parts.filter(Boolean).join(' · ');
+}
+
+function requestMeta(r: DeviceRequest): string {
+  const what = r.script
+    ? `with the key “${r.keyName ?? '?'}”`
+    : r.via === 'key'
+      ? `with the access key “${r.keyName ?? '?'}”`
+      : 'with your password';
+  return [r.address && `From ${r.address}`, what, relativeTime(r.createdAt)]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/**
+ * Approve new devices, on or off. On is extra protection, so any device may
+ * turn it on. Off takes it away, so only this computer can: elsewhere the
+ * switch says where to do it.
+ */
+function ApprovalSwitch({ access, guard }: { access: AccessSettings; guard: Guard }) {
+  const apply = useApply();
+  const [confirmOff, setConfirmOff] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const { on, here } = access.approval;
+
+  const set = async (next: boolean) => {
+    setBusy(true);
+    try {
+      const done = await guard(async () => apply(await api.setApproval(next)));
+      if (done)
+        toast.success(
+          next ? 'New devices now need your approval' : 'No longer approving new devices',
+        );
+    } catch (error) {
+      fail(error);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className={styles.approval} data-on={on || undefined}>
+      <Switch
+        checked={on}
+        disabled={busy || (on && !here)}
+        onCheckedChange={(next) => (next ? void set(true) : setConfirmOff(true))}
+        label="Approve new devices"
+        description={
+          on
+            ? 'A new device has to be approved on this computer after it signs in, even with the right password or key.'
+            : 'Extra protection: someone who learns your password or key still can’t get in until you approve their device on this computer.'
+        }
+      />
+      {on && !here && (
+        <Text size="xs" tone="muted" className={styles.approvalNote}>
+          To turn this off, use the computer running Conch, or run{' '}
+          <code>pnpm conch devices off</code> there.
+        </Text>
+      )}
+      <AlertDialog.Root open={confirmOff} onOpenChange={setConfirmOff}>
+        <AlertDialog.Content>
+          <AlertDialog.Title>Stop approving new devices?</AlertDialog.Title>
+          <AlertDialog.Description>
+            Anyone with your password or access key could then sign in from a new device. Devices
+            you approved are remembered, in case you turn it back on.
+          </AlertDialog.Description>
+          <AlertDialog.Footer>
+            <AlertDialog.Cancel>Keep approving</AlertDialog.Cancel>
+            <AlertDialog.Action onClick={() => void set(false)}>Turn off</AlertDialog.Action>
+          </AlertDialog.Footer>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
+    </div>
+  );
+}
+
+function DevicesSection({
+  access,
+  guard,
+  focus,
+}: {
+  access: AccessSettings;
+  guard: Guard;
+  focus?: Focus;
+}) {
   const client = useQueryClient();
   const apply = useApply();
+  const ref = useRef<HTMLElement>(null);
+  const [removing, setRemoving] = useState<DeviceInfo>();
+  const [busy, setBusy] = useState<string>();
+  const approval = access.approval.on;
   const others = access.sessions.filter((s) => !s.current).length;
+
+  useEffect(() => {
+    if (focus?.place !== 'devices') return;
+    focus.done();
+    const section = ref.current;
+    reveal(
+      section,
+      section?.querySelector<HTMLElement>('[aria-label="Waiting for your approval"] button') ??
+        section?.querySelector<HTMLElement>('button[role="switch"]'),
+    );
+  }, [focus]);
+
+  const approve = async (code: string, device: string) => {
+    setBusy(code);
+    try {
+      const done = await guard(async () => apply(await api.approveDevice(code)));
+      if (done) toast.success(`Approved ${device}`);
+    } catch (error) {
+      fail(error);
+    } finally {
+      setBusy(undefined);
+    }
+  };
+
+  const reject = (code: string, device: string) =>
+    void api
+      .rejectDevice(code)
+      .then((s) => {
+        apply(s);
+        toast(`Turned down ${device}`, {
+          description: 'If it wasn’t you, someone knows your password or key: change it.',
+        });
+      })
+      .catch(fail);
+
   return (
-    <Section title="Signed-in devices" description="Sign out anything you don’t recognise.">
-      <Stack gap={4}>
+    <Section
+      ref={ref}
+      title="Devices"
+      description={
+        approval
+          ? 'What has used Conch. A device you don’t approve can’t get in, even with your password.'
+          : 'What has used Conch. Sign out or remove anything you don’t recognise.'
+      }
+    >
+      <Stack gap={5}>
+        <ApprovalSwitch access={access} guard={guard} />
+        {access.requests.length > 0 && (
+          <DeviceRequests
+            requests={access.requests.map((r) => ({
+              code: r.code,
+              device: r.device,
+              kind: r.kind,
+              meta: requestMeta(r),
+              rejected: r.rejected,
+            }))}
+            canApprove={access.approval.here}
+            busy={busy}
+            onApprove={(r) => void approve(r.code, r.device)}
+            onReject={(r) => reject(r.code, r.device)}
+          />
+        )}
         <DeviceList
-          devices={access.sessions.map((s) => ({
-            id: s.id,
-            name: s.device,
-            kind: s.kind,
-            current: s.current,
-            meta: `${via[s.via]} · ${s.current ? 'now' : `active ${relativeTime(s.lastSeenAt)}`}`,
+          label="Devices"
+          devices={access.devices.map((d) => ({
+            id: d.id,
+            name: d.name,
+            kind: d.kind,
+            current: d.current,
+            signedIn: d.signedIn,
+            stale: approval && isStaleDevice(d),
+            meta: deviceMeta(d, approval),
           }))}
           onSignOut={(device) =>
             void (
               device.current
                 ? api.signOut().then(async () => applySignedIn(client, await api.auth()))
-                : api.revokeSession(device.id).then((s) => {
+                : api.signOutDevice(device.id).then((s) => {
                     apply(s);
                     toast.success(`Signed out ${device.name}`);
                   })
             ).catch(fail)
           }
+          onRemove={(device) => setRemoving(access.devices.find((d) => d.id === device.id))}
         />
         <div className={styles.inline}>
           <AddDevice access={access} guard={guard} />
@@ -635,6 +811,34 @@ function DevicesSection({ access, guard }: { access: AccessSettings; guard: Guar
           )}
         </div>
       </Stack>
+      <AlertDialog.Root open={Boolean(removing)} onOpenChange={(o) => !o && setRemoving(undefined)}>
+        <AlertDialog.Content>
+          <AlertDialog.Title>Remove {removing?.name}?</AlertDialog.Title>
+          <AlertDialog.Description>
+            {approval
+              ? 'It will be signed out, and will need your approval to sign in again.'
+              : 'It will be signed out, and forgotten.'}
+          </AlertDialog.Description>
+          <AlertDialog.Footer>
+            <AlertDialog.Cancel>Keep it</AlertDialog.Cancel>
+            <AlertDialog.Action
+              onClick={() => {
+                const device = removing;
+                if (!device) return;
+                void api
+                  .removeDevice(device.id)
+                  .then((s) => {
+                    apply(s);
+                    toast.success(`Removed ${device.name}`);
+                  })
+                  .catch(fail);
+              }}
+            >
+              Remove
+            </AlertDialog.Action>
+          </AlertDialog.Footer>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
     </Section>
   );
 }
@@ -786,13 +990,23 @@ function useCheckupFix(guard: Guard) {
       toast.success(done);
     }).catch(fail);
   };
-  return { run, focus };
+  const focusOn = (place: Place) => setFocus({ place, done: () => setFocus(undefined) });
+  return { run, focus, focusOn };
 }
 
 export function SecurityTab() {
   const access = useAccess();
   const { guard, dialog } = useVerify(access.data?.method ?? 'none');
   const fix = useCheckupFix(guard);
+  // Opened to a part of the tab (a device asking, or ⌘K's "Devices").
+  const settingsFocus = useUi((s) => s.settingsFocus);
+  const loaded = Boolean(access.data);
+  const { focusOn } = fix;
+  useEffect(() => {
+    if (settingsFocus !== DEVICES_FOCUS || !loaded) return;
+    useUi.setState({ settingsFocus: undefined });
+    focusOn('devices');
+  }, [settingsFocus, loaded, focusOn]);
 
   if (access.isPending)
     return (
@@ -828,7 +1042,7 @@ export function SecurityTab() {
         <SecurityCheckup items={items} />
       </Section>
       <SignInSection access={data} guard={guard} focus={fix.focus} />
-      {data.method !== 'none' && <DevicesSection access={data} guard={guard} />}
+      {data.method !== 'none' && <DevicesSection access={data} guard={guard} focus={fix.focus} />}
       <ReachSection access={data} focus={fix.focus} />
       {dialog}
       <Text size="xs" tone="subtle" className={styles.footnote}>

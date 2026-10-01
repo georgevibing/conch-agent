@@ -14,6 +14,17 @@
     gap: var(--nc-space-2);
   }
 
+  .approval {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+  }
+
+  /* Lines up under the switch's label. */
+  .approvalNote {
+    padding-inline-start: calc(2.25rem + var(--nc-space-3));
+  }
+
   .inline {
     display: flex;
     flex-wrap: wrap;

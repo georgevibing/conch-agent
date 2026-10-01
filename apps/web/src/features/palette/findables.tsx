@@ -9,6 +9,7 @@ import {
   Cpu,
   Gauge,
   MessagesSquare,
+  MonitorSmartphone,
   Globe,
   HeartPulse,
   Laptop,
@@ -32,6 +33,7 @@ import { useNavigate } from 'react-router';
 
 import { useUi, type SettingsTab } from '../../app/ui';
 import { doctorApi } from '../health/api';
+import { DEVICES_FOCUS } from '../auth/focus';
 import { FALLBACK_FOCUS } from '../settings/FallbackSection';
 import { APPS } from '../channels/describe';
 import { useChannels } from '../channels/queries';
@@ -101,6 +103,14 @@ const settingsPlaces: {
     label: 'Security',
     keywords: 'password keys devices sign in checkup',
     icon: <ShieldCheck />,
+  },
+  {
+    tab: 'security',
+    focus: DEVICES_FOCUS,
+    label: 'Devices',
+    keywords:
+      'approve new devices approval waiting pending phone laptop signed in sign out remove trusted allow',
+    icon: <MonitorSmartphone />,
   },
   {
     tab: 'providers',

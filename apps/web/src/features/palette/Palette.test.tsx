@@ -326,6 +326,27 @@ describe('Palette search', () => {
     await waitFor(() => expect(useUi.getState().settings).toBe('browser'));
   });
 
+  it('finds devices and approving them, straight into Settings → Security → Devices', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    for (const words of ['approve', 'devices', 'pending', 'trusted']) {
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(await screen.findByRole('option', { name: /Settings: Devices/ })).toBeInTheDocument();
+    }
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect(useUi.getState()).toMatchObject({ settings: 'security', settingsFocus: 'devices' }),
+    );
+    act(() => useUi.setState({ settings: null, settingsFocus: undefined }));
+  });
+
   it('backs up and restores by name, straight into Settings → Health', async () => {
     const user = userEvent.setup();
     mockFetch({

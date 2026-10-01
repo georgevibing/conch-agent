@@ -102,6 +102,29 @@ export const api = {
   /** A checkup finding's one-click fix; returns what changed and the checkup without it. */
   fixCheckup: (action: CheckupAction) =>
     request(CheckupFixResult, '/api/access/fix', { method: 'POST', body: { action } }),
+  /** Approve new devices: on from any signed-in device, off only on this computer. */
+  setApproval: (on: boolean) =>
+    request(AccessSettings, '/api/access/approval', { method: 'PUT', body: { on } }),
+  /** Only on the computer running Conch. */
+  approveDevice: (code: string) =>
+    request(AccessSettings, `/api/access/requests/${encodeURIComponent(code)}/approve`, {
+      method: 'POST',
+    }),
+  rejectDevice: (code: string) =>
+    request(AccessSettings, `/api/access/requests/${encodeURIComponent(code)}`, {
+      method: 'DELETE',
+    }),
+  signOutDevice: (id: string) =>
+    request(AccessSettings, `/api/access/devices/${encodeURIComponent(id)}/sign-out`, {
+      method: 'POST',
+    }),
+  removeDevice: (id: string) =>
+    request(AccessSettings, `/api/access/devices/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  renameDevice: (id: string, name: string) =>
+    request(AccessSettings, `/api/access/devices/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: { name },
+    }),
 
   state: () => request(AppState, '/api/state'),
   healed: () => request(HealLog, '/api/healed'),
