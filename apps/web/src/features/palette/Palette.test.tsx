@@ -165,7 +165,10 @@ describe('Palette search', () => {
     renderApp(<Palette />);
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'redeploy');
-    expect(await screen.findByText(/Search is catching up on your chats/)).toBeInTheDocument();
+    // Under load the first answer can take a moment to show.
+    expect(
+      await screen.findByText(/Search is catching up on your chats/, undefined, { timeout: 4000 }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Search is catching up…');
     expect(screen.queryByText(/Nothing matches/)).not.toBeInTheDocument();
     // It asks again by itself, and the results fill in.

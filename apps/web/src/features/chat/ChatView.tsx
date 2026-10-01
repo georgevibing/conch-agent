@@ -27,6 +27,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router';
 
 import { useAppState, useConversations, useUpdateSettings } from '../../api/queries';
+import { canPickHere, pickPath } from '../../lib/pick';
 import { useUi } from '../../app/ui';
 import { greeting } from '../../lib/time';
 import { useLive } from '../../live/LiveProvider';
@@ -421,6 +422,20 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
       ))
     : undefined;
 
+  const saveSettings = useUpdateSettings();
+  /** The folder chip: the system's Open dialog right here, or Settings from another device. */
+  const chooseFolder = () => {
+    if (!canPickHere()) return openSettings('providers');
+    void pickPath('workspace').then(
+      async (path) => {
+        if (!path) return;
+        await saveSettings.mutateAsync({ preferences: { workspace: path } });
+        toast.success(`Working in ${path.split(/[\\/]/).filter(Boolean).at(-1) ?? path}`);
+      },
+      () => openSettings('providers'),
+    );
+  };
+
   const workspaceName = useMemo(
     () => app?.workspace.split(/[\\/]/).filter(Boolean).at(-1) ?? 'workspace',
     [app?.workspace],
@@ -483,8 +498,8 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
             <Tooltip content={app?.workspace ?? ''}>
               <ComposerChip
                 icon={<Folder />}
-                onClick={() => openSettings('providers')}
-                aria-label={`Working folder: ${workspaceName}`}
+                onClick={chooseFolder}
+                aria-label={`Working folder: ${workspaceName}. Choose another`}
               >
                 {workspaceName}
               </ComposerChip>

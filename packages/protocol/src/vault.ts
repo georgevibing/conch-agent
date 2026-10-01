@@ -216,6 +216,8 @@ export const VaultSource = z.object({
   unlock: z.enum(['none', 'app', 'password']).default('none'),
   /** When its items were last read. */
   syncedAt: z.number().optional(),
+  /** KeePassXC: the database file chosen. */
+  database: z.string().optional(),
   /** Its items are copied into Conch's vault and kept up to date (`VaultTransferBody.keepSynced`). */
   sync: z
     .object({
@@ -574,6 +576,17 @@ export const VaultSourcePatch = z.object({
   /** KeePassXC: the database file. */
   database: z.string().max(4096).optional(),
 });
+/** A KeePassXC database Conch found on this computer, to choose with one click. */
+export const KeePassDatabase = z.object({
+  path: z.string(),
+  name: z.string(),
+  /** "Documents", "iCloud Drive". */
+  where: z.string(),
+  /** KeePassXC opened it lately. */
+  recent: z.boolean(),
+  modifiedAt: z.number().optional(),
+});
+export type KeePassDatabase = z.infer<typeof KeePassDatabase>;
 export const UnlockSourceBody = z.object({ password: z.string().min(1).max(1024) });
 export const BreachCheckResult = z.object({
   checked: z.number().int().nonnegative(),

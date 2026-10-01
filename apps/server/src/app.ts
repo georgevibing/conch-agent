@@ -43,6 +43,7 @@ import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import type { z } from 'zod';
 
 import { registerAttachmentRoutes } from './attachments/routes';
+import { registerPickRoutes } from './pick/routes';
 import { registerVaultRoutes } from './vault/routes';
 import { AttachmentError } from './attachments/store';
 import { isLoopbackAddress } from './auth/network';
@@ -151,6 +152,7 @@ export async function buildApp(services: Services) {
   registerLocalRoutes(app, services, gate);
   registerAttachmentRoutes(app, services.attachments);
   registerVaultRoutes(app, services.vault, gate);
+  registerPickRoutes(app);
   registerBackupRoutes(app, services.backups, gate);
   registerChannelRoutes(
     app,

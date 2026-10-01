@@ -13,15 +13,15 @@ import {
   Stack,
   Text,
   TotpCode,
+  VaultFavoriteButton,
   VaultFieldRow,
   VaultItemIcon,
   VaultPasskeyRow,
-  VaultSourceMark,
   toast,
   vaultSourceName,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, History, MoreHorizontal, Pencil, RotateCcw, Star, Trash2 } from 'lucide-react';
+import { ArrowLeft, History, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { useNavigate } from 'react-router';
@@ -129,13 +129,10 @@ export function ItemDetail({
         </div>
         <div className={styles.detailActions}>
           {!external && !deleted && (
-            <IconButton
-              label={item.favorite ? 'Remove from favourites' : 'Add to favourites'}
-              aria-pressed={item.favorite}
-              onClick={() => void vaultApi.patch(id, { favorite: !item.favorite }).then(refresh)}
-            >
-              <Star style={item.favorite ? { fill: 'currentColor' } : undefined} />
-            </IconButton>
+            <VaultFavoriteButton
+              favorite={item.favorite}
+              onToggle={() => void vaultApi.patch(id, { favorite: !item.favorite }).then(refresh)}
+            />
           )}
           {!external && !deleted && (
             <Button size="sm" variant="surface" leadingIcon={<Pencil />} onClick={onEdit}>
@@ -206,26 +203,14 @@ export function ItemDetail({
         </Callout>
       )}
       {external && item.source !== 'system' && (
-        <Callout
-          tone="info"
-          className={styles.detailNote}
-          icon={<VaultSourceMark source={item.source} size="sm" />}
-        >
+        <Callout tone="info" className={styles.detailNote}>
           From {vaultSourceName(item.source)}
           {item.container ? ` · ${item.container}` : ''}. Change it there; Conch shows it here and
           can fill it in for you.
         </Callout>
       )}
       {item.origin && (
-        <Callout
-          tone="info"
-          className={styles.detailNote}
-          icon={
-            item.origin.source !== 'conch' && item.origin.source !== 'system' ? (
-              <VaultSourceMark source={item.origin.source} size="sm" />
-            ) : undefined
-          }
-        >
+        <Callout tone="info" className={styles.detailNote}>
           {item.origin.syncing
             ? `Copied from ${vaultSourceName(item.origin.source)} and kept up to date from it${item.origin.syncedAt ? `, last ${ago(item.origin.syncedAt)}` : ''}. Changing it here makes this copy yours: syncs leave it alone after that.`
             : `Copied from ${vaultSourceName(item.origin.source)}${item.origin.syncedAt ? ` ${ago(item.origin.syncedAt)}` : ''}. It’s Conch’s own now.`}
@@ -294,9 +279,9 @@ export function ItemDetail({
               strength={field.strength}
               href={isLink(field) ? field.value : undefined}
               onReveal={field.value === undefined ? () => reveal(field) : undefined}
-              onCopy={async () => {
+              onCopy={async (shown) => {
                 if (field.value !== undefined) return copyPlain(field.value, field.label);
-                const value = await reveal(field, true);
+                const value = shown ?? (await reveal(field, true));
                 await copySecret(value, field.label);
               }}
             />

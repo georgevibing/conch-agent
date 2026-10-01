@@ -33,3 +33,4 @@ export * from './Health';
 export * from './Offline';
 export * from './Updates';
 export * from './Backups';
+export * from './PathPicker';

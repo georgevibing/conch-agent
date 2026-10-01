@@ -165,6 +165,13 @@ Each implements `PasswordSource` (`vault/sources.ts`):
   environment variable, never argv. The session key is kept in memory only.
 - **KeePassXC:** `keepassxc-cli` with the database password on stdin, kept in
   memory.
+  - The values its list read already returns stay in memory beside it until
+    it's locked, so Show and Copy answer at once: each run of the program
+    derives the database key again, which takes a second or more.
+  - The database is never typed. Conch offers the ones KeePassXC opened lately
+    (its own settings file) and any `.kdbx` in the usual folders
+    (`vault/keepass.ts`), plus the system's Open dialog (`POST /api/pick`, on
+    this computer only).
 
 - **Proton Pass:** `pass-cli`. You sign in once in a terminal; its session key
   stays in the system keychain, so Conch never handles the Proton password.

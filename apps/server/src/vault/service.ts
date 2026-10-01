@@ -8,6 +8,7 @@
  * person said yes), and the export, which a person asks for in so many words.
  */
 import { createHash } from 'node:crypto';
+import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
@@ -451,6 +452,10 @@ export class VaultService {
         writable: false,
         ...(source.need && { need: source.need }),
         unlock: source.unlock,
+        ...(source.id === 'keepassxc' &&
+          (await this.settings()).keepassxc.database && {
+            database: (await this.settings()).keepassxc.database,
+          }),
         ...((s || copies.get(source.id)) && {
           sync: {
             enabled: s?.enabled ?? false,
@@ -1110,6 +1115,14 @@ export class VaultService {
       const database = change.database.trim();
       if (database && !/\.kdbx$/i.test(database))
         throw new VaultError('invalid', 'Choose a KeePassXC database (a .kdbx file).');
+      if (
+        database &&
+        !(await stat(database).then(
+          (s) => s.isFile(),
+          () => false,
+        ))
+      )
+        throw new VaultError('invalid', 'That database isn’t there. Choose it again.');
       source.lock?.();
       await this.#saveSettings({ keepassxc: { database: database || undefined } });
     }

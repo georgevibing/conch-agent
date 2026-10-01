@@ -11,6 +11,7 @@ import {
   VaultLockState,
   type VaultFieldKind,
   type VaultFieldRole,
+  KeePassDatabase,
   VaultSource,
   type VaultSourceId,
   VaultTransferJob,
@@ -93,6 +94,8 @@ export const vaultApi = {
     }),
   syncNow: (id: VaultSourceId) =>
     request(z.array(VaultSource), `/api/vault/sources/${id}/sync`, { method: 'POST', body: {} }),
+  keepassDatabases: () =>
+    request(z.array(KeePassDatabase), '/api/vault/sources/keepassxc/databases'),
   removePasskey: (id: string, passkeyId: string) =>
     request(
       Ok,

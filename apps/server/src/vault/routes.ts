@@ -20,6 +20,7 @@ import {
   VaultList,
   VaultSource,
   VaultSourceId,
+  KeePassDatabase,
   VaultSourcePatch,
   VaultSyncPatch,
   VaultTransferBody,
@@ -31,6 +32,7 @@ import { z } from 'zod';
 
 import type { Access, Gatekeeper } from '../security';
 import { VaultCryptoError } from './crypto';
+import { findDatabases } from './keepass';
 import { VaultError, type VaultService } from './service';
 import { VaultIsLocked, VaultLockedError } from './store';
 
@@ -292,6 +294,12 @@ export function registerVaultRoutes(
     if (!id) return;
     vault.lockSource(id);
     return { ok: true };
+  });
+
+  // KeePassXC databases on this computer, so nobody types a path. Names and paths only.
+  app.get('/api/vault/sources/keepassxc/databases', async (request) => {
+    if (request.access?.kind !== 'local') return [];
+    return z.array(KeePassDatabase).parse(await findDatabases());
   });
 
   // ── Moving in: copying a manager's items into Conch's vault ───────────

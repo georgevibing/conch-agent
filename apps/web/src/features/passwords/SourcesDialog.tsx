@@ -1,20 +1,22 @@
-import type { VaultSource } from '@conch/protocol';
+import type { KeePassDatabase, VaultSource } from '@conch/protocol';
 import {
   Button,
   Callout,
   Dialog,
   Field,
-  Input,
   PasswordInput,
+  PathPicker,
+  Skeleton,
   Stack,
   Text,
   toast,
   VaultSourceRow,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 
 import { errorText } from '../integrations/queries';
+import { canPickHere, pickPath } from '../../lib/pick';
 import { GetIt } from '../setup/GetIt';
 import { vaultApi } from './api';
 import { ago } from './filter';
@@ -52,6 +54,25 @@ export function SourcesDialog({
   const [unlocking, setUnlocking] = useState<VaultSource>();
   const [password, setPassword] = useState('');
   const [database, setDatabase] = useState('');
+  const [found, setFound] = useState<KeePassDatabase[]>();
+
+  // KeePassXC: find its databases, so nobody types a path; the one chosen before comes first.
+  const forKeePass = unlocking?.id === 'keepassxc' ? unlocking : undefined;
+  useEffect(() => {
+    if (!forKeePass) return;
+    let live = true;
+    vaultApi.keepassDatabases().then(
+      (list) => {
+        if (!live) return;
+        setFound(list);
+        setDatabase((now) => now || forKeePass.database || list[0]?.path || '');
+      },
+      () => live && setFound([]),
+    );
+    return () => {
+      live = false;
+    };
+  }, [forKeePass]);
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState<string>();
   const [copying, setCopying] = useState<VaultSource>();
@@ -92,10 +113,18 @@ export function SourcesDialog({
       return (
         <Button
           size="sm"
+          variant="surface"
           loading={busy === id}
-          onClick={() => void run(id, () => vaultApi.setSource(id, { enabled: true }))}
+          onClick={() =>
+            void run(id, async () => {
+              const next = await vaultApi.setSource(id, { enabled: true });
+              // A manager that needs its password (or KeePassXC its file): ask right away.
+              const now = next.find((x) => x.id === id);
+              if (now?.state === 'locked' && now.unlock === 'password') setUnlocking(now);
+            })
+          }
         >
-          Show its items
+          Turn on
         </Button>
       );
     if (s.state === 'locked' && s.unlock === 'password')
@@ -223,7 +252,11 @@ export function SourcesDialog({
         <Dialog.Content size="sm">
           <form onSubmit={(e) => void unlock(e)}>
             <Dialog.Header>
-              <Dialog.Title>Unlock {unlocking?.name}</Dialog.Title>
+              <Dialog.Title>
+                {unlocking?.id === 'keepassxc'
+                  ? 'Open your KeePassXC database'
+                  : `Unlock ${unlocking?.name}`}
+              </Dialog.Title>
               <Dialog.Description>
                 {(unlocking && UNLOCK_WORDS[unlocking.id]) ??
                   'Its password. Conch keeps it in memory only, until Conch stops.'}
@@ -233,13 +266,30 @@ export function SourcesDialog({
               <Stack gap={3}>
                 {unlocking?.id === 'keepassxc' && (
                   <Field>
-                    <Field.Label size="sm">Database file</Field.Label>
-                    <Input
-                      placeholder="/Users/you/Passwords.kdbx"
-                      value={database}
-                      onChange={(e) => setDatabase(e.target.value)}
-                    />
-                    <Field.Description>The full path of your .kdbx file.</Field.Description>
+                    <Field.Label size="sm">Database</Field.Label>
+                    {found === undefined ? (
+                      <Skeleton style={{ blockSize: '3.5rem' }} />
+                    ) : (
+                      <PathPicker
+                        label="KeePassXC database"
+                        value={database || undefined}
+                        onChange={setDatabase}
+                        suggestions={found.map((d) => ({
+                          path: d.path,
+                          title: d.name,
+                          detail: [d.where, d.recent ? 'opened lately in KeePassXC' : undefined]
+                            .filter(Boolean)
+                            .join(' · '),
+                        }))}
+                        onChoose={canPickHere() ? () => pickPath('keepassxc-database') : undefined}
+                        placeholder="~/Documents/Passwords.kdbx"
+                        hint={
+                          found.length === 0 && !database
+                            ? 'Conch didn’t find a .kdbx file in your usual folders. Choose yours.'
+                            : undefined
+                        }
+                      />
+                    )}
                   </Field>
                 )}
                 <Field>
@@ -258,8 +308,12 @@ export function SourcesDialog({
               </Stack>
             </Dialog.Body>
             <Dialog.Footer>
-              <Button type="submit" loading={busy !== undefined} disabled={!password}>
-                Unlock
+              <Button
+                type="submit"
+                loading={busy !== undefined}
+                disabled={!password || (unlocking?.id === 'keepassxc' && !database)}
+              >
+                {unlocking?.id === 'keepassxc' ? 'Open' : 'Unlock'}
               </Button>
             </Dialog.Footer>
           </form>

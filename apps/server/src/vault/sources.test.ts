@@ -725,3 +725,33 @@ describe('moving in from another password manager', () => {
     expect(done?.done).toBeLessThan(40);
   });
 });
+
+describe('KeePassXC', () => {
+  it('answers Show and Copy from what its list already read, and forgets it on lock', async () => {
+    const { KeePassXcSource } = await import('./sources');
+    const calls: Call[] = [];
+    const source = new KeePassXcSource(
+      () => Promise.resolve('/Users/ada/Passwords.kdbx'),
+      exec(calls, {
+        'keepassxc-cli': (args) => {
+          if (args[0] === 'ls') return 'Root\n';
+          if (args[0] === 'export')
+            return `"Group","Title","Username","Password","URL","Notes","TOTP"\n"Root","Forum","ada","kp-secret-value","https://forum.example","","${TOTP}"\n`;
+          if (args[0] === 'show') return 'kp-secret-value\n';
+          return undefined as unknown as string;
+        },
+      }),
+    );
+    await source.unlockWith('db-password');
+    const [item] = await source.list();
+    const before = calls.length;
+    expect(await source.value(item?.ref ?? '', 'password')).toBe('kp-secret-value');
+    expect(await source.totp(item?.ref ?? '')).toMatch(/^\d{6}$/);
+    // No second run of keepassxc-cli: it re-derives the key each time, which is the slow part.
+    expect(calls.length).toBe(before);
+    expect(JSON.stringify(item)).not.toContain('kp-secret-value');
+    expectNoSecretsIn(calls, ['db-password', 'kp-secret-value']);
+    source.lock();
+    await expect(source.value(item?.ref ?? '', 'password')).rejects.toThrow();
+  });
+});

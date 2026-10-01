@@ -364,6 +364,7 @@ export function ItemEditor({
               <Stack key={i} direction="row" gap={2} align="center">
                 <Input
                   size="sm"
+                  className={styles.grow}
                   aria-label={`Website ${i + 1}`}
                   placeholder="netflix.com"
                   value={u}

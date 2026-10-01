@@ -388,6 +388,7 @@ coming, and each one follows the same shape:
 - [ ] New behaviour has tests (unit for logic, play/axe for components)
 - [ ] Docs updated where behaviour or architecture changed (this file, ARCHITECTURE.md, NACRE.md, an ADR)
 - [ ] Security-relevant? Threat-modelled, abuse cases tested, checkup updated, sources cited
+- [ ] Never asks anyone to type a file or folder path. Find it first (as `vault/keepass.ts` finds KeePassXC databases), offer it with Nacre `PathPicker`, and use the system's Open dialog (`POST /api/pick`, a new `PickPurpose` per use) for anything else. Typing is only the fallback from another device.
 - [ ] Fails well (working agreement 11)? Foreseeable failures heal themselves or end in one plain next step, and the healing paths are tested
 - [ ] Needs something outside Conch? It's declared as a need that Conch finds, installs or links to, and notices when it arrives. It's never a “Couldn't find X” message.
 - [ ] Joined the whole-Conch features (working agreement 12)? A Repair everything check, a backup rule for new files, `version`/`latest` for new programs, `cues` for new catalog apps, `local` and `TurnProblem` for new providers.

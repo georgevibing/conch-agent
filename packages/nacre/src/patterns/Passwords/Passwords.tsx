@@ -147,10 +147,11 @@ export function VaultItemIcon({
   className,
   ...props
 }: VaultItemIconProps) {
-  if (kind === 'login' && (domain || title)) {
+  // A site's own monogram once there's a site; until then, the kind's glyph.
+  if (kind === 'login' && domain) {
     return (
       <IntegrationLogo
-        name={domain ?? title}
+        name={domain}
         size={size === 'lg' ? 'lg' : size === 'sm' ? 'sm' : 'md'}
         decorative
         className={className}
@@ -171,6 +172,15 @@ export function VaultItemIcon({
   );
 }
 
+/**
+ * A kind's plain glyph, for a menu or the palette's own icon slot (a tile
+ * inside a 1rem slot would spill over the label).
+ */
+export function VaultKindGlyph({ kind }: { kind: VaultKind }) {
+  const Icon = KIND_ICONS[kind];
+  return <Icon aria-hidden />;
+}
+
 /** The small mark of the password manager an item comes from. */
 export function VaultSourceMark({
   source,
@@ -188,6 +198,27 @@ export function VaultSourceMark({
       size={size}
       className={styles.sourceMark}
     />
+  );
+}
+
+/** Favourite or not: an outlined star that turns gold, the way the list shows it. */
+export function VaultFavoriteButton({
+  favorite,
+  onToggle,
+}: {
+  favorite: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <IconButton
+      variant="ghost"
+      label={favorite ? 'Remove from favourites' : 'Add to favourites'}
+      aria-pressed={favorite}
+      className={styles.favorite}
+      onClick={onToggle}
+    >
+      <Star />
+    </IconButton>
   );
 }
 
@@ -289,8 +320,11 @@ export interface VaultFieldRowProps extends Omit<ComponentProps<'div'>, 'childre
   /** A secret: hidden until revealed. `onReveal` fetches it. */
   concealed?: boolean;
   onReveal?: () => Promise<string>;
-  /** Copy it: Conch's own copy handles clearing the clipboard. */
-  onCopy?: () => void | Promise<void>;
+  /**
+   * Copy it: Conch's own copy handles clearing the clipboard. Gets the value
+   * already shown, if it is, so it isn't fetched twice.
+   */
+  onCopy?: (shown?: string) => void | Promise<void>;
   /** For passwords: 0–4. */
   strength?: number;
   mono?: boolean;
@@ -326,6 +360,7 @@ export function VaultFieldRow({
   const [shown, setShown] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copying, setCopying] = useState(false);
   const labelId = useId();
 
   useEffect(() => {
@@ -357,9 +392,17 @@ export function VaultFieldRow({
   };
 
   const copy = async () => {
-    await onCopy?.();
-    setCopied(true);
+    if (copying) return;
+    // Getting a secret can take a moment (another app's vault): say so as it happens.
+    setCopying(true);
+    try {
+      await onCopy?.(shown);
+      setCopied(true);
+    } finally {
+      setCopying(false);
+    }
   };
+  const fetching = busy || copying;
 
   const text = concealed ? shown : value;
   return (
@@ -369,7 +412,11 @@ export function VaultFieldRow({
           {label}
         </span>
         {concealed && text === undefined ? (
-          <span className={styles.dots} aria-label="Hidden">
+          <span
+            className={styles.dots}
+            data-fetching={fetching || undefined}
+            aria-label={fetching ? 'Getting it…' : 'Hidden'}
+          >
             ••••••••••••
           </span>
         ) : href && text ? (
@@ -414,6 +461,7 @@ export function VaultFieldRow({
           <IconButton
             size="sm"
             label={copied ? 'Copied' : `Copy ${label.toLowerCase()}`}
+            loading={copying}
             onClick={() => void copy()}
           >
             {copied ? <Check /> : <Copy />}
@@ -749,25 +797,26 @@ export function VaultHealth({
           </span>
           {checkedNote && <span className={styles.healthNote}>{checkedNote}</span>}
         </div>
-        {action}
+        {action && <div className={styles.healthAction}>{action}</div>}
       </div>
       {!clear && (
-        <div className={styles.healthTiles}>
+        <ul className={styles.healthTiles}>
           {shown.map((t) => (
-            <button
-              type="button"
-              key={t.issue}
-              className={styles.healthTile}
-              data-issue={t.issue}
-              data-lustre=""
-              onClick={() => onSelect?.(t.issue)}
-            >
-              <span className={styles.healthCount}>{t.count}</span>
-              <span className={styles.healthLabel}>{t.title}</span>
-              <span className={styles.healthHint}>{t.hint}</span>
-            </button>
+            <li key={t.issue}>
+              <button
+                type="button"
+                className={styles.healthTile}
+                data-issue={t.issue}
+                onClick={() => onSelect?.(t.issue)}
+              >
+                <span className={styles.healthDot} aria-hidden />
+                <span className={styles.healthLabel}>{t.title}</span>
+                <span className={styles.healthHint}>{t.hint}</span>
+                <span className={styles.healthCount}>{t.count}</span>
+              </button>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </section>
   );

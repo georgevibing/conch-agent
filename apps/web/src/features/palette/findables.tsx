@@ -1,5 +1,5 @@
 import { generatePassword, type TextRange } from '@conch/protocol';
-import { IntegrationLogo, ProviderLogo, SkillIcon, toast, VaultItemIcon } from '@conch/nacre';
+import { IntegrationLogo, ProviderLogo, SkillIcon, toast, VaultKindGlyph } from '@conch/nacre';
 import {
   Archive,
   BatteryMedium,
@@ -347,7 +347,7 @@ export function useFindables(query: string, conversationId: string | undefined):
     label: item.title,
     ranges: match.ranges,
     description: item.subtitle || item.domains[0],
-    icon: <VaultItemIcon kind={item.type} domain={item.domains[0]} title={item.title} size="sm" />,
+    icon: <VaultKindGlyph kind={item.type} />,
     run: () => void navigate(`/passwords/${item.id}`),
   }));
 

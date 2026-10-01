@@ -119,7 +119,7 @@ test('delete to Recently deleted, undo, and ⌘K finds items by name', async ({ 
   });
   await page.goto('/passwords');
   await page.getByRole('button', { name: /^Everyday Visa/ }).click();
-  await expect(page.getByText('•••• 1111').first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Everyday Visa', level: 2 })).toBeVisible();
   await page.getByRole('button', { name: 'More' }).last().click();
   await page.getByRole('menuitem', { name: 'Delete' }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
@@ -276,4 +276,38 @@ test('a passkey comes in with a Bitwarden export, shows on its login, and can be
   const dialog = page.getByRole('dialog', { name: 'Password managers' });
   for (const name of ['1Password', 'Bitwarden', 'KeePassXC', 'Proton Pass', 'Dashlane', 'Keeper'])
     await expect(dialog.getByText(name, { exact: true })).toBeVisible();
+});
+
+test('Esc or a click on empty space puts an item away, back to the start screen', async ({
+  page,
+  request,
+}) => {
+  await request.post('/api/vault/items', {
+    data: {
+      type: 'login',
+      title: 'Mastodon',
+      fields: [{ label: 'Username', kind: 'text', role: 'username', value: 'ada' }],
+      urls: ['https://mastodon.social'],
+    },
+  });
+  await page.goto('/passwords');
+  // Nothing is opened for you: the start screen, with what you can do.
+  const start = page.getByRole('heading', { name: 'Your passwords' });
+  await expect(start).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Connect another password manager' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: /^Mastodon,/ }).click();
+  await expect(page.getByRole('heading', { name: 'Mastodon', level: 2 })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(start).toBeVisible();
+  await expect(page).toHaveURL(/\/passwords$/);
+  await page.getByRole('button', { name: /^Mastodon,/ }).click();
+  await expect(start).toHaveCount(0);
+  // The list's own background (between and below the rows), not a row.
+  await page
+    .getByRole('list')
+    .filter({ has: page.getByRole('button', { name: /^Mastodon,/ }) })
+    .evaluate((el: HTMLElement) => el.click());
+  await expect(start).toBeVisible();
 });

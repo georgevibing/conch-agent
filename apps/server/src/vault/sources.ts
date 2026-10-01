@@ -601,6 +601,13 @@ export class KeePassXcSource implements PasswordSource {
   readonly need = 'keepassxc';
   #password?: string;
   #paths = new Map<string, string>();
+  /**
+   * The list read (`export`) hands over every value anyway: they're kept in
+   * memory while the database is unlocked, as its password already is, so
+   * Show and Copy answer at once instead of running keepassxc-cli again
+   * (which derives the database key each time, a second or more).
+   */
+  #values = new Map<string, { password?: string; totp?: string }>();
   #list?: { items: ExternalItem[]; at: number };
 
   constructor(
@@ -654,6 +661,7 @@ export class KeePassXcSource implements PasswordSource {
     this.#password = undefined;
     this.#list = undefined;
     this.#paths.clear();
+    this.#values.clear();
   }
 
   async list(options: { force?: boolean; signal?: AbortSignal } = {}): Promise<ExternalItem[]> {
@@ -674,12 +682,17 @@ export class KeePassXcSource implements PasswordSource {
       'totp',
     ].map(col);
     this.#paths.clear();
+    this.#values.clear();
     const items = rows.map((r): ExternalItem => {
       const group = (r[g ?? -1] ?? '').replace(/^Root\/?/, '');
       const title = r[t ?? -1] ?? 'Untitled';
       const path = group ? `${group}/${title}` : title;
       const ref = `kp_${sha(path)}`;
       this.#paths.set(ref, path);
+      this.#values.set(ref, {
+        ...(r[p ?? -1] && { password: r[p ?? -1] }),
+        ...(r[totp ?? -1] && { totp: r[totp ?? -1] }),
+      });
       const fields: ExternalField[] = [];
       if (r[u ?? -1])
         fields.push({
@@ -724,6 +737,9 @@ export class KeePassXcSource implements PasswordSource {
   }
 
   async value(ref: string, fieldId: string, signal?: AbortSignal): Promise<string> {
+    const kept = this.#values.get(ref);
+    if (fieldId === 'password' && kept?.password) return kept.password;
+    if (fieldId === 'totp' && kept?.totp) return kept.totp;
     const attribute =
       fieldId === 'password'
         ? 'Password'
@@ -746,6 +762,14 @@ export class KeePassXcSource implements PasswordSource {
   }
 
   async totp(ref: string, signal?: AbortSignal): Promise<string> {
+    const setup = this.#values.get(ref)?.totp;
+    if (setup) {
+      try {
+        return totpNow(parseTotp(setup)).code;
+      } catch {
+        // Not a setup Conch reads: ask KeePassXC for the code.
+      }
+    }
     const result = await this.#cli('show', ['-q', '-t'], [this.#path(ref)], signal);
     const code = result.stdout.trim();
     if (result.code !== 0 || !/^\d{6,8}$/.test(code))

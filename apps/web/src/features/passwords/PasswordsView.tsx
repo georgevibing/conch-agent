@@ -13,7 +13,7 @@ import {
   toast,
   useMediaQuery,
   VaultHealth,
-  VaultItemIcon,
+  VaultKindGlyph,
   VaultRow,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
@@ -85,6 +85,7 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
   const [lockOpen, setLockOpen] = useState(false);
   const search = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const listPane = useRef<HTMLElement>(null);
   const location = useLocation();
 
   // ⌘K's "New password", "Import passwords" and "Check my passwords" arrive here.
@@ -132,12 +133,31 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Opening a filter or a search on a wide screen shows its first item.
-  const first = shown[0]?.id;
+  // Esc, or a click on empty space in the list, puts the item away: back to the start screen.
+  const viewing = Boolean(itemId) && mode.kind === 'view';
   useEffect(() => {
-    if (!narrow && !itemId && first && mode.kind === 'view')
-      void navigate(`/passwords/${first}`, { replace: true });
-  }, [narrow, itemId, first, mode.kind, navigate]);
+    if (!viewing) return;
+    const busy = () =>
+      document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]');
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (e.key !== 'Escape' || e.defaultPrevented || busy()) return;
+      if (target?.closest('input, textarea, select, [contenteditable]')) return;
+      void navigate('/passwords');
+    };
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target || !listPane.current?.contains(target) || busy()) return;
+      if (target.closest('button, a, input, label, [role="listitem"], [role="region"]')) return;
+      void navigate('/passwords');
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('click', onClick);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('click', onClick);
+    };
+  }, [viewing, navigate]);
 
   const onListKey = (e: KeyboardEvent<HTMLElement>) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
@@ -218,7 +238,7 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
         {VAULT_TEMPLATES.map((t) => (
           <DropdownMenu.Item
             key={t.type}
-            icon={<VaultItemIcon kind={t.type} title={t.name} size="sm" />}
+            icon={<VaultKindGlyph kind={t.type} />}
             onSelect={() => setMode({ kind: 'new', type: t.type })}
           >
             {t.name}
@@ -234,7 +254,7 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
   return (
     <div className={styles.page}>
       {showList && (
-        <section className={styles.listPane} aria-label="Passwords">
+        <section className={styles.listPane} aria-label="Passwords" ref={listPane}>
           <div className={styles.toolbar}>
             <Input
               ref={search}
@@ -440,7 +460,7 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
               action={
                 <Button
                   size="sm"
-                  variant="surface"
+                  variant="ghost"
                   loading={checking}
                   onClick={() => void checkBreaches()}
                 >
@@ -498,11 +518,15 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
         <section className={styles.detailPane} aria-label="Item">
           {status?.lock.locked && !(itemId && !itemId.startsWith('pw_')) ? (
             <LockScreen />
-          ) : empty && mode.kind === 'view' ? (
+          ) : (empty || (!narrow && !itemId)) && mode.kind === 'view' ? (
             <EmptyState
               icon={<KeyRound />}
-              title="Keep your passwords here"
-              description="Conch keeps them encrypted on this computer, fills them in for your assistant when you say so, and tells you when one turns up in a breach."
+              title={empty ? 'Keep your passwords here' : 'Your passwords'}
+              description={
+                empty
+                  ? 'Conch keeps them encrypted on this computer, fills them in for your assistant when you say so, and tells you when one turns up in a breach.'
+                  : 'Choose one on the left, press / to search, or add another. They’re encrypted on this computer, and your assistant only uses them with your OK.'
+              }
               actions={
                 <Stack direction="row" gap={2} wrap justify="center">
                   <Button
@@ -523,7 +547,7 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
                     leadingIcon={<Layers />}
                     onClick={() => setSourcesOpen(true)}
                   >
-                    Show my 1Password or Bitwarden
+                    Connect another password manager
                   </Button>
                 </Stack>
               }

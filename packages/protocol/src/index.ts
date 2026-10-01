@@ -49,6 +49,7 @@ export * from './updates';
 export * from './usage';
 export * from './vault';
 export * from './passwords';
+export * from './pick';
 export * from './words';
 
 export const PROTOCOL_VERSION = 7;

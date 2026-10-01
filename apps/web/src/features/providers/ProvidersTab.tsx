@@ -3,21 +3,20 @@ import {
   AlertDialog,
   Button,
   Callout,
-  Field,
-  Input,
   ProviderCard,
   Skeleton,
   Stack,
   Text,
+  PathPicker,
 } from '@conch/nacre';
 import { useState } from 'react';
 
 import { useAppState, useUpdateSettings } from '../../api/queries';
+import { canPickHere, pickPath } from '../../lib/pick';
 import { Section, SaveStatus } from '../settings/Section';
 import { useAutosave } from '../settings/useAutosave';
 import { useUi } from '../../app/ui';
 import { ProviderDetail } from './ConnectProviderDialog';
-import styles from './Providers.module.css';
 import { useCheckProvider, useClearProviderKey, useProviders, useUseProvider } from './queries';
 
 /** Quiet facts for a connected provider: who you are, and what Conch is running. */
@@ -185,20 +184,22 @@ export function ProvidersTab({
         description={`Where ${assistant} reads and writes files when you ask it to.`}
         status={<SaveStatus status={folderStatus} />}
       >
-        <Field>
-          <Field.Label>Folder</Field.Label>
-          <Input
-            value={folder}
-            placeholder={workspace}
-            spellCheck={false}
-            className={styles.mono}
-            onChange={(event) => setFolder(event.target.value)}
-          />
-          <Field.Description>
-            Leave empty to use Conch’s own workspace ({workspace}). Providers that only talk to a
-            model over the internet don’t read files at all.
-          </Field.Description>
-        </Field>
+        <PathPicker
+          kind="folder"
+          label="Working folder"
+          value={folder || workspace}
+          suggestions={[
+            {
+              path: workspace,
+              title: 'Conch’s own workspace',
+              detail: 'A folder just for your assistant',
+            },
+          ]}
+          onChange={(path) => setFolder(path === workspace ? '' : path)}
+          onChoose={canPickHere() ? () => pickPath('workspace') : undefined}
+          placeholder="~/Projects"
+          hint="Providers that only talk to a model over the internet don’t read files at all."
+        />
       </Section>
 
       <AlertDialog.Root
