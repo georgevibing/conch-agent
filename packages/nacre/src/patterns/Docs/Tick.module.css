@@ -1,0 +1,27 @@
+@layer nacre.components {
+  .tick {
+    display: inline-grid;
+    place-items: center;
+    inline-size: 1.375rem;
+    block-size: 1.375rem;
+    border-radius: var(--nc-radius-full);
+    vertical-align: middle;
+  }
+
+  .tick > svg {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+  }
+
+  .tick[data-value='yes'] {
+    color: light-dark(oklch(0.45 0.13 var(--nc-success-h)), oklch(0.82 0.13 var(--nc-success-h)));
+    background: light-dark(
+      oklch(0.94 0.05 var(--nc-success-h)),
+      oklch(0.3 0.06 var(--nc-success-h))
+    );
+  }
+
+  .tick[data-value='no'] {
+    color: var(--nc-text-subtle);
+  }
+}

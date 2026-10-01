@@ -1,0 +1,78 @@
+@layer nacre.components {
+  .nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-6);
+  }
+
+  .section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+  }
+
+  .title {
+    margin: 0;
+    padding-inline: var(--nc-space-3);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: 0.01em;
+    color: var(--nc-text);
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .item {
+    display: block;
+  }
+
+  .link {
+    position: relative;
+    display: block;
+    padding: var(--nc-space-1-5) var(--nc-space-3);
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    font-size: var(--nc-text-md);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+    text-decoration: none;
+    transition:
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .link:hover {
+      color: var(--nc-text);
+      background: var(--nc-wash-1);
+    }
+  }
+
+  .link:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  .link[aria-current='page'] {
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+    background: var(--nc-wash-2);
+  }
+
+  /* Where you are: one short accent bar that travels between links. */
+  .marker {
+    position: absolute;
+    inset-block: 22%;
+    inset-inline-start: 0;
+    inline-size: 2.5px;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-9);
+  }
+}

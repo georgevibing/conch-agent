@@ -1,0 +1,137 @@
+@layer nacre.components {
+  .card {
+    --nc-rim-rest: 0.18;
+    --nc-rim-hover: 0.85;
+    --nc-sheen-size: 240px;
+    --nc-sheen-hover: 0.22;
+
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    color: var(--nc-text);
+    text-decoration: none;
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+    animation-delay: calc(var(--lc-index, 0) * 45ms);
+    transition:
+      box-shadow var(--nc-duration-slow) var(--nc-ease-out),
+      transform var(--nc-spring-soft-duration) var(--nc-spring-soft),
+      --nc-rim-near var(--nc-duration-slower) var(--nc-ease-out),
+      --nc-sheen var(--nc-duration-slower) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow:
+        inset 0 0 0 1px var(--nc-border-subtle),
+        var(--nc-glaze-edge),
+        var(--nc-elevation-3);
+    }
+
+    .card:hover .away {
+      color: var(--nc-text-accent);
+      transform: translate(2px, -2px);
+    }
+  }
+
+  .card:active {
+    transform: scale(0.985);
+    transition-duration: var(--nc-duration-fast);
+  }
+
+  .card:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .icon {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    min-inline-size: 2.25rem;
+    min-block-size: 2.25rem;
+  }
+
+  /* A bare icon gets the glazed pearl tile; a logo brings its own. */
+  .icon:has(> svg) {
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    color: var(--nc-accent-11);
+    background: linear-gradient(160deg, var(--nc-surface-hi), var(--nc-accent-2));
+    box-shadow:
+      var(--nc-glaze-edge),
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-1);
+  }
+
+  .icon > svg {
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+  }
+
+  .words {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+  }
+
+  .head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--nc-space-2);
+  }
+
+  .title {
+    flex: 1;
+    font-size: var(--nc-text-lg);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: -0.012em;
+    line-height: var(--nc-leading-snug);
+    text-wrap: balance;
+  }
+
+  .meta {
+    flex-shrink: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .away {
+    flex-shrink: 0;
+    align-self: center;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+    transition:
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy),
+      color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .description {
+    font-size: var(--nc-text-md);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card {
+      animation: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .card {
+    animation: none;
+  }
+}

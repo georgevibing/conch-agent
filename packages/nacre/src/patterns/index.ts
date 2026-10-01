@@ -44,3 +44,4 @@ export * from './PathPicker';
 export * from './ComeHome';
 export * from './Artifacts';
 export * from './Memory';
+export * from './Docs';

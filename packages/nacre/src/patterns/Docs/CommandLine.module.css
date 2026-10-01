@@ -1,0 +1,114 @@
+@layer nacre.components {
+  .line {
+    --nc-rim-rest: 0.3;
+    --nc-rim-hover: 0.9;
+    --nc-sheen-size: 260px;
+    --nc-sheen-hover: 0.16;
+
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    min-inline-size: 0;
+    padding: var(--nc-space-1-5) var(--nc-space-2) var(--nc-space-1-5) var(--nc-space-3-5);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      inset 0 1px 2px 0 var(--nc-wash-2);
+  }
+
+  .line[data-size='lg'] {
+    padding: var(--nc-space-2-5) var(--nc-space-2-5) var(--nc-space-2-5) var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+  }
+
+  .prompt {
+    flex-shrink: 0;
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-accent);
+    user-select: none;
+  }
+
+  .scroll {
+    flex: 1;
+    min-inline-size: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-radius: var(--nc-radius-xs);
+    /* The line runs on under the copy button's side: fade it out, don't cut it. */
+    mask-image: linear-gradient(90deg, var(--nc-gray-12) calc(100% - 1.5rem), transparent);
+  }
+
+  .scroll:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .pre {
+    margin: 0;
+    font: inherit;
+  }
+
+  .code {
+    display: inline-block;
+    padding-inline-end: var(--nc-space-5);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-sm);
+    font-variant-ligatures: none;
+    line-height: var(--nc-leading-relaxed);
+    white-space: pre;
+    color: var(--nc-text);
+    vertical-align: middle;
+  }
+
+  .line[data-size='lg'] :is(.code, .prompt) {
+    font-size: var(--nc-text-md);
+  }
+
+  /* Typed out a character at a time; the caret rides the edge, then leaves. */
+  .code[data-typed] {
+    overflow: hidden;
+    box-sizing: content-box;
+    max-inline-size: calc(var(--cl-chars) * 1ch);
+    padding-inline-end: 0;
+    border-inline-end: 0.5em solid transparent;
+    animation:
+      nc-command-type calc(var(--cl-chars) * var(--nc-duration-instant) * 0.25)
+        steps(var(--cl-chars), end) var(--nc-duration-slower) both,
+      nc-command-caret calc(var(--nc-duration-slower) * 1.6) steps(2, jump-none) 3;
+  }
+
+  @keyframes nc-command-type {
+    from {
+      max-inline-size: 0;
+    }
+    to {
+      max-inline-size: calc(var(--cl-chars) * 1ch);
+    }
+  }
+
+  @keyframes nc-command-caret {
+    from {
+      border-inline-end-color: var(--nc-accent-9);
+    }
+    to {
+      border-inline-end-color: transparent;
+    }
+  }
+
+  .copy {
+    flex-shrink: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .code[data-typed] {
+      animation: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .code[data-typed] {
+    animation: none;
+  }
+}

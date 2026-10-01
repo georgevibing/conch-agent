@@ -1,0 +1,76 @@
+@layer nacre.components {
+  /* `ol.` and `li.`: inside Prose these must outrank its list styles, whatever order the sheets load in. */
+  ol.steps {
+    --st-marker: 1.625rem;
+
+    display: flex;
+    flex-direction: column;
+    /* No block margins of its own: inside Prose it takes the rhythm of the text around it. */
+    margin-inline: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: nc-step;
+  }
+
+  li.step {
+    position: relative;
+    margin: 0;
+    padding-inline-start: 0;
+    display: grid;
+    grid-template-columns: var(--st-marker) minmax(0, 1fr);
+    gap: var(--nc-space-3);
+    padding-block-end: var(--nc-space-4);
+    counter-increment: nc-step;
+  }
+
+  li.step:last-child {
+    padding-block-end: 0;
+  }
+
+  li.step::before {
+    content: counter(nc-step);
+    display: grid;
+    place-items: center;
+    inline-size: var(--st-marker);
+    block-size: var(--st-marker);
+    border-radius: var(--nc-radius-full);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-semibold);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    color: var(--nc-accent-11);
+    background: var(--nc-accent-3);
+    box-shadow: inset 0 0 0 1px var(--nc-accent-6);
+  }
+
+  /* The thread between one marker and the next. */
+  li.step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    inset-block: calc(var(--st-marker) + var(--nc-space-1)) var(--nc-space-1);
+    inset-inline-start: calc(var(--st-marker) / 2 - 0.5px);
+    inline-size: 1px;
+    background: var(--nc-border);
+  }
+
+  /* A block, not a row: a step is often one sentence with bold words in it. */
+  .body {
+    min-inline-size: 0;
+    /* Sits the first line of text on the marker's centre. */
+    padding-block-start: 0.1em;
+  }
+
+  .body > * {
+    margin-block: 0;
+  }
+
+  .body > * + * {
+    margin-block-start: var(--nc-space-2);
+  }
+
+  .title {
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+    text-wrap: balance;
+  }
+}

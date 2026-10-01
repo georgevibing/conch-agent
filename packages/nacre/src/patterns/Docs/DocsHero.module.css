@@ -1,0 +1,120 @@
+@layer nacre.components {
+  .hero {
+    container-type: inline-size;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    gap: var(--nc-space-10);
+  }
+
+  .words {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--nc-space-5);
+    min-inline-size: 0;
+  }
+
+  .words > * {
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+  .words > :nth-child(2) {
+    animation-delay: calc(var(--nc-duration-instant) * 0.8);
+  }
+  .words > :nth-child(3) {
+    animation-delay: calc(var(--nc-duration-instant) * 1.6);
+  }
+  .words > :nth-child(4) {
+    animation-delay: calc(var(--nc-duration-instant) * 2.4);
+  }
+
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  .title {
+    margin: 0;
+    font-family: var(--nc-font-display);
+    font-size: clamp(var(--nc-text-4xl), 9cqi, 4.5rem);
+    font-weight: 400;
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    color: var(--nc-text);
+    text-wrap: balance;
+  }
+
+  .title em {
+    font-style: italic;
+    color: var(--nc-text-accent);
+  }
+
+  .lede {
+    margin: 0;
+    max-inline-size: 34rem;
+    font-size: var(--nc-text-xl);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  .actions {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--nc-space-3);
+    inline-size: 100%;
+    max-inline-size: 34rem;
+  }
+
+  .media {
+    position: relative;
+    isolation: isolate;
+    min-inline-size: 0;
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft)
+      calc(var(--nc-duration-instant) * 3) both;
+  }
+
+  /* A slow tide of pearl light behind the picture: decoration, never state. */
+  .tide {
+    position: absolute;
+    inset: -12% -8%;
+    z-index: -1;
+    border-radius: var(--nc-radius-full);
+    background: conic-gradient(from var(--nc-angle) in oklab, var(--nc-pearl-spectrum));
+    opacity: calc(0.42 * var(--nc-lustre));
+    filter: blur(56px) saturate(1.25);
+    animation: nc-docs-tide 28s linear infinite;
+  }
+
+  @keyframes nc-docs-tide {
+    to {
+      --nc-angle: 360deg;
+    }
+  }
+
+  @container (min-width: 58rem) {
+    .layout[data-media] {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+      gap: var(--nc-space-12);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .words > *,
+    .media,
+    .tide {
+      animation: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] :is(.words > *, .media, .tide) {
+    animation: none;
+  }
+}
