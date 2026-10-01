@@ -63,6 +63,11 @@ interface Block {
   item?: TranscriptItem;
 }
 
+/** Said between browser steps, without ending the trail: an answered site question, a page read. */
+const aside = (block: Block) =>
+  block.item?.kind === 'taint' ||
+  (block.item?.kind === 'permission' && Boolean(block.item.browser && block.item.decision));
+
 /** Consecutive tool calls are grouped into one tight stack; browser steps into one trail. */
 function blocks(items: TranscriptItem[]): Block[] {
   const out: Block[] = [];
@@ -74,12 +79,11 @@ function blocks(items: TranscriptItem[]): Block[] {
       if (last?.tools) last.tools.push(item);
       else out.push({ key: `tools-${item.id}`, tools: [item], at });
     } else if (item.kind === 'browser') {
-      // Once a site question is answered, browsing goes on in the same trail
-      // (the answer shows under it), rather than starting a new one.
-      const before = out.at(-2);
-      const answered = last?.item?.kind === 'permission' && last.item.browser && last.item.decision;
-      if (last?.browser) last.browser.push(item);
-      else if (answered && before?.browser) before.browser.push(item);
+      // Browsing goes on in the same trail past an answered site question and
+      // the note that it read a page (both show under it), rather than starting
+      // a new one.
+      const trail = out.findLast((b) => !aside(b));
+      if (trail?.browser) trail.browser.push(item);
       else out.push({ key: `browser-${item.id}`, browser: [item], at });
     } else {
       out.push({ key: `${item.kind}-${item.id}`, item, at });

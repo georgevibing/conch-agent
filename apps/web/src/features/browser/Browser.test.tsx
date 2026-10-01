@@ -201,4 +201,36 @@ describe('browsing across an answered question', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Allowed on wikipedia.org in this chat')).toBeInTheDocument();
   });
+
+  it('keeps one trail past the note that it read a page (ADR 0028)', () => {
+    const view = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'Search Wikipedia' },
+        step('s1', 'done', 'Opened wikipedia.org'),
+        { type: 'taint', source: { kind: 'web', label: 'wikipedia.org' } },
+        {
+          type: 'permission.requested',
+          permissionId: 'p1',
+          toolName: 'browser_site',
+          input: {},
+          summary: 'use wikipedia.org',
+          browser: {
+            kind: 'site',
+            site: 'wikipedia.org',
+            url: 'https://wikipedia.org',
+            title: 'Wikipedia',
+            action: 'Click “Search”',
+          },
+        },
+        { type: 'permission.resolved', permissionId: 'p1', decision: 'allow' },
+        step('s2', 'done', 'Clicked “Search”'),
+        { type: 'taint', source: { kind: 'web', label: 'pages in the browser' } },
+        step('s3', 'done', 'Read the results'),
+      ),
+    );
+    show(view);
+    expect(screen.getAllByRole('button', { name: /^Browsed / })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /· 3 steps/ })).toBeInTheDocument();
+    expect(screen.getByText(/Read wikipedia\.org\./)).toBeInTheDocument();
+  });
 });
