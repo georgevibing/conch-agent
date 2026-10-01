@@ -30,6 +30,7 @@ const FILTERS: { value: ActivityKind | 'all'; label: string }[] = [
   { value: 'web', label: 'Web' },
   { value: 'app', label: 'Apps' },
   { value: 'approval', label: 'Asked you' },
+  { value: 'artifact', label: 'Made' },
 ];
 
 /** `code` in a title, as code. */

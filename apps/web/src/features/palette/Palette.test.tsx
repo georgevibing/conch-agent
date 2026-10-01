@@ -357,6 +357,50 @@ describe('Palette search', () => {
     act(() => useUi.setState({ settings: null, settingsFocus: undefined }));
   });
 
+  it('finds things made in chats: a pinned app on its page, anything else beside its chat', async () => {
+    const user = userEvent.setup();
+    const made = (id: string, title: string, pinned?: boolean) => ({
+      id,
+      title,
+      kind: 'chart' as const,
+      conversationId: 'c9',
+      createdAt: 1,
+      updatedAt: 2,
+      versions: [{ n: 1, at: 1, size: 1 }],
+      ...(pinned && { pinned: { at: 3 } }),
+    });
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'GET /api/artifacts': () => ({
+        artifacts: [made('a_1', 'Visitors this week', true), made('a_2', 'Visitors by country')],
+      }),
+    });
+    renderApp(
+      <>
+        <Palette />
+        <Where />
+      </>,
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'visitors');
+    await user.click(
+      await screen.findByRole('option', { name: /Visitors this week.*Chart · pinned/ }),
+    );
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/apps/a_1'));
+
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'country');
+    await user.click(await screen.findByRole('option', { name: /Visitors by country/ }));
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/c/c9'));
+    expect(useUi.getState().artifactOpen).toMatchObject({
+      conversationId: 'c9',
+      artifactId: 'a_2',
+    });
+    act(() => useUi.setState({ artifactOpen: null }));
+  });
+
   it('backs up and restores by name, straight into Settings → Health', async () => {
     const user = userEvent.setup();
     mockFetch({

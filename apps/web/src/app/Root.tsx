@@ -62,6 +62,7 @@ export function Root() {
       <Route path="/channels/:channelId" element={<Shell />} />
       <Route path="/passwords" element={<Shell />} />
       <Route path="/activity" element={<Shell />} />
+      <Route path="/apps/:artifactId" element={<Shell />} />
       <Route path="/passwords/:itemId" element={<Shell />} />
       <Route path="*" element={<Shell />} />
     </Routes>

@@ -56,6 +56,7 @@ import { Transcript } from './Transcript';
 import type { TurnRecovery } from './TranscriptItems';
 import { type Draft, useDraftAttachments } from './useDraftAttachments';
 import { useIntegrations } from '../integrations/queries';
+import { ArtifactDock } from '../artifacts/ArtifactDock';
 import { BrowserDock } from '../browser/BrowserDock';
 import { Dictate } from '../voice/Dictate';
 import { canSpeak } from '../voice/speak';
@@ -638,7 +639,9 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   );
   return conversationId ? (
     <BrowserDock conversationId={conversationId} view={view}>
-      {chat}
+      <ArtifactDock conversationId={conversationId} view={view}>
+        {chat}
+      </ArtifactDock>
     </BrowserDock>
   ) : (
     chat

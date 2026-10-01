@@ -5,6 +5,8 @@ import { useLocation, useNavigate, useParams } from 'react-router';
 
 import { useConversations } from '../api/queries';
 import { ActivityView } from '../features/activity/ActivityView';
+import { AppView } from '../features/artifacts/AppView';
+import { useArtifact } from '../features/artifacts/queries';
 import { RestartWatch } from '../features/health/RestartWatch';
 import { PushKeeper } from '../features/notifications/PushKeeper';
 import { UndoHost } from '../features/undo/UndoHost';
@@ -50,8 +52,16 @@ function Reconnecting() {
 }
 
 export function Shell() {
-  const { conversationId, routineId, integrationId, skillId, channelId, channelKind, itemId } =
-    useParams();
+  const {
+    conversationId,
+    routineId,
+    integrationId,
+    skillId,
+    channelId,
+    channelKind,
+    itemId,
+    artifactId,
+  } = useParams();
   const navigate = useNavigate();
   const path = useLocation().pathname;
   const routinesArea = path.startsWith('/routines');
@@ -60,6 +70,8 @@ export function Shell() {
   const channelsArea = path.startsWith('/channels');
   const passwordsArea = path.startsWith('/passwords');
   const activityArea = path.startsWith('/activity');
+  const appsArea = path.startsWith('/apps/');
+  const { data: app } = useArtifact(appsArea ? artifactId : undefined);
 
   // Toasts and notifications raised outside the router ask us to navigate.
   useEffect(() => {
@@ -89,7 +101,9 @@ export function Shell() {
             ? 'Passwords'
             : activityArea
               ? 'Activity'
-              : (current?.title ?? (conversationId ? '' : 'New chat'));
+              : appsArea
+                ? (app?.title ?? '')
+                : (current?.title ?? (conversationId ? '' : 'New chat'));
 
   useEffect(() => {
     document.title = current ? `${current.title} · Conch` : 'Conch';
@@ -149,6 +163,7 @@ export function Shell() {
                 !skillsArea &&
                 !channelsArea &&
                 !passwordsArea &&
+                !appsArea &&
                 current?.titling
               }
             >
@@ -172,7 +187,9 @@ export function Shell() {
         <Reconnecting />
         {/* The page; it steps aside while the terminal fills the screen. */}
         <div className={styles.area} data-covered={terminalMax || undefined}>
-          {activityArea ? (
+          {appsArea && artifactId ? (
+            <AppView key={artifactId} artifactId={artifactId} />
+          ) : activityArea ? (
             <ActivityView />
           ) : passwordsArea ? (
             <PasswordsView itemId={itemId} />

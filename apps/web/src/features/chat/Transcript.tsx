@@ -21,6 +21,7 @@ import {
 import { BrowserApprovalItem, BrowserTrailItem, HandoffItem } from '../browser/ChatCards';
 import { IntegrationIssue, IntegrationSuggestion } from '../integrations/ChatBits';
 import { HeldItem, RoutedItem } from './OfflineBits';
+import { ArtifactChatCard } from '../artifacts/ArtifactChatCard';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
 import { ChatFiles, turnChanges } from '../undo/ChatFiles';
 import { RoutineInstruction } from '../routines/RunBanner';
@@ -111,7 +112,7 @@ function placeSuggestions(items: TranscriptItem[], holdLast: boolean): Transcrip
 function timeOf(item: TranscriptItem): number | undefined {
   if (item.kind === 'user') return item.at;
   if (item.kind === 'assistant' || item.kind === 'tool') return item.startedAt;
-  if (item.kind === 'browser') return item.at;
+  if (item.kind === 'browser' || item.kind === 'artifact') return item.at;
   return undefined;
 }
 
@@ -193,6 +194,7 @@ export function Transcript({
       last?.kind === 'files' ||
       last?.kind === 'skill' ||
       last?.kind === 'routine' ||
+      last?.kind === 'artifact' ||
       last?.kind === 'integration-issue' ||
       last?.kind === 'routed' ||
       (last?.kind === 'browser' && last.step.status !== 'running') ||
@@ -280,6 +282,9 @@ export function Transcript({
                 title={block.item.title}
                 action={block.item.action}
               />
+            )}
+            {block.item?.kind === 'artifact' && conversationId && (
+              <ArtifactChatCard conversationId={conversationId} item={block.item} />
             )}
             {block.item?.kind === 'integration-issue' && <IntegrationIssue item={block.item} />}
             {block.item?.kind === 'held' && (

@@ -19,6 +19,7 @@ import { applyIntegrationEvent } from '../features/integrations/queries';
 import { healthKeys } from '../features/health/api';
 import { backupKeys } from '../features/health/backups';
 import { useImportProgress } from '../features/import/api';
+import { applyArtifactEvent } from '../features/artifacts/queries';
 import { applyRoutineEvent } from '../features/routines/queries';
 import { skillKeys } from '../features/skills/queries';
 import { vaultKeys } from '../features/passwords/queries';
@@ -234,6 +235,10 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         case 'integration.changed':
         case 'integration.deleted':
           applyIntegrationEvent(client, event);
+          break;
+        case 'artifact.changed':
+        case 'artifact.deleted':
+          applyArtifactEvent(client, event);
           break;
         case 'routine.changed':
         case 'routine.deleted':

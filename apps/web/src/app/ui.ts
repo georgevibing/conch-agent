@@ -92,6 +92,14 @@ interface UiState {
   openBrowser(conversationId: string): void;
   closeBrowser(): void;
   setBrowserWidth(width: number): void;
+  /** Something the assistant made, open beside a chat (ADR 0034). `version`: a past one. */
+  artifactOpen: { conversationId: string; artifactId: string; version?: number } | null;
+  /** When you last closed a chat's artifact panel: it only opens by itself for newer things. */
+  artifactDismissed: Record<string, number>;
+  artifactWidth: number;
+  openArtifact(conversationId: string, artifactId: string, version?: number): void;
+  closeArtifact(): void;
+  setArtifactWidth(width: number): void;
   /** The terminal drawer is open. */
   terminalOpen: boolean;
   /** Its height in pixels (remembered), and whether it fills the screen. */
@@ -115,6 +123,7 @@ interface UiState {
 const SIDEBAR_KEY = 'conch.sidebar';
 const BROWSER_WIDTH_KEY = 'conch.browserWidth';
 const TERMINAL_HEIGHT_KEY = 'conch.terminalHeight';
+const ARTIFACT_WIDTH_KEY = 'conch.artifactWidth';
 
 function storedHeight(): number {
   const value =
@@ -122,9 +131,8 @@ function storedHeight(): number {
   return Number.isFinite(value) && value >= 160 ? value : 300;
 }
 
-function storedWidth(): number {
-  const value =
-    typeof localStorage === 'undefined' ? NaN : Number(localStorage.getItem(BROWSER_WIDTH_KEY));
+function storedWidth(key = BROWSER_WIDTH_KEY): number {
+  const value = typeof localStorage === 'undefined' ? NaN : Number(localStorage.getItem(key));
   return Number.isFinite(value) && value >= 320 ? value : 560;
 }
 
@@ -186,7 +194,8 @@ export const useUi = create<UiState>((set) => ({
   browserFor: null,
   browserDismissed: {},
   browserWidth: storedWidth(),
-  openBrowser: (browserFor) => set({ browserFor, paletteOpen: false }),
+  // One panel beside the chat at a time: the browser or something made.
+  openBrowser: (browserFor) => set({ browserFor, artifactOpen: null, paletteOpen: false }),
   closeBrowser: () =>
     set((s) =>
       s.browserFor
@@ -196,6 +205,35 @@ export const useUi = create<UiState>((set) => ({
           }
         : s,
     ),
+  artifactOpen: null,
+  artifactDismissed: {},
+  artifactWidth: storedWidth(ARTIFACT_WIDTH_KEY),
+  openArtifact: (conversationId, artifactId, version) =>
+    set({
+      artifactOpen: { conversationId, artifactId, version },
+      browserFor: null,
+      paletteOpen: false,
+    }),
+  closeArtifact: () =>
+    set((s) =>
+      s.artifactOpen
+        ? {
+            artifactOpen: null,
+            artifactDismissed: {
+              ...s.artifactDismissed,
+              [s.artifactOpen.conversationId]: Date.now(),
+            },
+          }
+        : s,
+    ),
+  setArtifactWidth: (artifactWidth) => {
+    try {
+      localStorage.setItem(ARTIFACT_WIDTH_KEY, String(Math.round(artifactWidth)));
+    } catch {
+      // Private windows: the width just isn't remembered.
+    }
+    set({ artifactWidth });
+  },
   terminalOpen: false,
   terminalHeight: storedHeight(),
   terminalMax: false,

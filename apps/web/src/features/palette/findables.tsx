@@ -1,5 +1,12 @@
 import { generatePassword, type TextRange } from '@conch/protocol';
-import { IntegrationLogo, ProviderLogo, SkillIcon, toast, VaultKindGlyph } from '@conch/nacre';
+import {
+  ARTIFACT_KINDS,
+  IntegrationLogo,
+  ProviderLogo,
+  SkillIcon,
+  toast,
+  VaultKindGlyph,
+} from '@conch/nacre';
 import {
   Archive,
   BatteryMedium,
@@ -51,6 +58,7 @@ import { copySecret } from '../passwords/clipboard';
 import { useVault } from '../passwords/queries';
 import { modelLabel, providerLogos } from '../models/catalog';
 import { modelKey, useTurnOptions } from '../models/useTurnOptions';
+import { useArtifacts } from '../artifacts/queries';
 import { useRoutines } from '../routines/queries';
 import { fuzzyFilter, type FuzzyMatch } from '../search/fuzzy';
 import { useSkills } from '../skills/queries';
@@ -233,6 +241,8 @@ export function useFindables(query: string, conversationId: string | undefined):
   const { data: skills } = useSkills();
   const { data: integrations } = useIntegrations();
   const { data: routines } = useRoutines();
+  const { data: artifacts } = useArtifacts();
+  const openArtifact = useUi((s) => s.openArtifact);
   const { data: vault } = useVault();
   const { data: channels } = useChannels();
   const { data: terminal } = useTerminalStatus();
@@ -410,6 +420,26 @@ export function useFindables(query: string, conversationId: string | undefined):
     description: item.scheduleText,
     icon: <Repeat />,
     run: () => void navigate(`/routines/${item.id}`),
+  }));
+
+  // Things made in chats (ADR 0034): a pinned app opens on its page, anything else beside its chat.
+  const artifactItems = find(
+    artifacts ?? [],
+    q,
+    (a) => a.title,
+    (a) => `${ARTIFACT_KINDS[a.kind].label} ${a.pinned ? 'app pinned' : ''}`,
+    4,
+  ).map(({ item, match }): Findable => ({
+    id: `artifact:${item.id}`,
+    label: item.title,
+    ranges: match.ranges,
+    description: `${ARTIFACT_KINDS[item.kind].label}${item.pinned ? ' · pinned' : ''}`,
+    icon: ARTIFACT_KINDS[item.kind].icon,
+    run: () => {
+      if (item.pinned || !item.conversationId) return void navigate(`/apps/${item.id}`);
+      openArtifact(item.conversationId, item.id);
+      void navigate(`/c/${item.conversationId}`);
+    },
   }));
 
   const places: {
@@ -643,5 +673,6 @@ export function useFindables(query: string, conversationId: string | undefined):
     { heading: 'Integrations', items: appItems },
     { heading: 'Channels', items: channelItems },
     { heading: 'Routines', items: routineItems },
+    { heading: 'Made for you', items: artifactItems },
   ].filter((group) => group.items.length > 0);
 }

@@ -35,6 +35,7 @@ import { useUi } from '../../app/ui';
 import { dayGroup, type DayGroup } from '../../lib/time';
 import { useAutoFocus } from '../../lib/useAutoFocus';
 import { ActivityLink } from '../activity/ActivityLink';
+import { PinnedApps } from '../artifacts/PinnedApps';
 import { ChannelsLink } from '../channels/ChannelsLink';
 import { PasswordsLink } from '../passwords/PasswordsLink';
 import { APPS } from '../channels/describe';
@@ -213,8 +214,10 @@ export function Sidebar({
   const updates = updatesWaiting(useUpdates().data);
 
   const groups = new Map<DayGroup, ConversationSummary[]>();
-  // Routine runs live under Routines, not in your chat list.
-  for (const c of (conversations ?? []).filter((c) => c.origin?.kind !== 'routine')) {
+  // Routine runs live under Routines, and refreshes under their app, not in your chat list.
+  for (const c of (conversations ?? []).filter(
+    (c) => c.origin?.kind !== 'routine' && c.origin?.kind !== 'artifact',
+  )) {
     const g = dayGroup(c.updatedAt);
     groups.set(g, [...(groups.get(g) ?? []), c]);
   }
@@ -272,6 +275,7 @@ export function Sidebar({
         <ActivityLink onNavigate={onNavigate} />
       </div>
       <ScrollArea className={styles.scroll}>
+        <PinnedApps onNavigate={onNavigate} />
         {!isPending && (conversations?.length ?? 0) === 0 && (
           <Text size="sm" tone="subtle" className={styles.empty}>
             Your conversations will appear here.

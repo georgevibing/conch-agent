@@ -1,0 +1,58 @@
+@layer nacre.components {
+  .chatCard {
+    margin-block: var(--nc-space-2);
+  }
+
+  /* The panel as a card in the dock, like the browser beside it. */
+  .panel {
+    overflow: hidden;
+    border-radius: var(--nc-radius-xl);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-2);
+  }
+
+  .panel[data-expanded] {
+    border-radius: 0;
+  }
+
+  .panel[data-standalone] {
+    box-shadow: none;
+    background: transparent;
+  }
+
+  .picture {
+    display: block;
+    max-inline-size: 100%;
+    block-size: auto;
+    margin-inline: auto;
+  }
+
+  .loading {
+    block-size: 240px;
+  }
+
+  .loadingPanel {
+    block-size: 100%;
+    min-block-size: 320px;
+  }
+
+  /* A pinned app, on a page of its own. */
+  .app {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-block-size: 0;
+    padding: var(--nc-space-2) var(--nc-space-4) var(--nc-space-4);
+  }
+
+  .appFoot {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--nc-space-2);
+    padding-block-start: var(--nc-space-2);
+  }
+}

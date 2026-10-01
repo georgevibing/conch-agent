@@ -35,11 +35,35 @@ const components: Components = {
   },
 };
 
+/**
+ * For things the assistant made (ADR 0034): only pictures carried inside the
+ * document itself. One from an address would be fetched the moment it's shown,
+ * and its address can carry what's on the page away.
+ */
+const sealedComponents: Components = {
+  ...components,
+  img({ src, alt }) {
+    const inline = typeof src === 'string' && /^data:image\/(png|jpe?g|gif|webp|avif);/i.test(src);
+    if (inline) return <img src={src} alt={alt ?? ''} />;
+    return <span title="Pictures from other sites aren’t loaded here">[{alt || 'picture'}]</span>;
+  },
+};
+
 /** Agent Markdown → Nacre typography. Memoised: streaming only re-parses when text grows. */
-export const Markdown = memo(function Markdown({ text }: { text: string }) {
+export const Markdown = memo(function Markdown({
+  text,
+  sealed,
+}: {
+  text: string;
+  /** Load no pictures from other addresses (a document the assistant made). */
+  sealed?: boolean;
+}) {
   return (
     <Prose>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={sealed ? sealedComponents : components}
+      >
         {text}
       </ReactMarkdown>
     </Prose>

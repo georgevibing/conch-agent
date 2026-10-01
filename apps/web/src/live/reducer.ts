@@ -1,4 +1,5 @@
 import type {
+  ArtifactKind,
   Attachment,
   ChangedFile,
   TaintSource,
@@ -98,6 +99,18 @@ export type TranscriptItem =
     }
   | { kind: 'handoff'; id: string; handoff: BrowserHandoff }
   | { kind: 'memory'; id: string; memoryId: string; content: string; action: 'saved' | 'forgotten' }
+  | {
+      /** Something the assistant made (ADR 0034): a card that opens it beside the chat. */
+      kind: 'artifact';
+      id: string;
+      artifactId: string;
+      title: string;
+      artifactKind: ArtifactKind;
+      version: number;
+      action: 'created' | 'updated';
+      note?: string;
+      at: number;
+    }
   | {
       kind: 'routine';
       id: string;
@@ -576,6 +589,24 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         items: [...items, { kind: 'handoff', id: event.handoff.handoffId, handoff: event.handoff }],
       };
     }
+    case 'artifact':
+      return {
+        ...base,
+        items: [
+          ...items,
+          {
+            kind: 'artifact',
+            id: `artifact-${event.seq}`,
+            artifactId: event.artifactId,
+            title: event.title,
+            artifactKind: event.kind,
+            version: event.version,
+            action: event.action,
+            ...(event.note && { note: event.note }),
+            at: event.at,
+          },
+        ],
+      };
     case 'routine':
       return {
         ...base,
