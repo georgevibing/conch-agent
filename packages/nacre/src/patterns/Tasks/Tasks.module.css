@@ -1,0 +1,192 @@
+@layer nacre.components {
+  .card {
+    --tk-icon: 2rem;
+    --tk-indent: calc(var(--tk-icon) + var(--nc-space-3));
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+    container-type: inline-size;
+  }
+
+  .card[data-variant='compact'] {
+    padding: var(--nc-space-3) var(--nc-space-4);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .card[data-status='needs-you'] {
+    box-shadow:
+      inset 0 0 0 1px
+        light-dark(oklch(0.8 0.08 var(--nc-warning-h)), oklch(0.45 0.08 var(--nc-warning-h))),
+      var(--nc-elevation-1);
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+  }
+
+  .icon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    inline-size: var(--tk-icon);
+    block-size: var(--tk-icon);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    color: var(--nc-text-muted);
+  }
+
+  .icon > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .icon[data-status='done'] {
+    color: light-dark(oklch(0.5 0.11 var(--nc-success-h)), oklch(0.8 0.1 var(--nc-success-h)));
+  }
+
+  .icon[data-status='needs-you'] {
+    color: light-dark(oklch(0.5 0.12 var(--nc-warning-h)), oklch(0.82 0.1 var(--nc-warning-h)));
+  }
+
+  .icon[data-status='failed'],
+  .icon[data-status='interrupted'] {
+    color: light-dark(oklch(0.52 0.15 var(--nc-danger-h)), oklch(0.8 0.12 var(--nc-danger-h)));
+  }
+
+  .text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    min-inline-size: 0;
+  }
+
+  .title {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    overflow: hidden;
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .kind {
+    flex-shrink: 0;
+    inline-size: 0.85rem;
+    block-size: 0.85rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .meta {
+    margin: 0;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .status[data-status='needs-you'] {
+    color: light-dark(oklch(0.48 0.12 var(--nc-warning-h)), oklch(0.84 0.1 var(--nc-warning-h)));
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .current,
+  .steps,
+  .note,
+  .summary,
+  .error,
+  .branch,
+  .actions {
+    margin: 0;
+    padding-inline-start: var(--tk-indent);
+  }
+
+  .current {
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    padding-inline-start: calc(var(--tk-indent) + var(--nc-space-4));
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-snug);
+  }
+
+  .note {
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+  }
+
+  .summary {
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    white-space: pre-wrap;
+    text-wrap: pretty;
+  }
+
+  .error {
+    color: light-dark(oklch(0.48 0.12 var(--nc-danger-h)), oklch(0.84 0.1 var(--nc-danger-h)));
+    font-size: var(--nc-text-sm);
+  }
+
+  .branch {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+  }
+
+  .branch > svg {
+    inline-size: 0.85rem;
+    block-size: 0.85rem;
+  }
+
+  .branch code {
+    font-family: var(--nc-font-mono);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-2);
+    padding-block-start: var(--nc-space-1);
+  }
+
+  @container (max-width: 24rem) {
+    .current,
+    .steps,
+    .note,
+    .summary,
+    .error,
+    .branch,
+    .actions {
+      padding-inline-start: 0;
+    }
+
+    .steps {
+      padding-inline-start: var(--nc-space-4);
+    }
+  }
+}

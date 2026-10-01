@@ -26,6 +26,7 @@ export * from './Integrations';
 export * from './Channels';
 export * from './Providers';
 export * from './Skills';
+export * from './Tasks';
 export * from './Browser';
 export * from './Terminal';
 export * from './Setup';
