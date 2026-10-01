@@ -1,7 +1,7 @@
 import type { VaultItemSummary } from '@conch/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { counts, matches, visibleItems } from './filter';
+import { ago, counts, matches, visibleItems } from './filter';
 
 const item = (over: Partial<VaultItemSummary>): VaultItemSummary => ({
   id: 'pw_1',
@@ -80,5 +80,17 @@ describe('finding passwords', () => {
       deleted: 1,
       tags: [['Work', 1]],
     });
+  });
+});
+
+describe('ago', () => {
+  it('says how long ago in the words people use', () => {
+    const now = new Date(2026, 9, 1, 15, 0).getTime();
+    expect(ago(now - 20_000, now)).toBe('just now');
+    expect(ago(now - 5 * 60_000, now)).toBe('5 min ago');
+    expect(ago(now - 3 * 3_600_000, now)).toBe('3 h ago');
+    expect(ago(now - 8 * 3_600_000, now)).toBe('today');
+    expect(ago(now - 26 * 3_600_000, now)).toBe('yesterday');
+    expect(ago(undefined, now)).toBe('never');
   });
 });

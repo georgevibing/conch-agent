@@ -249,6 +249,8 @@ export interface VaultRowProps extends Omit<ComponentProps<'button'>, 'children'
   selected?: boolean;
   /** "Deleted 3 days ago" for Recently deleted. */
   note?: string;
+  /** What the list is sorted by, after the subtitle: "Used 5 min ago". */
+  meta?: string;
 }
 
 /** One item in the list: what it is, whose it is, and whether it needs you. */
@@ -264,6 +266,7 @@ export function VaultRow({
   issues = [],
   selected,
   note,
+  meta,
   className,
   ...props
 }: VaultRowProps) {
@@ -276,6 +279,7 @@ export function VaultRow({
     passkey ? 'has a passkey' : undefined,
     ...issues.map((i) => ISSUE_WORDS[i].toLowerCase()),
     note,
+    meta?.toLowerCase(),
   ]
     .filter(Boolean)
     .join(', ');
@@ -295,7 +299,17 @@ export function VaultRow({
           {title}
           {favorite && <Star className={styles.star} aria-hidden />}
         </span>
-        {(subtitle || note) && <span className={styles.rowSubtitle}>{note ?? subtitle}</span>}
+        {(subtitle || note || meta) && (
+          <span className={styles.rowSubtitle}>
+            {note ?? subtitle}
+            {meta && (
+              <span className={styles.rowMeta}>
+                {(note ?? subtitle) ? ' · ' : ''}
+                {meta}
+              </span>
+            )}
+          </span>
+        )}
       </span>
       <span className={styles.rowEnd} aria-hidden>
         {passkey && <Fingerprint className={styles.rowGlyph} />}
@@ -896,6 +910,60 @@ export function VaultSourceRow({
         )}
       </div>
       {action && <div className={styles.sourceAction}>{action}</div>}
+    </div>
+  );
+}
+
+export interface VaultConnectedSourcesProps extends Omit<ComponentProps<'div'>, 'children'> {
+  sources: {
+    source: Exclude<VaultSourceKind, 'conch' | 'system'>;
+    state: VaultSourceRowProps['state'];
+    count?: number;
+  }[];
+  /** Open that manager's settings (unlock it, copy from it, turn it off). */
+  onOpen: (source: Exclude<VaultSourceKind, 'conch' | 'system'>) => void;
+}
+
+/** The password managers shown alongside Conch's own, at a glance: one quiet chip each. */
+export function VaultConnectedSources({
+  sources,
+  onOpen,
+  className,
+  ...props
+}: VaultConnectedSourcesProps) {
+  if (!sources.length) return null;
+  return (
+    <div className={cx(styles.connected, className)} {...props}>
+      <span className={styles.connectedLabel}>Also showing</span>
+      <ul className={styles.connectedList}>
+        {sources.map((s) => {
+          const state =
+            s.state === 'ready'
+              ? s.count !== undefined
+                ? `${s.count} ${s.count === 1 ? 'item' : 'items'}`
+                : 'Connected'
+              : STATE_WORDS[s.state];
+          return (
+            <li key={s.source}>
+              <button
+                type="button"
+                className={styles.connectedChip}
+                data-state={s.state}
+                aria-label={`${SOURCE_NAMES[s.source]}: ${state}`}
+                onClick={() => onOpen(s.source)}
+              >
+                <VaultSourceMark source={s.source} size="xs" />
+                <span className={styles.connectedName}>{SOURCE_NAMES[s.source]}</span>
+                <span className={styles.connectedState}>
+                  {s.state === 'locked' && <LockKeyhole aria-hidden />}
+                  {s.state === 'error' && <AlertTriangle aria-hidden />}
+                  {state}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

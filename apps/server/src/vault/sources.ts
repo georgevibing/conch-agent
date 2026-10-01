@@ -672,7 +672,7 @@ export class KeePassXcSource implements PasswordSource {
       throw new SourceError(firstLine(result.stderr) || 'KeePassXC didn’t answer.');
     const [head, ...rows] = parseCsv(result.stdout);
     const col = (name: string) => (head ?? []).findIndex((h) => h.trim().toLowerCase() === name);
-    const [g, t, u, p, url, n, totp] = [
+    const [g, t, u, p, url, n, totp, modified] = [
       'group',
       'title',
       'username',
@@ -680,6 +680,7 @@ export class KeePassXcSource implements PasswordSource {
       'url',
       'notes',
       'totp',
+      'last modified',
     ].map(col);
     this.#paths.clear();
     this.#values.clear();
@@ -716,6 +717,9 @@ export class KeePassXcSource implements PasswordSource {
         favorite: false,
         totp: Boolean(r[totp ?? -1]),
         ...(group && { container: group }),
+        ...(Date.parse(r[modified ?? -1] ?? '') && {
+          updatedAt: Date.parse(r[modified ?? -1] ?? ''),
+        }),
         fields,
         notes: r[n ?? -1] ?? '',
       };

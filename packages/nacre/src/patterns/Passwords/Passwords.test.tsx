@@ -7,6 +7,7 @@ import {
   PasswordGenerator,
   TotpCode,
   VaultApproval,
+  VaultConnectedSources,
   VaultFieldRow,
   VaultHealth,
   VaultRequestCard,
@@ -135,6 +136,31 @@ describe('VaultSourceRow', () => {
     );
     expect(screen.getByText('Locked')).toBeInTheDocument();
     await expectAccessible(container);
+  });
+});
+
+describe('connected managers and dates', () => {
+  it('lists the managers that are on, with their state in words, each opening its settings', async () => {
+    const onOpen = vi.fn();
+    const { container } = renderNacre(
+      <VaultConnectedSources
+        sources={[
+          { source: 'keepassxc', state: 'ready', count: 4 },
+          { source: 'bitwarden', state: 'locked' },
+        ]}
+        onOpen={onOpen}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Bitwarden: Locked' }));
+    expect(onOpen).toHaveBeenCalledWith('bitwarden');
+    expect(screen.getByRole('button', { name: 'KeePassXC: 4 items' })).toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
+  it('shows the date a list is sorted by beside the account', () => {
+    renderNacre(<VaultRow kind="login" title="Forum" subtitle="ada" meta="Used 5 min ago" />);
+    expect(screen.getByText(/· Used 5 min ago/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Forum, ada, used 5 min ago/ })).toBeInTheDocument();
   });
 });
 

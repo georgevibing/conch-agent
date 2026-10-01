@@ -294,9 +294,7 @@ test('Esc or a click on empty space puts an item away, back to the start screen'
   // Nothing is opened for you: the start screen, with what you can do.
   const start = page.getByRole('heading', { name: 'Your passwords' });
   await expect(start).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: 'Connect another password manager' }),
-  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Connect a password manager' })).toBeVisible();
   await page.getByRole('button', { name: /^Mastodon,/ }).click();
   await expect(page.getByRole('heading', { name: 'Mastodon', level: 2 })).toBeVisible();
   await page.keyboard.press('Escape');

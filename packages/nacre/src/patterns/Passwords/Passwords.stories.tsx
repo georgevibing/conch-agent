@@ -8,6 +8,7 @@ import {
   PasswordGenerator,
   TotpCode,
   VaultApproval,
+  VaultConnectedSources,
   VaultRequestCard,
   VaultUnlockCard,
   VaultFieldRow,
@@ -273,6 +274,21 @@ export const Sources: Story = {
       />
       <VaultSourceRow source="keychain" state="ready" count={7} />
     </div>
+  ),
+};
+
+/** The start screen's glance at what else Passwords is showing. */
+export const ConnectedManagers: Story = {
+  render: () => (
+    <VaultConnectedSources
+      sources={[
+        { source: 'keepassxc', state: 'ready', count: 4 },
+        { source: '1password', state: 'ready', count: 318 },
+        { source: 'bitwarden', state: 'locked' },
+        { source: 'dashlane', state: 'error' },
+      ]}
+      onOpen={fn()}
+    />
   ),
 };
 

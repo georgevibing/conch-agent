@@ -1,5 +1,5 @@
 import type { SearchPreview, SearchResults, TerminalStatus } from '@conch/protocol';
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, configure, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useLocation } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -7,6 +7,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useUi } from '../../app/ui';
 import { appState, mockFetch, renderApp } from '../../test/harness';
 import { Palette } from './Palette';
+
+// Search waits on a debounce and a round trip; under a full parallel run that takes longer than 1 s.
+configure({ asyncUtilTimeout: 4000 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -165,10 +168,7 @@ describe('Palette search', () => {
     renderApp(<Palette />);
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'redeploy');
-    // Under load the first answer can take a moment to show.
-    expect(
-      await screen.findByText(/Search is catching up on your chats/, undefined, { timeout: 4000 }),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Search is catching up on your chats/)).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Search is catching up…');
     expect(screen.queryByText(/Nothing matches/)).not.toBeInTheDocument();
     // It asks again by itself, and the results fill in.

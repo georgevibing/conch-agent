@@ -73,6 +73,8 @@ const Settings = z.object({
   enabled: z.record(z.string(), z.boolean()).default({}),
   keepassxc: z.object({ database: z.string().max(4096).optional() }).default({}),
   breachCheckedAt: z.number().optional(),
+  /** When items from other managers were last used here (shown, copied, filled, read), by id. */
+  used: z.record(z.string(), z.number()).default({}),
   /** Managers whose items are copied into Conch's vault and kept up to date (§ Moving in). */
   sync: z
     .record(
@@ -390,7 +392,21 @@ export class VaultService {
     };
   }
 
+  /** An item from another manager was used here: remembered so "Recently used" means something. */
+  async #useExternal(id: string) {
+    const used = { ...(await this.settings()).used, [id]: Date.now() };
+    // The most recent few thousand are plenty.
+    const kept = Object.fromEntries(
+      Object.entries(used)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 2000),
+    );
+    await this.#saveSettings({ used: kept });
+    this.#changed();
+  }
+
   #external(source: PasswordSource, item: ExternalItem): VaultItemSummary {
+    const usedAt = this.#settings?.used[item.ref];
     return {
       id: item.ref,
       source: source.id,
@@ -406,6 +422,7 @@ export class VaultService {
       readOnly: true,
       ...(item.container && { container: item.container }),
       ...(item.updatedAt && { updatedAt: item.updatedAt }),
+      ...(usedAt && { usedAt }),
     };
   }
 
@@ -502,6 +519,7 @@ export class VaultService {
     const problems = locked ? new Map<string, VaultProblem[]>() : await this.#problems(records);
     const items = records.map((r) => this.#summary(r, problems.get(r.id) ?? []));
     const status = await this.status(problems);
+    await this.settings();
     for (const key of await this.#systemKeys()) items.push(this.#systemSummary(key));
     for (const source of this.sources) {
       const state = status.sources.find((s) => s.id === source.id);
@@ -704,6 +722,7 @@ export class VaultService {
         throw new VaultError('unavailable', e.message);
       });
       this.#remember(value);
+      await this.#useExternal(id);
       return value;
     }
     const record = await this.#record(id);
@@ -722,6 +741,7 @@ export class VaultService {
       const code = await source.totp(id).catch((e: Error) => {
         throw new VaultError('unavailable', e.message);
       });
+      await this.#useExternal(id);
       // External managers only hand out the code, not when it ends: assume the standard 30 s.
       const period = 30;
       return {
@@ -1566,6 +1586,7 @@ export class VaultService {
           fields.find((f) => f.role === request.want) ?? fields.find((f) => f.kind === 'secret');
         if (field) value = field.value ?? (await source.value(request.itemId, field.id));
       }
+      if (value) await this.#useExternal(request.itemId);
     } else {
       const record = await this.#record(request.itemId);
       if (request.want === 'totp') {
@@ -1901,6 +1922,7 @@ export class VaultService {
         f?.kind === 'totp'
           ? await source.totp(itemId)
           : (f?.value ?? (await source.value(itemId, fieldId)));
+      await this.#useExternal(itemId);
     } else {
       const record = await this.#record(itemId);
       const f = record.fields.find((x) => x.id === fieldId);

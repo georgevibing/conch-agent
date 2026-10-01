@@ -755,3 +755,28 @@ describe('KeePassXC', () => {
     await expect(source.value(item?.ref ?? '', 'password')).rejects.toThrow();
   });
 });
+
+describe('recently used and edited, for every manager', () => {
+  it('remembers when another manager’s item was used here, and KeePassXC’s own edit date', async () => {
+    const { service } = await vault({
+      exec: exec([], {
+        'keepassxc-cli': (args) => {
+          if (args[0] === 'ls') return 'Root\n';
+          if (args[0] === 'export')
+            return `"Group","Title","Username","Password","URL","Notes","TOTP","Icon","Last Modified","Created"\n"Root","Forum","ada","kp-secret-1","https://forum.example","","","0","2026-09-01T10:00:00Z","2026-01-01T10:00:00Z"\n`;
+          return undefined as unknown as string;
+        },
+      }),
+    });
+    const database = join(await mkdtemp(join(tmpdir(), 'conch-kdbx-')), 'Passwords.kdbx');
+    await (await import('node:fs/promises')).writeFile(database, 'x');
+    await service.setSource('keepassxc', { enabled: true, database });
+    await service.unlockSource('keepassxc', 'db-password');
+    let [forum] = (await service.list()).items;
+    expect(forum).toMatchObject({ title: 'Forum', updatedAt: Date.parse('2026-09-01T10:00:00Z') });
+    expect(forum?.usedAt).toBeUndefined();
+    await service.reveal(forum?.id ?? '', 'password', undefined, 'copied');
+    [forum] = (await service.list()).items;
+    expect(forum?.usedAt).toBeGreaterThan(Date.now() - 5_000);
+  });
+});

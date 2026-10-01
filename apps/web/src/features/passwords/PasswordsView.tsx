@@ -12,6 +12,7 @@ import {
   Text,
   toast,
   useMediaQuery,
+  VaultConnectedSources,
   VaultHealth,
   VaultKindGlyph,
   VaultRow,
@@ -210,6 +211,13 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
       toast.error(errorText(e, 'Couldn’t export.'));
     }
   };
+
+  // Managers that are on, at a glance on the start screen.
+  const connected = (status?.sources ?? []).flatMap((s) =>
+    s.id === 'conch' || s.id === 'system' || s.state === 'off' || s.state === 'missing'
+      ? []
+      : [{ source: s.id, state: s.state, ...(s.count !== undefined && { count: s.count }) }],
+  );
 
   const showList = !narrow || (!itemId && mode.kind === 'view');
   const showDetail = !narrow || Boolean(itemId) || mode.kind !== 'view';
@@ -490,6 +498,19 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
                       issues={item.problems}
                       selected={item.id === itemId}
                       note={item.deletedAt ? `Deleted ${ago(item.deletedAt)}` : undefined}
+                      meta={
+                        item.deletedAt
+                          ? undefined
+                          : sort === 'recent'
+                            ? item.updatedAt
+                              ? `Edited ${ago(item.updatedAt)}`
+                              : 'No edit date'
+                            : sort === 'used'
+                              ? item.usedAt
+                                ? `Used ${ago(item.usedAt)}`
+                                : 'Not used yet'
+                              : undefined
+                      }
                       onClick={() => open(item.id)}
                       onKeyDown={onListKey}
                     />
@@ -540,18 +561,20 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
                     leadingIcon={<Upload />}
                     onClick={() => setImporting(true)}
                   >
-                    Import from Chrome, 1Password…
+                    Import passwords
                   </Button>
                   <Button
                     variant="ghost"
                     leadingIcon={<Layers />}
                     onClick={() => setSourcesOpen(true)}
                   >
-                    Connect another password manager
+                    {connected.length ? 'Manage password managers' : 'Connect a password manager'}
                   </Button>
                 </Stack>
               }
-            />
+            >
+              <VaultConnectedSources sources={connected} onOpen={() => setSourcesOpen(true)} />
+            </EmptyState>
           ) : mode.kind === 'new' ? (
             <ItemEditor
               key={`new-${mode.type}`}

@@ -125,6 +125,7 @@ export function ItemDetail({
             {TYPE_NAMES[item.type].one}
             {item.container ? ` · ${item.container}` : ''}
             {item.updatedAt ? ` · edited ${ago(item.updatedAt)}` : ''}
+            {` · ${item.usedAt ? `used ${ago(item.usedAt)}` : 'not used yet'}`}
           </Text>
         </div>
         <div className={styles.detailActions}>

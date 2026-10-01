@@ -149,8 +149,13 @@ export function filterName(filter: VaultFilter): string {
 /** "3 days ago", "today". */
 export function ago(at: number | undefined, now = Date.now()): string {
   if (!at) return 'never';
+  const minutes = Math.floor((now - at) / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 6 * 60) return `${Math.floor(minutes / 60)} h ago`;
   const days = Math.floor((now - at) / 86_400_000);
-  if (days <= 0) return 'today';
+  if (days <= 0 && new Date(at).getDate() === new Date(now).getDate()) return 'today';
+  if (days <= 0) return 'yesterday';
   if (days === 1) return 'yesterday';
   if (days < 30) return `${days} days ago`;
   return new Date(at).toLocaleDateString(undefined, {
