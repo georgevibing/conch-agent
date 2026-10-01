@@ -209,3 +209,15 @@ browsers' saved passwords. A command that needs out asks first.
 Both are in **Settings → Security → Safety**, on unless you turn them off. Turning
 one off asks that it's you, and the checkup will say so. **Activity** (in the
 sidebar) shows everything the assistant did, in every chat and routine.
+
+## Undoing what the assistant changed
+
+Conch keeps a copy of each file just before the assistant changes it, so you can
+put it back from the chat or from **Activity** (ADR 0030). Those copies stay on
+this computer, readable only by you, and are never in a backup. They're let go
+after 30 days, or sooner if they grow past 1 GB.
+
+Conch never keeps a copy of where your keys and passwords live (SSH keys, your
+saved passwords, Conch's own keys), and an undo never writes through a link or
+into a folder that now points somewhere else. If you've changed a file since,
+Undo says so and leaves it alone unless you choose to replace it.
