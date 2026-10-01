@@ -184,6 +184,36 @@ describe('ProviderService', () => {
     expect(engine.keySeen).toEqual(['sk-or-v1-0123456789', undefined]);
   });
 
+  it('remembers which providers have worked here, and forgets one you remove', async () => {
+    const { providers } = await harness();
+    await providers.list();
+    // Never set up: nothing to miss.
+    expect([...(await providers.connected())]).toEqual(['claude-code']);
+    await providers.setKey('openrouter', 'sk-or-v1-0123456789');
+    expect(await providers.connected()).toContain('openrouter');
+    await providers.clearKey('openrouter');
+    expect(await providers.connected()).not.toContain('openrouter');
+  });
+
+  it('moves a default that never worked to one that does', async () => {
+    const { providers, settings, engines } = await harness();
+    (engines.get('claude-code') as FakeEngine).fail();
+    await providers.setKey('openrouter', 'sk-or-v1-0123456789');
+    const list = await providers.list();
+    expect(list.active).toBe('openrouter');
+    expect(must(list.providers.find((p) => p.id === 'openrouter')).active).toBe(true);
+    expect((await settings.get()).preferences.engine).toBe('openrouter');
+    expect((await providers.ready()).map((e) => e.id)[0]).toBe('openrouter');
+  });
+
+  it('keeps a default that worked before and stopped, for Health to ask about', async () => {
+    const { providers, engines } = await harness();
+    await providers.list();
+    (engines.get('claude-code') as FakeEngine).fail();
+    await providers.setKey('openrouter', 'sk-or-v1-0123456789');
+    expect((await providers.list({ force: true })).active).toBe('claude-code');
+  });
+
   it('turns a provider that won’t answer into a state, not an exception', async () => {
     const { providers, engines } = await harness();
     (engines.get('claude-code') as FakeEngine).fail();

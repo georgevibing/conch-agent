@@ -144,7 +144,36 @@ export class ProviderService {
       return engine ? [engine] : [];
     });
     const states = await Promise.all(engines.map((engine) => this.#detect(engine)));
-    return engines.filter((_, i) => states[i]?.state === 'ready');
+    const ready = engines.filter((_, i) => states[i]?.state === 'ready');
+    const settled = await this.#settle(
+      active,
+      ready.map((engine) => engine.id),
+    );
+    return settled === active
+      ? ready
+      : ready.sort((a, b) => Number(b.id === settled) - Number(a.id === settled));
+  }
+
+  /**
+   * A default that has never worked here, while another provider does, isn't
+   * a choice anyone made: new chats would only fail. Move it to one that works
+   * (one off the internet first). A default that worked before and stopped is
+   * left alone — Health asks you about it instead.
+   */
+  async #settle(active: EngineId, ready: EngineId[]): Promise<EngineId> {
+    if (this.deps.pinned || ready.includes(active)) return active;
+    const candidates = ready.filter((id) => !PROVIDER_COPY.get(id)?.internal);
+    const next = candidates.find((id) => !this.deps.engines.get(id)?.local) ?? candidates[0];
+    if (!next || (await this.connected().catch(() => new Set<EngineId>())).has(active))
+      return active;
+    try {
+      await this.deps.settings.update({ preferences: { engine: next } });
+    } catch {
+      return active;
+    }
+    this.#active = next;
+    this.deps.onSwitch?.();
+    return next;
   }
 
   /** What every connected provider offers, for the model picker. */
@@ -193,17 +222,34 @@ export class ProviderService {
     return engine;
   }
 
+  /**
+   * Providers that have worked on this computer and that you haven't removed
+   * since. Health only worries about these (and about having none at all).
+   */
+  async connected(): Promise<Set<EngineId>> {
+    return new Set((await this.deps.settings.get()).connected as EngineId[]);
+  }
+
   /** Every provider worth showing, with live status. */
   async list(options: { force?: boolean } = {}): Promise<ProvidersList> {
     const active = await this.load();
     // A pinned provider is the only one worth showing: you can't switch, and
     // detecting the rest would only offer choices that wouldn't take.
     const ids = this.#listed(active);
-    const providers = await Promise.all(
+    const described = await Promise.all(
       ids.map((id: EngineId) => this.#describe(id, active, options)),
     );
-    return {
+    const settled = await this.#settle(
       active,
+      described.filter((p) => p.ready).map((p) => p.id),
+    );
+    const providers = described.map((p) => ({ ...p, active: p.id === settled }));
+    if (settled !== active) {
+      const chosen = providers.find((p) => p.id === settled);
+      if (chosen) this.deps.emit({ type: 'engine.status', status: chosen.status });
+    }
+    return {
+      active: settled,
       providers,
       onePassword: await this.deps.keys.vault.onePassword.state(),
       pinned: this.deps.pinned
@@ -221,6 +267,9 @@ export class ProviderService {
     const copy = PROVIDER_COPY.get(id);
     const engine = this.#engineOrThrow(id);
     const status = await this.#detect(engine, options.force);
+    if (status.state === 'ready')
+      // Remembering is best-effort: a settings file that won't write mustn't fail a page.
+      await this.deps.settings.setConnected(id, true).catch(() => undefined);
     let key: SavedSecret | undefined;
     try {
       key = await this.deps.keys.describe(id);
@@ -358,6 +407,8 @@ export class ProviderService {
     const engine = this.#engineOrThrow(id);
     await this.deps.keys.clear(id);
     await engine.setApiKey?.(undefined);
+    // You removed it: it's no longer something Health should miss.
+    await this.deps.settings.setConnected(id, false);
     await this.#detect(engine, true);
     return this.list();
   }

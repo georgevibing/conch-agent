@@ -65,10 +65,16 @@ function providerItem(provider: Provider, fixed: boolean): DoctorItem {
   };
 }
 
-/** A provider worth mentioning: the default, or one set up (ready, signed in once, or with a key). */
-const inUse = (p: Provider) =>
-  p.active ||
-  (!p.hidden && (p.status.state === 'ready' || p.status.state === 'signed-out' || Boolean(p.key)));
+/**
+ * A provider worth mentioning: one that works, one with a key saved, or one
+ * that worked here before and you haven't removed. One you never set up isn't
+ * a problem — unless none works at all, when the default stands for them all.
+ */
+function inUse(p: Provider, connected: ReadonlySet<string>, anyReady: boolean) {
+  if (p.hidden) return p.active;
+  if (p.ready || p.key || connected.has(p.id)) return true;
+  return p.active && !anyReady;
+}
 
 export function providersCheck(services: Services): DoctorCheck {
   return {
@@ -79,13 +85,17 @@ export function providersCheck(services: Services): DoctorCheck {
       const before = repair ? await services.providers.list() : undefined;
       // A repair asks each provider afresh: Claude Code falls back to its own copy, and so on.
       const { providers } = await services.providers.list({ force: repair });
-      return providers.filter(inUse).map((provider) => {
-        const was = before?.providers.find((p) => p.id === provider.id)?.status.state;
-        return providerItem(
-          provider,
-          Boolean(repair && was && was !== 'ready' && provider.status.state === 'ready'),
-        );
-      });
+      const connected = await services.providers.connected();
+      const anyReady = providers.some((p) => p.ready);
+      return providers
+        .filter((p) => inUse(p, connected, anyReady))
+        .map((provider) => {
+          const was = before?.providers.find((p) => p.id === provider.id)?.status.state;
+          return providerItem(
+            provider,
+            Boolean(repair && was && was !== 'ready' && provider.status.state === 'ready'),
+          );
+        });
     },
   };
 }

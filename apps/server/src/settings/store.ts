@@ -14,6 +14,11 @@ const SettingsFile = z.object({
   persona: Persona.default(Persona.parse({})),
   profile: Profile.default(Profile.parse({})),
   preferences: Preferences.default(Preferences.parse({})),
+  /**
+   * Providers that have worked on this computer and haven't been removed
+   * since, by engine id. Health watches these; one you never set up isn't a problem.
+   */
+  connected: z.array(z.string()).default([]),
 });
 export type Settings = z.infer<typeof SettingsFile>;
 
@@ -91,6 +96,22 @@ export class SettingsStore {
       await writeJson(this.#path, next);
       this.#cache = Promise.resolve(next);
       return next;
+    });
+  }
+
+  /** Remember that a provider worked here, or forget it once it's removed. */
+  setConnected(id: string, connected: boolean): Promise<void> {
+    return this.#mutex.run(async () => {
+      const current = await this.get();
+      if (current.connected.includes(id) === connected) return;
+      const next = SettingsFile.parse({
+        ...current,
+        connected: connected
+          ? [...current.connected, id]
+          : current.connected.filter((c) => c !== id),
+      });
+      await writeJson(this.#path, next);
+      this.#cache = Promise.resolve(next);
     });
   }
 

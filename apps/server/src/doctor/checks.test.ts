@@ -4,8 +4,11 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { Provider } from '@conch/protocol';
+
 import { loadConfig } from '../config';
 import { Services } from '../services';
+import { providersCheck } from './checks';
 
 let services: Services | undefined;
 
@@ -102,6 +105,56 @@ describe('Repair everything, on a real Conch', () => {
     expect(repaired.items.find((i) => i.id === 'channels:ch_2')).toMatchObject({
       state: 'needs-you',
       action: { kind: 'open', place: 'channels', focus: 'ch_2', label: 'Paste a new key' },
+    });
+  });
+});
+
+describe('Your providers', () => {
+  const provider = (id: string, over: Partial<Provider> = {}) =>
+    ({
+      id,
+      name: id,
+      active: false,
+      ready: false,
+      hidden: false,
+      status: { engine: id, label: id, state: 'signed-out', install: [], canSignIn: false },
+      ...over,
+    }) as Provider;
+
+  async function report(providers: Provider[], connected: string[] = []) {
+    const services = {
+      providers: {
+        list: async () => ({ providers }),
+        connected: async () => new Set(connected),
+      },
+    } as unknown as Services;
+    const items = await providersCheck(services).run({
+      repair: false,
+      signal: new AbortController().signal,
+    });
+    return Object.fromEntries(items.map((i) => [i.id, i.state]));
+  }
+
+  const ready = { ready: true, status: { ...provider('x').status, state: 'ready' as const } };
+
+  it('leaves out providers you never set up', async () => {
+    expect(
+      await report([provider('claude-code', { active: true, ...ready }), provider('codex')]),
+    ).toEqual({ 'providers:claude-code': 'ok' });
+  });
+
+  it('asks about one that worked before and doesn’t now', async () => {
+    expect(
+      await report(
+        [provider('claude-code', { active: true, ...ready }), provider('codex')],
+        ['codex'],
+      ),
+    ).toEqual({ 'providers:claude-code': 'ok', 'providers:codex': 'needs-you' });
+  });
+
+  it('says so when no provider works at all', async () => {
+    expect(await report([provider('claude-code', { active: true }), provider('codex')])).toEqual({
+      'providers:claude-code': 'needs-you',
     });
   });
 });
