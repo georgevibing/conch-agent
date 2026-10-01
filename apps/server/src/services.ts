@@ -717,7 +717,11 @@ export class Services {
         settings: this.settings,
         memory: this.memory,
         skills: {
-          names: async () => (await this.skills.store.list()).skills.map((s) => s.name),
+          // Conch's own: another app's skills are only read in place, and go with it.
+          names: async () =>
+            (await this.skills.store.list()).skills
+              .filter((s) => s.source === 'conch')
+              .map((s) => s.name),
           adopt: (folder, base) => this.skills.store.adopt(folder, base),
           remove: (id) => this.skills.remove(id),
         },

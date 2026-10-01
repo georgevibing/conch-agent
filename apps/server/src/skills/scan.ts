@@ -173,6 +173,65 @@ function binaryKind(head: Buffer): string | undefined {
 }
 
 /** What could hurt you in this skill, each said once per file. */
+/** What the rules find in one text: a skill's file, or a memory brought from another app. */
+function findingsIn(text: string, file?: string): SkillFinding[] {
+  const out: SkillFinding[] = [];
+  const lines = text.split('\n');
+  for (const rule of RULES) {
+    const at = lines.findIndex(
+      (line, i) =>
+        rule.pattern.test(line) ||
+        (i < lines.length - 1 && rule.pattern.test(`${line}\n${lines[i + 1]}`)),
+    );
+    if (at >= 0)
+      out.push({
+        kind: rule.kind,
+        severity: rule.severity,
+        message: rule.message,
+        file,
+        line: at + 1,
+      });
+  }
+  const smuggled = lines.findIndex((line) => SMUGGLED.test(line));
+  if (smuggled >= 0)
+    out.push({
+      kind: 'hidden',
+      severity: 'danger',
+      message: 'Contains invisible characters that can say things to the assistant you can’t see.',
+      file,
+      line: smuggled + 1,
+    });
+  const zeroWidth = lines.findIndex((line) => ZERO_WIDTH.test(line));
+  if (zeroWidth >= 0)
+    out.push({
+      kind: 'hidden',
+      severity: 'warning',
+      message: 'Has invisible spacing characters in its text.',
+      file,
+      line: zeroWidth + 1,
+    });
+  return out;
+}
+
+const verdictOf = (findings: SkillFinding[]): SkillReview['verdict'] =>
+  findings.some((f) => f.severity === 'danger')
+    ? 'danger'
+    : findings.some((f) => f.severity === 'warning')
+      ? 'caution'
+      : 'clean';
+
+/**
+ * Words from another app that will reach the assistant (a memory, a persona,
+ * ADR 0035), read with the same eyes as a skill.
+ */
+export function scanText(text: string, file?: string): Pick<SkillReview, 'verdict' | 'findings'> {
+  const findings = findingsIn(text, file);
+  return { verdict: verdictOf(findings), findings };
+}
+
+/** Invisible characters that only ever say things to a model: never kept. */
+export const unsmuggle = (text: string) => text.replace(new RegExp(SMUGGLED.source, 'gu'), '');
+
 export async function scanSkill(folder: string): Promise<SkillReview> {
   const findings: SkillFinding[] = [];
   const say = (finding: SkillFinding) => {
@@ -217,46 +276,12 @@ export async function scanSkill(folder: string): Promise<SkillReview> {
       continue;
     }
     const text = await readFile(f.path, 'utf8').catch(() => '');
-    const lines = text.split('\n');
-    for (const rule of RULES) {
-      const at = lines.findIndex(
-        (line, i) =>
-          rule.pattern.test(line) ||
-          (i < lines.length - 1 && rule.pattern.test(`${line}\n${lines[i + 1]}`)),
-      );
-      if (at >= 0)
-        say({
-          kind: rule.kind,
-          severity: rule.severity,
-          message: rule.message,
-          file,
-          line: at + 1,
-        });
-    }
-    const smuggled = lines.findIndex((line) => SMUGGLED.test(line));
-    if (smuggled >= 0)
-      say({
-        kind: 'hidden',
-        severity: 'danger',
-        message:
-          'Contains invisible characters that can say things to the assistant you can’t see.',
-        file,
-        line: smuggled + 1,
-      });
-    const zeroWidth = lines.findIndex((line) => ZERO_WIDTH.test(line));
-    if (zeroWidth >= 0)
-      say({
-        kind: 'hidden',
-        severity: 'warning',
-        message: 'Has invisible spacing characters in its text.',
-        file,
-        line: zeroWidth + 1,
-      });
+    for (const finding of findingsIn(text, file)) say(finding);
   }
-  const severity = findings.some((f) => f.severity === 'danger')
-    ? 'danger'
-    : findings.some((f) => f.severity === 'warning')
-      ? 'caution'
-      : 'clean';
-  return { verdict: severity, findings, hash: await skillHash(folder), checkedAt: Date.now() };
+  return {
+    verdict: verdictOf(findings),
+    findings,
+    hash: await skillHash(folder),
+    checkedAt: Date.now(),
+  };
 }

@@ -64,8 +64,6 @@ const plan: ImportPlan = {
             line: 9,
           },
         ],
-        hash: 'h',
-        checkedAt: 1,
       },
     },
     {

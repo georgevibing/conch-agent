@@ -49,8 +49,11 @@ export const ImportItem = z.object({
   checked: z.boolean(),
   /** Something worth knowing before ticking it. */
   warning: z.string().optional(),
-  /** For a skill: what Conch saw reading it (ADR 0028). */
-  review: SkillReview.optional(),
+  /**
+   * What Conch saw reading it (ADR 0028): every skill, and any memory or
+   * persona that reads like instructions to the assistant.
+   */
+  review: SkillReview.pick({ verdict: true, findings: true }).optional(),
   /** Already in Conch (the same memory, a skill of that name): it would be skipped. */
   duplicate: z.boolean().optional(),
 });

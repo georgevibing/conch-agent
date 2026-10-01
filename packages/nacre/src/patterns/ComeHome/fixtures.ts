@@ -44,22 +44,22 @@ export const openClawItems: ImportPreviewItem[] = [
   {
     id: 'skill:weekly-review',
     group: 'skills',
-    title: 'weekly review',
+    title: 'Weekly review',
     detail: 'Comes over off: turn it on in Skills when you’re ready.',
   },
   {
     id: 'skill:solana-helper',
     group: 'skills',
-    title: 'solana helper',
+    title: 'Solana helper',
     detail: 'Comes over off: turn it on in Skills when you’re ready.',
-    warning: 'Conch found something worrying in it. Look at it first: it stays off until you do.',
+    warning: 'Left unticked: read what Conch found before bringing it.',
   },
   {
     id: 'routine:0',
     group: 'routines',
     title: 'Morning briefing',
     detail:
-      'Ran on the schedule “0 8 * * 1-5” there. Comes over as a draft: nothing runs until you turn it on.',
+      'At 08:00 AM, Monday through Friday in OpenClaw. Comes over as a draft: nothing runs until you turn it on.',
     preview: 'Summarise my calendar and the weather.',
   },
   {

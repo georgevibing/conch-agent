@@ -33,7 +33,7 @@ describe('ImportPreview', () => {
     expect(screen.getByRole('checkbox', { name: /Her sister/ })).toBeChecked();
     const skills = screen.getByRole('region', { name: 'Skills' });
     expect(skills).toHaveTextContent('They come over off');
-    expect(skills).toHaveTextContent('Conch found something worrying');
+    expect(skills).toHaveTextContent('Left unticked');
     expect(screen.getByRole('region', { name: 'Chat apps' })).toHaveTextContent(
       'Stop OpenClaw first',
     );

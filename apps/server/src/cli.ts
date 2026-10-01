@@ -404,7 +404,9 @@ async function importFrom() {
       settings,
       memory,
       skills: {
-        names: async () => (await skills.list()).skills.map((s) => s.name),
+        // Conch's own: another app's skills are only read in place, and go with it.
+        names: async () =>
+          (await skills.list()).skills.filter((s) => s.source === 'conch').map((s) => s.name),
         adopt: (folder, base) => skills.adopt(folder, base),
         remove: (id) => skills.remove(id),
       },

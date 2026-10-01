@@ -37,7 +37,8 @@ import type {
 import { z } from 'zod';
 
 import { Mutex, readJson, writeJson } from '../lib/fs';
-import { scanSkill } from '../skills/scan';
+import { describe } from '../routines/schedule';
+import { scanSkill, scanText, unsmuggle } from '../skills/scan';
 import type { Found, FoundChannel, FoundKey, FoundRoutine } from './found';
 import { readHermes } from './hermes';
 import { readOpenClaw } from './openclaw';
@@ -133,6 +134,25 @@ export class ImportError extends Error {
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+/** `weekly-review` → “Weekly review”. */
+const words = (name: string) => {
+  const text = name.replace(/[-_]+/g, ' ').trim();
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+/**
+ * Words that will reach the assistant, read like a skill first (ADR 0028):
+ * one that reads like orders to it rather than something about you starts
+ * unticked, with what Conch saw.
+ */
+function steering(text: string, file: string): Pick<ImportItem, 'review' | 'warning'> | undefined {
+  const review = scanText(text, file);
+  if (review.verdict === 'clean') return undefined;
+  return {
+    review,
+    warning: 'Left unticked: it reads like orders to the assistant. Read it before bringing it.',
+  };
+}
+
 const norm = (text: string) => text.replace(/\s+/g, ' ').trim().toLowerCase();
 
 function summarize(found: Found): string {
@@ -145,20 +165,6 @@ function summarize(found: Found): string {
     (found.persona || found.about) && 'your profile',
   ].filter(Boolean);
   return parts.length ? parts.join(', ') : 'Nothing to bring over yet';
-}
-
-/** "every day at 08:00" style words for a schedule, for the card. */
-function when(schedule: FoundRoutine['schedule']): string {
-  switch (schedule.type) {
-    case 'cron':
-      return `on the schedule “${schedule.expression}”`;
-    case 'interval':
-      return `every ${plural(schedule.every, schedule.unit.replace(/s$/, ''))}`;
-    case 'once':
-      return `once, on ${new Date(schedule.at).toLocaleString()}`;
-    default:
-      return 'on its schedule';
-  }
 }
 
 export class ImportService {
@@ -186,9 +192,12 @@ export class ImportService {
     return parsed.success ? parsed.data : Ledger.parse({});
   }
 
+  get #home() {
+    return this.deps.sourceHome ?? homedir();
+  }
+
   async #read(source: ImportSourceId): Promise<Found | undefined> {
-    const home = this.deps.sourceHome ?? homedir();
-    return source === 'openclaw' ? readOpenClaw(home) : readHermes(home);
+    return source === 'openclaw' ? readOpenClaw(this.#home) : readHermes(this.#home);
   }
 
   #source(found: Found, ledger: Ledger): ImportSource {
@@ -196,7 +205,10 @@ export class ImportService {
     return {
       id: found.source,
       label: found.label,
-      path: found.path,
+      // `~/.openclaw`, as people know it.
+      path: found.path.startsWith(`${this.#home}/`)
+        ? `~${found.path.slice(this.#home.length)}`
+        : found.path,
       summary: summarize(found),
       ...(before && { imported: { at: before.at, count: before.count } }),
     };
@@ -241,31 +253,39 @@ export class ImportService {
         checked: persona.name === 'Conch' && found.persona.name !== persona.name,
         duplicate: found.persona.name === persona.name,
       });
-    if (found.persona?.instructions)
+    if (found.persona?.instructions) {
+      const odd = steering(found.persona.instructions, found.persona.from);
       items.push({
         id: 'persona:instructions',
         group: 'persona',
         title: 'How your assistant should behave',
         detail: `From ${found.label}’s ${found.persona.from}, as your instructions in every chat.`,
         preview: found.persona.instructions,
-        checked: !persona.instructions.trim(),
+        checked: !persona.instructions.trim() && !odd,
         ...(persona.instructions.trim() && {
           warning: 'Replaces the instructions you wrote in Conch. Undo puts yours back.',
         }),
+        ...odd,
       });
-    if (found.about)
+    }
+    if (found.about) {
+      const odd = steering(found.about.text, found.about.from);
+      const duplicate = profile.about.includes(found.about.text.slice(0, 80));
       items.push({
         id: 'about',
         group: 'about',
         title: 'What it knows about you',
         detail: `From ${found.label}’s ${found.about.from}, added to About you.`,
         preview: found.about.text,
-        checked: !profile.about.includes(found.about.text.slice(0, 80)),
-        duplicate: profile.about.includes(found.about.text.slice(0, 80)),
+        checked: !duplicate && !odd,
+        duplicate,
+        ...odd,
       });
+    }
 
     found.memories.forEach((m, i) => {
       const duplicate = known.has(norm(m.text));
+      const odd = steering(m.text, m.from);
       items.push({
         id: `memory:${i}`,
         group: 'memories',
@@ -274,8 +294,9 @@ export class ImportService {
         detail: m.daily
           ? `A note from ${m.from.replace(/^memory\/|\.md$/g, '')}`
           : `From ${m.from}`,
-        checked: !m.daily && !duplicate,
+        checked: !m.daily && !duplicate && !odd,
         ...(duplicate && { duplicate }),
+        ...odd,
       });
     });
 
@@ -285,29 +306,30 @@ export class ImportService {
       items.push({
         id: `skill:${skill.name}`,
         group: 'skills',
-        title: skill.name.replace(/[-_]+/g, ' '),
+        title: words(skill.name),
         detail: duplicate
           ? 'Conch already has a skill by this name; this one comes over as a copy.'
           : 'Comes over off: turn it on in Skills when you’re ready.',
         ...(review && { review }),
         checked: review?.verdict !== 'danger',
         ...(review?.verdict === 'danger' && {
-          warning:
-            'Conch found something worrying in it. Look at it first: it stays off until you do.',
+          warning: 'Left unticked: read what Conch found before bringing it.',
         }),
       });
     }
 
-    found.routines.forEach((r, i) =>
+    found.routines.forEach((r, i) => {
+      const odd = steering(r.prompt, 'cron/jobs.json');
       items.push({
         id: `routine:${i}`,
         group: 'routines',
         title: r.title,
-        detail: `Ran ${when(r.schedule)} there${r.enabled ? '' : ' (paused)'}. Comes over as a draft: nothing runs until you turn it on.`,
+        detail: `${describe(r.schedule, r.timezone)} in ${found.label}${r.enabled ? '' : ' (paused there)'}. Comes over as a draft: nothing runs until you turn it on.`,
         preview: r.prompt,
-        checked: true,
-      }),
-    );
+        checked: !odd,
+        ...odd,
+      });
+    });
 
     for (const c of found.channels)
       items.push({
@@ -397,14 +419,14 @@ export class ImportService {
         await step('persona:instructions', 'persona', 'Instructions', async () => {
           before.persona = { ...before.persona, instructions: settings.persona.instructions };
           await t.settings.update({
-            persona: { instructions: found.persona?.instructions?.slice(0, 4000) },
+            persona: { instructions: unsmuggle(found.persona?.instructions ?? '').slice(0, 4000) },
           });
           return undefined;
         });
       if (found.about)
         await step('about', 'about', 'About you', async () => {
           before.about = settings.profile.about;
-          const about = [settings.profile.about.trim(), found.about?.text]
+          const about = [settings.profile.about.trim(), unsmuggle(found.about?.text ?? '')]
             .filter(Boolean)
             .join('\n\n');
           await t.settings.update({ profile: { about: about.slice(0, 4000) } });
@@ -415,7 +437,7 @@ export class ImportService {
         await step(`memory:${i}`, 'memories', m.text.slice(0, 80), async () => {
           const known = new Set((await t.memory.list()).map((x) => norm(x.content)));
           if (known.has(norm(m.text))) return 'Already remembered.';
-          const memory = await t.memory.add({ content: m.text, source: 'user' });
+          const memory = await t.memory.add({ content: unsmuggle(m.text), source: 'user' });
           created.memories.push(memory.id);
           return undefined;
         });
@@ -432,7 +454,7 @@ export class ImportService {
           const routine = await t.routines.create({
             title: r.title,
             summary: '',
-            prompt: r.prompt,
+            prompt: unsmuggle(r.prompt),
             schedule: r.schedule,
             timezone: r.timezone,
             status: 'draft',
