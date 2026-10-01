@@ -18,6 +18,7 @@ import { useNavigate } from 'react-router';
 import { useAssistantName } from '../integrations/queries';
 import { fuzzyFilter } from '../search/fuzzy';
 import { useSkills, useToggleSkill } from './queries';
+import { SkillSuggestions } from './SkillSuggestions';
 import styles from './Skills.module.css';
 import { skillIdeas } from './templates';
 
@@ -113,6 +114,8 @@ export function SkillsView() {
           New skill
         </Button>
       </header>
+
+      <SkillSuggestions />
 
       {isPending ? (
         <div className={styles.cards}>

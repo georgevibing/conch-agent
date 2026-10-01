@@ -7,6 +7,7 @@ import { useConversations } from '../api/queries';
 import { ActivityView } from '../features/activity/ActivityView';
 import { AppView } from '../features/artifacts/AppView';
 import { useArtifact } from '../features/artifacts/queries';
+import { MemoryView } from '../features/memory/MemoryView';
 import { RestartWatch } from '../features/health/RestartWatch';
 import { PushKeeper } from '../features/notifications/PushKeeper';
 import { UndoHost } from '../features/undo/UndoHost';
@@ -72,6 +73,7 @@ export function Shell() {
   const activityArea = path.startsWith('/activity');
   const appsArea = path.startsWith('/apps/');
   const { data: app } = useArtifact(appsArea ? artifactId : undefined);
+  const memoryArea = path.startsWith('/memory');
 
   // Toasts and notifications raised outside the router ask us to navigate.
   useEffect(() => {
@@ -103,7 +105,9 @@ export function Shell() {
               ? 'Activity'
               : appsArea
                 ? (app?.title ?? '')
-                : (current?.title ?? (conversationId ? '' : 'New chat'));
+                : memoryArea
+                  ? 'What Conch knows'
+                  : (current?.title ?? (conversationId ? '' : 'New chat'));
 
   useEffect(() => {
     document.title = current ? `${current.title} · Conch` : 'Conch';
@@ -189,6 +193,8 @@ export function Shell() {
         <div className={styles.area} data-covered={terminalMax || undefined}>
           {appsArea && artifactId ? (
             <AppView key={artifactId} artifactId={artifactId} />
+          ) : memoryArea ? (
+            <MemoryView />
           ) : activityArea ? (
             <ActivityView />
           ) : passwordsArea ? (

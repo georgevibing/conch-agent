@@ -454,6 +454,43 @@ describe('Palette search', () => {
     act(() => useUi.setState({ settings: null, settingsFocus: undefined }));
   });
 
+  it('finds what Conch knows about you, tidying up and exporting, by the words people use', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    renderApp(
+      <>
+        <Palette />
+        <Where />
+      </>,
+    );
+    act(() => useUi.getState().setPalette(true));
+    for (const words of ['what do you know about me', 'memories', 'forget']) {
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /What Conch knows about you/ }),
+      ).toBeInTheDocument();
+    }
+    for (const words of ['tidy', 'duplicates', 'dream']) {
+      await user.clear(screen.getByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(await screen.findByRole('option', { name: /Tidy up memories/ })).toBeInTheDocument();
+    }
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'export memories');
+    expect(
+      await screen.findByRole('option', { name: /Export what Conch knows/ }),
+    ).toBeInTheDocument();
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'what conch knows');
+    await user.click(await screen.findByRole('option', { name: /What Conch knows about you/ }));
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/memory'));
+  });
+
   it('finds Always on and quitting by the words people use, straight into Settings → Health', async () => {
     const user = userEvent.setup();
     mockFetch({

@@ -30,6 +30,7 @@ import { useAutoFocus } from '../../lib/useAutoFocus';
 import { SentAttachments } from './AttachmentViewer';
 import { StreamingMarkdown } from './Markdown';
 import { formatInput, toolDiff, toolSummary } from './tools';
+import { memoryApi } from '../memory/api';
 import styles from './Transcript.module.css';
 import { useToolLabel } from '../integrations/ChatBits';
 import { ReadAloud } from '../voice/ReadAloud';
@@ -343,26 +344,57 @@ export function TaintItem({ item, first }: { item: Of<'taint'>; first: boolean }
 
 export function MemoryPill({ item }: { item: Of<'memory'> }) {
   const client = useQueryClient();
-  const [undone, setUndone] = useState(false);
-  const undo = async () => {
+  const [answer, setAnswer] = useState<'undone' | 'kept'>();
+  const act = async (keep: boolean) => {
     try {
-      await api.deleteMemory(item.memoryId);
-      setUndone(true);
+      if (keep) await memoryApi.keep(item.memoryId);
+      else await api.deleteMemory(item.memoryId);
+      setAnswer(keep ? 'kept' : 'undone');
       void client.invalidateQueries({ queryKey: keys.memories });
     } catch (e) {
       toast.error((e as Error).message);
     }
   };
+  // Learned in a chat that read something from outside: it waits for an OK (ADR 0032).
+  const waiting = item.action === 'saved' && item.pending && !answer;
+  const label =
+    answer === 'undone' || item.action === 'forgotten'
+      ? 'Forgot'
+      : waiting
+        ? 'Wants to remember'
+        : 'Remembered';
   return (
-    <div className={styles.memory} data-action={undone ? 'undone' : item.action}>
+    <div
+      className={styles.memory}
+      data-action={answer === 'undone' ? 'undone' : item.action}
+      data-waiting={waiting || undefined}
+    >
       <Brain aria-hidden />
       <span className={styles.memoryText}>
-        {undone ? 'Forgot' : item.action === 'saved' ? 'Remembered' : 'Forgot'}: {item.content}
+        {label}: {item.content}
+        {waiting && (
+          <span className={styles.memoryWhy}>
+            {' '}
+            This chat read something from outside, so it waits for your OK.
+          </span>
+        )}
       </span>
-      {item.action === 'saved' && !undone && (
-        <Button variant="ghost" size="sm" leadingIcon={<Undo2 />} onClick={() => void undo()}>
-          Undo
-        </Button>
+      {waiting ? (
+        <>
+          <Button variant="soft" size="sm" onClick={() => void act(true)}>
+            Keep
+          </Button>
+          <Button variant="ghost" tone="neutral" size="sm" onClick={() => void act(false)}>
+            Forget
+          </Button>
+        </>
+      ) : (
+        item.action === 'saved' &&
+        answer !== 'undone' && (
+          <Button variant="ghost" size="sm" leadingIcon={<Undo2 />} onClick={() => void act(false)}>
+            Undo
+          </Button>
+        )
       )}
     </div>
   );

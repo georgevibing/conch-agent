@@ -58,14 +58,27 @@ export function NewSkill() {
   const location = useLocation();
   const assistant = useAssistantName();
   const create = useCreateSkill();
-  const [instructions, setInstructions] = useState(
-    () => (location.state as { instructions?: string } | null)?.instructions ?? '',
+  // A suggested skill (ADR 0032) arrives with its draft: yours to read and change.
+  const [start] = useState(
+    () =>
+      (location.state as {
+        instructions?: string;
+        title?: string;
+        description?: string;
+        /** From a suggestion: in how many chats you asked. */
+        suggested?: number;
+      } | null) ?? {},
   );
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const [instructions, setInstructions] = useState(start.instructions ?? '');
+  const [title, setTitle] = useState(start.title ?? '');
+  const [description, setDescription] = useState(start.description ?? '');
   const [name, setName] = useState<string>();
-  const [touched, setTouched] = useState({ title: false, description: false });
-  const [mode, setMode] = useState<Exclude<SkillMode, 'off'>>('auto');
+  const [touched, setTouched] = useState({
+    title: Boolean(start.title),
+    description: Boolean(start.description),
+  });
+  // A suggestion starts as something you ask for by name: using it by itself is your call.
+  const [mode, setMode] = useState<Exclude<SkillMode, 'off'>>(start.suggested ? 'manual' : 'auto');
   const [writing, setWriting] = useState(false);
   const drafted = useRef('');
   const inFlight = useRef<AbortController | null>(null);
@@ -155,8 +168,9 @@ export function NewSkill() {
           Teach {assistant} a skill
         </Heading>
         <Text tone="muted">
-          Describe what it should do, in your own words. {assistant} names it and writes a short
-          description — change either if you like.
+          {start.suggested
+            ? `You’ve asked for this in ${start.suggested} chats, so ${assistant} wrote a first draft from what you said. Read it, change anything, and save it only if you want it.`
+            : `Describe what it should do, in your own words. ${assistant} names it and writes a short description — change either if you like.`}
         </Text>
       </Stack>
 

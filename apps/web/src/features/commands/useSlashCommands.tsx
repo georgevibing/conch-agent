@@ -185,7 +185,7 @@ export function useSlashCommands(options: {
           });
         });
       case 'memory':
-        return ui.openSettings('memory');
+        return void navigate('/memory');
       case 'routines':
         return void navigate('/routines');
       case 'skills':

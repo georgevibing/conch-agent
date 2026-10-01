@@ -85,62 +85,27 @@
     gap: var(--nc-space-2);
   }
 
-  .addMemory {
+  /* The way to everything Conch knows (ADR 0032) */
+  .memoryDoor {
     display: flex;
-    gap: var(--nc-space-2);
-  }
-
-  .addMemory > :first-child {
-    flex: 1;
-  }
-
-  .memories {
-    display: flex;
-    flex-direction: column;
-    margin: 0;
-    padding: 0;
-    list-style: none;
+    align-items: center;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-3) var(--nc-space-4);
     border-radius: var(--nc-radius-lg);
     corner-shape: var(--nc-corner-shape);
     box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
   }
 
-  .memory {
-    display: flex;
-    flex-direction: column;
-    gap: var(--nc-space-1);
-    padding: var(--nc-space-3) var(--nc-space-3) var(--nc-space-2) var(--nc-space-4);
-    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
+  .memoryDoor > svg {
+    flex-shrink: 0;
+    inline-size: 1.1rem;
+    block-size: 1.1rem;
+    color: var(--nc-text-accent);
   }
 
-  .memory + .memory {
-    border-block-start: 1px solid var(--nc-border-subtle);
-  }
-
-  .memoryText {
-    padding: var(--nc-space-1) 0;
-    border: 0;
-    background: none;
-    font: inherit;
-    color: var(--nc-text);
-    text-align: start;
-    cursor: text;
-    border-radius: var(--nc-radius-xs);
-  }
-
-  .memoryText:focus-visible {
-    outline: 2px solid var(--nc-ring);
-    outline-offset: 2px;
-  }
-
-  .memoryMeta {
-    display: flex;
-    align-items: center;
-    gap: var(--nc-space-2);
-  }
-
-  .spacer {
+  .memoryDoorText {
     flex: 1;
+    min-inline-size: 0;
   }
 
   .facts {

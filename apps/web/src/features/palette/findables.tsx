@@ -15,6 +15,7 @@ import {
   Brain,
   CircleArrowUp,
   Cpu,
+  Download,
   Gauge,
   MessagesSquare,
   MonitorSmartphone,
@@ -54,6 +55,7 @@ import { FALLBACK_FOCUS } from '../settings/FallbackSection';
 import { APPS } from '../channels/describe';
 import { useChannels } from '../channels/queries';
 import { useIntegrations } from '../integrations/queries';
+import { downloadMemories } from '../memory/api';
 import { copySecret } from '../passwords/clipboard';
 import { useVault } from '../passwords/queries';
 import { modelLabel, providerLogos } from '../models/catalog';
@@ -531,6 +533,28 @@ export function useFindables(query: string, conversationId: string | undefined):
       keywords: 'undo revert put back restore file files change edit mistake oops go back rollback',
       icon: <Undo2 />,
       run: () => void undoLast(),
+    },
+    {
+      id: 'memory-page',
+      label: 'What Conch knows about you',
+      keywords:
+        'what do you know remember about me memory memories remembered profile forget learned learnings',
+      icon: <Brain />,
+      run: () => void navigate('/memory'),
+    },
+    {
+      id: 'tidy-memory',
+      label: 'Tidy up memories',
+      keywords: 'tidy clean merge duplicates repeats memories dream sleep nightly learn',
+      icon: <Sparkles />,
+      run: () => void navigate('/memory', { state: { tidy: true } }),
+    },
+    {
+      id: 'export-memories',
+      label: 'Export what Conch knows',
+      keywords: 'export download save memories markdown json',
+      icon: <Download />,
+      run: () => downloadMemories('md'),
     },
     {
       id: 'activity',

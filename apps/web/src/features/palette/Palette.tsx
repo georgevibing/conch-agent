@@ -232,7 +232,7 @@ export function Palette() {
       label: 'What do you remember about me?',
       icon: <Brain />,
       keywords: 'memory memories',
-      run: () => openSettings('memory'),
+      run: () => void navigate('/memory'),
     },
     {
       id: 'usage',

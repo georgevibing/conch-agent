@@ -233,6 +233,32 @@
     padding-block: var(--nc-space-1);
   }
 
+  /* Waits for an OK (ADR 0032): room for why, and two answers. */
+  .memory[data-waiting] {
+    flex-wrap: wrap;
+    border-radius: var(--nc-radius-lg);
+    color: var(--nc-text);
+    background: light-dark(
+      oklch(0.98 0.02 var(--nc-warning-h)),
+      oklch(0.25 0.03 var(--nc-warning-h))
+    );
+    box-shadow: inset 0 0 0 1px
+      light-dark(oklch(0.88 0.06 var(--nc-warning-h)), oklch(0.38 0.06 var(--nc-warning-h)));
+  }
+
+  .memory[data-waiting] > svg {
+    color: light-dark(oklch(0.5 0.12 var(--nc-warning-h)), oklch(0.82 0.1 var(--nc-warning-h)));
+  }
+
+  .memory[data-waiting] .memoryText {
+    flex: 1 1 16rem;
+    white-space: normal;
+  }
+
+  .memoryWhy {
+    color: var(--nc-text-muted);
+  }
+
   .stopped {
     align-self: center;
     font-size: var(--nc-text-xs);

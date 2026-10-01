@@ -98,7 +98,15 @@ export type TranscriptItem =
       at: number;
     }
   | { kind: 'handoff'; id: string; handoff: BrowserHandoff }
-  | { kind: 'memory'; id: string; memoryId: string; content: string; action: 'saved' | 'forgotten' }
+  | {
+      kind: 'memory';
+      id: string;
+      memoryId: string;
+      content: string;
+      action: 'saved' | 'forgotten';
+      /** Waits for an OK: learned in a chat that read something untrusted (ADR 0032). */
+      pending?: boolean;
+    }
   | {
       /** Something the assistant made (ADR 0034): a card that opens it beside the chat. */
       kind: 'artifact';
@@ -401,6 +409,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             memoryId: event.memory.id,
             content: event.memory.content,
             action: 'saved',
+            ...(event.memory.pending && { pending: true }),
           },
         ],
       };

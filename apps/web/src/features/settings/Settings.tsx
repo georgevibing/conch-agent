@@ -1,11 +1,8 @@
-import type { Memory, Persona, Profile } from '@conch/protocol';
+import type { Persona, Profile } from '@conch/protocol';
 import {
-  Badge,
   Button,
   Dialog,
-  EmptyState,
   Field,
-  IconButton,
   Input,
   RadioGroup,
   SegmentedControl,
@@ -16,13 +13,11 @@ import {
   Text,
   Textarea,
   accents,
-  toast,
   useMediaQuery,
   useNacreTheme,
   type AccentName,
   type ColorMode,
 } from '@conch/nacre';
-import { useQueryClient } from '@tanstack/react-query';
 import {
   BatteryMedium,
   Bell,
@@ -37,21 +32,17 @@ import {
   SquareTerminal,
   Moon,
   Palette,
-  Plus,
   ShieldCheck,
   Sparkles,
   SquareSlash,
   Sun,
-  Trash2,
   User,
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
+import { useNavigate } from 'react-router';
 
-import { api } from '../../api/client';
-import { keys, useAppState, useMemories, useUpdateSettings } from '../../api/queries';
+import { useAppState, useMemories, useUpdateSettings } from '../../api/queries';
 import { useUi, type SettingsTab } from '../../app/ui';
-import { relativeTime } from '../../lib/time';
-import { useAutoFocus } from '../../lib/useAutoFocus';
 import { SecurityTab } from '../auth/SecurityTab';
 import { updatesWaiting, useUpdates } from '../updates/queries';
 import { BrowserSettings } from '../browser/BrowserSettings';
@@ -162,119 +153,14 @@ function AboutTab({ initial }: { initial: Profile }) {
   );
 }
 
-function MemoryEditor({
-  value,
-  onChange,
-  onSave,
-  onCancel,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  onSave: () => void;
-  onCancel: () => void;
-}) {
-  const ref = useAutoFocus<HTMLTextAreaElement>();
-  return (
-    <Textarea
-      ref={ref}
-      autosize
-      minRows={1}
-      maxRows={6}
-      aria-label="Edit memory"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      onBlur={onSave}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          onSave();
-        }
-        if (e.key === 'Escape') onCancel();
-      }}
-    />
-  );
-}
-
-function MemoryRow({ memory }: { memory: Memory }) {
-  const client = useQueryClient();
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(memory.content);
-  const refresh = () => void client.invalidateQueries({ queryKey: keys.memories });
-  const save = async () => {
-    setEditing(false);
-    if (!value.trim() || value.trim() === memory.content) return setValue(memory.content);
-    try {
-      await api.updateMemory(memory.id, { content: value.trim() });
-      refresh();
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  };
-  return (
-    <li className={styles.memory}>
-      {editing ? (
-        <MemoryEditor
-          value={value}
-          onChange={setValue}
-          onSave={() => void save()}
-          onCancel={() => {
-            setValue(memory.content);
-            setEditing(false);
-          }}
-        />
-      ) : (
-        <button
-          type="button"
-          className={styles.memoryText}
-          onClick={() => setEditing(true)}
-          aria-label={`Edit: ${memory.content}`}
-        >
-          {memory.content}
-        </button>
-      )}
-      <div className={styles.memoryMeta}>
-        <Badge size="sm" tone={memory.source === 'user' ? 'neutral' : 'accent'} variant="soft">
-          {memory.source === 'user' ? 'You added' : 'Learned'}
-        </Badge>
-        <Text as="span" size="xs" tone="subtle">
-          {relativeTime(memory.updatedAt)}
-        </Text>
-        <span className={styles.spacer} />
-        <IconButton
-          size="sm"
-          label="Forget"
-          onClick={async () => {
-            try {
-              await api.deleteMemory(memory.id);
-              refresh();
-            } catch (e) {
-              toast.error((e as Error).message);
-            }
-          }}
-        >
-          <Trash2 />
-        </IconButton>
-      </div>
-    </li>
-  );
-}
-
-function MemoryTab({ autoMemory }: { autoMemory: boolean }) {
-  const client = useQueryClient();
+function MemoryTab({ autoMemory, tidyMemory }: { autoMemory: boolean; tidyMemory: boolean }) {
   const memories = useMemories();
   const update = useUpdateSettings();
-  const [draft, setDraft] = useState('');
-  const add = async () => {
-    const content = draft.trim();
-    if (!content) return;
-    try {
-      await api.addMemory(content);
-      setDraft('');
-      void client.invalidateQueries({ queryKey: keys.memories });
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  };
+  const navigate = useNavigate();
+  const closeSettings = useUi((s) => s.closeSettings);
+  const all = memories.data ?? [];
+  const waiting = all.filter((m) => m.pending).length;
+  const kept = all.length - waiting;
   return (
     <Stack gap={8}>
       <Section
@@ -290,38 +176,40 @@ function MemoryTab({ autoMemory }: { autoMemory: boolean }) {
             label="Remember things automatically"
             description="I’ll save useful details as we talk and always show you when I do."
           />
-          <form
-            className={styles.addMemory}
-            onSubmit={(e) => {
-              e.preventDefault();
-              void add();
-            }}
-          >
-            <Input
-              aria-label="Add a memory"
-              placeholder="Add something for me to remember…"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-            />
-            <Button type="submit" variant="surface" leadingIcon={<Plus />} disabled={!draft.trim()}>
-              Add
-            </Button>
-          </form>
-          {memories.data?.length === 0 && (
-            <EmptyState
+          <Switch
+            checked={tidyMemory}
+            onCheckedChange={(checked) =>
+              void update.mutateAsync({ preferences: { tidyMemory: checked } })
+            }
+            label="Tidy up every night"
+            description="Merge repeats, update what’s changed and learn from your chats while you sleep. Every change is shown, with Undo."
+          />
+          <div className={styles.memoryDoor}>
+            <Brain aria-hidden />
+            <Stack gap={0.5} className={styles.memoryDoorText}>
+              <Text size="sm" weight="medium">
+                What Conch knows about you
+              </Text>
+              <Text size="xs" tone="muted">
+                {kept === 0
+                  ? 'Nothing remembered yet.'
+                  : kept === 1
+                    ? '1 memory'
+                    : `${kept} memories`}
+                {waiting > 0 && ` · ${waiting} waiting for your OK`}
+              </Text>
+            </Stack>
+            <Button
               size="sm"
-              icon={<Brain />}
-              title="Nothing remembered yet"
-              description="Tell me things like “remember I’m vegetarian” in a chat, or add them here."
-            />
-          )}
-          {Boolean(memories.data?.length) && (
-            <ul className={styles.memories} aria-label="Memories">
-              {memories.data?.map((m) => (
-                <MemoryRow key={m.id} memory={m} />
-              ))}
-            </ul>
-          )}
+              variant="surface"
+              onClick={() => {
+                closeSettings();
+                void navigate('/memory');
+              }}
+            >
+              Open
+            </Button>
+          </div>
         </Stack>
       </Section>
       <ComeHomeSection />
@@ -488,7 +376,10 @@ export function Settings() {
                 <AboutTab initial={app.profile} />
               </Tabs.Content>
               <Tabs.Content value="memory">
-                <MemoryTab autoMemory={app.preferences.autoMemory} />
+                <MemoryTab
+                  autoMemory={app.preferences.autoMemory}
+                  tidyMemory={app.preferences.tidyMemory}
+                />
               </Tabs.Content>
               <Tabs.Content value="models">
                 <ModelsTab />
