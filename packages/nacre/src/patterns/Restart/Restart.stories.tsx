@@ -31,3 +31,12 @@ export const TakingLong: Story = {
     slow: 'This is taking longer than usual. If it doesn’t come back, run pnpm start in Conch’s folder.',
   },
 };
+
+/** Quit on purpose: the pearl rests, and the page comes back when Conch is opened again. */
+export const Stopped: Story = {
+  args: {
+    title: 'Conch has stopped',
+    detail: 'Open Conch from your apps, or run pnpm start, and this page comes back by itself.',
+    state: 'stopped',
+  },
+};

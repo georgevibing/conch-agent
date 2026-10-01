@@ -32,5 +32,6 @@ export * from './Restart';
 export * from './Health';
 export * from './Offline';
 export * from './Updates';
+export * from './AlwaysOn';
 export * from './Backups';
 export * from './PathPicker';
