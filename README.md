@@ -138,6 +138,14 @@ change first, a file you've changed since is only replaced if you say so, and
 Redo puts it back again. Memories it saved can be forgotten there too.
 ([ADR 0030](./docs/adr/0030-undo.md))
 
+**Come home.** Coming from OpenClaw or Hermes? Conch finds them and shows exactly
+what would come over: your memories, persona and what it knows about you, skills
+(read through first, and off until you turn them on), scheduled jobs (as draft
+routines) and, only if you tick them, your chat bots and keys. It backs up first,
+leaves the other app's folder alone, and Undo takes it all back.
+`pnpm conch import --from openclaw --dry-run` shows the same list in a terminal.
+([ADR 0035](./docs/adr/0035-come-home.md))
+
 **It looks after itself.** **Settings → Health** has one **Repair everything**
 button, a quiet list of what Conch fixed on its own, daily backups you can restore
 (with a preview and Undo), and one-click updates for Conch and the programs it uses.
@@ -157,6 +165,7 @@ pnpm check          # format + lint + typecheck + tests — must pass before eve
 pnpm e2e            # Playwright journeys against the gateway and the mock engine
 pnpm start:network  # reachable from your network (sign-in required)
 pnpm conch help     # sign-in from the terminal: status, password, key, pair, reset …
+pnpm conch import --from openclaw --dry-run   # what would come over from OpenClaw (or hermes)
 ```
 
 Configuration comes from the environment; [apps/server/.env.example](./apps/server/.env.example)
@@ -181,4 +190,4 @@ documents it. For an authenticated HTTPS reverse proxy, see
 - [docs/BROWSER.md](./docs/BROWSER.md) — the browser: watching, taking over, what it asks
 - [docs/TERMINAL.md](./docs/TERMINAL.md) — the terminal: shortcuts, the assistant, other devices
 - [docs/design/NACRE.md](./docs/design/NACRE.md) — the design language
-- [docs/adr](./docs/adr) — decision records (0001–0030)
+- [docs/adr](./docs/adr) — decision records (0001–0035)

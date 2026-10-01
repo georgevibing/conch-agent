@@ -183,6 +183,20 @@ copy.
 - **Only restore backups you made.** A backup without a passphrase can't prove where
   it came from.
 
+## Bringing your things from another assistant
+
+- **Conch only reads OpenClaw's or Hermes's folder, and never changes it.** Links
+  in it aren't followed, so nothing outside the folder comes along.
+- **You see everything first.** Memories, your persona and routine prompts that read
+  like orders to the assistant ("ignore previous instructions…") start unticked, with
+  what Conch found. Invisible characters are removed. Skills are read through and
+  come over off; routines come over as drafts.
+- **Bots and keys never come over by themselves.** Tick them, and Conch checks each
+  with its app or provider before keeping it in its encrypted key file; a bot still
+  waits for your hello. They're never shown, logged or written anywhere else.
+- **Conch backs itself up first, and Undo takes the whole import back.** Both
+  bringing things over and Undo ask that it's you.
+
 ## Good habits
 
 - Keep **Ask first** or **Auto** as your default mode. Use **Full trust** only in a

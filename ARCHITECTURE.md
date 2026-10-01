@@ -111,6 +111,7 @@ src/
   voice/                      private dictation: whisper.cpp and its speech model (ADR 0027)
   activity/                   everything the assistant did, read from the chats' logs (ADR 0028)
   undo/                       what each change was before: blobs, change sets, the preview diff, putting back (ADR 0030)
+  import/                     Come home: OpenClaw and Hermes read-only, a plan, a ledger for Undo (ADR 0035)
   doctor/                     Repair everything: every part's `DoctorCheck`, run at once (`doctor.report`)
   network/watch.ts            online or not (`network.status`); offline routing (ADR 0023)
   lib/path.ts                 the PATH as it is now (Windows registry), refreshed before lookups
@@ -258,6 +259,16 @@ src/
   undoes and redoes (`files.restored`), never through links, moved folders or
   forbidden places, and skips conflicts unless forced. Sets expire after 30 days or past
   1 GB (the `undo` doctor check sweeps).
+
+- **Come home** ([ADR 0035](./docs/adr/0035-come-home.md)). `import/openclaw.ts` and
+  `hermes.ts` read the other app's folder through `read.ts` (lstat, no links, 1 MB a
+  file, JSON5 and `.env` parsers) into a `Found`; `ImportService.plan` turns it into
+  `ImportItem`s with ticks (skills through `scanSkill`, words that reach the model
+  through `scanText`), `run` backs up, brings the ticked ones over through the real
+  stores (`skills.store.adopt` off, routines as drafts, `ChannelService.create`,
+  `providers.setKey`) with `import.progress` events, and records ids in
+  `import.json`; `undo` takes exactly those back. Secrets never enter a plan, a log
+  or the ledger.
 - **Healing** (`lib/healed.ts`): every self-repair leaves one plain note —
   integrations that came back, a renewed sign-in, Claude Code's fallback, a held
   routine that ran once its provider was back. Integrations retry failures that
