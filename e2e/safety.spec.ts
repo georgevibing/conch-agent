@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { openConch } from './app';
+
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
 
 /**
@@ -59,7 +61,7 @@ test('after reading a page, a command asks — saying why — and there’s no �
 test('Safety in Settings: turning a check off says what could happen, and the checkup notices', async ({
   page,
 }) => {
-  await page.goto('/');
+  await openConch(page);
   await page.keyboard.press(`${mod}+k`);
   await page.getByRole('combobox').fill('security');
   await page.getByRole('option', { name: /Settings: Security/ }).click();

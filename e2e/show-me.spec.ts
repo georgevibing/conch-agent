@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { openConch } from './app';
+
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
 
 /**
@@ -188,7 +190,7 @@ test('pinned as an app: in the sidebar, opens on its own page, refreshes with fr
   await expect(page.getByRole('link', { name: /Refresh: Visitors/ })).toHaveCount(0);
 
   // ⌘K finds it by name.
-  await page.goto('/');
+  await openConch(page);
   await page.keyboard.press(`${mod}+k`);
   await page.getByRole('combobox').fill('visitors');
   await page.getByRole('option', { name: /Visitors this week.*Chart · pinned/ }).click();
