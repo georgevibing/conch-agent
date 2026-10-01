@@ -38,11 +38,23 @@
     border-block-start: 1px solid var(--nc-border-subtle);
   }
 
-  .row {
+  .item {
     display: flex;
     align-items: center;
+  }
+
+  .action {
+    display: flex;
+    flex-shrink: 0;
+    padding-inline-end: var(--nc-space-3);
+  }
+
+  .row {
+    display: flex;
+    flex: 1;
+    align-items: center;
     gap: var(--nc-space-3);
-    inline-size: 100%;
+    min-inline-size: 0;
     padding: var(--nc-space-2-5) var(--nc-space-4);
     border: 0;
     background: transparent;

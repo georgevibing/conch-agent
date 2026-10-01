@@ -46,4 +46,35 @@ describe('ActivityTimeline', () => {
     ).toBeInTheDocument();
     await expectAccessible(container);
   });
+
+  it('puts a row’s action beside it, not inside its button', async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    const onUndo = vi.fn();
+    const { container } = renderNacre(
+      <ActivityTimeline
+        onOpen={onOpen}
+        groups={[
+          {
+            label: 'Today',
+            rows: [
+              {
+                id: 'a',
+                kind: 'file',
+                status: 'done',
+                title: 'Changed notes.md',
+                time: '9:40 AM',
+                where: 'Tidy',
+                action: <button onClick={onUndo}>Undo</button>,
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(onUndo).toHaveBeenCalled();
+    expect(onOpen).not.toHaveBeenCalled();
+    await expectAccessible(container);
+  });
 });

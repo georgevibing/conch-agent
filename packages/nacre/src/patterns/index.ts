@@ -34,6 +34,7 @@ export * from './Restart';
 export * from './Health';
 export * from './Notifications';
 export * from './Offline';
+export * from './Undo';
 export * from './Updates';
 export * from './Activity';
 export * from './AlwaysOn';

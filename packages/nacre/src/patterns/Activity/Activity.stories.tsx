@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
+import { Button } from '../../components/Button';
 import { InlineCode } from '../CodeBlock';
 import { ActivityTimeline, type ActivityRow } from './ActivityTimeline';
 
@@ -108,4 +109,39 @@ type Story = StoryObj<typeof meta>;
 export const Playground: Story = {};
 export const Narrow: Story = {
   decorators: [(Story) => <div style={{ maxInlineSize: 360 }}>{Story()}</div>],
+};
+
+/** A row can carry one thing to do about it: Undo a change to your files, Forget a memory. */
+export const WithActions: Story = {
+  args: {
+    groups: [
+      {
+        label: 'Today',
+        rows: [
+          row({
+            id: 'u',
+            kind: 'file',
+            status: 'done',
+            title: 'Changed notes.md',
+            action: (
+              <Button size="sm" variant="ghost">
+                Undo
+              </Button>
+            ),
+          }),
+          row({
+            id: 'm',
+            kind: 'memory',
+            status: 'noted',
+            title: 'Remembered: prefers tea',
+            action: (
+              <Button size="sm" variant="ghost">
+                Forget
+              </Button>
+            ),
+          }),
+        ],
+      },
+    ],
+  },
 };

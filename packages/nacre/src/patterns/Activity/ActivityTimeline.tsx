@@ -28,6 +28,8 @@ export interface ActivityRow {
   time: string;
   /** The chat it happened in: "Fix the build". */
   where: ReactNode;
+  /** One thing to do about it, beside the row: Undo, Redo, Forget (ADR 0030). */
+  action?: ReactNode;
 }
 
 export interface ActivityTimelineProps extends Omit<ComponentProps<'div'>, 'children'> {
@@ -78,7 +80,7 @@ export function ActivityTimeline({ groups, onOpen, className, ...props }: Activi
                   <Check aria-hidden />
                 );
               return (
-                <li key={row.id}>
+                <li key={row.id} className={styles.item}>
                   <button
                     type="button"
                     className={styles.row}
@@ -100,6 +102,7 @@ export function ActivityTimeline({ groups, onOpen, className, ...props }: Activi
                       <span className={styles.statusText}>{SPOKEN[row.status]}</span>
                     </span>
                   </button>
+                  {row.action && <span className={styles.action}>{row.action}</span>}
                 </li>
               );
             })}
