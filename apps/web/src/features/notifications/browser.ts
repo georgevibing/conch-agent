@@ -39,6 +39,31 @@ const sameKey = (a: ArrayBuffer | null | undefined, b: Uint8Array) => {
   return x.length === b.length && x.every((v, i) => v === b[i]);
 };
 
+/**
+ * The browser said yes, but its push service wouldn't give this device an
+ * address. The message is the next step, in plain words.
+ */
+export class PushServiceError extends Error {}
+
+/** Brave says so itself; its user agent is Chrome's. */
+const brave = async () => {
+  const api = (navigator as Navigator & { brave?: { isBrave?: () => Promise<boolean> } }).brave;
+  return Boolean(await api?.isBrave?.().catch(() => false));
+};
+
+async function refused(failure: unknown): Promise<PushServiceError> {
+  // Brave ships with its link to Google's push service switched off, so every
+  // subscribe ends in "Registration failed - push service error" until the
+  // person turns it on. A page can't open brave:// settings; it can name the switch.
+  if (failure instanceof DOMException && failure.name === 'AbortError' && (await brave()))
+    return new PushServiceError(
+      'Brave has notifications from websites switched off. In Brave’s settings, under Privacy and security, turn on “Use Google services for push messaging”. Restart Brave, then turn this on again.',
+    );
+  return new PushServiceError(
+    'This browser couldn’t reach its notification service. Check you’re online, then try again.',
+  );
+}
+
 async function registration(): Promise<ServiceWorkerRegistration> {
   const ready = navigator.serviceWorker.ready;
   // Registered on load; if it isn't yet (the first visit), register it now.
@@ -71,7 +96,11 @@ export async function subscribe(publicKey: string): Promise<PushSubscriptionJson
     await existing.unsubscribe();
   const subscription =
     (existing && sameKey(existing.options.applicationServerKey, key) ? existing : undefined) ??
-    (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }));
+    (await reg.pushManager
+      .subscribe({ userVisibleOnly: true, applicationServerKey: key })
+      .catch(async (failure: unknown) => {
+        throw await refused(failure);
+      }));
   return PushSubscriptionJson.parse(subscription.toJSON());
 }
 

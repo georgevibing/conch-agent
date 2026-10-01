@@ -18,7 +18,13 @@ const keyBytes = (k: string) => {
 
 /** A browser that can do push, as far as the page can tell. */
 function pushableBrowser(
-  options: { permission?: NotificationPermission; subscribedWith?: string } = {},
+  options: {
+    permission?: NotificationPermission;
+    subscribedWith?: string;
+    /** Its push service won't register anyone, in Chromium's own words. */
+    refuses?: boolean;
+    brave?: boolean;
+  } = {},
 ) {
   let permission: NotificationPermission = options.permission ?? 'default';
   let subscription: {
@@ -41,6 +47,8 @@ function pushableBrowser(
   }
   const subscribe = vi.fn(
     async ({ applicationServerKey }: { applicationServerKey: Uint8Array }) => {
+      if (options.refuses)
+        throw new DOMException('Registration failed - push service error', 'AbortError');
       subscription = make(
         btoa(String.fromCharCode(...applicationServerKey))
           .replace(/\+/g, '-')
@@ -67,6 +75,11 @@ function pushableBrowser(
     },
   });
   Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
+  if (options.brave)
+    Object.defineProperty(navigator, 'brave', {
+      configurable: true,
+      value: { isBrave: async () => true },
+    });
   return { subscribe };
 }
 
@@ -97,6 +110,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.unstubAllGlobals();
+  Reflect.deleteProperty(navigator, 'brave');
   if (userAgent)
     Object.defineProperty(navigator, 'userAgent', { configurable: true, get: userAgent.get });
 });
@@ -154,6 +168,37 @@ describe('Settings → Notifications', () => {
     expect(
       await screen.findByRole('region', { name: 'Notifications are blocked for Conch' }),
     ).toHaveTextContent(/browser’s settings/);
+  });
+
+  it('in Brave, whose push messaging starts switched off, names the setting to turn on', async () => {
+    const user = userEvent.setup();
+    const browser = pushableBrowser({ brave: true, refuses: true });
+    const calls = mockFetch({ 'GET /api/push': () => status() });
+    renderApp(<NotificationsTab />);
+    await user.click(await screen.findByRole('switch', { name: 'Notifications on this device' }));
+    await waitFor(() => expect(browser.subscribe).toHaveBeenCalled());
+    // It stays on the card, to read while Brave's settings are open.
+    const card = screen.getByRole('region', { name: 'Get notifications on this device' });
+    await waitFor(() =>
+      expect(card).toHaveTextContent(/Brave’s settings.*“Use Google services for push messaging”/),
+    );
+    // Never the browser's own words, and Conch isn't told about a device that can't be reached.
+    expect(screen.queryByText(/Registration failed/)).toBeNull();
+    expect(calls.some((c) => c.method === 'POST')).toBe(false);
+    expect(screen.getByRole('switch', { name: 'Notifications on this device' })).not.toBeChecked();
+  });
+
+  it('says so in plain words when another browser’s push service won’t answer', async () => {
+    const user = userEvent.setup();
+    const browser = pushableBrowser({ refuses: true });
+    mockFetch({ 'GET /api/push': () => status() });
+    renderApp(<NotificationsTab />);
+    await user.click(await screen.findByRole('switch', { name: 'Notifications on this device' }));
+    await waitFor(() => expect(browser.subscribe).toHaveBeenCalled());
+    const card = screen.getByRole('region', { name: 'Get notifications on this device' });
+    await waitFor(() => expect(card).toHaveTextContent(/couldn’t reach its notification service/));
+    expect(card).not.toHaveTextContent(/Brave/);
+    expect(screen.queryByText(/Registration failed/)).toBeNull();
   });
 
   it('lists every device, with a way to stop each', async () => {
