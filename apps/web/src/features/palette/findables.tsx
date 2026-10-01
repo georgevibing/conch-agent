@@ -19,6 +19,7 @@ import {
   Paperclip,
   SquareTerminal,
   Plus,
+  Power,
   RefreshCw,
   Repeat,
   ShieldCheck,
@@ -49,6 +50,7 @@ import { fuzzyFilter, type FuzzyMatch } from '../search/fuzzy';
 import { useSkills } from '../skills/queries';
 import { useTerminalStatus } from '../terminal/queries';
 import { useUpdates } from '../updates/queries';
+import { BACKGROUND_FOCUS } from '../background/AlwaysOnSection';
 
 /** Something ⌘K can find and act on that isn't a chat or a message. */
 export interface Findable {
@@ -101,6 +103,14 @@ const settingsPlaces: {
     keywords:
       'repair everything fix doctor checkup broken updates update upgrade backup back up restore fixed healed',
     icon: <HeartPulse />,
+  },
+  {
+    tab: 'health',
+    focus: BACKGROUND_FOCUS,
+    label: 'Always on',
+    keywords:
+      'always on background start at login startup login items launch boot keep running daemon service close window',
+    icon: <Power />,
   },
   {
     tab: 'security',
@@ -386,6 +396,13 @@ export function useFindables(query: string, conversationId: string | undefined):
       keywords: 'backup back up save copy export download archive keep safe',
       icon: <Archive />,
       run: () => openSettings('health', 'backup'),
+    },
+    {
+      id: 'quit-conch',
+      label: 'Quit Conch',
+      keywords: 'quit stop exit shut down close turn off conch',
+      icon: <Power />,
+      run: () => openSettings('health', BACKGROUND_FOCUS),
     },
     {
       id: 'restore-backup',

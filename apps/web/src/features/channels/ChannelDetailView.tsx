@@ -32,6 +32,7 @@ import { APPS, channelState, handleOf } from './describe';
 import { HelloStep } from './HelloStep';
 import { useKeyCheck } from './hooks';
 import { channelKeys, errorText, putChannel, useChannel, useChannelAction } from './queries';
+import { AlwaysOnHint } from '../background/AlwaysOnHint';
 
 /** `/channels/:id`: one channel — who can talk to it, how it's doing, and its settings. */
 export function ChannelDetailView({ channelId }: { channelId: string }) {
@@ -173,6 +174,8 @@ function Detail({ channel }: { channel: Channel }) {
       </header>
 
       <Health channel={channel} onRepair={() => repair.mutate([])} repairing={repair.isPending} />
+
+      {channel.enabled && <AlwaysOnHint what={`${app.name} reaches you`} />}
 
       {channel.kind === 'discord' &&
         channel.enabled &&

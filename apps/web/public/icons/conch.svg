@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="glaze" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fffdfb"/>
+      <stop offset="1" stop-color="#f3ece6"/>
+    </linearGradient>
+    <radialGradient id="pearl" cx="38%" cy="32%" r="72%">
+      <stop offset="0" stop-color="#fffaf5"/>
+      <stop offset="0.42" stop-color="#f6d9cc"/>
+      <stop offset="0.72" stop-color="#d9d3ee"/>
+      <stop offset="1" stop-color="#bfaec2"/>
+    </radialGradient>
+    <radialGradient id="sheen" cx="34%" cy="28%" r="30%">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="shadow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#8a6f7a" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#8a6f7a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#glaze)"/>
+  <rect x="64.5" y="64.5" width="895" height="895" rx="199.5" fill="none" stroke="#e7dcd4" stroke-width="3"/>
+  <ellipse cx="512" cy="770" rx="250" ry="46" fill="url(#shadow)"/>
+  <circle cx="512" cy="496" r="272" fill="url(#pearl)"/>
+  <circle cx="512" cy="496" r="272" fill="url(#sheen)"/>
+</svg>

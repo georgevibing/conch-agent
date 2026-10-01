@@ -28,6 +28,7 @@ import { useDeleteRoutine, useRoutine, useRunRoutine, useUpdateRoutine } from '.
 import { RoutineEditor } from './RoutineEditor';
 import styles from './Routines.module.css';
 import { useSchedulePreview } from './useSchedulePreview';
+import { AlwaysOnHint } from '../background/AlwaysOnHint';
 
 const trustLabels: Record<Routine['trust'], string> = {
   ask: 'Asks you before doing anything that needs permission',
@@ -66,6 +67,7 @@ function NextRuns({ routine }: { routine: Routine }) {
       <Text size="2xs" tone="subtle">
         Times are in {routine.timezone.replaceAll('_', ' ')}.
       </Text>
+      <AlwaysOnHint what="This routine runs" />
     </Surface>
   );
 }

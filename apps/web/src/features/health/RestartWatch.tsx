@@ -49,7 +49,11 @@ export function RestartWatch() {
         return;
       }
       if (Date.now() - started > SLOW_MS) setSlow(true);
-      setTimeout(() => void look(), 700);
+      // Quit on purpose, it may be hours: look calmly rather than every moment.
+      setTimeout(
+        () => void look(),
+        restarting.stopped && Date.now() - started > SLOW_MS ? 5_000 : 700,
+      );
     };
     const first = setTimeout(() => void look(), 900);
     return () => {
@@ -62,9 +66,14 @@ export function RestartWatch() {
   return (
     <RestartScreen
       title={restarting.title}
-      detail="This takes a few seconds. Your chats are safe."
+      state={restarting.stopped ? 'stopped' : 'waiting'}
+      detail={
+        restarting.stopped
+          ? 'Open Conch from your apps, or run pnpm start, and this page comes back by itself.'
+          : 'This takes a few seconds. Your chats are safe.'
+      }
       slow={
-        slow
+        slow && !restarting.stopped
           ? 'This is taking longer than usual. If Conch doesn’t come back, run pnpm start in its folder.'
           : undefined
       }
