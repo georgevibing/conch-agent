@@ -54,6 +54,8 @@ const scenarios = {
   undo: { port: 4375, env: { CONCH_MOCK_STATE: 'ready' } },
   // Come home (ADR 0035), from a pretend OpenClaw.
   import: { port: 4370, env: { CONCH_MOCK_STATE: 'ready', CONCH_IMPORT_HOME: importHome } },
+  // Show me: things made beside the chat, sealed pages, pinned apps (ADR 0034).
+  'show-me': { port: 4371, env: { CONCH_MOCK_STATE: 'ready' } },
   // Conch in your pocket: the app, the offline screen, the phone's address (a pretend Tailscale).
   pocket: { port: 4379, env: { CONCH_MOCK_STATE: 'ready' } },
   // Under the supervisor, like `pnpm start`: Conch runs "in a Terminal window", and can quit.
