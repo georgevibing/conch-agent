@@ -359,7 +359,8 @@ function securityHeaders(request: FastifyRequest, reply: FastifyReply, secure: b
     'origin-agent-cluster': '?1',
     'x-dns-prefetch-control': 'off',
     'permissions-policy':
-      'camera=(), geolocation=(), microphone=(), payment=(), usb=(), serial=(), bluetooth=(), interest-cohort=()',
+      // The microphone is Conch's own, for dictation and talk mode (ADR 0027); never an embedded page's.
+      'camera=(), geolocation=(), microphone=(self), payment=(), usb=(), serial=(), bluetooth=(), interest-cohort=()',
   });
   if (secure && request.protocol === 'https')
     reply.header('strict-transport-security', 'max-age=31536000');

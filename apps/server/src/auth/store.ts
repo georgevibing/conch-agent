@@ -591,6 +591,18 @@ export class AccessStore {
     return (await this.get()).sessions.some((s) => s.id === id && !s.pending && alive(s, now));
   }
 
+  /**
+   * Is this device still let in: not removed, approved when approval is on,
+   * and signed in on at least one live session? For its notifications (ADR 0027).
+   */
+  async deviceActive(id: string): Promise<boolean> {
+    const now = Date.now();
+    const file = await this.get();
+    const device = file.devices.find((d) => d.id === id);
+    if (!device || (file.approval && device.approvedAt === undefined)) return false;
+    return file.sessions.some((s) => s.deviceId === id && !s.pending && alive(s, now));
+  }
+
   /** End the session (signed in or waiting) this cookie value belongs to. */
   async endSession(token: string): Promise<string | undefined> {
     const hash = hashToken(token);

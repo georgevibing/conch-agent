@@ -13,6 +13,12 @@ import { pretendBackend } from './background/backends';
 import { carriedEnv } from './background/files';
 import { backendFor, BackgroundService, runningAs } from './background/service';
 import { Shortcut } from './background/shortcut';
+import { pretendTailscale } from './network/mock-tailscale';
+import { Tailscale } from './network/tailscale';
+import { pushCheck } from './push/doctor';
+import { PushService } from './push/service';
+import { PushStore } from './push/store';
+import { VoiceService } from './voice/service';
 import { AccessStore } from './auth/store';
 import { backupCheck } from './backup/doctor';
 import { BackupService } from './backup/service';
@@ -35,6 +41,7 @@ import { CodexEngine } from './engines/codex/engine';
 import { MockEngine } from './engines/mock/engine';
 import type { Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
+import { findExecutable } from './lib/proc';
 import { registerCoreChecks } from './doctor/checks';
 import { BOOT_ID, restart, restartable, stopSoon } from './lib/lifecycle';
 import { Doctor } from './doctor/service';
@@ -132,6 +139,12 @@ export class Services {
   readonly channels: ChannelService;
   /** Always on: starting at login, running with no window (ADR 0026). */
   readonly background: BackgroundService;
+  /** Your phone's secure address, over Tailscale (ADR 0027). */
+  readonly tailscale: Tailscale;
+  /** Notifications on your devices (ADR 0027). */
+  readonly push: PushService;
+  /** Private dictation: whisper.cpp on this computer (ADR 0027). */
+  readonly voice: VoiceService;
   /** The pretend Telegram and Discord used with the mock engine. */
   readonly mockTelegram?: MockTelegram;
   readonly mockDiscord?: MockDiscord;
@@ -405,6 +418,24 @@ export class Services {
     // Conversations and routine runs reach the channels through the same stream as the web app.
     this.broadcast.on((event) => this.channels.onEvent(event));
     this.background = this.#background(config);
+    this.push = this.#push(config);
+    this.broadcast.on((event) => void this.push.onEvent(event).catch(() => undefined));
+    this.gate.signedOut.on((ids) => void this.push.forget(ids.map((id) => `session:${id}`)));
+    this.tailscale = new Tailscale({
+      port: () => config.CONCH_PORT,
+      onName: (name, serving) => this.gate.hosts.setTailscale(name, serving),
+      ...(config.CONCH_ENGINE === 'mock' && pretendTailscale()),
+    });
+    this.doctor.register(pushCheck(this.push, this.tailscale));
+    this.voice = new VoiceService({
+      home: config.CONCH_HOME,
+      // The mock engine never finds (or downloads) a real speech model.
+      whisper: async () =>
+        config.CONCH_ENGINE === 'mock' ? undefined : findExecutable('whisper-cli'),
+      emit: (status) => this.broadcast.emit({ type: 'voice.changed', status }),
+    });
+    void this.voice.sweep();
+    this.doctor.register(this.voice.doctorCheck());
     this.doctor.register(this.background.doctorCheck());
     this.#channelsReady = (async () => {
       if (this.mockTelegram) {
@@ -485,6 +516,48 @@ export class Services {
         ),
       heal: (message) => void this.healed.note('gateway', message),
     });
+  }
+
+  /** Notifications: who's still allowed in, and what each thing is called. */
+  #push(config: Config): PushService {
+    const push = new PushService({
+      store: new PushStore(
+        config.CONCH_HOME,
+        (area, message) => void this.healed.note(area, message),
+      ),
+      persona: async () => (await this.settings.get()).persona.name,
+      conversation: async (id) => {
+        const chat = await this.conversations.detail(id).catch(() => undefined);
+        if (!chat) return undefined;
+        const origin = chat.conversation.origin;
+        return {
+          title: chat.conversation.title,
+          routine: origin?.kind === 'routine',
+          channel: origin !== undefined && origin.kind !== 'routine',
+        };
+      },
+      routineTitle: async (id) =>
+        (await this.routines.detail(id).catch(() => undefined))?.routine.title,
+      ownerExists: async (owner) => {
+        if (owner === 'local') return true;
+        const [kind, id = ''] = owner.split(':');
+        if (kind === 'device') return this.access.deviceActive(id);
+        if (kind === 'session') return this.access.sessionActive(id);
+        return false;
+      },
+    });
+    // A device asking to sign in: the devices already in hear about it, once.
+    const told = new Set<string>();
+    this.gate.devicesChanged.on(() => {
+      void this.access.requests().then(async (requests) => {
+        for (const r of requests) {
+          if (r.rejected || r.script || told.has(r.code)) continue;
+          told.add(r.code);
+          await push.deviceWaiting(r);
+        }
+      });
+    });
+    return push;
   }
 
   /**
@@ -633,6 +706,7 @@ export class Services {
 
   stop() {
     this.channels.stop();
+    this.tailscale.stop();
     void this.mockTelegram?.stop();
     void this.mockDiscord?.stop();
     void this.mockSlack?.stop();

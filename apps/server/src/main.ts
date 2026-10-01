@@ -70,6 +70,8 @@ const services = new Services(config);
 services.homeProblems = await secureHome(config.CONCH_HOME);
 const app = await buildApp(services);
 await services.gate.hosts.discover();
+// Whether `tailscale serve` reaches Conch: phones are only offered an address that works.
+void services.tailscale.status().catch(() => undefined);
 
 try {
   await app.listen({ host: config.CONCH_HOST, port: config.CONCH_PORT });

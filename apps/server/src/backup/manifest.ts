@@ -94,6 +94,16 @@ export const RULES: readonly BackupRule[] = [
     why: 'How this computer starts Conch at login (Always on): written for this computer’s paths. Turn Always on on again on a new one; a restore never does it for you.',
   },
   {
+    match: 'push.secrets.json',
+    class: 'derived',
+    why: 'Where notifications go: this Conch’s own key and each browser’s subscription, both tied to this computer. After a restore, each device turns its notifications on again by itself.',
+  },
+  {
+    match: 'voice/**',
+    class: 'derived',
+    why: 'Private dictation’s speech model (downloaded again when it’s missing) and recordings being read, which are deleted at once.',
+  },
+  {
     match: 'shortcut/**',
     class: 'derived',
     why: 'The Conch app’s files for this computer (the Start menu, the app menu): written again from where Conch is.',

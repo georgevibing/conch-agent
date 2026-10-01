@@ -25,6 +25,7 @@ import { HealNote } from './healed';
 import { CatalogId, Integration } from './integrations';
 import { Routine, RoutineRun } from './routines';
 import { VaultPermission, VaultRequest } from './vault';
+import { VoiceStatus } from './phone';
 import { UpdatesStatus } from './updates';
 import { UsageSnapshot } from './usage';
 
@@ -40,6 +41,7 @@ export * from './integrations';
 export * from './local';
 export * from './common';
 export * from './doctor';
+export * from './phone';
 export * from './providers';
 export * from './routines';
 export * from './search';
@@ -496,6 +498,8 @@ export const ClientCommand = z.discriminatedUnion('type', [
     decision: z.enum(['allow', 'allow-always', 'deny']),
   }),
   z.object({ type: z.literal('ping') }),
+  /** This page is in front of someone, or isn't: nothing is pushed while one is (ADR 0027). */
+  z.object({ type: z.literal('presence'), visible: z.boolean() }),
 ]);
 export type ClientCommand = z.infer<typeof ClientCommand>;
 
@@ -546,6 +550,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('healed'), note: HealNote }),
   /** A backup was made, kept or let go, or a restore got ready: refetch the list. */
   z.object({ type: z.literal('backups.changed') }),
+  /** Private dictation changed: its speech model arriving, say (ADR 0027). */
+  z.object({ type: z.literal('voice.changed'), status: VoiceStatus }),
   /**
    * Devices changed: one signed in, was approved or removed, or asked to be
    * approved (`waiting` counts those). Refetch Settings → Security.

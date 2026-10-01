@@ -5,6 +5,7 @@ import { hostname, networkInterfaces } from 'node:os';
 import type { Exposure } from '@conch/protocol';
 
 import type { Config } from '../config';
+import { TAILSCALE_BINARIES } from '../network/tailscale';
 
 export const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 const WILDCARD = new Set(['0.0.0.0', '::', '[::]']);
@@ -35,13 +36,6 @@ function interfaceAddresses(): string[] {
   return out;
 }
 
-const TAILSCALE_BINARIES = [
-  '/Applications/Tailscale.app/Contents/MacOS/Tailscale',
-  '/usr/local/bin/tailscale',
-  '/opt/homebrew/bin/tailscale',
-  '/usr/bin/tailscale',
-];
-
 /**
  * This machine's Tailscale name (`mac.tail1234.ts.net`), if Tailscale is
  * running. `tailscale serve` then gives other devices on your tailnet an
@@ -71,6 +65,8 @@ export function detectTailscale(): Promise<string | undefined> {
 export class HostPolicy {
   readonly #allowed = new Set(LOOPBACK_HOSTS);
   #tailscale?: string;
+  /** `tailscale serve` sends that name to Conch (unknown until Conch looked). */
+  #serving?: boolean;
 
   constructor(private readonly config: Config) {
     for (const h of config.CONCH_ALLOWED_HOSTS) this.#allowed.add(h);
@@ -97,6 +93,16 @@ export class HostPolicy {
     return this.#tailscale;
   }
 
+  /**
+   * What Tailscale says now (ADR 0027): its name is allowed as soon as it's
+   * there, and phones are only offered it once `tailscale serve` reaches Conch.
+   */
+  setTailscale(name: string | undefined, serving: boolean): void {
+    if (name) this.#allowed.add(name);
+    this.#tailscale = name ?? this.#tailscale;
+    this.#serving = serving;
+  }
+
   allows(host: string): boolean {
     return this.#allowed.has(host) || host.endsWith('.localhost');
   }
@@ -105,7 +111,7 @@ export class HostPolicy {
   urls(): string[] {
     const port = this.config.CONCH_PORT;
     const out: string[] = [];
-    if (this.#tailscale) out.push(`https://${this.#tailscale}`);
+    if (this.#tailscale && this.#serving !== false) out.push(`https://${this.#tailscale}`);
     for (const h of this.config.CONCH_ALLOWED_HOSTS) out.push(`https://${h}`);
     if (exposure(this.config) === 'network') {
       for (const h of this.#allowed) {

@@ -53,6 +53,9 @@ import { IntegrationError, type SignIn } from './integrations/service';
 import { preview } from './routines/schedule';
 import { RoutineError } from './routines/service';
 import { registerAuthRoutes } from './auth/routes';
+import { registerPhoneRoutes } from './phone/routes';
+import { pushOwner, registerPushRoutes } from './push/routes';
+import { registerVoiceRoutes } from './voice/routes';
 import { registerBackgroundRoutes } from './background/routes';
 import { registerBackupRoutes } from './backup/routes';
 import { registerBrowserRoutes } from './browser/routes';
@@ -156,6 +159,9 @@ export async function buildApp(services: Services) {
   registerPickRoutes(app);
   registerBackupRoutes(app, services.backups, gate);
   registerBackgroundRoutes(app, services.background, gate, () => services.conversations.busy());
+  registerPhoneRoutes(app, { tailscale: services.tailscale, gate });
+  registerPushRoutes(app, { push: services.push, conversations: services.conversations });
+  registerVoiceRoutes(app, services.voice);
   registerChannelRoutes(
     app,
     services.channels,
@@ -843,6 +849,10 @@ export async function buildApp(services: Services) {
     const session = request.access?.kind === 'session' ? request.access.session : undefined;
     const untrack = session ? gate.track(session.id, socket, gate.isLocal(request)) : undefined;
     socket.on('close', () => untrack?.());
+    // Whether this page is in front of someone: notifications wait while one is.
+    const owner = pushOwner(request.access);
+    const presence = owner ? services.push.presence.open(owner) : undefined;
+    socket.on('close', () => presence?.close());
     const stillSignedIn = async () => {
       const resolved = await gate.resolve(request);
       if (typeof resolved === 'object') return true;
@@ -881,6 +891,9 @@ export async function buildApp(services: Services) {
         switch (command.type) {
           case 'ping':
             return send({ type: 'pong' });
+          case 'presence':
+            presence?.set(command.visible);
+            return;
           case 'conversation.subscribe': {
             if (subscribed.size >= 200) subscribed.delete(subscribed.values().next().value ?? '');
             subscribed.add(command.conversationId);

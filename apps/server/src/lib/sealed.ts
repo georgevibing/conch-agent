@@ -20,6 +20,7 @@ export const SEALED_FILES = new Set([
   'secrets.json',
   'integrations.secrets.json',
   'channels.secrets.json',
+  'push.secrets.json',
 ]);
 
 const MAGIC = 'conch-sealed';

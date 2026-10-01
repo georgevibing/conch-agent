@@ -403,6 +403,45 @@ list.push(
     },
   },
   {
+    // Your phone's secure address (ADR 0027). Every Tailscale installer asks
+    // for an administrator (it adds a network adapter), so a person runs it;
+    // Conch opens the app afterwards so you can sign in.
+    id: 'tailscale',
+    name: 'Tailscale',
+    short: 'Tailscale',
+    async find(platform) {
+      if (platform === 'darwin') return macApp('Tailscale.app');
+      return findExecutable('tailscale', {
+        extraDirs: platform === 'win32' ? ['C:\\Program Files\\Tailscale'] : [],
+      });
+    },
+    download: {
+      win32: 'https://tailscale.com/download/windows',
+      darwin: 'https://tailscale.com/download/mac',
+      linux: 'https://tailscale.com/download/linux',
+    },
+    opens: 'tailscale',
+  },
+  {
+    // Private dictation (ADR 0027): whisper.cpp turns speech into text on this
+    // computer, so a voice never leaves it. Homebrew has it on a Mac and on
+    // Linux; on Windows it's a download from its own releases.
+    id: 'whisper',
+    name: 'whisper.cpp (private dictation)',
+    short: 'whisper.cpp',
+    find: () => findExecutable('whisper-cli'),
+    install: {
+      darwin: { manager: 'brew', args: ['install', 'whisper-cpp'] },
+      linux: { manager: 'brew', args: ['install', 'whisper-cpp'] },
+    },
+    ...updatable({ brew: 'whisper-cpp' }),
+    download: {
+      win32: 'https://github.com/ggml-org/whisper.cpp/releases',
+      darwin: 'https://github.com/ggml-org/whisper.cpp#quick-start',
+      linux: 'https://github.com/ggml-org/whisper.cpp#quick-start',
+    },
+  },
+  {
     id: 'docker',
     name: 'Docker',
     short: 'Docker',
