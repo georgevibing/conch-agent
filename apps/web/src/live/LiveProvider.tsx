@@ -57,6 +57,8 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
   const socketRef = useRef<LiveSocket | null>(null);
   /** Messages whose new chat should stop the moment it exists (Stop pressed right after sending). */
   const stopWhenCreated = useRef(new Set<string>());
+  /** New chats started from this tab, newest last, until they've been stopped or answered. */
+  const startedNew = useRef<string[]>([]);
 
   useEffect(() => {
     const store = useLiveStore.getState();
@@ -228,6 +230,8 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           ...(attachments?.length && { attachments: attachments.map((a) => a.id) }),
           ...(options && { options }),
         });
+        if (!conversationId)
+          startedNew.current = [...startedNew.current.slice(-9), clientMessageId];
         return clientMessageId;
       },
       configure(conversationId, options) {
@@ -244,8 +248,17 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           socketRef.current?.send({ type: 'conversation.interrupt', conversationId });
           return;
         }
-        for (const message of useLiveStore.getState().pending[NEW] ?? [])
+        // A new chat the server already made, while this view hasn't caught up
+        // with its address yet (a slow machine): stop that one now.
+        const { created, pending } = useLiveStore.getState();
+        for (const clientMessageId of startedNew.current) {
+          const id = created[clientMessageId];
+          if (id) socketRef.current?.send({ type: 'conversation.interrupt', conversationId: id });
+          else stopWhenCreated.current.add(clientMessageId);
+        }
+        for (const message of pending[NEW] ?? [])
           stopWhenCreated.current.add(message.clientMessageId);
+        startedNew.current = [];
       },
       respond(conversationId, permissionId, decision) {
         socketRef.current?.send({
