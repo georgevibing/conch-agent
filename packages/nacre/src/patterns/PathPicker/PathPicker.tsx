@@ -68,6 +68,8 @@ export function PathPicker({
 }: PathPickerProps) {
   const [typing, setTyping] = useState(!onChoose && suggestions.length === 0);
   const [busy, setBusy] = useState(false);
+  /** Why the Open dialog didn't come up, when it didn't. */
+  const [failed, setFailed] = useState<string>();
   const Icon = kind === 'folder' ? Folder : FileKey2;
   const options = [...suggestions];
   if (value && !options.some((s) => s.path === value)) {
@@ -78,9 +80,16 @@ export function PathPicker({
   const choose = async () => {
     if (!onChoose) return;
     setBusy(true);
+    setFailed(undefined);
     try {
       const path = await onChoose();
       if (path) onChange(path);
+    } catch (error) {
+      // Never a button that does nothing: say so, and offer typing instead.
+      setFailed(
+        error instanceof Error && error.message ? error.message : 'The Open dialog didn’t come up.',
+      );
+      setTyping(true);
     } finally {
       setBusy(false);
     }
@@ -144,6 +153,11 @@ export function PathPicker({
           </Button>
         )}
       </div>
+      {failed && (
+        <p role="status" className={styles.hint}>
+          {failed} Type the path instead.
+        </p>
+      )}
       {hint && <p className={styles.hint}>{hint}</p>}
     </div>
   );

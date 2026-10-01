@@ -46,4 +46,16 @@ describe('PathPicker', () => {
     expect(screen.getByRole('radio', { name: /site/ })).toHaveAccessibleDescription('~/Projects');
     expect(screen.getByRole('textbox', { name: 'Folder' })).toBeInTheDocument();
   });
+
+  it('says so when the Open dialog can’t come up, and offers typing instead', async () => {
+    const onChoose = vi.fn(() => Promise.reject(new Error('The Open dialog didn’t come up.')));
+    renderNacre(
+      <PathPicker label="Folder" kind="folder" onChange={() => undefined} onChoose={onChoose} />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Choose a folder…' }));
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'The Open dialog didn’t come up. Type the path instead.',
+    );
+    expect(screen.getByRole('textbox', { name: 'Folder' })).toBeInTheDocument();
+  });
 });
