@@ -46,23 +46,36 @@ export async function pickPath(
 
   if (platform === 'darwin') {
     // Arguments, not interpolation: the prompt can't change the script.
+    const choose = [
+      'if isFolder then',
+      '  set chosen to choose folder with prompt thePrompt',
+      'else if (count of types) > 0 then',
+      '  set chosen to choose file with prompt thePrompt of type types',
+      'else',
+      '  set chosen to choose file with prompt thePrompt',
+      'end if',
+    ];
     const script = [
       'on run argv',
       '  set thePrompt to item 1 of argv',
       '  set isFolder to item 2 of argv is "folder"',
       '  set types to {}',
       '  if (count of argv) > 3 then set types to items 4 thru -1 of argv',
-      '  set front to path to frontmost application as text',
-      '  tell application front',
+      // In front of the browser, as its own sheet. (Not `front`: that's a word
+      // AppleScript keeps for itself, and the script failed on it every time.)
+      '  set frontApp to path to frontmost application as text',
+      '  try',
+      '    tell application frontApp',
+      '      activate',
+      ...choose.map((line) => `      ${line}`),
+      '    end tell',
+      '  on error number n',
+      '    if n is -128 then error number -128',
+      // Not allowed to ask the browser (macOS Automation, or Conch running in
+      // the background): the dialog comes from Conch itself, in front.
       '    activate',
-      '    if isFolder then',
-      '      set chosen to choose folder with prompt thePrompt',
-      '    else if (count of types) > 0 then',
-      '      set chosen to choose file with prompt thePrompt of type types',
-      '    else',
-      '      set chosen to choose file with prompt thePrompt',
-      '    end if',
-      '  end tell',
+      ...choose.map((line) => `    ${line}`),
+      '  end try',
       '  return POSIX path of chosen',
       'end run',
     ].join('\n');
