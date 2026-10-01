@@ -87,7 +87,7 @@ export function buildSystemAppend(input: {
           ]
         : [
             ``,
-            `This provider can't save or search memories itself. If the user asks you to remember or forget something, tell them they can do it in Settings → Memory.`,
+            `This provider can't save or search memories itself. If the user asks you to remember or forget something, tell them they can do it in What Conch knows about you (⌘K, or Settings → Memory).`,
           ]),
       `Never mention memory ids to the user.`,
     ].join('\n'),

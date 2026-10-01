@@ -899,7 +899,7 @@ export class MockEngine implements Engine {
       }
 
       const reply = rememberMatch
-        ? "Got it — I'll remember that. You can see and edit everything I remember in **Settings → Memory**."
+        ? "Got it — I'll remember that. You can see, edit or forget everything I remember in **What Conch knows about you**."
         : attached.length
           ? [
               `You attached ${attached.length === 1 ? 'one thing' : `${attached.length} things`}: ${attached.join(', ')}.`,

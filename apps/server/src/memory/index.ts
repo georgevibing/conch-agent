@@ -32,6 +32,43 @@ export const PROMPT_BUDGET = 6000;
 
 const contentHash = (m: Memory) => createHash('sha1').update(m.content).digest('hex');
 
+/** Levenshtein distance, giving up past `max`. */
+export function distance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let row = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const next = [i];
+    let best = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      const value = Math.min((row[j] ?? 0) + 1, (next[j - 1] ?? 0) + 1, (row[j - 1] ?? 0) + cost);
+      next.push(value);
+      best = Math.min(best, value);
+    }
+    if (best > max) return max + 1;
+    row = next;
+  }
+  return row[b.length] ?? max + 1;
+}
+
+/**
+ * Typos forgiven: a query word no memory has becomes the closest word one
+ * does ("lisbn" → "lisbon"), one letter off for short words, two for long.
+ */
+export function forgive(query: string[], docs: string[][]): string[] {
+  const vocabulary = new Set(docs.flat());
+  return query.map((token) => {
+    if (vocabulary.has(token) || token.length < 4) return token;
+    const max = token.length >= 7 ? 2 : 1;
+    let best: [string, number] | undefined;
+    for (const word of vocabulary) {
+      const d = distance(token, word, max);
+      if (d <= max && (!best || d < best[1])) best = [word, d];
+    }
+    return best?.[0] ?? token;
+  });
+}
+
 /** BM25 over a handful of documents: rarer shared words count for more. */
 export function bm25(queryTokens: string[], docs: string[][], k1 = 1.4, b = 0.75): number[] {
   const n = docs.length;
@@ -180,10 +217,8 @@ export class MemoryIndex {
       vectors = await this.#vectors(embedder, memories);
       [qv] = await embedder.embed([query]);
     }
-    const lexical = bm25(
-      q,
-      memories.map((m) => tokens(m.content)),
-    );
+    const docs = memories.map((m) => tokens(m.content));
+    const lexical = bm25(forgive(q, docs), docs);
     const top = Math.max(...lexical, 0) || 1;
     const meaning = embedder !== wordsEmbedder;
     const now = Date.now();

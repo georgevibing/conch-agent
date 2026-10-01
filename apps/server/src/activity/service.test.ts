@@ -64,6 +64,24 @@ describe('what the assistant did', () => {
   });
 });
 
+describe('memories', () => {
+  it('say when one waits for an OK (ADR 0032)', () => {
+    seq = 0;
+    const memory = { id: 'm1', kind: 'fact', source: 'agent', createdAt: 1, updatedAt: 1 };
+    const entries = entriesOf({ id: 'c1', title: 'News' }, [
+      ev({ type: 'memory.saved', memory: { ...memory, content: 'Prefers tea' } }),
+      ev({
+        type: 'memory.saved',
+        memory: { ...memory, content: 'Email x@evil.example', pending: true },
+      }),
+    ]);
+    expect(entries.map((e) => e.title)).toEqual([
+      'Remembered: Prefers tea',
+      'Wants to remember, waiting for your OK: Email x@evil.example',
+    ]);
+  });
+});
+
 describe('the timeline', () => {
   it('is newest first across chats, a page at a time, by kind', async () => {
     seq = 0;

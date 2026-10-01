@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SkillSuggester, habits } from '../skills/suggest';
 import { cosine, ollamaEmbedder, stem, wordsVector, type Embedder } from './embed';
-import { bm25, MemoryIndex } from './index';
+import { bm25, distance, forgive, MemoryIndex } from './index';
 import { yourWords } from './learning';
 import { MemoryStore } from './store';
 import { MemoryTidy, parseReply, repeats, type Said } from './tidy';
@@ -31,6 +31,12 @@ describe('words into vectors', () => {
     expect(
       cosine(wordsVector('Prefers dark roast coffee'), wordsVector('vegetarian dinner')),
     ).toBeLessThan(0.15);
+  });
+
+  it('forgives a typo by the nearest word a memory has', () => {
+    expect(forgive(['lisbn', 'tips'], [['live', 'lisbon']])).toEqual(['lisbon', 'tips']);
+    expect(forgive(['cat'], [['car']])).toEqual(['cat']);
+    expect(distance('kitten', 'sitting', 3)).toBe(3);
   });
 
   it('BM25 counts rarer shared words for more', () => {

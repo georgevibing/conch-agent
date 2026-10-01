@@ -174,7 +174,8 @@ export function entriesOf(
           id: `${chat.id}:${e.seq}`,
           at: e.at,
           kind: 'memory',
-          title: `Remembered: ${e.memory.content.slice(0, 120)}`,
+          // Learned in a chat that read something untrusted: it waits for an OK (ADR 0032).
+          title: `${e.memory.pending ? 'Wants to remember, waiting for your OK' : 'Remembered'}: ${e.memory.content.slice(0, 120)}`,
           status: 'done',
           memory: { id: e.memory.id, content: e.memory.content, action: 'saved' },
         });
