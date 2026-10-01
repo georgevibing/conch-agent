@@ -36,6 +36,8 @@ const scenarios = {
   // Runs under the supervisor (`pnpm start`), so a restore can start Conch again.
   backups: { port: 4382, env: { CONCH_MOCK_STATE: 'ready', CONCH_SUPERVISE: '1' }, entry: 'start' },
   channels: { port: 4387, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Conch in your pocket: the app, the offline screen, the phone's address (a pretend Tailscale).
+  pocket: { port: 4379, env: { CONCH_MOCK_STATE: 'ready' } },
   // Under the supervisor, like `pnpm start`: Conch runs "in a Terminal window", and can quit.
   'always-on': {
     port: 4380,
