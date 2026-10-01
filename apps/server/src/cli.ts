@@ -13,6 +13,7 @@ import { renderUnicodeCompact } from 'uqr';
 
 import { checkup, secureHome, workspaceRules } from './auth/checkup';
 import { HostPolicy, exposure } from './auth/network';
+import { Devices } from './auth/devicesCli';
 import { AccessError, AccessStore } from './auth/store';
 import { BrowserStore } from './browser/store';
 import { terminalRemote } from './terminal/service';
@@ -34,6 +35,8 @@ const store = new AccessStore(config.CONCH_HOME, heal);
 
 const bold = (s: string) => (process.stdout.isTTY ? `\x1b[1m${s}\x1b[22m` : s);
 const dim = (s: string) => (process.stdout.isTTY ? `\x1b[2m${s}\x1b[22m` : s);
+const green = (s: string) => (process.stdout.isTTY ? `\x1b[32m${s}\x1b[39m` : s);
+const yellow = (s: string) => (process.stdout.isTTY ? `\x1b[33m${s}\x1b[39m` : s);
 const say = (s = '') => console.log(s ? `  ${s.replaceAll('\n', '\n  ')}` : '');
 
 /** Ask a question; with `hidden`, nothing typed is echoed (for passwords). */
@@ -47,10 +50,17 @@ function ask(question: string, { hidden = false } = {}): Promise<string> {
   });
   const rl = createInterface({ input: process.stdin, output, terminal: process.stdin.isTTY });
   return new Promise((resolve) => {
+    let answered = false;
     rl.question(`  ${question}`, (answer) => {
+      answered = true;
       rl.close();
       if (hidden) process.stdout.write('\n');
       resolve(answer);
+    });
+    // Ctrl+D (or input that ends) is no answer, never a hang.
+    rl.on('close', () => {
+      if (!answered) process.stdout.write('\n');
+      resolve('');
     });
     muted = hidden;
   });
@@ -154,6 +164,20 @@ async function pair() {
   );
 }
 
+async function devices() {
+  await new Devices({
+    store,
+    reopen: () => new AccessStore(config.CONCH_HOME, heal),
+    say,
+    print: (text) => console.log(text),
+    ask: (question) => ask(question),
+    interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY),
+    style: { bold, dim, green, yellow },
+    sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+    now: Date.now,
+  }).run(process.argv.slice(3));
+}
+
 async function signOutEverywhere() {
   const ended = await store.revokeOtherSessions();
   say(`✓ Signed out ${ended.length} device${ended.length === 1 ? '' : 's'}.`);
@@ -205,7 +229,16 @@ async function status() {
     if (item.command) say(dim(`   → ${item.command}`));
   }
   say();
-  say(dim(`${access.sessions.length} signed-in device(s) · ${access.keys.length} access key(s)`));
+  say(
+    dim(
+      `${access.sessions.filter((s) => !s.pending).length} signed-in device(s) · ${access.keys.length} access key(s) · ${access.approval ? 'approving new devices' : 'not approving new devices'}`,
+    ),
+  );
+  const waiting = (await store.requests()).filter((r) => !r.rejected).length;
+  if (waiting)
+    say(
+      `${yellow('●')} ${waiting} device${waiting === 1 ? ' is' : 's are'} waiting: pnpm conch devices`,
+    );
 }
 
 function help() {
@@ -218,6 +251,7 @@ function help() {
     ['keys', 'List access keys'],
     ['revoke <id>', 'Revoke an access key'],
     ['pair', 'Sign in your phone with a QR code'],
+    ['devices', 'What has signed in; approve new devices (devices help)'],
     ['sign-out-everywhere', 'Sign every device out'],
     ['reset', 'Forgot your password? Turn sign-in off and start again'],
   ];
@@ -231,6 +265,7 @@ const commands: Record<string, () => Promise<void> | void> = {
   keys,
   revoke,
   pair,
+  devices,
   'sign-out-everywhere': signOutEverywhere,
   reset,
   help,
