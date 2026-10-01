@@ -10,6 +10,7 @@ import { ChannelDetailView } from '../features/channels/ChannelDetailView';
 import { ChannelsView } from '../features/channels/ChannelsView';
 import { ConnectChannel } from '../features/channels/ConnectChannel';
 import { ChatView } from '../features/chat/ChatView';
+import { PasswordsView } from '../features/passwords/PasswordsView';
 import { EnginePill } from '../features/engine/EnginePill';
 import { IntegrationDetailView } from '../features/integrations/IntegrationDetailView';
 import { IntegrationsView } from '../features/integrations/IntegrationsView';
@@ -45,13 +46,15 @@ function Reconnecting() {
 }
 
 export function Shell() {
-  const { conversationId, routineId, integrationId, skillId, channelId, channelKind } = useParams();
+  const { conversationId, routineId, integrationId, skillId, channelId, channelKind, itemId } =
+    useParams();
   const navigate = useNavigate();
   const path = useLocation().pathname;
   const routinesArea = path.startsWith('/routines');
   const integrationsArea = path.startsWith('/integrations');
   const skillsArea = path.startsWith('/skills');
   const channelsArea = path.startsWith('/channels');
+  const passwordsArea = path.startsWith('/passwords');
 
   // Toasts and notifications raised outside the router ask us to navigate.
   useEffect(() => {
@@ -77,7 +80,9 @@ export function Shell() {
         ? 'Skills'
         : channelsArea
           ? 'Channels'
-          : (current?.title ?? (conversationId ? '' : 'New chat'));
+          : passwordsArea
+            ? 'Passwords'
+            : (current?.title ?? (conversationId ? '' : 'New chat'));
 
   useEffect(() => {
     document.title = current ? `${current.title} · Conch` : 'Conch';
@@ -136,6 +141,7 @@ export function Shell() {
                 !integrationsArea &&
                 !skillsArea &&
                 !channelsArea &&
+                !passwordsArea &&
                 current?.titling
               }
             >
@@ -159,7 +165,9 @@ export function Shell() {
         <Reconnecting />
         {/* The page; it steps aside while the terminal fills the screen. */}
         <div className={styles.area} data-covered={terminalMax || undefined}>
-          {channelsArea ? (
+          {passwordsArea ? (
+            <PasswordsView itemId={itemId} />
+          ) : channelsArea ? (
             channelKind ? (
               <ConnectChannel key={channelKind} kind={channelKind} />
             ) : channelId ? (

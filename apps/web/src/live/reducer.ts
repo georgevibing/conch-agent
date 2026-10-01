@@ -1,5 +1,7 @@
 import type {
   Attachment,
+  VaultPermission,
+  VaultRequest,
   BrowserHandoff,
   BrowserPermission,
   BrowserStep,
@@ -59,6 +61,14 @@ export type TranscriptItem =
       decision?: 'allow' | 'allow-always' | 'deny' | 'expired';
       /** The browser asking about a site or a significant action. */
       browser?: BrowserPermission;
+      /** Reading something from Passwords (ADR 0025). */
+      vault?: VaultPermission;
+    }
+  | {
+      /** Passwords needs you (unlock it, or type in a credential); later events with the same id replace it. */
+      kind: 'vault-request';
+      id: string;
+      request: VaultRequest;
     }
   | {
       /** One browser step; a later event with the same id replaces it (running → done). */
@@ -295,9 +305,24 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             summary: event.summary,
             input: event.input,
             browser: event.browser,
+            ...(event.vault && { vault: event.vault }),
           },
         ],
       };
+    case 'vault.request': {
+      const updated = updateItem(items, 'vault-request', event.request.requestId, (item) => ({
+        ...item,
+        request: event.request,
+      }));
+      if (updated) return { ...base, items: updated };
+      return {
+        ...base,
+        items: [
+          ...items,
+          { kind: 'vault-request', id: event.request.requestId, request: event.request },
+        ],
+      };
+    }
     case 'permission.resolved': {
       const updated = updateItem(items, 'permission', event.permissionId, (item) => ({
         ...item,

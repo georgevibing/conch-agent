@@ -23,6 +23,7 @@ import { HeldItem, RoutedItem } from './OfflineBits';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
 import { RoutineInstruction } from '../routines/RunBanner';
 import styles from './Transcript.module.css';
+import { VaultApprovalItem, VaultRequestItem } from './VaultItems';
 import type { PendingMessage } from '../../live/store';
 
 export interface TranscriptProps {
@@ -234,7 +235,17 @@ export function Transcript({
                 onRespond={(d) => onRespond((block.item as { id: string }).id, d)}
               />
             )}
-            {block.item?.kind === 'permission' && !block.item.browser && (
+            {block.item?.kind === 'permission' && block.item.vault && (
+              <VaultApprovalItem
+                item={block.item}
+                name={name}
+                onRespond={(d) => onRespond((block.item as { id: string }).id, d)}
+              />
+            )}
+            {block.item?.kind === 'vault-request' && (
+              <VaultRequestItem item={block.item} name={name} />
+            )}
+            {block.item?.kind === 'permission' && !block.item.browser && !block.item.vault && (
               <PermissionCard
                 item={block.item}
                 name={name}

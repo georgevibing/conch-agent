@@ -32,7 +32,9 @@ function ActionButton({ action }: { action: DoctorAction }) {
             ? '/integrations'
             : action.place === 'channels'
               ? `/channels${action.focus ? `/${encodeURIComponent(action.focus)}` : ''}`
-              : undefined;
+              : action.place === 'passwords'
+                ? '/passwords'
+                : undefined;
         if (!page) return openSettings(action.place as SettingsTab, action.focus);
         useUi.getState().closeSettings();
         window.dispatchEvent(new CustomEvent('conch:navigate', { detail: page }));

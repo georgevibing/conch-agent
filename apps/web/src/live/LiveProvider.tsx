@@ -20,6 +20,7 @@ import { healthKeys } from '../features/health/api';
 import { backupKeys } from '../features/health/backups';
 import { applyRoutineEvent } from '../features/routines/queries';
 import { skillKeys } from '../features/skills/queries';
+import { vaultKeys } from '../features/passwords/queries';
 import { updateKeys } from '../features/updates/api';
 import { followRestart } from '../features/updates/queries';
 import { LiveSocket, socketUrl } from './socket';
@@ -161,6 +162,9 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           break;
         case 'skills.changed':
           void client.invalidateQueries({ queryKey: skillKeys.all });
+          break;
+        case 'vault.changed':
+          void client.invalidateQueries({ queryKey: vaultKeys.all });
           break;
         case 'network.status':
           // Offline and back: the composer and waiting messages say what happens.

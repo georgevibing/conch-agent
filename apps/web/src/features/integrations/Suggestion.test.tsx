@@ -217,7 +217,10 @@ describe('connect from the chat', () => {
     expect(
       await screen.findByRole('group', { name: 'Linear isn’t connected yet' }),
     ).toBeInTheDocument();
-    expect(calls.at(-1)).toMatchObject({ body: { preferences: { mutedSuggestions: [] } } });
+    // The last change made, whatever else the page has fetched since.
+    expect(calls.filter((c) => c.method === 'PATCH').at(-1)).toMatchObject({
+      body: { preferences: { mutedSuggestions: [] } },
+    });
   });
 
   it('shows nothing for an app muted before', async () => {

@@ -1,5 +1,5 @@
-import type { TextRange } from '@conch/protocol';
-import { IntegrationLogo, ProviderLogo, SkillIcon, toast } from '@conch/nacre';
+import { generatePassword, type TextRange } from '@conch/protocol';
+import { IntegrationLogo, ProviderLogo, SkillIcon, toast, VaultItemIcon } from '@conch/nacre';
 import {
   Archive,
   BatteryMedium,
@@ -14,6 +14,7 @@ import {
   HeartPulse,
   Laptop,
   History,
+  KeyRound,
   Palette as PaletteIcon,
   Paperclip,
   SquareTerminal,
@@ -22,6 +23,7 @@ import {
   Repeat,
   ShieldCheck,
   Sparkles,
+  Upload,
   SquareSlash,
   User,
   WandSparkles,
@@ -38,6 +40,8 @@ import { FALLBACK_FOCUS } from '../settings/FallbackSection';
 import { APPS } from '../channels/describe';
 import { useChannels } from '../channels/queries';
 import { useIntegrations } from '../integrations/queries';
+import { copySecret } from '../passwords/clipboard';
+import { useVault } from '../passwords/queries';
 import { modelLabel, providerLogos } from '../models/catalog';
 import { modelKey, useTurnOptions } from '../models/useTurnOptions';
 import { useRoutines } from '../routines/queries';
@@ -183,6 +187,7 @@ export function useFindables(query: string, conversationId: string | undefined):
   const { data: skills } = useSkills();
   const { data: integrations } = useIntegrations();
   const { data: routines } = useRoutines();
+  const { data: vault } = useVault();
   const { data: channels } = useChannels();
   const { data: terminal } = useTerminalStatus();
   const { data: updates } = useUpdates();
@@ -331,6 +336,21 @@ export function useFindables(query: string, conversationId: string | undefined):
     run: () => void navigate(item.to),
   }));
 
+  const passwordItems = find(
+    (vault?.items ?? []).filter((i) => !i.deletedAt),
+    q,
+    (i) => i.title,
+    (i) => [i.subtitle, ...i.domains, ...i.tags, i.type, 'password login'].join(' '),
+    5,
+  ).map(({ item, match }): Findable => ({
+    id: `password:${item.id}`,
+    label: item.title,
+    ranges: match.ranges,
+    description: item.subtitle || item.domains[0],
+    icon: <VaultItemIcon kind={item.type} domain={item.domains[0]} title={item.title} size="sm" />,
+    run: () => void navigate(`/passwords/${item.id}`),
+  }));
+
   const routineItems = find(
     routines ?? [],
     q,
@@ -373,6 +393,46 @@ export function useFindables(query: string, conversationId: string | undefined):
       keywords: 'restore backup undo go back recover import upload file conchbackup',
       icon: <History />,
       run: () => openSettings('health', 'restore'),
+    },
+    {
+      id: 'passwords',
+      label: 'Passwords',
+      keywords:
+        'password passwords login logins keychain vault credentials secret secrets keys card cards 2fa codes otp 1password bitwarden keepass',
+      icon: <KeyRound />,
+      run: () => void navigate('/passwords'),
+    },
+    {
+      id: 'new-password',
+      label: 'New password',
+      keywords: 'add save store login credential secret card note key vault',
+      icon: <Plus />,
+      run: () => void navigate('/passwords', { state: { new: 'login' } }),
+    },
+    {
+      id: 'generate-password',
+      label: 'Generate a password',
+      keywords: 'make create random strong new password passphrase generator copy',
+      icon: <Sparkles />,
+      run: () => {
+        const value = generatePassword();
+        void copySecret(value, 'New password');
+      },
+    },
+    {
+      id: 'import-passwords',
+      label: 'Import passwords',
+      keywords:
+        'import passwords chrome safari firefox 1password bitwarden lastpass keepass csv move',
+      icon: <Upload />,
+      run: () => void navigate('/passwords', { state: { import: true } }),
+    },
+    {
+      id: 'password-check',
+      label: 'Check my passwords',
+      keywords: 'security check breach breached leaked pwned weak reused health',
+      icon: <ShieldCheck />,
+      run: () => void navigate('/passwords', { state: { check: true } }),
     },
     {
       id: 'skills',
@@ -502,6 +562,7 @@ export function useFindables(query: string, conversationId: string | undefined):
 
   return [
     { heading: 'Go to', items: placeItems },
+    { heading: 'Passwords', items: passwordItems },
     { heading: 'Skills', items: skillItems },
     { heading: 'Models', items: modelItems },
     { heading: 'Integrations', items: appItems },

@@ -554,4 +554,43 @@ describe('Palette search', () => {
     await user.type(screen.getByRole('combobox'), 'signal');
     expect(screen.queryByRole('option', { name: /Connect Signal/ })).toBeNull();
   });
+
+  it('finds saved passwords by name or site, and opens them', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'GET /api/vault': () => ({
+        items: [
+          {
+            id: 'pw_netflix',
+            source: 'conch',
+            type: 'login',
+            title: 'Netflix',
+            subtitle: 'ada@example.com',
+            domains: ['netflix.com'],
+            tags: [],
+            favorite: false,
+            totp: false,
+            problems: [],
+            readOnly: false,
+          },
+        ],
+        status: {
+          protection: 'keychain',
+          sources: [],
+          health: { weak: 0, reused: 0, compromised: 0, expired: 0, insecure: 0 },
+          trash: 0,
+        },
+      }),
+    });
+    renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'netflix');
+    expect(await screen.findByRole('option', { name: /Netflix/ })).toBeInTheDocument();
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'generate password');
+    expect(await screen.findByRole('option', { name: /Generate a password/ })).toBeInTheDocument();
+  });
 });

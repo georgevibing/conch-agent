@@ -60,6 +60,8 @@ export function Root() {
       <Route path="/channels" element={<Shell />} />
       <Route path="/channels/new/:channelKind" element={<Shell />} />
       <Route path="/channels/:channelId" element={<Shell />} />
+      <Route path="/passwords" element={<Shell />} />
+      <Route path="/passwords/:itemId" element={<Shell />} />
       <Route path="*" element={<Shell />} />
     </Routes>
   );
