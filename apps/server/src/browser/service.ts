@@ -8,6 +8,7 @@ import type {
   BrowserStatus,
   ServerEvent,
   UpdateBrowserSettingsBody,
+  VaultRequest,
 } from '@conch/protocol';
 import type { Download, Page } from 'playwright-core';
 
@@ -15,6 +16,7 @@ import type { Engine, HostTool } from '../engines/types';
 import type { ToolContext } from '../conversations/manager';
 import { safeJoin } from '../lib/fs';
 import type { Heal } from '../lib/recover';
+import type { WebAuthnCredential } from './passkeys';
 import { declineCookies } from './cookies';
 import { BrowserGuard } from './guard';
 import { blockedPage } from './pages';
@@ -44,7 +46,43 @@ export interface BrowserServiceDeps {
  * the agent's tools and the live view. Starts on first use, stops when idle,
  * restarts and restores each chat's page after a crash.
  */
+/** Saved passwords the browser may fill (ADR 0025); `VaultService` is the one there is. */
+export interface PasswordFiller {
+  matching(host: string): Promise<{ id: string; title: string; subtitle: string }[]>;
+  /** Saved payment cards, for a checkout (a card isn't tied to one site). */
+  cards(): Promise<{ id: string; title: string; subtitle: string }[]>;
+  /** Passwords is locked: show the card that unlocks it, and wait (false: it stayed locked). */
+  ensureOpen(show: (request: VaultRequest) => void, signal: AbortSignal): Promise<boolean>;
+  fillPolicy(request: FillRequest): Promise<{ ask: boolean; title: string; site: string }>;
+  fillValue(request: FillRequest): Promise<string>;
+  /** The person chose "Always on this site". */
+  allowAgent(id: string): Promise<void>;
+  /** Saved passkeys for a page (ADR 0025 § Passkeys). */
+  passkeysFor?(
+    host: string,
+  ): Promise<{ itemId: string; passkeyId: string; title: string; userName?: string }[]>;
+  passkeyPolicy?(
+    itemId: string,
+    passkeyId: string,
+    host: string,
+  ): Promise<{ ask: boolean; title: string; site: string }>;
+  passkeyCredential?(itemId: string, passkeyId: string, host: string): Promise<WebAuthnCredential>;
+  passkeyUsed?(itemId: string, credentialId: string, signCount: number): Promise<void>;
+  savePasskey?(
+    credential: WebAuthnCredential,
+    host: string,
+  ): Promise<{ itemId: string; title: string; created: boolean }>;
+}
+
+export interface FillRequest {
+  itemId: string;
+  host: string;
+  want: 'password' | 'username' | 'totp' | 'cardNumber' | 'cvv' | 'expiry' | 'cardholder';
+}
+
 export class BrowserService {
+  /** Set by `Services` once Passwords exist. */
+  passwords?: PasswordFiller;
   readonly store: BrowserStore;
   readonly guard: BrowserGuard;
   readonly runtime: BrowserRuntime;

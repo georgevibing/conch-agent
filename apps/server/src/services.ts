@@ -1,8 +1,14 @@
+import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 
 import type { EngineId, LoginState, ServerEvent, SkillSource, TurnProblem } from '@conch/protocol';
 
 import { AttachmentStore } from './attachments/store';
+import { type SystemKey, VaultService } from './vault/service';
+import { vaultTools } from './vault/tools';
+import { vaultCheck } from './vault/doctor';
+import { deviceSealer, registerSealer } from './lib/sealed';
+import { protectedPaths } from './lib/protect';
 import { AccessStore } from './auth/store';
 import { backupCheck } from './backup/doctor';
 import { BackupService } from './backup/service';
@@ -93,6 +99,8 @@ export class Services {
   readonly commands: CommandStore;
   /** Files and long pastes sent with messages (ADR 0017). */
   readonly attachments: AttachmentStore;
+  /** Passwords: Conch's own vault and the managers it reads (ADR 0025). */
+  readonly vault: VaultService;
   readonly routines: RoutineService;
   readonly conversations: ConversationManager;
   readonly browser: BrowserService;
@@ -123,6 +131,7 @@ export class Services {
   readonly mockDiscord?: MockDiscord;
   readonly mockSlack?: MockSlack;
   #login?: { handle: LoginHandle; state: LoginState };
+  #channelStore?: ChannelStore;
   #sweeper?: NodeJS.Timeout;
 
   constructor(readonly config: Config) {
@@ -147,6 +156,20 @@ export class Services {
     this.memory = new MemoryStore(join(config.CONCH_HOME, 'memory'));
     this.commands = new CommandStore(join(config.CONCH_HOME, 'commands'));
     this.attachments = new AttachmentStore(join(config.CONCH_HOME, 'attachments'));
+    this.vault = new VaultService({
+      home: config.CONCH_HOME,
+      keystore:
+        config.CONCH_VAULT_KEYSTORE ??
+        (config.CONCH_ENGINE === 'mock' || process.env.VITEST ? 'file' : 'auto'),
+      emit: () => this.broadcast.emit({ type: 'vault.changed' }),
+      systemKeys: () => this.#systemKeys(),
+    });
+    // Conch's own keys (providers, integrations, channels) are sealed under this
+    // computer's device key from here on (ADR 0025 § Keys Conch uses).
+    registerSealer(
+      config.CONCH_HOME,
+      deviceSealer(() => this.vault.deviceKey()),
+    );
     this.keys = new ProviderKeys(this.settings, new SecretVault());
     this.local = new LocalService({
       home: config.CONCH_HOME,
@@ -246,6 +269,8 @@ export class Services {
       workspace: () => this.settings.workspace(),
       emit: (event) => this.broadcast.emit(event),
     });
+    // The browser fills sign-in fields from Passwords, with your OK (ADR 0025).
+    this.browser.passwords = this.vault;
     const conversationStore = new ConversationStore(join(config.CONCH_HOME, 'conversations'), heal);
     this.conversations = new ConversationManager({
       store: conversationStore,
@@ -257,19 +282,27 @@ export class Services {
       tools: (ctx) =>
         ctx.engine.hostTools === false
           ? []
-          : [...this.routines.tools(ctx), ...this.skills.tools(ctx), ...this.browser.tools(ctx)],
+          : [
+              ...this.routines.tools(ctx),
+              ...this.skills.tools(ctx),
+              ...this.browser.tools(ctx),
+              ...vaultTools(this.vault, ctx),
+            ],
       context: async (engine) =>
         [
           engine.hostTools === false ? '' : await this.routines.promptSection(),
           await this.skills.promptSection(engine).catch(() => ''),
           await this.browser.promptSection(engine).catch(() => ''),
           await this.integrations.promptSection(),
+          engine.hostTools === false ? '' : this.vault.promptSection(),
         ]
           .filter(Boolean)
           .join('\n\n'),
       expand: (text) => this.skills.expand(text),
       integrations: this.integrations,
       attachments: this.attachments,
+      redact: this.vault.redactor(),
+      protectedPaths: protectedPaths(config.CONCH_HOME),
       // A spend that can't be saved is lost, not fatal: an unhandled rejection would stop Conch.
       onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
     });
@@ -339,16 +372,20 @@ export class Services {
       lastActivity: () => this.#lastActivity,
       emit: () => this.broadcast.emit({ type: 'backups.changed' }),
       heal,
+      // Passwords travel only in a passphrase-locked backup, with the key that opens them.
+      extraSecrets: () => this.vault.backupFiles(),
     });
     this.doctor.register(backupCheck(this.backups));
+    this.doctor.register(vaultCheck(this.vault));
 
     // With the mock engine, channels talk to a pretend Telegram on this machine.
     this.mockTelegram = config.CONCH_ENGINE === 'mock' ? new MockTelegram() : undefined;
     this.mockDiscord = config.CONCH_ENGINE === 'mock' ? new MockDiscord() : undefined;
     this.mockSlack = config.CONCH_ENGINE === 'mock' ? new MockSlack() : undefined;
     const endpoints: ChannelEndpoints = {};
+    this.#channelStore = new ChannelStore(config.CONCH_HOME, heal);
     this.channels = new ChannelService({
-      store: new ChannelStore(config.CONCH_HOME, heal),
+      store: this.#channelStore,
       conversations: this.conversations,
       attachments: this.attachments,
       settings: this.settings,
@@ -407,6 +444,82 @@ export class Services {
   }
 
   #channelsReady: Promise<void>;
+
+  /**
+   * The keys Conch itself uses, for Passwords (ADR 0025 § Keys Conch uses):
+   * provider keys, integration keys and sign-ins, channel bot keys. Shown
+   * read-only; each is changed where it's used.
+   */
+  async #systemKeys(): Promise<SystemKey[]> {
+    const id = (...parts: string[]) =>
+      `sys_${createHash('sha256').update(parts.join('\0')).digest('base64url').slice(0, 22)}`;
+    const tail = (v: string) => (v.length > 8 ? `…${v.slice(-4)}` : 'saved');
+    const out: SystemKey[] = [];
+    for (const [engineId, engine] of this.engines) {
+      if (engineId === 'mock') continue;
+      const described = await this.keys.describe(engineId).catch(() => undefined);
+      if (!described) continue;
+      out.push({
+        id: id('provider', engineId),
+        title: `${engine.label} key`,
+        usedBy: engine.label,
+        hint: described.hint,
+        savedAt: described.savedAt || undefined,
+        manage: { label: 'Open Providers', place: 'providers', focus: engineId },
+        reveal: async () => (await this.keys.value(engineId)) ?? '',
+      });
+    }
+    for (const item of await this.integrations.store.all().catch(() => [])) {
+      const secrets = await this.integrations.store.secrets(item.id).catch(() => undefined);
+      for (const [key, value] of Object.entries(secrets?.values ?? {})) {
+        if (!value) continue;
+        out.push({
+          id: id('integration', item.id, key),
+          title: `${item.name} · ${key}`,
+          usedBy: `${item.name} integration`,
+          hint: tail(value),
+          manage: { label: 'Open Integrations', place: 'integrations', focus: item.id },
+          reveal: async () => value,
+        });
+      }
+      if (secrets?.oauth?.tokens)
+        out.push({
+          id: id('integration', item.id, 'oauth'),
+          title: `${item.name} sign-in`,
+          usedBy: `${item.name} integration`,
+          hint: 'Signed in',
+          manage: { label: 'Open Integrations', place: 'integrations', focus: item.id },
+          reveal: () =>
+            Promise.reject(
+              new Error(
+                'This sign-in is kept by Conch and renewed by itself; there’s nothing to copy.',
+              ),
+            ),
+        });
+    }
+    for (const channel of (await this.#channelStore?.all().catch(() => [])) ?? []) {
+      const secrets = await this.#channelStore?.secrets(channel.id).catch(() => undefined);
+      if (!secrets) continue;
+      const name = channel.bot.name ? `${channel.bot.name} (${channel.kind})` : channel.kind;
+      const tokens: [string, string][] =
+        secrets.kind === 'slack'
+          ? [
+              ['bot token', secrets.botToken],
+              ['app token', secrets.appToken],
+            ]
+          : [['bot token', secrets.token]];
+      for (const [label, value] of tokens)
+        out.push({
+          id: id('channel', channel.id, label),
+          title: `${name} ${label}`,
+          usedBy: `${name} channel`,
+          hint: tail(value),
+          manage: { label: 'Open Channels', place: 'channels', focus: channel.id },
+          reveal: async () => value,
+        });
+    }
+    return out;
+  }
 
   /** The default provider: your choice, or `CONCH_ENGINE` when it's set. */
   engine(): Engine {

@@ -216,11 +216,16 @@ export async function run(
     signal?: AbortSignal;
     /** Bytes of output to keep. Guards against a program that never stops talking. */
     maxBuffer?: number;
+    /**
+     * Written to the program's stdin, which is then closed. Secrets go this way,
+     * never as arguments: any user on the computer can read arguments in `ps`.
+     */
+    input?: string;
   } = {},
 ): Promise<RunResult> {
   try {
     const { command, prefix } = launch(file);
-    const { stdout, stderr } = await exec(command, [...prefix, ...args], {
+    const running = exec(command, [...prefix, ...args], {
       env: options.env ?? agentEnv(),
       cwd: options.cwd,
       timeout: options.timeout ?? 15_000,
@@ -228,6 +233,12 @@ export async function run(
       maxBuffer: options.maxBuffer ?? 4 * 1024 * 1024,
       windowsHide: true,
     });
+    const stdin = running.child.stdin;
+    if (stdin && options.input !== undefined) {
+      stdin.on('error', () => undefined);
+      stdin.end(options.input);
+    }
+    const { stdout, stderr } = await running;
     return { stdout, stderr, code: 0 };
   } catch (error) {
     const e = error as {

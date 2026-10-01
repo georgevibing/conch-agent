@@ -31,6 +31,7 @@ import type {
   TurnInput,
 } from '../types';
 import { detectClaude } from './detect';
+import { PROTECTED_MESSAGE, touchesProtected } from '../../lib/protect';
 import { childEnv } from './env';
 import { startClaudeLogin } from './login';
 import { Translator } from './translate';
@@ -521,11 +522,23 @@ export class ClaudeCodeEngine implements Engine {
             allowDangerouslySkipPermissions: true,
           }),
           mcpServers: { conch },
-          ...(input.disallowedTools?.length && { disallowedTools: input.disallowedTools }),
+          // Deny rules hold in every mode, Full trust included (`//` is an absolute path).
+          ...((input.disallowedTools?.length || input.protectedPaths?.length) && {
+            disallowedTools: [
+              ...(input.disallowedTools ?? []),
+              ...(input.protectedPaths ?? []).flatMap((p) => {
+                const rule = `/${p.replaceAll('\\', '/')}${/\.json$/.test(p) ? '' : '/**'}`;
+                return [`Read(${rule})`, `Edit(${rule})`, `Write(${rule})`];
+              }),
+            ],
+          }),
           canUseTool: async (toolName, toolInput, { signal, toolUseID }) => {
             // Conch's own tools (memory) are always allowed; the user sees their effects inline.
             if (toolName.startsWith('mcp__conch__'))
               return { behavior: 'allow', updatedInput: toolInput };
+            // Passwords and Conch's keys are never read or changed with files or commands.
+            if (touchesProtected(toolInput, input.protectedPaths ?? []))
+              return { behavior: 'deny', message: PROTECTED_MESSAGE };
             const decision = await input.requestPermission(
               { toolName, toolUseId: toolUseID, input: toolInput },
               signal,

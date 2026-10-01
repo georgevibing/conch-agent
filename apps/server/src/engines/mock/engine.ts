@@ -387,6 +387,58 @@ export class MockEngine implements Engine {
         yield { type: 'tool-end', toolUseId, status: 'success', output };
       }
 
+      // Passwords (ADR 0025): asking for a credential, and reading one field with a yes.
+      const vaultTool = async function* (name: string, args: Record<string, unknown>) {
+        const tool = input.tools.find((t) => t.name === name);
+        const toolUseId = newId('tool');
+        yield { type: 'tool-start', toolUseId, name: `mcp__conch__${name}`, input: args } as const;
+        const output = tool ? hostToolText(await tool.run(args as never)) : '';
+        yield { type: 'tool-end', toolUseId, status: 'success', output } as const;
+        return output;
+      };
+      const askFor = /\bask me for my ([a-z0-9.-]+) (login|password|key)\b/i.exec(input.prompt);
+      const readField = /\bread the ([a-z ]+?) (?:of|from) ([\w ’'-]+?)[.?!]*$/i.exec(
+        input.prompt.trim(),
+      );
+      if (askFor?.[1] || readField?.[2]) {
+        let reply: string;
+        if (askFor?.[1]) {
+          const site = askFor[1];
+          const out = yield* vaultTool('passwords_request', {
+            title: site,
+            type: askFor[2] === 'key' ? 'apiKey' : 'login',
+            site,
+            reason: `To sign in to ${site} for you`,
+          });
+          reply = /saved it/.test(out)
+            ? `Thanks — it’s in your Passwords now. I never saw it, and I’ll use it to sign in to ${site}.`
+            : 'No problem, I’ll do without it.';
+        } else {
+          const [, field = '', title = ''] = readField ?? [];
+          const found = yield* vaultTool('passwords_find', { query: title });
+          const id = /id=([A-Za-z0-9_-]+)/.exec(found)?.[1];
+          const out = id
+            ? yield* vaultTool('passwords_read', {
+                item: id,
+                field,
+                reason: 'You asked me to use it',
+              })
+            : 'not found';
+          reply = /said no/.test(out)
+            ? 'Understood, I won’t use it.'
+            : id
+              ? `I have the ${field.toLowerCase()} now and will only use it for this.`
+              : `I couldn’t find “${title}” in your Passwords.`;
+        }
+        for (const chunk of bursts(reply)) {
+          await wait(chunk.pause);
+          yield { type: 'text', messageId, delta: chunk.text };
+        }
+        yield { type: 'message-done', messageId };
+        yield { type: 'done', outcome: 'success' };
+        return;
+      }
+
       if (/\b(run|list|files?|test)\b/.test(text)) {
         const toolUseId = newId('tool');
         const command = /test/.test(text) ? 'npm test' : 'ls -la';

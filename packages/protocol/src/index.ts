@@ -24,6 +24,7 @@ import { EngineStatus, LoginState } from './engine';
 import { HealNote } from './healed';
 import { CatalogId, Integration } from './integrations';
 import { Routine, RoutineRun } from './routines';
+import { VaultPermission, VaultRequest } from './vault';
 import { UpdatesStatus } from './updates';
 import { UsageSnapshot } from './usage';
 
@@ -46,6 +47,9 @@ export * from './skills';
 export * from './terminal';
 export * from './updates';
 export * from './usage';
+export * from './vault';
+export * from './passwords';
+export * from './words';
 
 export const PROTOCOL_VERSION = 7;
 
@@ -318,6 +322,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     summary: z.string(),
     /** The browser asks about a site or a significant action: show the site and the control. */
     browser: BrowserPermission.optional(),
+    /** The agent asks to read or fill something from Passwords (ADR 0025). */
+    vault: VaultPermission.optional(),
   }),
   z.object({
     ...logged,
@@ -368,6 +374,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     message: z.string(),
   }),
   z.object({ ...logged, type: z.literal('options'), options: TurnOptions }),
+  /** Passwords needs the person: to unlock it, or to type in a credential (ADR 0025). Later ones with the same id replace it. */
+  z.object({ ...logged, type: z.literal('vault.request'), request: VaultRequest }),
   /** A step the agent (or you, while driving) took in this chat's browser tab. */
   z.object({ ...logged, type: z.literal('browser.step'), step: BrowserStep }),
   /** The agent handed the browser to you (sign in, a captcha) — and later, that you handed it back. */
@@ -515,6 +523,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('integration.deleted'), integrationId: z.string() }),
   /** A skill was added, changed or removed (here, or in one of the folders Conch reads). */
   z.object({ type: z.literal('skills.changed') }),
+  /** Passwords changed (an item, a source unlocked or locked): refetch them. */
+  z.object({ type: z.literal('vault.changed') }),
   /** Remaining usage changed (a turn finished, a window reset, the provider warned). */
   z.object({ type: z.literal('usage.changed'), usage: UsageSnapshot }),
   /** Terminals were opened, closed or ended somewhere: refetch the list. */

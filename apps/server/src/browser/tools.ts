@@ -1,4 +1,9 @@
-import type { BrowserActionKind, BrowserBox, BrowserPermission } from '@conch/protocol';
+import type {
+  BrowserActionKind,
+  BrowserBox,
+  BrowserPermission,
+  VaultRequest,
+} from '@conch/protocol';
 import type { Download, Locator, Page } from 'playwright-core';
 import { z } from 'zod';
 
@@ -10,8 +15,20 @@ import { isHighStakes, SECRET_ATTR, secretLabel, type SecretKind } from './risk'
 import { BrowserProblemError } from './runtime';
 import { plainNavigationError, toUrl, type BrowserService } from './service';
 import { displayHost, siteOf } from './site';
+import { armCreate, armSignIn } from './passkeys';
 import { markSecrets, readPage } from './snapshot';
 import type { Tab } from './tab';
+
+/** The page's host, for a fill: https only, or this computer itself. */
+function hostOf(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    const local = /^(localhost|127(\.\d{1,3}){3}|\[::1\])$/i.test(parsed.hostname);
+    return parsed.protocol === 'https:' || local ? parsed.hostname.toLowerCase() : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * The agent's browser tools (ADR 0014, "What the agent gets"). Every action
@@ -211,6 +228,157 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
     if (decision === 'allow-always' && kind === 'site') await service.grantSite(site);
   };
 
+  /**
+   * Fill a secret field from Passwords (ADR 0025). Only on the item's own site
+   * (the field's frame included), only after the person says yes (unless they
+   * chose "Always" for that item), and the value goes straight from the
+   * gateway into the page: the model is told that it happened, never what.
+   * Returns undefined when there's nothing saved to offer (the person types it).
+   */
+  const fillSaved = async (
+    tab: Tab,
+    target: Locator,
+    element: string,
+    secret: SecretKind,
+    itemId: string | undefined,
+  ): Promise<Outcome | undefined> => {
+    const passwords = service.passwords;
+    if (!passwords || secret === 'identity') return undefined;
+    const frameUrl = await target
+      .elementHandle({ timeout: 2_000 })
+      .then((h) => h?.ownerFrame())
+      .then((f) => f?.url())
+      .catch(() => undefined);
+    const host = hostOf(frameUrl ?? tab.page.url());
+    const topHost = hostOf(tab.page.url());
+    // A sign-in box from another site inside this page is never filled.
+    if (!host || host !== topHost) return undefined;
+    const hints = await target
+      .evaluate((el: { getAttribute(n: string): string | null }) =>
+        [
+          el.getAttribute('autocomplete'),
+          el.getAttribute('name'),
+          el.getAttribute('id'),
+          el.getAttribute('aria-label'),
+          el.getAttribute('placeholder'),
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase(),
+      )
+      .catch(() => '');
+    const want: 'password' | 'totp' | 'cardNumber' | 'cvv' | 'expiry' | 'cardholder' =
+      secret === 'payment'
+        ? /cvc|cvv|csc|security code/.test(hints)
+          ? 'cvv'
+          : /exp/.test(hints) || /expir/.test(element.toLowerCase())
+            ? 'expiry'
+            : /name/.test(hints)
+              ? 'cardholder'
+              : 'cardNumber'
+        : /one-time-code|otp|2fa|verification|totp|\bcode\b/.test(hints) ||
+            /code/.test(element.toLowerCase())
+          ? 'totp'
+          : 'password';
+    // Locked: the person unlocks it from the chat, and this carries on.
+    const show = (request: VaultRequest) => ctx.append({ type: 'vault.request', request });
+    if (!(await passwords.ensureOpen(show, ctx.signal)))
+      return {
+        label: `Passwords stayed locked`,
+        text: 'The user’s Passwords is locked and wasn’t unlocked. Ask them to unlock it, or hand the field to them.',
+      };
+    let chosen = itemId;
+    if (!chosen) {
+      const matches = await (
+        secret === 'payment' ? passwords.cards() : passwords.matching(host)
+      ).catch(() => []);
+      if (!matches.length) return undefined;
+      if (matches.length > 1)
+        return {
+          label: `Found ${matches.length} saved items for ${host}`,
+          text: `The user has ${matches.length} saved items for ${host}: ${matches.map((m) => `“${m.title}”${m.subtitle ? ` (${m.subtitle})` : ''} id=${m.id}`).join('; ')}. Call browser_type again with \`item\` set to the right one, or ask the user which.`,
+        };
+      chosen = matches[0]?.id;
+    }
+    if (!chosen) return undefined;
+    let policy: { ask: boolean; title: string; site: string };
+    try {
+      policy = await passwords.fillPolicy({ itemId: chosen, host, want });
+    } catch (error) {
+      return {
+        label: `Didn’t fill “${element}”`,
+        text: `${(error as Error).message} Hand the field to the user instead, or ask them.`,
+      };
+    }
+    const what =
+      want === 'totp'
+        ? 'the one-time code'
+        : want === 'cvv'
+          ? 'the security code'
+          : want === 'cardNumber'
+            ? 'the card number'
+            : want === 'expiry'
+              ? 'the expiry date'
+              : want === 'cardholder'
+                ? 'the name on the card'
+                : 'the password';
+    if (policy.ask) {
+      const box = await tab.boxOf(target);
+      const picture = await tab.thumbnail(box);
+      const shot = await service.saveShot(conversationId, picture?.jpeg);
+      const decision = await ctx.ask({
+        toolName: 'browser_fill',
+        input: { site: policy.site, item: policy.title, field: want },
+        summary: `fill ${what} for “${policy.title}” on ${policy.site}`,
+        browser: {
+          kind: 'fill',
+          site: policy.site,
+          url: tab.page.url(),
+          title: await tab.page.title().catch(() => ''),
+          action: `Fill ${what} for “${policy.title}”`,
+          box: picture?.box,
+          shot,
+        },
+      });
+      if (decision === 'deny')
+        return {
+          label: `You didn’t fill “${element}”`,
+          text: 'The user doesn’t want Conch to fill that from their passwords. Ask them how they’d like to continue.',
+        };
+      if (decision === 'allow-always') await passwords.allowAgent(chosen).catch(() => undefined);
+    }
+    const value = await passwords.fillValue({ itemId: chosen, host, want }).catch((e: Error) => e);
+    if (value instanceof Error)
+      return {
+        label: `Couldn’t fill “${element}”`,
+        text: `${value.message} Hand the field to the user instead.`,
+      };
+    await target.fill(value);
+    // The account name goes in the same form, if that box is empty.
+    if (want === 'password') {
+      const username = target
+        .locator('xpath=ancestor::form[1]')
+        .locator(
+          'input[autocomplete="username"], input[type="email"], input[name*="user" i], input[name*="email" i], input[name*="login" i], input[id*="user" i], input[id*="email" i]',
+        )
+        .first();
+      const empty = await username.inputValue({ timeout: 1_000 }).then(
+        (v) => v === '',
+        () => false,
+      );
+      if (empty) {
+        const user = await passwords
+          .fillValue({ itemId: chosen, host, want: 'username' })
+          .catch(() => undefined);
+        if (user) await username.fill(user).catch(() => undefined);
+      }
+    }
+    return {
+      label: `Filled ${what} from Passwords`,
+      text: `Conch filled ${what} from the user’s saved item “${policy.title}” (you never see it). Carry on.\n${await pageText(tab)}`,
+    };
+  };
+
   /** You type the secret yourself: the agent waits, then carries on. */
   const handoff = async (tab: Tab, reason: string): Promise<'done' | 'cancelled'> => {
     const handoffId = newId('handoff');
@@ -379,17 +547,28 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
     element: typeof Element;
     text: z.ZodString;
     submit: z.ZodOptional<z.ZodBoolean>;
+    item: z.ZodOptional<z.ZodString>;
   }> = {
     name: 'browser_type',
     description:
-      'Type into a field by its ref (replacing what’s there). Set `submit` to press Enter after. Never use it for passwords, codes or card numbers: Conch hands those fields to the user.',
+      'Type into a field by its ref (replacing what’s there). Set `submit` to press Enter after. On a password, one-time code or card field, Conch fills it from the user’s saved Passwords (after asking them) or hands the field to the user; you never see or type those values yourself.',
     input: {
       ref: Ref,
       element: Element,
-      text: z.string().max(5_000).describe('What to type.'),
+      text: z
+        .string()
+        .max(5_000)
+        .describe('What to type. For a password or code field, leave it empty: Conch fills it.'),
       submit: z.boolean().optional().describe('Press Enter afterwards (e.g. to search).'),
+      item: z
+        .string()
+        .max(300)
+        .optional()
+        .describe(
+          'For a password, code or card field: the id of the saved item to fill it from (from passwords_find). Omit it and Conch picks the one saved for this site.',
+        ),
     },
-    run: ({ ref, element, text, submit }) =>
+    run: ({ ref, element, text, submit, item }) =>
       step(
         'type',
         { running: `Typing in “${element}”`, done: `Typed in “${element}”` },
@@ -398,6 +577,9 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
           const target = locate(tab, ref);
           const secret = await secretOf(target);
           if (secret) {
+            // A saved password for this site: Conch fills it, with the person's OK.
+            const filled = await fillSaved(tab, target, element, secret, item);
+            if (filled) return filled;
             // Secrets never pass through the model: the user types this one.
             const outcome = await handoff(
               tab,
@@ -643,11 +825,163 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
       ),
   };
 
+  const passkey: HostTool<{
+    action: z.ZodEnum<{ sign_in: 'sign_in'; save: 'save' }>;
+    item: z.ZodOptional<z.ZodString>;
+  }> = {
+    name: 'browser_passkey',
+    description:
+      'Use a passkey on the page that’s open. `sign_in`: Conch holds the user’s saved passkey for this site (after asking them); then click the site’s “Sign in with a passkey” button and Conch answers it. `save`: when the site offers to create a passkey, call this first, then click its button; the new passkey is kept in the user’s Passwords. You never see the key.',
+    input: {
+      action: z
+        .enum(['sign_in', 'save'])
+        .describe('Sign in with a saved passkey, or save a new one.'),
+      item: z
+        .string()
+        .max(300)
+        .optional()
+        .describe('For sign_in with several saved: the item id Conch listed.'),
+    },
+    run: ({ action, item }) =>
+      step(
+        'type',
+        action === 'sign_in'
+          ? { running: 'Getting your passkey ready', done: 'Passkey ready' }
+          : { running: 'Getting ready to save a passkey', done: 'Ready to save a passkey' },
+        async (tab) => {
+          const passwords = service.passwords;
+          if (!passwords?.passkeysFor || !passwords.passkeyCredential || !passwords.savePasskey)
+            throw new Refusal('Passkeys aren’t available here. Use the password instead.');
+          const host = hostOf(tab.page.url());
+          if (!host)
+            throw new Refusal('Passkeys only work on a secure (https) page. Open the site first.');
+          const show = (request: VaultRequest) => ctx.append({ type: 'vault.request', request });
+          if (!(await passwords.ensureOpen(show, ctx.signal)))
+            return {
+              label: 'Passwords stayed locked',
+              text: 'The user’s Passwords is locked and wasn’t unlocked. Ask them to unlock it, or to sign in themselves.',
+            };
+          const askFill = async (title: string, site: string, what: string) => {
+            const picture = await tab.thumbnail();
+            const shot = await service.saveShot(conversationId, picture?.jpeg);
+            return ctx.ask({
+              toolName: 'browser_fill',
+              input: { site, item: title, field: 'passkey' },
+              summary: `${what.charAt(0).toLowerCase()}${what.slice(1)} on ${site}`,
+              browser: {
+                kind: 'fill',
+                site,
+                url: tab.page.url(),
+                title: await tab.page.title().catch(() => ''),
+                action: what,
+                shot,
+              },
+            });
+          };
+          if (action === 'save') {
+            const decision = await askFill(
+              host,
+              host,
+              `Make a passkey for ${host} and keep it in Passwords`,
+            );
+            if (decision === 'deny')
+              return {
+                label: 'You didn’t save a passkey',
+                text: 'The user doesn’t want a passkey made here. Carry on without it.',
+              };
+            // Said in the chat once the site has made it (after this step ended).
+            const note = (status: 'done' | 'error', label: string) =>
+              ctx.append({
+                type: 'browser.step',
+                step: {
+                  stepId: newId('step'),
+                  status,
+                  action: 'type',
+                  label,
+                  url: tab.page.url(),
+                  title: '',
+                  by: 'agent',
+                },
+              });
+            await armCreate(tab.page, (credential) => {
+              void passwords.savePasskey?.(credential, host).then(
+                (saved) =>
+                  note(
+                    'done',
+                    saved.created
+                      ? `Saved a passkey for ${host} in Passwords`
+                      : `Saved a passkey for ${host} to “${saved.title}”`,
+                  ),
+                () => note('error', `Couldn’t save the passkey for ${host}`),
+              );
+            });
+            return {
+              label: `Ready to save a passkey for ${host}`,
+              text: `Conch’s browser will answer ${host}’s next “create a passkey” for the next 3 minutes and keep the passkey in the user’s Passwords. Now click the site’s button to create it.`,
+            };
+          }
+          const saved = await passwords.passkeysFor(host).catch(() => []);
+          const chosen = item ? saved.filter((p) => p.itemId === item) : saved;
+          if (!chosen.length)
+            return {
+              label: `No passkey saved for ${host}`,
+              text: `The user has no passkey saved for ${host}. Sign in with the password instead (browser_type fills it), or ask the user.`,
+            };
+          if (chosen.length > 1)
+            return {
+              label: `Found ${chosen.length} passkeys for ${host}`,
+              text: `The user has ${chosen.length} passkeys for ${host}: ${chosen.map((p) => `“${p.title}”${p.userName ? ` (${p.userName})` : ''} id=${p.itemId}`).join('; ')}. Call browser_passkey again with \`item\` set to the right one, or ask the user which.`,
+            };
+          const pick = chosen[0];
+          if (!pick) throw new Refusal('No passkey to use.');
+          let policy: { ask: boolean; title: string; site: string };
+          try {
+            policy = (await passwords.passkeyPolicy?.(pick.itemId, pick.passkeyId, host)) ?? {
+              ask: true,
+              title: pick.title,
+              site: host,
+            };
+          } catch (error) {
+            return { label: 'Didn’t use the passkey', text: (error as Error).message };
+          }
+          if (policy.ask) {
+            const decision = await askFill(
+              policy.title,
+              policy.site,
+              `Sign in with the passkey for “${policy.title}”`,
+            );
+            if (decision === 'deny')
+              return {
+                label: 'You didn’t use the passkey',
+                text: 'The user doesn’t want Conch to use that passkey. Ask them how they’d like to sign in.',
+              };
+            if (decision === 'allow-always')
+              await passwords.allowAgent(pick.itemId).catch(() => undefined);
+          }
+          const credential = await passwords
+            .passkeyCredential(pick.itemId, pick.passkeyId, host)
+            .catch((e: Error) => e);
+          if (credential instanceof Error)
+            return { label: 'Couldn’t use the passkey', text: credential.message };
+          await armSignIn(tab.page, credential, (signCount) => {
+            void passwords
+              .passkeyUsed?.(pick.itemId, credential.credentialId, signCount)
+              .catch(() => undefined);
+          });
+          return {
+            label: `Passkey for “${policy.title}” ready`,
+            text: `Conch’s browser holds the passkey for “${policy.title}” for the next 3 minutes, for ${policy.site} only (you never see it). Now click the site’s passkey sign-in button (“Sign in with a passkey”, or the sign-in button if it offers one); Conch answers it.`,
+          };
+        },
+      ),
+  };
+
   const all = [
     open,
     read,
     click,
     type,
+    passkey,
     press,
     select,
     scroll,

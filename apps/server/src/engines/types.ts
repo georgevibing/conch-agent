@@ -136,6 +136,8 @@ export interface TurnInput {
   images?: TurnImage[];
   /** Folders holding this conversation's attachments, for engines with `attachments.files`. */
   readableDirs?: string[];
+  /** Files and folders the engine's own tools must never touch (Passwords and Conch's keys). */
+  protectedPaths?: string[];
   /** Engine-native session to continue, from a previous turn's `session` event. */
   resumeId?: string;
   /** Appended to the engine's own system prompt. */

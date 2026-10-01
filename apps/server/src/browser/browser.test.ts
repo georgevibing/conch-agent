@@ -180,6 +180,108 @@ describe.skipIf(!hasBrowser)('the browser, for real', () => {
   );
 
   it(
+    'fills a saved password for the site, with your OK, and the model never sees it',
+    { timeout: 90_000 },
+    async () => {
+      const { VaultService } = await import('../vault/service');
+      const vault = new VaultService({
+        home: await mkdtemp(join(tmpdir(), 'conch-fill-')),
+        keystore: 'file',
+      });
+      browser.passwords = vault;
+      const saved = await vault.create({
+        type: 'login',
+        title: 'Test site',
+        fields: [
+          { label: 'Username', kind: 'text', role: 'username', value: 'ada@example.com' },
+          { label: 'Password', kind: 'secret', role: 'password', value: 'river-otter-copper-42!' },
+        ],
+        urls: [origin],
+        tags: [],
+        notes: '',
+        favorite: false,
+        agentAccess: 'ask',
+        allowedSites: [],
+      });
+      try {
+        // Said no: nothing is filled, and the model is told so.
+        const no = harness(['deny'], 'default', 'conv_fill_no');
+        let text = await no.call('browser_open', { url: `${origin}/login` });
+        const declined = await no.call('browser_type', {
+          ref: refOf(text, /textbox "Password"/),
+          element: 'Password',
+          text: '',
+        });
+        expect(no.asked[0]?.browser).toMatchObject({
+          kind: 'fill',
+          action: 'Fill the password for “Test site”',
+        });
+        expect(declined).toMatch(/doesn’t want Conch to fill that/);
+        expect(
+          await browser
+            .tabIfOpen('conv_fill_no')
+            ?.page.locator('input[type=password]')
+            .inputValue(),
+        ).toBe('hunter2');
+
+        // Said yes: the password and the username go straight into the page.
+        const yes = harness(['allow'], 'default', 'conv_fill_yes');
+        text = await yes.call('browser_open', { url: `${origin}/login` });
+        const filled = await yes.call('browser_type', {
+          ref: refOf(text, /textbox "Password"/),
+          element: 'Password',
+          text: '',
+        });
+        expect(filled).toContain(
+          'Conch filled the password from the user’s saved item “Test site”',
+        );
+        expect(filled).not.toContain('river-otter');
+        const page = browser.tabIfOpen('conv_fill_yes')?.page;
+        expect(await page?.locator('input[type=password]').inputValue()).toBe(
+          'river-otter-copper-42!',
+        );
+        expect(await page?.locator('input[name=email]').inputValue()).toBe('ada@example.com');
+        expect((await vault.detail(saved.id)).usedAt).toBeDefined();
+
+        // Saved for another site: never offered here; the person types it.
+        await vault.update(saved.id, {
+          type: 'login',
+          title: 'Test site',
+          fields: (await vault.detail(saved.id)).fields.map((f) => ({
+            id: f.id,
+            label: f.label,
+            kind: f.kind,
+            ...(f.role && { role: f.role }),
+          })),
+          urls: ['https://example.com'],
+          tags: [],
+          notes: '',
+          favorite: false,
+          agentAccess: 'ask',
+          allowedSites: [],
+        });
+        const other = harness([], 'default', 'conv_fill_other');
+        text = await other.call('browser_open', { url: `${origin}/login` });
+        const typing = other.call('browser_type', {
+          ref: refOf(text, /textbox "Password"/),
+          element: 'Password',
+          text: '',
+        });
+        await expect
+          .poll(() =>
+            other.events.some((e) => e.type === 'browser.handoff' && e.handoff.state === 'waiting'),
+          )
+          .toBe(true);
+        expect(other.asked).toHaveLength(0);
+        browser.tabIfOpen('conv_fill_other')?.setControl('idle');
+        await typing;
+      } finally {
+        browser.passwords = undefined;
+      }
+    },
+  );
+
+  it(
     'keeps the browser away from Conch itself, even with local apps on',
     { timeout: 60_000 },
     async () => {

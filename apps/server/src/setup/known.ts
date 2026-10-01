@@ -262,6 +262,101 @@ list.push(
     opens: '1password-app',
   },
   {
+    id: 'bw',
+    name: 'The Bitwarden command-line tool',
+    short: 'Bitwarden CLI',
+    find: () => findExecutable('bw'),
+    install: {
+      win32: [winget('Bitwarden.CLI'), npmGlobal('@bitwarden/cli')],
+      darwin: [
+        { manager: 'brew', args: ['install', 'bitwarden-cli'] },
+        npmGlobal('@bitwarden/cli'),
+      ],
+      linux: npmGlobal('@bitwarden/cli'),
+    },
+    ...updatable({ winget: 'Bitwarden.CLI', brew: 'bitwarden-cli', npm: '@bitwarden/cli' }),
+    download: {
+      win32: 'https://bitwarden.com/help/cli/',
+      darwin: 'https://bitwarden.com/help/cli/',
+      linux: 'https://bitwarden.com/help/cli/',
+    },
+  },
+  {
+    id: 'keepassxc',
+    name: 'KeePassXC',
+    short: 'KeePassXC',
+    // The command line comes inside the app on macOS and Windows.
+    find: () =>
+      findExecutable('keepassxc-cli', {
+        extraDirs: [
+          '/Applications/KeePassXC.app/Contents/MacOS',
+          join(homedir(), 'Applications', 'KeePassXC.app', 'Contents', 'MacOS'),
+          'C:\\Program Files\\KeePassXC',
+        ],
+      }),
+    install: {
+      win32: winget('KeePassXCTeam.KeePassXC'),
+      darwin: { manager: 'brew', args: ['install', '--cask', 'keepassxc'] },
+    },
+    ...updatable({ winget: 'KeePassXCTeam.KeePassXC', brew: 'keepassxc', cask: true }),
+    // Linux packages need sudo.
+    download: {
+      win32: 'https://keepassxc.org/download/',
+      darwin: 'https://keepassxc.org/download/',
+      linux: 'https://keepassxc.org/download/#linux',
+    },
+  },
+  {
+    id: 'pass-cli',
+    name: 'The Proton Pass command-line tool',
+    short: 'Proton Pass CLI',
+    find: () => findExecutable('pass-cli', { extraDirs: [join(homedir(), '.local', 'bin')] }),
+    install: {
+      darwin: { manager: 'brew', args: ['install', 'protonpass/tap/pass-cli'] },
+    },
+    ...updatable({ brew: 'protonpass/tap/pass-cli' }),
+    // Elsewhere Proton's own installer script: shown, not piped into a shell by Conch.
+    download: {
+      win32: 'https://proton.me/support/pass-cli',
+      darwin: 'https://proton.me/support/pass-cli',
+      linux: 'https://proton.me/support/pass-cli',
+    },
+  },
+  {
+    id: 'dcli',
+    name: 'The Dashlane command-line tool',
+    short: 'Dashlane CLI',
+    find: () => findExecutable('dcli'),
+    install: {
+      darwin: { manager: 'brew', args: ['install', 'dashlane/tap/dashlane-cli'] },
+    },
+    ...updatable({ brew: 'dashlane/tap/dashlane-cli' }),
+    // Dashlane ships signed binaries for Windows and Linux on its releases page.
+    download: {
+      win32: 'https://cli.dashlane.com/install',
+      darwin: 'https://cli.dashlane.com/install',
+      linux: 'https://cli.dashlane.com/install',
+    },
+  },
+  {
+    id: 'keeper',
+    name: 'Keeper Commander',
+    short: 'Keeper Commander',
+    find: () =>
+      findExecutable('keeper', {
+        extraDirs: [
+          join(homedir(), '.local', 'bin'),
+          '/Applications/Keeper Commander.app/Contents/MacOS',
+        ],
+      }),
+    // Keeper ships it as a Python package and signed installers, not through a package manager Conch drives.
+    download: {
+      win32: 'https://docs.keeper.io/en/keeperpam/commander-cli/commander-installation-setup',
+      darwin: 'https://docs.keeper.io/en/keeperpam/commander-cli/commander-installation-setup',
+      linux: 'https://docs.keeper.io/en/keeperpam/commander-cli/commander-installation-setup',
+    },
+  },
+  {
     id: 'uv',
     name: 'uv (runs Python tools)',
     short: 'uv',

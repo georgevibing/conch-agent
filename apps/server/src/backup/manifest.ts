@@ -185,6 +185,18 @@ export const RULES: readonly BackupRule[] = [
     why: 'Pictures of what the agent saw while browsing, shown in the chat.',
   },
 
+  {
+    match: 'vault/sources.json',
+    class: 'kept',
+    group: 'settings',
+    why: 'Which password managers Passwords shows, and where your KeePassXC database is. No secrets.',
+  },
+  {
+    match: 'vault/device.*',
+    class: 'derived',
+    why: 'This computer’s own key to your passwords. It never leaves this computer; a backup carries the vault’s key instead.',
+  },
+
   // ── Secret: only with a passphrase ─────────────────────────────────────
   {
     match: 'secrets.json',
@@ -203,6 +215,18 @@ export const RULES: readonly BackupRule[] = [
     class: 'secret',
     group: 'secrets',
     why: 'Your bots’ keys.',
+  },
+  {
+    match: 'vault/vault.json',
+    class: 'secret',
+    group: 'secrets',
+    why: 'Your passwords, encrypted. In a backup only with a passphrase, with the key that opens them (`vault/key.json`).',
+  },
+  {
+    match: 'vault/key.json',
+    class: 'secret',
+    group: 'secrets',
+    why: 'The key to your passwords, only inside a passphrase-locked backup; a restore moves it into this computer’s keychain and deletes the file.',
   },
   {
     match: 'access.json',

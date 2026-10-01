@@ -6,6 +6,7 @@ import type { HealArea } from '@conch/protocol';
 import { z } from 'zod';
 
 import { writeFileAtomic, writeJson } from './fs';
+import { openIfSealed, sealerFor } from './sealed';
 
 /**
  * Say what Conch fixed on its own, in one plain sentence (`Healed.note`).
@@ -205,14 +206,22 @@ export async function readStore<S extends z.ZodType>(
   }
   let raw: unknown;
   let parsedJson = true;
+  // A sealed key file is opened first; one written in the clear (an older
+  // Conch, a restored backup) is sealed as soon as it reads cleanly.
+  let toSeal = false;
   try {
-    raw = JSON.parse(bytes.toString('utf8'));
+    const opened = await openIfSealed(path, bytes);
+    toSeal = opened.wasPlain && sealerFor(path) !== undefined;
+    raw = JSON.parse(opened.plain.toString('utf8'));
   } catch {
     parsedJson = false;
   }
   if (parsedJson) {
     const parsed = schema.safeParse(raw);
-    if (parsed.success) return { value: parsed.data, state: 'read' };
+    if (parsed.success) {
+      if (toSeal) await writeJson(path, parsed.data).catch(() => undefined);
+      return { value: parsed.data, state: 'read' };
+    }
   }
 
   let value: z.output<S> | undefined;

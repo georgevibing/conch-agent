@@ -164,7 +164,8 @@ export type BrowserHandoff = z.infer<typeof BrowserHandoff>;
 
 /** Extra detail on a `permission.requested` for the browser, so the prompt can show the site and the control. */
 export const BrowserPermission = z.object({
-  kind: z.enum(['site', 'high-stakes', 'download']),
+  /** `fill`: Conch types a saved password into the page (ADR 0025); the agent never sees it. */
+  kind: z.enum(['site', 'high-stakes', 'download', 'fill']),
   site: z.string(),
   url: z.string(),
   title: z.string(),

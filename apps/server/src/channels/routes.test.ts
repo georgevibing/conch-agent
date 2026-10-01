@@ -87,11 +87,11 @@ describe('channel routes', () => {
     expect(res.body).not.toContain(MockTelegram.TOKEN.split(':')[1]);
     const list = await app.inject('/api/channels');
     expect(list.body).not.toContain(MockTelegram.TOKEN.split(':')[1]);
-    // The settings file has no key either; the secrets file does.
+    // The settings file has no key either; the secrets file has it sealed (ADR 0025).
     expect(await readFile(join(home, 'channels.json'), 'utf8')).not.toContain(MockTelegram.TOKEN);
-    expect(await readFile(join(home, 'channels.secrets.json'), 'utf8')).toContain(
-      MockTelegram.TOKEN,
-    );
+    const sealed = await readFile(join(home, 'channels.secrets.json'), 'utf8');
+    expect(sealed).toMatch(/^\{"conch-sealed":1/);
+    expect(sealed).not.toContain(MockTelegram.TOKEN.split(':')[1]);
   });
 
   it('from another device, opening a new way in needs a fresh sign-in', async () => {

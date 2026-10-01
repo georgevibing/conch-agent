@@ -1,6 +1,7 @@
 import type {
   Attachment,
   BrowserPermission,
+  VaultPermission,
   ConversationEvent,
   ConversationEventInput,
   ConversationStatus,
@@ -81,6 +82,8 @@ export interface AskRequest {
   /** One line, e.g. "use booking.com". */
   summary: string;
   browser?: BrowserPermission;
+  /** Reading or filling something from Passwords (ADR 0025). */
+  vault?: VaultPermission;
 }
 
 /** Per-turn additions used by routines (and future automations). */
@@ -340,6 +343,10 @@ export class ConversationManager {
       integrations?: TurnIntegrationsProvider;
       /** Where uploaded files and long pastes are kept (ADR 0017). */
       attachments?: AttachmentStore;
+      /** Takes saved secrets out of what's logged and shown (ADR 0025). */
+      redact?: (text: string) => string;
+      /** Where Passwords and Conch's keys live: never for the engine's own file tools. */
+      protectedPaths?: string[];
     },
   ) {}
 
@@ -773,6 +780,7 @@ export class ConversationManager {
           input: request.input,
           summary: request.summary,
           browser: request.browser,
+          ...(request.vault && { vault: request.vault }),
         });
         this.#setStatus(live, 'awaiting-permission');
       });
@@ -911,6 +919,7 @@ export class ConversationManager {
             prompt: missed ? `${missed}\n\n${prompt}` : prompt,
             ...(attached?.images.length && { images: attached.images }),
             ...(readableDirs.length && { readableDirs }),
+            ...(this.deps.protectedPaths?.length && { protectedPaths: this.deps.protectedPaths }),
             resumeId: session?.resumeId,
             systemAppend: [
               buildSystemAppend({
@@ -1164,6 +1173,13 @@ export class ConversationManager {
 
   /** Append to the log and broadcast — or, if `defer` is given, collect for later broadcast. */
   #append(live: Live, input: ConversationEventInput, defer?: ConversationEvent[]) {
+    // A saved password that turns up in a tool's output or a reply is never logged or shown.
+    const redact = this.deps.redact;
+    if (redact) {
+      if (input.type === 'tool.finished' && input.output)
+        input = { ...input, output: redact(input.output) };
+      else if (input.type === 'assistant.delta') input = { ...input, delta: redact(input.delta) };
+    }
     const event = {
       ...input,
       conversationId: live.record.id,

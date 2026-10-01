@@ -48,6 +48,14 @@ const Env = z.object({
    * Unset: `auto`, except with the mock engine.
    */
   CONCH_UPDATE_CHECKS: z.enum(['auto', 'off']).optional(),
+  /**
+   * Where the key that opens your passwords is kept: `auto` uses this
+   * computer's keychain (macOS Keychain, Windows DPAPI, the Linux Secret
+   * Service) when it has one; `file` a 0600 file beside the vault. Unset:
+   * `auto`, except with the mock engine, whose test runs mustn't touch your
+   * keychain.
+   */
+  CONCH_VAULT_KEYSTORE: z.enum(['auto', 'file']).optional(),
   /** Built web app to serve at `/`. */
   CONCH_WEB_DIST: z.string().optional(),
   CONCH_OPEN: z

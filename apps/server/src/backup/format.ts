@@ -40,6 +40,7 @@ import {
   type BackupGroup,
   type BackupRule,
 } from './manifest';
+import { openIfSealed } from '../lib/sealed';
 import { safeJoinPath, validRelPath } from './paths';
 
 export const FORMAT = 'conch-backup';
@@ -173,14 +174,31 @@ export interface WriteOptions {
   /** What goes in; `secrets` is decided by `secrets` below. */
   groups: BackupGroup[];
   secrets?: { mode: 'passphrase'; passphrase: string } | { mode: 'local' };
+  /**
+   * Secret files that only exist for a passphrase-locked backup (the key to
+   * your passwords, `vault/key.json`): never on disk, never in a local copy.
+   */
+  extraSecrets?: () => Promise<{ path: string; data: Buffer }[]>;
   conchVersion: string;
   now?: number;
 }
 
-/** Read a file under `home` as it will go in a backup, or undefined if it can't go in. */
-async function contentOf(home: string, path: string): Promise<Buffer | undefined> {
-  const bytes = await readFile(join(home, ...path.split('/'))).catch(() => undefined);
+/**
+ * Read a file under `home` as it will go in a backup, or undefined if it can't
+ * go in. `unseal` opens Conch's sealed key files (`lib/sealed.ts`): their seal
+ * is this computer's own, so a passphrase-locked backup carries them open
+ * inside its encrypted part, and they're sealed again wherever they're restored.
+ */
+async function contentOf(
+  home: string,
+  path: string,
+  options: { unseal?: boolean } = {},
+): Promise<Buffer | undefined> {
+  const full = join(home, ...path.split('/'));
+  let bytes: Buffer | undefined = await readFile(full).catch(() => undefined);
   if (!bytes || bytes.length > BACKUP_LIMITS.maxFileBytes) return undefined;
+  if (options.unseal) bytes = (await openIfSealed(full, bytes).catch(() => undefined))?.plain;
+  if (!bytes) return undefined;
   return path === 'access.json' ? credentialsOnly(bytes) : bytes;
 }
 
@@ -263,8 +281,12 @@ export async function writeBackup(
     if (lock) {
       const files: { path: string; data: string }[] = [];
       for (const file of secret) {
-        const data = await contentOf(home, file.path);
+        const data = await contentOf(home, file.path, { unseal: true });
         if (data) files.push({ path: file.path, data: data.toString('base64') });
+      }
+      for (const extra of (await options.extraSecrets?.()) ?? []) {
+        if (!validRelPath(extra.path) || files.some((f) => f.path === extra.path)) continue;
+        files.push({ path: extra.path, data: extra.data.toString('base64') });
       }
       const plain = Buffer.from(JSON.stringify({ files }));
       const sealed = encrypt(lock.key, lock.lock, plain, associatedData(headerBytes, sealBytes));
@@ -518,6 +540,8 @@ export async function extractBackup(path: string, options: ExtractOptions): Prom
     for (const file of payload.files) {
       if (!validRelPath(file.path) || classify(file.path)?.class !== 'secret') throw unsafe();
       const target = safeJoinPath(files, file.path);
+      // Secrets in a folder (`vault/`) need it made first.
+      await mkdir(dirname(target), { recursive: true, mode: 0o700 });
       const handle = await open(target, 'wx', 0o600).catch(() => {
         throw new BackupError('damaged', DAMAGED);
       });

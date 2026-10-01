@@ -97,6 +97,8 @@ export interface BackupDeps {
   now?: () => number;
   /** Free bytes on the disk holding `dir`, or undefined when that can't be told. */
   freeBytes?: (dir: string) => Promise<number | undefined>;
+  /** Secret files made only for a passphrase-locked backup (the key to your passwords). */
+  extraSecrets?: () => Promise<{ path: string; data: Buffer }[]>;
 }
 
 async function diskFree(dir: string): Promise<number | undefined> {
@@ -384,6 +386,8 @@ export class BackupService {
       kind,
       groups: options.groups,
       secrets: options.secrets,
+      ...(options.secrets?.mode === 'passphrase' &&
+        this.deps.extraSecrets && { extraSecrets: this.deps.extraSecrets }),
       conchVersion: this.deps.conchVersion,
       now,
     });

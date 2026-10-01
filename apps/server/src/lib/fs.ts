@@ -3,6 +3,8 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { platform } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 
+import { sealerFor } from './sealed';
+
 /**
  * `join(dir, name)` for a name that must be a plain file name. Throws on
  * anything that could escape `dir` (`..`, slashes, NUL) — the last line of
@@ -58,8 +60,12 @@ export async function readJson<T>(path: string): Promise<T | undefined> {
   }
 }
 
-export function writeJson(path: string, value: unknown): Promise<void> {
-  return writeFileAtomic(path, `${JSON.stringify(value, null, 2)}\n`);
+export async function writeJson(path: string, value: unknown): Promise<void> {
+  const text = `${JSON.stringify(value, null, 2)}\n`;
+  // Conch's own key files are sealed under this computer's device key (`sealed.ts`).
+  const sealer = sealerFor(path);
+  if (sealer) return writeFileAtomic(path, await sealer.seal(basename(path), Buffer.from(text)));
+  return writeFileAtomic(path, text);
 }
 
 /** Serialises async operations so read-modify-write cycles never interleave. */
