@@ -534,6 +534,11 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('healed'), note: HealNote }),
   /** A backup was made, kept or let go, or a restore got ready: refetch the list. */
   z.object({ type: z.literal('backups.changed') }),
+  /**
+   * Devices changed: one signed in, was approved or removed, or asked to be
+   * approved (`waiting` counts those). Refetch Settings → Security.
+   */
+  z.object({ type: z.literal('access.changed'), waiting: z.number().int().min(0) }),
   z.object({ type: z.literal('pong') }),
   z.object({
     type: z.literal('error'),

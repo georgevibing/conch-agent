@@ -23,6 +23,15 @@ export type AccessMethod = z.infer<typeof AccessMethod>;
 export const Exposure = z.enum(['local', 'network']);
 export type Exposure = z.infer<typeof Exposure>;
 
+/** This browser signed in, and is waiting for its approval. */
+export const WaitingApproval = z.object({
+  code: z.string(),
+  device: z.string(),
+  expiresAt: z.number(),
+  state: z.enum(['waiting', 'rejected']),
+});
+export type WaitingApproval = z.infer<typeof WaitingApproval>;
+
 /** Public: answered for everyone so the web app knows whether to ask for sign-in. */
 export const AuthStatus = z.object({
   method: AccessMethod,
@@ -38,6 +47,8 @@ export const AuthStatus = z.object({
    * Conch never guesses "no sign-in" instead: that would let anyone in.
    */
   locked: z.boolean().optional(),
+  /** Signed in, but this device is waiting to be approved (see `DeviceRequest`). */
+  approval: WaitingApproval.optional(),
 });
 export type AuthStatus = z.infer<typeof AuthStatus>;
 
@@ -107,6 +118,110 @@ export const SessionInfo = z.object({
 });
 export type SessionInfo = z.infer<typeof SessionInfo>;
 
+// ── Devices and approving new ones ─────────────────────────────────────────
+//
+// Every browser that signs in is remembered as a *device* (an HttpOnly cookie
+// the gateway knows only the hash of), so Settings → Security can show what
+// has used Conch. With **Approve new devices** on, a device seen for the first
+// time from somewhere other than this computer still needs the person's OK
+// after the right password or key: `pnpm conch devices approve <code>` in a
+// terminal on this computer, or Settings on this computer.
+
+export const DeviceKind = z.enum(['desktop', 'phone', 'tablet', 'other']);
+export type DeviceKind = z.infer<typeof DeviceKind>;
+
+/** How a device came to be approved. */
+export const ApprovedHow = z.enum([
+  /** Signed in on the computer running Conch. */
+  'this-computer',
+  /** `pnpm conch devices approve` in a terminal on the computer running Conch. */
+  'terminal',
+  /** Settings → Security on the computer running Conch. */
+  'settings',
+  /** A one-time sign-in link (the QR code), made by a device already allowed in. */
+  'link',
+  /** It was signed in when approval was turned on. */
+  'already-signed-in',
+]);
+export type ApprovedHow = z.infer<typeof ApprovedHow>;
+
+/** The approval code a waiting device shows, e.g. "K7M-Q2X". */
+export const APPROVAL_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+export const APPROVAL_CODE_LENGTH = 6;
+
+/** "k7m q2x", "K7MQ2X" and "K7M-Q2X" are all the same code. */
+export function normalizeApprovalCode(input: string): string {
+  return input.toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+export function formatApprovalCode(code: string): string {
+  const c = normalizeApprovalCode(code);
+  return c.length === APPROVAL_CODE_LENGTH ? `${c.slice(0, 3)}-${c.slice(3)}` : c;
+}
+
+/** A device waiting for the person's OK. */
+export const DeviceRequest = z.object({
+  /** Shown on the waiting device too, so the person approves the right one. */
+  code: z.string(),
+  deviceId: z.string(),
+  /** e.g. "Safari on iPhone", or "Scripts using “Work laptop”". */
+  device: z.string(),
+  kind: DeviceKind,
+  /** What it proved before asking: the password, or an access key (by name). */
+  via: z.enum(['password', 'key']),
+  keyName: z.string().optional(),
+  /** Where it connected from (an IP address), to help recognise it. */
+  address: z.string().optional(),
+  /** A script with an access key rather than a browser. */
+  script: z.boolean(),
+  createdAt: z.number(),
+  expiresAt: z.number(),
+  /** Turned down: the device is told, until the request runs out. */
+  rejected: z.boolean(),
+});
+export type DeviceRequest = z.infer<typeof DeviceRequest>;
+
+export const DeviceInfo = z.object({
+  id: z.string(),
+  name: z.string(),
+  kind: DeviceKind,
+  firstSeenAt: z.number(),
+  lastSeenAt: z.number(),
+  address: z.string().optional(),
+  /** Allowed in without asking again (always true in meaning while approval is off). */
+  approved: z.boolean(),
+  approvedAt: z.number().optional(),
+  approvedHow: ApprovedHow.optional(),
+  /** Signed in now (has a session that hasn't ended). */
+  signedIn: z.boolean(),
+  /** How it last signed in. */
+  via: SignInVia.optional(),
+  script: z.boolean(),
+  /** The device this page is open on. */
+  current: z.boolean(),
+});
+export type DeviceInfo = z.infer<typeof DeviceInfo>;
+
+/** An approved device nobody has used for this long is worth removing. */
+export const STALE_DEVICE_DAYS = 90;
+
+export function isStaleDevice(device: { lastSeenAt: number }, now = Date.now()): boolean {
+  return now - device.lastSeenAt > STALE_DEVICE_DAYS * 24 * 60 * 60 * 1000;
+}
+
+export const DeviceApproval = z.object({
+  on: z.boolean(),
+  /**
+   * This page is on the computer running Conch, so it may approve devices
+   * and turn approval off. Elsewhere, only the terminal there can.
+   */
+  here: z.boolean(),
+});
+export type DeviceApproval = z.infer<typeof DeviceApproval>;
+
+export const SetApprovalBody = z.object({ on: z.boolean() }).strict();
+export const RenameDeviceBody = z.object({ name: z.string().trim().min(1).max(64) }).strict();
+
 export const CheckLevel = z.enum(['ok', 'info', 'warn', 'danger']);
 export type CheckLevel = z.infer<typeof CheckLevel>;
 
@@ -125,6 +240,8 @@ export const CheckupPlace = z.enum([
   'models',
   /** The Channels page: who may talk to your assistant from Telegram, Discord or Slack. */
   'channels',
+  /** Settings › Security › Devices: what's signed in, what's waiting, and approving new ones. */
+  'devices',
 ]);
 export type CheckupPlace = z.infer<typeof CheckupPlace>;
 
@@ -182,6 +299,10 @@ export const AccessSettings = z.object({
   suggestedUsername: z.string(),
   keys: z.array(AccessKeyInfo),
   sessions: z.array(SessionInfo),
+  devices: z.array(DeviceInfo),
+  /** Devices waiting for approval, newest first. */
+  requests: z.array(DeviceRequest),
+  approval: DeviceApproval,
   checkup: z.array(CheckupItem),
   exposure: Exposure,
   port: z.number(),
@@ -277,8 +398,14 @@ function predictableCount(s: string): number {
   return count;
 }
 
+/** One of the most common passwords (or that with its separators taken out). */
+export function isCommonPassword(password: string): boolean {
+  const lower = password.toLowerCase();
+  return BLOCKLIST.has(lower) || BLOCKLIST.has(lower.replace(/[\s\-_.]/g, ''));
+}
+
 /** "abcabcabc…" — the whole thing is one short chunk repeated. */
-function isRepetition(s: string): boolean {
+export function isRepetition(s: string): boolean {
   const lower = s.toLowerCase();
   for (let size = 1; size <= Math.min(8, lower.length / 2); size++) {
     if (
