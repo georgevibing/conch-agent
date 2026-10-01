@@ -34,11 +34,13 @@ import {
   WandSparkles,
   WifiOff,
   Wrench,
+  House,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
 import { useUi, type SettingsTab } from '../../app/ui';
+import { COME_HOME_FOCUS } from '../import/api';
 import { doctorApi } from '../health/api';
 import { DEVICES_FOCUS } from '../auth/focus';
 import { FALLBACK_FOCUS } from '../settings/FallbackSection';
@@ -444,6 +446,14 @@ export function useFindables(query: string, conversationId: string | undefined):
       keywords: 'restore backup undo go back recover import upload file conchbackup',
       icon: <History />,
       run: () => openSettings('health', 'restore'),
+    },
+    {
+      id: 'come-home',
+      label: 'Bring your things from OpenClaw or Hermes',
+      keywords:
+        'import move migrate switch bring come home openclaw clawdbot moltbot hermes agent memories skills persona soul',
+      icon: <House />,
+      run: () => openSettings('memory', COME_HOME_FOCUS),
     },
     {
       id: 'passwords',

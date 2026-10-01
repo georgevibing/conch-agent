@@ -18,6 +18,7 @@ import { applyChannelEvent } from '../features/channels/queries';
 import { applyIntegrationEvent } from '../features/integrations/queries';
 import { healthKeys } from '../features/health/api';
 import { backupKeys } from '../features/health/backups';
+import { useImportProgress } from '../features/import/api';
 import { applyRoutineEvent } from '../features/routines/queries';
 import { skillKeys } from '../features/skills/queries';
 import { vaultKeys } from '../features/passwords/queries';
@@ -201,6 +202,13 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         }
         case 'backups.changed':
           void client.invalidateQueries({ queryKey: backupKeys.status });
+          break;
+        case 'import.progress':
+          useImportProgress.setState({
+            done: event.done,
+            total: event.total,
+            current: event.current,
+          });
           break;
         case 'doctor.report':
           client.setQueryData(healthKeys.doctor, event.report);

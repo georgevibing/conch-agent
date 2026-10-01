@@ -387,6 +387,29 @@ describe('Palette search', () => {
     act(() => useUi.setState({ settings: null, settingsFocus: undefined }));
   });
 
+  it('finds Come home by the other apps’ names, straight into Settings → Memory', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    for (const words of ['openclaw', 'hermes', 'migrate']) {
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /Bring your things from OpenClaw or Hermes/ }),
+      ).toBeInTheDocument();
+    }
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect(useUi.getState()).toMatchObject({ settings: 'memory', settingsFocus: 'come-home' }),
+    );
+    act(() => useUi.setState({ settings: null, settingsFocus: undefined }));
+  });
+
   it('finds Always on and quitting by the words people use, straight into Settings → Health', async () => {
     const user = userEvent.setup();
     mockFetch({

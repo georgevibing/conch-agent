@@ -74,4 +74,52 @@ describe('Onboarding', () => {
     await user.click(await screen.findByRole('button', { name: 'Skip for now' }));
     expect(await screen.findByRole('button', { name: 'Start chatting' })).toBeInTheDocument();
   });
+
+  it('offers to bring your things when another assistant is here, and Not now carries on', async () => {
+    mockFetch({
+      'GET /api/state': () => appState({ onboarded: false }),
+      'GET /api/engine': () => baseEngine,
+      'GET /api/providers': () => baseProviders,
+      'GET /api/import': () => ({
+        sources: [
+          {
+            id: 'hermes',
+            label: 'Hermes',
+            path: '/Users/ada/.hermes',
+            summary: '2 memories, 1 skill, 1 routine',
+          },
+        ],
+      }),
+      'GET /api/import/hermes': () => ({
+        source: {
+          id: 'hermes',
+          label: 'Hermes',
+          path: '/Users/ada/.hermes',
+          summary: '2 memories, 1 skill, 1 routine',
+        },
+        items: [
+          { id: 'memory:0', group: 'memories', title: 'Prefers metric units.', checked: true },
+        ],
+        problems: [],
+      }),
+      'GET /api/auth': () => ({ method: 'none', signedIn: true, setupRequired: false }),
+    });
+    const user = userEvent.setup();
+    renderApp(<Onboarding />);
+    await user.click(await screen.findByRole('button', { name: 'Get started' }));
+    expect(
+      await screen.findByRole(
+        'heading',
+        { name: 'Bring your things from Hermes?' },
+        { timeout: 4000 },
+      ),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Take a look' }));
+    expect(await screen.findByRole('checkbox', { name: /Prefers metric units/ })).toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(screen.getByRole('button', { name: 'Not now' }));
+    expect(
+      await screen.findByRole('heading', { name: 'Give me a personality' }),
+    ).toBeInTheDocument();
+  });
 });

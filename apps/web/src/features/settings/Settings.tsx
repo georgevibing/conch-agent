@@ -56,6 +56,7 @@ import { SecurityTab } from '../auth/SecurityTab';
 import { updatesWaiting, useUpdates } from '../updates/queries';
 import { BrowserSettings } from '../browser/BrowserSettings';
 import { HealthTab } from '../health/HealthTab';
+import { ComeHomeSection } from '../import/ComeHomeSection';
 import { NotificationsTab } from '../notifications/NotificationsTab';
 import { VoiceTab } from '../voice/VoiceTab';
 import { TerminalSettings } from '../terminal/TerminalSettings';
@@ -275,53 +276,56 @@ function MemoryTab({ autoMemory }: { autoMemory: boolean }) {
     }
   };
   return (
-    <Section
-      title="Memory"
-      description="What I remember across conversations. Stored as plain files in ~/.conch/memory — yours to read, edit or delete."
-    >
-      <Stack gap={5}>
-        <Switch
-          checked={autoMemory}
-          onCheckedChange={(checked) =>
-            void update.mutateAsync({ preferences: { autoMemory: checked } })
-          }
-          label="Remember things automatically"
-          description="I’ll save useful details as we talk and always show you when I do."
-        />
-        <form
-          className={styles.addMemory}
-          onSubmit={(e) => {
-            e.preventDefault();
-            void add();
-          }}
-        >
-          <Input
-            aria-label="Add a memory"
-            placeholder="Add something for me to remember…"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+    <Stack gap={8}>
+      <Section
+        title="Memory"
+        description="What I remember across conversations. Stored as plain files in ~/.conch/memory — yours to read, edit or delete."
+      >
+        <Stack gap={5}>
+          <Switch
+            checked={autoMemory}
+            onCheckedChange={(checked) =>
+              void update.mutateAsync({ preferences: { autoMemory: checked } })
+            }
+            label="Remember things automatically"
+            description="I’ll save useful details as we talk and always show you when I do."
           />
-          <Button type="submit" variant="surface" leadingIcon={<Plus />} disabled={!draft.trim()}>
-            Add
-          </Button>
-        </form>
-        {memories.data?.length === 0 && (
-          <EmptyState
-            size="sm"
-            icon={<Brain />}
-            title="Nothing remembered yet"
-            description="Tell me things like “remember I’m vegetarian” in a chat, or add them here."
-          />
-        )}
-        {Boolean(memories.data?.length) && (
-          <ul className={styles.memories} aria-label="Memories">
-            {memories.data?.map((m) => (
-              <MemoryRow key={m.id} memory={m} />
-            ))}
-          </ul>
-        )}
-      </Stack>
-    </Section>
+          <form
+            className={styles.addMemory}
+            onSubmit={(e) => {
+              e.preventDefault();
+              void add();
+            }}
+          >
+            <Input
+              aria-label="Add a memory"
+              placeholder="Add something for me to remember…"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+            />
+            <Button type="submit" variant="surface" leadingIcon={<Plus />} disabled={!draft.trim()}>
+              Add
+            </Button>
+          </form>
+          {memories.data?.length === 0 && (
+            <EmptyState
+              size="sm"
+              icon={<Brain />}
+              title="Nothing remembered yet"
+              description="Tell me things like “remember I’m vegetarian” in a chat, or add them here."
+            />
+          )}
+          {Boolean(memories.data?.length) && (
+            <ul className={styles.memories} aria-label="Memories">
+              {memories.data?.map((m) => (
+                <MemoryRow key={m.id} memory={m} />
+              ))}
+            </ul>
+          )}
+        </Stack>
+      </Section>
+      <ComeHomeSection />
+    </Stack>
   );
 }
 
