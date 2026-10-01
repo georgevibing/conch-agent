@@ -155,9 +155,12 @@ test('a page with a link out starts with its code off, until you say', async ({ 
   await panel.getByRole('button', { name: 'Run it anyway' }).click();
   await expect(frame.locator('body[data-ran="yes"]')).toHaveCount(1);
   // Running, a link asks first, showing where it goes, and opens apart from Conch.
-  await frame.getByRole('link', { name: 'The best article' }).click();
-  await expect(page.getByText('Open evil.example?')).toBeVisible();
-  await expect(page.getByText('https://evil.example/?q=everything-you-said')).toBeVisible();
+  // (A click just as the notice above goes can miss the moving frame: click again.)
+  await expect(async () => {
+    await frame.getByRole('link', { name: 'The best article' }).click();
+    await expect(page.getByText('Open evil.example?').first()).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 15_000 });
+  await expect(page.getByText('https://evil.example/?q=everything-you-said').first()).toBeVisible();
   await expect(frame.getByRole('heading', { name: 'Reading list' })).toBeVisible();
   expect(leaks).toEqual([]);
 });

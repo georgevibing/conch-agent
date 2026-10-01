@@ -99,14 +99,12 @@ body { margin: 16px; background: ${options.theme === 'dark' ? '#16120f' : '#fffd
 </style>`;
   // Inline so it runs with `script-src 'unsafe-inline'`; harmless when scripts are off.
   // A link out never navigates the page: Conch asks you, then opens it in a tab of its own.
+  // In the head, so it's listening before any of the page's own code runs.
   const bridge = `<script>(function(){var o=${JSON.stringify(options.parentOrigin)};function p(m){try{m.conch='artifact';parent.postMessage(m,o)}catch(e){}}function s(){p({height:Math.ceil(document.documentElement.scrollHeight)})}addEventListener('load',s);if(typeof ResizeObserver==='function')new ResizeObserver(s).observe(document.documentElement);s();document.addEventListener('click',function(e){var a=e.target&&e.target.closest&&e.target.closest('a[href]');if(!a)return;var h=a.getAttribute('href')||'';if(h.charAt(0)==='#')return;e.preventDefault();if(/^https?:/i.test(a.href))p({open:a.href})},true);})();</script>`;
   const whole = /<\s*html[\s>]/i.test(html);
   if (!whole)
-    return `<!doctype html><html lang="en"><head>${base}<title>${escape(options.title)}</title></head><body>${html}${bridge}</body></html>`;
-  const withHead = /<\s*head[\s>]/i.test(html)
-    ? html.replace(/<\s*head(\s[^>]*)?>/i, (m) => `${m}${base}`)
-    : html.replace(/<\s*html(\s[^>]*)?>/i, (m) => `${m}<head>${base}</head>`);
-  return /<\/\s*body\s*>/i.test(withHead)
-    ? withHead.replace(/<\/\s*body\s*>(?![\s\S]*<\/\s*body\s*>)/i, `${bridge}</body>`)
-    : `${withHead}${bridge}`;
+    return `<!doctype html><html lang="en"><head>${base}${bridge}<title>${escape(options.title)}</title></head><body>${html}</body></html>`;
+  return /<\s*head[\s>]/i.test(html)
+    ? html.replace(/<\s*head(\s[^>]*)?>/i, (m) => `${m}${base}${bridge}`)
+    : html.replace(/<\s*html(\s[^>]*)?>/i, (m) => `${m}<head>${base}${bridge}</head>`);
 }

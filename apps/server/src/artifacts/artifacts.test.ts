@@ -70,7 +70,9 @@ describe('a page, sealed off', () => {
       parentOrigin: 'http://h',
     });
     expect(whole.indexOf('<meta charset')).toBeGreaterThan(whole.indexOf('<head>'));
-    expect(whole.indexOf('postMessage')).toBeLessThan(whole.indexOf('</body>'));
+    // Listening before any of the page's own code runs.
+    expect(whole.indexOf('postMessage')).toBeLessThan(whole.indexOf('</head>'));
+    expect(doc.indexOf('postMessage')).toBeLessThan(doc.indexOf('</head>'));
   });
 });
 
