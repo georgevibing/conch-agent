@@ -48,6 +48,8 @@ interface UiState {
   /** Something to open inside the settings tab (a provider's page), once. */
   settingsFocus?: string;
   paletteOpen: boolean;
+  /** Undo's preview is open for these change sets (ADR 0030). */
+  undoing?: { ids: string[]; direction: 'undo' | 'redo' };
   /**
    * Talk mode is open (ADR 0027). `from`: where the answer to what was just
    * said starts in the chat, so a new chat (which opens on its own page)

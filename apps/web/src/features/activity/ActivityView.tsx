@@ -1,4 +1,4 @@
-import type { ActivityEntry, ActivityKind } from '@conch/protocol';
+import type { ActivityEntry, ActivityKind, Memory } from '@conch/protocol';
 import {
   ActivityTimeline,
   Button,
@@ -16,9 +16,11 @@ import { History } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
+import { useMemories } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { dayGroup } from '../../lib/time';
 import { safetyApi, safetyKeys } from '../safety/api';
+import { ActivityAction } from '../undo/ActivityActions';
 import styles from './Activity.module.css';
 
 const FILTERS: { value: ActivityKind | 'all'; label: string }[] = [
@@ -36,7 +38,10 @@ function withCode(text: string): ReactNode {
   return parts.map((part, i) => (i % 2 ? <InlineCode key={i}>{part}</InlineCode> : part));
 }
 
-function rows(entries: ActivityEntry[]): { label: string; rows: ActivityRow[] }[] {
+function rows(
+  entries: ActivityEntry[],
+  memories?: Memory[],
+): { label: string; rows: ActivityRow[] }[] {
   const groups: { label: string; rows: ActivityRow[] }[] = [];
   for (const entry of entries) {
     const date = new Date(entry.at);
@@ -60,6 +65,7 @@ function rows(entries: ActivityEntry[]): { label: string; rows: ActivityRow[] }[
       where: entry.conversation.routine
         ? `${entry.conversation.title} (routine)`
         : entry.conversation.title,
+      action: <ActivityAction entry={entry} memories={memories} />,
     });
   }
   return groups;
@@ -67,7 +73,8 @@ function rows(entries: ActivityEntry[]): { label: string; rows: ActivityRow[] }[
 
 /**
  * Activity (ADR 0028): everything the assistant did, across every chat and
- * routine, newest first. A row opens the chat at that moment.
+ * routine, newest first. A row opens the chat at that moment; a change to
+ * your files can be undone from here, and a memory forgotten (ADR 0030).
  */
 export function ActivityView() {
   const [kind, setKind] = useState<ActivityKind | 'all'>('all');
@@ -81,6 +88,7 @@ export function ActivityView() {
     refetchOnWindowFocus: true,
   });
   const entries = query.data?.pages.flatMap((p) => p.entries) ?? [];
+  const memories = useMemories().data;
 
   const open = (row: ActivityRow) => {
     const entry = entries.find((e) => e.id === row.id);
@@ -125,7 +133,7 @@ export function ActivityView() {
         />
       ) : (
         <>
-          <ActivityTimeline groups={rows(entries)} onOpen={open} />
+          <ActivityTimeline groups={rows(entries, memories)} onOpen={open} />
           {query.hasNextPage && (
             <Button
               variant="surface"

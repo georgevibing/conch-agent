@@ -7,6 +7,7 @@ import { useConversations } from '../api/queries';
 import { ActivityView } from '../features/activity/ActivityView';
 import { RestartWatch } from '../features/health/RestartWatch';
 import { PushKeeper } from '../features/notifications/PushKeeper';
+import { UndoHost } from '../features/undo/UndoHost';
 import { OpenFromLink } from '../features/pwa/OpenFromLink';
 import { RestoredNotice } from '../features/health/RestoredNotice';
 import { ChannelDetailView } from '../features/channels/ChannelDetailView';
@@ -214,6 +215,7 @@ export function Shell() {
       <RestartWatch />
       <RestoredNotice />
       <PushKeeper />
+      <UndoHost />
       <OpenFromLink />
     </div>
   );

@@ -22,6 +22,7 @@ import { BrowserApprovalItem, BrowserTrailItem, HandoffItem } from '../browser/C
 import { IntegrationIssue, IntegrationSuggestion } from '../integrations/ChatBits';
 import { HeldItem, RoutedItem } from './OfflineBits';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
+import { ChatFiles, turnChanges } from '../undo/ChatFiles';
 import { RoutineInstruction } from '../routines/RunBanner';
 import styles from './Transcript.module.css';
 import { VaultApprovalItem, VaultRequestItem } from './VaultItems';
@@ -160,6 +161,7 @@ export function Transcript({
   const lastErrorId = [...items].reverse().find((i) => i.kind === 'turn-end')?.id;
   // The first time a chat reads something from outside says what changes; the rest are brief.
   const firstTaint = items.find((i) => i.kind === 'taint')?.id;
+  const turns = turnChanges(items);
   const turnStart = items.findLastIndex((i) => i.kind === 'user');
   const prompt = turnStart === -1 ? '' : (items[turnStart] as { text: string }).text;
   // Waiting on you (a question, a handoff): no "working…" while it's your move.
@@ -181,12 +183,14 @@ export function Transcript({
   const placeholder = busy && last?.kind === 'user';
   const lastUserId = items.findLast((i) => i.kind === 'user')?.id;
   const turnRunning = running || pending.length > 0;
+  const lastFilesId = items.findLast((i) => i.kind === 'files')?.id;
   // Between steps (a tool finished, a reply paused): a quieter wait that appears only if it lingers.
   const between =
     busy &&
     !placeholder &&
     ((last?.kind === 'tool' && last.status !== 'running' && last.status !== 'pending') ||
       last?.kind === 'memory' ||
+      last?.kind === 'files' ||
       last?.kind === 'skill' ||
       last?.kind === 'routine' ||
       last?.kind === 'integration-issue' ||
@@ -257,6 +261,16 @@ export function Transcript({
             )}
             {block.item?.kind === 'taint' && (
               <TaintItem item={block.item} first={block.item.id === firstTaint} />
+            )}
+            {block.item?.kind === 'files' && (
+              <ChatFiles
+                item={block.item}
+                turn={
+                  turnRunning && block.item.id === lastFilesId
+                    ? undefined
+                    : turns.get(block.item.id)
+                }
+              />
             )}
             {block.item?.kind === 'memory' && <MemoryPill item={block.item} />}
             {block.item?.kind === 'skill' && <SkillUsedLine item={block.item} />}

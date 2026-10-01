@@ -1,5 +1,6 @@
 import type {
   Attachment,
+  ChangedFile,
   TaintSource,
   VaultPermission,
   VaultRequest,
@@ -66,6 +67,15 @@ export type TranscriptItem =
       vault?: VaultPermission;
       /** Asked because the chat read something untrusted (ADR 0028): why. No "always". */
       taint?: string;
+    }
+  | {
+      /** Files the assistant created, changed or deleted, which can be put back (ADR 0030). */
+      kind: 'files';
+      id: string;
+      toolUseId?: string;
+      label: string;
+      files: ChangedFile[];
+      state: 'applied' | 'undone';
     }
   | {
       /** The chat read something from outside: sending and changing ask first from here (ADR 0028). */
@@ -319,6 +329,28 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
           },
         ],
       };
+    case 'files.changed':
+      return {
+        ...base,
+        items: [
+          ...items,
+          {
+            kind: 'files',
+            id: event.changeSetId,
+            ...(event.toolUseId && { toolUseId: event.toolUseId }),
+            label: event.label,
+            files: event.files,
+            state: 'applied',
+          },
+        ],
+      };
+    case 'files.restored': {
+      const updated = updateItem(items, 'files', event.changeSetId, (item) => ({
+        ...item,
+        state: event.direction === 'undo' ? 'undone' : 'applied',
+      }));
+      return updated ? { ...base, items: updated } : base;
+    }
     case 'taint':
       return {
         ...base,

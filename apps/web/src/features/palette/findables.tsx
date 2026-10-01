@@ -27,6 +27,7 @@ import {
   Repeat,
   ShieldCheck,
   Sparkles,
+  Undo2,
   Upload,
   SquareSlash,
   User,
@@ -52,6 +53,7 @@ import { useRoutines } from '../routines/queries';
 import { fuzzyFilter, type FuzzyMatch } from '../search/fuzzy';
 import { useSkills } from '../skills/queries';
 import { useTerminalStatus } from '../terminal/queries';
+import { undoLast } from '../undo/UndoHost';
 import { useUpdates } from '../updates/queries';
 import { ADD_DEVICE_FOCUS } from '../auth/SecurityTab';
 import { BACKGROUND_FOCUS } from '../background/AlwaysOnSection';
@@ -475,6 +477,13 @@ export function useFindables(query: string, conversationId: string | undefined):
       keywords: 'security check breach breached leaked pwned weak reused health',
       icon: <ShieldCheck />,
       run: () => void navigate('/passwords', { state: { check: true } }),
+    },
+    {
+      id: 'undo-last',
+      label: 'Undo the last change',
+      keywords: 'undo revert put back restore file files change edit mistake oops go back rollback',
+      icon: <Undo2 />,
+      run: () => void undoLast(),
     },
     {
       id: 'activity',
