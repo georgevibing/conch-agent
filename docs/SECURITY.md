@@ -271,8 +271,8 @@ Undo says so and leaves it alone unless you choose to replace it.
 ## Conch in the menu bar
 
 The pearl in your menu bar (tray, panel) is a tiny helper Conch builds on your
-computer. It can only ask how Conch is (counts, never anything from a chat), quit
-Conch and hide itself, and only from the same computer, with a token in a file only
+computer. It can only ask how Conch is (counts, never anything from a chat) and quit
+Conch, and only from the same computer, with a token in a file only
 you can read (`~/.conch/tray/token`). The token isn't a sign-in: it opens nothing
 else, and doesn't work through a proxy or from another device. Anything that needs you
 to confirm it's you opens Conch's page instead.

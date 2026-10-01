@@ -28,9 +28,9 @@ A small pearl sits in the menu bar on a Mac, the tray on Windows and the panel o
 
 Its menu has **Open Conch**, **Quit Conch** and, when Conch is stopped, **Start Conch**. The pearl stays after you quit, so starting again is one click.
 
-To hide it, choose **Hide from the menu bar** in its menu, or turn off **Show Conch in the menu bar** in **Settings → Health → Always on**. On Windows and Linux, both say "tray" or "panel" instead. On a Mac, the pearl needs Apple's Command Line Tools. If they're missing, the switch says so and helps you get them.
+To hide it, turn off **Show Conch in the menu bar** in **Settings → Health → Always on**. On Windows and Linux, the switch says "tray" or "panel" instead. On a Mac, the pearl needs Apple's Command Line Tools. If they're missing, the switch says so and helps you get them.
 
-The pearl can only ask how Conch is, quit it and hide itself. It sees counts, never anything from a chat. Anything that needs you to confirm it's you opens Conch's page instead.
+The pearl can only ask how Conch is and quit it. It sees counts, never anything from a chat. Anything that needs you to confirm it's you opens Conch's page instead.
 
 ## Quit Conch
 
