@@ -105,6 +105,7 @@ src/
   lib/healed.ts               "fixed on its own" notes (~/.conch/healed.json, `healed` event)
   lib/lifecycle.ts            this run's `BOOT_ID`; `restart()` (exit 75, the supervisor starts it again)
   start.ts, supervisor.ts     `pnpm start` runs Conch as a child it restarts (on request, or after a crash)
+  background/                 Always on: login items (launchd, systemd, the Run key), the launcher, the handover, Conch as an app (ADR 0026)
   doctor/                     Repair everything: every part's `DoctorCheck`, run at once (`doctor.report`)
   network/watch.ts            online or not (`network.status`); offline routing (ADR 0023)
   lib/path.ts                 the PATH as it is now (Windows registry), refreshed before lookups
@@ -197,6 +198,19 @@ src/
   under `/api/updates` (updating and turning automation on need sudo mode);
   `updates.changed` is pushed live. Repair everything's `updates` check lists what
   waits.
+- **Always on** (`background/`, [ADR 0026](./docs/adr/0026-always-on.md)). Conch starts at
+  login through the computer's own mechanism (a LaunchAgent, a systemd user unit or
+  XDG autostart, the Run key) running one launcher, `~/.conch/background/Conch`, that
+  finds a Node ≥ 24 each time and starts the supervisor with `CONCH_BACKGROUND=1`.
+  Turning it on from a window is a handover: the background Conch writes
+  `background/waiting.json` and waits for the port (`waitForTurn` in `main.ts`), the
+  window one answers `handover: true` and stops (`stopSoon`), and the page reloads
+  onto the new boot id. Off never stops the Conch answering; `POST /api/gateway/quit`
+  does (sudo mode), and a clean exit stays stopped. `pnpm conch shortcut` puts
+  **Conch** in Applications, the Start menu or the app menu; opening it starts Conch
+  first when it isn't answering. The `background` doctor check heals the launcher
+  and the app when Node or the folder moved. `scripts/install.sh` and `install.ps1`
+  are the one-line installers.
 - **Healing** (`lib/healed.ts`): every self-repair leaves one plain note —
   integrations that came back, a renewed sign-in, Claude Code's fallback, a held
   routine that ran once its provider was back. Integrations retry failures that

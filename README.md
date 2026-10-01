@@ -23,15 +23,32 @@ surfaces with a pointer-reactive, mother-of-pearl iridescence we call _Lustre_.
 
 ## Quick start
 
+One line, nothing else to install first:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/giotiskl/conch-agent/main/scripts/install.sh | sh
+```
+
+On Windows, in PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/giotiskl/conch-agent/main/scripts/install.ps1 | iex
+```
+
+It gets Node.js and Git if you don't have them (into Conch's own folder, checked
+against their checksums, no administrator), builds Conch, keeps it running in the
+background, adds **Conch** to your apps and opens it. Then Conch looks for what you
+already have, helps you connect a provider (and sign in, or install what's missing),
+and asks a couple of optional questions so it can be _yours_. Run the line again to
+update; add `--uninstall` to remove it.
+
+From a checkout instead (Node ≥ 24):
+
 ```bash
 corepack enable     # or: npm i -g pnpm
 pnpm install
 pnpm start          # builds the app and opens http://localhost:4317
 ```
-
-That's it. Conch looks for what you already have, helps you connect a provider (and
-sign in, or install what's missing), then asks a couple of optional questions so it
-can be _yours_. Requires Node ≥ 24.
 
 **On your phone, safely:** choose a password in **Settings → Security**, then scan
 the **Add a device** QR code. [docs/SECURITY.md](./docs/SECURITY.md) explains it in
@@ -85,6 +102,12 @@ pastes fold into a card, and each provider gets them in the way it can use.
 steps — no public address or tunnel — and approve what the assistant asks right
 there. Nobody gets in unless you let them. ([ADR 0018](./docs/adr/0018-channels.md))
 
+**Always on, and an app of its own.** Conch starts when you log in and keeps
+running with no window, so routines run on time and your phone and chat apps can
+always reach it. Turning it on from a Terminal window moves Conch to the background
+without losing your place. Open **Conch** from Applications, Spotlight or the Start
+menu, and it starts itself first if it has to. ([ADR 0026](./docs/adr/0026-always-on.md))
+
 **It looks after itself.** **Settings → Health** has one **Repair everything**
 button, a quiet list of what Conch fixed on its own, daily backups you can restore
 (with a preview and Undo), and one-click updates for Conch and the programs it uses.
@@ -128,4 +151,4 @@ documents it. For an authenticated HTTPS reverse proxy, see
 - [docs/BROWSER.md](./docs/BROWSER.md) — the browser: watching, taking over, what it asks
 - [docs/TERMINAL.md](./docs/TERMINAL.md) — the terminal: shortcuts, the assistant, other devices
 - [docs/design/NACRE.md](./docs/design/NACRE.md) — the design language
-- [docs/adr](./docs/adr) — decision records (0001–0024)
+- [docs/adr](./docs/adr) — decision records (0001–0026)
