@@ -8,7 +8,7 @@
  * person said yes), and the export, which a person asks for in so many words.
  */
 import { createHash } from 'node:crypto';
-import { stat } from 'node:fs/promises';
+import { readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
@@ -36,6 +36,7 @@ import {
 import { z } from 'zod';
 
 import { Mutex, readJson, writeJson } from '../lib/fs';
+import { deviceSealer } from '../lib/sealed';
 import { newId } from '../lib/ids';
 import { Emitter } from '../lib/emitter';
 import { fingerprint } from './crypto';
@@ -71,7 +72,13 @@ export class VaultError extends Error {
 
 const Settings = z.object({
   enabled: z.record(z.string(), z.boolean()).default({}),
-  keepassxc: z.object({ database: z.string().max(4096).optional() }).default({}),
+  keepassxc: z
+    .object({
+      database: z.string().max(4096).optional(),
+      /** A key file the database also needs, if it does. A path, not a secret. */
+      keyFile: z.string().max(4096).optional(),
+    })
+    .default({}),
   breachCheckedAt: z.number().optional(),
   /** When items from other managers were last used here (shown, copied, filled, read), by id. */
   used: z.record(z.string(), z.number()).default({}),
@@ -218,7 +225,11 @@ export class VaultService {
     this.sources = [
       new OnePasswordSource(exec),
       new BitwardenSource(exec),
-      new KeePassXcSource(async () => (await this.settings()).keepassxc.database, exec),
+      new KeePassXcSource(
+        async () => (await this.settings()).keepassxc.database,
+        exec,
+        async () => (await this.settings()).keepassxc.keyFile,
+      ),
       new ProtonPassSource(exec),
       new DashlaneSource(exec),
       new KeeperSource(exec),
@@ -432,6 +443,7 @@ export class VaultService {
 
   /** Each source's state. Never prompts anybody: `state()` is a cheap check. */
   async sourceStatus(): Promise<VaultSource[]> {
+    await this.#reopen().catch(() => undefined);
     const { items, damaged } = await this.store
       .open()
       .catch(() => ({ items: new Map(), damaged: [] }));
@@ -450,6 +462,7 @@ export class VaultService {
       },
     ];
     const sync = (await this.settings()).sync;
+    const kept = await this.#keptPasswords();
     const copies = new Map<string, number>();
     for (const r of items.values() as Iterable<ItemRecord>)
       if (r.origin && !r.deletedAt)
@@ -469,9 +482,16 @@ export class VaultService {
         writable: false,
         ...(source.need && { need: source.need }),
         unlock: source.unlock,
+        ...(kept[source.id] !== undefined && { keptUnlocked: true }),
+        ...(state.state === 'locked' &&
+          this.#reopenFailed.has(source.id) && { message: this.#reopenFailed.get(source.id) }),
         ...(source.id === 'keepassxc' &&
           (await this.settings()).keepassxc.database && {
             database: (await this.settings()).keepassxc.database,
+          }),
+        ...(source.id === 'keepassxc' &&
+          (await this.settings()).keepassxc.keyFile && {
+            keyFile: (await this.settings()).keepassxc.keyFile,
           }),
         ...((s || copies.get(source.id)) && {
           sync: {
@@ -1126,7 +1146,10 @@ export class VaultService {
     return source;
   }
 
-  async setSource(id: VaultSourceId, change: { enabled?: boolean; database?: string }) {
+  async setSource(
+    id: VaultSourceId,
+    change: { enabled?: boolean; database?: string; keyFile?: string },
+  ) {
     const source = this.#source(id);
     const settings = await this.settings();
     if (change.database !== undefined) {
@@ -1144,17 +1167,38 @@ export class VaultService {
       )
         throw new VaultError('invalid', 'That database isn’t there. Choose it again.');
       source.lock?.();
-      await this.#saveSettings({ keepassxc: { database: database || undefined } });
+      await this.#saveSettings({
+        keepassxc: { ...settings.keepassxc, database: database || undefined },
+      });
+    }
+    if (change.keyFile !== undefined) {
+      if (id !== 'keepassxc') throw new VaultError('invalid', 'Only KeePassXC takes a key file.');
+      const keyFile = change.keyFile.trim();
+      if (
+        keyFile &&
+        !(await stat(keyFile).then(
+          (s) => s.isFile(),
+          () => false,
+        ))
+      )
+        throw new VaultError('invalid', 'That key file isn’t there. Choose it again.');
+      source.lock?.();
+      await this.#saveSettings({
+        keepassxc: { ...(await this.settings()).keepassxc, keyFile: keyFile || undefined },
+      });
     }
     if (change.enabled !== undefined) {
-      if (!change.enabled) source.lock?.();
+      if (!change.enabled) {
+        source.lock?.();
+        await this.#keep(id, undefined);
+      }
       await this.#saveSettings({ enabled: { ...settings.enabled, [id]: change.enabled } });
     }
     this.#changed();
     return this.sourceStatus();
   }
 
-  async unlockSource(id: VaultSourceId, password: string) {
+  async unlockSource(id: VaultSourceId, password: string, remember = false) {
     const source = this.#source(id);
     if (!source.unlockWith)
       throw new VaultError('invalid', `${source.name} unlocks in its own app.`);
@@ -1166,14 +1210,83 @@ export class VaultService {
         error instanceof SourceError ? error.message : `${source.name} wouldn’t unlock.`,
       );
     }
+    await this.#keep(id, remember ? password : undefined);
     this.#changed();
     void this.syncDue(id).catch(() => undefined);
     return this.sourceStatus();
   }
 
-  lockSource(id: VaultSourceId) {
+  /** Lock it now. A manager kept unlocked is forgotten too: locking means locked. */
+  async lockSource(id: VaultSourceId) {
     this.#source(id).lock?.();
+    await this.#keep(id, undefined);
     this.#changed();
+  }
+
+  // ── Kept unlocked (ADR 0025 § Kept unlocked) ───────────────────────────
+  //
+  // A person can choose to keep a password manager unlocked on this computer.
+  // Its password is sealed with this computer's device key (`deviceSealer`) in
+  // `vault/remembered.json`: never in a backup, never readable on another
+  // computer, but open to anyone who can use this one as you, which the
+  // switch says in so many words.
+
+  #remembered?: Promise<Record<string, string>>;
+  #reopened = new Set<string>();
+  #reopenFailed = new Map<string, string>();
+
+  get #rememberedPath() {
+    return join(this.deps.home, 'vault', 'remembered.json');
+  }
+
+  #sealer() {
+    return deviceSealer(() => this.deviceKey());
+  }
+
+  async #keptPasswords(): Promise<Record<string, string>> {
+    this.#remembered ??= readFile(this.#rememberedPath, 'utf8')
+      .then(async (text) => {
+        const plain = await this.#sealer().open('remembered.json', text);
+        return z.record(z.string(), z.string()).parse(JSON.parse(plain.toString('utf8')));
+      })
+      .catch(() => ({}));
+    return this.#remembered;
+  }
+
+  async #keep(id: VaultSourceId, password: string | undefined) {
+    const before = await this.#keptPasswords();
+    if (password === undefined && !(id in before)) return;
+    const kept = Object.fromEntries(Object.entries(before).filter(([k]) => k !== id));
+    if (password !== undefined) kept[id] = password;
+    this.#remembered = Promise.resolve(kept);
+    this.#reopenFailed.delete(id);
+    if (!Object.keys(kept).length) {
+      await rm(this.#rememberedPath, { force: true });
+      return;
+    }
+    const sealed = await this.#sealer().seal('remembered.json', Buffer.from(JSON.stringify(kept)));
+    await writeJson(this.#rememberedPath, JSON.parse(sealed) as unknown);
+  }
+
+  /** Managers kept unlocked open by themselves, once each time Conch starts. */
+  async #reopen() {
+    const kept = await this.#keptPasswords();
+    for (const [id, password] of Object.entries(kept)) {
+      if (this.#reopened.has(id)) continue;
+      this.#reopened.add(id);
+      const source = this.sources.find((s) => s.id === id);
+      if (!source?.unlockWith || !(await this.#enabled(source.id))) continue;
+      try {
+        await source.unlockWith(password);
+      } catch {
+        // The password changed in the manager: stop trying it, and say so.
+        await this.#keep(source.id, undefined).catch(() => undefined);
+        this.#reopenFailed.set(
+          id,
+          `Conch couldn’t open ${source.name} with the password it kept. Unlock it again.`,
+        );
+      }
+    }
   }
 
   // ── Moving in (ADR 0025 § Moving in) ────────────────────────────────────

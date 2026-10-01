@@ -198,6 +198,24 @@ Each program is a need (ADR 0016: `op`, `bw`, `keepassxc`, `pass-cli`,
 Keeper's own installers, and Proton's script is shown, never piped into a
 shell.
 
+### Kept unlocked
+
+A person can choose **Keep unlocked on this computer** when unlocking a
+manager that takes a password (Bitwarden, KeePassXC, Dashlane, Keeper). It's
+less safe, and the switch says why in plain words; it's their call.
+
+- The password is sealed with this computer's device key
+  (`vault/remembered.json`, `deviceSealer`). It's never in a backup and
+  doesn't open on another computer.
+- When Conch starts, each kept manager opens by itself.
+- **Lock** (or turning the manager off) forgets it.
+- If the password stopped working (changed in the manager), Conch forgets it
+  and says so.
+- Managers that unlock in their own app (1Password, Proton Pass, the macOS
+  Keychain) stay unlocked as long as that app does.
+- Conch's own lock can close only when Conch stops (auto-lock 0), or be
+  turned off.
+
 ### Moving in (`vault/transfer.ts`)
 
 **Copy into Conch** (Passwords › Password managers) makes another manager's

@@ -152,6 +152,7 @@ export class Services {
   #login?: { handle: LoginHandle; state: LoginState };
   #channelStore?: ChannelStore;
   #sweeper?: NodeJS.Timeout;
+  #vaultDoctor?: NodeJS.Timeout;
 
   constructor(readonly config: Config) {
     this.healed = new Healed(config.CONCH_HOME, (note) =>
@@ -180,7 +181,13 @@ export class Services {
       keystore:
         config.CONCH_VAULT_KEYSTORE ??
         (config.CONCH_ENGINE === 'mock' || process.env.VITEST ? 'file' : 'auto'),
-      emit: () => this.broadcast.emit({ type: 'vault.changed' }),
+      emit: () => {
+        this.broadcast.emit({ type: 'vault.changed' });
+        // Repair everything says what's true now (unlocked, locked, turned off).
+        clearTimeout(this.#vaultDoctor);
+        this.#vaultDoctor = setTimeout(() => void this.doctor.refresh('passwords'), 400);
+        this.#vaultDoctor.unref?.();
+      },
       systemKeys: () => this.#systemKeys(),
     });
     // Conch's own keys (providers, integrations, channels) are sealed under this

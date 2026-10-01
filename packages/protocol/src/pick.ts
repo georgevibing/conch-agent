@@ -5,7 +5,7 @@
  */
 import { z } from 'zod';
 
-export const PickPurpose = z.enum(['keepassxc-database', 'workspace']);
+export const PickPurpose = z.enum(['keepassxc-database', 'keepassxc-keyfile', 'workspace']);
 export type PickPurpose = z.infer<typeof PickPurpose>;
 
 export const PickBody = z.object({ purpose: PickPurpose });

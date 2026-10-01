@@ -78,6 +78,30 @@ export class Doctor {
     return done;
   }
 
+  /**
+   * Look at one check again, after what it watches changed (Passwords
+   * unlocked), so the report never says something that's no longer true.
+   * Only once there's a report to correct, and never in the middle of a run.
+   */
+  async refresh(checkId: string): Promise<void> {
+    if (this.#running || !this.#report.checkedAt) return;
+    const check = this.#checks.find((c) => c.id === checkId);
+    if (!check) return;
+    const items = await check
+      .run({ repair: false, signal: AbortSignal.timeout(this.deps.timeoutMs ?? CHECK_TIMEOUT_MS) })
+      .catch(() => undefined);
+    if (!items || this.#running) return;
+    const before = this.#report.items;
+    const ours = (item: DoctorItem) => item.id === checkId || item.id.startsWith(`${checkId}:`);
+    const at = before.findIndex(ours);
+    const rest = before.filter((item) => !ours(item));
+    this.#report = {
+      ...this.#report,
+      items: at < 0 ? [...rest, ...items] : [...rest.slice(0, at), ...items, ...rest.slice(at)],
+    };
+    this.deps.emit(this.#report);
+  }
+
   async #run(repair: boolean): Promise<DoctorReport> {
     const checks = this.#checks;
     const results = new Map<string, DoctorItem[]>();

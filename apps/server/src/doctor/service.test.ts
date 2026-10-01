@@ -87,3 +87,43 @@ describe('Repair everything', () => {
     expect(runs).toEqual([false, true]);
   });
 });
+
+describe('one check again', () => {
+  it('corrects that check’s lines in the report, and leaves the rest', async () => {
+    const { Doctor } = await import('./service');
+    let locked = true;
+    const reports: { items: { id: string; state: string }[] }[] = [];
+    const doctor = new Doctor({ emit: (r) => reports.push(r) } as ConstructorParameters<
+      typeof Doctor
+    >[0]);
+    doctor.register({
+      id: 'passwords',
+      group: 'data',
+      title: 'Passwords',
+      run: async () => [
+        {
+          id: 'passwords:keepassxc',
+          group: 'data',
+          title: 'KeePassXC',
+          state: locked ? 'needs-you' : 'ok',
+          message: '',
+        },
+      ],
+    } as never);
+    doctor.register({
+      id: 'other',
+      group: 'data',
+      title: 'Other',
+      run: async () => [{ id: 'other', group: 'data', title: 'Other', state: 'ok', message: '' }],
+    } as never);
+    await doctor.refresh('passwords');
+    expect(reports).toHaveLength(0);
+    await doctor.run();
+    locked = false;
+    await doctor.refresh('passwords');
+    expect(doctor.report.items.map((i) => [i.id, i.state])).toEqual([
+      ['passwords:keepassxc', 'ok'],
+      ['other', 'ok'],
+    ]);
+  });
+});

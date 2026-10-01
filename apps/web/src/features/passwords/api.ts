@@ -58,12 +58,14 @@ export const vaultApi = {
     skipDuplicates: boolean;
   }) => request(ImportPreview, '/api/vault/import', { method: 'POST', body }),
   breaches: () => request(BreachCheckResult, '/api/vault/breaches', { method: 'POST', body: {} }),
-  setSource: (id: VaultSourceId, body: { enabled?: boolean; database?: string }) =>
-    request(z.array(VaultSource), `/api/vault/sources/${id}`, { method: 'PATCH', body }),
-  unlockSource: (id: VaultSourceId, password: string) =>
+  setSource: (
+    id: VaultSourceId,
+    body: { enabled?: boolean; database?: string; keyFile?: string },
+  ) => request(z.array(VaultSource), `/api/vault/sources/${id}`, { method: 'PATCH', body }),
+  unlockSource: (id: VaultSourceId, password: string, remember = false) =>
     request(z.array(VaultSource), `/api/vault/sources/${id}/unlock`, {
       method: 'POST',
-      body: { password },
+      body: { password, remember },
     }),
   lockSource: (id: VaultSourceId) =>
     request(Ok, `/api/vault/sources/${id}/lock`, { method: 'POST', body: {} }),

@@ -285,14 +285,14 @@ export function registerVaultRoutes(
     if (!id || !body) return;
     if (!verify(request, reply)) return;
     return guarded(reply, async () =>
-      z.array(VaultSource).parse(await vault.unlockSource(id, body.password)),
+      z.array(VaultSource).parse(await vault.unlockSource(id, body.password, body.remember)),
     );
   });
 
   app.post<{ Params: { id: string } }>('/api/vault/sources/:id/lock', async (request, reply) => {
     const id = sourceId(reply, request.params.id);
     if (!id) return;
-    vault.lockSource(id);
+    await vault.lockSource(id);
     return { ok: true };
   });
 

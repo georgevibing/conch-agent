@@ -780,3 +780,109 @@ describe('recently used and edited, for every manager', () => {
     expect(forum?.usedAt).toBeGreaterThan(Date.now() - 5_000);
   });
 });
+
+describe('kept unlocked', () => {
+  const keepass = (calls: Call[]) =>
+    exec(calls, {
+      'keepassxc-cli': (args) => {
+        if (args[0] === 'ls') return 'Root\n';
+        if (args[0] === 'export')
+          return `"Group","Title","Username","Password","URL","Notes","TOTP"\n"Root","Forum","ada","kp-secret-1","https://forum.example","",""\n`;
+        return undefined as unknown as string;
+      },
+    });
+  // keepassxc-cli checks the password it's given on stdin.
+  const checking = (calls: Call[], right: string): Exec => {
+    const inner = keepass(calls);
+    return {
+      find: inner.find,
+      run: async (file, args, options) =>
+        options?.input === `${right}\n`
+          ? inner.run(file, args, options)
+          : {
+              stdout: '',
+              stderr: 'Error while reading the database: Invalid credentials',
+              code: 1,
+            },
+    };
+  };
+
+  it('opens by itself after a restart, sealed with this computer’s key, until it’s locked', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-kept-'));
+    const database = join(home, 'Passwords.kdbx');
+    await (await import('node:fs/promises')).writeFile(database, 'x');
+    const first = new VaultService({ home, keystore: 'file', exec: checking([], 'db-password') });
+    await first.setSource('keepassxc', { enabled: true, database });
+    await first.unlockSource('keepassxc', 'db-password', true);
+    const file = await (
+      await import('node:fs/promises')
+    ).readFile(join(home, 'vault', 'remembered.json'), 'utf8');
+    expect(file).not.toContain('db-password');
+
+    // Conch starts again: nobody types anything.
+    const calls: Call[] = [];
+    const again = new VaultService({
+      home,
+      keystore: 'file',
+      exec: checking(calls, 'db-password'),
+    });
+    const status = (await again.sourceStatus()).find((s) => s.id === 'keepassxc');
+    expect(status).toMatchObject({ state: 'ready', keptUnlocked: true });
+    expect((await again.list()).items.map((i) => i.title)).toContain('Forum');
+    expectNoSecretsIn(calls, ['db-password']);
+
+    // Locking means locked, after the next restart too.
+    await again.lockSource('keepassxc');
+    const third = new VaultService({ home, keystore: 'file', exec: checking([], 'db-password') });
+    expect((await third.sourceStatus()).find((s) => s.id === 'keepassxc')?.state).toBe('locked');
+  });
+
+  it('says so when the kept password stopped working, and forgets it', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-kept-'));
+    const database = join(home, 'Passwords.kdbx');
+    await (await import('node:fs/promises')).writeFile(database, 'x');
+    const first = new VaultService({ home, keystore: 'file', exec: checking([], 'old-password') });
+    await first.setSource('keepassxc', { enabled: true, database });
+    await first.unlockSource('keepassxc', 'old-password', true);
+    const changed = new VaultService({
+      home,
+      keystore: 'file',
+      exec: checking([], 'new-password'),
+    });
+    const status = (await changed.sourceStatus()).find((s) => s.id === 'keepassxc');
+    expect(status).toMatchObject({
+      state: 'locked',
+      message: expect.stringMatching(/Unlock it again/),
+    });
+    expect(status?.keptUnlocked).toBeUndefined();
+  });
+});
+
+describe('KeePassXC’s own words', () => {
+  it('says the password is wrong, and passes a key file as a path when there is one', async () => {
+    const { KeePassXcSource } = await import('./sources');
+    const calls: Call[] = [];
+    const wrong: Exec = {
+      find: async (name) => `/fake/${name}`,
+      run: async (file, args, options) => {
+        calls.push({ file, args, ...(options?.input && { input: options.input }) });
+        return {
+          stdout: '',
+          stderr:
+            'Enter password to unlock /Users/ada/P.kdbx: \nError while reading the database: Invalid credentials were provided, please try again.\n',
+          code: 1,
+        };
+      },
+    };
+    const plain = new KeePassXcSource(async () => '/Users/ada/P.kdbx', wrong);
+    await expect(plain.unlockWith('nope')).rejects.toThrow(/isn’t the database’s password/);
+    const keyed = new KeePassXcSource(
+      async () => '/Users/ada/P.kdbx',
+      wrong,
+      async () => '/Users/ada/P.keyx',
+    );
+    await expect(keyed.unlockWith('nope')).rejects.toThrow(/password and key file/);
+    expect(calls.at(-1)?.args).toEqual(['ls', '-k', '/Users/ada/P.keyx', '/Users/ada/P.kdbx']);
+    expectNoSecretsIn(calls, ['nope']);
+  });
+});

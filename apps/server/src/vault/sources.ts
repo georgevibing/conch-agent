@@ -613,6 +613,7 @@ export class KeePassXcSource implements PasswordSource {
   constructor(
     private readonly database: () => Promise<string | undefined>,
     private readonly exec: Exec = realExec,
+    private readonly keyFile: () => Promise<string | undefined> = () => Promise.resolve(undefined),
   ) {}
 
   /** `keepassxc-cli <command> [options] <database> [entry]`, the password on stdin. */
@@ -628,7 +629,8 @@ export class KeePassXcSource implements PasswordSource {
     const db = await this.database();
     if (!db) throw new SourceError('Choose your KeePassXC database first.');
     if (password === undefined) throw new SourceError('Unlock KeePassXC first.');
-    return this.exec.run(cli, [command, ...options, db, ...entry], {
+    const key = await this.keyFile();
+    return this.exec.run(cli, [command, ...options, ...(key ? ['-k', key] : []), db, ...entry], {
       input: `${password}\n`,
       timeout: 30_000,
       ...(signal && { signal }),
@@ -646,13 +648,22 @@ export class KeePassXcSource implements PasswordSource {
   }
 
   async unlockWith(password: string): Promise<void> {
-    const result = await this.#cli('ls', ['-q'], [], undefined, password);
-    if (result.code !== 0)
+    // Without -q: on a wrong password `-q` leaves stderr empty (KeePassXC 2.7), and the person needs to know why.
+    const result = await this.#cli('ls', [], [], undefined, password);
+    if (result.code !== 0) {
+      const said = result.stderr.replace(/^Enter password to unlock[^\n]*\n?/m, '');
       throw new SourceError(
-        /invalid credentials|wrong key|HMAC/i.test(result.stderr)
-          ? 'That isn’t the database’s password.'
-          : firstLine(result.stderr) || 'KeePassXC wouldn’t open the database.',
+        /invalid credentials|wrong key|HMAC/i.test(said)
+          ? (await this.keyFile())
+            ? 'That password and key file don’t open this database.'
+            : 'That isn’t the database’s password. If it also needs a key file, choose it below.'
+          : /key ?file/i.test(said)
+            ? 'This database needs its key file. Choose it below.'
+            : /yubikey|challenge/i.test(said)
+              ? 'This database needs a YubiKey, which Conch can’t use yet. Open it in KeePassXC instead.'
+              : firstLine(said) || 'KeePassXC wouldn’t open the database.',
       );
+    }
     this.#password = password;
     this.#list = undefined;
   }

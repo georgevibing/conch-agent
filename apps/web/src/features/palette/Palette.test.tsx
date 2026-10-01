@@ -204,8 +204,10 @@ describe('Palette search', () => {
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'redeploy');
     const repair = await screen.findByRole('button', { name: 'Repair search' });
-    expect(screen.getByText(/Repair rebuilds it from your chats/)).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('Search isn’t working right now');
+    expect(await screen.findByText(/Repair rebuilds it from your chats/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('Search isn’t working right now'),
+    );
     expect(screen.queryByText(/Nothing matches/)).not.toBeInTheDocument();
     // Not retried on its own: only a person's Repair tries again.
     expect(calls.filter((c) => c.path.startsWith('/api/search?'))).toHaveLength(1);

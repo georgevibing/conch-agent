@@ -7,6 +7,7 @@ import {
   PasswordInput,
   PathPicker,
   Skeleton,
+  Switch,
   Stack,
   Text,
   toast,
@@ -53,8 +54,11 @@ export function SourcesDialog({
   const client = useQueryClient();
   const [unlocking, setUnlocking] = useState<VaultSource>();
   const [password, setPassword] = useState('');
+  const [keep, setKeep] = useState(false);
   const [database, setDatabase] = useState('');
   const [found, setFound] = useState<KeePassDatabase[]>();
+  const [keyFile, setKeyFile] = useState<string>();
+  const [askKey, setAskKey] = useState(false);
 
   // KeePassXC: find its databases, so nobody types a path; the one chosen before comes first.
   const forKeePass = unlocking?.id === 'keepassxc' ? unlocking : undefined;
@@ -66,6 +70,7 @@ export function SourcesDialog({
         if (!live) return;
         setFound(list);
         setDatabase((now) => now || forKeePass.database || list[0]?.path || '');
+        setKeyFile((now) => now ?? forKeePass.keyFile);
       },
       () => live && setFound([]),
     );
@@ -96,8 +101,9 @@ export function SourcesDialog({
     if (!unlocking || unlocking.id === 'conch') return;
     const id = unlocking.id;
     await run(id, async () => {
-      if (id === 'keepassxc' && database) await vaultApi.setSource(id, { database });
-      const done = await guard(() => vaultApi.unlockSource(id, password));
+      if (id === 'keepassxc' && database)
+        await vaultApi.setSource(id, { database, keyFile: keyFile ?? '' });
+      const done = await guard(() => vaultApi.unlockSource(id, password, keep));
       if (done) {
         toast.success(`${unlocking.name} is unlocked`);
         setUnlocking(undefined);
@@ -138,6 +144,23 @@ export function SourcesDialog({
         {s.state === 'ready' && (
           <Button size="sm" variant="surface" onClick={() => setCopying(s)}>
             Copy into Conch
+          </Button>
+        )}
+        {s.state === 'ready' && s.unlock === 'password' && (
+          <Button
+            size="sm"
+            variant="ghost"
+            loading={busy === `lock:${id}`}
+            onClick={() =>
+              void run(`lock:${id}`, async () => {
+                await vaultApi.lockSource(id);
+                toast(`${s.name} is locked`, {
+                  description: s.keptUnlocked ? 'Conch no longer keeps it unlocked.' : undefined,
+                });
+              })
+            }
+          >
+            Lock
           </Button>
         )}
         <Button
@@ -212,6 +235,7 @@ export function SourcesDialog({
                     state={s.state}
                     message={s.message}
                     count={s.count}
+                    keptUnlocked={s.keptUnlocked}
                     action={action(s)}
                     sync={
                       s.sync && {
@@ -231,7 +255,7 @@ export function SourcesDialog({
                 </div>
               ))}
             </div>
-            {error && (
+            {error && !unlocking && (
               <Callout tone="warning" role="alert">
                 {error}
               </Callout>
@@ -247,7 +271,11 @@ export function SourcesDialog({
 
       <Dialog.Root
         open={unlocking !== undefined}
-        onOpenChange={(o) => !o && setUnlocking(undefined)}
+        onOpenChange={(o) => {
+          if (o) return;
+          setUnlocking(undefined);
+          setError(undefined);
+        }}
       >
         <Dialog.Content size="sm">
           <form onSubmit={(e) => void unlock(e)}>
@@ -292,6 +320,33 @@ export function SourcesDialog({
                     )}
                   </Field>
                 )}
+                {unlocking?.id === 'keepassxc' &&
+                  (askKey || keyFile || /key file/i.test(error ?? '') ? (
+                    <Field>
+                      <Field.Label size="sm">Key file</Field.Label>
+                      <PathPicker
+                        label="Key file"
+                        value={keyFile}
+                        onChange={(path) => {
+                          setKeyFile(path);
+                          setAskKey(true);
+                        }}
+                        onChoose={canPickHere() ? () => pickPath('keepassxc-keyfile') : undefined}
+                        chooseLabel={keyFile ? 'Choose another key file…' : 'Choose the key file…'}
+                        placeholder="~/Documents/Passwords.keyx"
+                        hint="Only if your database also needs one. Conch keeps where it is, never what’s in it."
+                      />
+                    </Field>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setAskKey(true)}
+                      style={{ alignSelf: 'flex-start' }}
+                    >
+                      This database also uses a key file
+                    </Button>
+                  ))}
                 <Field>
                   <Field.Label size="sm">Password</Field.Label>
                   <PasswordInput
@@ -300,6 +355,12 @@ export function SourcesDialog({
                     autoComplete="off"
                   />
                 </Field>
+                <Switch
+                  checked={keep}
+                  onCheckedChange={setKeep}
+                  label="Keep unlocked on this computer"
+                  description={`${unlocking?.name ?? 'It'} opens by itself whenever Conch starts. Its password is sealed with this computer’s key and never leaves it, but anyone who can use this computer as you could open it too.`}
+                />
                 {error && (
                   <Text tone="danger" size="sm" role="alert">
                     {error}

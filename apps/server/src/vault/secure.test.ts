@@ -67,32 +67,37 @@ const tool = (service: VaultService, ctx: ToolContext, name: string) => {
 afterEach(() => vi.useRealTimers());
 
 describe('the lock', () => {
-  it('locks with a password: items hidden, wrong guesses slowed, and it opens again', async () => {
-    const { home, service } = await vault();
-    await service.create(login);
-    await service.setLock({ enabled: true, password: 'tide pool seven' });
-    // Without the device key the password alone opens nothing: it's mixed in.
-    const file = JSON.parse(await readFile(join(home, 'vault', 'vault.json'), 'utf8'));
-    expect(file.wrap).toBeUndefined();
-    expect(file.lock.kdf).toMatchObject({ name: 'scrypt', N: 2 ** 17 });
+  // Several scrypt runs (128 MB each): slow when the whole suite runs at once.
+  it(
+    'locks with a password: items hidden, wrong guesses slowed, and it opens again',
+    { timeout: 60_000 },
+    async () => {
+      const { home, service } = await vault();
+      await service.create(login);
+      await service.setLock({ enabled: true, password: 'tide pool seven' });
+      // Without the device key the password alone opens nothing: it's mixed in.
+      const file = JSON.parse(await readFile(join(home, 'vault', 'vault.json'), 'utf8'));
+      expect(file.wrap).toBeUndefined();
+      expect(file.lock.kdf).toMatchObject({ name: 'scrypt', N: 2 ** 17 });
 
-    await service.lock();
-    const locked = await service.list();
-    expect(locked.status.lock).toMatchObject({ enabled: true, locked: true });
-    expect(locked.items.filter((i) => i.source === 'conch')).toHaveLength(0);
+      await service.lock();
+      const locked = await service.list();
+      expect(locked.status.lock).toMatchObject({ enabled: true, locked: true });
+      expect(locked.items.filter((i) => i.source === 'conch')).toHaveLength(0);
 
-    for (let i = 0; i < 5; i++)
-      await expect(service.unlock('wrong one!')).rejects.toThrow(/isn’t the password/);
-    await expect(service.unlock('tide pool seven')).rejects.toThrow(/Too many wrong passwords/);
+      for (let i = 0; i < 5; i++)
+        await expect(service.unlock('wrong one!')).rejects.toThrow(/isn’t the password/);
+      await expect(service.unlock('tide pool seven')).rejects.toThrow(/Too many wrong passwords/);
 
-    // A fresh start (the wait is in memory) with the right one.
-    const again = new VaultService({ home, keystore: 'file' });
-    await again.unlock('tide pool seven');
-    expect((await again.list()).items.map((i) => i.title)).toEqual(['Bank']);
-    await again.setLock({ enabled: false });
-    const plain = new VaultService({ home, keystore: 'file' });
-    expect((await plain.list()).items).toHaveLength(1);
-  });
+      // A fresh start (the wait is in memory) with the right one.
+      const again = new VaultService({ home, keystore: 'file' });
+      await again.unlock('tide pool seven');
+      expect((await again.list()).items.map((i) => i.title)).toEqual(['Bank']);
+      await again.setLock({ enabled: false });
+      const plain = new VaultService({ home, keystore: 'file' });
+      expect((await plain.list()).items).toHaveLength(1);
+    },
+  );
 
   it('is useless without this computer’s key, whatever the password', async () => {
     const { home, service } = await vault();

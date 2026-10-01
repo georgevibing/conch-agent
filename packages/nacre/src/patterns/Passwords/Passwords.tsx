@@ -845,6 +845,8 @@ export interface VaultSourceRowProps extends Omit<ComponentProps<'div'>, 'childr
   count?: number;
   /** The one button for its state: Turn on, Unlock, Install… */
   action?: ReactNode;
+  /** Kept unlocked on this computer: it opens by itself when Conch starts. */
+  keptUnlocked?: boolean;
   /** Its items are copied into Conch's vault (and kept up to date while `enabled`). */
   sync?: { enabled: boolean; copies: number; when?: string; problem?: string; running?: boolean };
 }
@@ -865,6 +867,7 @@ export function VaultSourceRow({
   count,
   action,
   sync,
+  keptUnlocked,
   className,
   ...props
 }: VaultSourceRowProps) {
@@ -894,6 +897,9 @@ export function VaultSourceRow({
             : STATE_WORDS[state]}
           {message && state !== 'ready' && (
             <span className={styles.sourceMessage}> · {message}</span>
+          )}
+          {keptUnlocked && state === 'ready' && (
+            <span className={styles.sourceMessage}> · Stays unlocked on this computer</span>
           )}
         </span>
         {sync && (sync.enabled || sync.copies > 0) && (

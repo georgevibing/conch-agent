@@ -217,6 +217,11 @@ export const RULES: readonly BackupRule[] = [
     why: 'Which password managers Passwords shows, and where your KeePassXC database is. No secrets.',
   },
   {
+    match: 'vault/remembered.json',
+    class: 'derived',
+    why: 'Passwords of the managers you keep unlocked, sealed with this computer’s own key. They never leave this computer; unlock them again on another.',
+  },
+  {
     match: 'vault/device.*',
     class: 'derived',
     why: 'This computer’s own key to your passwords. It never leaves this computer; a backup carries the vault’s key instead.',

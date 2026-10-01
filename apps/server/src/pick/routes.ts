@@ -10,6 +10,7 @@ const PURPOSES: Record<PickPurpose, PickOptions> = {
     kind: 'file',
     extensions: ['kdbx'],
   },
+  'keepassxc-keyfile': { prompt: 'Choose the key file for your KeePassXC database', kind: 'file' },
   workspace: { prompt: 'Choose the folder your assistant works in', kind: 'folder' },
 };
 
