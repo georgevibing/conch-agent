@@ -203,7 +203,9 @@ copy.
   throwaway folder.
 - Be careful what you ask the agent to read: web pages, emails and files can
   contain instructions meant for it ("prompt injection"). Conch never lets the agent
-  turn on a scheduled routine or give itself more trust — you do that.
+  turn on a scheduled routine or give itself more trust — you do that. And anything
+  it learns about you in a chat that read something from outside waits for your OK
+  in **What Conch knows about you** before it's ever used.
 - Use a password manager.
 - Sign out devices you don't use.
 

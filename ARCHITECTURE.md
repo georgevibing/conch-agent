@@ -88,7 +88,8 @@ src/
   services.ts                 wiring: stores, engines, conversation manager, login
   app.ts                      Fastify routes + /ws + static web app
   settings/store.ts           ~/.conch/settings.json and secrets.json (0600)
-  memory/                     file-per-memory store, prompt builder, memory tools
+  memory/                     file-per-memory store, prompt builder, memory tools; hybrid search
+                              (index, embed), the tidy-up, What Conch knows (ADR 0032)
   conversations/              manager (turns, permissions, events) + JSONL store
   attachments/                uploads: sniffing, storage + sweep, per-engine prompt, sandboxed serving (ADR 0017)
   vault/                      Passwords: encrypted vault, keychain, other managers, import, fills (ADR 0025)
@@ -280,6 +281,19 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   versions that could navigate run with `script-src 'none'` until allowed. Charts,
   tables, Markdown, SVG and Mermaid are drawn by the web app. Pinned ones are apps at
   `/apps/:id`; a refresh is a chat (origin `artifact`) that may only update that one.
+
+- **It learns you** ([ADR 0032](./docs/adr/0032-it-learns-you.md)). `MemoryIndex` ranks
+  memories by BM25 (typos forgiven) plus vectors: Ollama's embedding model when one is
+  installed (`MeaningModel`), built-in hashed word/trigram vectors otherwise. It serves
+  `recall` and `forPrompt` (all memories while they fit in 6,000 characters, else the
+  relevant ones, then the newest). Model vectors are cached in `memory-index.db`
+  (derived, healed). `MemoryTidy` (on request, or nightly with `preferences.tidyMemory`)
+  asks the cheapest model to merge, update and add. It applies changes with Undo, or
+  leaves them `pending` when they came from a tainted chat or `autoMemory` is off.
+  `remember` in a tainted chat saves `pending` too. Pending memories never reach the
+  prompt, `recall` or the export. `SkillSuggester` finds requests made in three chats
+  and drafts a skill to review. Routes: `/api/memories/{search,export,:id/keep}`,
+  `/api/memory/{index,tidy}`, `/api/skills/suggestions`.
 - **Healing** (`lib/healed.ts`): every self-repair leaves one plain note —
   integrations that came back, a renewed sign-in, Claude Code's fallback, a held
   routine that ran once its provider was back. Integrations retry failures that
@@ -441,7 +455,7 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   person presses Repair (`POST /api/search/repair`), never a loop.
 - Local data lives in `~/.conch/` (`CONCH_HOME`): `settings.json`, `secrets.json`
   (the API key and a key per provider, or a 1Password reference to one),
-  `memory/*.md`, `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `search.db`,
+  `memory/*.md` (+ derived `memory-index.db`, `memory-tidy.json`; `skill-suggestions.json`), `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `search.db`,
   `integrations.json` + `integrations.secrets.json`, `skills/<name>/SKILL.md` +
   `skills.json` (modes for skills Conch doesn't own), `local.json` (the local model chosen, the last download speed), `api-sessions/<id>.json` (the
   transcript a plain model API needs, since it keeps no session of its own),
@@ -660,7 +674,8 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
   - integrations ask before changes by default; "Don't ask" needs a recent
     password/key and is flagged by the checkup; a tool whose definition changes
     loses "allow"; integration content is framed as data, not instructions;
-  - memories are injected as facts, not instructions;
+  - memories are injected as facts, not instructions, and one learned in a chat that
+    read something untrusted waits for a person's OK before it's ever used (ADR 0032);
   - the agent's browser can never reach the gateway (every request and WebSocket
     is checked after DNS resolution, service workers are blocked). Local and
     private addresses need "Open local apps" (recent verification, and flagged by

@@ -79,6 +79,15 @@ or delete; every save shows in the chat with Undo. Search finds any line in mont
 of chats, typos and all. ([ADR 0003](./docs/adr/0003-memory.md),
 [0007](./docs/adr/0007-search.md))
 
+**It learns you — visibly.** Memory search understands meaning with a model on
+this computer (or forgives typos without one), and the prompt carries the
+memories that matter. Turn on **Tidy up every night** and Conch merges repeats,
+updates what changed and learns from your chats while you sleep: every change is
+a card with Undo. Something you've asked for in three chats is offered as a skill,
+drafted for you to read; it's never saved by itself. Anything learned in a chat
+that read a web page or an email waits for your OK. **What Conch knows about you**
+shows it all, searchable and exportable. ([ADR 0032](./docs/adr/0032-it-learns-you.md))
+
 **Apps, skills and routines — for every provider.** Connect Notion, Gmail, Google
 Calendar and Drive, Slack, GitHub, Linear, Atlassian, Home Assistant, Stripe and
 more from a gallery, no JSON editing; Conch keeps their sign-ins fresh, and offers

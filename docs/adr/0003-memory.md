@@ -42,4 +42,5 @@ databases to "summarise everything" pipelines. We want something users can trust
 
 Users can see, understand and control everything Conch remembers. Retrieval quality is
 keyword-level; when memory counts grow, add local embeddings behind the same `recall`
-tool without changing storage or UI.
+tool without changing storage or UI. (Done in [ADR 0032](./0032-it-learns-you.md):
+hybrid search, a tidy-up with Undo, and memories that wait for an OK.)
