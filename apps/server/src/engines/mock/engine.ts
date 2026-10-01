@@ -601,6 +601,19 @@ export class MockEngine implements Engine {
         return;
       }
 
+      // "Take your time" writes until it's stopped (a minute at most), so a test
+      // of Stop never races the end of a short scripted reply on a slow machine.
+      if (/\btake your time\b/i.test(said)) {
+        yield { type: 'text', messageId, delta: 'Let me think this through properly.' };
+        for (let i = 0; i < 120; i++) {
+          await sleep(500, input.signal);
+          yield { type: 'text', messageId, delta: ' Still going…' };
+        }
+        yield { type: 'message-done', messageId };
+        yield { type: 'done', outcome: 'success' };
+        return;
+      }
+
       const reply = rememberMatch
         ? "Got it — I'll remember that. You can see and edit everything I remember in **Settings → Memory**."
         : attached.length

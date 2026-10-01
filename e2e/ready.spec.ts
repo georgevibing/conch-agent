@@ -83,7 +83,9 @@ test('a running reply can be stopped', async ({ page }) => {
   // Onboarding was completed by the previous test on this server.
   const composer = page.getByRole('textbox', { name: /Message/ });
   await expect(composer).toBeVisible();
-  await composer.fill('Tell me something interesting');
+  // A reply that runs until it's stopped: a short one can finish before the
+  // click lands on a slow runner, and then there's nothing left to stop.
+  await composer.fill('Tell me something interesting, take your time');
   await composer.press('Enter');
   await page.getByRole('button', { name: /Stop/ }).click();
   await expect(page.getByText(/Stopped/)).toBeVisible();
