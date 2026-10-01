@@ -51,6 +51,7 @@ working agreement 11: _fix it before you ask_.
 | Safe hands: the guard after reading, sealed commands, Activity, skills read first                    | `apps/server/src/conversations/{taint,sandbox}.ts`, `engines/claude-code/engine.ts` (PreToolUse), `activity/`, `skills/scan.ts`, web `features/{safety,activity}/`, Nacre `Safety`, `Activity`, `SkillReview` + [ADR 0028](./docs/adr/0028-safe-hands.md) — security-relevant |
 | Undo: putting back what the assistant changed in your files, Redo, forgetting a memory from Activity | `apps/server/src/undo/`, `conversations/manager.ts` (the turn's tracker), web `features/undo/`, Nacre `Undo`, `ActivityTimeline` `action` + [ADR 0030](./docs/adr/0030-undo.md) — security-relevant                                                                           |
 | Come home: bringing things from OpenClaw and Hermes (`pnpm conch import`)                            | `apps/server/src/import/` (`openclaw.ts`, `hermes.ts`, `read.ts`, `service.ts`), web `features/import/`, Nacre `ComeHome` + [ADR 0035](./docs/adr/0035-come-home.md) — security-relevant                                                                                      |
+| Show me: things made beside the chat, sealed pages, pinned apps                                      | `apps/server/src/artifacts/` (`frame.ts` is the seal), web `features/artifacts/`, Nacre `Artifacts` (`SealedFrame`, `ArtifactPanel`, `ArtifactChart`) + [ADR 0034](./docs/adr/0034-show-me.md) — security-relevant                                                            |
 | Conch restarting itself, surviving a crash                                                           | `apps/server/src/supervisor.ts`, `lib/lifecycle.ts` (`restart()`), web `features/health/restart.ts`                                                                                                                                                                           |
 | A decision that changes architecture or adds a dependency                                            | Write an ADR in [`docs/adr/`](./docs/adr/) first                                                                                                                                                                                                                              |
 | Devices, approving new ones (`pnpm conch devices`)                                                   | `apps/server/src/auth/` (`store.ts`, `devicesCli.ts`), `security.ts`, web `features/auth/`, Nacre `DeviceApproval` + [ADR 0024](./docs/adr/0024-approve-new-devices.md) — security-relevant                                                                                   |
@@ -289,11 +290,15 @@ threat model. Hold every change to the bar of a FAANG security review:
    when a mode allows by itself (ADR 0028). A new tool that brings outside
    content in taints the chat (`conversations/taint.ts` `taintFrom`); one that
    can send things out or change the computer is a sink (`sinkReason`).
-8. **Test the attack, not just the feature.** Add regression tests for each abuse
+8. **What the assistant makes is sealed.** A page it wrote runs only in
+   `SealedFrame` from `/api/artifacts/…/frame` (opaque origin, no network, no way
+   out — ADR 0034); everything else is drawn by Conch, never as HTML. Don't add
+   `allow-same-origin`, popups or a network source to either.
+9. **Test the attack, not just the feature.** Add regression tests for each abuse
    case (traversal, cross-origin, replay, brute force, escalation). See
    `apps/server/src/auth/auth.test.ts` and `e2e/security.spec.ts`.
-9. **Warn people in their words.** Every security message says what could happen
-   and what to do next, never jargon alone.
+10. **Warn people in their words.** Every security message says what could happen
+    and what to do next, never jargon alone.
 
 ## Secrets in a new feature
 

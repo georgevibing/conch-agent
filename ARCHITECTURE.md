@@ -112,6 +112,7 @@ src/
   activity/                   everything the assistant did, read from the chats' logs (ADR 0028)
   undo/                       what each change was before: blobs, change sets, the preview diff, putting back (ADR 0030)
   import/                     Come home: OpenClaw and Hermes read-only, a plan, a ledger for Undo (ADR 0035)
+  artifacts/                  things made beside the chat: store, tools, fenced blocks, the sealed frame (ADR 0034)
   doctor/                     Repair everything: every part's `DoctorCheck`, run at once (`doctor.report`)
   network/watch.ts            online or not (`network.status`); offline routing (ADR 0023)
   lib/path.ts                 the PATH as it is now (Windows registry), refreshed before lookups
@@ -269,6 +270,16 @@ src/
   `providers.setKey`) with `import.progress` events, and records ids in
   `import.json`; `undo` takes exactly those back. Secrets never enter a plan, a log
   or the ledger.
+
+- **Show me** ([ADR 0034](./docs/adr/0034-show-me.md)). `artifact_create`/`artifact_update`
+  (or a fenced ` ```artifact ` block from a provider without tools, taken out on
+  `turn.completed`) write versions to `~/.conch/artifacts/<id>/` and an `artifact` event to
+  the chat. Pages are served by `…/versions/:n/frame` with `frameHeaders` (CSP `sandbox
+allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
+  (`sandbox="allow-scripts"`, height and links by `postMessage` checked by source);
+  versions that could navigate run with `script-src 'none'` until allowed. Charts,
+  tables, Markdown, SVG and Mermaid are drawn by the web app. Pinned ones are apps at
+  `/apps/:id`; a refresh is a chat (origin `artifact`) that may only update that one.
 - **Healing** (`lib/healed.ts`): every self-repair leaves one plain note —
   integrations that came back, a renewed sign-in, Claude Code's fallback, a held
   routine that ran once its provider was back. Integrations retry failures that

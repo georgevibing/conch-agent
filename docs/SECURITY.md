@@ -249,3 +249,16 @@ Conch and hide itself, and only from the same computer, with a token in a file o
 you can read (`~/.conch/tray/token`). The token isn't a sign-in: it opens nothing
 else, and doesn't work through a proxy or from another device. Anything that needs you
 to confirm it's you opens Conch's page instead.
+
+## Things the assistant makes for you
+
+A page or small app the assistant makes runs **sealed off**. It can't see your
+cookies, your saved sign-ins or anything else in Conch. It can't load anything
+from the internet or send anything there, not even through a picture's address.
+It can't take you to another site either. When a page wants to open a link,
+Conch shows you the whole address and asks first.
+
+A page that has links or code that could take you elsewhere opens with its code
+off until you press **Run it anyway**. Documents, charts, tables and diagrams are
+drawn by Conch itself, and they load no pictures from other sites.
+([ADR 0034](./adr/0034-show-me.md))

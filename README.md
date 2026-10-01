@@ -146,6 +146,12 @@ leaves the other app's folder alone, and Undo takes it all back.
 `pnpm conch import --from openclaw --dry-run` shows the same list in a terminal.
 ([ADR 0035](./docs/adr/0035-come-home.md))
 
+**Show me.** Ask for a chart, a page, a document, a diagram or a table, and it opens
+beside the chat: every version kept, with what changed, ready to copy, download or open
+full screen. Pages run sealed off, so one made after reading something hostile still
+can't reach your things or the internet. Pin one as an app in the sidebar, and refresh
+it with fresh data whenever you like. ([ADR 0034](./docs/adr/0034-show-me.md))
+
 **It looks after itself.** **Settings → Health** has one **Repair everything**
 button, a quiet list of what Conch fixed on its own, daily backups you can restore
 (with a preview and Undo), and one-click updates for Conch and the programs it uses.
