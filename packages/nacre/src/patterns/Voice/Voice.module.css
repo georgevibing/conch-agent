@@ -1,0 +1,121 @@
+@layer nacre.components {
+  /* ── VoiceButton ─────────────────────────────────────────────────────── */
+
+  .voiceButton {
+    --vb-level: 0;
+
+    position: relative;
+  }
+
+  /* A ring that breathes with your voice while it listens. */
+  .voiceButton[data-state='listening']::after {
+    content: '';
+    position: absolute;
+    inset: calc(-2px - var(--vb-level) * 6px);
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px
+      color-mix(in oklch, var(--nc-ring) calc(25% + var(--vb-level) * 50%), transparent);
+    pointer-events: none;
+    transition: inset 80ms linear;
+  }
+
+  /* ── TalkMode ────────────────────────────────────────────────────────── */
+
+  .talk {
+    position: fixed;
+    inset: 0;
+    z-index: var(--nc-z-modal);
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    padding: max(env(safe-area-inset-top), var(--nc-space-4)) var(--nc-space-5)
+      max(env(safe-area-inset-bottom), var(--nc-space-6));
+    background: var(--nc-canvas);
+    color: var(--nc-text);
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .talk:focus-visible {
+    outline: none;
+  }
+
+  .talkTop {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .talkCenter {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--nc-space-5);
+    min-block-size: 0;
+    text-align: center;
+  }
+
+  .orb {
+    --tm-level: 0;
+
+    display: grid;
+    place-items: center;
+    inline-size: 11rem;
+    block-size: 11rem;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    transform: scale(calc(1.6 + var(--tm-level) * 0.35));
+    transition: transform 90ms linear;
+  }
+
+  .orb:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 8px;
+  }
+
+  .talkState {
+    margin: var(--nc-space-8) 0 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-md);
+  }
+
+  .heard,
+  .reply {
+    margin: 0;
+    max-inline-size: 32rem;
+    text-wrap: pretty;
+  }
+
+  .heard {
+    color: var(--nc-text);
+    font-size: var(--nc-text-lg);
+  }
+
+  .reply {
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-md);
+    line-height: var(--nc-leading-normal);
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .talkBottom {
+    display: flex;
+    justify-content: center;
+    gap: var(--nc-space-3);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .orb,
+    .voiceButton[data-state='listening']::after {
+      transition: none;
+    }
+
+    .orb {
+      transform: scale(1.6);
+    }
+  }
+}
