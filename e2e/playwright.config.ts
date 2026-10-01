@@ -38,6 +38,8 @@ const scenarios = {
   channels: { port: 4387, env: { CONCH_MOCK_STATE: 'ready' } },
   // Safe hands: checking after reading, the timeline, skills read before they're used.
   safety: { port: 4378, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Undo (ADR 0030): the mock really writes note.md in the work folder, then it's put back.
+  undo: { port: 4375, env: { CONCH_MOCK_STATE: 'ready' } },
   // Conch in your pocket: the app, the offline screen, the phone's address (a pretend Tailscale).
   pocket: { port: 4379, env: { CONCH_MOCK_STATE: 'ready' } },
   // Under the supervisor, like `pnpm start`: Conch runs "in a Terminal window", and can quit.
