@@ -1,0 +1,519 @@
+/**
+ * Come home (ADR 0035): bring your things from OpenClaw or Hermes into Conch.
+ *
+ * Three steps, each the person's:
+ *
+ * 1. **Look.** `plan()` reads the other agent's folder (read-only, no links
+ *    followed) and lists every thing that could come over, with its words
+ *    and a tick. Skills are read through first (ADR 0028). What could hurt
+ *    or surprise — a worrying skill, a bot, a key — starts unticked.
+ * 2. **Bring.** `run()` backs Conch up first, then brings the ticked things
+ *    over: memories, your persona and about-you, skills (Off, to turn on
+ *    when you're ready), routines (drafts: nothing runs by itself), chat
+ *    bots (checked with the app, then waiting for your hello, ADR 0018) and
+ *    keys (into Conch's encrypted key file).
+ * 3. **Undo.** Everything it added is recorded, and goes again with one
+ *    press; what it replaced (your persona, about you) comes back.
+ *
+ * The other app's folder is never written to, and secrets never leave this
+ * process except into Conch's own key stores.
+ */
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
+import type {
+  ImportGroup,
+  ImportItem,
+  ImportOutcome,
+  ImportPlan,
+  ImportResult,
+  ImportSource,
+  ImportSourceId,
+  ImportStatus,
+  Persona,
+  Profile,
+  Routine,
+} from '@conch/protocol';
+import { z } from 'zod';
+
+import { Mutex, readJson, writeJson } from '../lib/fs';
+import { scanSkill } from '../skills/scan';
+import type { Found, FoundChannel, FoundKey, FoundRoutine } from './found';
+import { readHermes } from './hermes';
+import { readOpenClaw } from './openclaw';
+
+const CHANNEL_NAMES = { telegram: 'Telegram', discord: 'Discord', slack: 'Slack' } as const;
+const KEY_NAMES = { 'anthropic-api': 'Anthropic API', openrouter: 'OpenRouter' } as const;
+
+/** What an import added and replaced, so Undo can put things back. */
+const Ledger = z.object({
+  last: z
+    .object({
+      at: z.number(),
+      source: z.enum(['openclaw', 'hermes']),
+      count: z.number(),
+      created: z.object({
+        memories: z.array(z.string()).default([]),
+        skills: z.array(z.string()).default([]),
+        routines: z.array(z.string()).default([]),
+        channels: z.array(z.string()).default([]),
+        keys: z.array(z.enum(['anthropic-api', 'openrouter'])).default([]),
+      }),
+      before: z
+        .object({
+          persona: z.object({ name: z.string(), instructions: z.string() }).partial().optional(),
+          about: z.string().optional(),
+        })
+        .default({}),
+    })
+    .optional(),
+  history: z
+    .array(z.object({ source: z.enum(['openclaw', 'hermes']), at: z.number(), count: z.number() }))
+    .default([]),
+});
+type Ledger = z.infer<typeof Ledger>;
+
+export const LEDGER = 'import.json';
+/** Undo is offered for a week; after that, what came over is simply yours. */
+const UNDO_MS = 7 * 24 * 60 * 60_000;
+
+/** What Conch already has, to tell duplicates apart. */
+export interface ImportTargets {
+  settings: {
+    get(): Promise<{ persona: Persona; profile: Profile }>;
+    update(body: { persona?: Partial<Persona>; profile?: Partial<Profile> }): Promise<unknown>;
+  };
+  memory: {
+    list(): Promise<{ id: string; content: string }[]>;
+    add(input: {
+      content: string;
+      kind?: 'fact' | 'preference' | 'project' | 'person';
+      source: 'user';
+    }): Promise<{ id: string }>;
+    remove(id: string): Promise<unknown>;
+  };
+  skills: {
+    names(): Promise<string[]>;
+    adopt(folder: string, base: string): Promise<{ id: string }>;
+    remove(id: string): Promise<unknown>;
+  };
+  routines: {
+    create(input: {
+      title: string;
+      summary: string;
+      prompt: string;
+      schedule: FoundRoutine['schedule'];
+      timezone: string;
+      status: 'draft';
+      trust: 'ask';
+    }): Promise<Routine>;
+    remove(id: string): Promise<unknown>;
+  };
+  channels: {
+    connect(channel: FoundChannel): Promise<{ id: string; name: string }>;
+    remove(id: string): Promise<unknown>;
+  };
+  keys: {
+    has(provider: FoundKey['provider']): Promise<boolean>;
+    set(provider: FoundKey['provider'], value: string): Promise<unknown>;
+    clear(provider: FoundKey['provider']): Promise<unknown>;
+  };
+  /** A backup to go back to, made before anything changes. */
+  backup?: () => Promise<{ id: string }>;
+  progress?: (done: number, total: number, current: string) => void;
+}
+
+export class ImportError extends Error {
+  constructor(
+    readonly code: 'not-found' | 'busy' | 'nothing',
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const norm = (text: string) => text.replace(/\s+/g, ' ').trim().toLowerCase();
+
+function summarize(found: Found): string {
+  const parts = [
+    found.memories.filter((m) => !m.daily).length &&
+      plural(found.memories.filter((m) => !m.daily).length, 'memory', 'memories'),
+    found.skills.length && plural(found.skills.length, 'skill'),
+    found.routines.length && plural(found.routines.length, 'routine'),
+    found.channels.length && plural(found.channels.length, 'chat app'),
+    (found.persona || found.about) && 'your profile',
+  ].filter(Boolean);
+  return parts.length ? parts.join(', ') : 'Nothing to bring over yet';
+}
+
+/** "every day at 08:00" style words for a schedule, for the card. */
+function when(schedule: FoundRoutine['schedule']): string {
+  switch (schedule.type) {
+    case 'cron':
+      return `on the schedule “${schedule.expression}”`;
+    case 'interval':
+      return `every ${plural(schedule.every, schedule.unit.replace(/s$/, ''))}`;
+    case 'once':
+      return `once, on ${new Date(schedule.at).toLocaleString()}`;
+    default:
+      return 'on its schedule';
+  }
+}
+
+export class ImportService {
+  readonly #mutex = new Mutex();
+  /** The last look at each source, so `run` imports exactly what was shown. */
+  readonly #looked = new Map<ImportSourceId, Found>();
+
+  constructor(
+    private readonly deps: {
+      home: string;
+      /** Whose home folder to look in (tests point it at a fixture). */
+      sourceHome?: string;
+      targets: ImportTargets;
+      now?: () => number;
+    },
+  ) {}
+
+  get #now() {
+    return this.deps.now?.() ?? Date.now();
+  }
+
+  async #ledger(): Promise<Ledger> {
+    const raw = await readJson<unknown>(join(this.deps.home, LEDGER)).catch(() => undefined);
+    const parsed = Ledger.safeParse(raw ?? {});
+    return parsed.success ? parsed.data : Ledger.parse({});
+  }
+
+  async #read(source: ImportSourceId): Promise<Found | undefined> {
+    const home = this.deps.sourceHome ?? homedir();
+    return source === 'openclaw' ? readOpenClaw(home) : readHermes(home);
+  }
+
+  #source(found: Found, ledger: Ledger): ImportSource {
+    const before = [...ledger.history].reverse().find((h) => h.source === found.source);
+    return {
+      id: found.source,
+      label: found.label,
+      path: found.path,
+      summary: summarize(found),
+      ...(before && { imported: { at: before.at, count: before.count } }),
+    };
+  }
+
+  /** The agents found on this computer. Cheap enough to ask on every Settings open. */
+  async status(): Promise<ImportStatus> {
+    const ledger = await this.#ledger();
+    const sources: ImportSource[] = [];
+    for (const id of ['openclaw', 'hermes'] as const) {
+      const found = await this.#read(id).catch(() => undefined);
+      if (found) sources.push(this.#source(found, ledger));
+    }
+    const last = ledger.last && this.#now - ledger.last.at < UNDO_MS ? ledger.last : undefined;
+    return {
+      sources,
+      ...(last && { last: { at: last.at, source: last.source, count: last.count } }),
+    };
+  }
+
+  /** Everything that could come over from `source`, ticked or not, with its words. */
+  async plan(source: ImportSourceId): Promise<ImportPlan> {
+    const found = await this.#read(source);
+    if (!found)
+      throw new ImportError(
+        'not-found',
+        `${source === 'openclaw' ? 'OpenClaw' : 'Hermes'} isn’t on this computer.`,
+      );
+    this.#looked.set(source, found);
+    const t = this.deps.targets;
+    const { persona, profile } = await t.settings.get();
+    const known = new Set((await t.memory.list()).map((m) => norm(m.content)));
+    const skillNames = new Set((await t.skills.names()).map((n) => n.toLowerCase()));
+    const items: ImportItem[] = [];
+
+    if (found.persona?.name)
+      items.push({
+        id: 'persona:name',
+        group: 'persona',
+        title: `Call your assistant “${found.persona.name}”`,
+        detail: `From ${found.label}’s IDENTITY.md. Now it’s “${persona.name}”.`,
+        checked: persona.name === 'Conch' && found.persona.name !== persona.name,
+        duplicate: found.persona.name === persona.name,
+      });
+    if (found.persona?.instructions)
+      items.push({
+        id: 'persona:instructions',
+        group: 'persona',
+        title: 'How your assistant should behave',
+        detail: `From ${found.label}’s ${found.persona.from}, as your instructions in every chat.`,
+        preview: found.persona.instructions,
+        checked: !persona.instructions.trim(),
+        ...(persona.instructions.trim() && {
+          warning: 'Replaces the instructions you wrote in Conch. Undo puts yours back.',
+        }),
+      });
+    if (found.about)
+      items.push({
+        id: 'about',
+        group: 'about',
+        title: 'What it knows about you',
+        detail: `From ${found.label}’s ${found.about.from}, added to About you.`,
+        preview: found.about.text,
+        checked: !profile.about.includes(found.about.text.slice(0, 80)),
+        duplicate: profile.about.includes(found.about.text.slice(0, 80)),
+      });
+
+    found.memories.forEach((m, i) => {
+      const duplicate = known.has(norm(m.text));
+      items.push({
+        id: `memory:${i}`,
+        group: 'memories',
+        title: m.text.length > 140 ? `${m.text.slice(0, 139)}…` : m.text,
+        ...(m.text.length > 140 && { preview: m.text }),
+        detail: m.daily
+          ? `A note from ${m.from.replace(/^memory\/|\.md$/g, '')}`
+          : `From ${m.from}`,
+        checked: !m.daily && !duplicate,
+        ...(duplicate && { duplicate }),
+      });
+    });
+
+    for (const skill of found.skills) {
+      const review = await scanSkill(skill.path).catch(() => undefined);
+      const duplicate = skillNames.has(skill.name.toLowerCase());
+      items.push({
+        id: `skill:${skill.name}`,
+        group: 'skills',
+        title: skill.name.replace(/[-_]+/g, ' '),
+        detail: duplicate
+          ? 'Conch already has a skill by this name; this one comes over as a copy.'
+          : 'Comes over off: turn it on in Skills when you’re ready.',
+        ...(review && { review }),
+        checked: review?.verdict !== 'danger',
+        ...(review?.verdict === 'danger' && {
+          warning:
+            'Conch found something worrying in it. Look at it first: it stays off until you do.',
+        }),
+      });
+    }
+
+    found.routines.forEach((r, i) =>
+      items.push({
+        id: `routine:${i}`,
+        group: 'routines',
+        title: r.title,
+        detail: `Ran ${when(r.schedule)} there${r.enabled ? '' : ' (paused)'}. Comes over as a draft: nothing runs until you turn it on.`,
+        preview: r.prompt,
+        checked: true,
+      }),
+    );
+
+    for (const c of found.channels)
+      items.push({
+        id: `channel:${c.kind}`,
+        group: 'channels',
+        title: `Your ${CHANNEL_NAMES[c.kind]} bot`,
+        detail: `Its key, from ${found.label}’s ${c.from}. Conch checks it with ${CHANNEL_NAMES[c.kind]}, then waits for your hello: nobody else gets in.`,
+        checked: false,
+        warning: `A bot answers in one app at a time. Stop ${found.label} first, or both will try to answer.`,
+      });
+
+    for (const k of found.keys) {
+      const has = await t.keys.has(k.provider).catch(() => false);
+      items.push({
+        id: `key:${k.provider}`,
+        group: 'keys',
+        title: `Your ${KEY_NAMES[k.provider]} key`,
+        detail: has
+          ? `Conch already has a key for ${KEY_NAMES[k.provider]}; it stays as it is.`
+          : `Saved in Conch’s encrypted key file, so ${KEY_NAMES[k.provider]} works here too. It’s never shown.`,
+        checked: false,
+        ...(has && { duplicate: true }),
+      });
+    }
+
+    return { source: this.#source(found, await this.#ledger()), items, problems: found.problems };
+  }
+
+  /** Bring the ticked things over. A backup is made first; then each item, one at a time. */
+  run(source: ImportSourceId, ids: string[]): Promise<ImportResult> {
+    return this.#mutex.run(async () => {
+      const found = this.#looked.get(source) ?? (await this.#read(source));
+      if (!found) throw new ImportError('not-found', 'That app isn’t on this computer any more.');
+      const wanted = new Set(ids);
+      if (!wanted.size) throw new ImportError('nothing', 'Tick something to bring over.');
+      const t = this.deps.targets;
+      const total = wanted.size;
+      let done = 0;
+      const tick = (current: string) => t.progress?.(done, total, current);
+
+      tick('Backing up first');
+      const backup = await t.backup?.().catch(() => undefined);
+
+      const outcomes: ImportOutcome[] = [];
+      const counts: Partial<Record<ImportGroup, number>> = {};
+      const ok = (id: string, group: ImportGroup, title: string, message?: string) => {
+        outcomes.push({ id, group, title, ok: true, ...(message && { message }) });
+        counts[group] = (counts[group] ?? 0) + 1;
+      };
+      const failed = (id: string, group: ImportGroup, title: string, message: string) =>
+        outcomes.push({ id, group, title, ok: false, message });
+      const created: NonNullable<Ledger['last']>['created'] = {
+        memories: [],
+        skills: [],
+        routines: [],
+        channels: [],
+        keys: [],
+      };
+      const before: NonNullable<Ledger['last']>['before'] = {};
+      const settings = await t.settings.get();
+
+      const step = async (
+        id: string,
+        group: ImportGroup,
+        title: string,
+        work: () => Promise<string | undefined>,
+      ) => {
+        if (!wanted.has(id)) return;
+        tick(title);
+        try {
+          const message = await work();
+          ok(id, group, title, message || undefined);
+        } catch (error) {
+          failed(id, group, title, (error as Error).message || 'It didn’t come over.');
+        }
+        done += 1;
+      };
+
+      // Persona and about you: what they replace is kept for Undo.
+      if (found.persona?.name)
+        await step('persona:name', 'persona', `Name: ${found.persona.name}`, async () => {
+          before.persona = { ...before.persona, name: settings.persona.name };
+          await t.settings.update({ persona: { name: found.persona?.name } });
+          return undefined;
+        });
+      if (found.persona?.instructions)
+        await step('persona:instructions', 'persona', 'Instructions', async () => {
+          before.persona = { ...before.persona, instructions: settings.persona.instructions };
+          await t.settings.update({
+            persona: { instructions: found.persona?.instructions?.slice(0, 4000) },
+          });
+          return undefined;
+        });
+      if (found.about)
+        await step('about', 'about', 'About you', async () => {
+          before.about = settings.profile.about;
+          const about = [settings.profile.about.trim(), found.about?.text]
+            .filter(Boolean)
+            .join('\n\n');
+          await t.settings.update({ profile: { about: about.slice(0, 4000) } });
+          return undefined;
+        });
+
+      for (const [i, m] of found.memories.entries())
+        await step(`memory:${i}`, 'memories', m.text.slice(0, 80), async () => {
+          const known = new Set((await t.memory.list()).map((x) => norm(x.content)));
+          if (known.has(norm(m.text))) return 'Already remembered.';
+          const memory = await t.memory.add({ content: m.text, source: 'user' });
+          created.memories.push(memory.id);
+          return undefined;
+        });
+
+      for (const s of found.skills)
+        await step(`skill:${s.name}`, 'skills', s.name, async () => {
+          const skill = await t.skills.adopt(s.path, s.name);
+          created.skills.push(skill.id);
+          return 'Off for now: turn it on in Skills.';
+        });
+
+      for (const [i, r] of found.routines.entries())
+        await step(`routine:${i}`, 'routines', r.title, async () => {
+          const routine = await t.routines.create({
+            title: r.title,
+            summary: '',
+            prompt: r.prompt,
+            schedule: r.schedule,
+            timezone: r.timezone,
+            status: 'draft',
+            trust: 'ask',
+          });
+          created.routines.push(routine.id);
+          return 'A draft: turn it on in Routines when you’re ready.';
+        });
+
+      for (const c of found.channels)
+        await step(`channel:${c.kind}`, 'channels', `${CHANNEL_NAMES[c.kind]} bot`, async () => {
+          const channel = await t.channels.connect(c);
+          created.channels.push(channel.id);
+          return `Say hello to ${channel.name} in ${CHANNEL_NAMES[c.kind]} to finish: nobody else gets in.`;
+        });
+
+      for (const k of found.keys)
+        await step(`key:${k.provider}`, 'keys', `${KEY_NAMES[k.provider]} key`, async () => {
+          if (await t.keys.has(k.provider))
+            return `Conch already had a ${KEY_NAMES[k.provider]} key; it kept it.`;
+          await t.keys.set(k.provider, k.value);
+          created.keys.push(k.provider);
+          return undefined;
+        });
+
+      const count = outcomes.filter((o) => o.ok).length;
+      const ledger = await this.#ledger();
+      await writeJson(join(this.deps.home, LEDGER), {
+        last: { at: this.#now, source, count, created, before },
+        history: [...ledger.history, { source, at: this.#now, count }].slice(-20),
+      } satisfies Ledger);
+      t.progress?.(total, total, 'Done');
+      return {
+        source,
+        counts: Object.fromEntries(
+          (['persona', 'about', 'memories', 'skills', 'routines', 'channels', 'keys'] as const).map(
+            (g) => [g, counts[g] ?? 0],
+          ),
+        ) as ImportResult['counts'],
+        outcomes,
+        ...(backup && { backupId: backup.id }),
+        undoable: count > 0,
+      };
+    });
+  }
+
+  /** Take the last import back: what it added goes, what it replaced comes back. */
+  undo(): Promise<{ removed: number; restored: number }> {
+    return this.#mutex.run(async () => {
+      const ledger = await this.#ledger();
+      const last = ledger.last;
+      if (!last || this.#now - last.at > UNDO_MS)
+        throw new ImportError('nothing', 'There’s no import to undo.');
+      const t = this.deps.targets;
+      let removed = 0;
+      let restored = 0;
+      const quietly = async (work: () => Promise<unknown>) => {
+        try {
+          await work();
+          removed += 1;
+        } catch {
+          // Already gone (removed by hand since): nothing to take back.
+        }
+      };
+      for (const id of last.created.memories) await quietly(() => t.memory.remove(id));
+      for (const id of last.created.skills) await quietly(() => t.skills.remove(id));
+      for (const id of last.created.routines) await quietly(() => t.routines.remove(id));
+      for (const id of last.created.channels) await quietly(() => t.channels.remove(id));
+      for (const p of last.created.keys) await quietly(() => t.keys.clear(p));
+      if (last.before.persona && Object.keys(last.before.persona).length) {
+        await t.settings.update({ persona: last.before.persona });
+        restored += 1;
+      }
+      if (last.before.about !== undefined) {
+        await t.settings.update({ profile: { about: last.before.about } });
+        restored += 1;
+      }
+      await writeJson(join(this.deps.home, LEDGER), {
+        history: ledger.history,
+      } satisfies Ledger);
+      return { removed, restored };
+    });
+  }
+}

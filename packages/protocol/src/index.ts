@@ -38,6 +38,7 @@ export * from './browser';
 export * from './channels';
 export * from './engine';
 export * from './healed';
+export * from './import';
 export * from './integrations';
 export * from './local';
 export * from './common';
@@ -610,6 +611,13 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('healed'), note: HealNote }),
   /** A backup was made, kept or let go, or a restore got ready: refetch the list. */
   z.object({ type: z.literal('backups.changed') }),
+  /** Come home is bringing things over (ADR 0035): how far it is. */
+  z.object({
+    type: z.literal('import.progress'),
+    done: z.number().int().min(0),
+    total: z.number().int().min(0),
+    current: z.string().max(200),
+  }),
   /** Private dictation changed: its speech model arriving, say (ADR 0027). */
   z.object({ type: z.literal('voice.changed'), status: VoiceStatus }),
   /**

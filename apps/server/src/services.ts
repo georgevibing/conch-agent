@@ -11,6 +11,8 @@ import type {
 } from '@conch/protocol';
 
 import { Activity } from './activity/service';
+import { importCheck } from './import/doctor';
+import { ImportService } from './import/service';
 import { AttachmentStore } from './attachments/store';
 import { type SystemKey, VaultService } from './vault/service';
 import { vaultTools } from './vault/tools';
@@ -151,6 +153,8 @@ export class Services {
   #lastActivity = Date.now();
   /** Telegram, Discord and Slack bots that reach your assistant (ADR 0018). */
   readonly channels: ChannelService;
+  /** Come home: bringing your things from OpenClaw or Hermes (ADR 0035). */
+  readonly imports: ImportService;
   /** Always on: starting at login, running with no window (ADR 0026). */
   readonly background: BackgroundService;
   /** Conch in the menu bar, tray or panel (ADR 0029). */
@@ -500,6 +504,8 @@ export class Services {
     this.doctor.register(safetyCheck(this.settings));
     this.doctor.register(this.background.doctorCheck());
     this.doctor.register(trayCheck(this.tray));
+    this.imports = this.#imports(config);
+    this.doctor.register(importCheck(this.imports));
     this.#channelsReady = (async () => {
       if (this.mockTelegram) {
         const port = Number(process.env.CONCH_MOCK_TELEGRAM_PORT ?? 0);
@@ -700,6 +706,46 @@ export class Services {
     const verb =
       parts.length > 1 || routines > 1 ? 'only work' : routines === 1 ? 'only runs' : 'only works';
     return `${list} ${verb} while Conch is running.`;
+  }
+
+  /** Come home: what Conch already has, and where things go when they come over. */
+  #imports(config: Config): ImportService {
+    return new ImportService({
+      home: config.CONCH_HOME,
+      ...(config.CONCH_IMPORT_HOME && { sourceHome: config.CONCH_IMPORT_HOME }),
+      targets: {
+        settings: this.settings,
+        memory: this.memory,
+        skills: {
+          names: async () => (await this.skills.store.list()).skills.map((s) => s.name),
+          adopt: (folder, base) => this.skills.store.adopt(folder, base),
+          remove: (id) => this.skills.remove(id),
+        },
+        routines: {
+          create: (input) => this.routines.create(input, { createdBy: 'user' }),
+          remove: (id) => this.routines.remove(id),
+        },
+        channels: {
+          connect: async (c) => {
+            const channel = await this.channels.create(
+              c.kind === 'slack'
+                ? { kind: 'slack', botToken: c.token, appToken: c.appToken ?? '' }
+                : { kind: c.kind, token: c.token },
+            );
+            return { id: channel.id, name: channel.bot.name };
+          },
+          remove: (id) => this.channels.remove(id),
+        },
+        keys: {
+          has: async (provider) => Boolean(await this.keys.describe(provider)),
+          set: (provider, value) => this.providers.setKey(provider, value),
+          clear: (provider) => this.providers.clearKey(provider),
+        },
+        backup: () => this.backups.backupNow(),
+        progress: (done, total, current) =>
+          this.broadcast.emit({ type: 'import.progress', done, total, current }),
+      },
+    });
   }
 
   #channelsReady: Promise<void>;

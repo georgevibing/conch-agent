@@ -5,6 +5,7 @@
  * having this terminal *is* the proof that it's you.
  */
 import { userInfo } from 'node:os';
+import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { Writable } from 'node:stream';
 
@@ -29,7 +30,14 @@ import { loadConfig } from './config';
 import { IntegrationStore } from './integrations/store';
 import { Healed } from './lib/healed';
 import type { Heal } from './lib/recover';
+import { importCommand } from './import/cli';
+import { ImportService } from './import/service';
+import { MemoryStore } from './memory/store';
 import { probePort, runningGateway } from './port';
+import { ProviderKeys } from './providers/keys';
+import { RoutineService } from './routines/service';
+import { RoutineStore } from './routines/store';
+import { SkillStore } from './skills/store';
 import { findCheckout } from './updates/conch';
 import { PROVIDER_COPY } from './providers/catalog';
 import { SettingsStore } from './settings/store';
@@ -376,6 +384,59 @@ async function background() {
   );
 }
 
+async function importFrom() {
+  const settings = new SettingsStore(config.CONCH_HOME, heal);
+  const memory = new MemoryStore(join(config.CONCH_HOME, 'memory'));
+  const skills = new SkillStore(config.CONCH_HOME);
+  const routineStore = new RoutineStore(join(config.CONCH_HOME, 'routines'), heal);
+  // The CLI only ever adds drafts: no runs, so nothing needs a provider here.
+  const routines = new RoutineService({
+    store: routineStore,
+    conversations: undefined as never,
+    engine: () => undefined as never,
+    emit: () => undefined,
+  });
+  const keys = new ProviderKeys(settings);
+  const imports = new ImportService({
+    home: config.CONCH_HOME,
+    ...(config.CONCH_IMPORT_HOME && { sourceHome: config.CONCH_IMPORT_HOME }),
+    targets: {
+      settings,
+      memory,
+      skills: {
+        names: async () => (await skills.list()).skills.map((s) => s.name),
+        adopt: (folder, base) => skills.adopt(folder, base),
+        remove: (id) => skills.remove(id),
+      },
+      routines: {
+        create: (input) => routines.create(input, { createdBy: 'user' }),
+        remove: (id) => routines.remove(id),
+      },
+      channels: {
+        connect: async () => {
+          throw new Error('Chat bots come over in Conch itself.');
+        },
+        remove: async () => undefined,
+      },
+      keys: {
+        has: async (provider) => Boolean(await keys.describe(provider)),
+        set: async () => {
+          throw new Error('Keys come over in Conch itself.');
+        },
+        clear: async () => undefined,
+      },
+    },
+  });
+  process.exitCode = await importCommand(process.argv.slice(3), imports, {
+    say,
+    bold,
+    dim,
+    green,
+    yellow,
+    running: async () => Boolean(await runningGateway(config.CONCH_HOME)),
+  });
+}
+
 async function shortcut() {
   if (process.argv[3] === 'remove') {
     await (await backgroundService()).removeShortcut();
@@ -411,6 +472,7 @@ function help() {
     ['tray [on|off]', 'Conch in the menu bar, tray or panel'],
     ['background after-logout on', 'Keep running after you log out (Linux)'],
     ['phone', 'Give your phone a secure address (Tailscale)'],
+    ['import --from <app> [--dry-run]', 'Bring your things from OpenClaw or Hermes'],
   ];
   for (const [cmd, what] of rows) say(`${cmd.padEnd(24)}${dim(what)}`);
 }
@@ -430,6 +492,7 @@ const commands: Record<string, () => Promise<void> | void> = {
   shortcut,
   tray,
   phone,
+  import: importFrom,
   help,
 };
 

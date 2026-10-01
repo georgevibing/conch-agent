@@ -84,6 +84,11 @@ export const RULES: readonly BackupRule[] = [
     why: 'What Conch fixed on this computer: reassurance about this machine, not something to move.',
   },
   {
+    match: 'import.json',
+    class: 'derived',
+    why: 'What the last import from OpenClaw or Hermes added, for its Undo: about this computer’s copy of things.',
+  },
+  {
     match: 'gateway.json',
     class: 'derived',
     why: 'Where this run of Conch listens; written again on every start.',

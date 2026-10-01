@@ -56,6 +56,11 @@ const Env = z.object({
    * keychain.
    */
   CONCH_VAULT_KEYSTORE: z.enum(['auto', 'file']).optional(),
+  /**
+   * Whose home folder Come home looks in for OpenClaw and Hermes (ADR 0035).
+   * For tests and e2e only: it's your own home folder otherwise.
+   */
+  CONCH_IMPORT_HOME: z.string().optional(),
   /** Built web app to serve at `/`. */
   CONCH_WEB_DIST: z.string().optional(),
   CONCH_OPEN: z

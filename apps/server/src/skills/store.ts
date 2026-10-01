@@ -421,6 +421,50 @@ export class SkillStore {
     });
   }
 
+  /**
+   * Bring a skill folder from another agent in as one of Conch's own (ADR
+   * 0035), Off until you turn it on. Only regular files come over — never a
+   * link, never a dot-file — and at most 200 files and 10 MB.
+   */
+  async adopt(folder: string, base: string): Promise<LoadedSkill> {
+    const name = await this.freeName(slugify(base) || 'imported-skill');
+    return this.#mutex.run(async () => {
+      const to = safeJoin(this.dir, name);
+      let files = 0;
+      let bytes = 0;
+      await cp(folder, to, {
+        recursive: true,
+        // A link is skipped, not followed: a skill mustn't carry your files in with it.
+        verbatimSymlinks: true,
+        filter: async (from) => {
+          if (
+            relative(folder, from)
+              .split(sep)
+              .some((part) => part.startsWith('.'))
+          )
+            return false;
+          const info = await lstat(from);
+          if (info.isSymbolicLink()) return false;
+          if (info.isFile()) {
+            files += 1;
+            bytes += info.size;
+            if (files > 200 || bytes > 10 * 1024 * 1024) return false;
+          }
+          return true;
+        },
+      });
+      const file = await this.#read(join(to, 'SKILL.md'));
+      await writeFileAtomic(
+        join(to, 'SKILL.md'),
+        joinSkill({ front: setKeys(file.front, [['name', name]]), body: file.body }),
+        0o600,
+      );
+      await this.#setMode(name, 'off');
+      this.invalidate();
+      return this.get(name);
+    });
+  }
+
   // ── Internals ───────────────────────────────────────────────────────────
 
   async #read(file: string): Promise<{ front: string | undefined; body: string }> {
