@@ -1,4 +1,5 @@
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -6,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RunResult } from '../lib/proc';
 import { AfterLogout, KeepAwake } from './little';
-import { trayCheck, TrayService, type TrayDeps } from './tray';
+import { startHelper, trayCheck, TrayService, type TrayDeps } from './tray';
 import { powershellSource, pythonSource, swiftSource } from './tray-sources';
 
 const checkout = resolve(import.meta.dirname, '../../../..');
@@ -42,6 +43,7 @@ function tray(overrides: Partial<TrayDeps> = {}) {
     },
     // A process that's alive (this one's parent shell would do; the test's own pid is refused).
     spawn: (file) => (spawned.push(file), process.ppid),
+    settle: 0,
     ...overrides,
   });
   return { service, spawned, execs, tokens, setWanted: (on: boolean) => (wanted = on) };
@@ -52,13 +54,14 @@ describe('the menu bar helper', () => {
     const { service, spawned, execs, tokens } = tray();
     expect(await service.ensure()).toBe('started');
     expect(execs.filter((e) => e.startsWith('xcrun swiftc'))).toHaveLength(1);
-    expect(spawned[0]).toMatch(/Conch Menu\.app\/Contents\/MacOS\/ConchMenu$/);
+    expect(spawned[0]).toMatch(/Conch Menu\.app[\\/]Contents[\\/]MacOS[\\/]ConchMenu$/);
     expect(await service.ensure()).toBe('running');
     expect(execs.filter((e) => e.startsWith('xcrun swiftc'))).toHaveLength(1);
     // Its token: random, in a file only its owner reads, told to the gate.
     const token = readFileSync(join(home, 'tray', 'token'), 'utf8').trim();
     expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(statSync(join(home, 'tray', 'token')).mode & 0o077).toBe(0);
+    if (process.platform !== 'win32')
+      expect(statSync(join(home, 'tray', 'token')).mode & 0o077).toBe(0);
     expect(tokens).toEqual([token]);
     expect((await service.status()).running).toBe(true);
   });
@@ -128,6 +131,70 @@ describe('the menu bar helper', () => {
     });
     expect(alive).toBe(true);
   });
+
+  it('one that leaves straight away isn’t called started, and Repair everything doesn’t say fixed', async () => {
+    // The pid of a program that has already gone.
+    const gone = spawnSync(process.execPath, ['-e', '']).pid;
+    const { service } = tray({ spawn: () => gone });
+    expect(await service.ensure()).toBe('failed');
+    expect((await service.status()).running).toBe(false);
+    const signal = new AbortController().signal;
+    expect((await trayCheck(service).run({ repair: true, signal }))[0]).toMatchObject({
+      state: 'warning',
+      message: 'Conch couldn’t show itself in the menu bar. It tries again by itself.',
+    });
+  });
+});
+
+// Really started, on a real Windows: a pretend spawn can't tell whether the helper stays.
+describe.runIf(process.platform === 'win32')('started for real on Windows', () => {
+  const alive = (pid: number) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  it('PowerShell runs the helper and stays, from a folder with spaces and quotes in its name', async () => {
+    const dir = join(home, "Ada's folder (x86) & $co");
+    mkdirSync(dir);
+    const ran = join(dir, 'ran');
+    const script = join(dir, 'helper.ps1');
+    writeFileSync(
+      script,
+      [
+        `"tray=$env:CONCH_TRAY" | Out-File -Encoding ascii -FilePath '${ran.replaceAll("'", "''")}'`,
+        'Start-Sleep -Seconds 60',
+        '',
+      ].join('\r\n'),
+    );
+    const pid = await startHelper(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-WindowStyle',
+        'Hidden',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        script,
+      ],
+      { CONCH_TRAY: '1' },
+    );
+    try {
+      expect(pid).toBeGreaterThan(0);
+      await vi.waitFor(() => expect(readFileSync(ran, 'utf8')).toContain('tray=1'), {
+        timeout: 15_000,
+        interval: 200,
+      });
+      expect(alive(pid ?? 0)).toBe(true);
+    } finally {
+      if (pid && alive(pid)) process.kill(pid);
+    }
+  }, 30_000);
 });
 
 describe('its source', () => {

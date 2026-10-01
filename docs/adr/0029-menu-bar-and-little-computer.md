@@ -59,6 +59,14 @@ it again. **Settings → Health → Always on** and `pnpm conch tray on|off`
 switch it. Hiding it from the helper itself sets the preference, so it stays
 hidden. Uninstalling removes `~/.conch/tray`.
 
+**How it's started on Windows.** A detached program has no console, and
+`powershell.exe` without one leaves at once (exit 0, nothing run); one that
+isn't detached goes when the gateway does. So a short-lived PowerShell starts
+the helper with `Start-Process -WindowStyle Hidden` and says its pid: the
+helper gets a hidden console of its own and outlives Quit. A helper that has
+gone a moment after starting counts as not started, so Repair everything
+never says "back in the tray" for one that isn't there.
+
 **It only shows where it can.** Over SSH a Mac has no menu bar
 (`launchctl managername` isn't `Aqua`), and a Linux box with no `DISPLAY` or
 `WAYLAND_DISPLAY` has no panel. There, Conch says so, offers no switch, and

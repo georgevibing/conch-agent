@@ -38,8 +38,48 @@ export type Spawn = (
   file: string,
   args: string[],
   env: Record<string, string>,
-) => number | undefined;
-const spawn: Spawn = (file, args, env) => {
+) => number | undefined | Promise<number | undefined>;
+
+/** One argument on a Windows command line, quoted the way the program will read it back. */
+const windowsArg = (arg: string) =>
+  /^[^\s"]+$/.test(arg) ? arg : `"${arg.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1')}"`;
+
+/**
+ * Windows: PowerShell that starts the helper and says its pid. What to start
+ * comes from the environment, so a folder's name is never part of a command.
+ */
+const START_HIDDEN =
+  '(Start-Process -FilePath $env:CONCH_START_FILE -ArgumentList $env:CONCH_START_ARGS -WindowStyle Hidden -PassThru).Id';
+
+/**
+ * Start the helper and let it go: it outlives this process. Returns its pid.
+ *
+ * Windows can't simply detach it. A detached program gets no console, and
+ * `powershell.exe` without one leaves straight away (exit 0, nothing run);
+ * one that isn't detached goes when the gateway does. So a short-lived
+ * PowerShell starts it with `Start-Process`: the helper gets a hidden console
+ * of its own and belongs to nobody.
+ */
+export const startHelper: Spawn = async (file, args, env) => {
+  if (process.platform === 'win32') {
+    const started = await run(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', START_HIDDEN],
+      {
+        timeout: 20_000,
+        env: {
+          ...(Object.fromEntries(
+            Object.entries(process.env).filter(([, value]) => value !== undefined),
+          ) as Record<string, string>),
+          ...env,
+          CONCH_START_FILE: file,
+          CONCH_START_ARGS: args.map(windowsArg).join(' '),
+        },
+      },
+    );
+    const pid = Number(started.stdout.trim());
+    return Number.isInteger(pid) && pid > 0 ? pid : undefined;
+  }
   const child = nodeSpawn(file, args, {
     detached: true,
     stdio: 'ignore',
@@ -81,6 +121,8 @@ export interface TrayDeps {
   platform?: NodeJS.Platform;
   exec?: Exec;
   spawn?: Spawn;
+  /** How long a helper just started gets before it's believed to have stayed (ms). */
+  settle?: number;
   env?: NodeJS.ProcessEnv;
   heal?: (message: string) => void;
 }
@@ -311,11 +353,15 @@ nohup /bin/sh ${shQuote(join(this.#dir, 'launch'))} >/dev/null 2>&1 &
         .digest('hex');
       if (before && fresh.trim() === version) return 'running';
       if (before) this.#kill(before);
-      const pid = (this.deps.spawn ?? spawn)(prepared.file, prepared.args, { CONCH_TRAY: '1' });
+      const pid = await (this.deps.spawn ?? startHelper)(prepared.file, prepared.args, {
+        CONCH_TRAY: '1',
+      });
       if (!pid) return 'failed';
       await writeFile(join(this.#dir, 'pid'), String(pid));
       await writeFile(join(this.#dir, 'started'), version);
-      return 'started';
+      // A pid isn't an icon: one that left straight away never showed anything.
+      await new Promise((resolve) => setTimeout(resolve, this.deps.settle ?? 1_500));
+      return alive(pid) ? 'started' : 'failed';
     } catch (error) {
       this.deps.heal?.(`The menu bar helper couldn’t start: ${(error as Error).message}`);
       return 'failed';
@@ -380,11 +426,12 @@ export function menuPlist(): string {
 }
 
 /** A pretend helper for the mock engine: tests never put anything in this computer's menu bar. */
-export function pretendTray(): Pick<TrayDeps, 'exec' | 'spawn' | 'platform'> {
+export function pretendTray(): Pick<TrayDeps, 'exec' | 'spawn' | 'settle' | 'platform'> {
   return {
     platform: 'win32',
     exec: async () => ({ stdout: '', stderr: '', code: 0 }),
     spawn: () => process.pid,
+    settle: 0,
   };
 }
 
