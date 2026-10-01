@@ -193,3 +193,19 @@ copy.
 Please report privately to the maintainers rather than opening a public issue.
 See [ARCHITECTURE.md § Security model](../ARCHITECTURE.md#security-model) and
 [ADR 0008](./adr/0008-access-and-hardening.md) for the technical design.
+
+## When the assistant reads something untrusted
+
+A web page, an email or a message from someone else can contain instructions
+aimed at your assistant. Conch can't tell a hostile page from a friendly one, so
+it doesn't try: once a chat has read something from outside, anything that could
+send your things somewhere or change this computer **asks you first**, in every
+mode (Full trust included), and the question says why. Reading on is free.
+
+Commands also run **sealed**: they can change your work folder and the caches
+installs use, and can't read your SSH keys, cloud sign-ins, keychains or
+browsers' saved passwords. A command that needs out asks first.
+
+Both are in **Settings → Security → Safety**, on unless you turn them off. Turning
+one off asks that it's you, and the checkup will say so. **Activity** (in the
+sidebar) shows everything the assistant did, in every chat and routine.

@@ -109,6 +109,7 @@ src/
   network/tailscale.ts        your phone's secure address: `tailscale serve`, looked at and turned on (ADR 0027)
   push/                       notifications: RFC 8291/8292 Web Push on node:crypto, subscriptions, presence (ADR 0027)
   voice/                      private dictation: whisper.cpp and its speech model (ADR 0027)
+  activity/                   everything the assistant did, read from the chats' logs (ADR 0028)
   doctor/                     Repair everything: every part's `DoctorCheck`, run at once (`doctor.report`)
   network/watch.ts            online or not (`network.status`); offline routing (ADR 0023)
   lib/path.ts                 the PATH as it is now (Windows registry), refreshed before lookups
@@ -225,6 +226,17 @@ src/
   web app is installable (manifest, `sw.js` with an offline screen), dictates
   (on-device, private, or the browser's service with consent), reads aloud, and talks
   hands free (`Talk`).
+- **Safe hands** ([ADR 0028](./docs/adr/0028-safe-hands.md)). A chat that takes something
+  in from outside (web, downloads, integrations, another person's message) gets a
+  `taint` event; from then on `sinkReason` calls (commands, files outside the work
+  folder, data-carrying URLs, integration writes) ask with a `taint` sentence and no
+  "always". `TurnInput.guard` is consulted before every tool call (Claude Code's
+  PreToolUse hook, so it holds in Full trust), Codex runs `workspace-write` when
+  tainted, and channel guard questions go to the owner. `TurnInput.sandbox` seals
+  Claude Code's commands (`conversations/sandbox.ts`: writable caches, denied secret
+  places). `Activity` serves `/api/activity` from the logs. `skills/scan.ts` reviews
+  every skill; `danger` ones stay off until acknowledged by hash, and other apps'
+  skills are pinned when turned on.
 - **Healing** (`lib/healed.ts`): every self-repair leaves one plain note —
   integrations that came back, a renewed sign-in, Claude Code's fallback, a held
   routine that ran once its provider was back. Integrations retry failures that

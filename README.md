@@ -117,6 +117,13 @@ always reach it. Turning it on from a Terminal window moves Conch to the backgro
 without losing your place. Open **Conch** from Applications, Spotlight or the Start
 menu, and it starts itself first if it has to. ([ADR 0026](./docs/adr/0026-always-on.md))
 
+**Safe hands.** Once a chat has read a web page, an email or someone else's message,
+anything that could send your things out or change your computer asks you first,
+in every mode, and says why. Commands run sealed, so they can't read your keys or
+saved passwords. **Activity** shows everything your assistant did. Skills are read
+through before they're used: a worrying one stays off until you've looked, and
+another app's skill that changes turns off again. ([ADR 0028](./docs/adr/0028-safe-hands.md))
+
 **It looks after itself.** **Settings → Health** has one **Repair everything**
 button, a quiet list of what Conch fixed on its own, daily backups you can restore
 (with a preview and Undo), and one-click updates for Conch and the programs it uses.
@@ -160,4 +167,4 @@ documents it. For an authenticated HTTPS reverse proxy, see
 - [docs/BROWSER.md](./docs/BROWSER.md) — the browser: watching, taking over, what it asks
 - [docs/TERMINAL.md](./docs/TERMINAL.md) — the terminal: shortcuts, the assistant, other devices
 - [docs/design/NACRE.md](./docs/design/NACRE.md) — the design language
-- [docs/adr](./docs/adr) — decision records (0001–0027)
+- [docs/adr](./docs/adr) — decision records (0001–0028)
