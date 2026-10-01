@@ -114,6 +114,7 @@ src/
   undo/                       what each change was before: blobs, change sets, the preview diff, putting back (ADR 0030)
   import/                     Come home: OpenClaw and Hermes read-only, a plan, a ledger for Undo (ADR 0035)
   artifacts/                  things made beside the chat: store, tools, fenced blocks, the sealed frame (ADR 0034)
+  tasks/                      background tasks and helpers side by side (`delegate`), queue, worktrees (ADR 0033)
   doctor/                     Repair everything: every part's `DoctorCheck`, run at once (`doctor.report`)
   network/watch.ts            online or not (`network.status`); offline routing (ADR 0023)
   lib/path.ts                 the PATH as it is now (Windows registry), refreshed before lookups
@@ -294,6 +295,17 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   prompt, `recall` or the export. `SkillSuggester` finds requests made in three chats
   and drafts a skill to review. Routes: `/api/memories/{search,export,:id/keep}`,
   `/api/memory/{index,tidy}`, `/api/skills/suggestions`.
+
+- **Hand it off** ([ADR 0033](./docs/adr/0033-hand-it-off.md)). `TaskService` runs each
+  task as a conversation with origin `task` (as routines do), at most 3 background and 4
+  helpers at once, the rest `queued`. A task reports with `report_result`; its status,
+  `current` activity and `steps` follow its chat's events, and the chat it came from gets
+  `task` events that the transcript folds into one live card. `delegate` (a host tool)
+  starts helpers in the parent turn's mode, with the parent's taint, on the small model by
+  default, optionally in a git worktree (`tasks/worktree.ts`, removed when nothing
+  changed); their taint comes back to the parent, the turn's abort stops them, and over
+  budget it refuses. A restart marks running tasks `interrupted` (one-press retry); a limit
+  carries on once on `limitFallback`. Push topic `tasks`; doctor check `tasks`.
 - **Healing** (`lib/healed.ts`): every self-repair leaves one plain note —
   integrations that came back, a renewed sign-in, Claude Code's fallback, a held
   routine that ran once its provider was back. Integrations retry failures that

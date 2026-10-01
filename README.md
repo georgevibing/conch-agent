@@ -161,6 +161,13 @@ full screen. Pages run sealed off, so one made after reading something hostile s
 can't reach your things or the internet. Pin one as an app in the sidebar, and refresh
 it with fresh data whenever you like. ([ADR 0034](./docs/adr/0034-show-me.md))
 
+**Hand it off.** Press ⌘⇧↩ to send something to the background and keep chatting:
+a live card shows what it's doing, **Tasks** shows everything that's working, and
+its result comes back to your chat, with a notification when it's done. The
+assistant can split a job and run the parts side by side on a faster model, each
+in its own copy of the folder if it's code. Helpers ask as you would, stay as
+careful as their chat, and stop when you stop. ([ADR 0033](./docs/adr/0033-hand-it-off.md))
+
 **It looks after itself.** **Settings → Health** has one **Repair everything**
 button, a quiet list of what Conch fixed on its own, daily backups you can restore
 (with a preview and Undo), and one-click updates for Conch and the programs it uses.
