@@ -12,6 +12,7 @@
 import { lstat, readFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 
+import { SKILLS_SUBCOMMANDS } from '../cliCommands';
 import { readKey, splitSkill } from './frontmatter';
 import { fingerprintOf, publicKeyFrom, SIG_FILE, signSkill } from './signing';
 import type { SkillTrust } from './trust';
@@ -127,13 +128,6 @@ export async function skillsCommand(
 
   say(bold('pnpm conch skills <command>'));
   say();
-  const rows: [string, string][] = [
-    ['sign <folder> [--as name]', 'Sign a skill you share'],
-    ['key', 'Your public key, for people who trust you'],
-    ['trust <key> --as name', 'Trust a publisher’s key'],
-    ['trusted', 'Whose skills you trust'],
-    ['forget <fingerprint>', 'Stop trusting a publisher'],
-  ];
-  for (const [cmd, what] of rows) say(`${cmd.padEnd(28)}${dim(what)}`);
+  for (const { usage, summary } of SKILLS_SUBCOMMANDS) say(`${usage.padEnd(28)}${dim(summary)}`);
   return verb === 'help' ? 0 : 1;
 }

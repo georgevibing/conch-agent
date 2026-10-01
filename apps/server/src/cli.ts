@@ -23,6 +23,7 @@ import { Tailscale } from './network/tailscale';
 import { SERVER_VERSION } from './version';
 import { HostPolicy, exposure } from './auth/network';
 import { Devices } from './auth/devicesCli';
+import { CLI_COMMANDS, type CliCommandName } from './cliCommands';
 import { AccessError, AccessStore } from './auth/store';
 import { BrowserStore } from './browser/store';
 import { terminalRemote } from './terminal/service';
@@ -471,29 +472,12 @@ async function quit() {
 function help() {
   say(bold('pnpm conch <command>'));
   say();
-  const rows: [string, string][] = [
-    ['status', 'Security checkup'],
-    ['password [--generate]', 'Choose a password (or have a strong one made)'],
-    ['key [name]', 'Create an access key'],
-    ['keys', 'List access keys'],
-    ['revoke <id>', 'Revoke an access key'],
-    ['pair', 'Sign in your phone with a QR code'],
-    ['devices', 'What has signed in; approve new devices (devices help)'],
-    ['sign-out-everywhere', 'Sign every device out'],
-    ['reset', 'Forgot your password? Turn sign-in off and start again'],
-    ['background [on|off]', 'Always on: start at login, run with no window'],
-    ['quit', 'Stop Conch, wherever it’s running'],
-    ['shortcut [remove]', 'Put Conch where your apps are (Applications, Start)'],
-    ['tray [on|off]', 'Conch in the menu bar, tray or panel'],
-    ['background after-logout on', 'Keep running after you log out (Linux)'],
-    ['phone', 'Give your phone a secure address (Tailscale)'],
-    ['import --from <app> [--dry-run]', 'Bring your things from OpenClaw or Hermes'],
-    ['skills sign <folder>', 'Sign a skill you share (skills help)'],
-  ];
-  for (const [cmd, what] of rows) say(`${cmd.padEnd(24)}${dim(what)}`);
+  const width = Math.max(...CLI_COMMANDS.map((c) => c.usage.length)) + 2;
+  for (const { usage, summary } of CLI_COMMANDS) say(`${usage.padEnd(width)}${dim(summary)}`);
 }
 
-const commands: Record<string, () => Promise<void> | void> = {
+/** Typed by `cliCommands.ts`: a command needs its words there before it can exist here. */
+const commands: Record<CliCommandName | 'help', () => Promise<void> | void> = {
   status,
   password,
   key,
@@ -515,7 +499,8 @@ const commands: Record<string, () => Promise<void> | void> = {
 
 console.log();
 try {
-  await (commands[process.argv[2] ?? 'help'] ?? help)();
+  const handlers: Record<string, (() => Promise<void> | void) | undefined> = commands;
+  await (handlers[process.argv[2] ?? 'help'] ?? help)();
 } catch (error) {
   say(`✗ ${error instanceof AccessError ? error.message : String(error)}`);
   process.exitCode = 1;

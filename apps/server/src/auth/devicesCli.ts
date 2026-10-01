@@ -16,6 +16,7 @@ import {
   type DeviceRequest,
 } from '@conch/protocol';
 
+import { DEVICES_SUBCOMMANDS } from '../cliCommands';
 import { AccessError, type AccessStore } from './store';
 
 export interface DevicesIo {
@@ -132,16 +133,8 @@ export class Devices {
     const { say, style } = this.io;
     say(style.bold('pnpm conch devices <command>'));
     say();
-    const rows: [string, string][] = [
-      ['(nothing), list [--json]', 'What has signed in, and who is waiting'],
-      ['approve [code] [--yes]', 'Let a waiting device in (asks which, or waits for one)'],
-      ['reject [code] [--all]', 'Turn a waiting device down'],
-      ['remove [id] [--yes]', 'Forget a device and sign it out'],
-      ['rename <id> <name>', 'Give a device a name you’ll recognise'],
-      ['on', 'New devices need your approval after signing in'],
-      ['off', 'Anyone with the password or key gets in again'],
-    ];
-    for (const [cmd, what] of rows) say(`${pad(cmd, 28)}${style.dim(what)}`);
+    for (const { usage, summary } of DEVICES_SUBCOMMANDS)
+      say(`${pad(usage, 28)}${style.dim(summary)}`);
   }
 
   async json() {

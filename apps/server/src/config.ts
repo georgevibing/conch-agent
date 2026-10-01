@@ -4,14 +4,14 @@ import { join, resolve } from 'node:path';
 import { EngineId } from '@conch/protocol';
 import { z } from 'zod';
 
-const Env = z.object({
+/** What each variable is for is in `ENV_ABOUT` below, where the documentation reads it too. */
+export const Env = z.object({
   CONCH_HOST: z.string().default('127.0.0.1'),
   CONCH_PORT: z.coerce.number().int().min(1).max(65535).default(4317),
   CONCH_ALLOW_REMOTE: z
     .enum(['0', '1'])
     .default('0')
     .transform((v) => v === '1'),
-  /** Extra hostnames allowed in the Host header (comma separated), e.g. a Tailscale name. */
   CONCH_ALLOWED_HOSTS: z
     .string()
     .default('')
@@ -21,47 +21,16 @@ const Env = z.object({
         .map((h) => h.trim().toLowerCase())
         .filter(Boolean),
     ),
-  /**
-   * Legacy: a shared access key from the environment. Prefer creating access
-   * keys in Settings → Security (they're hashed at rest and revocable).
-   */
   CONCH_TOKEN: z.string().min(16, 'CONCH_TOKEN must be at least 16 characters.').optional(),
   CONCH_HOME: z.string().default(join(homedir(), '.conch')),
-  /** Force an engine regardless of preferences (e.g. `mock` for UI work and tests). */
   CONCH_ENGINE: EngineId.optional(),
-  /** Explicit path to the Claude Code executable. */
   CONCH_CLAUDE_PATH: z.string().optional(),
   CONCH_CODEX_PATH: z.string().optional(),
-  /**
-   * `auto` lists skills from other agents' folders too (`~/.agents/skills`,
-   * `~/.claude/skills`, OpenClaw, Hermes); `off` only Conch's own. Unset: `auto`,
-   * except with the mock engine, whose test runs shouldn't see your skills.
-   */
   CONCH_SKILL_SOURCES: z.enum(['auto', 'off']).optional(),
-  /**
-   * Conch's own git checkout, which updates move forward. For development and
-   * tests only: Conch finds the folder it runs from by itself.
-   */
   CONCH_CHECKOUT: z.string().optional(),
-  /**
-   * `auto` looks for updates once a day; `off` only when asked ("Check now").
-   * Unset: `auto`, except with the mock engine.
-   */
   CONCH_UPDATE_CHECKS: z.enum(['auto', 'off']).optional(),
-  /**
-   * Where the key that opens your passwords is kept: `auto` uses this
-   * computer's keychain (macOS Keychain, Windows DPAPI, the Linux Secret
-   * Service) when it has one; `file` a 0600 file beside the vault. Unset:
-   * `auto`, except with the mock engine, whose test runs mustn't touch your
-   * keychain.
-   */
   CONCH_VAULT_KEYSTORE: z.enum(['auto', 'file']).optional(),
-  /**
-   * Whose home folder Come home looks in for OpenClaw and Hermes (ADR 0035).
-   * For tests and e2e only: it's your own home folder otherwise.
-   */
   CONCH_IMPORT_HOME: z.string().optional(),
-  /** Built web app to serve at `/`. */
   CONCH_WEB_DIST: z.string().optional(),
   CONCH_OPEN: z
     .enum(['0', '1'])
@@ -73,6 +42,97 @@ const Env = z.object({
 });
 
 export type Config = z.infer<typeof Env>;
+
+export interface EnvAbout {
+  /** What it does, for the person setting it. */
+  about: string;
+  /** What happens when it's unset, where the schema has no default to show. */
+  unset?: string;
+  /** Only for development and tests: nobody running Conch needs it. */
+  internal?: boolean;
+}
+
+/**
+ * Every variable, in words. Typed by `Config`, so a new variable without its
+ * words doesn't compile; the documentation's configuration page is generated
+ * from this and the schema above (`apps/docs/reference`).
+ */
+export const ENV_ABOUT: Record<keyof Config, EnvAbout> = {
+  CONCH_HOST: {
+    about:
+      'The address Conch listens on. Anything but this computer also needs CONCH_ALLOW_REMOTE=1, and other devices must sign in.',
+  },
+  CONCH_PORT: {
+    about:
+      'Pins the port. A pinned port that’s taken is reported, never swapped for the next free one.',
+    unset: '4317, or the next free port when another program has it',
+  },
+  CONCH_ALLOW_REMOTE: {
+    about:
+      'Lets Conch listen beyond this computer. Other devices are refused until sign-in is set up.',
+  },
+  CONCH_ALLOWED_HOSTS: {
+    about:
+      'Extra hostnames Conch answers to, comma separated: a reverse proxy’s name, say. Your Tailscale name is found by itself.',
+  },
+  CONCH_TOKEN: {
+    about:
+      'Legacy: one shared access key, at least 16 characters. Prefer access keys from Settings → Security, which are hashed and can be revoked.',
+    unset: 'no shared key',
+  },
+  CONCH_HOME: {
+    about:
+      'Where Conch keeps everything it writes. Use the same value for Conch and for pnpm conch.',
+    unset: '~/.conch',
+  },
+  CONCH_ENGINE: {
+    about:
+      'Pins one provider and makes it the only one, whatever Settings says: mock for UI work and tests.',
+    unset: 'every connected provider',
+  },
+  CONCH_CLAUDE_PATH: {
+    about: 'The Claude Code program to run, when Conch shouldn’t find it by itself.',
+    unset: 'found by itself',
+  },
+  CONCH_CODEX_PATH: {
+    about: 'The Codex program to run, when Conch shouldn’t find it by itself.',
+    unset: 'found by itself',
+  },
+  CONCH_SKILL_SOURCES: {
+    about:
+      'auto also lists skills from other agents’ folders (~/.agents/skills, ~/.claude/skills, OpenClaw, Hermes); off lists only Conch’s own.',
+    unset: 'auto (off with the mock engine)',
+  },
+  CONCH_CHECKOUT: {
+    about: 'Conch’s own git checkout, which updates move forward.',
+    unset: 'the folder Conch runs from',
+    internal: true,
+  },
+  CONCH_UPDATE_CHECKS: {
+    about: 'auto looks for updates once a day; off only when you press Check now.',
+    unset: 'auto (off with the mock engine)',
+  },
+  CONCH_VAULT_KEYSTORE: {
+    about:
+      'Where the key that opens Passwords is kept: auto uses this computer’s keychain (macOS Keychain, Windows DPAPI, the Linux Secret Service) when it has one; file a private file beside the vault.',
+    unset: 'auto (file with the mock engine)',
+  },
+  CONCH_IMPORT_HOME: {
+    about: 'Whose home folder Come home looks in for OpenClaw and Hermes.',
+    unset: 'your own',
+    internal: true,
+  },
+  CONCH_WEB_DIST: {
+    about: 'The built web app to serve.',
+    unset: 'apps/web/dist',
+  },
+  CONCH_OPEN: {
+    about: 'Opens Conch in your browser once it has started. pnpm start sets it.',
+  },
+  CONCH_LOG_LEVEL: {
+    about: 'How much Conch logs. Logs never hold query strings, headers or bodies.',
+  },
+};
 
 /**
  * `CONCH_PORT` was chosen on purpose. Then a port another program holds is
