@@ -1,0 +1,141 @@
+@layer nacre.components {
+  .permissions,
+  .signature,
+  .publishers {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-3) var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+  }
+
+  .permissions[data-variant='compact'] {
+    padding: 0;
+    background: none;
+  }
+
+  .heading {
+    margin: 0;
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  .fine {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    text-wrap: pretty;
+  }
+
+  .can {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+  }
+
+  .can > li {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .can code,
+  .fingerprint {
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+  }
+
+  .canIcon {
+    display: inline-flex;
+    flex-shrink: 0;
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .canIcon > svg {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  /* ── Signature ─────────────────────────────────────────────────────── */
+
+  .signature {
+    --ss-h: var(--nc-success-h);
+  }
+
+  .signature[data-state='caution'] {
+    --ss-h: var(--nc-warning-h);
+  }
+
+  .signature[data-state='danger'] {
+    --ss-h: var(--nc-danger-h);
+
+    background: light-dark(oklch(0.97 0.025 var(--ss-h)), oklch(0.26 0.04 var(--ss-h)));
+  }
+
+  .signatureHead {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .signatureIcon {
+    flex-shrink: 0;
+    inline-size: 1.1rem;
+    block-size: 1.1rem;
+    color: light-dark(oklch(0.5 0.13 var(--ss-h)), oklch(0.8 0.11 var(--ss-h)));
+  }
+
+  .signature[data-state='unsigned'] .signatureIcon {
+    color: var(--nc-text-subtle);
+  }
+
+  .signature[data-state='unsigned'] .heading {
+    color: var(--nc-text-muted);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .signatureAction {
+    display: flex;
+    gap: var(--nc-space-2);
+    padding-block-start: var(--nc-space-1);
+  }
+
+  /* ── Trusted publishers ────────────────────────────────────────────── */
+
+  .publisherRows {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .publisherRows > li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-1) var(--nc-space-3);
+    font-size: var(--nc-text-sm);
+  }
+
+  .publisherName {
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .publisherRows > li > button {
+    margin-inline-start: auto;
+  }
+}

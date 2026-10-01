@@ -1,4 +1,5 @@
 import {
+  BadgeCheck,
   Blocks,
   Globe,
   MessageCircle,
@@ -32,6 +33,7 @@ const ICONS: Record<BackupPowerInfo['kind'], ReactNode> = {
   'browser-local': <Router />,
   'terminal-remote': <MonitorSmartphone />,
   'channel-people': <MessageCircle />,
+  'trusted-publishers': <BadgeCheck />,
 };
 
 /**
