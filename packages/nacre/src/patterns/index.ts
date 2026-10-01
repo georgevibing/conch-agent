@@ -41,3 +41,4 @@ export * from './AlwaysOn';
 export * from './Backups';
 export * from './PathPicker';
 export * from './ComeHome';
+export * from './Artifacts';

@@ -1,6 +1,7 @@
 import {
   AppWindow,
   Brain,
+  ChartColumn,
   Check,
   Clock,
   FilePen,
@@ -15,7 +16,8 @@ import type { ComponentProps, ReactNode } from 'react';
 import { cx } from '../../utils/cx';
 import styles from './Activity.module.css';
 
-export type ActivityRowKind = 'command' | 'file' | 'web' | 'app' | 'approval' | 'read' | 'memory';
+export type ActivityRowKind =
+  'command' | 'file' | 'web' | 'app' | 'approval' | 'read' | 'memory' | 'artifact';
 export type ActivityRowStatus = 'done' | 'failed' | 'allowed' | 'denied' | 'waiting' | 'noted';
 
 export interface ActivityRow {
@@ -46,6 +48,7 @@ const ICONS: Record<ActivityRowKind, typeof Globe> = {
   approval: ShieldCheck,
   read: ShieldAlert,
   memory: Brain,
+  artifact: ChartColumn,
 };
 
 const SPOKEN: Record<ActivityRowStatus, string> = {

@@ -1,0 +1,499 @@
+@layer nacre.components {
+  /* ── Card in the chat ─────────────────────────────────────────────── */
+
+  .card {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    inline-size: 100%;
+    max-inline-size: 28rem;
+    padding: var(--nc-space-2-5) var(--nc-space-3);
+    border: 0;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-1);
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+    transition:
+      background var(--nc-duration-fast) var(--nc-ease-out),
+      box-shadow var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .card:hover {
+      background: var(--nc-surface-hi);
+    }
+  }
+
+  .card:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .card[data-active] {
+    box-shadow:
+      inset 0 0 0 1.5px var(--nc-accent-8),
+      var(--nc-elevation-1);
+  }
+
+  .cardIcon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--nc-control-md);
+    block-size: var(--nc-control-md);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-accent-3);
+    color: var(--nc-accent-11);
+  }
+
+  .cardIcon svg,
+  .panelIcon svg {
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+  }
+
+  .cardText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .cardTitle {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    overflow: hidden;
+    font-weight: var(--nc-weight-medium);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .cardPin {
+    flex: none;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .cardMeta {
+    overflow: hidden;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .cardOpen {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--nc-space-0-5);
+    color: var(--nc-text-accent);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .cardOpen svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  /* ── Panel ────────────────────────────────────────────────────────── */
+
+  .panel {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    block-size: 100%;
+    background: var(--nc-canvas);
+  }
+
+  .panel[data-expanded] {
+    position: fixed;
+    inset: 0;
+    z-index: var(--nc-z-modal);
+  }
+
+  .panelHead {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    padding: var(--nc-space-2-5) var(--nc-space-3);
+    border-block-end: 1px solid var(--nc-border-subtle);
+  }
+
+  .panelIcon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    color: var(--nc-text-muted);
+  }
+
+  .panelTitles {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .panelTitle {
+    margin: 0;
+    overflow: hidden;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-tight);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .panelMeta {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+  }
+
+  .refreshing {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    color: var(--nc-text-muted);
+  }
+
+  .panelActions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--nc-space-0-5);
+  }
+
+  .panelBar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+    padding: 0 var(--nc-space-3);
+    border-block-end: 1px solid var(--nc-border-subtle);
+  }
+
+  /* Beats the Tabs root's own gap: the bar and the body sit flush. */
+  .panel .panelTabs {
+    flex: 1;
+    gap: 0;
+    min-block-size: 0;
+  }
+
+  .panelNote {
+    margin: 0;
+    padding: var(--nc-space-2) var(--nc-space-4) 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+  }
+
+  .panelBody {
+    flex: 1;
+    margin: 0;
+    min-block-size: 0;
+    padding: var(--nc-space-4);
+    overflow: auto;
+  }
+
+  .panelBody[data-view='source'] {
+    padding: 0;
+  }
+
+  .panelEsc {
+    position: absolute;
+    inset-block-end: var(--nc-space-4);
+    inset-inline-end: var(--nc-space-4);
+  }
+
+  /* ── Sealed page ──────────────────────────────────────────────────── */
+
+  .frameWrap {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+  }
+
+  .frameWrap[data-fill] {
+    block-size: 100%;
+  }
+
+  .frame {
+    display: block;
+    inline-size: 100%;
+    border: 0;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .frameWrap[data-fill] .frame {
+    flex: 1;
+    min-block-size: 0;
+  }
+
+  /* ── Chart ────────────────────────────────────────────────────────── */
+
+  .chart {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    margin: 0;
+  }
+
+  .chartHead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-3);
+  }
+
+  .chartTitle {
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  .chartViews {
+    margin-inline-start: auto;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1) var(--nc-space-4);
+    margin: 0;
+    padding: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    list-style: none;
+  }
+
+  .legend li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+  }
+
+  .swatch {
+    flex: none;
+    inline-size: 0.625rem;
+    block-size: 0.625rem;
+    border-radius: var(--nc-radius-xs);
+  }
+
+  .plot {
+    position: relative;
+    min-inline-size: 0;
+  }
+
+  .plot svg {
+    display: block;
+    overflow: visible;
+  }
+
+  .grid {
+    stroke: var(--nc-border-subtle);
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+  }
+
+  .tick {
+    fill: var(--nc-text-subtle);
+    font-size: var(--nc-text-2xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .bar,
+  .slice {
+    transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .slice {
+    stroke: var(--nc-canvas);
+    stroke-width: 2;
+  }
+
+  @media (hover: hover) {
+    .plot:has(.bar:hover) .bar:not(:hover),
+    .plot:has(.slice:hover) .slice:not(:hover) {
+      opacity: 0.55;
+    }
+  }
+
+  .area {
+    opacity: 0.1;
+  }
+
+  .line {
+    fill: none;
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+
+  .dot {
+    stroke: var(--nc-canvas);
+    stroke-width: 2;
+  }
+
+  .crosshair {
+    stroke: var(--nc-border-strong);
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+    pointer-events: none;
+  }
+
+  .tip {
+    position: absolute;
+    z-index: var(--nc-z-tooltip);
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    min-inline-size: 8rem;
+    padding: var(--nc-space-2) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-overlay);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-3);
+    font-size: var(--nc-text-xs);
+    pointer-events: none;
+  }
+
+  .tipLabel {
+    color: var(--nc-text-muted);
+  }
+
+  .tipRow {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+  }
+
+  .tipRow strong {
+    margin-inline-start: auto;
+    padding-inline-start: var(--nc-space-3);
+    font-weight: var(--nc-weight-semibold);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Table ────────────────────────────────────────────────────────── */
+
+  .tableWrap {
+    max-block-size: 70vh;
+    overflow: auto;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .tableWrap:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .table {
+    inline-size: max-content;
+    min-inline-size: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: var(--nc-text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .table th,
+  .table td {
+    max-inline-size: 24rem;
+    padding: var(--nc-space-2) var(--nc-space-3);
+    overflow: hidden;
+    text-align: start;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    border-block-end: 1px solid var(--nc-border-subtle);
+  }
+
+  .table [data-numeric] {
+    text-align: end;
+  }
+
+  .table thead th {
+    position: sticky;
+    inset-block-start: 0;
+    padding: 0;
+    font-weight: var(--nc-weight-semibold);
+    background: var(--nc-surface-hi);
+  }
+
+  .table thead th:not(:has(button)) {
+    padding: var(--nc-space-2) var(--nc-space-3);
+  }
+
+  .table tbody th {
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .table tbody tr:last-child > * {
+    border-block-end: 0;
+  }
+
+  .sort {
+    display: inline-flex;
+    align-items: center;
+    justify-content: inherit;
+    gap: var(--nc-space-1);
+    inline-size: 100%;
+    padding: var(--nc-space-2) var(--nc-space-3);
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  [data-numeric] > .sort {
+    flex-direction: row-reverse;
+  }
+
+  .sort:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  .sortIcon {
+    flex: none;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    color: var(--nc-text-disabled);
+  }
+
+  .sortIcon[data-active] {
+    color: var(--nc-text);
+  }
+
+  @media (hover: hover) {
+    .sort:hover .sortIcon {
+      color: var(--nc-text-muted);
+    }
+  }
+
+  .more {
+    margin: 0;
+    padding: var(--nc-space-2) var(--nc-space-3);
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+  }
+}
