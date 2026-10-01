@@ -40,3 +40,4 @@ export * from './Activity';
 export * from './AlwaysOn';
 export * from './Backups';
 export * from './PathPicker';
+export * from './ComeHome';
