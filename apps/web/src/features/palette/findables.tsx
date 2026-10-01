@@ -477,6 +477,13 @@ export function useFindables(query: string, conversationId: string | undefined):
       run: () => void navigate('/passwords', { state: { check: true } }),
     },
     {
+      id: 'activity',
+      label: 'Activity',
+      keywords: 'activity history log audit timeline what did it do commands ran files changed',
+      icon: <History />,
+      run: () => void navigate('/activity'),
+    },
+    {
       id: 'skills',
       label: 'Skills',
       keywords: 'skill teach',

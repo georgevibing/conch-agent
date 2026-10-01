@@ -209,8 +209,9 @@ describe('Palette search', () => {
       expect(screen.getByRole('status')).toHaveTextContent('Search isn’t working right now'),
     );
     expect(screen.queryByText(/Nothing matches/)).not.toBeInTheDocument();
-    // Not retried on its own: only a person's Repair tries again.
-    expect(calls.filter((c) => c.path.startsWith('/api/search?'))).toHaveLength(1);
+    // Not retried on its own: only a person's Repair tries again. (Under load the typing
+    // can also search a part of the word first; the whole word is searched once.)
+    expect(calls.filter((c) => /^\/api\/search\?q=redeploy(&|$)/.test(c.path))).toHaveLength(1);
     await user.click(repair);
     expect(
       await screen.findByRole('option', { name: /Run the redeploy script/ }),

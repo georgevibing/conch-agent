@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 
 import { useConversations } from '../api/queries';
+import { ActivityView } from '../features/activity/ActivityView';
 import { RestartWatch } from '../features/health/RestartWatch';
 import { PushKeeper } from '../features/notifications/PushKeeper';
 import { OpenFromLink } from '../features/pwa/OpenFromLink';
@@ -57,6 +58,7 @@ export function Shell() {
   const skillsArea = path.startsWith('/skills');
   const channelsArea = path.startsWith('/channels');
   const passwordsArea = path.startsWith('/passwords');
+  const activityArea = path.startsWith('/activity');
 
   // Toasts and notifications raised outside the router ask us to navigate.
   useEffect(() => {
@@ -84,7 +86,9 @@ export function Shell() {
           ? 'Channels'
           : passwordsArea
             ? 'Passwords'
-            : (current?.title ?? (conversationId ? '' : 'New chat'));
+            : activityArea
+              ? 'Activity'
+              : (current?.title ?? (conversationId ? '' : 'New chat'));
 
   useEffect(() => {
     document.title = current ? `${current.title} · Conch` : 'Conch';
@@ -167,7 +171,9 @@ export function Shell() {
         <Reconnecting />
         {/* The page; it steps aside while the terminal fills the screen. */}
         <div className={styles.area} data-covered={terminalMax || undefined}>
-          {passwordsArea ? (
+          {activityArea ? (
+            <ActivityView />
+          ) : passwordsArea ? (
             <PasswordsView itemId={itemId} />
           ) : channelsArea ? (
             channelKind ? (

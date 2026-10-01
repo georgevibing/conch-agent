@@ -34,6 +34,7 @@ import { keys, useAppState, useConversations } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { dayGroup, type DayGroup } from '../../lib/time';
 import { useAutoFocus } from '../../lib/useAutoFocus';
+import { ActivityLink } from '../activity/ActivityLink';
 import { ChannelsLink } from '../channels/ChannelsLink';
 import { PasswordsLink } from '../passwords/PasswordsLink';
 import { APPS } from '../channels/describe';
@@ -268,6 +269,7 @@ export function Sidebar({
         <IntegrationsLink onNavigate={onNavigate} />
         <ChannelsLink onNavigate={onNavigate} />
         <PasswordsLink onNavigate={onNavigate} />
+        <ActivityLink onNavigate={onNavigate} />
       </div>
       <ScrollArea className={styles.scroll}>
         {!isPending && (conversations?.length ?? 0) === 0 && (

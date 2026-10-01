@@ -8,6 +8,7 @@ import {
   Arrival,
   AssistantPlaceholder,
   MemoryPill,
+  TaintItem,
   SkillUsedLine,
   PermissionCard,
   ToolItem,
@@ -157,6 +158,8 @@ export function Transcript({
     )
     .at(-1);
   const lastErrorId = [...items].reverse().find((i) => i.kind === 'turn-end')?.id;
+  // The first time a chat reads something from outside says what changes; the rest are brief.
+  const firstTaint = items.find((i) => i.kind === 'taint')?.id;
   const turnStart = items.findLastIndex((i) => i.kind === 'user');
   const prompt = turnStart === -1 ? '' : (items[turnStart] as { text: string }).text;
   // Waiting on you (a question, a handoff): no "working…" while it's your move.
@@ -251,6 +254,9 @@ export function Transcript({
                 name={name}
                 onRespond={(d) => onRespond((block.item as { id: string }).id, d)}
               />
+            )}
+            {block.item?.kind === 'taint' && (
+              <TaintItem item={block.item} first={block.item.id === firstTaint} />
             )}
             {block.item?.kind === 'memory' && <MemoryPill item={block.item} />}
             {block.item?.kind === 'skill' && <SkillUsedLine item={block.item} />}

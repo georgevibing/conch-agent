@@ -66,6 +66,7 @@ import { applySignedIn } from './signedIn';
 import { useCountdown } from './useCountdown';
 import { useVerify } from './useVerify';
 import { PhoneSetup } from '../phone/PhoneSetup';
+import { SafetySection } from '../safety/SafetySection';
 
 type Guard = ReturnType<typeof useVerify>['guard'];
 
@@ -1090,6 +1091,7 @@ export function SecurityTab() {
       <Section title="Security" description="Keep Conch — and this computer — safe.">
         <SecurityCheckup items={items} />
       </Section>
+      <SafetySection />
       <SignInSection access={data} guard={guard} focus={fix.focus} />
       {data.method !== 'none' && <DevicesSection access={data} guard={guard} focus={fix.focus} />}
       <ReachSection access={data} focus={fix.focus} />

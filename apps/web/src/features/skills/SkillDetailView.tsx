@@ -16,6 +16,7 @@ import {
   SegmentedControl,
   SkillIcon,
   SkillProblem,
+  SkillReview,
   skillModeLabels,
   Skeleton,
   Stack,
@@ -24,7 +25,15 @@ import {
   toast,
   type SkillProblemFix,
 } from '@conch/nacre';
-import { ArrowLeft, Copy, MessageSquare, SearchX, Sparkles, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Copy,
+  MessageSquare,
+  SearchX,
+  ShieldAlert,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -126,6 +135,9 @@ function SkillPage({ skill }: { skill: SkillDetail }) {
   };
 
   const setMode = (mode: SkillMode) => update.mutate({ id: skill.id, patch: { mode } });
+  // Off because of what's in it, or because it changed: the review says why, with the way on.
+  const reviewing = skill.problemKind === 'needs-review' || skill.problemKind === 'changed';
+  const [confirmOn, setConfirmOn] = useState(false);
   const tryIt = () => void navigate('/', { state: { draft: `/${skill.name} ` } });
 
   const makeCopy = () =>
@@ -234,7 +246,64 @@ function SkillPage({ skill }: { skill: SkillDetail }) {
         )}
       </Stack>
 
-      {skill.problem && problemFix && <SkillProblem problem={skill.problem} fix={problemFix} />}
+      {skill.review && (skill.review.verdict !== 'clean' || !skill.editable) && (
+        <SkillReview
+          verdict={skill.review.verdict}
+          findings={skill.review.findings}
+          note={skill.problemKind === 'changed' ? skill.problem : undefined}
+          action={
+            reviewing ? (
+              <Button
+                size="sm"
+                variant={skill.problemKind === 'needs-review' ? 'surface' : 'solid'}
+                tone={skill.problemKind === 'needs-review' ? 'danger' : undefined}
+                onClick={() =>
+                  skill.review?.verdict === 'danger' ? setConfirmOn(true) : setMode('auto')
+                }
+              >
+                {skill.problemKind === 'needs-review'
+                  ? 'Turn it on anyway…'
+                  : 'Turn it on as it is now'}
+              </Button>
+            ) : undefined
+          }
+        />
+      )}
+      {skill.problem && problemFix && !reviewing && (
+        <SkillProblem problem={skill.problem} fix={problemFix} />
+      )}
+      <AlertDialog.Root open={confirmOn} onOpenChange={setConfirmOn}>
+        <AlertDialog.Content tone="danger" icon={<ShieldAlert />}>
+          <AlertDialog.Header>
+            <AlertDialog.Title>Turn on {skill.title}?</AlertDialog.Title>
+            <AlertDialog.Description>
+              It could{' '}
+              {(skill.review?.findings ?? [])
+                .filter((f) => f.severity === 'danger')
+                .map(
+                  (f) => f.message.charAt(0).toLowerCase() + f.message.slice(1).replace(/\.$/, ''),
+                )
+                .join('; ')}
+              . Only turn it on if you know where it came from and trust it. You’ll still be asked
+              before it runs commands.
+            </AlertDialog.Description>
+          </AlertDialog.Header>
+          <AlertDialog.Footer>
+            <AlertDialog.Cancel>Keep it off</AlertDialog.Cancel>
+            <AlertDialog.Action
+              tone="danger"
+              onClick={() =>
+                update.mutate({
+                  id: skill.id,
+                  patch: { mode: 'auto', acknowledged: skill.review?.hash },
+                })
+              }
+            >
+              Turn it on
+            </AlertDialog.Action>
+          </AlertDialog.Footer>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
       {!skill.editable && problemFix?.kind !== 'copy' && (
         <Callout tone="info" title={`From ${skill.sourceLabel}`}>
           Conch reads this folder but never changes it. Skills found in other apps start off — read

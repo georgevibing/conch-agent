@@ -1,5 +1,6 @@
 import type {
   Attachment,
+  TaintSource,
   VaultPermission,
   VaultRequest,
   BrowserHandoff,
@@ -63,6 +64,14 @@ export type TranscriptItem =
       browser?: BrowserPermission;
       /** Reading something from Passwords (ADR 0025). */
       vault?: VaultPermission;
+      /** Asked because the chat read something untrusted (ADR 0028): why. No "always". */
+      taint?: string;
+    }
+  | {
+      /** The chat read something from outside: sending and changing ask first from here (ADR 0028). */
+      kind: 'taint';
+      id: string;
+      source: TaintSource;
     }
   | {
       /** Passwords needs you (unlock it, or type in a credential); later events with the same id replace it. */
@@ -306,8 +315,14 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             input: event.input,
             browser: event.browser,
             ...(event.vault && { vault: event.vault }),
+            ...(event.taint && { taint: event.taint }),
           },
         ],
+      };
+    case 'taint':
+      return {
+        ...base,
+        items: [...items, { kind: 'taint', id: `taint-${event.seq}`, source: event.source }],
       };
     case 'vault.request': {
       const updated = updateItem(items, 'vault-request', event.request.requestId, (item) => ({

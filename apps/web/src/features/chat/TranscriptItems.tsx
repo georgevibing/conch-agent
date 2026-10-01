@@ -4,11 +4,13 @@ import {
   Collapsible,
   CopyButton,
   Diff,
+  GuardNote,
   InlineCode,
   Message,
   SkillUsed,
   Stack,
   Surface,
+  TaintNotice,
   Text,
   ThinkingIndicator,
   ToolCall,
@@ -294,19 +296,23 @@ export function PermissionCard({
           </Text>
         </Stack>
       </div>
+      {item.taint && <GuardNote>{item.taint}</GuardNote>}
       {command && <pre className={styles.permissionCommand}>{command}</pre>}
       <div className={styles.permissionActions}>
         <Button variant="ghost" onClick={() => respond('deny')} disabled={Boolean(sent)}>
           Deny
         </Button>
-        <Button
-          variant="surface"
-          onClick={() => respond('allow-always')}
-          disabled={Boolean(sent)}
-          loading={sent === 'allow-always'}
-        >
-          Always allow
-        </Button>
+        {/* Asked because of what it read: this once, never always (ADR 0028). */}
+        {!item.taint && (
+          <Button
+            variant="surface"
+            onClick={() => respond('allow-always')}
+            disabled={Boolean(sent)}
+            loading={sent === 'allow-always'}
+          >
+            Always allow
+          </Button>
+        )}
         <Button
           ref={allowRef}
           onClick={() => respond('allow')}
@@ -318,6 +324,21 @@ export function PermissionCard({
       </div>
     </Surface>
   );
+}
+
+const READ_WORDS: Record<Of<'taint'>['source']['kind'], string> = {
+  web: '',
+  download: 'something downloaded from ',
+  app: 'things in ',
+  person: 'a message from ',
+};
+
+/** The chat read something from outside (ADR 0028): said once, quietly. */
+export function TaintItem({ item, first }: { item: Of<'taint'>; first: boolean }) {
+  const { kind, label } = item.source;
+  const read =
+    kind === 'download' && label === 'something downloaded' ? label : `${READ_WORDS[kind]}${label}`;
+  return <TaintNotice read={read} first={first} />;
 }
 
 export function MemoryPill({ item }: { item: Of<'memory'> }) {

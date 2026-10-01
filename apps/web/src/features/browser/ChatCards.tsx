@@ -84,6 +84,7 @@ export function BrowserApprovalItem({
       box={detail.box}
       name={name}
       decision={item.decision}
+      guard={item.taint}
       busy={busy}
       onDecide={(decision) => {
         setBusy(true);
