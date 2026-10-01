@@ -70,4 +70,20 @@ describe('Button', () => {
     expect(link).toHaveAttribute('data-lustre');
     expect(link).not.toHaveAttribute('type');
   });
+
+  it('keeps its icons around the child’s own words when asChild is set', () => {
+    renderNacre(
+      <Button
+        asChild
+        leadingIcon={<svg data-testid="lead" />}
+        trailingIcon={<svg data-testid="trail" />}
+      >
+        <a href="/docs">Docs</a>
+      </Button>,
+    );
+    const link = screen.getByRole('link', { name: 'Docs' });
+    expect(link).toContainElement(screen.getByTestId('lead'));
+    expect(link).toContainElement(screen.getByTestId('trail'));
+    expect(link.textContent).toBe('Docs');
+  });
 });

@@ -152,6 +152,10 @@
     align-items: center;
     gap: var(--nc-space-1-5);
     color: var(--nc-text-muted);
+  }
+
+  /* Only the logo is faded: the name keeps its contrast. */
+  .soonItem > :first-child {
     filter: saturate(0.35);
     opacity: 0.8;
   }

@@ -172,10 +172,11 @@ export function CodeBlock({
       <div
         id={bodyId}
         className={styles.viewport}
-        // Scrollable regions must be keyboard-focusable (WCAG 2.1.1).
+        // What scrolls must be reachable from the keyboard (WCAG 2.1.1). A group, not
+        // a region: a page with several blocks would be a page of identical landmarks.
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}
-        role="region"
+        role="group"
         aria-label={filename ? `Code: ${filename}` : `${label} code`}
       >
         <pre className={styles.pre} data-language={lang}>

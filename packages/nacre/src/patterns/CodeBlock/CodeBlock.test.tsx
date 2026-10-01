@@ -11,7 +11,7 @@ const code = 'const a = 1;\nconst b = 2;\nexport { a, b };';
 describe('CodeBlock', () => {
   it('renders plain code immediately and is accessible', async () => {
     const { container } = renderNacre(<CodeBlock code={code} language="ts" filename="a.ts" />);
-    expect(screen.getByRole('region', { name: 'Code: a.ts' })).toHaveTextContent('const b = 2;');
+    expect(screen.getByRole('group', { name: 'Code: a.ts' })).toHaveTextContent('const b = 2;');
     expect(screen.getByText('a.ts')).toBeInTheDocument();
     await expectAccessible(container);
   });
@@ -22,7 +22,7 @@ describe('CodeBlock', () => {
       () => expect(container.querySelector('[style*="--shiki-token-keyword"]')).not.toBeNull(),
       { timeout: 10_000 },
     );
-    expect(screen.getByRole('region')).toHaveTextContent('export { a, b };');
+    expect(screen.getByRole('group')).toHaveTextContent('export { a, b };');
   }, 15_000);
 
   it('copies the code and confirms', async () => {

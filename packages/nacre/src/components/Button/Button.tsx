@@ -62,22 +62,21 @@ export function Button({
       onClick={loading ? (event) => event.preventDefault() : onClick}
       {...props}
     >
+      {lead != null && (
+        <span className={styles.icon} aria-hidden>
+          {lead}
+        </span>
+      )}
       {asChild ? (
-        children
+        // The child is the element; what's inside it is the label, between the icons.
+        <Slot.Slottable>{children}</Slot.Slottable>
       ) : (
-        <>
-          {lead != null && (
-            <span className={styles.icon} aria-hidden>
-              {lead}
-            </span>
-          )}
-          {children != null && <span className={styles.label}>{children}</span>}
-          {trailingIcon != null && (
-            <span className={styles.icon} aria-hidden>
-              {trailingIcon}
-            </span>
-          )}
-        </>
+        children != null && <span className={styles.label}>{children}</span>
+      )}
+      {trailingIcon != null && (
+        <span className={styles.icon} aria-hidden>
+          {trailingIcon}
+        </span>
       )}
     </Comp>
   );
