@@ -10,6 +10,7 @@ import { Palette } from './Palette';
 
 // Search waits on a debounce and a round trip; under a full parallel run that takes longer than 1 s.
 configure({ asyncUtilTimeout: 4000 });
+vi.setConfig({ testTimeout: 20_000 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -117,7 +118,10 @@ describe('Palette search', () => {
     expect(screen.getByRole('option', { name: /redeploy failed/ })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /Plan my week/ })).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('2 messages in 1 chat');
-    expect(calls.some((c) => c.path.startsWith('/api/search?q=redeploy'))).toBe(true);
+    // Typing under load can show results for "redep" first: wait for the whole word's search.
+    await waitFor(() =>
+      expect(calls.some((c) => c.path.startsWith('/api/search?q=redeploy'))).toBe(true),
+    );
 
     await user.keyboard('{ArrowDown}');
     expect(hit).toHaveAttribute('aria-selected', 'true');
