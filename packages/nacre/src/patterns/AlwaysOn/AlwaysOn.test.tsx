@@ -102,3 +102,27 @@ describe('AlwaysOn', () => {
     );
   });
 });
+
+describe('AlwaysOn options', () => {
+  it('shows how it runs under the status, and not while it’s changing', () => {
+    const { rerender } = renderNacre(
+      <AlwaysOn
+        on
+        onOnChange={() => undefined}
+        running="background"
+        options={<p>Menu bar row</p>}
+      />,
+    );
+    expect(screen.getByText('Menu bar row')).toBeInTheDocument();
+    rerender(
+      <AlwaysOn
+        on
+        onOnChange={() => undefined}
+        running="background"
+        busy
+        options={<p>Menu bar row</p>}
+      />,
+    );
+    expect(screen.queryByText('Menu bar row')).toBeNull();
+  });
+});

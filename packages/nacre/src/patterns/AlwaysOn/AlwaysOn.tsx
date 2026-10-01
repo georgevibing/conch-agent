@@ -28,6 +28,11 @@ export interface AlwaysOnProps extends Omit<ComponentProps<'section'>, 'title'> 
   unsupported?: ReactNode;
   /** Where the computer lists it: “System Settings → General → Login Items”. */
   place?: string;
+  /**
+   * More about how it runs, as quiet rows of switches (ADR 0029): the menu
+   * bar, after logging out, staying awake.
+   */
+  options?: ReactNode;
   /** Actions: Quit Conch. */
   children?: ReactNode;
 }
@@ -48,6 +53,7 @@ export function AlwaysOn({
   problem,
   unsupported,
   place,
+  options,
   children,
   className,
   ...props
@@ -151,6 +157,8 @@ export function AlwaysOn({
       {needed != null && !on && !busy && !problem && !unsupported && (
         <p className={styles.needed}>{needed}</p>
       )}
+
+      {options != null && !busy && !unsupported && <div className={styles.options}>{options}</div>}
 
       {children != null && !busy && <div className={styles.actions}>{children}</div>}
     </section>

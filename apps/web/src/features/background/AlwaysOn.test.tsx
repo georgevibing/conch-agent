@@ -160,3 +160,121 @@ describe('the hint beside routines and chat apps', () => {
     expect(screen.queryByText(/reaches you/)).toBeNull();
   });
 });
+
+describe('how it runs (ADR 0029)', () => {
+  it('turns the menu bar off, and keeps a Mac awake', async () => {
+    const user = userEvent.setup();
+    const tray = { available: true, on: true, running: true, where: 'menu bar' };
+    const calls = mockFetch({
+      'GET /api/background': () =>
+        status({ on: true, running: 'background', tray, keepAwake: { on: false, active: false } }),
+      'PUT /api/background/tray': () =>
+        status({
+          on: true,
+          running: 'background',
+          tray: { ...tray, on: false, running: false },
+          keepAwake: { on: false, active: false },
+        }),
+      'PUT /api/background/keep-awake': () =>
+        status({ on: true, running: 'background', keepAwake: { on: true, active: true } }),
+    });
+    renderApp(<AlwaysOnSection />);
+    await user.click(await screen.findByRole('switch', { name: /Show Conch in the menu bar/ }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/api/background/tray')?.body).toEqual({ on: false }),
+    );
+    await user.click(await screen.findByRole('switch', { name: /Keep this Mac awake/ }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/api/background/keep-awake')?.body).toEqual({
+        on: true,
+      }),
+    );
+  });
+
+  it('on Linux, says the one command when logging out needs an administrator', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/background': () =>
+        status({ on: true, running: 'background', afterLogout: { state: 'off' } }),
+      'PUT /api/background/after-logout': () =>
+        status({
+          on: true,
+          running: 'background',
+          afterLogout: {
+            state: 'off',
+            command: 'sudo loginctl enable-linger ada',
+            note: 'This computer asks for an administrator to change that.',
+          },
+        }),
+    });
+    renderApp(<AlwaysOnSection />);
+    await user.click(await screen.findByRole('switch', { name: /Keep running after you log out/ }));
+    expect(await screen.findByText('sudo loginctl enable-linger ada')).toBeVisible();
+  });
+
+  it('asks you to confirm it’s you before it keeps running with nobody logged in', async () => {
+    const user = userEvent.setup();
+    let verified = false;
+    const calls = mockFetch({
+      'GET /api/auth': () => ({
+        method: 'password',
+        signedIn: true,
+        setupRequired: false,
+        secure: true,
+      }),
+      'GET /api/background': () =>
+        status({ on: true, running: 'background', afterLogout: { state: 'off' } }),
+      'PUT /api/background/after-logout': () =>
+        verified
+          ? status({ on: true, running: 'background', afterLogout: { state: 'on' } })
+          : new Response(
+              JSON.stringify({
+                error: 'verify-required',
+                message: 'Confirm it’s you to keep Conch running after you log out.',
+              }),
+              { status: 403 },
+            ),
+      'POST /api/access/verify': () => {
+        verified = true;
+        return {
+          method: 'password',
+          username: 'ada',
+          suggestedUsername: 'ada',
+          keys: [],
+          sessions: [],
+          devices: [],
+          requests: [],
+          approval: { on: false, here: true },
+          checkup: [],
+          exposure: 'local',
+          port: 4317,
+          urls: [],
+          verified: true,
+        };
+      },
+    });
+    renderApp(<AlwaysOnSection />);
+    await user.click(await screen.findByRole('switch', { name: /Keep running after you log out/ }));
+    const confirm = await screen.findByRole('dialog', { name: 'Confirm it’s you' });
+    await user.type(within(confirm).getByLabelText('Password'), 'purple otters juggle at dawn');
+    await user.click(within(confirm).getByRole('button', { name: 'Confirm' }));
+    await waitFor(() =>
+      expect(screen.getByRole('switch', { name: /Keep running after you log out/ })).toBeChecked(),
+    );
+    expect(calls.filter((c) => c.path === '/api/background/after-logout')).toHaveLength(2);
+  });
+
+  it('on a Mac, says how to stay logged in instead', async () => {
+    mockFetch({
+      'GET /api/background': () =>
+        status({
+          on: true,
+          running: 'background',
+          afterLogout: { state: 'unavailable', note: 'A Mac stops what you run when you log out.' },
+        }),
+    });
+    renderApp(<AlwaysOnSection />);
+    expect(await screen.findByText('A Mac stops what you run when you log out.')).toBeVisible();
+    expect(screen.queryByRole('switch', { name: /after you log out/ })).toBeNull();
+  });
+});

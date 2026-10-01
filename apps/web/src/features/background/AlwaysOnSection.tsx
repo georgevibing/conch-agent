@@ -12,6 +12,7 @@ import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
 import { bootId } from '../health/restart';
 import { backgroundApi, backgroundKeys } from './api';
+import { RunningOptions } from './RunningOptions';
 
 /** ⌘K and Repair everything open it by name (`openSettings('health', 'background')`). */
 export const BACKGROUND_FOCUS = 'background';
@@ -136,6 +137,11 @@ export function AlwaysOnSection() {
         problem={status.problem}
         unsupported={status.supported ? undefined : status.unsupported}
         place={status.place}
+        options={
+          status.tray || status.afterLogout || status.keepAwake ? (
+            <RunningOptions status={status} />
+          ) : undefined
+        }
       >
         {status.shortcut && !status.shortcut.installed && (
           <Button

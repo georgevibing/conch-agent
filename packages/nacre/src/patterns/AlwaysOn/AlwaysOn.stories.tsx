@@ -3,6 +3,7 @@ import { Power } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '../../components/Button';
+import { Switch } from '../../components/Switch';
 import { AlwaysOn } from './AlwaysOn';
 
 const quit = (
@@ -106,5 +107,30 @@ export const Unavailable: Story = {
   args: {
     running: 'dev',
     unsupported: 'Always on is for Conch itself (pnpm start), not a development server.',
+  },
+};
+
+/** On, with how it runs: the menu bar, after logging out, staying awake (ADR 0029). */
+export const WithOptions: Story = {
+  args: {
+    on: true,
+    running: 'background',
+    since: 'yesterday',
+    children: quit,
+    options: (
+      <>
+        <Switch
+          labelPosition="start"
+          defaultChecked
+          label="Show Conch in the menu bar"
+          description="Whether it’s running, and a dot when something needs you."
+        />
+        <Switch
+          labelPosition="start"
+          label="Keep this Mac awake"
+          description="On mains power, it won’t sleep while Conch runs, so routines and your phone always reach it."
+        />
+      </>
+    ),
   },
 };

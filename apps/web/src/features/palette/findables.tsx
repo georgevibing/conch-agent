@@ -111,6 +111,13 @@ const settingsPlaces: {
     icon: <HeartPulse />,
   },
   {
+    tab: 'health',
+    focus: BACKGROUND_FOCUS,
+    label: 'Menu bar',
+    keywords: 'menu bar tray icon system tray status bar panel indicator taskbar',
+    icon: <Power />,
+  },
+  {
     tab: 'notifications',
     label: 'Notifications',
     keywords: 'notifications notify push alerts phone bell badge tell me lock screen',
@@ -136,7 +143,7 @@ const settingsPlaces: {
     focus: BACKGROUND_FOCUS,
     label: 'Always on',
     keywords:
-      'always on background start at login startup login items launch boot keep running daemon service close window',
+      'always on background start at login startup login items launch boot keep running daemon service close window server headless log out logout awake sleep caffeinate little computer mac mini raspberry pi',
     icon: <Power />,
   },
   {

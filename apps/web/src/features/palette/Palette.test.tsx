@@ -396,7 +396,13 @@ describe('Palette search', () => {
     });
     renderApp(<Palette />);
     act(() => useUi.getState().setPalette(true));
-    for (const words of ['always on', 'start at login', 'background', 'login items']) {
+    for (const words of [
+      'always on',
+      'start at login',
+      'background',
+      'login items',
+      'raspberry pi',
+    ]) {
       await user.clear(await screen.findByRole('combobox'));
       await user.type(screen.getByRole('combobox'), words);
       expect(
@@ -408,6 +414,11 @@ describe('Palette search', () => {
       expect(useUi.getState()).toMatchObject({ settings: 'health', settingsFocus: 'background' }),
     );
     act(() => useUi.getState().setPalette(true));
+    for (const words of ['tray', 'menu bar']) {
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(await screen.findByRole('option', { name: /Settings: Menu bar/ })).toBeInTheDocument();
+    }
     for (const words of ['quit', 'shut down']) {
       await user.clear(await screen.findByRole('combobox'));
       await user.type(screen.getByRole('combobox'), words);

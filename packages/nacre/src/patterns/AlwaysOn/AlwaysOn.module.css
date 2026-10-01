@@ -176,6 +176,15 @@
     white-space: pre;
   }
 
+  .options {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    margin-inline-start: var(--ao-indent);
+    padding-block: var(--nc-space-3) var(--nc-space-1);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
   .actions {
     display: flex;
     flex-wrap: wrap;
@@ -190,7 +199,8 @@
     }
 
     .needed,
-    .problem {
+    .problem,
+    .options {
       margin-inline-start: 0;
     }
   }

@@ -10,6 +10,12 @@ export const backgroundApi = {
     request(SetBackgroundResult, '/api/background', { method: 'PUT', body: { on } }),
   addShortcut: () =>
     request(BackgroundStatus, '/api/background/shortcut', { method: 'POST', body: {} }),
+  tray: (on: boolean) =>
+    request(BackgroundStatus, '/api/background/tray', { method: 'PUT', body: { on } }),
+  keepAwake: (on: boolean) =>
+    request(BackgroundStatus, '/api/background/keep-awake', { method: 'PUT', body: { on } }),
+  afterLogout: (on: boolean) =>
+    request(BackgroundStatus, '/api/background/after-logout', { method: 'PUT', body: { on } }),
   quit: () =>
     request(z.object({ ok: z.boolean() }), '/api/gateway/quit', { method: 'POST', body: {} }),
 };

@@ -158,6 +158,8 @@ export function appState(patch: Partial<AppState> = {}): AppState {
       mutedSuggestions: [],
       checkAfterReading: true,
       sealedCommands: true,
+      menuBar: true,
+      keepAwake: false,
     },
     engine: baseEngine,
     workspace: '/home/ada/.conch/workspace',
