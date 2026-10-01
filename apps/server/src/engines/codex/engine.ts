@@ -649,7 +649,10 @@ export class CodexEngine implements Engine {
     const mcp = mcpOverrides(input.mcpServers, input.disallowedTools);
     if (mcp.skipped.length) yield { type: 'mcp-status', failed: mcp.skipped };
 
-    const sandbox = sandboxFor(input.options.permissionMode);
+    // Codex can't ask before a step: a chat that read something untrusted keeps it
+    // in the work folder with no network (ADR 0028), even in Full trust.
+    const wanted = sandboxFor(input.options.permissionMode);
+    const sandbox = input.tainted && wanted === 'danger-full-access' ? 'workspace-write' : wanted;
     // Codex can't ask before a step, so the first turn says what it may do.
     if (!input.resumeId) {
       yield { type: 'notice', code: 'sandbox', message: sandboxNotice(sandbox) };

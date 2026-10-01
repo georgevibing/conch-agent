@@ -532,6 +532,57 @@ export class ClaudeCodeEngine implements Engine {
               }),
             ],
           }),
+          // The sealed box (ADR 0028): commands write only to the work folder, temp and
+          // caches, and can't read where keys live. Escaping it asks (the guard below).
+          ...(input.sandbox && {
+            sandbox: {
+              enabled: true,
+              failIfUnavailable: false,
+              autoAllowBashIfSandboxed: false,
+              allowUnsandboxedCommands: true,
+              filesystem: {
+                allowWrite: input.sandbox.allowWrite,
+                denyRead: input.sandbox.denyRead,
+              },
+            },
+          }),
+          // Every tool call passes here, whatever the mode: canUseTool alone is skipped
+          // when a mode allows by itself (Full trust, Accept edits), so what must hold
+          // in every mode is decided here (ADR 0028).
+          hooks: {
+            PreToolUse: [
+              {
+                hooks: [
+                  async (hookInput) => {
+                    if (hookInput.hook_event_name !== 'PreToolUse') return {};
+                    const toolName = hookInput.tool_name;
+                    const toolInput = (hookInput.tool_input ?? {}) as Record<string, unknown>;
+                    if (toolName.startsWith('mcp__conch__')) return {};
+                    const deny = (reason: string) => ({
+                      hookSpecificOutput: {
+                        hookEventName: 'PreToolUse' as const,
+                        permissionDecision: 'deny' as const,
+                        permissionDecisionReason: reason,
+                      },
+                    });
+                    if (touchesProtected(toolInput, input.protectedPaths ?? []))
+                      return deny(PROTECTED_MESSAGE);
+                    const verdict = await input.guard?.({ toolName, input: toolInput });
+                    if (verdict?.decision === 'deny') return deny(verdict.message);
+                    if (verdict?.decision === 'ask')
+                      return {
+                        hookSpecificOutput: {
+                          hookEventName: 'PreToolUse' as const,
+                          permissionDecision: 'ask' as const,
+                          permissionDecisionReason: verdict.reason,
+                        },
+                      };
+                    return {};
+                  },
+                ],
+              },
+            ],
+          },
           canUseTool: async (toolName, toolInput, { signal, toolUseID }) => {
             // Conch's own tools (memory) are always allowed; the user sees their effects inline.
             if (toolName.startsWith('mcp__conch__'))

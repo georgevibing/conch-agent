@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 
 import type { EngineId, LoginState, ServerEvent, SkillSource, TurnProblem } from '@conch/protocol';
 
+import { Activity } from './activity/service';
 import { AttachmentStore } from './attachments/store';
 import { type SystemKey, VaultService } from './vault/service';
 import { vaultTools } from './vault/tools';
@@ -42,6 +43,8 @@ import { MockEngine } from './engines/mock/engine';
 import type { Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
 import { findExecutable } from './lib/proc';
+import { sandboxFor, sandboxSupport } from './conversations/sandbox';
+import { safetyCheck } from './conversations/safety-doctor';
 import { registerCoreChecks } from './doctor/checks';
 import { BOOT_ID, restart, restartable, stopSoon } from './lib/lifecycle';
 import { Doctor } from './doctor/service';
@@ -145,6 +148,8 @@ export class Services {
   readonly push: PushService;
   /** Private dictation: whisper.cpp on this computer (ADR 0027). */
   readonly voice: VoiceService;
+  /** Everything the assistant did, in one place (ADR 0028). */
+  readonly activity: Activity;
   /** The pretend Telegram and Discord used with the mock engine. */
   readonly mockTelegram?: MockTelegram;
   readonly mockDiscord?: MockDiscord;
@@ -329,6 +334,14 @@ export class Services {
       attachments: this.attachments,
       redact: this.vault.redactor(),
       protectedPaths: protectedPaths(config.CONCH_HOME),
+      // The sealed box, only where this computer can do it (ADR 0028).
+      sandbox: (workspace) =>
+        sandboxSupport().available
+          ? sandboxFor(workspace, {
+              protectedPaths: protectedPaths(config.CONCH_HOME),
+              home: config.CONCH_HOME,
+            })
+          : undefined,
       // A spend that can't be saved is lost, not fatal: an unhandled rejection would stop Conch.
       onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
     });
@@ -359,6 +372,10 @@ export class Services {
     });
     this.usage.start();
     void (this.mockVendor?.start() ?? Promise.resolve()).then(() => this.integrations.start());
+    this.activity = new Activity({
+      list: () => conversationStore.list(),
+      events: (id) => conversationStore.events(id),
+    });
     this.search = new SearchService({
       path: join(config.CONCH_HOME, 'search.db'),
       source: {
@@ -443,6 +460,7 @@ export class Services {
     });
     void this.voice.sweep();
     this.doctor.register(this.voice.doctorCheck());
+    this.doctor.register(safetyCheck(this.settings));
     this.doctor.register(this.background.doctorCheck());
     this.#channelsReady = (async () => {
       if (this.mockTelegram) {

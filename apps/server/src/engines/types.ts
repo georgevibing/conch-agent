@@ -154,7 +154,25 @@ export interface TurnInput {
   bridgedTools?: BridgedTool[];
   /** Tools the user turned off; the model never sees them. */
   disallowedTools?: string[];
+  /**
+   * Looked at before every tool call, in every permission mode (ADR 0028):
+   * `ask` sends it to `requestPermission` even when the mode would allow it
+   * by itself (the chat read something untrusted; a command leaves the sealed
+   * box), `deny` refuses it with a sentence the model can act on. Engines whose
+   * mode would skip asking must still consult it (Claude Code: a PreToolUse hook).
+   */
+  guard?: (request: PermissionRequest) => Promise<GuardDecision | undefined>;
+  /** The chat has read something untrusted: engines that can't ask (Codex) run tighter. */
+  tainted?: boolean;
+  /**
+   * Run commands in the computer's own sandbox (ADR 0028), for engines that
+   * can: writes only to these folders, no reading these.
+   */
+  sandbox?: { allowWrite: string[]; denyRead: string[] };
 }
+
+export type GuardDecision =
+  { decision: 'ask'; reason: string } | { decision: 'deny'; message: string };
 
 export interface ResolvedOptions {
   /** Undefined = the engine's default model. */

@@ -1,0 +1,140 @@
+/**
+ * Read something untrusted, then check before acting (ADR 0028).
+ *
+ * An assistant that can read the web, your email and chat apps, and can also
+ * run commands and send things, is one prompt injection away from doing what
+ * a stranger wrote (Greshake et al. 2023; Willison's "lethal trifecta":
+ * private data, untrusted content, a way out). Conch can't tell a hostile
+ * page from a friendly one, so it doesn't try. Once a chat has *read*
+ * something from outside — a web page, an email, a message from someone who
+ * isn't you — anything that could send your things out or change your
+ * computer asks you first, whatever mode the chat is in, and the card says
+ * why in a sentence. Reading on stays free.
+ *
+ * Pure functions: the manager keeps the state (a `taint` event in the chat's
+ * log, so it survives restarts) and asks; engines only call `guard`.
+ */
+import { isAbsolute, relative, resolve } from 'node:path';
+
+import type { TaintSource } from '@conch/protocol';
+
+/** Built-in tools that bring the outside in. */
+const WEB_READERS = new Set(['WebFetch', 'WebSearch']);
+/** Conch's browser: every look at a page is the outside coming in. */
+const BROWSER =
+  /^(?:mcp__conch__)?browser_(?:open|read|screenshot|click|back|scroll|wait|select|press|type)$/;
+const DOWNLOADS =
+  /\b(?:curl|wget|http(?:ie)?|aria2c|fetch|Invoke-WebRequest|iwr|irm)\b|https?:\/\//i;
+const INTEGRATION = /^mcp__([a-z0-9_-]+?)__(.+)$/;
+
+const hostOf = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  try {
+    return new URL(value).hostname.replace(/^www\./, '');
+  } catch {
+    return /https?:\/\/([^/\s"']+)/i.exec(value)?.[1]?.replace(/^www\./, '');
+  }
+};
+
+/**
+ * What a finished tool call brought in from outside, if anything.
+ * `app`: an integration's name, for `mcp__<server>__*` calls.
+ */
+export function taintFrom(toolName: string, input: unknown, app?: string): TaintSource | undefined {
+  const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  if (WEB_READERS.has(toolName))
+    return {
+      kind: 'web',
+      label: toolName === 'WebSearch' ? 'web search results' : (hostOf(args.url) ?? 'a web page'),
+    };
+  if (BROWSER.test(toolName))
+    return { kind: 'web', label: hostOf(args.url) ?? 'pages in the browser' };
+  if (toolName === 'Bash' && typeof args.command === 'string' && DOWNLOADS.test(args.command))
+    return { kind: 'download', label: hostOf(args.command) ?? 'something downloaded' };
+  const integration = INTEGRATION.exec(toolName);
+  if (integration && integration[1] !== 'conch')
+    return { kind: 'app', label: app ?? integration[1] ?? 'an app' };
+  return undefined;
+}
+
+export interface SinkContext {
+  /** The chat's work folder: changing files there is the work. */
+  workspace: string;
+  /** For an integration's tool: `read` when it only reads (Integrations page). */
+  access?: 'read' | 'write';
+  app?: string;
+}
+
+const inside = (dir: string, path: string) => {
+  const rel = relative(resolve(dir), resolve(dir, path));
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+};
+
+/** A URL that could carry what was read: a long query, a long opaque path segment. */
+const carries = (url: string) => {
+  try {
+    const u = new URL(url);
+    return (
+      u.search.length > 80 ||
+      u.hash.length > 80 ||
+      u.pathname.split('/').some((segment) => segment.length > 60) ||
+      /[?&](?:q|data|d|payload|text|content|body|msg|token|key)=[^&]{24,}/i.test(u.search)
+    );
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * What this call could do with what was read, in the words of the card
+ * ("run a command"), when it's something that should ask. Undefined: let it be.
+ */
+export function sinkReason(
+  toolName: string,
+  input: unknown,
+  context: SinkContext,
+): string | undefined {
+  const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  if (toolName === 'Bash' || toolName === 'BashOutput' || toolName === 'KillShell')
+    return toolName === 'Bash' ? 'run a command' : undefined;
+  if (['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(toolName)) {
+    const path = String(args.file_path ?? args.notebook_path ?? '');
+    return path && !inside(context.workspace, path)
+      ? 'change a file outside your work folder'
+      : undefined;
+  }
+  if (toolName === 'WebFetch' && typeof args.url === 'string' && carries(args.url))
+    return 'open a web address that could carry what it read';
+  const integration = INTEGRATION.exec(toolName);
+  if (integration && integration[1] !== 'conch' && context.access !== 'read')
+    return `act in ${context.app ?? integration[1] ?? 'an app'}`;
+  return undefined;
+}
+
+/** Escaping the sealed box always asks: it's the box's whole point. */
+export function leavesSandbox(toolName: string, input: unknown): boolean {
+  return (
+    toolName === 'Bash' &&
+    Boolean(
+      (input as { dangerouslyDisableSandbox?: unknown } | undefined)?.dangerouslyDisableSandbox,
+    )
+  );
+}
+
+const KIND_WORDS: Record<TaintSource['kind'], string> = {
+  web: 'read',
+  download: 'downloaded',
+  app: 'read things in',
+  person: 'got a message from',
+};
+
+/** "This chat read example.com and things in Gmail" — what the card says. */
+export function describeTaint(sources: readonly TaintSource[]): string {
+  const parts = sources.slice(0, 3).map((s) => `${KIND_WORDS[s.kind]} ${s.label}`);
+  const more = sources.length > 3 ? ` and ${sources.length - 3} more` : '';
+  const list =
+    parts.length <= 1
+      ? (parts[0] ?? 'read something from outside')
+      : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
+  return `This chat ${list}${more}, which could be trying to steer me.`;
+}

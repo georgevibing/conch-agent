@@ -9,6 +9,7 @@ import {
   type Skill,
   type SkillDetail,
   type SkillProblemKind,
+  type SkillReview,
   type SkillSource,
   type SkillSourceInfo,
 } from '@conch/protocol';
@@ -17,6 +18,7 @@ import { z } from 'zod';
 import { Mutex, safeJoin, writeFileAtomic, writeJson } from '../lib/fs';
 import { readStore, type Heal } from '../lib/recover';
 import { humanize, slugify } from './draft';
+import { folderSignature, scanSkill } from './scan';
 import {
   joinSkill,
   readFlag,
@@ -89,7 +91,7 @@ export function externalRoots(home = homedir()): SkillRoot[] {
 
 export class SkillError extends Error {
   constructor(
-    readonly code: 'not-found' | 'invalid' | 'read-only',
+    readonly code: 'not-found' | 'invalid' | 'read-only' | 'needs-review',
     message: string,
   ) {
     super(message);
@@ -106,6 +108,13 @@ export interface LoadedSkill extends Skill {
 const ModesFile = z.object({
   /** Choices made in Conch that the skill's own file doesn't hold. */
   modes: z.record(z.string(), SkillMode).default({}),
+  /**
+   * Another app's skill, as it was when you turned it on (ADR 0028): if any
+   * file in it changes, it's off again until you look at what it says now.
+   */
+  pins: z.record(z.string(), z.object({ hash: z.string(), at: z.number() })).default({}),
+  /** Skills Conch found worrying that you looked at and turned on anyway, as they were then. */
+  acks: z.record(z.string(), z.string()).default({}),
 });
 
 const exists = (path: string) =>
@@ -151,7 +160,7 @@ export class SkillStore {
 
   async list(options: { fresh?: boolean } = {}) {
     if (!options.fresh && this.#cache && Date.now() - this.#cache.at < 2_000) return this.#cache;
-    const modes = await this.#modes();
+    const { modes, pins, acks } = await this.#choices();
     const native = this.nativelyLoaded();
     const skills: LoadedSkill[] = [];
     const sources: SkillSourceInfo[] = [];
@@ -161,7 +170,13 @@ export class SkillStore {
       const folders = found ? await this.#scan(root.dir, root.depth) : [];
       let count = 0;
       for (const folder of folders) {
-        const skill = await this.#load(root, folder, modes, ids, native.get(root.source));
+        const skill = await this.#load(
+          root,
+          folder,
+          { modes, pins, acks },
+          ids,
+          native.get(root.source),
+        );
         if (!skill) continue;
         skills.push(skill);
         ids.add(skill.id);
@@ -286,14 +301,25 @@ export class SkillStore {
       instructions?: string;
       name?: string;
       mode?: 'auto' | 'manual' | 'off';
+      acknowledged?: string;
     },
   ): Promise<LoadedSkill> {
     return this.#mutex.run(async () => {
       let skill = await this.get(id);
       if (!skill.editable) {
         // Only the mode of someone else's skill is ours to keep.
-        if (patch.mode && Object.keys(patch).length === 1) {
-          await this.#setMode(skill.id, patch.mode);
+        const { acknowledged, ...rest } = patch;
+        if (rest.mode && Object.keys(rest).length === 1) {
+          // On, as it is right now: if it changes later, it's off again (ADR 0028).
+          const review =
+            (await this.#checkReviewed(skill, rest.mode, acknowledged)) ??
+            (await scanSkill(skill.path));
+          await this.#setMode(
+            skill.id,
+            rest.mode,
+            review.hash,
+            review.verdict === 'danger' ? acknowledged : undefined,
+          );
           this.invalidate();
           return this.get(skill.id);
         }
@@ -316,6 +342,7 @@ export class SkillStore {
         this.invalidate();
         skill = await this.get(name);
       }
+      const reviewed = await this.#checkReviewed(skill, patch.mode, patch.acknowledged);
       const file = await this.#read(skill.file);
       const current = splitTitle(file.body);
       const title = patch.title ?? current.title ?? skill.title;
@@ -344,7 +371,13 @@ export class SkillStore {
           : withTitle(title, instructions);
       await writeFileAtomic(skill.file, joinSkill({ front, body }), 0o600);
       if (patch.mode !== undefined)
-        await this.#setMode(skill.id, mode === 'off' ? 'off' : undefined);
+        await this.#setMode(
+          skill.id,
+          mode === 'off' ? 'off' : undefined,
+          undefined,
+          // The OK holds for the file as it is now that it's written.
+          reviewed?.verdict === 'danger' ? (await scanSkill(skill.path)).hash : undefined,
+        );
       this.invalidate();
       return this.get(skill.id);
     });
@@ -429,7 +462,7 @@ export class SkillStore {
   async #load(
     root: SkillRoot,
     folder: string,
-    modes: Record<string, SkillMode>,
+    choices: z.infer<typeof ModesFile>,
     taken: Set<string>,
     loadedBy: string | undefined,
   ): Promise<LoadedSkill | undefined> {
@@ -465,9 +498,24 @@ export class SkillStore {
       taken,
     );
     if (!id) return undefined;
+    const { modes, pins, acks } = choices;
     const chosen = modes[id];
     // Skills found in other apps start Off: a folder appearing on disk mustn't start steering chats.
-    const mode = chosen ?? (root.source === 'conch' ? fileMode : 'off');
+    let mode = chosen ?? (root.source === 'conch' ? fileMode : 'off');
+    // Read through before it steers anything, and held to what you turned on (ADR 0028).
+    const review = await this.#review(folder);
+    const pin = pins[id];
+    if (review.verdict === 'danger' && acks[id] !== review.hash) {
+      // Worrying, and nobody has looked: never offered to an assistant until someone does.
+      mode = 'off';
+      const first = review.findings.find((f) => f.severity === 'danger');
+      problem ??= `Conch found something worrying in it: ${first?.message.charAt(0).toLowerCase()}${first?.message.slice(1) ?? ''} Look at it before turning it on.`;
+      problemKind ??= 'needs-review';
+    } else if (root.source !== 'conch' && mode !== 'off' && pin && pin.hash !== review.hash) {
+      mode = 'off';
+      problem ??= `It changed in ${root.label} since you turned it on, so it’s off until you look at it again.`;
+      problemKind ??= 'changed';
+    }
     return {
       id,
       name,
@@ -483,9 +531,22 @@ export class SkillStore {
       ...(problem && { problem }),
       ...(problemKind && { problemKind }),
       updatedAt,
+      review,
       file,
       fileMode,
     };
+  }
+
+  readonly #reviews = new Map<string, { signature: string; review: SkillReview }>();
+
+  /** The review of a folder, read again only when a file in it changed. */
+  async #review(folder: string): Promise<SkillReview> {
+    const signature = await folderSignature(folder);
+    const cached = this.#reviews.get(folder);
+    if (cached?.signature === signature) return cached.review;
+    const review = await scanSkill(folder);
+    this.#reviews.set(folder, { signature, review });
+    return review;
   }
 
   /**
@@ -493,6 +554,10 @@ export class SkillStore {
    * default: off for other agents' skills, so nothing new starts loading.
    */
   async #modes(): Promise<Record<string, SkillMode>> {
+    return (await this.#choices()).modes;
+  }
+
+  async #choices(): Promise<z.infer<typeof ModesFile>> {
     const read = await readStore(this.#modesPath, ModesFile, {
       onRepair: (state) =>
         this.heal?.(
@@ -502,20 +567,53 @@ export class SkillStore {
             : 'Your choices of which skills are on couldn’t be read, so Conch kept a copy and went back to each skill’s default.',
         ),
     });
-    return read.value.modes;
+    return read.value;
   }
 
-  async #setMode(id: string, mode: SkillMode | undefined) {
-    const { [id]: _previous, ...others } = await this.#modes();
+  /**
+   * Remember a mode. Turning another app's skill on pins it as it is now
+   * (`hash`); turning it off lets the pin go, and any OK given to a worrying
+   * one (`acknowledged`), so turning it on again means looking again.
+   */
+  async #setMode(id: string, mode: SkillMode | undefined, hash?: string, acknowledged?: string) {
+    const { modes, pins, acks } = await this.#choices();
+    const { [id]: _previous, ...others } = modes;
+    const { [id]: _pin, ...otherPins } = pins;
+    const { [id]: _ack, ...otherAcks } = acks;
+    const on = mode !== 'off';
     await writeJson(this.#modesPath, {
       modes: mode === undefined ? others : { ...others, [id]: mode },
+      pins: on && mode && hash ? { ...otherPins, [id]: { hash, at: Date.now() } } : otherPins,
+      acks: !on ? otherAcks : acknowledged ? { ...otherAcks, [id]: acknowledged } : acks,
     });
   }
 
+  /**
+   * Turning on a skill Conch found worrying needs its review's hash: proof
+   * the person saw what it does, for exactly this version (ADR 0028).
+   */
+  async #checkReviewed(skill: LoadedSkill, mode: SkillMode | undefined, acknowledged?: string) {
+    if (!mode || mode === 'off') return undefined;
+    const review = await scanSkill(skill.path);
+    if (review.verdict !== 'danger') return review;
+    if (acknowledged !== review.hash)
+      throw new SkillError(
+        'needs-review',
+        'Conch found something worrying in this skill. Look at what it found, then turn it on if you still want it.',
+      );
+    return review;
+  }
+
   /** Remember a mode for a skill Conch doesn't own, or turn one of ours off. */
-  setMode(id: string, mode: SkillMode) {
+  setMode(id: string, mode: SkillMode, acknowledged?: string) {
     return this.#mutex.run(async () => {
-      await this.#setMode(id, mode);
+      const skill = (await this.list()).skills.find((s) => s.id === id);
+      const review = skill ? await this.#checkReviewed(skill, mode, acknowledged) : undefined;
+      const hash =
+        skill && skill.source !== 'conch'
+          ? (review ?? (await scanSkill(skill.path))).hash
+          : undefined;
+      await this.#setMode(id, mode, hash, review?.verdict === 'danger' ? acknowledged : undefined);
       this.invalidate();
     });
   }

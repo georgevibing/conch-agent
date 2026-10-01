@@ -56,6 +56,7 @@ import { registerAuthRoutes } from './auth/routes';
 import { registerPhoneRoutes } from './phone/routes';
 import { pushOwner, registerPushRoutes } from './push/routes';
 import { registerVoiceRoutes } from './voice/routes';
+import { registerSafetyRoutes } from './conversations/safety-routes';
 import { registerBackgroundRoutes } from './background/routes';
 import { registerBackupRoutes } from './backup/routes';
 import { registerBrowserRoutes } from './browser/routes';
@@ -109,7 +110,9 @@ function sendError(reply: FastifyReply, error: unknown) {
     return reply.code(status).send({ error: error.code, message: error.message });
   }
   if (error instanceof SkillError) {
-    const status = { 'not-found': 404, invalid: 400, 'read-only': 409 }[error.code];
+    const status = { 'not-found': 404, invalid: 400, 'read-only': 409, 'needs-review': 409 }[
+      error.code
+    ];
     return reply.code(status).send({ error: error.code, message: error.message });
   }
   if (error instanceof RoutineError) {
@@ -162,6 +165,7 @@ export async function buildApp(services: Services) {
   registerPhoneRoutes(app, { tailscale: services.tailscale, gate });
   registerPushRoutes(app, { push: services.push, conversations: services.conversations });
   registerVoiceRoutes(app, services.voice);
+  registerSafetyRoutes(app, services.activity);
   registerChannelRoutes(
     app,
     services.channels,
@@ -261,6 +265,14 @@ export async function buildApp(services: Services) {
   app.patch('/api/settings', async (request, reply) => {
     const body = parse(UpdateSettingsBody, request.body, reply);
     if (!body) return;
+    // Lowering a safety guard is a change that grants trust (ADR 0028): it asks that it's you.
+    const lowering =
+      body.preferences?.checkAfterReading === false || body.preferences?.sealedCommands === false;
+    if (lowering && !gate.verified(request.access))
+      return reply.code(403).send({
+        error: 'verify-required',
+        message: 'Confirm it’s you to turn a safety check off.',
+      });
     // A new default provider goes through the provider service, which knows about pins.
     const engine = body.preferences?.engine;
     if (engine) {

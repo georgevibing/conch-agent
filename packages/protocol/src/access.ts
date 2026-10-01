@@ -263,6 +263,10 @@ export const CheckupAction = z.enum([
   'workspace-rules-off',
   /** `~/.conch` is made readable by you alone. */
   'secure-files',
+  /** Check before acting on what was read goes back on (ADR 0028). */
+  'check-after-reading',
+  /** Commands are sealed again (ADR 0028). */
+  'sealed-commands',
 ]);
 export type CheckupAction = z.infer<typeof CheckupAction>;
 

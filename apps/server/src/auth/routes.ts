@@ -21,6 +21,7 @@ import { checkup, findTokenProfile, workspaceRules } from './checkup';
 import { FixError, runFix } from './fixes';
 import { exposure } from './network';
 import { AccessError } from './store';
+import { sandboxSupport } from '../conversations/sandbox';
 
 function parse<T extends z.ZodType>(schema: T, value: unknown, reply: FastifyReply) {
   const result = schema.safeParse(value);
@@ -147,6 +148,11 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
         terminalRemote: (await services.terminal.settings()).allowRemote,
         provider: await services.providers.checkupCopy(),
         channels: await services.channels.checkupCopy(),
+        safety: {
+          checkAfterReading: preferences.checkAfterReading,
+          sealedCommands: preferences.sealedCommands,
+          sandboxAvailable: sandboxSupport().available,
+        },
         ...(services.config.CONCH_TOKEN && { tokenProfile: await findTokenProfile() }),
       }),
       exposure: exposure(services.config),

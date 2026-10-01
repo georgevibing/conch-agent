@@ -1138,13 +1138,20 @@ export class IntegrationService {
   }
 
   /** Friendly name for an integration's tool, for permission prompts. */
-  async describeTool(toolName: string): Promise<{ integration: string; tool: string } | undefined> {
+  async describeTool(
+    toolName: string,
+  ): Promise<{ integration: string; tool: string; access: 'read' | 'write' } | undefined> {
     const parsed = parseToolName(toolName);
     if (!parsed) return undefined;
     const item = (await this.store.all()).find((i) => i.server === parsed.server);
     if (!item) return undefined;
     const tool = item.tools.find((t) => t.name === parsed.tool);
-    return { integration: item.name, tool: tool?.title ?? parsed.tool.replaceAll('_', ' ') };
+    return {
+      integration: item.name,
+      tool: tool?.title ?? parsed.tool.replaceAll('_', ' '),
+      // Only what the server says only reads counts as reading (ADR 0028).
+      access: tool?.access === 'read' && !tool.destructive ? 'read' : 'write',
+    };
   }
 
   /** The system-prompt section about integrations. */

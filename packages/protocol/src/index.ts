@@ -44,6 +44,7 @@ export * from './doctor';
 export * from './phone';
 export * from './providers';
 export * from './routines';
+export * from './safety';
 export * from './search';
 export * from './setup';
 export * from './skills';
@@ -131,8 +132,27 @@ export const Preferences = z.object({
   limitFallback: EngineId.optional(),
   /** Apps the chat never offers to connect ("Don't suggest Linear"), by catalog id. */
   mutedSuggestions: MutedSuggestions.default([]),
+  /**
+   * Once a chat has read something from outside (a web page, an email, someone
+   * else's message), anything that could send it out or change this computer
+   * asks first, in every mode (ADR 0028).
+   */
+  checkAfterReading: z.boolean().default(true),
+  /**
+   * Commands run in a sealed box: they can change the work folder and caches,
+   * and can't read where keys and passwords live (ADR 0028).
+   */
+  sealedCommands: z.boolean().default(true),
 });
 export type Preferences = z.infer<typeof Preferences>;
+
+/** Where something untrusted came into a chat from (ADR 0028). */
+export const TaintSource = z.object({
+  kind: z.enum(['web', 'download', 'app', 'person']),
+  /** "example.com", "Gmail", "Ana on Telegram". */
+  label: z.string().max(120),
+});
+export type TaintSource = z.infer<typeof TaintSource>;
 
 /** Whether Conch can reach the internet (it checks now and then, and when a provider stops answering). */
 export const NetworkStatus = z.object({
@@ -229,6 +249,9 @@ export const UpdateSettingsBody = z.object({
       /** `null` goes back to waiting for the limit to reset. */
       limitFallback: EngineId.nullable(),
       mutedSuggestions: MutedSuggestions,
+      /** Turning either off needs a recent password or key (ADR 0028). */
+      checkAfterReading: z.boolean(),
+      sealedCommands: z.boolean(),
     })
     .partial()
     .optional(),
@@ -328,6 +351,11 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     browser: BrowserPermission.optional(),
     /** The agent asks to read or fill something from Passwords (ADR 0025). */
     vault: VaultPermission.optional(),
+    /**
+     * Asked because the chat read something untrusted (ADR 0028): why, in a
+     * sentence. Such a question offers no "always".
+     */
+    taint: z.string().optional(),
   }),
   z.object({
     ...logged,
@@ -346,6 +374,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     memoryId: z.string(),
     content: z.string(),
   }),
+  /** The chat read something from outside: from here on, sending and changing ask first (ADR 0028). */
+  z.object({ ...logged, type: z.literal('taint'), source: TaintSource }),
   z.object({ ...logged, type: z.literal('status'), status: ConversationStatus }),
   z.object({
     ...logged,

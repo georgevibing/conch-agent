@@ -17,6 +17,7 @@ import {
 } from './port';
 import { SERVER_VERSION, Services } from './services';
 import { RESTART_CODE } from './supervisor';
+import { sandboxSupport } from './conversations/sandbox';
 
 const config = loadConfig();
 const addressOf = (port: number) =>
@@ -126,6 +127,11 @@ const findings = checkup({
   terminalRemote: (await services.terminal.settings()).allowRemote,
   provider: services.providers.activeCopy(),
   channels: await services.channels.checkupCopy(),
+  safety: {
+    checkAfterReading: (await services.settings.get()).preferences.checkAfterReading,
+    sealedCommands: (await services.settings.get()).preferences.sealedCommands,
+    sandboxAvailable: sandboxSupport().available,
+  },
 }).filter((item) => item.level === 'danger' || item.level === 'warn');
 for (const item of findings) {
   console.warn(`  ${item.level === 'danger' ? '⛔' : '⚠️ '}  ${item.title}\n      ${item.detail}`);

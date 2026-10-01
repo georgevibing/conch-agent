@@ -176,6 +176,8 @@ export interface CheckupInput {
   platform?: NodeJS.Platform;
   /** Chat apps that reach the assistant, and who besides you may use each. */
   channels?: { app: string; bot: string; others: string[] }[];
+  /** Safe hands (ADR 0028): the guard, and the sealed box for commands. */
+  safety?: { checkAfterReading: boolean; sealedCommands: boolean; sandboxAvailable: boolean };
 }
 
 /**
@@ -333,6 +335,25 @@ export function checkup(input: CheckupInput): CheckupItem[] {
     });
   }
 
+  if (input.safety && !input.safety.checkAfterReading)
+    items.push({
+      id: 'check-after-reading',
+      level: 'warn',
+      title: 'The assistant acts on what it read without checking',
+      detail:
+        'A web page, an email or someone else’s message could tell it to send your things somewhere or change this computer, and nothing would stop to ask you. Turn checking back on in Settings › Security › Safety.',
+      fix: { kind: 'act', label: 'Turn it on', action: 'check-after-reading' },
+    });
+  if (input.safety && input.safety.sandboxAvailable && !input.safety.sealedCommands)
+    items.push({
+      id: 'sealed-commands',
+      level: 'info',
+      title: 'Commands aren’t sealed',
+      detail:
+        'Commands the assistant runs can read your SSH keys, cloud sign-ins and browsers’ saved passwords. Sealing them keeps those out of reach and still lets it work in your folder.',
+      fix: { kind: 'act', label: 'Seal them', action: 'sealed-commands' },
+    });
+
   const channels = input.channels ?? [];
   if (channels.length && input.permissionMode === 'bypassPermissions') {
     const apps = [...new Set(channels.map((c) => c.app))];
@@ -352,7 +373,7 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       id: 'channel-people',
       level: 'info',
       title: `${people.length === 1 ? people[0] : `${people.length} other people`} can use your assistant from ${shared.map((c) => c.app).join(' and ')}`,
-      detail: `They can ask it to do what you can, and it asks them, not you, before anything important. Remove anyone you no longer want there.`,
+      detail: `They can ask it things. Anything that could send something out or change this computer comes to you to OK first, in Conch. Remove anyone you no longer want there.`,
       fix: { kind: 'open', label: 'Review', place: 'channels' },
     });
   }

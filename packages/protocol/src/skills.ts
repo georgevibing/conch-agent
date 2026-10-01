@@ -57,7 +57,40 @@ export const SkillProblemKind = z.enum([
   'no-front-matter',
   /** Front matter, but no usable description. */
   'no-description',
+  /** Another app's skill changed since you turned it on: off until you look again (ADR 0028). */
+  'changed',
+  /** Conch found something worrying in it: off until you've looked and said yes (ADR 0028). */
+  'needs-review',
 ]);
+
+/** Something in a skill that could hurt you, in plain words (ADR 0028). */
+export const SkillFinding = z.object({
+  kind: z.enum([
+    'download-run',
+    'secrets',
+    'exfiltration',
+    'deception',
+    'prerequisite',
+    'hidden',
+    'binary',
+  ]),
+  severity: z.enum(['danger', 'warning']),
+  message: z.string(),
+  /** Where, relative to the skill's folder. */
+  file: z.string().optional(),
+  line: z.number().int().positive().optional(),
+});
+export type SkillFinding = z.infer<typeof SkillFinding>;
+
+/** What Conch saw reading a skill: nothing worrying, worth a look, or dangerous. */
+export const SkillReview = z.object({
+  verdict: z.enum(['clean', 'caution', 'danger']),
+  findings: z.array(SkillFinding),
+  /** The fingerprint of everything in the folder that was read. */
+  hash: z.string(),
+  checkedAt: z.number(),
+});
+export type SkillReview = z.infer<typeof SkillReview>;
 export type SkillProblemKind = z.infer<typeof SkillProblemKind>;
 
 export const Skill = z.object({
@@ -83,6 +116,8 @@ export const Skill = z.object({
   problem: z.string().optional(),
   problemKind: SkillProblemKind.optional(),
   updatedAt: z.number(),
+  /** What Conch saw reading it (another app's skill, or one you were given). */
+  review: SkillReview.optional(),
 });
 export type Skill = z.infer<typeof Skill>;
 
@@ -169,6 +204,11 @@ export const UpdateSkillBody = z
     /** Renames the folder and the slash command. */
     name: SkillName,
     mode: SkillMode,
+    /**
+     * Turning on a skill Conch found worrying: the review's `hash`, to say
+     * you've seen what it does (ADR 0028). Ignored for anything else.
+     */
+    acknowledged: z.string().max(128),
   })
   .partial();
 export type UpdateSkillBody = z.infer<typeof UpdateSkillBody>;

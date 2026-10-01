@@ -1022,11 +1022,20 @@ export class ChannelService {
         if (!this.#relays.has(conversationId)) this.#relays.set(conversationId, relay);
       } else this.#pending.set(clientMessageId, relay);
       try {
+        // Someone you let in isn't you: what they write is read like a web page (ADR 0028).
+        const person = current.people.find((p) => p.id === personId);
+        const fromOwner = current.people[0]?.id === personId;
         const summary = await this.deps.conversations.send({
           ...(conversationId && { conversationId }),
           clientMessageId,
           text,
           ...(attachments.length && { attachments }),
+          ...(!fromOwner && {
+            untrusted: {
+              kind: 'person' as const,
+              label: `${person?.name ?? 'someone'} on ${CHANNEL_NAMES[stored.kind]}`,
+            },
+          }),
           ...(!conversationId && {
             origin: { kind: 'channel' as const, channelId: stored.id, channel: stored.kind },
           }),
@@ -1192,10 +1201,7 @@ export class ChannelService {
         break;
       }
       case 'permission.requested':
-        this.#quietly(
-          this.#ask(relay.channelId, relay.chatId, e.conversationId, e.permissionId, e.summary),
-          'question',
-        );
+        this.#quietly(this.#askOrDefer(relay, e), 'question');
         break;
       case 'browser.handoff':
         if (e.handoff.state === 'waiting')
@@ -1258,6 +1264,36 @@ export class ChannelService {
   }
 
   /** Put a question to the chat, with buttons. */
+  /**
+   * A question from the guard (the chat read something untrusted, ADR 0028)
+   * in someone else's chat goes to you, the owner, in Conch itself (and as a
+   * notification): the person who wrote it can't approve their own request.
+   */
+  async #askOrDefer(relay: Relay, e: Extract<ConversationEvent, { type: 'permission.requested' }>) {
+    if (e.taint) {
+      const stored = await this.deps.store.get(relay.channelId);
+      const owner = stored?.people[0];
+      if (owner && owner.id !== relay.personId) {
+        await this.#say(
+          relay,
+          `🔐 Before I ${e.summary.charAt(0).toLowerCase()}${e.summary.slice(1)}, I’ve asked ${firstName(owner.name)} to OK it.`,
+        );
+        return;
+      }
+    }
+    return this.#ask(
+      relay.channelId,
+      relay.chatId,
+      e.conversationId,
+      e.permissionId,
+      e.summary,
+      undefined,
+      {
+        always: !e.taint,
+      },
+    );
+  }
+
   async #ask(
     channelId: string,
     chatId: string,
@@ -1265,6 +1301,7 @@ export class ChannelService {
     permissionId: string,
     summary: string,
     heading?: string,
+    options: { always?: boolean } = {},
   ) {
     const live = this.#live.get(channelId);
     const askKey = `${channelId}:${permissionId}`;
@@ -1279,7 +1316,7 @@ export class ChannelService {
     const buttons = {
       buttons: [
         { label: 'Allow', data: `p:${key}:a`, style: 'primary' as const },
-        { label: 'Always in this chat', data: `p:${key}:A` },
+        ...(options.always !== false ? [{ label: 'Always in this chat', data: `p:${key}:A` }] : []),
         { label: 'Don’t allow', data: `p:${key}:d`, style: 'danger' as const },
       ],
     };

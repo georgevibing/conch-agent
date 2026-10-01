@@ -201,9 +201,12 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
     }
     const kind: BrowserPermission['kind'] =
       request.kind ?? (request.highStakes ? 'high-stakes' : 'site');
+    // Read something untrusted (ADR 0028): even a trusted site, or Full trust, asks once per site.
+    const untrusted = kind === 'site' ? ctx.untrusted?.() : undefined;
     if (kind === 'site') {
-      if (ctx.permissionMode === 'bypassPermissions') return;
-      if (tab.sites.has(site) || (await service.store.trusts(site))) return;
+      if (tab.sites.has(site)) return;
+      if (!untrusted && ctx.permissionMode === 'bypassPermissions') return;
+      if (!untrusted && (await service.store.trusts(site))) return;
     }
     const picture = await tab.thumbnail(request.box);
     const shot = await service.saveShot(conversationId, picture?.jpeg);
@@ -216,6 +219,7 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
           ? `use ${site}`
           : `${request.action.charAt(0).toLowerCase()}${request.action.slice(1)} on ${site}`,
       browser: { kind, site, url, title, action: request.action, box: picture?.box, shot },
+      ...(untrusted && { taint: `${untrusted} So I’m checking before I act on ${site}.` }),
     });
     if (decision === 'deny') {
       throw new Refusal(

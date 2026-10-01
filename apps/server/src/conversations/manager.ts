@@ -9,6 +9,7 @@ import type {
   EngineId,
   Preferences,
   ServerEvent,
+  TaintSource,
   TurnOptions,
   TurnProblem,
   Usage,
@@ -21,6 +22,7 @@ import type {
   Engine,
   EngineEvent,
   EngineMcpServer,
+  GuardDecision,
   HostTool,
   PermissionDecision,
   ResolvedOptions,
@@ -36,6 +38,7 @@ import type { SettingsStore } from '../settings/store';
 import { handoff } from './handoff';
 import type { ConversationRecord, ConversationStore } from './store';
 import { summarizeToolUse, titleFrom } from './summarize';
+import { describeTaint, leavesSandbox, sinkReason, taintFrom } from './taint';
 import { generateTitle } from './title';
 
 /**
@@ -84,6 +87,8 @@ export interface AskRequest {
   browser?: BrowserPermission;
   /** Reading or filling something from Passwords (ADR 0025). */
   vault?: VaultPermission;
+  /** Asked because the chat read something untrusted (ADR 0028): why. */
+  taint?: string;
 }
 
 /** Per-turn additions used by routines (and future automations). */
@@ -219,7 +224,9 @@ export interface TurnIntegrationsProvider {
   }>;
   /** `undefined` for tools that don't belong to an integration. */
   decide(toolName: string): Promise<'allow' | 'ask' | 'off' | undefined>;
-  describeTool(toolName: string): Promise<{ integration: string; tool: string } | undefined>;
+  describeTool(
+    toolName: string,
+  ): Promise<{ integration: string; tool: string; access?: 'read' | 'write' } | undefined>;
   markUsed(toolName: string): Promise<void>;
 }
 
@@ -236,6 +243,11 @@ export interface ToolContext {
   ask: (request: AskRequest) => Promise<PermissionDecision>;
   /** Aborts when the turn is stopped or ends. */
   signal: AbortSignal;
+  /**
+   * The chat has read something untrusted (ADR 0028): why, in a sentence.
+   * Tools that would act without asking (a trusted site) ask once instead.
+   */
+  untrusted?: () => string | undefined;
 }
 
 /** Tools every conversation gets from other parts of Conch (e.g. routines, skills, the browser). */
@@ -347,6 +359,11 @@ export class ConversationManager {
       redact?: (text: string) => string;
       /** Where Passwords and Conch's keys live: never for the engine's own file tools. */
       protectedPaths?: string[];
+      /**
+       * The sealed box for commands (ADR 0028), for this chat's work folder:
+       * where commands may write, and where they may never read.
+       */
+      sandbox?: (workspace: string) => { allowWrite: string[]; denyRead: string[] } | undefined;
     },
   ) {}
 
@@ -419,6 +436,8 @@ export class ConversationManager {
     options?: TurnOptions;
     /** Where a new conversation came from (a channel), when not from this app. */
     origin?: ConversationRecord['origin'];
+    /** The words are someone else's (a chat app's other people): the chat reads them as untrusted (ADR 0028). */
+    untrusted?: TaintSource;
   }) {
     const existing = input.conversationId ? await this.#get(input.conversationId) : undefined;
     if (existing?.abort)
@@ -498,6 +517,7 @@ export class ConversationManager {
       ...(attachments.length && { attachments }),
     });
     if (expanded?.skill) this.#append(live, { type: 'skill.used', ...expanded.skill, by: 'user' });
+    if (input.untrusted) this.#taint(live, input.untrusted);
     live.record = { ...live.record, preview: said.slice(0, 140), updatedAt: Date.now() };
     const { prompt, attachments: sending } = joinHeld(waiting, {
       engine: chosen.id,
@@ -729,6 +749,7 @@ export class ConversationManager {
     const settings = await this.deps.settings.get();
     const memories = await this.deps.memory.list();
     const started = new Map<string, number>();
+    const calls = new Map<string, { name: string; input: unknown }>();
     let outcome: 'success' | 'interrupted' | 'error' = 'success';
     let completed: { usage?: Usage; error?: string; problem?: TurnProblem } | undefined;
     let heldProblem: TurnProblem | undefined;
@@ -781,6 +802,7 @@ export class ConversationManager {
           summary: request.summary,
           browser: request.browser,
           ...(request.vault && { vault: request.vault }),
+          ...(request.taint && { taint: request.taint }),
         });
         this.#setStatus(live, 'awaiting-permission');
       });
@@ -813,9 +835,27 @@ export class ConversationManager {
             permissionMode: resolved.permissionMode,
             ask: (request) => askUser({ ...request, remember: false }, abort.signal),
             signal: abort.signal,
+            untrusted: () => {
+              const tainted = settings.preferences.checkAfterReading ? this.#tainted(live) : [];
+              return tainted.length ? describeTaint(tainted) : undefined;
+            },
           }) ?? [])),
       ...(extras?.tools ?? []),
     );
+    // Conch's browser reads the outside world: what it brings back taints the chat.
+    // (New objects: the same tools may be handed to the next turn.)
+    for (const [i, tool] of tools.entries()) {
+      const source = taintFrom(tool.name, {});
+      if (!source) continue;
+      tools[i] = {
+        ...tool,
+        run: async (args) => {
+          const result = await tool.run(args);
+          this.#taint(live, taintFrom(tool.name, args) ?? source);
+          return result;
+        },
+      };
+    }
     // This provider's own session, and whatever it missed while others answered.
     const session = live.record.sessions?.[engine.id];
     const asked = askedSeq(live.events) ?? live.seq;
@@ -826,15 +866,44 @@ export class ConversationManager {
       this.#append(live, { type: 'integration.issue', ...issue });
 
     let closeBridge: (() => Promise<void>) | undefined;
+    const workspace = await this.deps.settings.workspace();
+    const guardOn = settings.preferences.checkAfterReading;
+    /**
+     * Why this call must ask whatever was allowed before (ADR 0028): the chat
+     * read something untrusted and this could send it out or change the
+     * computer, or a command wants out of the sealed box.
+     */
+    const mustAsk = async (request: {
+      toolName: string;
+      input: Record<string, unknown>;
+    }): Promise<string | undefined> => {
+      if (leavesSandbox(request.toolName, request.input))
+        return 'This command wants to run outside the sealed box, where it could reach anything on this computer.';
+      const tainted = guardOn ? this.#tainted(live) : [];
+      if (!tainted.length) return undefined;
+      const described = request.toolName.startsWith('mcp__')
+        ? await integrations?.describeTool(request.toolName).catch(() => undefined)
+        : undefined;
+      const sink = sinkReason(request.toolName, request.input, {
+        workspace,
+        access: described?.access,
+        app: described?.integration,
+      });
+      return sink ? `${describeTaint(tainted)} So I’m checking before I ${sink}.` : undefined;
+    };
+
     const requestPermission = async (
       request: { toolName: string; toolUseId?: string; input: Record<string, unknown> },
       signal: AbortSignal,
     ): Promise<PermissionDecision> => {
       // Your choices on the Integrations page come first: "Don't ask", or a tool you turned off.
       const policy = await integrations?.decide(request.toolName).catch(() => undefined);
-      if (policy === 'allow') return 'allow';
       if (policy === 'off') return 'deny';
-      if (live.alwaysAllow.has(request.toolName)) return 'allow';
+      const taint = await mustAsk(request);
+      if (!taint) {
+        if (policy === 'allow') return 'allow';
+        if (live.alwaysAllow.has(request.toolName)) return 'allow';
+      }
       const described = await integrations?.describeTool(request.toolName).catch(() => undefined);
       return askUser(
         {
@@ -844,10 +913,26 @@ export class ConversationManager {
           summary: described
             ? `${described.tool.charAt(0).toLowerCase()}${described.tool.slice(1)} in ${described.integration}`
             : summarizeToolUse(request.toolName, request.input),
-          remember: true,
+          // Asked because of what it read: yes this once, never "always".
+          remember: !taint,
+          ...(taint && { taint }),
         },
         signal,
       );
+    };
+
+    /** Before every tool call, in every mode (Claude Code's PreToolUse hook). */
+    const guard = async (request: {
+      toolName: string;
+      input: Record<string, unknown>;
+    }): Promise<GuardDecision | undefined> => {
+      if ((await integrations?.decide(request.toolName).catch(() => undefined)) === 'off')
+        return {
+          decision: 'deny',
+          message: 'The user turned this tool off on the Integrations page.',
+        };
+      const taint = await mustAsk(request);
+      return taint ? { decision: 'ask', reason: taint } : undefined;
     };
 
     // Attachments go in front of the words, as each provider can take them (ADR 0017).
@@ -938,7 +1023,7 @@ export class ConversationManager {
             ]
               .filter(Boolean)
               .join('\n\n'),
-            cwd: await this.deps.settings.workspace(),
+            cwd: workspace,
             tools,
             options: resolved,
             mcpServers: engine.integrations.mode === 'native' ? loaded?.servers : undefined,
@@ -946,6 +1031,9 @@ export class ConversationManager {
             bridgedTools,
             signal: abort.signal,
             requestPermission,
+            guard,
+            tainted: guardOn && this.#tainted(live).length > 0,
+            ...(settings.preferences.sealedCommands && { sandbox: this.deps.sandbox?.(workspace) }),
           });
 
       for await (const event of stream) {
@@ -991,6 +1079,7 @@ export class ConversationManager {
             if (event.name.startsWith('mcp__'))
               void integrations?.markUsed(event.name).catch(() => undefined);
             started.set(event.toolUseId, Date.now());
+            calls.set(event.toolUseId, { name: event.name, input: event.input });
             this.#append(live, {
               type: 'tool.started',
               toolUseId: event.toolUseId,
@@ -1001,6 +1090,14 @@ export class ConversationManager {
           case 'tool-end': {
             const at = started.get(event.toolUseId);
             if (at === undefined) break;
+            const call = calls.get(event.toolUseId);
+            if (call && event.status === 'success') {
+              const app = call.name.startsWith('mcp__')
+                ? (await integrations?.describeTool(call.name).catch(() => undefined))?.integration
+                : undefined;
+              const source = taintFrom(call.name, call.input, app);
+              if (source) this.#taint(live, source);
+            }
             this.#append(live, {
               type: 'tool.finished',
               toolUseId: event.toolUseId,
@@ -1202,6 +1299,19 @@ export class ConversationManager {
   async #persist(live: Live) {
     await this.deps.store.upsert(live.record);
     await this.deps.store.saveEvents(live.record.id, live.events);
+  }
+
+  /** What untrusted things this chat has read, from its own log (so it survives a restart). */
+  #tainted(live: Live): TaintSource[] {
+    return live.events.flatMap((e) => (e.type === 'taint' ? [e.source] : []));
+  }
+
+  /** Note once that the chat read something from outside; the transcript says so, quietly. */
+  #taint(live: Live, source: TaintSource) {
+    const known = this.#tainted(live);
+    if (known.length >= 12 || known.some((t) => t.kind === source.kind && t.label === source.label))
+      return;
+    this.#append(live, { type: 'taint', source });
   }
 
   async #get(id: string): Promise<Live> {

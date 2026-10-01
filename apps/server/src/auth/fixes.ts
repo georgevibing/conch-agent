@@ -49,6 +49,14 @@ export async function runFix(
       return 'New chats ask before acting.';
     }
 
+    case 'check-after-reading':
+      await services.settings.update({ preferences: { checkAfterReading: true } });
+      return 'The assistant checks with you before acting on what it read.';
+
+    case 'sealed-commands':
+      await services.settings.update({ preferences: { sealedCommands: true } });
+      return 'Commands run sealed again.';
+
     case 'integrations-ask': {
       const trusted = (await services.integrations.store.all()).filter(
         (i) => i.enabled && i.policy === 'trust',
