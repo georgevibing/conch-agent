@@ -66,7 +66,7 @@ test('keep Conch running, add it to your apps, turn it off, and quit', async ({
     .toBe('ok');
 
   // Off again: back to a window.
-  await on.getByRole('switch').click();
+  await on.getByRole('switch', { name: /Start Conch when I log in/ }).click();
   await expect(
     settings.getByRole('region', { name: 'Runs while its window is open' }),
   ).toBeVisible();

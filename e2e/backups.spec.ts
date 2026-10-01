@@ -70,15 +70,15 @@ test('back up, change something, restore it, see it back, and undo', async ({ pa
   await expect(page.getByText('Your Conch is restored')).toBeVisible({ timeout: 60_000 });
   expect(await memories(request)).toEqual(['Ada takes her tea with lemon.']);
 
-  // And in Settings → Memory, where a person would look.
+  // And in What Conch knows about you, where a person would look.
   await page.keyboard.press(`${mod}+k`);
-  await page.getByRole('combobox').fill('memory');
-  await page.getByRole('option', { name: /Settings: Memory/ }).click();
-  await expect(page.getByText('Ada takes her tea with lemon.')).toBeVisible();
-  await expect(page.getByText('Only after the backup.')).toHaveCount(0);
+  await page.getByRole('combobox').fill('what conch knows');
+  await page.getByRole('option', { name: /What Conch knows about you/ }).click();
+  const known = page.getByRole('list', { name: 'Memories' });
+  await expect(known).toContainText('Ada takes her tea with lemon.');
+  await expect(known).not.toContainText('Only after the backup.');
 
   // Undo, from Settings → Health: back to how it was just before.
-  await page.keyboard.press('Escape');
   await openBackups(page, 'Restore a backup');
   await page.getByRole('button', { name: 'Undo restore' }).click();
   const undo = page.getByRole('dialog', { name: 'Undo the restore?' });

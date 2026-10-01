@@ -74,7 +74,8 @@ test('previews, brings things over after a backup, says what’s next, and undoe
 
   // It's all here: the name, the memories, the draft routine, the skill (off).
   const settings = page.getByRole('dialog', { name: /Settings/ });
-  await expect(settings.getByRole('list', { name: 'Memories' })).toContainText(
+  await expect(settings.getByText('3 memories', { exact: true })).toBeVisible();
+  expect(JSON.stringify(await (await request.get('/api/memories')).json())).toContain(
     'Ada takes her tea with lemon.',
   );
   await expect(settings.getByText(/came from OpenClaw/)).toBeVisible();
