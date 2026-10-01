@@ -178,6 +178,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           break;
         case 'skills.changed':
           void client.invalidateQueries({ queryKey: skillKeys.all });
+          void client.invalidateQueries({ queryKey: skillKeys.publishers });
           break;
         case 'vault.changed':
           void client.invalidateQueries({ queryKey: vaultKeys.all });

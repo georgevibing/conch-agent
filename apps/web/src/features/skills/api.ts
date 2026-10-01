@@ -3,6 +3,7 @@ import {
   SkillDetail,
   SkillDraft,
   SkillsList,
+  TrustedPublisher,
   type CreateSkillBody,
   type UpdateSkillBody,
 } from '@conch/protocol';
@@ -29,4 +30,12 @@ export const skillsApi = {
   describe: (id: string) =>
     request(SkillDescriptionDraft, `${path(id)}/describe`, { method: 'POST', body: {} }),
   copy: (id: string) => request(SkillDetail, `${path(id)}/copy`, { method: 'POST', body: {} }),
+  /** Whose signed skills you trust (ADR 0031). */
+  publishers: () =>
+    request(z.object({ publishers: z.array(TrustedPublisher) }), '/api/skills/publishers'),
+  /** Trust whoever signed this skill. Needs a recent password or key. */
+  trustPublisher: (id: string) =>
+    request(SkillDetail, `${path(id)}/trust-publisher`, { method: 'POST', body: {} }),
+  forgetPublisher: (fingerprint: string) =>
+    request(Ok, `/api/skills/publishers/${encodeURIComponent(fingerprint)}`, { method: 'DELETE' }),
 };

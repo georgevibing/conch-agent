@@ -9,6 +9,7 @@ import {
 } from '@conch/nacre';
 import {
   Archive,
+  BadgeCheck,
   BatteryMedium,
   Folder,
   Settings2,
@@ -623,6 +624,13 @@ export function useFindables(query: string, conversationId: string | undefined):
       keywords: 'skill teach',
       icon: <WandSparkles />,
       run: () => void navigate('/skills'),
+    },
+    {
+      id: 'skill-publishers',
+      label: 'Skill publishers you trust',
+      keywords: 'skill signed signature verified publisher key fingerprint',
+      icon: <BadgeCheck />,
+      run: () => void navigate('/skills', { state: { focus: 'publishers' } }),
     },
     {
       id: 'new-skill',

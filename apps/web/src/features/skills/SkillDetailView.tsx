@@ -50,6 +50,7 @@ import {
   useUpdateSkill,
 } from './queries';
 import styles from './Skills.module.css';
+import { SkillCan, SkillSignatureSection, useTurnOn } from './SkillTrust';
 
 export function SkillDetailView({ skillId }: { skillId: string }) {
   const { data: skill, isPending, isError } = useSkill(skillId);
@@ -134,7 +135,9 @@ function SkillPage({ skill }: { skill: SkillDetail }) {
     }
   };
 
-  const setMode = (mode: SkillMode) => update.mutate({ id: skill.id, patch: { mode } });
+  // Turning on one from elsewhere says what it can do first (ADR 0031).
+  const turnOn = useTurnOn();
+  const setMode = (mode: SkillMode) => turnOn.turn(skill, mode);
   // Off because of what's in it, or because it changed: the review says why, with the way on.
   const reviewing = skill.problemKind === 'needs-review' || skill.problemKind === 'changed';
   const [confirmOn, setConfirmOn] = useState(false);
@@ -269,7 +272,8 @@ function SkillPage({ skill }: { skill: SkillDetail }) {
           }
         />
       )}
-      {skill.problem && problemFix && !reviewing && (
+      <SkillSignatureSection skill={skill} />
+      {skill.problem && problemFix && !reviewing && skill.problemKind !== 'bad-signature' && (
         <SkillProblem problem={skill.problem} fix={problemFix} />
       )}
       <AlertDialog.Root open={confirmOn} onOpenChange={setConfirmOn}>
@@ -288,6 +292,7 @@ function SkillPage({ skill }: { skill: SkillDetail }) {
               before it runs commands.
             </AlertDialog.Description>
           </AlertDialog.Header>
+          <SkillCan skill={skill} compact />
           <AlertDialog.Footer>
             <AlertDialog.Cancel>Keep it off</AlertDialog.Cancel>
             <AlertDialog.Action
@@ -338,6 +343,9 @@ function SkillPage({ skill }: { skill: SkillDetail }) {
               : `Only when you type /${skill.name}.`}
         </Field.Description>
       </Field>
+
+      <SkillCan skill={skill} />
+      {turnOn.dialog}
 
       {skill.editable ? (
         <Stack gap={4}>

@@ -33,6 +33,12 @@ const triage = skill({
   editable: false,
   mode: 'off',
   path: '/home/ada/.openclaw/skills/gh-triage',
+  permissions: {
+    declared: true,
+    capabilities: ['commands'],
+    commands: ['gh'],
+    words: ['run commands (only `gh`)'],
+  },
 });
 
 const list: SkillsList = {
@@ -82,9 +88,30 @@ describe('Skills page', () => {
     });
     renderApp(<SkillsView />, { route: '/skills' });
     await userEvent.click(await screen.findByRole('switch', { name: 'Turn on GitHub triage' }));
+    // One from another app says what it can do first (ADR 0031).
+    const ask = await screen.findByRole('alertdialog', { name: 'Turn on GitHub triage?' });
+    expect(within(ask).getByRole('region', { name: 'This skill can:' })).toHaveTextContent(
+      'run commands (only gh)',
+    );
+    expect(calls.some((c) => c.method === 'PATCH')).toBe(false);
+    await userEvent.click(within(ask).getByRole('button', { name: 'Turn it on' }));
     await waitFor(() =>
       expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ mode: 'auto' }),
     );
+  });
+
+  it('your own turn on and off straight away', async () => {
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/skills': () => ({ ...list, skills: [{ ...weekly, mode: 'off' }, triage] }),
+      'PATCH /api/skills/weekly-review': () => ({ ...weekly, instructions: 'x' }),
+    });
+    renderApp(<SkillsView />, { route: '/skills' });
+    await userEvent.click(await screen.findByRole('switch', { name: 'Turn on Weekly review' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ mode: 'auto' }),
+    );
+    expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
   it('invites you to teach one when there are none', async () => {
@@ -178,6 +205,9 @@ describe('One skill', () => {
     expect(await screen.findByText('Run gh issue list.')).toBeInTheDocument();
     expect(screen.getByText(/Conch reads this folder but never changes it/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('radio', { name: 'When I ask' }));
+    await userEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Turn it on' }),
+    );
     await waitFor(() =>
       expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ mode: 'manual' }),
     );
@@ -318,5 +348,127 @@ describe('A skill that can’t be used yet', () => {
     await user.click(await screen.findByRole('button', { name: 'Look again' }));
     await waitFor(() => expect(screen.queryByText(/too big to read/)).toBeNull());
     expect(calls.some((c) => c.path === '/api/skills?refresh=1')).toBe(true);
+  });
+});
+
+describe('Who made a skill, and what it can do (ADR 0031)', () => {
+  const signed: SkillDetail = {
+    ...triage,
+    instructions: 'Run gh issue list.',
+    signature: { state: 'untrusted', publisher: 'Ada', fingerprint: '3F9A 21C0 7B44 E1D2' },
+  };
+
+  it('shows what it can do on its page, and who signed it', async () => {
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/skills/openclaw_gh-triage': () => signed,
+    });
+    renderApp(<SkillDetailView skillId="openclaw_gh-triage" />, {
+      route: '/skills/openclaw_gh-triage',
+    });
+    expect(await screen.findByRole('region', { name: 'This skill can:' })).toHaveTextContent(
+      'Anything else it tries asks you first',
+    );
+    expect(
+      screen.getByRole('region', { name: 'Signed by Ada, who you haven’t said you trust' }),
+    ).toHaveTextContent('3F9A 21C0 7B44 E1D2');
+  });
+
+  it('trusting a publisher says what it means, and asks that it’s you', async () => {
+    const user = userEvent.setup();
+    let verified = false;
+    let trusted = false;
+    const nowVerified = { ...signed, signature: { ...signed.signature, state: 'verified' } };
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/auth': () => ({
+        method: 'password',
+        signedIn: true,
+        setupRequired: false,
+        secure: true,
+      }),
+      'GET /api/access': () => ({}),
+      'GET /api/skills/openclaw_gh-triage': () => (trusted ? nowVerified : signed),
+      'GET /api/skills': () => list,
+      'GET /api/skills/publishers': () => ({ publishers: [] }),
+      'POST /api/skills/openclaw_gh-triage/trust-publisher': () =>
+        verified
+          ? ((trusted = true), nowVerified)
+          : new Response(
+              JSON.stringify({ error: 'verify-required', message: 'Confirm it’s you.' }),
+              { status: 403 },
+            ),
+      'POST /api/access/verify': () => {
+        verified = true;
+        return {
+          method: 'password',
+          username: 'ada',
+          suggestedUsername: 'ada',
+          keys: [],
+          sessions: [],
+          devices: [],
+          requests: [],
+          approval: { on: false, here: true },
+          checkup: [],
+          exposure: 'local',
+          port: 4317,
+          urls: [],
+          verified: true,
+        };
+      },
+    });
+    renderApp(<SkillDetailView skillId="openclaw_gh-triage" />, {
+      route: '/skills/openclaw_gh-triage',
+    });
+    await user.click(await screen.findByRole('button', { name: 'Trust this publisher…' }));
+    const ask = await screen.findByRole('alertdialog', { name: 'Trust Ada?' });
+    expect(ask).toHaveTextContent('anyone can call themselves Ada');
+    await user.click(within(ask).getByRole('button', { name: 'Trust Ada' }));
+    const confirm = await screen.findByRole('dialog', { name: 'Confirm it’s you' });
+    await user.type(within(confirm).getByLabelText('Password'), 'purple otters juggle at dawn');
+    await user.click(within(confirm).getByRole('button', { name: 'Confirm' }));
+    await waitFor(() =>
+      expect(calls.filter((c) => c.path.endsWith('/trust-publisher'))).toHaveLength(2),
+    );
+    expect(await screen.findByRole('region', { name: 'Verified: signed by Ada' })).toBeVisible();
+  });
+
+  it('a signature that doesn’t hold says why, and offers no trust', async () => {
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/skills/openclaw_gh-triage': () => ({
+        ...signed,
+        problem: 'It was changed after Ada signed it. It’s off so it can’t steer anything.',
+        problemKind: 'bad-signature',
+        signature: {
+          state: 'invalid',
+          publisher: 'Ada',
+          problem: 'It was changed after Ada signed it.',
+        },
+      }),
+    });
+    renderApp(<SkillDetailView skillId="openclaw_gh-triage" />, {
+      route: '/skills/openclaw_gh-triage',
+    });
+    expect(
+      await screen.findByRole('region', { name: 'Its signature doesn’t hold' }),
+    ).toHaveTextContent('It was changed after Ada signed it.');
+    expect(screen.queryByRole('button', { name: 'Trust this publisher…' })).toBeNull();
+    expect(screen.getByRole('radio', { name: 'Automatically' })).toBeDisabled();
+  });
+
+  it('lists the publishers you trust on the Skills page, and forgets one', async () => {
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/skills': () => list,
+      'GET /api/skills/publishers': () => ({
+        publishers: [{ fingerprint: '3F9A 21C0 7B44 E1D2', name: 'Ada', trustedAt: 1 }],
+      }),
+      'DELETE /api/skills/publishers/3F9A%2021C0%207B44%20E1D2': () => ({ ok: true }),
+    });
+    renderApp(<SkillsView />, { route: '/skills' });
+    const region = await screen.findByRole('region', { name: 'Publishers you trust' });
+    await userEvent.click(within(region).getByRole('button', { name: 'Stop trusting Ada' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'DELETE')).toBe(true));
   });
 });

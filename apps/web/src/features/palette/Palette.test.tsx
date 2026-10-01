@@ -552,6 +552,33 @@ describe('Palette search', () => {
     act(() => useUi.setState({ settings: null, settingsFocus: undefined, paletteOpen: false }));
   });
 
+  it('finds the publishers you trust by the words people use, straight to the list', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    renderApp(
+      <>
+        <Palette />
+        <Where />
+      </>,
+    );
+    act(() => useUi.getState().setPalette(true));
+    for (const words of ['publishers', 'signed skill', 'verified']) {
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /Skill publishers you trust/ }),
+      ).toBeInTheDocument();
+    }
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'publishers you trust');
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/skills'));
+  });
+
   it('finds notifications and adding a phone by the words people use', async () => {
     const user = userEvent.setup();
     mockFetch({

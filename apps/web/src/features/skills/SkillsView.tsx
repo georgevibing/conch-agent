@@ -17,9 +17,10 @@ import { useNavigate } from 'react-router';
 
 import { useAssistantName } from '../integrations/queries';
 import { fuzzyFilter } from '../search/fuzzy';
-import { useSkills, useToggleSkill } from './queries';
+import { useSkills } from './queries';
 import { SkillSuggestions } from './SkillSuggestions';
 import styles from './Skills.module.css';
+import { PublishersSection, useTurnOn } from './SkillTrust';
 import { skillIdeas } from './templates';
 
 type Show = 'all' | 'mine' | 'found';
@@ -49,7 +50,10 @@ export function SkillIdeas({ onPick }: { onPick: (instructions: string) => void 
  */
 export function SkillsView() {
   const { data, isPending } = useSkills();
-  const toggle = useToggleSkill();
+  // The quick switch: on keeps "When I ask"; one from elsewhere says what it can do first.
+  const turnOn = useTurnOn();
+  const toggle = (skill: Skill, on: boolean) =>
+    turnOn.turn(skill, on ? (skill.mode === 'manual' ? 'manual' : 'auto') : 'off');
   const navigate = useNavigate();
   const assistant = useAssistantName();
   const [query, setQuery] = useState('');
@@ -212,8 +216,10 @@ export function SkillsView() {
               )}
             </>
           )}
+          <PublishersSection />
         </>
       )}
+      {turnOn.dialog}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import {
   Callout,
   Collapsible,
   CopyButton,
+  SealCoverage,
   Stack,
   Switch,
   Text,
@@ -96,6 +97,7 @@ export function SafetySection() {
               )}
             </Callout>
           )}
+          {safety?.providers && <SealCoverage providers={safety.providers} />}
           {sandbox?.available && (
             <Collapsible>
               <Collapsible.Trigger>What a sealed command can’t read</Collapsible.Trigger>
