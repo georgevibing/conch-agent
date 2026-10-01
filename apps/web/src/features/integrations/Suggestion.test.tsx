@@ -245,7 +245,7 @@ describe('connect from the chat', () => {
   });
 });
 
-describe('Settings → Models & modes', () => {
+describe('Settings → Models', () => {
   it('lists the apps you muted, each with a way back', async () => {
     let muted = ['linear', 'google-calendar'];
     const calls = mockFetch({

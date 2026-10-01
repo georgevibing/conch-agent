@@ -386,7 +386,7 @@ describe('SecurityTab', () => {
     expect(screen.getByText('Not used in 90 days')).toBeInTheDocument();
   });
 
-  it('opens Models & modes for a choice made there', async () => {
+  it('opens Models for a choice made there', async () => {
     const user = userEvent.setup();
     useUi.setState({ settings: 'security' });
     mockFetch({

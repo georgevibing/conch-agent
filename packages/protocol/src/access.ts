@@ -236,7 +236,7 @@ export const CheckupPlace = z.enum([
   'keys',
   /** Settings › Security › Use Conch on your phone (Tailscale). */
   'reach',
-  /** Settings › Models & modes, where new chats' mode is chosen. */
+  /** Settings › Models, where new chats' mode is chosen. */
   'models',
   /** The Channels page: who may talk to your assistant from Telegram, Discord or Slack. */
   'channels',

@@ -119,9 +119,9 @@ const settingsPlaces: {
   { tab: 'memory', label: 'Memory', keywords: 'remember forget', icon: <Brain /> },
   {
     tab: 'models',
-    label: 'Models & modes',
+    label: 'Models',
     keywords:
-      'default model thinking effort permissions suggestions suggest connect apps offers muted',
+      'default model modes thinking effort permissions suggestions suggest connect apps offers muted',
     icon: <Gauge />,
   },
   {

@@ -48,6 +48,8 @@ interface UiState {
   };
   /** Something to open inside the settings tab (a provider's page), once. */
   settingsFocus?: string;
+  /** On a phone, Settings shows its list rather than one place (opened without naming one). */
+  settingsBrowse?: boolean;
   paletteOpen: boolean;
   /** Undo's preview is open for these change sets (ADR 0030). */
   undoing?: { ids: string[]; direction: 'undo' | 'redo' };
@@ -163,8 +165,13 @@ export const useUi = create<UiState>((set) => ({
       return { sidebarOpen: !s.sidebarOpen };
     }),
   setMobileSidebar: (mobileSidebarOpen) => set({ mobileSidebarOpen }),
-  openSettings: (tab = 'general', focus) =>
-    set({ settings: tab, settingsFocus: focus, paletteOpen: false }),
+  openSettings: (tab, focus) =>
+    set({
+      settings: tab ?? 'general',
+      settingsFocus: focus,
+      settingsBrowse: tab === undefined,
+      paletteOpen: false,
+    }),
   // The whole page rests while Conch starts again: nothing stays open over the calm screen.
   setRestarting: (restarting) =>
     set(restarting ? { restarting, settings: null, paletteOpen: false } : { restarting }),

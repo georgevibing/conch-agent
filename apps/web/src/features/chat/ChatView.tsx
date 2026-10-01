@@ -242,7 +242,7 @@ function useTurnRecovery(
                         {
                           onSuccess: () =>
                             toast.success(`${other.label} carries on at a limit`, {
-                              description: 'Change it in Settings → Models & modes.',
+                              description: 'Change it in Settings → Models.',
                             }),
                         },
                       ),

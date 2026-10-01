@@ -50,7 +50,7 @@ export const checkupWithFixes: CheckItem[] = [
     level: 'warn',
     title: 'New chats never ask before acting',
     detail:
-      '“Full trust” lets the assistant run any command and change any file without asking. A web page or file it reads could trick it. Go back to asking first — or choose “Auto” in Settings › Models & modes.',
+      '“Full trust” lets the assistant run any command and change any file without asking. A web page or file it reads could trick it. Go back to asking first — or choose “Auto” in Settings › Models.',
     fix: { kind: 'act', label: 'Ask first', onFix: later },
   },
   {

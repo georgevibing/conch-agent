@@ -96,7 +96,7 @@ test('“Not now” is for this chat; “Don’t suggest” is for good, until y
 
   // Settings lists it, with a way back.
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('tab', { name: 'Models & modes' }).click();
+  await page.getByRole('tab', { name: 'Models' }).click();
   const muted = page.getByRole('list', { name: 'Apps not suggested' });
   await expect(muted.getByText('Canva')).toBeVisible();
   await muted.getByRole('button', { name: 'Suggest Canva again' }).click();

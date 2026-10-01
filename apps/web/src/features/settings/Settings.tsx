@@ -3,6 +3,7 @@ import {
   Button,
   Dialog,
   Field,
+  Heading,
   Input,
   RadioGroup,
   SegmentedControl,
@@ -23,6 +24,7 @@ import {
   Bell,
   Brain,
   Check,
+  ChevronLeft,
   Cpu,
   Gauge,
   Mic,
@@ -301,110 +303,222 @@ function AppearanceTab() {
   );
 }
 
-const tabs: { value: SettingsTab; label: string; icon: ReactNode }[] = [
-  { value: 'general', label: 'General', icon: <Settings2 /> },
-  { value: 'personality', label: 'Personality', icon: <Sparkles /> },
-  { value: 'about', label: 'About you', icon: <User /> },
-  { value: 'memory', label: 'Memory', icon: <Brain /> },
-  { value: 'models', label: 'Models & modes', icon: <Gauge /> },
-  { value: 'commands', label: 'Commands', icon: <SquareSlash /> },
-  { value: 'usage', label: 'Usage', icon: <BatteryMedium /> },
-  { value: 'health', label: 'Health', icon: <HeartPulse /> },
-  { value: 'security', label: 'Security', icon: <ShieldCheck /> },
-  { value: 'notifications', label: 'Notifications', icon: <Bell /> },
-  { value: 'voice', label: 'Voice', icon: <Mic /> },
-  { value: 'providers', label: 'Providers', icon: <Cpu /> },
-  { value: 'browser', label: 'Browser', icon: <Globe /> },
-  { value: 'terminal', label: 'Terminal', icon: <SquareTerminal /> },
-  { value: 'appearance', label: 'Appearance', icon: <Palette /> },
+interface Place {
+  value: SettingsTab;
+  label: string;
+  icon: ReactNode;
+}
+
+/**
+ * Fifteen places, read as five: the everyday basics, then who your assistant
+ * is, where its intelligence comes from, what it can use, and keeping it safe.
+ */
+const groups: { label: string; hidden?: boolean; places: Place[] }[] = [
+  {
+    label: 'Conch',
+    hidden: true,
+    places: [
+      { value: 'general', label: 'General', icon: <Settings2 /> },
+      { value: 'appearance', label: 'Appearance', icon: <Palette /> },
+      { value: 'notifications', label: 'Notifications', icon: <Bell /> },
+    ],
+  },
+  {
+    label: 'Your assistant',
+    places: [
+      { value: 'personality', label: 'Personality', icon: <Sparkles /> },
+      { value: 'about', label: 'About you', icon: <User /> },
+      { value: 'memory', label: 'Memory', icon: <Brain /> },
+      { value: 'voice', label: 'Voice', icon: <Mic /> },
+    ],
+  },
+  {
+    label: 'Intelligence',
+    places: [
+      { value: 'models', label: 'Models', icon: <Gauge /> },
+      { value: 'providers', label: 'Providers', icon: <Cpu /> },
+      { value: 'commands', label: 'Commands', icon: <SquareSlash /> },
+      { value: 'usage', label: 'Usage', icon: <BatteryMedium /> },
+    ],
+  },
+  {
+    label: 'Tools',
+    places: [
+      { value: 'browser', label: 'Browser', icon: <Globe /> },
+      { value: 'terminal', label: 'Terminal', icon: <SquareTerminal /> },
+    ],
+  },
+  {
+    label: 'Safe and sound',
+    places: [
+      { value: 'security', label: 'Security', icon: <ShieldCheck /> },
+      { value: 'health', label: 'Health', icon: <HeartPulse /> },
+    ],
+  },
 ];
 
+/**
+ * Settings is a page of its own: it takes the whole window, its places where
+ * the app's sidebar was, with Back (and Escape) to return. On a phone it's a
+ * list, then the place you chose, with ‹ Settings to go back to the list.
+ */
 export function Settings() {
   const tab = useUi((s) => s.settings);
+  const browsing = useUi((s) => s.settingsBrowse);
   const open = useUi((s) => s.openSettings);
   const close = useUi((s) => s.closeSettings);
   const { data: app } = useAppState();
   const narrow = useMediaQuery('(max-width: 720px)');
   const updates = updatesWaiting(useUpdates().data);
+  const view = narrow ? (browsing ? 'list' : 'place') : undefined;
 
   return (
     <Dialog.Root open={tab !== null} onOpenChange={(o) => !o && close()}>
-      <Dialog.Content size="xl" className={styles.dialog} aria-describedby={undefined}>
-        <Dialog.Title className={styles.srOnly}>Settings</Dialog.Title>
+      <Dialog.Content
+        size="full"
+        hideClose
+        className={styles.page}
+        aria-describedby={undefined}
+        onOpenAutoFocus={(event) => {
+          // Straight onto the place it opened at, so the arrow keys move from there.
+          const here = (event.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>(
+            '[role="tab"][data-state="active"]',
+          );
+          if (here && !here.closest('[hidden]')) {
+            event.preventDefault();
+            here.focus();
+          }
+        }}
+      >
         {app && tab && (
           <Tabs
             value={tab}
             onValueChange={(v) => open(v as SettingsTab)}
-            orientation={narrow ? 'horizontal' : 'vertical'}
+            orientation="vertical"
+            // On a phone, moving through the list mustn't leave it.
+            activationMode={narrow ? 'manual' : 'automatic'}
             variant="pill"
             className={styles.tabs}
+            data-view={view}
           >
-            <div className={styles.nav}>
-              <Text as="span" size="sm" weight="semibold" className={styles.navTitle}>
-                Settings
-              </Text>
-              <Tabs.List aria-label="Settings sections" className={styles.list}>
-                {tabs.map((t) => (
-                  <Tabs.Trigger
-                    key={t.value}
-                    value={t.value}
-                    icon={t.icon}
-                    dot={t.value === 'health' && updates ? 'Update available' : undefined}
-                  >
-                    {t.label}
-                  </Tabs.Trigger>
+            {/* On a phone one half shows at a time; the other stays, hidden, so the
+                tabs and their panel still name each other. */}
+            <div className={styles.nav} hidden={view === 'place'}>
+              <div className={styles.bar}>
+                <Dialog.Close asChild>
+                  <Button variant="ghost" size="sm" leadingIcon={<ChevronLeft />}>
+                    Back
+                  </Button>
+                </Dialog.Close>
+              </div>
+              <Dialog.Title asChild>
+                <Heading level={2} size="2xl" weight="regular" display className={styles.title}>
+                  Settings
+                </Heading>
+              </Dialog.Title>
+              <div className={styles.groups}>
+                {groups.map((group) => (
+                  <div key={group.label} className={styles.group}>
+                    {!group.hidden && (
+                      <Text
+                        as="span"
+                        size="xs"
+                        weight="medium"
+                        tone="subtle"
+                        id={`settings-${group.label.toLowerCase().replaceAll(' ', '-')}`}
+                        className={styles.groupLabel}
+                      >
+                        {group.label}
+                      </Text>
+                    )}
+                    <Tabs.List
+                      className={styles.list}
+                      {...(group.hidden
+                        ? { 'aria-label': group.label }
+                        : {
+                            'aria-labelledby': `settings-${group.label.toLowerCase().replaceAll(' ', '-')}`,
+                          })}
+                    >
+                      {group.places.map((t) => (
+                        <Tabs.Trigger
+                          key={t.value}
+                          value={t.value}
+                          icon={t.icon}
+                          dot={t.value === 'health' && updates ? 'Update available' : undefined}
+                          // On a phone, choosing the place already chosen still opens it.
+                          onClick={() => useUi.setState({ settingsBrowse: false })}
+                        >
+                          {t.label}
+                        </Tabs.Trigger>
+                      ))}
+                    </Tabs.List>
+                  </div>
                 ))}
-              </Tabs.List>
+              </div>
             </div>
-            <div className={styles.panel}>
-              <Tabs.Content value="general">
-                <GeneralTab workspace={app.workspace} workspacePref={app.preferences.workspace} />
-              </Tabs.Content>
-              <Tabs.Content value="personality">
-                <PersonalityTab initial={app.persona} />
-              </Tabs.Content>
-              <Tabs.Content value="about">
-                <AboutTab initial={app.profile} />
-              </Tabs.Content>
-              <Tabs.Content value="memory">
-                <MemoryTab
-                  autoMemory={app.preferences.autoMemory}
-                  tidyMemory={app.preferences.tidyMemory}
-                />
-              </Tabs.Content>
-              <Tabs.Content value="models">
-                <ModelsTab />
-              </Tabs.Content>
-              <Tabs.Content value="commands">
-                <CommandsTab />
-              </Tabs.Content>
-              <Tabs.Content value="usage">
-                <UsageTab />
-              </Tabs.Content>
-              <Tabs.Content value="health">
-                <HealthTab />
-              </Tabs.Content>
-              <Tabs.Content value="security">
-                <SecurityTab />
-              </Tabs.Content>
-              <Tabs.Content value="notifications">
-                <NotificationsTab />
-              </Tabs.Content>
-              <Tabs.Content value="voice">
-                <VoiceTab />
-              </Tabs.Content>
-              <Tabs.Content value="providers">
-                <ProvidersTab />
-              </Tabs.Content>
-              <Tabs.Content value="browser">
-                <BrowserSettings />
-              </Tabs.Content>
-              <Tabs.Content value="terminal">
-                <TerminalSettings />
-              </Tabs.Content>
-              <Tabs.Content value="appearance">
-                <AppearanceTab />
-              </Tabs.Content>
+            <div className={styles.panel} hidden={view === 'list'}>
+              {narrow && (
+                <div className={styles.bar}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leadingIcon={<ChevronLeft />}
+                    onClick={() => useUi.setState({ settingsBrowse: true })}
+                  >
+                    Settings
+                  </Button>
+                </div>
+              )}
+              <div className={styles.column}>
+                <Tabs.Content value="general">
+                  <GeneralTab workspace={app.workspace} workspacePref={app.preferences.workspace} />
+                </Tabs.Content>
+                <Tabs.Content value="personality">
+                  <PersonalityTab initial={app.persona} />
+                </Tabs.Content>
+                <Tabs.Content value="about">
+                  <AboutTab initial={app.profile} />
+                </Tabs.Content>
+                <Tabs.Content value="memory">
+                  <MemoryTab
+                    autoMemory={app.preferences.autoMemory}
+                    tidyMemory={app.preferences.tidyMemory}
+                  />
+                </Tabs.Content>
+                <Tabs.Content value="models">
+                  <ModelsTab />
+                </Tabs.Content>
+                <Tabs.Content value="commands">
+                  <CommandsTab />
+                </Tabs.Content>
+                <Tabs.Content value="usage">
+                  <UsageTab />
+                </Tabs.Content>
+                <Tabs.Content value="health">
+                  <HealthTab />
+                </Tabs.Content>
+                <Tabs.Content value="security">
+                  <SecurityTab />
+                </Tabs.Content>
+                <Tabs.Content value="notifications">
+                  <NotificationsTab />
+                </Tabs.Content>
+                <Tabs.Content value="voice">
+                  <VoiceTab />
+                </Tabs.Content>
+                <Tabs.Content value="providers">
+                  <ProvidersTab />
+                </Tabs.Content>
+                <Tabs.Content value="browser">
+                  <BrowserSettings />
+                </Tabs.Content>
+                <Tabs.Content value="terminal">
+                  <TerminalSettings />
+                </Tabs.Content>
+                <Tabs.Content value="appearance">
+                  <AppearanceTab />
+                </Tabs.Content>
+              </div>
             </div>
           </Tabs>
         )}

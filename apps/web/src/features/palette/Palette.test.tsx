@@ -324,9 +324,7 @@ describe('Palette search', () => {
     // Where apps you muted in a chat can be suggested again.
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'suggestions');
-    expect(
-      await screen.findByRole('option', { name: /Settings: Models & modes/ }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: /Settings: Models/ })).toBeInTheDocument();
 
     // The browser's settings answer to the words people use for it.
     await user.clear(screen.getByRole('combobox'));

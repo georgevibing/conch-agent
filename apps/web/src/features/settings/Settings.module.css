@@ -1,53 +1,92 @@
 @layer nacre.components {
-  .dialog {
-    inline-size: min(52rem, calc(100vw - 2rem));
-    block-size: min(40rem, calc(100dvh - 2rem));
+  /* ── The page ─────────────────────────────────────────────────────── */
+  .page {
     padding: 0;
     overflow: hidden;
   }
 
-  .srOnly {
-    position: absolute;
-    inline-size: 1px;
-    block-size: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-
+  /* Its places sit where the app's sidebar was, at the same width. */
   .tabs {
     display: grid;
-    grid-template-columns: 13rem minmax(0, 1fr);
+    grid-template-columns: 17rem minmax(0, 1fr);
+    gap: 0;
     block-size: 100%;
   }
 
   .nav {
     display: flex;
     flex-direction: column;
-    gap: var(--nc-space-3);
-    padding: var(--nc-space-5) var(--nc-space-3);
+    min-block-size: 0;
     background: var(--nc-canvas-raised);
     border-inline-end: 1px solid var(--nc-border-subtle);
   }
 
-  .navTitle {
-    padding-inline: var(--nc-space-3);
-    color: var(--nc-text-subtle);
+  /* Back, level with the app's own top bar. */
+  .bar {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    block-size: 3.25rem;
+    padding-inline: var(--nc-space-2);
+  }
+
+  /* The page's name, as large as a page's (not a dialog's) title. */
+  .nav .title {
+    padding: var(--nc-space-1) var(--nc-space-5) var(--nc-space-4);
+    font-size: var(--nc-text-3xl);
+    line-height: var(--nc-leading-tight);
+  }
+
+  .groups {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-4);
+    min-block-size: 0;
+    overflow-y: auto;
+    padding: 0 var(--nc-space-3) var(--nc-space-6);
+    overscroll-behavior: contain;
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+  }
+
+  .groupLabel {
+    padding: var(--nc-space-1) var(--nc-space-3);
   }
 
   .list {
     align-items: stretch;
+    gap: 1px;
+    overflow: visible;
   }
 
   .list > button {
     justify-content: flex-start;
   }
 
+  /* A phone shows one half at a time. */
+  .nav[hidden],
+  .panel[hidden] {
+    display: none;
+  }
+
   .panel {
+    display: flex;
+    flex-direction: column;
     min-block-size: 0;
     overflow-y: auto;
-    /* Clear the dialog's corner close button, so nothing ever sits under it. */
-    padding: var(--nc-space-12) var(--nc-space-8) var(--nc-space-10);
+  }
+
+  /* One calm column to read down, however wide the window. */
+  .column {
+    inline-size: 100%;
+    max-inline-size: 44rem;
+    margin-inline: auto;
+    padding: calc(3.25rem + var(--nc-space-1)) var(--nc-space-8) var(--nc-space-16);
   }
 
   .section {
@@ -70,7 +109,6 @@
 
   .saved {
     flex-shrink: 0;
-    margin-inline-end: var(--nc-space-8);
     padding-block-start: var(--nc-space-1);
     transition: opacity var(--nc-duration-slow) var(--nc-ease-out);
   }
@@ -178,21 +216,23 @@
     outline-offset: 3px;
   }
 
+  /* A phone: the list, then the place you chose. */
   @media (max-width: 720px) {
     .tabs {
       grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: auto minmax(0, 1fr);
     }
 
     .nav {
-      padding: var(--nc-space-4) var(--nc-space-12) var(--nc-space-2) var(--nc-space-3);
       border-inline-end: 0;
-      border-block-end: 1px solid var(--nc-border-subtle);
-      overflow-x: auto;
     }
 
-    .panel {
-      padding: var(--nc-space-5) var(--nc-space-4) var(--nc-space-8);
+    /* Rows a thumb can hit. */
+    .list > button {
+      block-size: 2.75rem;
+    }
+
+    .column {
+      padding: var(--nc-space-2) var(--nc-space-4) var(--nc-space-10);
     }
 
     .tones {

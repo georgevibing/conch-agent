@@ -643,7 +643,7 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   Plan only · Full trust). A `UsageMeter` in the header shows what's left of your
   tightest limit, and a `UsageNotice` appears above the composer when it runs low.
   Typing `/` opens a `CommandMenu`; `/model` and `/mode` open the
-  pickers. Defaults live in Settings → Models & modes; your commands in Settings →
+  pickers. Defaults live in Settings → Models; your commands in Settings →
   Commands.
 
 ## Security model
