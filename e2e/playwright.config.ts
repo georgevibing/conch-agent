@@ -4,6 +4,8 @@ import { join } from 'node:path';
 
 import { defineConfig, devices } from '@playwright/test';
 
+import { openClawHome } from '../apps/server/src/import/fixtures';
+
 /**
  * End-to-end tests run the real gateway (with the scripted mock engine) serving
  * the production web build. Each scenario gets its own fresh CONCH_HOME and
@@ -19,6 +21,16 @@ import { defineConfig, devices } from '@playwright/test';
 const devicesHome = (process.env.CONCH_E2E_DEVICES_HOME ??= mkdtempSync(
   join(tmpdir(), 'conch-e2e-devices-'),
 ));
+
+/**
+ * The `import` journey brings things over from a pretend OpenClaw: a home
+ * folder with `~/.openclaw` in it (apps/server/src/import/fixtures.ts).
+ */
+const importHome = (process.env.CONCH_E2E_IMPORT_HOME ??= (() => {
+  const home = mkdtempSync(join(tmpdir(), 'conch-e2e-import-'));
+  openClawHome(home);
+  return home;
+})());
 
 const scenarios = {
   ready: { port: 4391, env: { CONCH_MOCK_STATE: 'ready' } },
@@ -40,6 +52,8 @@ const scenarios = {
   safety: { port: 4378, env: { CONCH_MOCK_STATE: 'ready' } },
   // Undo (ADR 0030): the mock really writes note.md in the work folder, then it's put back.
   undo: { port: 4375, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Come home (ADR 0035), from a pretend OpenClaw.
+  import: { port: 4370, env: { CONCH_MOCK_STATE: 'ready', CONCH_IMPORT_HOME: importHome } },
   // Conch in your pocket: the app, the offline screen, the phone's address (a pretend Tailscale).
   pocket: { port: 4379, env: { CONCH_MOCK_STATE: 'ready' } },
   // Under the supervisor, like `pnpm start`: Conch runs "in a Terminal window", and can quit.
@@ -145,6 +159,10 @@ export default defineConfig({
       CONCH_PORT: String(s.port),
       CONCH_HOME:
         (s.env as Record<string, string>).CONCH_HOME ?? mkdtempSync(join(tmpdir(), 'conch-e2e-')),
+      // No journey sees the OpenClaw or Hermes of whoever runs it: only `import` has one.
+      CONCH_IMPORT_HOME:
+        (s.env as Record<string, string>).CONCH_IMPORT_HOME ??
+        mkdtempSync(join(tmpdir(), 'conch-e2e-nohome-')),
       CONCH_WEB_DIST: join(root, 'apps/web/dist'),
       CONCH_LOG_LEVEL: 'warn',
     },
