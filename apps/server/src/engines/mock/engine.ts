@@ -324,6 +324,60 @@ export class MockEngine implements Engine {
         usage: { inputTokens: 300, outputTokens: 40, costUsd: 0.0004 },
       };
     }
+    // The memory tidy-up (ADR 0032): where you live, said in a chat, updates or adds a memory.
+    if (/tidy the long-term memory/.test(input.system)) {
+      const memories = [...input.prompt.matchAll(/^\[(m_[\w]+)\] \((\w+)\) (.+)$/gm)].map((m) => ({
+        id: m[1] ?? '',
+        content: m[3] ?? '',
+      }));
+      const moved = [
+        ...input.prompt.matchAll(
+          /<said chat="([\w]+)">[^<]*?\bI (?:moved to|live in|now live in) ([A-Z][\p{L} ]+?)(?:[.!,]|<)/gu,
+        ),
+      ][0];
+      const home = memories.find((m) => /^Lives in /.test(m.content));
+      const reply = {
+        merge: [],
+        update:
+          moved && home
+            ? [
+                {
+                  id: home.id,
+                  content: `Lives in ${moved[2]}`,
+                  why: `You said you moved to ${moved[2]}.`,
+                  from: moved[1],
+                },
+              ]
+            : [],
+        add:
+          moved && !home
+            ? [
+                {
+                  content: `Lives in ${moved[2]}`,
+                  kind: 'fact',
+                  why: 'You said where you live.',
+                  from: moved[1],
+                },
+              ]
+            : [],
+      };
+      return {
+        text: JSON.stringify(reply),
+        usage: { inputTokens: 400, outputTokens: 60, costUsd: 0.0005 },
+      };
+    }
+    // A skill from something you keep asking for (ADR 0032).
+    if (/reusable skill/.test(input.system)) {
+      const asked = /<asked>([^<]+)<\/asked>/.exec(input.prompt)?.[1]?.trim() ?? 'Do the usual';
+      return {
+        text: JSON.stringify({
+          title: 'Weekly summary',
+          description: 'Summarises your week when you ask for your weekly summary.',
+          instructions: `Each time:\n1. ${asked}\n2. Keep it to five bullet points.`,
+        }),
+        usage: { inputTokens: 200, outputTokens: 50, costUsd: 0.0004 },
+      };
+    }
     const message = /<message>\n([\s\S]*)\n<\/message>/.exec(input.prompt)?.[1] ?? input.prompt;
     if (/title-fail/i.test(message)) throw new Error('Mock completion failed.');
     const usage = { inputTokens: 120, outputTokens: 8, costUsd: 0.0002 };

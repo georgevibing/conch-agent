@@ -61,6 +61,7 @@ import { registerUndoRoutes } from './undo/routes';
 import { registerArtifactRoutes } from './artifacts/routes';
 import { registerBackgroundRoutes } from './background/routes';
 import { registerImportRoutes } from './import/routes';
+import { registerLearningRoutes } from './memory/routes';
 import { registerBackupRoutes } from './backup/routes';
 import { registerBrowserRoutes } from './browser/routes';
 import { registerChannelRoutes } from './channels/routes';
@@ -172,6 +173,14 @@ export async function buildApp(services: Services) {
     () => services.conversations.busy(),
     () => services.trayInfo(),
   );
+  registerLearningRoutes(app, {
+    store: services.memory,
+    index: services.memoryIndex,
+    tidy: services.tidy,
+    suggester: services.suggester,
+    getMeaningModel: () => services.meaning.get(() => void services.memoryIndex.sync()),
+    gettingMeaning: () => services.meaning.progress,
+  });
   registerPhoneRoutes(app, { tailscale: services.tailscale, gate });
   registerPushRoutes(app, { push: services.push, conversations: services.conversations });
   registerVoiceRoutes(app, services.voice);

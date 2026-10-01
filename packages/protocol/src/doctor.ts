@@ -41,6 +41,7 @@ export const DoctorPlace = z.enum([
   /** Settings → Memory (Come home lives there, ADR 0035). */
   'memory',
   'notifications',
+  'memory',
 ]);
 export type DoctorPlace = z.infer<typeof DoctorPlace>;
 

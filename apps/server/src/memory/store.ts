@@ -43,6 +43,9 @@ export class MemoryStore {
     kind?: MemoryKind;
     source: Memory['source'];
     conversationId?: string;
+    /** Waiting for the person's OK (ADR 0032), and why. */
+    pending?: boolean;
+    untrusted?: string;
   }): Promise<Memory> {
     return this.#mutex.run(async () => {
       const memories = await this.#load();
@@ -51,6 +54,7 @@ export class MemoryStore {
       const existing = [...memories.values()].find(
         (m) => normalise(m.content).toLowerCase() === content.toLowerCase(),
       );
+      // (Something already known never goes back to waiting for an OK.)
       if (existing) return this.#write({ ...existing, updatedAt: Date.now() });
       const now = Date.now();
       return this.#write(
@@ -62,6 +66,8 @@ export class MemoryStore {
           conversationId: input.conversationId,
           createdAt: now,
           updatedAt: now,
+          ...(input.pending && { pending: true }),
+          ...(input.untrusted && { untrusted: input.untrusted.slice(0, 300) }),
         }),
       );
     });
@@ -80,6 +86,21 @@ export class MemoryStore {
     });
   }
 
+  /** You looked at a memory waiting for your OK, and keep it. */
+  keep(id: string): Promise<Memory | undefined> {
+    return this.#mutex.run(async () => {
+      const current = (await this.#load()).get(id);
+      if (!current) return undefined;
+      const { pending: _p, untrusted: _u, ...kept } = current;
+      return this.#write({ ...kept, updatedAt: Date.now() });
+    });
+  }
+
+  /** Put a memory back exactly as it was (Undo after a tidy-up). */
+  restore(memory: Memory): Promise<Memory> {
+    return this.#mutex.run(() => this.#write(Memory.parse(memory)));
+  }
+
   remove(id: string): Promise<Memory | undefined> {
     return this.#mutex.run(async () => {
       const memories = await this.#load();
@@ -92,7 +113,7 @@ export class MemoryStore {
     });
   }
 
-  /** Keyword search, ranked by term overlap then recency. Good enough until embeddings. */
+  /** Keyword search, ranked by term overlap then recency (the index's hybrid search is better: `MemoryIndex`). */
   async search(query: string, limit = 8): Promise<Memory[]> {
     const terms = query
       .toLowerCase()
@@ -144,6 +165,8 @@ export function serialise(m: Memory): string {
     `kind: ${m.kind}`,
     `source: ${m.source}`,
     ...(m.conversationId ? [`conversationId: ${m.conversationId}`] : []),
+    ...(m.pending ? ['pending: true'] : []),
+    ...(m.untrusted ? [`untrusted: ${m.untrusted.replace(/\s+/g, ' ')}`] : []),
     `createdAt: ${m.createdAt}`,
     `updatedAt: ${m.updatedAt}`,
   ];
@@ -161,6 +184,11 @@ export function parse(text: string): Memory | undefined {
     const value = line.slice(i + 1).trim();
     meta[key] = /At$/.test(key) ? Number(value) : value;
   }
-  const result = Memory.safeParse({ ...meta, content: normalise(match[2] ?? '') });
+  const { pending, ...rest } = meta;
+  const result = Memory.safeParse({
+    ...rest,
+    ...(pending === 'true' && { pending: true }),
+    content: normalise(match[2] ?? ''),
+  });
   return result.success ? result.data : undefined;
 }

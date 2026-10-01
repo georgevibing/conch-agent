@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import type {
   Attachment,
   BrowserPermission,
+  Memory,
   VaultPermission,
   ConversationEvent,
   ConversationEventInput,
@@ -345,6 +346,15 @@ export class ConversationManager {
       store: ConversationStore;
       settings: SettingsStore;
       memory: MemoryStore;
+      /**
+       * Memory search that understands meaning (ADR 0032): which memories a
+       * turn's prompt carries, and what `recall` finds. Absent: all of them,
+       * and keyword search.
+       */
+      memoryIndex?: {
+        forPrompt(said: string): Promise<{ memories: Memory[]; total: number }>;
+        search(query: string, limit?: number): Promise<{ memory: Memory }[]>;
+      };
       /** The provider for a turn: the one a conversation chose, else the default. */
       engine: (id?: EngineId) => Engine;
       tools?: ToolProvider;
@@ -765,7 +775,11 @@ export class ConversationManager {
     const abort = live.abort ?? new AbortController();
     const conversationId = live.record.id;
     const settings = await this.deps.settings.get();
-    const memories = await this.deps.memory.list();
+    const picked = this.deps.memoryIndex
+      ? await this.deps.memoryIndex.forPrompt(said).catch(() => undefined)
+      : undefined;
+    const memories = picked?.memories ?? (await this.deps.memory.list()).filter((m) => !m.pending);
+    const memoryTotal = picked?.total ?? memories.length;
     const started = new Map<string, number>();
     const calls = new Map<string, { name: string; input: unknown }>();
     let outcome: 'success' | 'interrupted' | 'error' = 'success';
@@ -829,6 +843,14 @@ export class ConversationManager {
     const tools = memoryTools({
       store: this.deps.memory,
       conversationId,
+      ...(this.deps.memoryIndex && {
+        search: (q: string) => this.deps.memoryIndex?.search(q) ?? Promise.resolve([]),
+      }),
+      // Learned in a chat that read something untrusted: it waits for the person's OK (ADR 0032).
+      untrusted: () => {
+        const tainted = this.#tainted(live);
+        return tainted.length ? describeTaint(tainted) : undefined;
+      },
       onSaved: (memory) => {
         this.#append(live, { type: 'memory.saved', memory });
       },
@@ -1061,6 +1083,7 @@ export class ConversationManager {
                 persona: settings.persona,
                 profile: settings.profile,
                 memories,
+                total: memoryTotal,
                 autoMemory: settings.preferences.autoMemory,
                 tools: engine.hostTools !== false,
               }),

@@ -75,7 +75,12 @@ import { SecretVault } from './secrets/vault';
 import { type Blueprint, CATALOG } from './integrations/catalog';
 import { MockVendor } from './integrations/mock/vendor';
 import { IntegrationService } from './integrations/service';
+import { MemoryIndex } from './memory/index';
+import { cheapModel, MeaningModel, yourRequests, yourWords } from './memory/learning';
+import { registerLearningDoctor } from './memory/doctor';
 import { MemoryStore } from './memory/store';
+import { MemoryTidy } from './memory/tidy';
+import { SkillSuggester } from './skills/suggest';
 import { RoutineService } from './routines/service';
 import { SearchService } from './search/service';
 import { RoutineStore } from './routines/store';
@@ -125,6 +130,11 @@ export class Services {
   /** Files in CONCH_HOME whose permissions couldn't be tightened (see `secureHome`). */
   homeProblems: string[] = [];
   readonly memory: MemoryStore;
+  /** It learns you (ADR 0032): meaning search, the tidy-up, skills you keep asking for. */
+  readonly memoryIndex: MemoryIndex;
+  readonly meaning: MeaningModel;
+  readonly tidy: MemoryTidy;
+  readonly suggester: SkillSuggester;
   readonly commands: CommandStore;
   /** Files and long pastes sent with messages (ADR 0017). */
   readonly attachments: AttachmentStore;
@@ -351,10 +361,52 @@ export class Services {
       conversations: () => this.conversations,
       emit: (event) => this.broadcast.emit(event),
     });
+    // It learns you (ADR 0032).
+    this.meaning = new MeaningModel(this.local.client);
+    this.memoryIndex = new MemoryIndex({
+      path: join(config.CONCH_HOME, 'memory-index.db'),
+      store: this.memory,
+      // The mock engine never reaches for a real Ollama.
+      meaning: () =>
+        config.CONCH_ENGINE === 'mock' ? Promise.resolve(undefined) : this.meaning.embedder(),
+      canOffer: () =>
+        config.CONCH_ENGINE === 'mock' ? Promise.resolve(false) : this.meaning.canOffer(),
+      heal: (message) => void this.healed.note('settings', message),
+    });
+    this.memory.changed.on(() => void this.memoryIndex.sync());
+    this.tidy = new MemoryTidy({
+      home: config.CONCH_HOME,
+      store: this.memory,
+      model: () => cheapModel(this.providers.engine()),
+      said: (since) => yourWords(conversationStore, since),
+      settings: async () => {
+        const { preferences } = await this.settings.get();
+        return { autoMemory: preferences.autoMemory, tidyMemory: preferences.tidyMemory };
+      },
+      busy: () => this.conversations.busy(),
+      emit: () => this.broadcast.emit({ type: 'memory.changed' }),
+    });
+    this.tidy.start();
+    this.suggester = new SkillSuggester({
+      home: config.CONCH_HOME,
+      asked: (since) => yourRequests(conversationStore, since),
+      skills: async () =>
+        (await this.skills.list()).skills.map((s) => ({
+          title: s.title,
+          description: s.description,
+        })),
+      model: () => cheapModel(this.providers.engine()),
+    });
+    registerLearningDoctor(this.doctor, {
+      index: this.memoryIndex,
+      store: this.memory,
+      tidy: this.tidy,
+    });
     this.conversations = new ConversationManager({
       store: conversationStore,
       settings: this.settings,
       memory: this.memory,
+      memoryIndex: this.memoryIndex,
       engine: (id) => this.providers.engineFor(id),
       route: (engine, context) => this.route(engine, context),
       // An engine that can't run Conch's own tools is never offered them.
@@ -889,6 +941,8 @@ export class Services {
   stop() {
     this.channels.stop();
     this.tailscale.stop();
+    this.tidy.stop();
+    this.memoryIndex.close();
     void this.mockTelegram?.stop();
     void this.mockDiscord?.stop();
     void this.mockSlack?.stop();

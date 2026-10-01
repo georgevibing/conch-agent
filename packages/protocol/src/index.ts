@@ -21,6 +21,7 @@ import {
   Usage,
 } from './common';
 import { DoctorReport } from './doctor';
+import { Memory, MemoryKind } from './memory';
 import { EngineStatus, LoginState } from './engine';
 import { HealNote } from './healed';
 import { CatalogId, Integration } from './integrations';
@@ -42,7 +43,9 @@ export * from './engine';
 export * from './healed';
 export * from './import';
 export * from './integrations';
+export * from './learning';
 export * from './local';
+export * from './memory';
 export * from './common';
 export * from './doctor';
 export * from './phone';
@@ -152,6 +155,8 @@ export const Preferences = z.object({
   menuBar: z.boolean().default(true),
   /** A Mac on mains power stays awake while Conch runs in the background (ADR 0029). */
   keepAwake: z.boolean().default(false),
+  /** Tidy memory every night, while nothing's running (ADR 0032). Every change can be undone. */
+  tidyMemory: z.boolean().default(false),
 });
 export type Preferences = z.infer<typeof Preferences>;
 
@@ -172,21 +177,6 @@ export const NetworkStatus = z.object({
 export type NetworkStatus = z.infer<typeof NetworkStatus>;
 
 // ── Memory ──────────────────────────────────────────────────────────────────
-
-export const MemoryKind = z.enum(['fact', 'preference', 'project', 'person']);
-export type MemoryKind = z.infer<typeof MemoryKind>;
-
-export const Memory = z.object({
-  id: z.string(),
-  content: z.string().min(1).max(2000),
-  kind: MemoryKind.default('fact'),
-  /** Who wrote it: the user directly, or the agent during a conversation. */
-  source: z.enum(['user', 'agent']),
-  conversationId: z.string().optional(),
-  createdAt: z.number(),
-  updatedAt: z.number(),
-});
-export type Memory = z.infer<typeof Memory>;
 
 export const CreateMemoryBody = z.object({
   content: z.string().trim().min(1).max(2000),
@@ -263,6 +253,7 @@ export const UpdateSettingsBody = z.object({
       sealedCommands: z.boolean(),
       menuBar: z.boolean(),
       keepAwake: z.boolean(),
+      tidyMemory: z.boolean(),
     })
     .partial()
     .optional(),

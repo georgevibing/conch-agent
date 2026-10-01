@@ -89,6 +89,16 @@ export const RULES: readonly BackupRule[] = [
     why: 'What the last import from OpenClaw or Hermes added, for its Undo: about this computer’s copy of things.',
   },
   {
+    match: 'memory-index.db*',
+    class: 'derived',
+    why: 'Memory search by meaning: vectors made from your memories, made again when missing.',
+  },
+  {
+    match: 'memory-tidy.json',
+    class: 'derived',
+    why: 'What the memory tidy-up changed lately, for Undo: about this computer’s memories, as they were.',
+  },
+  {
     match: 'gateway.json',
     class: 'derived',
     why: 'Where this run of Conch listens; written again on every start.',
@@ -182,6 +192,12 @@ export const RULES: readonly BackupRule[] = [
     why: 'Each routine’s run history.',
   },
   { match: 'skills/**', class: 'kept', group: 'skills', why: 'Your skills, with their files.' },
+  {
+    match: 'skill-suggestions.json',
+    class: 'kept',
+    group: 'skills',
+    why: 'Skill suggestions you turned down, so they stay down.',
+  },
   {
     match: 'skills.json',
     class: 'kept',

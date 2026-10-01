@@ -160,6 +160,7 @@ export function appState(patch: Partial<AppState> = {}): AppState {
       sealedCommands: true,
       menuBar: true,
       keepAwake: false,
+      tidyMemory: false,
     },
     engine: baseEngine,
     workspace: '/home/ada/.conch/workspace',

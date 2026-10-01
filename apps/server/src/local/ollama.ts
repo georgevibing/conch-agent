@@ -69,6 +69,8 @@ export type OllamaShow = z.infer<typeof Show>;
 
 const Version = z.object({ version: z.string() });
 
+const Embeddings = z.object({ embeddings: z.array(z.array(z.number())) });
+
 const Ps = z.object({
   models: z
     .array(
@@ -187,6 +189,17 @@ export class OllamaClient {
 
   show(model: string, signal: AbortSignal = AbortSignal.timeout(10_000)): Promise<OllamaShow> {
     return this.#json('/api/show', Show, { method: 'POST', body: { model }, signal });
+  }
+
+  /** Vectors for `input`, one each, from an embedding model (memory search, ADR 0032). */
+  async embed(
+    model: string,
+    input: string[],
+    signal: AbortSignal = AbortSignal.timeout(60_000),
+  ): Promise<number[][]> {
+    return (
+      await this.#json('/api/embed', Embeddings, { method: 'POST', body: { model, input }, signal })
+    ).embeddings;
   }
 
   async loaded(signal: AbortSignal = AbortSignal.timeout(QUICK_MS)): Promise<OllamaLoaded[]> {

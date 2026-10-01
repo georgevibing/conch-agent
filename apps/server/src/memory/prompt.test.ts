@@ -48,7 +48,7 @@ describe('buildSystemAppend', () => {
       autoMemory: false,
     });
     expect(text.length).toBeLessThan(9000);
-    expect(text).toMatch(/older memories — use the recall tool/);
+    expect(text).toMatch(/more memories than these — use the recall tool/);
     expect(text).toContain('Only use the remember tool when the user explicitly asks');
   });
 });
