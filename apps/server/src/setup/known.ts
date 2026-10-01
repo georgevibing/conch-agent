@@ -442,6 +442,49 @@ list.push(
     },
   },
   {
+    // Building Conch's menu bar helper (ADR 0029). Apple's own installer asks
+    // for it in a window, so a person presses Install there.
+    id: 'command-line-tools',
+    name: 'Apple’s Command Line Tools',
+    short: 'Command Line Tools',
+    find: async (platform) => {
+      if (platform !== 'darwin') return undefined;
+      const result = await run('xcode-select', ['-p'], { timeout: 5_000 });
+      return result.code === 0 ? result.stdout.trim() : undefined;
+    },
+    // Only a Mac needs it; the other systems get the same page, which says so.
+    download: {
+      darwin: 'https://developer.apple.com/download/all/?q=command%20line%20tools',
+      win32: 'https://developer.apple.com/download/all/?q=command%20line%20tools',
+      linux: 'https://developer.apple.com/download/all/?q=command%20line%20tools',
+    },
+    hint: () => 'Or run xcode-select --install in Terminal, and press Install.',
+  },
+  {
+    // Conch in the Linux panel (ADR 0029): Python's GObject bindings and AppIndicator.
+    id: 'appindicator',
+    name: 'AppIndicator for Python',
+    short: 'AppIndicator',
+    find: async (platform) => {
+      if (platform !== 'linux') return undefined;
+      const result = await run(
+        'python3',
+        [
+          '-c',
+          'import gi\ngi.require_version("Gtk","3.0")\ntry:\n  gi.require_version("AyatanaAppIndicator3","0.1")\nexcept ValueError:\n  gi.require_version("AppIndicator3","0.1")',
+        ],
+        { timeout: 5_000 },
+      );
+      return result.code === 0 ? 'python3' : undefined;
+    },
+    download: {
+      linux: 'https://github.com/AyatanaIndicators/libayatana-appindicator',
+      darwin: 'https://github.com/AyatanaIndicators/libayatana-appindicator',
+      win32: 'https://github.com/AyatanaIndicators/libayatana-appindicator',
+    },
+    hint: () => 'On Debian or Ubuntu: sudo apt install python3-gi gir1.2-ayatanaappindicator3-0.1',
+  },
+  {
     id: 'docker',
     name: 'Docker',
     short: 'Docker',

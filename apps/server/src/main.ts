@@ -94,6 +94,19 @@ await recordGateway(config.CONCH_HOME, {
 });
 // Always on: the file that starts Conch at login still fits where Conch is now.
 void services.background.heal().catch(() => undefined);
+// The menu bar helper and keeping a Mac awake (ADR 0029): with Conch itself, never a dev server.
+if (runningAs() !== 'dev' || config.CONCH_ENGINE === 'mock') {
+  // The gate learns the helper's token even while it's hidden: `pnpm conch tray on` can show it any time.
+  const showTray = () =>
+    void services.tray
+      .token()
+      .then(() => services.tray.ensure())
+      .catch(() => undefined);
+  showTray();
+  // Started again if it stopped (a crash, a logout and back): looked at now and then.
+  setInterval(showTray, 5 * 60_000).unref();
+  void services.background.applyKeepAwake().catch(() => undefined);
+}
 process.on('exit', () => forgetGateway(config.CONCH_HOME));
 
 // Routines only run while Conch is running; start the clock once we're listening.

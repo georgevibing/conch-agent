@@ -40,7 +40,9 @@ import {
   windowsLauncher,
   type LaunchSpec,
 } from './files';
+import type { AfterLogout, KeepAwake } from './little';
 import { iconIn, type Shortcut } from './shortcut';
+import type { TrayService } from './tray';
 
 /** How long a background Conch has to be seen waiting before this one hands over. */
 const HANDOVER_WAIT_MS = 60_000;
@@ -151,6 +153,16 @@ export interface BackgroundDeps {
   url: string;
   /** Conch as an app (Applications, the Start menu). Unset: none here. */
   shortcut?: Shortcut;
+  /** Conch in the menu bar, tray or panel (ADR 0029). */
+  tray?: TrayService;
+  /** Whether Conch keeps running after logging out (ADR 0029). */
+  afterLogout?: AfterLogout;
+  /** A Mac kept awake while the background Conch runs (ADR 0029). */
+  keepAwake?: {
+    service: KeepAwake;
+    wanted: () => Promise<boolean>;
+    setWanted: (on: boolean) => Promise<void>;
+  };
   /** For tests. */
   waitMs?: number;
 }
@@ -191,7 +203,16 @@ export class BackgroundService {
       this.deps.shortcut && where && checkout && running !== 'dev'
         ? { installed: this.deps.shortcut.installed(), where }
         : undefined;
-    const base = { running, since, kind: backend?.kind, place: backend?.place, needed, shortcut };
+    const little = running === 'dev' ? {} : await this.#little();
+    const base = {
+      running,
+      since,
+      kind: backend?.kind,
+      place: backend?.place,
+      needed,
+      shortcut,
+      ...little,
+    };
     if (!backend)
       return {
         ...base,
@@ -216,6 +237,52 @@ export class BackgroundService {
       };
     const disabled = on ? await backend.disabled?.().catch(() => undefined) : undefined;
     return { ...base, supported: true, on, problem: disabled ?? this.#problem };
+  }
+
+  /** Conch in the menu bar on or off (it shows, or goes, now). */
+  async setTray(on: boolean): Promise<BackgroundStatus> {
+    await this.deps.tray?.set(on);
+    return this.status();
+  }
+
+  /** Keep running after logging out (Linux lingering). */
+  async setAfterLogout(on: boolean): Promise<BackgroundStatus> {
+    const result = await this.deps.afterLogout?.set(on);
+    const status = await this.status();
+    return result ? { ...status, afterLogout: result } : status;
+  }
+
+  /** Keep this Mac awake while the background Conch runs. */
+  async setKeepAwake(on: boolean): Promise<BackgroundStatus> {
+    const awake = this.deps.keepAwake;
+    if (awake) {
+      await awake.setWanted(on);
+      awake.service.apply(on && this.deps.running === 'background');
+    }
+    return this.status();
+  }
+
+  /** On start: hold the Mac awake if that's wanted and this is the background Conch. */
+  async applyKeepAwake(): Promise<void> {
+    const awake = this.deps.keepAwake;
+    if (!awake?.service.available) return;
+    awake.service.apply((await awake.wanted()) && this.deps.running === 'background');
+  }
+
+  /** The menu bar, after logging out, and staying awake: each only where it means something. */
+  async #little(): Promise<Pick<BackgroundStatus, 'tray' | 'afterLogout' | 'keepAwake'>> {
+    const { tray, afterLogout, keepAwake } = this.deps;
+    const [trayStatus, logout, awake] = await Promise.all([
+      tray?.status().catch(() => undefined),
+      afterLogout?.status().catch(() => undefined),
+      keepAwake?.service.available ? keepAwake.wanted().catch(() => false) : undefined,
+    ]);
+    return {
+      ...(trayStatus && { tray: trayStatus }),
+      ...(logout && { afterLogout: logout }),
+      ...(awake !== undefined &&
+        keepAwake && { keepAwake: { on: awake, active: keepAwake.service.active } }),
+    };
   }
 
   #shortcutSpec() {

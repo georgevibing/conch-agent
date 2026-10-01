@@ -1,4 +1,10 @@
-import { SetBackgroundBody } from '@conch/protocol';
+import {
+  SetAfterLogoutBody,
+  SetBackgroundBody,
+  SetKeepAwakeBody,
+  SetTrayBody,
+  type TrayInfo,
+} from '@conch/protocol';
 import type { FastifyInstance } from 'fastify';
 
 import { stopSoon } from '../lib/lifecycle';
@@ -16,6 +22,8 @@ export function registerBackgroundRoutes(
   background: BackgroundService,
   gate: Gatekeeper,
   busy: () => boolean,
+  /** What the menu bar helper shows (ADR 0029). */
+  trayInfo?: () => Promise<TrayInfo>,
 ): void {
   app.get('/api/background', () => background.status());
 
@@ -47,6 +55,47 @@ export function registerBackgroundRoutes(
     } catch (error) {
       return reply.code(409).send({ error: 'shortcut', message: (error as Error).message });
     }
+  });
+
+  // ── The menu bar helper (ADR 0029): its own token, loopback only (security.ts). ──
+  app.get('/api/tray/status', async (_request, reply) =>
+    trayInfo ? trayInfo() : reply.code(404).send({ error: 'not-found' }),
+  );
+  app.post('/api/tray/quit', (_request, reply) => {
+    // Quitting from the computer itself, as Ctrl+C would; never while a chat is mid-answer.
+    if (busy()) return reply.code(409).send({ error: 'busy', message: 'A chat is still working.' });
+    return stopSoon(
+      '🐚  Conch has stopped. Start it again from the menu bar, your apps, or pnpm start.',
+    )
+      ? reply.code(202).send({ ok: true })
+      : reply.code(409).send({ error: 'not-quittable', message: 'Conch can’t quit itself here.' });
+  });
+  app.post('/api/tray/hide', async () => {
+    await background.setTray(false);
+    return { ok: true };
+  });
+
+  // ── Settings for it, and for a little computer ─────────────────────────
+  app.put('/api/background/tray', async (request, reply) => {
+    const body = SetTrayBody.safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: 'bad-request' });
+    return background.setTray(body.data.on);
+  });
+  app.put('/api/background/keep-awake', async (request, reply) => {
+    const body = SetKeepAwakeBody.safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: 'bad-request' });
+    return background.setKeepAwake(body.data.on);
+  });
+  // Keeping Conch running with nobody logged in lets it act unattended: it asks that it's you.
+  app.put('/api/background/after-logout', async (request, reply) => {
+    const body = SetAfterLogoutBody.safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: 'bad-request' });
+    if (body.data.on && !gate.verified(request.access))
+      return reply.code(403).send({
+        error: 'verify-required',
+        message: 'Confirm it’s you to keep Conch running after you log out.',
+      });
+    return background.setAfterLogout(body.data.on);
   });
 
   app.post('/api/gateway/quit', (request, reply) => {

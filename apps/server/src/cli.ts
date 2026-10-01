@@ -15,7 +15,10 @@ import { checkup, secureHome, workspaceRules } from './auth/checkup';
 import { backgroundCommand, quitCommand, type BackgroundIo } from './background/cli';
 import { carriedEnv } from './background/files';
 import { backendFor, BackgroundService, lastWords } from './background/service';
+import { AfterLogout } from './background/little';
 import { Shortcut } from './background/shortcut';
+import { TrayService } from './background/tray';
+import { Tailscale } from './network/tailscale';
 import { SERVER_VERSION } from './version';
 import { HostPolicy, exposure } from './auth/network';
 import { Devices } from './auth/devicesCli';
@@ -284,7 +287,88 @@ async function backgroundService() {
   });
 }
 
+function trayService() {
+  const settings = new SettingsStore(config.CONCH_HOME, heal);
+  return new TrayService({
+    home: config.CONCH_HOME,
+    checkout: findCheckout(import.meta.dirname, config.CONCH_CHECKOUT),
+    url: `http://localhost:${config.CONCH_PORT}`,
+    spec: { node: process.execPath, env: carriedEnv(process.env), path: process.env.PATH ?? '' },
+    wanted: async () => (await settings.get()).preferences.menuBar,
+    setWanted: async (on) => void (await settings.update({ preferences: { menuBar: on } })),
+    onToken: () => undefined,
+  });
+}
+
+/** `pnpm conch tray [on|off|status]`: Conch in the menu bar, tray or panel (ADR 0029). */
+async function tray() {
+  const service = trayService();
+  const verb = process.argv[3] ?? 'status';
+  if (verb === 'on' || verb === 'off') await service.set(verb === 'on');
+  const status = await service.status();
+  if (!status.available) {
+    say(`${yellow('⚠')} ${status.unavailable ?? 'This computer can’t show Conch there.'}`);
+    if (status.need === 'command-line-tools') say(dim('  → xcode-select --install'));
+    if (status.need === 'appindicator')
+      say(dim('  → sudo apt install python3-gi gir1.2-ayatanaappindicator3-0.1'));
+    return;
+  }
+  say(
+    status.running
+      ? `${green('●')} Conch is in the ${status.where}.`
+      : status.on
+        ? `${dim('○')} Conch shows in the ${status.where} whenever it runs.`
+        : `${dim('○')} Conch isn’t shown in the ${status.where}.`,
+  );
+  say(dim(status.on ? '  pnpm conch tray off' : '  pnpm conch tray on'));
+}
+
+/** `pnpm conch phone`: your phone's secure address (Tailscale, ADR 0027), on with one command. */
+async function phone() {
+  const recorded = await runningGateway(config.CONCH_HOME);
+  const tailscale = new Tailscale({ port: () => recorded?.port ?? config.CONCH_PORT });
+  let address = await tailscale.status();
+  if (address.state === 'off') address = await tailscale.serve();
+  const next = {
+    missing:
+      'Install Tailscale on this computer and on your phone, and sign in to both: https://tailscale.com/download',
+    stopped: 'Open Tailscale on this computer (sudo tailscale up on Linux), then run this again.',
+    'signed-out': 'Sign in to Tailscale on this computer (tailscale up), then run this again.',
+  } as const;
+  if (address.state === 'ready') {
+    say(`${green('✓')} Your devices reach Conch at ${bold(address.url ?? '')}`);
+    say(dim('  Sign your phone in: pnpm conch pair'));
+    return;
+  }
+  if (address.state in next) say(next[address.state as keyof typeof next]);
+  if (address.problem) {
+    say(`${yellow('⚠')} ${address.problem.message}`);
+    if (address.problem.url) say(dim(`  → ${address.problem.url}`));
+    if (address.problem.command) say(dim(`  → ${address.problem.command}`));
+  }
+  process.exitCode = 1;
+}
+
 async function background() {
+  if (process.argv[3] === 'after-logout') {
+    const on = process.argv[4] !== 'off';
+    const backend = await backendFor(config.CONCH_HOME);
+    const result = await new AfterLogout({ systemd: async () => backend?.kind === 'systemd' }).set(
+      on,
+    );
+    if (result.state === 'unavailable')
+      say(result.note ?? 'This computer stops Conch when you log out.');
+    else if (result.state === (on ? 'on' : 'off'))
+      say(
+        `${green('✓')} ${on ? 'Conch keeps running after you log out.' : 'Conch stops when you log out.'}`,
+      );
+    else {
+      say(`${yellow('⚠')} ${result.note ?? 'That needs an administrator.'}`);
+      if (result.command) say(dim(`  → ${result.command}`));
+      process.exitCode = 1;
+    }
+    return;
+  }
   process.exitCode = await backgroundCommand(
     process.argv.slice(3),
     await backgroundService(),
@@ -324,6 +408,9 @@ function help() {
     ['background [on|off]', 'Always on: start at login, run with no window'],
     ['quit', 'Stop Conch, wherever it’s running'],
     ['shortcut [remove]', 'Put Conch where your apps are (Applications, Start)'],
+    ['tray [on|off]', 'Conch in the menu bar, tray or panel'],
+    ['background after-logout on', 'Keep running after you log out (Linux)'],
+    ['phone', 'Give your phone a secure address (Tailscale)'],
   ];
   for (const [cmd, what] of rows) say(`${cmd.padEnd(24)}${dim(what)}`);
 }
@@ -341,6 +428,8 @@ const commands: Record<string, () => Promise<void> | void> = {
   background,
   quit,
   shortcut,
+  tray,
+  phone,
   help,
 };
 

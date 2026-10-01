@@ -145,6 +145,10 @@ export const Preferences = z.object({
    * and can't read where keys and passwords live (ADR 0028).
    */
   sealedCommands: z.boolean().default(true),
+  /** Conch in the menu bar, tray or panel, whenever it runs (ADR 0029). */
+  menuBar: z.boolean().default(true),
+  /** A Mac on mains power stays awake while Conch runs in the background (ADR 0029). */
+  keepAwake: z.boolean().default(false),
 });
 export type Preferences = z.infer<typeof Preferences>;
 
@@ -254,6 +258,8 @@ export const UpdateSettingsBody = z.object({
       /** Turning either off needs a recent password or key (ADR 0028). */
       checkAfterReading: z.boolean(),
       sealedCommands: z.boolean(),
+      menuBar: z.boolean(),
+      keepAwake: z.boolean(),
     })
     .partial()
     .optional(),

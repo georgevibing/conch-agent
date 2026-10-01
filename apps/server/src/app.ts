@@ -162,7 +162,13 @@ export async function buildApp(services: Services) {
   registerVaultRoutes(app, services.vault, gate);
   registerPickRoutes(app);
   registerBackupRoutes(app, services.backups, gate);
-  registerBackgroundRoutes(app, services.background, gate, () => services.conversations.busy());
+  registerBackgroundRoutes(
+    app,
+    services.background,
+    gate,
+    () => services.conversations.busy(),
+    () => services.trayInfo(),
+  );
   registerPhoneRoutes(app, { tailscale: services.tailscale, gate });
   registerPushRoutes(app, { push: services.push, conversations: services.conversations });
   registerVoiceRoutes(app, services.voice);

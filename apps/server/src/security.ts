@@ -38,6 +38,9 @@ const PUBLIC_API = new Set([
   'POST /api/auth/sign-out',
 ]);
 
+/** What the menu bar helper may ask, with its token instead of a sign-in (ADR 0029). */
+const TRAY_API = new Set(['GET /api/tray/status', 'POST /api/tray/quit', 'POST /api/tray/hide']);
+
 const COOKIE = 'conch_session';
 /** `__Host-` cookies must be Secure, host-only and Path=/ — browsers enforce it. */
 const SECURE_COOKIE = `__Host-${COOKIE}`;
@@ -85,6 +88,27 @@ export class Gatekeeper {
   readonly #localSockets = new WeakSet<object>();
   #sweep?: ReturnType<typeof setInterval>;
   #seen = '';
+  /** The menu bar helper's token (ADR 0029), once it has one. */
+  #trayToken?: string;
+
+  /** The menu bar helper carries this token in `X-Conch-Tray`. */
+  setTrayToken(token: string): void {
+    this.#trayToken = token;
+  }
+
+  /**
+   * The menu bar helper asking: from this computer itself (never a proxy),
+   * with its token, compared in constant time.
+   */
+  trayAllowed(request: FastifyRequest): boolean {
+    const given = request.headers['x-conch-tray'];
+    return (
+      this.#trayToken !== undefined &&
+      typeof given === 'string' &&
+      this.isLocal(request) &&
+      safeEqual(given, this.#trayToken)
+    );
+  }
 
   constructor(
     readonly config: Config,
@@ -440,6 +464,11 @@ export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
     }
 
     if (!isApi || PUBLIC_API.has(`${request.method} ${path}`)) return;
+    // The menu bar helper (ADR 0029): only these, only with its own token, only from here.
+    if (TRAY_API.has(`${request.method} ${path}`)) {
+      if (gate.trayAllowed(request)) return;
+      return reject(reply, 401, 'unauthorized', 'Only Conch’s menu bar helper can ask that.');
+    }
 
     const resolved = await gate.resolve(request);
     if (resolved === 'setup-required') {

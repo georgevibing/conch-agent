@@ -1,7 +1,14 @@
 import { createHash } from 'node:crypto';
 import { join, resolve, sep } from 'node:path';
 
-import type { EngineId, LoginState, ServerEvent, SkillSource, TurnProblem } from '@conch/protocol';
+import type {
+  EngineId,
+  LoginState,
+  ServerEvent,
+  SkillSource,
+  TrayInfo,
+  TurnProblem,
+} from '@conch/protocol';
 
 import { Activity } from './activity/service';
 import { AttachmentStore } from './attachments/store';
@@ -13,7 +20,9 @@ import { protectedPaths } from './lib/protect';
 import { pretendBackend } from './background/backends';
 import { carriedEnv } from './background/files';
 import { backendFor, BackgroundService, runningAs } from './background/service';
+import { AfterLogout, KeepAwake, pretendLittle } from './background/little';
 import { Shortcut } from './background/shortcut';
+import { pretendTray, trayCheck, TrayService } from './background/tray';
 import { pretendTailscale } from './network/mock-tailscale';
 import { Tailscale } from './network/tailscale';
 import { pushCheck } from './push/doctor';
@@ -144,6 +153,8 @@ export class Services {
   readonly channels: ChannelService;
   /** Always on: starting at login, running with no window (ADR 0026). */
   readonly background: BackgroundService;
+  /** Conch in the menu bar, tray or panel (ADR 0029). */
+  tray!: TrayService;
   /** Your phone's secure address, over Tailscale (ADR 0027). */
   readonly tailscale: Tailscale;
   /** Notifications on your devices (ADR 0027). */
@@ -488,6 +499,7 @@ export class Services {
     this.doctor.register(this.voice.doctorCheck());
     this.doctor.register(safetyCheck(this.settings));
     this.doctor.register(this.background.doctorCheck());
+    this.doctor.register(trayCheck(this.tray));
     this.#channelsReady = (async () => {
       if (this.mockTelegram) {
         const port = Number(process.env.CONCH_MOCK_TELEGRAM_PORT ?? 0);
@@ -540,15 +552,50 @@ export class Services {
   #background(config: Config): BackgroundService {
     const mock = config.CONCH_ENGINE === 'mock';
     const checkout = findCheckout(import.meta.dirname, config.CONCH_CHECKOUT);
+    const backend = mock ? pretendBackend() : backendFor(config.CONCH_HOME);
+    const spec = {
+      node: process.execPath,
+      env: carriedEnv(process.env),
+      path: process.env.PATH ?? '',
+    };
+    const url = `http://localhost:${config.CONCH_PORT}`;
+    // The menu bar helper, a little computer's settings (ADR 0029). Pretend ones for the mock engine.
+    this.tray = new TrayService({
+      home: config.CONCH_HOME,
+      checkout: mock ? (checkout ?? config.CONCH_HOME) : checkout,
+      url,
+      spec,
+      wanted: async () => (await this.settings.get()).preferences.menuBar,
+      setWanted: async (on) => void (await this.settings.update({ preferences: { menuBar: on } })),
+      onToken: (token) => this.gate.setTrayToken(token),
+      heal: (message) => void this.healed.note('gateway', message),
+      ...(mock && pretendTray()),
+    });
+    const little = mock
+      ? pretendLittle()
+      : {
+          afterLogout: new AfterLogout({
+            systemd: async () => (await backend)?.kind === 'systemd',
+          }),
+          keepAwake: new KeepAwake(),
+        };
     return new BackgroundService({
+      tray: this.tray,
+      afterLogout: little.afterLogout,
+      keepAwake: {
+        service: little.keepAwake,
+        wanted: async () => (await this.settings.get()).preferences.keepAwake,
+        setWanted: async (on) =>
+          void (await this.settings.update({ preferences: { keepAwake: on } })),
+      },
       home: config.CONCH_HOME,
       checkout: mock ? (checkout ?? config.CONCH_HOME) : checkout,
       running: mock && runningAs() === 'dev' ? 'window' : runningAs(),
       since: Date.now(),
-      backend: mock ? pretendBackend() : backendFor(config.CONCH_HOME),
-      spec: { node: process.execPath, env: carriedEnv(process.env), path: process.env.PATH ?? '' },
+      backend,
+      spec,
       needed: () => this.unattended(),
-      url: `http://localhost:${config.CONCH_PORT}`,
+      url,
       // The mock engine's app lands in its own home, never in your Applications.
       shortcut: new Shortcut({
         version: SERVER_VERSION,
@@ -567,6 +614,23 @@ export class Services {
         ),
       heal: (message) => void this.healed.note('gateway', message),
     });
+  }
+
+  /** What the menu bar helper shows: counts only, nothing from a chat (ADR 0029). */
+  async trayInfo(): Promise<TrayInfo> {
+    const [settings, status, conversations, requests] = await Promise.all([
+      this.settings.get(),
+      this.background.status(),
+      this.conversations.list().catch(() => []),
+      this.access.requests().catch(() => []),
+    ]);
+    return {
+      name: settings.persona.name,
+      alwaysOn: status.on,
+      approvals: conversations.filter((c) => c.status === 'awaiting-permission').length,
+      devices: requests.filter((r) => !r.rejected && !r.script).length,
+      url: `http://localhost:${this.config.CONCH_PORT}`,
+    };
   }
 
   /** Notifications: who's still allowed in, and what each thing is called. */
