@@ -121,6 +121,12 @@ export const BackupPower = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('browser-local') }),
   /** Other devices can open a terminal on this computer. */
   z.object({ kind: z.literal('terminal-remote') }),
+  /** Publishers whose signed skills carry on updating without being turned off (ADR 0031). */
+  z.object({
+    kind: z.literal('trusted-publishers'),
+    names: z.array(PowerText).max(20),
+    more: z.number().int().nonnegative().default(0),
+  }),
   /** A bot (Telegram, Discord, Slack) that these people can talk to your assistant through. */
   z.object({
     kind: z.literal('channel-people'),

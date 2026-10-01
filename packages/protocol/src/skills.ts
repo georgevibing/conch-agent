@@ -61,7 +61,69 @@ export const SkillProblemKind = z.enum([
   'changed',
   /** Conch found something worrying in it: off until you've looked and said yes (ADR 0028). */
   'needs-review',
+  /** Signed, but what's in it isn't what was signed: off (ADR 0031). */
+  'bad-signature',
 ]);
+
+/** What a skill may do while it's in use (ADR 0031). Reading is never limited. */
+export const SkillCapability = z.enum([
+  'commands',
+  'files',
+  'files-anywhere',
+  'web',
+  'browser',
+  'apps',
+  'passwords',
+]);
+export type SkillCapability = z.infer<typeof SkillCapability>;
+
+export const SkillPermissions = z.object({
+  /** The skill said (`allowed-tools` or `permissions`); otherwise these are the defaults. */
+  declared: z.boolean(),
+  capabilities: z.array(SkillCapability),
+  /** Only these commands (prefixes: `git`, `npm test`), when it named them. */
+  commands: z.array(z.string()).optional(),
+  /** Only these apps (integration servers), when it named them. */
+  apps: z.array(z.string()).optional(),
+  /** The list in plain words: "run commands (only `git`)". */
+  words: z.array(z.string()),
+});
+export type SkillPermissions = z.infer<typeof SkillPermissions>;
+
+/** Who signed a skill, and whether that holds (ADR 0031). */
+export const SkillSignature = z.object({
+  state: z.enum([
+    /** No `SKILL.sig`: reviewed like any other skill. */
+    'unsigned',
+    /** Signed, the signature holds, and you trust who signed it. */
+    'verified',
+    /** Signed and it holds, by someone you haven't said you trust. */
+    'untrusted',
+    /** Signed, and what's in it isn't what was signed: off. */
+    'invalid',
+  ]),
+  /** The name the signer gave; only the key says who it really is. */
+  publisher: z.string().max(80).optional(),
+  /** The key's fingerprint, grouped for reading: "3F9A 21C0 7B44 E1D2". */
+  fingerprint: z.string().optional(),
+  /** Why it's invalid, in a sentence. */
+  problem: z.string().optional(),
+  /**
+   * Untrusted, but it gives the name of a publisher you trust: another key
+   * using a name you know. Someone may be pretending.
+   */
+  lookalike: z.boolean().optional(),
+});
+export type SkillSignature = z.infer<typeof SkillSignature>;
+
+export const TrustedPublisher = z.object({
+  fingerprint: z.string(),
+  name: z.string(),
+  trustedAt: z.number(),
+  /** It's your own key (`pnpm conch skills sign`). */
+  you: z.boolean().optional(),
+});
+export type TrustedPublisher = z.infer<typeof TrustedPublisher>;
 
 /** Something in a skill that could hurt you, in plain words (ADR 0028). */
 export const SkillFinding = z.object({
@@ -118,6 +180,9 @@ export const Skill = z.object({
   updatedAt: z.number(),
   /** What Conch saw reading it (another app's skill, or one you were given). */
   review: SkillReview.optional(),
+  /** What it may do while it's in use (ADR 0031). */
+  permissions: SkillPermissions.optional(),
+  signature: SkillSignature.optional(),
 });
 export type Skill = z.infer<typeof Skill>;
 

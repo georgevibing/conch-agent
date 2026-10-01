@@ -16,6 +16,21 @@ export const SafetyStatus = z.object({
     /** What a sealed command can't read, in words: "SSH keys", "your keychains"… */
     protects: z.array(z.string()),
   }),
+  /**
+   * What sealing means for each provider you use (ADR 0031), honestly: never
+   * a protection that isn't there.
+   */
+  providers: z
+    .array(
+      z.object({
+        id: z.string(),
+        label: z.string(),
+        /** `partly`: sealed, but something is still reachable (`note` says what). */
+        state: z.enum(['sealed', 'partly', 'not-sealed', 'no-commands']),
+        note: z.string(),
+      }),
+    )
+    .default([]),
 });
 export type SafetyStatus = z.infer<typeof SafetyStatus>;
 
