@@ -52,6 +52,9 @@ pearly near-white instead of mud.
 - Accent presets: `coral` (default), `amber`, `kelp`, `lagoon`, `tide`, `iris`,
   `orchid`, `graphite`. Any `{ hue, chroma }` works.
 - Neutral tints: `porcelain` (warm, default), `slate`, `tinted` (follows accent), `pure`.
+
+<!-- conch:accents -->
+
 - Semantic tokens are what components use: `--nc-canvas`, `--nc-surface`,
   `--nc-surface-overlay`, `--nc-surface-sunken`, `--nc-text`, `--nc-text-muted`,
   `--nc-border`, `--nc-ring`, `--nc-wash-1…3` (translucent hover/press tints).

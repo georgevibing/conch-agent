@@ -1,0 +1,100 @@
+/* Layout only: contents on the left, the page in the middle, its headings on the right. */
+
+.frame {
+  display: grid;
+  grid-template-columns: 15rem minmax(0, 1fr) 13rem;
+  gap: var(--nc-space-10);
+  inline-size: 100%;
+  max-inline-size: var(--docs-wide);
+  margin-inline: auto;
+  padding-inline: var(--docs-gutter);
+}
+
+.sidebar,
+.toc {
+  position: sticky;
+  inset-block-start: var(--docs-bar);
+  align-self: start;
+  block-size: calc(100dvh - var(--docs-bar));
+}
+
+.sidebarScroll {
+  block-size: 100%;
+  /* Room for the links' focus rings, which sit just outside them. */
+  margin-inline: calc(var(--nc-space-3) * -1);
+  padding: var(--nc-space-8) var(--nc-space-3) var(--nc-space-12);
+}
+
+.toc {
+  overflow-y: auto;
+  padding-block: var(--nc-space-10);
+  scrollbar-width: none;
+}
+
+.main {
+  min-inline-size: 0;
+}
+
+.article {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-8);
+  max-inline-size: 46rem;
+  margin-inline: auto;
+  padding-block: var(--nc-space-10) var(--nc-space-16);
+  animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-3);
+}
+
+.title {
+  scroll-margin-block-start: var(--docs-scroll-margin);
+}
+
+.crumb {
+  color: inherit;
+}
+
+.foot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nc-space-5);
+  margin-block-start: var(--nc-space-8);
+  padding-block-start: var(--nc-space-6);
+  box-shadow: 0 -1px 0 0 var(--nc-border-subtle);
+}
+
+.foot > nav {
+  inline-size: 100%;
+}
+
+@media (max-width: 76rem) {
+  .frame {
+    grid-template-columns: 15rem minmax(0, 1fr);
+  }
+
+  .toc {
+    display: none;
+  }
+}
+
+@media (max-width: 60rem) {
+  .frame {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sidebar {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .article {
+    animation: none;
+  }
+}

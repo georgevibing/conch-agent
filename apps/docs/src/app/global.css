@@ -1,0 +1,8 @@
+html {
+  scroll-padding-block-start: 5rem;
+}
+
+body {
+  margin: 0;
+  background: var(--nc-canvas);
+}

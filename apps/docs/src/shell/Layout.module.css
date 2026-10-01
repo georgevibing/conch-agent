@@ -1,0 +1,101 @@
+/* Layout only: where the bar, the contents and the page sit. */
+
+.page {
+  --docs-bar: 3.5rem;
+  --docs-scroll-margin: calc(var(--docs-bar) + var(--nc-space-6));
+  --docs-gutter: clamp(var(--nc-space-4), 4vw, var(--nc-space-8));
+  --docs-wide: 88rem;
+
+  display: flex;
+  flex-direction: column;
+  min-block-size: 100dvh;
+}
+
+.skip {
+  position: absolute;
+  inset-block-start: var(--nc-space-2);
+  inset-inline-start: var(--nc-space-2);
+  z-index: var(--nc-z-toast);
+  padding: var(--nc-space-2) var(--nc-space-3);
+  border-radius: var(--nc-radius-sm);
+  color: var(--nc-text-inverse);
+  background: var(--nc-surface-inverse);
+  transform: translateY(-200%);
+}
+
+.skip:focus-visible {
+  transform: none;
+}
+
+.bar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: var(--nc-z-sticky);
+  block-size: var(--docs-bar);
+  background: var(--nc-canvas);
+  box-shadow: 0 1px 0 0 var(--nc-border-subtle);
+}
+
+.barInner {
+  display: flex;
+  align-items: center;
+  gap: var(--nc-space-3);
+  block-size: 100%;
+  max-inline-size: var(--docs-wide);
+  margin-inline: auto;
+  padding-inline: var(--docs-gutter);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--nc-space-2);
+  border-radius: var(--nc-radius-sm);
+  color: inherit;
+  text-decoration: none;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nc-space-1);
+  margin-inline-start: auto;
+}
+
+.search {
+  margin-inline-end: var(--nc-space-1);
+}
+
+.searchLabel {
+  min-inline-size: 7rem;
+  text-align: start;
+}
+
+.sheetNav {
+  flex: 1;
+  min-block-size: 0;
+  padding: var(--nc-space-4) var(--nc-space-3) var(--nc-space-5);
+}
+
+.menu {
+  display: none;
+}
+
+@media (max-width: 60rem) {
+  .menu {
+    display: inline-flex;
+  }
+
+  .searchLabel {
+    min-inline-size: 0;
+  }
+}
+
+@media (max-width: 36rem) {
+  /* A phone has no ⌘K, and no room for the words. */
+  .source,
+  .searchLabel,
+  .searchKeys {
+    display: none;
+  }
+}

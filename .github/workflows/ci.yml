@@ -22,6 +22,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
       - run: pnpm build-storybook
+      - run: pnpm docs:build
       - run: pnpm e2e
       # When a journey fails, keep what it saw (screenshots, traces, the page's text).
       - if: failure()

@@ -1,0 +1,23 @@
+---
+provider: openrouter
+---
+
+## Connect it
+
+1. Open **Settings → Providers** and find **OpenRouter**.
+2. Press **Connect**.
+3. Sign in to OpenRouter in the page that opens, and it makes a key for Conch. Nothing to copy. Or paste a key you already have: it starts with `sk-or-`.
+
+Conch checks the key before keeping it.
+
+## What you get
+
+Models from every lab in one list (Claude, GPT, Gemini, Llama and more), each with its price beside it. You pay OpenRouter as you go.
+
+Conch runs the conversation itself: it keeps the thread, holds the connections to your [apps](../features/apps.md) and hands the model their tools, and asks you before anything changes. So apps, [memory](../features/memory.md), [skills](../features/skills.md) and the [browser](../features/browser.md) all work, with models that can call tools.
+
+## Good to know
+
+- **It only talks to a model.** It can't read your files or run commands. For that, use [Claude Code](./claude-code.md) or [Codex](./codex-cli.md).
+- **Spend is tracked.** Conch records what each turn cost, and you can set a budget. See [Offline and at a limit](../care/offline.md).
+- **Pictures work** with models that can see. A file card warns you when the chosen model can't use it.

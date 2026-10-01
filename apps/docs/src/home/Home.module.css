@@ -1,0 +1,36 @@
+/* Layout only: the hero, then bands of cards. */
+
+.home {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--nc-space-12), 9vw, 7rem);
+  inline-size: 100%;
+  max-inline-size: 76rem;
+  margin-inline: auto;
+  padding: clamp(var(--nc-space-10), 7vw, 6rem) var(--docs-gutter) var(--nc-space-16);
+}
+
+.heroButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nc-space-2);
+}
+
+.band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-6);
+}
+
+.bandHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-2);
+  max-inline-size: 40rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  gap: var(--nc-space-3);
+}

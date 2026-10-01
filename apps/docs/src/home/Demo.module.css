@@ -1,0 +1,43 @@
+/* Layout only: a small window with a chat pinned to its foot. */
+
+.figure {
+  margin: 0;
+}
+
+.window {
+  display: flex;
+  flex-direction: column;
+  block-size: 27rem;
+  overflow: hidden;
+}
+
+.titleBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nc-space-3);
+  padding: var(--nc-space-3) var(--nc-space-4);
+  box-shadow: 0 1px 0 0 var(--nc-border-subtle);
+}
+
+.speaker {
+  display: flex;
+  align-items: center;
+  gap: var(--nc-space-2);
+  animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+}
+
+.chat {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--nc-space-1);
+  min-block-size: 0;
+  padding: var(--nc-space-3) var(--nc-space-2) var(--nc-space-4);
+}
+
+.reply {
+  display: grid;
+  gap: var(--nc-space-2-5);
+}

@@ -1,0 +1,6 @@
+.center {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  padding: var(--docs-gutter);
+}

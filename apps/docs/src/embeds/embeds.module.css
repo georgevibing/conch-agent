@@ -1,0 +1,230 @@
+/* Layout only: how the generated parts are arranged. Everything they're made of is Nacre's. */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-8);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+  gap: var(--nc-space-3);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-3);
+  min-inline-size: 0;
+}
+
+.groupTitle {
+  scroll-margin-block-start: var(--docs-scroll-margin);
+}
+
+.install {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-2);
+  min-inline-size: 0;
+}
+
+/* ── A provider or a channel at a glance ─────────────────────────────── */
+
+.facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-5);
+}
+
+.factsHead {
+  display: flex;
+  align-items: center;
+  gap: var(--nc-space-4);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nc-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pairs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: var(--nc-space-4);
+  margin: 0;
+}
+
+.pairs > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-0-5);
+}
+
+.pairs dd {
+  margin: 0;
+}
+
+.abilities {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: var(--nc-space-2) var(--nc-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.abilities > li {
+  display: flex;
+  align-items: center;
+  gap: var(--nc-space-2);
+}
+
+.plainList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-1-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ── Pictures of the other app ───────────────────────────────────────── */
+
+.scene {
+  display: grid;
+  justify-items: center;
+  padding-block: var(--nc-space-2);
+}
+
+.scene > * {
+  inline-size: min(100%, 22rem);
+}
+
+/* ── Cards ───────────────────────────────────────────────────────────── */
+
+.cardFoot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nc-space-1-5);
+  margin-block-start: var(--nc-space-2-5);
+}
+
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nc-space-2);
+}
+
+/* ── The app's own API ───────────────────────────────────────────────── */
+
+.columns {
+  columns: 18rem;
+  column-gap: var(--nc-space-8);
+}
+
+.routes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-2);
+  margin-block-end: var(--nc-space-6);
+  break-inside: avoid;
+}
+
+.route {
+  display: grid;
+  grid-template-columns: 3.75rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--nc-space-2);
+}
+
+.route > * {
+  justify-self: start;
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fields > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nc-space-2);
+}
+
+/* ── Accents ─────────────────────────────────────────────────────────── */
+
+.scroll {
+  overflow-x: auto;
+  padding-block: var(--nc-space-1);
+}
+
+.swatch {
+  display: block;
+  inline-size: 0.75rem;
+  block-size: 0.75rem;
+  border-radius: var(--nc-radius-full);
+}
+
+/* ── How the parts connect ───────────────────────────────────────────── */
+
+.how {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: var(--nc-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-2);
+}
+
+.marks {
+  display: flex;
+  align-items: center;
+  gap: var(--nc-space-2);
+  min-block-size: 1.75rem;
+  margin-block-end: var(--nc-space-1);
+}
+
+.marks > svg {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}
+
+.between {
+  display: grid;
+  place-items: center;
+}
+
+.between > svg {
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+  opacity: 0.5;
+}
+
+@media (max-width: 48rem) {
+  .how {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .between > svg {
+    transform: rotate(90deg);
+  }
+}

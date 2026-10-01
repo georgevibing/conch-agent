@@ -1,0 +1,43 @@
+/* Layout only: how a page's parts sit together. The look of each part is Nacre's. */
+
+.flow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-6);
+  min-inline-size: 0;
+}
+
+.flow > * {
+  min-inline-size: 0;
+}
+
+.heading {
+  position: relative;
+  scroll-margin-block-start: var(--docs-scroll-margin);
+}
+
+/* The link to a heading waits beside it, and shows when you point at the heading or tab to it. */
+.anchor {
+  display: inline-grid;
+  place-items: center;
+  margin-inline-start: 0.4em;
+  vertical-align: middle;
+  opacity: 0;
+  transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+}
+
+.anchor > svg {
+  inline-size: 0.8em;
+  block-size: 0.8em;
+}
+
+.heading:hover .anchor,
+.anchor:focus-visible {
+  opacity: 1;
+}
+
+.chord {
+  display: inline-flex;
+  gap: 0.2em;
+  white-space: nowrap;
+}

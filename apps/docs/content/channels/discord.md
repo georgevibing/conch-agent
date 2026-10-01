@@ -1,0 +1,28 @@
+---
+channel: discord
+---
+
+## Connect it
+
+In Conch, open **Channels** and choose **Discord**. The page walks you through these.
+
+1. **Make a Discord app.** Open the [Developer Portal](https://discord.com/developers/applications), press **New Application**, name it after your assistant, tick the box and press **Create**.
+2. **Copy its token.** In your app, open **Bot**, press **Reset Token**, confirm, then **Copy**. Paste it anywhere on Conch's page. Discord shows a token once: if you lose it, press **Reset Token** again.
+3. **Add it to your server.** Discord only lets you message a bot you share a server with. Conch makes the invite link; the bot gets no permissions there, so it can't read or post anything. This step ticks itself off when the bot arrives.
+4. **Say hello.** Send your bot a private message. Conch asks **Is this you?** with your name and the message. Press **That's me**.
+
+<!-- conch:channel-scene discord key -->
+
+No server of your own? In Discord, press **+** in the list of servers, then **Create My Own**. It takes ten seconds.
+
+## Your first hello
+
+Once Conch knows it's you, the bot greets you by name.
+
+<!-- conch:channel-scene discord hello -->
+
+## Good to know
+
+- **Nothing to switch on.** The bot needs no special settings in the portal: Conch handles them.
+- **While it works** you see Discord's "typing…".
+- **It answers private messages only.**
