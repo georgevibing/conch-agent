@@ -3,7 +3,8 @@ import { checkup, secureHome, workspaceRules } from './auth/checkup';
 import { applyPendingRestore } from './backup/restore';
 import { exposure } from './auth/network';
 import { loadConfig, portIsExplicit } from './config';
-import { setRestartHandler } from './lib/lifecycle';
+import { runningAs, waitForTurn } from './background/service';
+import { setRestartHandler, setStopHandler } from './lib/lifecycle';
 import { openInBrowser } from './lib/open';
 import {
   choosePort,
@@ -21,13 +22,28 @@ const config = loadConfig();
 const addressOf = (port: number) =>
   `http://${config.CONCH_HOST === '127.0.0.1' ? 'localhost' : config.CONCH_HOST}:${port}`;
 
+const background = runningAs() === 'background';
 // Before anything starts: is the port free, already a Conch, or another program's?
-const choice = await choosePort({
-  port: config.CONCH_PORT,
-  explicit: portIsExplicit(),
-  recorded: (await runningGateway(config.CONCH_HOME))?.port,
-  probe: (port) => probePort(config.CONCH_HOST, port),
-});
+const choose = async () =>
+  choosePort({
+    port: config.CONCH_PORT,
+    explicit: portIsExplicit(),
+    recorded: (await runningGateway(config.CONCH_HOME))?.port,
+    probe: (port) => probePort(config.CONCH_HOST, port),
+  });
+let choice = await choose();
+// Started at login with a Conch already open in a Terminal window: wait for its
+// place (it hands over, or you close it), then take over. Another background
+// Conch already there means this one isn't needed.
+if (
+  choice.kind === 'running' &&
+  background &&
+  !(await runningGateway(config.CONCH_HOME))?.background
+) {
+  console.warn('  🐚  Conch is open in a window; this one takes over when it closes.');
+  await waitForTurn(config.CONCH_HOME, async () => (await choose()).kind !== 'running');
+  choice = await choose();
+}
 if (choice.kind === 'running') {
   const running = addressOf(choice.port);
   console.warn(
@@ -71,7 +87,10 @@ await recordGateway(config.CONCH_HOME, {
   host: config.CONCH_HOST,
   port: config.CONCH_PORT,
   startedAt: Date.now(),
+  ...(background && { background }),
 });
+// Always on: the file that starts Conch at login still fits where Conch is now.
+void services.background.heal().catch(() => undefined);
 process.on('exit', () => forgetGateway(config.CONCH_HOME));
 
 // Routines only run while Conch is running; start the clock once we're listening.
@@ -124,6 +143,15 @@ setRestartHandler(async () => {
   setTimeout(() => process.exit(RESTART_CODE), 1500).unref();
   await app.close().catch(() => undefined);
   process.exit(RESTART_CODE);
+});
+
+// Quit Conch, or hand over to the Conch the computer started (Always on).
+setStopHandler(async (farewell) => {
+  services.routines.stop();
+  setTimeout(() => process.exit(0), 1500).unref();
+  await app.close().catch(() => undefined);
+  if (farewell) console.warn(`\n  ${farewell.replaceAll('\n', '\n  ')}\n`);
+  process.exit(0);
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

@@ -25,3 +25,22 @@ export function restart(): boolean {
   setTimeout(() => void handler(), 300).unref?.();
   return true;
 }
+
+let stopHandler: ((farewell?: string) => Promise<void>) | undefined;
+
+/** `main.ts` says how to stop for good (Quit Conch, or handing over to the background). */
+export function setStopHandler(handler: (farewell?: string) => Promise<void>): void {
+  stopHandler = handler;
+}
+
+/**
+ * Stop Conch (quit, or a handover to the Conch the computer started).
+ * Answers straight away and stops a moment later, so the request that asked
+ * gets its reply. `farewell` is said in the Terminal window, if there is one.
+ */
+export function stopSoon(farewell?: string): boolean {
+  const handler = stopHandler;
+  if (!handler) return false;
+  setTimeout(() => void handler(farewell), 600).unref?.();
+  return true;
+}

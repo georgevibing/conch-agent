@@ -53,6 +53,7 @@ import { IntegrationError, type SignIn } from './integrations/service';
 import { preview } from './routines/schedule';
 import { RoutineError } from './routines/service';
 import { registerAuthRoutes } from './auth/routes';
+import { registerBackgroundRoutes } from './background/routes';
 import { registerBackupRoutes } from './backup/routes';
 import { registerBrowserRoutes } from './browser/routes';
 import { registerChannelRoutes } from './channels/routes';
@@ -154,6 +155,7 @@ export async function buildApp(services: Services) {
   registerVaultRoutes(app, services.vault, gate);
   registerPickRoutes(app);
   registerBackupRoutes(app, services.backups, gate);
+  registerBackgroundRoutes(app, services.background, gate, () => services.conversations.busy());
   registerChannelRoutes(
     app,
     services.channels,

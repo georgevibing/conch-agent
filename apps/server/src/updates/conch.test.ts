@@ -10,6 +10,7 @@ import {
   ConchCheckout,
   explainFetch,
   findCheckout,
+  findPnpm,
   installProgress,
   overwritten,
   type UpdateProgressReport,
@@ -365,5 +366,27 @@ describe('finding Conch’s folder', () => {
   it('reads pnpm’s install progress', () => {
     expect(installProgress('Progress: resolved 838, reused 830, downloaded 8, added 419')).toBe(50);
     expect(installProgress('Already up to date')).toBeUndefined();
+  });
+});
+
+describe('finding pnpm', () => {
+  it('falls back to the corepack beside Node, as the installer leaves it', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'conch-corepack-'));
+    const node = join(dir, 'node');
+    const corepack = join(dir, process.platform === 'win32' ? 'corepack.cmd' : 'corepack');
+    await writeFile(node, '');
+    await writeFile(corepack, '#!/bin/sh\n', { mode: 0o755 });
+    const path = process.env.PATH;
+    process.env.PATH = '';
+    try {
+      const found = await findPnpm({}, node);
+      // A pnpm somewhere this computer always looks is used first; otherwise corepack's.
+      if (found && !found.prefix.includes('pnpm')) return;
+      expect(found?.prefix.at(-1)).toBe('pnpm');
+      expect([found?.command, ...(found?.prefix ?? [])].join(' ')).toContain(corepack);
+    } finally {
+      process.env.PATH = path;
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

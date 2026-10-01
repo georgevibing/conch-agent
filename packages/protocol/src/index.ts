@@ -30,6 +30,7 @@ import { UsageSnapshot } from './usage';
 
 export * from './access';
 export * from './attachments';
+export * from './background';
 export * from './backups';
 export * from './browser';
 export * from './channels';

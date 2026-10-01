@@ -9,6 +9,10 @@ import { vaultTools } from './vault/tools';
 import { vaultCheck } from './vault/doctor';
 import { deviceSealer, registerSealer } from './lib/sealed';
 import { protectedPaths } from './lib/protect';
+import { pretendBackend } from './background/backends';
+import { carriedEnv } from './background/files';
+import { backendFor, BackgroundService, runningAs } from './background/service';
+import { Shortcut } from './background/shortcut';
 import { AccessStore } from './auth/store';
 import { backupCheck } from './backup/doctor';
 import { BackupService } from './backup/service';
@@ -17,7 +21,7 @@ import { adapterFor, type ChannelEndpoints, slackCheckFor } from './channels/ada
 import { MockDiscord } from './channels/mock/discord';
 import { MockSlack } from './channels/mock/slack';
 import { MockTelegram } from './channels/mock/telegram';
-import { ChannelService } from './channels/service';
+import { CHANNEL_NAMES, ChannelService } from './channels/service';
 import { ChannelStore } from './channels/store';
 import { TerminalService } from './terminal/service';
 import { Gatekeeper } from './security';
@@ -32,7 +36,7 @@ import { MockEngine } from './engines/mock/engine';
 import type { Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
 import { registerCoreChecks } from './doctor/checks';
-import { BOOT_ID, restart, restartable } from './lib/lifecycle';
+import { BOOT_ID, restart, restartable, stopSoon } from './lib/lifecycle';
 import { Doctor } from './doctor/service';
 import { NetworkWatch } from './network/watch';
 import { Healed } from './lib/healed';
@@ -126,6 +130,8 @@ export class Services {
   #lastActivity = Date.now();
   /** Telegram, Discord and Slack bots that reach your assistant (ADR 0018). */
   readonly channels: ChannelService;
+  /** Always on: starting at login, running with no window (ADR 0026). */
+  readonly background: BackgroundService;
   /** The pretend Telegram and Discord used with the mock engine. */
   readonly mockTelegram?: MockTelegram;
   readonly mockDiscord?: MockDiscord;
@@ -398,6 +404,8 @@ export class Services {
     });
     // Conversations and routine runs reach the channels through the same stream as the web app.
     this.broadcast.on((event) => this.channels.onEvent(event));
+    this.background = this.#background(config);
+    this.doctor.register(this.background.doctorCheck());
     this.#channelsReady = (async () => {
       if (this.mockTelegram) {
         const port = Number(process.env.CONCH_MOCK_TELEGRAM_PORT ?? 0);
@@ -441,6 +449,69 @@ export class Services {
       restart,
       schedule: (config.CONCH_UPDATE_CHECKS ?? (mock ? 'off' : 'auto')) === 'auto',
     });
+  }
+
+  /**
+   * Always on. The mock engine's is pretend, so tests and `pnpm dev:mock`
+   * never add anything to this computer's login items.
+   */
+  #background(config: Config): BackgroundService {
+    const mock = config.CONCH_ENGINE === 'mock';
+    const checkout = findCheckout(import.meta.dirname, config.CONCH_CHECKOUT);
+    return new BackgroundService({
+      home: config.CONCH_HOME,
+      checkout: mock ? (checkout ?? config.CONCH_HOME) : checkout,
+      running: mock && runningAs() === 'dev' ? 'window' : runningAs(),
+      since: Date.now(),
+      backend: mock ? pretendBackend() : backendFor(config.CONCH_HOME),
+      spec: { node: process.execPath, env: carriedEnv(process.env), path: process.env.PATH ?? '' },
+      needed: () => this.unattended(),
+      url: `http://localhost:${config.CONCH_PORT}`,
+      // The mock engine's app lands in its own home, never in your Applications.
+      shortcut: new Shortcut({
+        version: SERVER_VERSION,
+        ...(mock && {
+          platform: 'linux' as const,
+          places: {
+            macApp: join(config.CONCH_HOME, 'shortcut', 'Conch.app'),
+            startMenu: join(config.CONCH_HOME, 'shortcut', 'Conch.lnk'),
+            desktopEntry: join(config.CONCH_HOME, 'shortcut', 'conch.desktop'),
+          },
+        }),
+      }),
+      handover: () =>
+        stopSoon(
+          '🐚  Conch now runs in the background, so you can close this window.\n    It starts by itself when you log in. To stop it: pnpm conch quit',
+        ),
+      heal: (message) => void this.healed.note('gateway', message),
+    });
+  }
+
+  /**
+   * What only works while Conch is running, in one sentence: routines that
+   * are on, and the chat apps that reach it. Undefined when there's nothing.
+   */
+  async unattended(): Promise<string | undefined> {
+    const routines = (await this.routines.list().catch(() => [])).filter(
+      (r) => r.status === 'active',
+    ).length;
+    const apps = [
+      ...new Set(
+        (await this.channels.list().catch(() => ({ channels: [] }))).channels
+          .filter((c) => c.enabled)
+          .map((c) => CHANNEL_NAMES[c.kind]),
+      ),
+    ];
+    const parts = [
+      ...(routines ? [routines === 1 ? 'Your routine' : `Your ${routines} routines`] : []),
+      ...apps,
+    ];
+    if (!parts.length) return undefined;
+    const list =
+      parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
+    const verb =
+      parts.length > 1 || routines > 1 ? 'only work' : routines === 1 ? 'only runs' : 'only works';
+    return `${list} ${verb} while Conch is running.`;
   }
 
   #channelsReady: Promise<void>;

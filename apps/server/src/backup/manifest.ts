@@ -89,6 +89,21 @@ export const RULES: readonly BackupRule[] = [
     why: 'Where this run of Conch listens; written again on every start.',
   },
   {
+    match: 'background/**',
+    class: 'derived',
+    why: 'How this computer starts Conch at login (Always on): written for this computer’s paths. Turn Always on on again on a new one; a restore never does it for you.',
+  },
+  {
+    match: 'shortcut/**',
+    class: 'derived',
+    why: 'The Conch app’s files for this computer (the Start menu, the app menu): written again from where Conch is.',
+  },
+  {
+    match: 'logs/**',
+    class: 'derived',
+    why: 'What Conch said while running in the background: about this computer and these runs.',
+  },
+  {
     match: 'updates.json',
     class: 'derived',
     why: 'What’s installed on this computer and what’s newest: looked up again. Automatic updates are switched on again by you (it asks that it’s you), never by a restore.',

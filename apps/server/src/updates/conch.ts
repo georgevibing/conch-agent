@@ -46,13 +46,26 @@ export function findCheckout(
   }
 }
 
-/** pnpm as `pnpm start` ran it (`npm_execpath`), else from PATH. */
-export async function findPnpm(env: NodeJS.ProcessEnv = process.env): Promise<Launch | undefined> {
+/**
+ * pnpm as `pnpm start` ran it (`npm_execpath`), else from PATH, else through
+ * the corepack that comes with Node (the installer's way: ADR 0026), which
+ * runs the pnpm `packageManager` pins.
+ */
+export async function findPnpm(
+  env: NodeJS.ProcessEnv = process.env,
+  node: string = process.execPath,
+): Promise<Launch | undefined> {
   const exec = env.npm_execpath;
   if (exec && /pnpm/i.test(basename(exec)) && existsSync(exec))
-    return /\.[cm]?js$/i.test(exec) ? { command: process.execPath, prefix: [exec] } : launch(exec);
+    return /\.[cm]?js$/i.test(exec) ? { command: node, prefix: [exec] } : launch(exec);
   const found = await findExecutable('pnpm');
-  return found ? launch(found) : undefined;
+  if (found) return launch(found);
+  const corepack = join(dirname(node), process.platform === 'win32' ? 'corepack.cmd' : 'corepack');
+  if (existsSync(corepack)) {
+    const runner = launch(corepack);
+    return { ...runner, prefix: [...runner.prefix, 'pnpm'] };
+  }
+  return undefined;
 }
 
 export type Git = (args: string[], options?: { timeout?: number }) => Promise<RunResult>;
@@ -91,6 +104,8 @@ export const stream: Stream = (program, args, { cwd, onLine, timeout = STEP_TIME
     // Installing for production would leave out the tools the build needs.
     const env = agentEnv();
     delete env.NODE_ENV;
+    // corepack (the installer's pnpm) never stops to ask before fetching the pinned pnpm.
+    env.COREPACK_ENABLE_DOWNLOAD_PROMPT = '0';
     const child = nodeSpawn(program.command, [...program.prefix, ...args], {
       cwd,
       env,

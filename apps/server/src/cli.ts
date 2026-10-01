@@ -12,6 +12,11 @@ import { checkPassword, suggestPassword } from '@conch/protocol';
 import { renderUnicodeCompact } from 'uqr';
 
 import { checkup, secureHome, workspaceRules } from './auth/checkup';
+import { backgroundCommand, quitCommand, type BackgroundIo } from './background/cli';
+import { carriedEnv } from './background/files';
+import { backendFor, BackgroundService, lastWords } from './background/service';
+import { Shortcut } from './background/shortcut';
+import { SERVER_VERSION } from './version';
 import { HostPolicy, exposure } from './auth/network';
 import { Devices } from './auth/devicesCli';
 import { AccessError, AccessStore } from './auth/store';
@@ -21,7 +26,8 @@ import { loadConfig } from './config';
 import { IntegrationStore } from './integrations/store';
 import { Healed } from './lib/healed';
 import type { Heal } from './lib/recover';
-import { runningGateway } from './port';
+import { probePort, runningGateway } from './port';
+import { findCheckout } from './updates/conch';
 import { PROVIDER_COPY } from './providers/catalog';
 import { SettingsStore } from './settings/store';
 
@@ -241,6 +247,67 @@ async function status() {
     );
 }
 
+const backgroundIo: BackgroundIo = {
+  say,
+  bold,
+  dim,
+  green,
+  yellow,
+  running: () => runningGateway(config.CONCH_HOME),
+  answering: async () => {
+    const port = (await runningGateway(config.CONCH_HOME))?.port ?? config.CONCH_PORT;
+    return (await probePort(config.CONCH_HOST, port)) === 'conch';
+  },
+  url: async () => {
+    const port = (await runningGateway(config.CONCH_HOME))?.port ?? config.CONCH_PORT;
+    return `http://${config.CONCH_HOST === '127.0.0.1' ? 'localhost' : config.CONCH_HOST}:${port}`;
+  },
+  lastWords: () => lastWords(config.CONCH_HOME),
+  kill: (pid) => process.kill(pid, 'SIGTERM'),
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+};
+
+async function backgroundService() {
+  const recorded = await runningGateway(config.CONCH_HOME);
+  return new BackgroundService({
+    home: config.CONCH_HOME,
+    checkout: findCheckout(import.meta.dirname, config.CONCH_CHECKOUT),
+    // A person at this terminal; a Conch the computer started is left running.
+    running: recorded?.background ? 'background' : 'window',
+    since: Date.now(),
+    backend: backendFor(config.CONCH_HOME),
+    spec: { node: process.execPath, env: carriedEnv(process.env), path: process.env.PATH ?? '' },
+    handover: () => false,
+    heal: (message) => heal('gateway', message),
+    url: `http://localhost:${recorded?.port ?? config.CONCH_PORT}`,
+    shortcut: new Shortcut({ version: SERVER_VERSION }),
+  });
+}
+
+async function background() {
+  process.exitCode = await backgroundCommand(
+    process.argv.slice(3),
+    await backgroundService(),
+    backgroundIo,
+  );
+}
+
+async function shortcut() {
+  if (process.argv[3] === 'remove') {
+    await (await backgroundService()).removeShortcut();
+    say(`${green('✓')} Conch is no longer in your apps.`);
+    return;
+  }
+  const status = await (await backgroundService()).addShortcut();
+  say(
+    `${green('✓')} Conch is in ${status.shortcut?.where ?? 'your apps'}. Open it from there any time.`,
+  );
+}
+
+async function quit() {
+  process.exitCode = await quitCommand(backgroundIo);
+}
+
 function help() {
   say(bold('pnpm conch <command>'));
   say();
@@ -254,6 +321,9 @@ function help() {
     ['devices', 'What has signed in; approve new devices (devices help)'],
     ['sign-out-everywhere', 'Sign every device out'],
     ['reset', 'Forgot your password? Turn sign-in off and start again'],
+    ['background [on|off]', 'Always on: start at login, run with no window'],
+    ['quit', 'Stop Conch, wherever it’s running'],
+    ['shortcut [remove]', 'Put Conch where your apps are (Applications, Start)'],
   ];
   for (const [cmd, what] of rows) say(`${cmd.padEnd(24)}${dim(what)}`);
 }
@@ -268,6 +338,9 @@ const commands: Record<string, () => Promise<void> | void> = {
   devices,
   'sign-out-everywhere': signOutEverywhere,
   reset,
+  background,
+  quit,
+  shortcut,
   help,
 };
 

@@ -184,6 +184,8 @@ export const GatewayRecord = z.object({
   host: z.string(),
   port: z.number().int().min(1).max(65535),
   startedAt: z.number(),
+  /** Started by the computer at login (Always on, ADR 0026), not in a Terminal window. */
+  background: z.boolean().optional(),
 });
 export type GatewayRecord = z.infer<typeof GatewayRecord>;
 
