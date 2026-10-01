@@ -837,6 +837,30 @@ describe('kept unlocked', () => {
     expect((await third.sourceStatus()).find((s) => s.id === 'keepassxc')?.state).toBe('locked');
   });
 
+  it('is never shown as locked while it opens itself, to anyone asking at the same time', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-kept-'));
+    const database = join(home, 'Passwords.kdbx');
+    await (await import('node:fs/promises')).writeFile(database, 'x');
+    const first = new VaultService({ home, keystore: 'file', exec: checking([], 'db-password') });
+    await first.setSource('keepassxc', { enabled: true, database });
+    await first.unlockSource('keepassxc', 'db-password', true);
+    // Opening a database takes a moment (keepassxc-cli derives its key).
+    const fast = checking([], 'db-password');
+    const slow: Exec = {
+      find: fast.find,
+      run: async (file, args, options) => {
+        await new Promise((r) => setTimeout(r, 150));
+        return fast.run(file, args, options);
+      },
+    };
+    let changed = 0;
+    const again = new VaultService({ home, keystore: 'file', exec: slow, emit: () => changed++ });
+    const [a, b] = await Promise.all([again.sourceStatus(), again.sourceStatus()]);
+    for (const list of [a, b]) expect(list.find((s) => s.id === 'keepassxc')?.state).toBe('ready');
+    // And it says so, for Repair everything to look again.
+    expect(changed).toBeGreaterThan(0);
+  });
+
   it('says so when the kept password stopped working, and forgets it', async () => {
     const home = await mkdtemp(join(tmpdir(), 'conch-kept-'));
     const database = join(home, 'Passwords.kdbx');

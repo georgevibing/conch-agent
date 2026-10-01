@@ -1268,9 +1268,23 @@ export class VaultService {
     await writeJson(this.#rememberedPath, JSON.parse(sealed) as unknown);
   }
 
-  /** Managers kept unlocked open by themselves, once each time Conch starts. */
-  async #reopen() {
+  #reopening?: Promise<void>;
+
+  /**
+   * Managers kept unlocked open by themselves, once each time Conch starts.
+   * Everyone asking meanwhile (Repair everything, the list) waits for the
+   * same opening, so nobody sees a kept manager as locked while it opens.
+   */
+  #reopen(): Promise<void> {
+    this.#reopening ??= this.#reopenAll().finally(() => {
+      this.#reopening = undefined;
+    });
+    return this.#reopening;
+  }
+
+  async #reopenAll() {
     const kept = await this.#keptPasswords();
+    let opened = false;
     for (const [id, password] of Object.entries(kept)) {
       if (this.#reopened.has(id)) continue;
       this.#reopened.add(id);
@@ -1278,6 +1292,7 @@ export class VaultService {
       if (!source?.unlockWith || !(await this.#enabled(source.id))) continue;
       try {
         await source.unlockWith(password);
+        opened = true;
       } catch {
         // The password changed in the manager: stop trying it, and say so.
         await this.#keep(source.id, undefined).catch(() => undefined);
@@ -1287,6 +1302,8 @@ export class VaultService {
         );
       }
     }
+    // Open now: everything showing it (Repair everything, Passwords) looks again.
+    if (opened) this.#changed();
   }
 
   // ── Moving in (ADR 0025 § Moving in) ────────────────────────────────────

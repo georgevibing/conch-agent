@@ -81,9 +81,11 @@ export class Doctor {
   /**
    * Look at one check again, after what it watches changed (Passwords
    * unlocked), so the report never says something that's no longer true.
-   * Only once there's a report to correct, and never in the middle of a run.
+   * Only once there's a report to correct; after a run that's going on.
    */
   async refresh(checkId: string): Promise<void> {
+    // A run going on may have looked before the change: look again once it's done.
+    if (this.#running) await this.#running.done.catch(() => undefined);
     if (this.#running || !this.#report.checkedAt) return;
     const check = this.#checks.find((c) => c.id === checkId);
     if (!check) return;
