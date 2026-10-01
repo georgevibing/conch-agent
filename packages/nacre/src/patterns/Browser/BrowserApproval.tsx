@@ -1,8 +1,9 @@
 import { Check, Download, Globe, KeyRound, ShieldAlert, X } from 'lucide-react';
-import type { ComponentProps } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 
 import { Button } from '../../components/Button';
 import { cx } from '../../utils/cx';
+import { GuardNote } from '../Safety';
 import styles from './Browser.module.css';
 import type { BrowserBox } from './BrowserWindow';
 
@@ -21,6 +22,11 @@ export interface BrowserApprovalProps extends Omit<ComponentProps<'div'>, 'title
   name?: string;
   /** Set once answered: the card becomes a quiet line. */
   decision?: BrowserApprovalDecision | 'expired';
+  /**
+   * Asked because the chat read something untrusted (ADR 0028): why, shown on
+   * the card, and no "Always" is offered.
+   */
+  guard?: ReactNode;
   /** The answer is on its way. */
   busy?: boolean;
   onDecide?: (decision: BrowserApprovalDecision) => void;
@@ -73,6 +79,7 @@ export function BrowserApproval({
   box,
   name = 'Conch',
   decision,
+  guard,
   busy = false,
   onDecide,
   className,
@@ -141,6 +148,7 @@ export function BrowserApproval({
         </div>
         {kind === 'site' && <p className={styles.approvalAction}>First: {action}</p>}
         <p className={styles.approvalDetail}>{detail(kind, site, name)}</p>
+        {guard && <GuardNote>{guard}</GuardNote>}
         <div className={styles.approvalActions}>
           <Button size="sm" variant="ghost" disabled={busy} onClick={() => onDecide?.('deny')}>
             {kind === 'site' || kind === 'fill'
@@ -149,7 +157,7 @@ export function BrowserApproval({
                 ? 'Don’t download'
                 : 'Don’t'}
           </Button>
-          {(kind === 'site' || kind === 'fill') && (
+          {(kind === 'site' || kind === 'fill') && !guard && (
             <Button
               size="sm"
               variant="surface"

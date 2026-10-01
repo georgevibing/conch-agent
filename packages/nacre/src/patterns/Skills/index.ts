@@ -6,3 +6,5 @@ export { SkillUsed } from './SkillUsed';
 export type { SkillUsedProps } from './SkillUsed';
 export { SkillProblem } from './SkillProblem';
 export type { DescriptionDraft, SkillProblemFix, SkillProblemProps } from './SkillProblem';
+export { SkillReview } from './SkillReview';
+export type { SkillReviewFinding, SkillReviewProps } from './SkillReview';
