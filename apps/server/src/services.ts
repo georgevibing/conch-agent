@@ -425,7 +425,10 @@ export class Services {
     void (this.mockVendor?.start() ?? Promise.resolve()).then(() => this.integrations.start());
     this.activity = new Activity({
       list: () => conversationStore.list(),
-      events: (id) => conversationStore.events(id),
+      // What's happening now, not what's reached the disk yet: a "no" said a moment ago counts.
+      events: async (id) =>
+        (await this.conversations.detail(id).catch(() => undefined))?.events ??
+        conversationStore.events(id),
       undoState: (id) => this.undo.state(id),
     });
     this.search = new SearchService({
