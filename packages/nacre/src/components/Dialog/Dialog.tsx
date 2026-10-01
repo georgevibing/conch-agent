@@ -6,7 +6,11 @@ import { cx } from '../../utils/cx';
 import { IconButton } from '../IconButton';
 import styles from './Dialog.module.css';
 
-export type DialogSize = 'sm' | 'md' | 'lg' | 'xl';
+/**
+ * `full`: the whole window, as a page of its own (Settings). Its own way back
+ * goes in it; Escape still closes it.
+ */
+export type DialogSize = 'sm' | 'md' | 'lg' | 'xl' | 'full';
 
 export interface DialogContentProps extends ComponentProps<typeof DialogPrimitive.Content> {
   size?: DialogSize;

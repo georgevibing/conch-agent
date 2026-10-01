@@ -65,6 +65,24 @@
     --dialog-w: 52rem;
   }
 
+  /* A page of its own: the window, edge to edge, on the canvas — no card, no
+     rim, just a quiet rise in. */
+  .content[data-size='full'] {
+    --nc-enter-y: 6px;
+    --nc-exit-y: 0px;
+    --nc-rim-rest: 0;
+    --nc-rim-hover: 0;
+    --nc-sheen-hover: 0;
+    inset: 0;
+    translate: none;
+    inline-size: 100vw;
+    block-size: 100dvh;
+    max-block-size: none;
+    border-radius: 0;
+    background: var(--nc-canvas);
+    box-shadow: none;
+  }
+
   .content[data-state='open'] {
     animation: nc-surface-in var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
   }

@@ -62,7 +62,7 @@ export const Open: Story = {
 export const Sizes: Story = {
   render: () => (
     <Stack direction="row" gap={3}>
-      {(['sm', 'md', 'lg', 'xl'] as const).map((size) => (
+      {(['sm', 'md', 'lg', 'xl', 'full'] as const).map((size) => (
         <Dialog.Root key={size}>
           <Dialog.Trigger asChild>
             <Button variant="surface">{size.toUpperCase()}</Button>
@@ -81,6 +81,29 @@ export const Sizes: Story = {
         </Dialog.Root>
       ))}
     </Stack>
+  ),
+};
+
+/** The window as a page of its own (Settings): its own way back, and Escape. */
+export const FullWindow: Story = {
+  tags: ['!autodocs'],
+  render: () => (
+    <Dialog.Root defaultOpen>
+      <Dialog.Trigger asChild>
+        <Button variant="surface">Settings</Button>
+      </Dialog.Trigger>
+      <Dialog.Content size="full" hideClose aria-describedby={undefined}>
+        <Stack gap={4} style={{ padding: '1rem 1.5rem' }}>
+          <Dialog.Close asChild>
+            <Button variant="ghost" size="sm" style={{ alignSelf: 'flex-start' }}>
+              Back
+            </Button>
+          </Dialog.Close>
+          <Dialog.Title>Settings</Dialog.Title>
+          <Text tone="muted">Edge to edge, on the canvas: a page, not a card.</Text>
+        </Stack>
+      </Dialog.Content>
+    </Dialog.Root>
   ),
 };
 

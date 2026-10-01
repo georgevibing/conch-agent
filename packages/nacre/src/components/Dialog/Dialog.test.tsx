@@ -75,4 +75,23 @@ describe('Dialog', () => {
     await screen.findByRole('dialog');
     expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
   });
+
+  it('fills the window as a page of its own, with its own way back', async () => {
+    renderNacre(
+      <Dialog.Root defaultOpen>
+        <Dialog.Content size="full" hideClose aria-describedby={undefined}>
+          <Dialog.Title>Settings</Dialog.Title>
+          <Dialog.Close asChild>
+            <Button>Back</Button>
+          </Dialog.Close>
+        </Dialog.Content>
+      </Dialog.Root>,
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Settings' });
+    expect(dialog).toHaveAttribute('data-size', 'full');
+    expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await expectAccessible(document.body);
+  });
 });
