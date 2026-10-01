@@ -472,14 +472,14 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   const saveSettings = useUpdateSettings();
   /** The folder chip: the system's Open dialog right here, or Settings from another device. */
   const chooseFolder = () => {
-    if (!canPickHere()) return openSettings('providers');
+    if (!canPickHere()) return openSettings('general');
     void pickPath('workspace').then(
       async (path) => {
         if (!path) return;
         await saveSettings.mutateAsync({ preferences: { workspace: path } });
         toast.success(`Working in ${path.split(/[\\/]/).filter(Boolean).at(-1) ?? path}`);
       },
-      () => openSettings('providers'),
+      () => openSettings('general'),
     );
   };
 

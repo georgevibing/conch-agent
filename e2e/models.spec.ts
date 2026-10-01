@@ -77,3 +77,22 @@ test('make default and custom commands', async ({ page, request }) => {
   await composer.press('Enter');
   await expect(page.getByText('There’s no /definitely-not-a-command command')).toBeVisible();
 });
+
+test('Settings opens on General: the working folder and starting over, not under Providers', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const settings = page.getByRole('dialog');
+  await expect(settings.getByRole('tab', { name: 'General' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(settings.getByRole('heading', { name: 'Working folder' })).toBeVisible();
+  await expect(settings.getByRole('radio', { name: /Conch’s own workspace/ })).toBeChecked();
+  await expect(settings.getByRole('button', { name: 'Replay welcome' })).toBeVisible();
+
+  await settings.getByRole('tab', { name: 'Providers' }).click();
+  await expect(settings.getByRole('heading', { name: 'Providers' })).toBeVisible();
+  await expect(settings.getByRole('heading', { name: 'Working folder' })).toBeHidden();
+});

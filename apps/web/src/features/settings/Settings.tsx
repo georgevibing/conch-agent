@@ -32,6 +32,7 @@ import {
   SquareTerminal,
   Moon,
   Palette,
+  Settings2,
   ShieldCheck,
   Sparkles,
   SquareSlash,
@@ -56,6 +57,7 @@ import { ProvidersTab } from '../providers/ProvidersTab';
 import { UsageTab } from '../usage/UsageTab';
 import styles from './Settings.module.css';
 import { CommandsTab } from './CommandsTab';
+import { GeneralTab } from './GeneralTab';
 import { ModelsTab } from './ModelsTab';
 import { SaveStatus, Section } from './Section';
 import { useAutosave } from './useAutosave';
@@ -221,7 +223,6 @@ const accentSwatches = Object.keys(accents) as AccentName[];
 
 function AppearanceTab() {
   const theme = useNacreTheme();
-  const update = useUpdateSettings();
   return (
     <Stack gap={8}>
       <Section title="Appearance">
@@ -296,25 +297,12 @@ function AppearanceTab() {
           />
         </Stack>
       </Section>
-      <Section
-        title="Start over"
-        description="Replay the welcome and set-up. Your conversations and memories stay."
-      >
-        <div>
-          <Button
-            variant="surface"
-            size="sm"
-            onClick={() => void update.mutateAsync({ onboarded: false })}
-          >
-            Replay welcome
-          </Button>
-        </div>
-      </Section>
     </Stack>
   );
 }
 
 const tabs: { value: SettingsTab; label: string; icon: ReactNode }[] = [
+  { value: 'general', label: 'General', icon: <Settings2 /> },
   { value: 'personality', label: 'Personality', icon: <Sparkles /> },
   { value: 'about', label: 'About you', icon: <User /> },
   { value: 'memory', label: 'Memory', icon: <Brain /> },
@@ -369,6 +357,9 @@ export function Settings() {
               </Tabs.List>
             </div>
             <div className={styles.panel}>
+              <Tabs.Content value="general">
+                <GeneralTab workspace={app.workspace} workspacePref={app.preferences.workspace} />
+              </Tabs.Content>
               <Tabs.Content value="personality">
                 <PersonalityTab initial={app.persona} />
               </Tabs.Content>
@@ -403,7 +394,7 @@ export function Settings() {
                 <VoiceTab />
               </Tabs.Content>
               <Tabs.Content value="providers">
-                <ProvidersTab workspace={app.workspace} workspacePref={app.preferences.workspace} />
+                <ProvidersTab />
               </Tabs.Content>
               <Tabs.Content value="browser">
                 <BrowserSettings />

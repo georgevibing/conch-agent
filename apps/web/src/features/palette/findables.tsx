@@ -10,6 +10,8 @@ import {
 import {
   Archive,
   BatteryMedium,
+  Folder,
+  Settings2,
   Bell,
   Blocks,
   Brain,
@@ -99,6 +101,18 @@ const settingsPlaces: {
   keywords: string;
   icon: ReactNode;
 }[] = [
+  {
+    tab: 'general',
+    label: 'General',
+    keywords: 'general replay welcome start over onboarding setup',
+    icon: <Settings2 />,
+  },
+  {
+    tab: 'general',
+    label: 'Working folder',
+    keywords: 'working folder workspace directory project files where cwd',
+    icon: <Folder />,
+  },
   { tab: 'personality', label: 'Personality', keywords: 'name tone persona', icon: <Sparkles /> },
   { tab: 'about', label: 'About you', keywords: 'profile me', icon: <User /> },
   { tab: 'memory', label: 'Memory', keywords: 'remember forget', icon: <Brain /> },

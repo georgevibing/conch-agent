@@ -2,6 +2,7 @@ import type { TurnOptions } from '@conch/protocol';
 import { create } from 'zustand';
 
 export type SettingsTab =
+  | 'general'
   | 'personality'
   | 'about'
   | 'memory'
@@ -162,7 +163,7 @@ export const useUi = create<UiState>((set) => ({
       return { sidebarOpen: !s.sidebarOpen };
     }),
   setMobileSidebar: (mobileSidebarOpen) => set({ mobileSidebarOpen }),
-  openSettings: (tab = 'personality', focus) =>
+  openSettings: (tab = 'general', focus) =>
     set({ settings: tab, settingsFocus: focus, paletteOpen: false }),
   // The whole page rests while Conch starts again: nothing stays open over the calm screen.
   setRestarting: (restarting) =>

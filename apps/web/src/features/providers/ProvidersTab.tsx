@@ -1,20 +1,9 @@
 import type { Provider } from '@conch/protocol';
-import {
-  AlertDialog,
-  Button,
-  Callout,
-  ProviderCard,
-  Skeleton,
-  Stack,
-  Text,
-  PathPicker,
-} from '@conch/nacre';
+import { AlertDialog, Button, Callout, ProviderCard, Skeleton, Stack, Text } from '@conch/nacre';
 import { useState } from 'react';
 
-import { useAppState, useUpdateSettings } from '../../api/queries';
-import { canPickHere, pickPath } from '../../lib/pick';
-import { Section, SaveStatus } from '../settings/Section';
-import { useAutosave } from '../settings/useAutosave';
+import { useAppState } from '../../api/queries';
+import { Section } from '../settings/Section';
 import { useUi } from '../../app/ui';
 import { ProviderDetail } from './ConnectProviderDialog';
 import { useCheckProvider, useClearProviderKey, useProviders, useUseProvider } from './queries';
@@ -44,22 +33,8 @@ function order(a: Provider, b: Provider) {
   return rank(a) - rank(b);
 }
 
-export function ProvidersTab({
-  workspace,
-  workspacePref,
-}: {
-  workspace: string;
-  workspacePref?: string;
-}) {
+export function ProvidersTab() {
   const { data: app } = useAppState();
-  const update = useUpdateSettings();
-  const [folder, setFolder] = useState(workspacePref ?? '');
-  const folderStatus = useAutosave(
-    folder,
-    (next) => update.mutateAsync({ preferences: { workspace: next.trim() } }),
-    900,
-  );
-
   const assistant = app?.persona.name ?? 'Conch';
   // Opened to sign in to one provider (from a chat): its page, straight away.
   const [connecting, setConnecting] = useState<string | undefined>(() => {
@@ -177,29 +152,6 @@ export function ProvidersTab({
             model or provider in a chat carries the conversation over — nothing is lost.
           </Text>
         </Stack>
-      </Section>
-
-      <Section
-        title="Working folder"
-        description={`Where ${assistant} reads and writes files when you ask it to.`}
-        status={<SaveStatus status={folderStatus} />}
-      >
-        <PathPicker
-          kind="folder"
-          label="Working folder"
-          value={folder || workspace}
-          suggestions={[
-            {
-              path: workspace,
-              title: 'Conch’s own workspace',
-              detail: 'A folder just for your assistant',
-            },
-          ]}
-          onChange={(path) => setFolder(path === workspace ? '' : path)}
-          onChoose={canPickHere() ? () => pickPath('workspace') : undefined}
-          placeholder="~/Projects"
-          hint="Providers that only talk to a model over the internet don’t read files at all."
-        />
       </Section>
 
       <AlertDialog.Root

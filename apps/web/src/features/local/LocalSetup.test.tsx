@@ -93,7 +93,7 @@ const ollamaNeed = (patch: Partial<Need> = {}): { ready: boolean; needs: Need[] 
 });
 
 function render() {
-  return renderApp(<ProvidersTab workspace="/home/ada/.conch/workspace" />, { route: '/' });
+  return renderApp(<ProvidersTab />, { route: '/' });
 }
 
 async function open(name = 'Set up') {

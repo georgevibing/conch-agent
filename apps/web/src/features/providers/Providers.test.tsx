@@ -14,7 +14,7 @@ const routes = (overrides: Record<string, (body: unknown) => unknown> = {}) => (
 });
 
 function render() {
-  return renderApp(<ProvidersTab workspace="/home/ada/.conch/workspace" />, { route: '/' });
+  return renderApp(<ProvidersTab />, { route: '/' });
 }
 
 describe('Providers settings', () => {

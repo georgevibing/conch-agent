@@ -357,6 +357,27 @@ describe('Palette search', () => {
     act(() => useUi.setState({ settings: null, settingsFocus: undefined }));
   });
 
+  it('finds the working folder in General by the words people use', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    for (const words of ['working folder', 'workspace', 'directory']) {
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /Settings: Working folder/ }),
+      ).toBeInTheDocument();
+    }
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(useUi.getState()).toMatchObject({ settings: 'general' }));
+    act(() => useUi.setState({ settings: null, settingsFocus: undefined }));
+  });
+
   it('finds things made in chats: a pinned app on its page, anything else beside its chat', async () => {
     const user = userEvent.setup();
     const made = (id: string, title: string, pinned?: boolean) => ({
