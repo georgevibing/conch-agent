@@ -52,7 +52,9 @@ What it needs is a Conch need (`setup/known.ts`):
 - Whether Conch is running, and whether it's Always on.
 - A dot when a question or a new device is waiting.
 - Open Conch, Start Conch, Quit Conch, and Always on….
-- Hide from the menu bar.
+
+It doesn't offer to hide itself: whether it shows is a switch in
+**Settings → Health → Always on**.
 
 **When it runs.** It's on by default (`preferences.menuBar`). The gateway
 shows it whenever it starts, at login with Always on, and every five minutes
@@ -62,8 +64,7 @@ away. Start runs `tray/start`, which uses the computer's own login item when
 there is one (`launchctl kickstart`, `systemctl --user start`) and the
 launcher otherwise. Everywhere else, Repair everything's `tray` check starts
 it again. **Settings → Health → Always on** and `pnpm conch tray on|off`
-switch it. Hiding it from the helper itself sets the preference, so it stays
-hidden. Uninstalling removes `~/.conch/tray`.
+switch it. Uninstalling removes `~/.conch/tray`.
 
 **How it's started on Windows.** A detached program has no console, and
 `powershell.exe` without one leaves at once (exit 0, nothing run); one that
@@ -100,7 +101,7 @@ doesn't try.
 other:
 
 - It talks only to `http://localhost:<port>`, and only to
-  `GET /api/tray/status`, `POST /api/tray/quit` and `POST /api/tray/hide`.
+  `GET /api/tray/status` and `POST /api/tray/quit`.
 - It carries a 256-bit token from `tray/token` (0600) in `X-Conch-Tray`. The
   gate compares it in constant time and accepts it only from loopback, never
   through a proxy (`Gatekeeper.trayAllowed`, `TRAY_API`).

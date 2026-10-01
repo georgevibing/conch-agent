@@ -10,8 +10,8 @@
  *
  * It asks the gateway how things are over loopback with its own token
  * (`tray/token`, 0600, compared in constant time, `Gatekeeper.trayAllowed`).
- * It can read a few counts, quit Conch and hide itself; everything else
- * opens the page.
+ * It can read a few counts and quit Conch; everything else opens the page.
+ * Whether it shows at all is a switch in Settings, not something it offers.
  */
 import { spawn as nodeSpawn } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';

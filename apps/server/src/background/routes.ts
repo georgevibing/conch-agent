@@ -70,10 +70,6 @@ export function registerBackgroundRoutes(
       ? reply.code(202).send({ ok: true })
       : reply.code(409).send({ error: 'not-quittable', message: 'Conch can’t quit itself here.' });
   });
-  app.post('/api/tray/hide', async () => {
-    await background.setTray(false);
-    return { ok: true };
-  });
 
   // ── Settings for it, and for a little computer ─────────────────────────
   app.put('/api/background/tray', async (request, reply) => {

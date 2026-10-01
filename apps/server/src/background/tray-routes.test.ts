@@ -64,7 +64,6 @@ describe('the menu bar helper’s door', () => {
       for (const [method, url] of [
         ['GET', '/api/tray/status'],
         ['POST', '/api/tray/quit'],
-        ['POST', '/api/tray/hide'],
       ] as const) {
         const res = await app.inject({
           method,
@@ -87,9 +86,10 @@ describe('the menu bar helper’s door', () => {
     expect((await ask('/api/background', proxied)).statusCode).toBe(401);
   });
 
-  it('Hide from the menu bar turns it off for good, until you turn it on', async () => {
-    expect((await ask('/api/tray/hide', { 'x-conch-tray': token }, 'POST')).statusCode).toBe(200);
-    expect((await services.settings.get()).preferences.menuBar).toBe(false);
+  it('can’t turn itself off: its token reads how things are and quits, nothing more', async () => {
+    const res = await ask('/api/tray/hide', { 'x-conch-tray': token }, 'POST');
+    expect(res.statusCode).toBeGreaterThanOrEqual(400);
+    expect((await services.settings.get()).preferences.menuBar).toBe(true);
   });
 });
 

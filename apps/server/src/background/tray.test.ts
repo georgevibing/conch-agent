@@ -402,6 +402,13 @@ describe('its source', () => {
     }
   });
 
+  it('offers no way to hide itself: showing it is a switch in Settings', () => {
+    for (const source of [swiftSource(spec), powershellSource(spec), pythonSource(spec)]) {
+      expect(source).not.toMatch(/Hide from/);
+      expect(source).not.toContain('/api/tray/hide');
+    }
+  });
+
   it('on Windows, never keeps the menu waiting for an answer', () => {
     const source = powershellSource({ ...spec, ask: 'http://127.0.0.1:4317' });
     // How things are is asked in the background; the menu is Windows' own, put together as it opens.

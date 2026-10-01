@@ -9,7 +9,9 @@
  * - every few seconds it asks the gateway on this computer how things are
  *   (`GET /api/tray/status`, loopback only, with the token in its own file);
  * - it shows whether Conch is running, and a dot when something needs you;
- * - Open Conch, Start Conch, Quit Conch, Always on… and Hide from here.
+ * - Open Conch, Start Conch, Quit Conch and Always on….
+ *
+ * It can't hide itself: whether it shows is a switch in Settings.
  *
  * Anything that needs you to confirm it's you (turning Always on on or off)
  * opens the page instead: the helper never holds more power than a person
@@ -138,7 +140,6 @@ final class Menu: NSObject, NSApplicationDelegate, NSMenuDelegate {
       menu.addItem(.separator())
       add("Start Conch", starting ? nil : #selector(start))
     }
-    add("Hide from the menu bar", #selector(hide))
   }
 
   func openPage(_ path: String) {
@@ -163,11 +164,6 @@ final class Menu: NSObject, NSApplicationDelegate, NSMenuDelegate {
       if data == nil { self.openPage("/?open=background") }
       self.refresh()
     }
-  }
-
-  @objc func hide() {
-    request("/api/tray/hide", method: "POST") { _ in NSApp.terminate(nil) }
-    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { NSApp.terminate(nil) }
   }
 }
 
@@ -250,7 +246,6 @@ export function powershellSource(spec: TraySpec): string {
     '    [void]$menu.MenuItems.Add("-")',
     '    Add "Start Conch" { Start-Process -WindowStyle Hidden -FilePath $startScript }',
     '  }',
-    '  Add "Hide from the tray" { [void](Ask "/api/tray/hide" "POST"); $icon.Visible = $false; [System.Windows.Forms.Application]::Exit() }',
     '}',
     '# Put together as it opens, from the last answer: never changed while it’s showing.',
     '$menu.add_Popup({ Build })',
@@ -350,7 +345,6 @@ def build(info):
         item(menu, "Conch isn’t running")
         menu.append(Gtk.SeparatorMenuItem())
         item(menu, "Start Conch", lambda: subprocess.Popen(["/bin/sh", START], start_new_session=True))
-    item(menu, "Hide from the panel", lambda: (ask("/api/tray/hide", "POST"), Gtk.main_quit()))
     menu.show_all()
     indicator.set_menu(menu)
 
