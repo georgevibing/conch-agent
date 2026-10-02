@@ -66,11 +66,10 @@ import type { Config } from './config';
 import { CommandStore } from './commands/store';
 import { ConversationManager, type TurnRoute } from './conversations/manager';
 import { ConversationStore } from './conversations/store';
-import { anthropicApiVariant, ApiEngine, ollamaVariant, openrouterVariant } from './engines/api';
-import { ClaudeCodeEngine } from './engines/claude-code/engine';
+import type { ApiEngine } from './engines/api';
+import { builtInEngines, serverEngine } from './engines/registry';
 import { appsNeeded } from './providers/apps';
 import { carryTools } from './providers/capabilities';
-import { CodexEngine } from './engines/codex/engine';
 import { MockEngine } from './engines/mock/engine';
 import { MOCK_MEANING_SPEC, mockMeaningFetch, mockMeaningLoad } from './engines/mock/meaning';
 import type { Engine, LoginHandle } from './engines/types';
@@ -331,32 +330,20 @@ export class Services {
       // A model arrived or Ollama started: the card and the picker see it now.
       onChange: () => local.forget(),
     });
-    const local = new ApiEngine(
-      ollamaVariant(this.local, { home: config.CONCH_HOME }),
-      this.settings,
-      this.keys,
-    );
     this.doctor.register(this.local.doctorCheck());
+    // Every provider Conch knows by name (ADR 0053); servers you add join as you add them.
+    const registry = {
+      settings: this.settings,
+      keys: this.keys,
+      home: config.CONCH_HOME,
+      local: this.local,
+      heal: (message: string) => void this.healed.note('providers', message),
+      paths: { claude: config.CONCH_CLAUDE_PATH, codex: config.CONCH_CODEX_PATH },
+    };
+    const known = builtInEngines(registry);
+    const local = known.get('ollama') as ApiEngine;
     this.engines = new Map<EngineId, Engine>([
-      [
-        'claude-code',
-        new ClaudeCodeEngine(
-          this.settings,
-          this.keys,
-          config.CONCH_CLAUDE_PATH,
-          (message) => void this.healed.note('providers', message),
-        ),
-      ],
-      ['codex-cli', new CodexEngine(this.settings, this.keys, config.CONCH_CODEX_PATH)],
-      [
-        'openrouter',
-        new ApiEngine(openrouterVariant({ home: config.CONCH_HOME }), this.settings, this.keys),
-      ],
-      [
-        'anthropic-api',
-        new ApiEngine(anthropicApiVariant({ home: config.CONCH_HOME }), this.settings, this.keys),
-      ],
-      ['ollama', local],
+      ...known,
       [
         'mock',
         new MockEngine({
@@ -373,6 +360,7 @@ export class Services {
       engines: this.engines,
       settings: this.settings,
       keys: this.keys,
+      makeServer: (server) => serverEngine(server, registry),
       pinned: config.CONCH_ENGINE,
       emit: (event) => this.broadcast.emit(event),
       // A different provider means different limits and a different model list.
@@ -1360,6 +1348,8 @@ export class Services {
 
   /** Read the remembered provider before the first request arrives. */
   async start() {
+    // The servers you added are providers too: built before the first request needs them.
+    await this.providers.loadServers().catch(() => undefined);
     await this.providers.load();
     this.network.start();
     await this.#channelsReady;

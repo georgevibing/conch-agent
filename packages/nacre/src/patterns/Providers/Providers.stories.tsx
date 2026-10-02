@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Stack } from '../../components/Stack';
 import { Heading, Text } from '../../components/Text';
 import { providers } from './fixtures';
+import { KeyCatcher, type KeyCandidate } from './KeyCatcher';
 import { ProviderCard, ProviderCaution, ProviderStatusBadge } from './ProviderCard';
 import type { ProviderStateValue } from './ProviderCard';
 import { SecretField, type SecretSourceValue } from './SecretField';
@@ -168,6 +169,49 @@ export const SignInWithACode: Story = {
         </div>
       </Stack>
     </Stack>
+  ),
+};
+
+const groq: KeyCandidate = { id: 'groq', name: 'Groq', color: '#F55036' };
+const deepseek: KeyCandidate = { id: 'deepseek', name: 'DeepSeek', brand: 'deepseek', color: '#4D6BFE' };
+const kimi: KeyCandidate = { id: 'moonshot', name: 'Kimi', brand: 'moonshot', color: '#16191E' };
+const qwen: KeyCandidate = { id: 'qwen', name: 'Qwen', brand: 'qwen', color: '#615CED' };
+const gemini: KeyCandidate = { id: 'gemini', name: 'Google Gemini', brand: 'gemini', color: '#3186FF' };
+
+const recogniseKey = (value: string): KeyCandidate[] =>
+  value.startsWith('gsk_')
+    ? [groq]
+    : value.startsWith('AIza')
+      ? [gemini]
+      : value.startsWith('sk-')
+        ? [deepseek, kimi, qwen]
+        : [];
+
+/**
+ * Have a key? Paste it here, or anywhere on the page — Conch knows a key by its
+ * shape and checks it with its provider straight away. Try `gsk_` and 26 more
+ * characters (one match), `sk-` and 26 more (shared by several: it asks), or
+ * anything else (it offers everyone). A key ending in `0000` is refused.
+ */
+export const PasteAKey: Story = {
+  render: () => (
+    <div style={{ maxInlineSize: '40rem' }}>
+      <KeyCatcher
+        recognise={recogniseKey}
+        all={[gemini, groq, deepseek, kimi, qwen]}
+        onConnect={(id, value) =>
+          new Promise((resolve, reject) =>
+            setTimeout(
+              () =>
+                value.endsWith('0000')
+                  ? reject(new Error(`${id === 'groq' ? 'Groq' : 'It'} refused your key.`))
+                  : resolve(),
+              1200,
+            ),
+          )
+        }
+      />
+    </div>
   ),
 };
 

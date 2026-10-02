@@ -1,0 +1,203 @@
+@layer nacre.components {
+  /* An open hand rather than a form: a quiet, recessed strip that takes a key. */
+  .root {
+    --nc-rim-rest: 0.22;
+    --nc-rim-hover: 0.7;
+    --nc-sheen-size: 260px;
+    --nc-sheen-hover: 0.14;
+
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-3-5);
+    min-inline-size: 0;
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      inset 0 1px 2px color-mix(in oklch, var(--nc-text) 5%, transparent);
+    transition: box-shadow var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .root[data-phase='connected'] {
+    box-shadow:
+      inset 0 0 0 1px
+        light-dark(oklch(0.72 0.12 var(--nc-success-h) / 0.5), oklch(0.7 0.12 var(--nc-success-h) / 0.5)),
+      inset 0 1px 2px color-mix(in oklch, var(--nc-text) 5%, transparent);
+  }
+
+  .icon {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge);
+    color: var(--nc-accent-11);
+  }
+
+  .icon svg {
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+    stroke-width: 1.9;
+  }
+
+  .body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    min-inline-size: 0;
+  }
+
+  .heading {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    letter-spacing: -0.008em;
+    color: var(--nc-text);
+  }
+
+  .lead {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  .form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .input {
+    flex: 1 1 14rem;
+    min-inline-size: 0;
+  }
+
+  /* What happened: one line, never a jump — it holds a line's height while empty. */
+  .outcome {
+    min-block-size: 0;
+  }
+
+  .outcome:empty {
+    display: none;
+  }
+
+  .line,
+  .note {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  .line[data-tone='success'],
+  .line[data-tone='danger'] {
+    color: var(--nc-text);
+  }
+
+  .line[data-tone='danger'] {
+    align-items: flex-start;
+  }
+
+  .tick {
+    display: inline-grid;
+    flex-shrink: 0;
+    place-items: center;
+    color: light-dark(oklch(0.55 0.14 var(--nc-success-h)), oklch(0.76 0.14 var(--nc-success-h)));
+  }
+
+  .tick svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    stroke-width: 2.4;
+  }
+
+  .choose {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2-5);
+  }
+
+  .choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* Whose key: the provider's own mark and name, one press. */
+  .choice {
+    --nc-rim-rest: 0.12;
+    --nc-rim-hover: 0.6;
+
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-1-5) var(--nc-space-3) var(--nc-space-1-5) var(--nc-space-1-5);
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+    cursor: pointer;
+    transition:
+      box-shadow var(--nc-duration-slow) var(--nc-ease-out),
+      transform var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .choice:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  @media (hover: hover) {
+    .choice:hover {
+      box-shadow:
+        inset 0 0 0 1px var(--nc-border-subtle),
+        var(--nc-glaze-edge),
+        var(--nc-elevation-2);
+      transform: translateY(-1px);
+    }
+  }
+
+  .choice:active {
+    transform: translateY(0);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .choice {
+      transition: box-shadow var(--nc-duration-slow) var(--nc-ease-out);
+    }
+  }
+}

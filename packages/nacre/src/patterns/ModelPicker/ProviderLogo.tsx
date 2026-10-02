@@ -53,6 +53,7 @@ const marks: Partial<Record<ProviderId, string>> = {
   kimi: brandMarks.moonshot,
   minimax: brandMarks.minimax,
   qwen: brandMarks.qwen,
+  zai: brandMarks.zai,
   ollama: brandMarks['ollama-cloud'],
   lmstudio: brandMarks['lm-studio'],
 };
@@ -62,7 +63,6 @@ const letters: Partial<Record<ProviderId, string>> = {
   xai: 'x',
   groq: 'g',
   cerebras: 'c',
-  zai: 'Z',
 };
 
 /** Small mark that identifies which provider serves a model. */

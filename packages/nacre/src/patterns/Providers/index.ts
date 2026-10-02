@@ -15,3 +15,5 @@ export { SecretField } from './SecretField';
 export type { SecretFieldProps, SecretSourceValue } from './SecretField';
 export { SignInCode } from './SignInCode';
 export type { SignInCodeProps } from './SignInCode';
+export { KeyCatcher, looksLikeKey, maskKey } from './KeyCatcher';
+export type { KeyCandidate, KeyCatcherProps } from './KeyCatcher';

@@ -100,6 +100,43 @@ export function bindFor(host: OllamaHost): string {
   return new URL(host.url).host;
 }
 
+/** 10/8, 172.16/12, 192.168/16, and 100.64/10 (Tailscale and other carrier networks). */
+function privateV4(host: string): boolean {
+  const parts = host.split('.').map(Number);
+  if (parts.length !== 4 || parts.some((p) => !Number.isInteger(p) || p < 0 || p > 255)) return false;
+  const [a = 0, b = 0] = parts;
+  return (
+    a === 10 ||
+    a === 127 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 100 && b >= 64 && b <= 127)
+  );
+}
+
+/** Names that only mean something on your own network. */
+const LOCAL_NAMES = /(^localhost$)|(\.(local|lan|home|home\.arpa|internal|intranet|ts\.net)$)|(^[a-z0-9-]+$)/i;
+
+/**
+ * Whether plain http to this address stays off the internet: this computer, an
+ * address on your own network (or your tailnet), or a name that only your
+ * network can answer (`nas.local`, `gpu-box`). Anything that could be a public
+ * address must use https.
+ */
+export function isPrivateUrl(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'http:' || parsed.username || parsed.password) return false;
+  const host = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (host === '::1' || /^f[cd][0-9a-f]{2}:/.test(host) || /^fe[89ab][0-9a-f]:/.test(host)) return true;
+  if (/^[\d.]+$/.test(host)) return privateV4(host);
+  return LOCAL_NAMES.test(host);
+}
+
 /** Whether a URL is one `ollamaHost` could have produced: plain http to this computer. */
 export function isLoopbackUrl(url: string): boolean {
   let parsed: URL;

@@ -22,6 +22,10 @@ import {
   CreateRoutineBody,
   EngineId,
   ProviderKeyBody,
+  ProbeServerBody,
+  AddServerBody,
+  UpdateServerBody,
+  ServerId,
   ReleaseTurnBody,
   RenameConversationBody,
   SchedulePreviewBody,
@@ -431,6 +435,55 @@ export async function buildApp(services: Services) {
       return { ok: true };
     } catch (error) {
       return reply.code(400).send({ error: 'bad-request', message: (error as Error).message });
+    }
+  });
+
+  // Servers you run yourself, each a provider of its own (ADR 0053).
+  const serverId = (params: unknown, reply: FastifyReply) =>
+    parse(ServerId, (params as { id?: string } | undefined)?.id, reply);
+  app.post('/api/providers/servers/probe', async (request, reply) => {
+    const body = parse(ProbeServerBody, request.body, reply);
+    if (!body) return;
+    return services.providers.probeServer(body.url, body.key);
+  });
+  app.post('/api/providers/servers', async (request, reply) => {
+    const body = parse(AddServerBody, request.body, reply);
+    if (!body) return;
+    try {
+      return await services.providers.addServer(body);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  app.patch<{ Params: { id: string } }>('/api/providers/servers/:id', async (request, reply) => {
+    const id = serverId(request.params, reply);
+    if (!id) return;
+    const body = parse(UpdateServerBody, request.body, reply);
+    if (!body) return;
+    try {
+      return await services.providers.updateServer(id, body);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  app.delete<{ Params: { id: string } }>('/api/providers/servers/:id', async (request, reply) => {
+    const id = serverId(request.params, reply);
+    if (!id) return;
+    try {
+      return await services.providers.removeServer(id);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  // Something found on this computer — a key in the environment, a server running —
+  // used only when someone presses it. The key itself never comes to the browser.
+  app.post<{ Params: { id: string } }>('/api/providers/found/:id/use', async (request, reply) => {
+    const id = parse(Id, request.params.id, reply);
+    if (!id) return;
+    try {
+      return await services.providers.useFound(id);
+    } catch (error) {
+      return sendError(reply, error);
     }
   });
 

@@ -18,6 +18,7 @@ export const BuiltInEngineId = z.enum([
   'codex-cli',
   'copilot',
   'gemini-cli',
+  'grok',
   'anthropic-api',
   'openrouter',
   'openai',

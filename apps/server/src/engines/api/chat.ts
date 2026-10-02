@@ -129,6 +129,63 @@ export interface ChatDialect {
    * that doesn't while thinking is on).
    */
   replayReasoning?: 'reasoning_content';
+  /**
+   * The model may think out loud inside `<think>…</think>` in its answer
+   * (MiniMax by default, open models on your own server): shown as thinking,
+   * kept in the message exactly as sent, because the provider wants it back.
+   */
+  thinkTags?: boolean;
+}
+
+const OPEN = '<think>';
+const CLOSE = '</think>';
+
+/** How much of the end of `text` could be the start of `tag`, so it waits for the next piece. */
+function partial(text: string, tag: string): number {
+  for (let n = Math.min(tag.length - 1, text.length); n > 0; n--)
+    if (tag.startsWith(text.slice(-n))) return n;
+  return 0;
+}
+
+/**
+ * Splits streamed text into what's said and what's thought, by `<think>` tags
+ * that may arrive cut in half (`<thi` then `nk>`).
+ */
+export class ThinkSplitter {
+  #held = '';
+  #thinking = false;
+
+  push(delta: string): { text: string; thinking: string } {
+    let rest = this.#held + delta;
+    this.#held = '';
+    let text = '';
+    let thinking = '';
+    while (rest) {
+      const tag = this.#thinking ? CLOSE : OPEN;
+      const at = rest.indexOf(tag);
+      if (at >= 0) {
+        if (this.#thinking) thinking += rest.slice(0, at);
+        else text += rest.slice(0, at);
+        rest = rest.slice(at + tag.length);
+        this.#thinking = !this.#thinking;
+        continue;
+      }
+      const wait = partial(rest, tag);
+      const now = rest.slice(0, rest.length - wait);
+      if (this.#thinking) thinking += now;
+      else text += now;
+      this.#held = rest.slice(rest.length - wait);
+      rest = '';
+    }
+    return { text, thinking };
+  }
+
+  /** Whatever was held back waiting for a tag that never came. */
+  flush(): { text: string; thinking: string } {
+    const held = this.#held;
+    this.#held = '';
+    return this.#thinking ? { text: '', thinking: held } : { text: held, thinking: '' };
+  }
 }
 
 /** Usage numbers, never negative, with the cost only when the provider priced it. */
@@ -183,6 +240,7 @@ export async function* readChatStream(
   >();
   let usage: WireUsage | undefined;
   let finish: string | undefined;
+  const tags = dialect.thinkTags ? new ThinkSplitter() : undefined;
 
   for await (const event of sseEvents(body, signal)) {
     if (event.data === '[DONE]') break;
@@ -195,16 +253,17 @@ export async function* readChatStream(
     if (!choice) continue;
     const delta = choice.delta;
     const parts = contentParts(delta?.content);
-    const thought = (delta?.reasoning_content ?? delta?.reasoning ?? '') + parts.thinking;
+    // The raw words go back to the provider as they came, tags and all.
+    content += parts.text;
+    const split = tags && parts.text ? tags.push(parts.text) : { text: parts.text, thinking: '' };
+    const thought =
+      (delta?.reasoning_content ?? delta?.reasoning ?? '') + parts.thinking + split.thinking;
     if (thought) {
       thinking += thought;
       yield { type: 'thinking', delta: thought };
     }
     if (delta?.reasoning_details?.length) details.push(...delta.reasoning_details);
-    if (parts.text) {
-      content += parts.text;
-      yield { type: 'text', delta: parts.text };
-    }
+    if (split.text) yield { type: 'text', delta: split.text };
     for (const call of delta?.tool_calls ?? []) {
       // `index` is the promise; a server without it is keyed by id, then by arrival.
       const key =
@@ -225,6 +284,9 @@ export async function* readChatStream(
     }
     if (choice.finish_reason) finish = choice.finish_reason;
   }
+  const rest = tags?.flush();
+  if (rest?.thinking) yield { type: 'thinking', delta: rest.thinking };
+  if (rest?.text) yield { type: 'text', delta: rest.text };
 
   const ordered = [...calls.values()].sort((a, b) => a.order - b.order).filter((c) => c.name);
   const toolCalls: WireToolCall[] = ordered.map((call, index) => ({
@@ -297,19 +359,31 @@ export function safeJson(body: string): unknown {
   }
 }
 
-/** The error object in an error body, in any of the shapes providers use. */
+/**
+ * The error object in an error body, in any of the shapes providers use:
+ * `{error: {…}}` (OpenAI and most), `[{error: {…}}]` (Gemini's POSTs),
+ * `{code, error: "…"}` (xAI), `{error: "…"}` (Hugging Face, Venice), fields at
+ * the top level (Cerebras), `{detail: "…"}` (Mistral) or problem+json
+ * `{title, status, detail}` (NVIDIA). Read whatever the content type says.
+ */
 export function errorIn(body: string): ChatError | undefined {
   const raw = safeJson(body);
   if (!raw || typeof raw !== 'object') return undefined;
-  // `{error: {…}}` (OpenAI and most), `[{error: {…}}]` (Gemini), or `{message, code}` (Mistral).
-  const candidate = Array.isArray(raw)
-    ? (raw[0] as Record<string, unknown> | undefined)?.error
-    : 'error' in raw
-      ? (raw as { error: unknown }).error
-      : raw;
-  if (typeof candidate === 'string') return { message: candidate };
-  const parsed = ChatError.safeParse(candidate);
-  return parsed.success ? parsed.data : undefined;
+  const top = (Array.isArray(raw) ? raw[0] : raw) as Record<string, unknown> | undefined;
+  if (!top || typeof top !== 'object') return undefined;
+  const inner = 'error' in top ? top.error : top;
+  if (typeof inner === 'string')
+    return {
+      message: inner,
+      ...((typeof top.code === 'string' || typeof top.code === 'number') && { code: top.code }),
+    };
+  if (!inner || typeof inner !== 'object') return undefined;
+  const parsed = ChatError.safeParse(inner);
+  const error = parsed.success ? parsed.data : {};
+  const fields = inner as Record<string, unknown>;
+  const detail = typeof fields.detail === 'string' ? fields.detail : undefined;
+  const title = typeof fields.title === 'string' ? fields.title : undefined;
+  return { ...error, message: error.message ?? detail ?? title ?? undefined };
 }
 
 /** A short, stable reading of an error object's kind, whatever field it sits in. */

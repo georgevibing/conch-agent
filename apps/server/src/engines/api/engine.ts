@@ -249,6 +249,8 @@ export class ApiEngine implements Engine {
   readonly attachments = { images: true, files: false };
   /** Only for providers that publish limits; Conch tracks spend for the rest. */
   readonly usage?: (options?: { force?: boolean }) => Promise<EngineUsage>;
+  /** A sign-in of the provider's own (Ollama Cloud through the Ollama app). */
+  readonly login?: Engine['login'];
   #sessions: TranscriptStore;
   #status?: { value: EngineStatus; at: number };
   #detecting?: Promise<EngineStatus>;
@@ -267,6 +269,14 @@ export class ApiEngine implements Engine {
     this.local = Boolean(variant.local);
     this.#sessions = new TranscriptStore(sessionsDir(variant.home));
     if (variant.wire.usage) this.usage = (options) => this.#readUsage(options);
+    const signIn = variant.login?.bind(variant);
+    if (signIn)
+      this.login = (_method, onUpdate) =>
+        signIn((state) => {
+          // Signed in: what was known before is stale.
+          if (state.phase === 'done') this.forget();
+          onUpdate(state);
+        });
   }
 
   /**
@@ -287,7 +297,7 @@ export class ApiEngine implements Engine {
   async #peek(): Promise<{ stored: boolean; key?: string; problem?: string }> {
     if (this.variant.keyless) return { stored: true, key: '' };
     const stored = await this.keys.has(this.id).catch(() => false);
-    if (!stored) return { stored: false };
+    if (!stored) return this.variant.keyOptional ? { stored: true, key: '' } : { stored: false };
     try {
       const key = await this.keys.value(this.id, { peek: true });
       return key
@@ -313,6 +323,7 @@ export class ApiEngine implements Engine {
         'key-locked',
       );
     }
+    if (!key && this.variant.keyOptional) return '';
     if (!key)
       throw new KeyProblem(
         `Add your ${this.label} key in Settings to start chatting.`,
@@ -335,7 +346,7 @@ export class ApiEngine implements Engine {
 
   async #probeStatus(): Promise<EngineStatus> {
     if (this.variant.status) {
-      const status = await this.variant.status();
+      const status = await this.variant.status((await this.#peek()).key || undefined);
       this.#status = { value: status, at: Date.now() };
       return status;
     }
@@ -358,7 +369,7 @@ export class ApiEngine implements Engine {
           ? `Sign in to ${this.label}, or paste a key, to start chatting.`
           : `Add your ${this.label} key to start chatting.`,
       };
-    } else if (!key) {
+    } else if (key === undefined || (!key && !this.variant.keyOptional)) {
       status = { ...base, state: 'signed-out', message: problem };
     } else {
       try {

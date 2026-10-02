@@ -7,23 +7,42 @@
  * environment variable. An operator who sets `CONCH_ENGINE` pins it: that
  * provider is then the only one, and the UI says so.
  */
-import type {
-  EngineId,
-  ModelCatalog,
-  Provider,
-  ProviderModels,
-  ProvidersList,
-  SavedSecret,
-  ServerEvent,
-  EngineStatus,
+import {
+  isServerId,
+  type AddServerBody,
+  type EngineId,
+  type EngineStatus,
+  type Found,
+  type KeyForm,
+  type ModelCatalog,
+  type Provider,
+  type ProviderModels,
+  type ProvidersList,
+  type SavedSecret,
+  type ServerConfig,
+  type ServerEvent,
+  type ServerId,
+  type ServerProbe,
+  type UpdateServerBody,
 } from '@conch/protocol';
 
+import type { FetchLike } from '../engines/api/types';
 import type { Engine } from '../engines/types';
 import { SecretError } from '../secrets/vault';
 import type { SettingsStore } from '../settings/store';
-import { PROVIDER_COPY, PROVIDER_ORDER } from './catalog';
+import { PROVIDER_COPY, PROVIDER_ORDER, SERVER_COPY, type ProviderCopy } from './catalog';
+import { environmentKeys, foundKeyValue, FoundThings } from './found';
 import type { ProviderKeys } from './keys';
 import { canSignIn, ProviderSignIns, type SignInDisplay } from './oauth';
+import { newServerId, probeServer, SERVER_PRESETS } from './servers';
+
+/** What a server's card asks for: a key only some servers want. */
+const SERVER_KEY: KeyForm = {
+  label: 'Key',
+  placeholder: '',
+  help: 'Only if this server asks for one. It’s sent to this server and nowhere else.',
+  canSignIn: false,
+};
 
 /** Detection talks to other programs and other people's servers; don't hang on it. */
 const DETECT_TIMEOUT_MS = 30_000;
@@ -40,9 +59,14 @@ export class ProviderError extends Error {
 }
 
 export interface ProviderServiceDeps {
-  engines: ReadonlyMap<EngineId, Engine>;
+  /** Every provider's engine. Servers you add join it, and leave it, as you add and remove them. */
+  engines: Map<EngineId, Engine>;
   settings: SettingsStore;
   keys: ProviderKeys;
+  /** Build the engine for a server you added. */
+  makeServer?: (config: ServerConfig) => Engine;
+  /** For looking at addresses and this computer's usual ports. */
+  fetch?: FetchLike;
   /** `CONCH_ENGINE`, when the operator set it. */
   pinned?: EngineId;
   emit: (event: ServerEvent) => void;
@@ -55,8 +79,23 @@ export class ProviderService {
   readonly signIns = new ProviderSignIns();
   #active?: EngineId;
   #loading?: Promise<EngineId>;
+  /** The servers you added, in the order you added them, as settings last said. */
+  #servers: ServerConfig[] = [];
+  readonly #found: FoundThings;
 
-  constructor(private readonly deps: ProviderServiceDeps) {}
+  constructor(private readonly deps: ProviderServiceDeps) {
+    this.#found = new FoundThings(deps.fetch);
+  }
+
+  /** Build an engine for each server in settings: once at start-up. */
+  async loadServers(): Promise<void> {
+    const { servers } = await this.deps.settings.get();
+    this.#servers = servers;
+    if (!this.deps.makeServer) return;
+    for (const server of servers)
+      if (!this.deps.engines.has(server.id))
+        this.deps.engines.set(server.id, this.deps.makeServer(server));
+  }
 
   /**
    * The active provider without waiting: the remembered choice once settings
@@ -126,15 +165,24 @@ export class ProviderService {
     return this.#listed(this.activeIdNow());
   }
 
-  /** Providers worth showing: the pin alone, else every real one (the test double only as the default). */
+  /**
+   * Providers worth showing: the pin alone, else every real one (the test
+   * double only as the default), then the servers you added.
+   */
   #listed(active: EngineId): EngineId[] {
     if (this.deps.pinned) return [this.deps.pinned];
-    return PROVIDER_ORDER.filter((id) => {
+    const known = PROVIDER_ORDER.filter((id) => {
       const copy = PROVIDER_COPY.get(id);
       if (!copy || !this.deps.engines.has(id)) return false;
       // The test double is only interesting when Conch is running on it.
       return !copy.internal || id === active;
     });
+    const servers = this.#servers.map((s) => s.id).filter((id) => this.deps.engines.has(id));
+    return [...known, ...servers];
+  }
+
+  #copy(id: EngineId): ProviderCopy | undefined {
+    return isServerId(id) ? undefined : PROVIDER_COPY.get(id);
   }
 
   /**
@@ -260,7 +308,115 @@ export class ProviderService {
       pinned: this.deps.pinned
         ? `Conch was started with CONCH_ENGINE=${this.deps.pinned}, so it’s the only provider.`
         : undefined,
+      found: this.deps.pinned ? [] : await this.#foundNow(providers, options.force),
+      serverPresets: this.deps.pinned ? [] : [...SERVER_PRESETS],
     };
+  }
+
+  /** What's on this computer that would connect a provider in one press. */
+  async #foundNow(providers: Provider[], force?: boolean): Promise<Found[]> {
+    const connected = new Set(providers.filter((p) => p.ready || p.key).map((p) => p.id));
+    const keys = environmentKeys(connected).map(({ key: _key, ...found }) => found);
+    const servers = await this.#found.servers(this.#servers, force).catch(() => []);
+    return [...keys, ...servers];
+  }
+
+  /** Use something found on this computer: save a found key, or add a found server. */
+  async useFound(id: string): Promise<ProvidersList> {
+    const key = environmentKeys(new Set()).find((found) => found.id === id)?.key;
+    if (key) {
+      const value = foundKeyValue(key);
+      if (!value) throw new ProviderError('That key isn’t on this computer any more.', 'not-found');
+      return this.setKey(key.provider, value);
+    }
+    const server = (await this.#found.servers(this.#servers, true)).find((f) => f.id === id);
+    if (server?.url) {
+      await this.addServer({
+        url: server.url,
+        ...(server.name !== 'A model server' && { name: server.name }),
+      });
+      return this.list();
+    }
+    throw new ProviderError('That’s not on this computer any more.', 'not-found');
+  }
+
+  // ── Servers you run yourself ──────────────────────────────────────────────
+
+  /** Look at an address before adding it. */
+  probeServer(url: string, key?: string): Promise<ServerProbe> {
+    return probeServer(this.deps.fetch ?? globalThis.fetch, url, key);
+  }
+
+  /**
+   * Add a server: look at it first, so "Added" means its models answer. A key
+   * is kept like every provider key; the address and name go in settings.
+   */
+  async addServer(body: AddServerBody): Promise<{ id: ServerId; list: ProvidersList }> {
+    if (!this.deps.makeServer) throw new ProviderError('Servers can’t be added here.');
+    if (this.deps.pinned)
+      throw new ProviderError(
+        `Conch was started with CONCH_ENGINE=${this.deps.pinned}. Remove it to add servers.`,
+        'pinned',
+      );
+    const probe = await this.probeServer(body.url, body.key);
+    if (!probe.ok || !probe.url) throw new ProviderError(probe.message ?? 'Nothing answered there.');
+    const taken = new Set(this.#servers.map((s) => s.name.toLowerCase()));
+    const wanted = (body.name?.trim() || probe.kind || new URL(probe.url).host).slice(0, 56);
+    let name = wanted;
+    for (let n = 2; taken.has(name.toLowerCase()); n++) name = `${wanted} ${n}`;
+    const config: ServerConfig = {
+      id: newServerId(),
+      name,
+      url: probe.url,
+      ...(probe.kind && { kind: probe.kind }),
+      addedAt: Date.now(),
+    };
+    if (body.key?.trim()) await this.deps.keys.save(config.id, body.key.trim());
+    this.#servers = await this.deps.settings.setServer(config.id, config);
+    this.deps.engines.set(config.id, this.deps.makeServer(config));
+    this.#found.forget();
+    return { id: config.id, list: await this.list() };
+  }
+
+  /** Rename a server, or point it somewhere new (looked at first). */
+  async updateServer(id: ServerId, body: UpdateServerBody): Promise<ProvidersList> {
+    const current = this.#servers.find((s) => s.id === id);
+    if (!current || !this.deps.makeServer)
+      throw new ProviderError('There’s no server like that here.', 'not-found');
+    let url = current.url;
+    let kind = current.kind;
+    if (body.url && body.url !== current.url) {
+      const saved = await this.deps.keys.value(id).catch(() => undefined);
+      const probe = await this.probeServer(body.url, saved);
+      if (!probe.ok || !probe.url) throw new ProviderError(probe.message ?? 'Nothing answered there.');
+      url = probe.url;
+      kind = probe.kind;
+    }
+    const { kind: _old, ...rest } = current;
+    const next: ServerConfig = {
+      ...rest,
+      ...(body.name && { name: body.name.trim().slice(0, 60) }),
+      url,
+      ...(kind && { kind }),
+    };
+    this.#servers = await this.deps.settings.setServer(id, next);
+    this.deps.engines.set(id, this.deps.makeServer(next));
+    return this.list();
+  }
+
+  /** Take a server away: its key, its card and its models. Chats that used it move to the default. */
+  async removeServer(id: ServerId): Promise<ProvidersList> {
+    if (!this.#servers.some((s) => s.id === id))
+      throw new ProviderError('There’s no server like that here.', 'not-found');
+    await this.deps.keys.clear(id);
+    this.#servers = await this.deps.settings.setServer(id, undefined);
+    this.deps.engines.delete(id);
+    if (this.#active === id) {
+      this.#active = undefined;
+      await this.deps.settings.update({ preferences: { engine: 'claude-code' } }).catch(() => undefined);
+    }
+    this.#found.forget();
+    return this.list();
   }
 
   async get(id: EngineId, options: { force?: boolean } = {}): Promise<Provider> {
@@ -269,8 +425,9 @@ export class ProviderService {
   }
 
   async #describe(id: EngineId, active: EngineId, options: { force?: boolean }): Promise<Provider> {
-    const copy = PROVIDER_COPY.get(id);
+    const copy = this.#copy(id);
     const engine = this.#engineOrThrow(id);
+    const server = isServerId(id) ? this.#servers.find((s) => s.id === id) : undefined;
     const status = await this.#detect(engine, options.force);
     if (status.state === 'ready')
       // Remembering is best-effort: a settings file that won't write mustn't fail a page.
@@ -281,6 +438,32 @@ export class ProviderService {
     } catch {
       // Describing a key must never fail a page; the status already says enough.
     }
+    if (server)
+      return {
+        id,
+        name: server.name,
+        tagline: server.kind
+          ? `${server.kind} · ${new URL(server.url).host}`
+          : new URL(server.url).host,
+        description: SERVER_COPY.description,
+        connect: 'key',
+        local: Boolean(engine.local),
+        status,
+        active: id === active,
+        ready: status.state === 'ready',
+        highlights: [...SERVER_COPY.highlights],
+        limits: [...SERVER_COPY.limits],
+        install: [],
+        key,
+        keyForm: SERVER_KEY,
+        experimental: false,
+        color: SERVER_COPY.color,
+        hidden: false,
+        group: 'server',
+        featured: false,
+        brand: 'server',
+        server,
+      };
     return {
       id,
       // A stand-in is named by whatever it's standing in for.
@@ -305,6 +488,9 @@ export class ProviderService {
       color: copy?.color,
       homepage: copy?.homepage,
       hidden: copy?.internal ?? false,
+      group: copy?.group ?? 'key',
+      featured: copy?.featured ?? false,
+      ...(copy?.free && { free: copy.free }),
     };
   }
 
@@ -358,9 +544,10 @@ export class ProviderService {
    */
   async setKey(id: EngineId, value: string): Promise<ProvidersList> {
     const engine = this.#engineOrThrow(id);
-    const copy = PROVIDER_COPY.get(id);
-    if (!copy?.keyForm)
-      throw new ProviderError(`${copy?.name ?? engine.label} doesn’t take a key.`);
+    const copy = this.#copy(id);
+    const form = isServerId(id) ? SERVER_KEY : copy?.keyForm;
+    const name = copy?.name ?? engine.label;
+    if (!form) throw new ProviderError(`${name} doesn’t take a key.`);
 
     const previous = await this.deps.keys.stored(id);
     const stored = await this.deps.keys.save(id, value);
@@ -375,13 +562,13 @@ export class ProviderService {
       await this.#restore(id, previous);
       throw new ProviderError((error as Error).message);
     }
-    const pattern = copy.keyForm.pattern;
+    const pattern = form.pattern;
     if (resolved && pattern && !new RegExp(pattern).test(resolved)) {
       await this.#restore(id, previous);
       throw new ProviderError(
         stored.source === '1password'
-          ? `That 1Password field doesn’t look like a key. ${copy.keyForm.patternHint ?? ''}`.trim()
-          : (copy.keyForm.patternHint ?? 'That doesn’t look like a key.'),
+          ? `That 1Password field doesn’t look like a key. ${form.patternHint ?? ''}`.trim()
+          : (form.patternHint ?? 'That doesn’t look like a key.'),
       );
     }
 
@@ -389,7 +576,7 @@ export class ProviderService {
     const status = await this.#detect(engine, true);
     if (status.state === 'signed-out' || status.state === 'error') {
       await this.#restore(id, previous);
-      throw new ProviderError(status.message ?? `${copy.name} didn’t accept that key.`);
+      throw new ProviderError(status.message ?? `${name} didn’t accept that key.`);
     }
     return this.list();
   }

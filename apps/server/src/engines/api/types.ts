@@ -7,12 +7,16 @@
  * page, the URLs, and the wire adapter that knows the provider's HTTP. Ollama
  * is the one on this computer: it has no key, and says how it is by itself.
  */
-import type { EffortChoice, EngineId, EngineStatus, ModelInfo } from '@conch/protocol';
+import type { EffortChoice, EngineId, EngineStatus, LoginState, ModelInfo } from '@conch/protocol';
 
+import type { LoginHandle } from '../types';
 import type { Wire } from './wire';
 
-/** The providers this engine family speaks for. */
-export type ApiProviderId = Extract<EngineId, 'openrouter' | 'anthropic-api' | 'ollama'>;
+/**
+ * The providers this engine family speaks for: OpenRouter, the Anthropic API,
+ * Ollama, every model API with a preset (ADR 0053) and the servers you add.
+ */
+export type ApiProviderId = EngineId;
 
 /** The one function a wire adapter needs from the outside world, so tests can supply their own. */
 export type FetchLike = typeof globalThis.fetch;
@@ -45,15 +49,19 @@ export interface ApiVariant {
   readonly home: string;
   /** No key at all: the model is on this computer (Ollama). */
   readonly keyless?: boolean;
+  /** A key only some servers want: none saved means none sent. */
+  readonly keyOptional?: boolean;
   /** Runs on this computer: works with no internet and spends nothing (`Engine.local`). */
   readonly local?: boolean;
   /**
    * How it is, for a provider with no key to check: installed, running, a
    * model here. Replaces the key check when set.
    */
-  status?(): Promise<EngineStatus>;
+  status?(key?: string): Promise<EngineStatus>;
   /** The first sentence of what the model is told about itself. */
   readonly where?: string;
+  /** A sign-in of the provider's own (Ollama's app), instead of a pasted key. */
+  login?(onUpdate: (state: LoginState) => void): LoginHandle;
 }
 
 /** A message exactly as the provider's wire format has it. Stored and replayed verbatim. */

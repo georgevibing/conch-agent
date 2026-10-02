@@ -14,7 +14,7 @@
 import type { EffortChoice } from '@conch/protocol';
 import type { z } from 'zod';
 
-import { isLoopbackUrl } from '../../local/host';
+import { isLoopbackUrl, isPrivateUrl } from '../../local/host';
 import type { Completion, EngineUsage, TurnImage } from '../types';
 import {
   ApiError,
@@ -149,14 +149,25 @@ export async function send(options: {
    * loopback address. Everything else must be https.
    */
   local?: boolean;
+  /**
+   * A server you run yourself: https anywhere, and plain http too when it's on
+   * this computer or your own network — never across the internet, where the
+   * key and the conversation would travel in the clear.
+   */
+  plain?: boolean;
 }): Promise<Response> {
-  const { fetchImpl, url, method, headers, body, signal, label, key, local } = options;
-  if (local ? !isLoopbackUrl(url) : !url.startsWith('https://')) {
+  const { fetchImpl, url, method, headers, body, signal, label, key, local, plain } = options;
+  const allowed = local
+    ? isLoopbackUrl(url)
+    : url.startsWith('https://') || (plain === true && isPrivateUrl(url));
+  if (!allowed) {
     throw new ApiError(
       'other',
       local
         ? `Conch only talks to ${label} on this computer.`
-        : `Conch only talks to ${label} over https.`,
+        : plain
+          ? `Conch only talks to ${label} over https, or plain http on this computer or your own network.`
+          : `Conch only talks to ${label} over https.`,
     );
   }
   try {

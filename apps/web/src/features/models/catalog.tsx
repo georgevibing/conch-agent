@@ -75,6 +75,7 @@ const providerLogos: Record<BuiltInEngineId, ProviderId> = {
   copilot: 'copilot',
   'gemini-cli': 'gemini',
   gemini: 'gemini',
+  grok: 'xai',
   openrouter: 'openrouter',
   xai: 'xai',
   deepseek: 'deepseek',

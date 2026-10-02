@@ -1,7 +1,14 @@
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { Persona, Preferences, Profile, type UpdateSettingsBody } from '@conch/protocol';
+import {
+  Persona,
+  Preferences,
+  Profile,
+  ServerConfig as Server,
+  type ServerConfig,
+  type UpdateSettingsBody,
+} from '@conch/protocol';
 import { z } from 'zod';
 
 import { Mutex, writeJson } from '../lib/fs';
@@ -19,6 +26,13 @@ const SettingsFile = z.object({
    * since, by engine id. Health watches these; one you never set up isn't a problem.
    */
   connected: z.array(z.string()).default([]),
+  /**
+   * For a provider with several addresses (a region), the one that took your
+   * key, by provider id — so the next check starts there (ADR 0053).
+   */
+  endpoints: z.record(z.string(), z.string().max(40)).default({}),
+  /** Servers you added yourself (Settings → Providers → Another server). Their keys are secrets. */
+  servers: z.array(Server).max(32).default([]),
 });
 export type Settings = z.infer<typeof SettingsFile>;
 
@@ -112,6 +126,36 @@ export class SettingsStore {
       });
       await writeJson(this.#path, next);
       this.#cache = Promise.resolve(next);
+    });
+  }
+
+  /** Remember which of a provider's addresses took its key. */
+  setEndpoint(id: string, endpoint: string): Promise<void> {
+    return this.#mutex.run(async () => {
+      const current = await this.get();
+      if (current.endpoints[id] === endpoint) return;
+      const next = SettingsFile.parse({
+        ...current,
+        endpoints: { ...current.endpoints, [id]: endpoint },
+      });
+      await writeJson(this.#path, next);
+      this.#cache = Promise.resolve(next);
+    });
+  }
+
+  /** Add or change a server you run yourself; `undefined` takes it away. */
+  setServer(id: string, server: ServerConfig | undefined): Promise<ServerConfig[]> {
+    return this.#mutex.run(async () => {
+      const current = await this.get();
+      const others = current.servers.filter((s) => s.id !== id);
+      const next = SettingsFile.parse({
+        ...current,
+        servers: server ? [...others, server] : others,
+        connected: server ? current.connected : current.connected.filter((c) => c !== id),
+      });
+      await writeJson(this.#path, next);
+      this.#cache = Promise.resolve(next);
+      return next.servers;
     });
   }
 
