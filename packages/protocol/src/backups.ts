@@ -133,6 +133,15 @@ export const BackupPower = z.discriminatedUnion('kind', [
     sites: z.array(PowerText).max(20),
     more: z.number().int().nonnegative().default(0),
   }),
+  /**
+   * Model servers you added (ADR 0053): your chats go to these addresses when
+   * one answers, so a backup from somewhere else names each before it's restored.
+   */
+  z.object({
+    kind: z.literal('provider-servers'),
+    servers: z.array(PowerText).max(20),
+    more: z.number().int().nonnegative().default(0),
+  }),
   /** A bot (Telegram, Discord, Slack) that these people can talk to your assistant through. */
   z.object({
     kind: z.literal('channel-people'),

@@ -63,10 +63,56 @@ export interface FoundAgent {
   routines: FoundRoutine[];
 }
 
+/** The providers a key from another app can connect (ADR 0042, ADR 0053). */
+export type KeyProvider =
+  | 'anthropic-api'
+  | 'openrouter'
+  | 'openai'
+  | 'gemini'
+  | 'xai'
+  | 'deepseek'
+  | 'mistral'
+  | 'groq'
+  | 'cerebras'
+  | 'zai'
+  | 'moonshot'
+  | 'minimax'
+  | 'qwen';
+
 export interface FoundKey {
-  provider: 'anthropic-api' | 'openrouter';
+  provider: KeyProvider;
   value: string;
   from: string;
+}
+
+/**
+ * Where another app keeps each provider's key: its own provider name (an
+ * OpenClaw profile) and the environment variable (a Hermes `.env`). A coding
+ * plan's key (`kimi-coding`, Z.ai's coding plan) only works in the tools its
+ * terms list, so it isn't brought.
+ */
+export const KEY_SOURCES: readonly { provider: KeyProvider; names: readonly string[]; env: readonly string[] }[] = [
+  { provider: 'anthropic-api', names: ['anthropic'], env: ['ANTHROPIC_API_KEY'] },
+  { provider: 'openrouter', names: ['openrouter'], env: ['OPENROUTER_API_KEY'] },
+  { provider: 'openai', names: ['openai'], env: ['OPENAI_API_KEY'] },
+  { provider: 'gemini', names: ['google', 'gemini'], env: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'] },
+  { provider: 'xai', names: ['xai'], env: ['XAI_API_KEY'] },
+  { provider: 'deepseek', names: ['deepseek'], env: ['DEEPSEEK_API_KEY'] },
+  { provider: 'mistral', names: ['mistral'], env: ['MISTRAL_API_KEY'] },
+  { provider: 'groq', names: ['groq'], env: ['GROQ_API_KEY'] },
+  { provider: 'cerebras', names: ['cerebras'], env: ['CEREBRAS_API_KEY'] },
+  { provider: 'zai', names: ['zai', 'z-ai', 'zhipu'], env: ['ZAI_API_KEY', 'ZHIPUAI_API_KEY'] },
+  { provider: 'moonshot', names: ['moonshot', 'kimi'], env: ['MOONSHOT_API_KEY', 'KIMI_API_KEY'] },
+  { provider: 'minimax', names: ['minimax'], env: ['MINIMAX_API_KEY'] },
+  { provider: 'qwen', names: ['qwen', 'alibaba', 'dashscope'], env: ['DASHSCOPE_API_KEY'] },
+];
+
+/** The keys in an app's `.env`, one per provider. */
+export function keysInEnv(env: Record<string, string | undefined>, from: string): FoundKey[] {
+  return KEY_SOURCES.flatMap(({ provider, env: names }) => {
+    const value = names.map((name) => env[name]?.trim()).find(Boolean);
+    return value ? [{ provider, value, from }] : [];
+  });
 }
 
 export interface Found {

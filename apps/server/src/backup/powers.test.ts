@@ -34,6 +34,28 @@ describe('what in a backup can act for you', () => {
     ]);
   });
 
+  it('names every model server a backup would send your chats to (ADR 0053)', () => {
+    const powers = powersOf(
+      ['settings.json'],
+      reader({
+        'settings.json': {
+          servers: [
+            { id: 'server-abcdefgh', name: 'The GPU box', url: 'http://10.0.0.5:8000/v1', addedAt: 1 },
+            { id: 'server-ijklmnop', name: '', url: 'https://gateway.example.com/v1', addedAt: 2 },
+          ],
+        },
+      }),
+    );
+    expect(powers).toEqual([
+      {
+        kind: 'provider-servers',
+        servers: ['The GPU box (10.0.0.5:8000)', 'A server (gateway.example.com)'],
+        more: 0,
+      },
+    ]);
+    for (const power of powers) expect(BackupPower.safeParse(power).success).toBe(true);
+  });
+
   it('names whose skills it trusts, so a backup can’t quietly vouch for someone (ADR 0031)', () => {
     const powers = powersOf(
       ['skills.trust.json'],

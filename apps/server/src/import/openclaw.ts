@@ -20,7 +20,14 @@
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { empty, type Found, type FoundAgent, type FoundRoutine } from './found';
+import {
+  empty,
+  KEY_SOURCES,
+  keysInEnv,
+  type Found,
+  type FoundAgent,
+  type FoundRoutine,
+} from './found';
 import { openClawModel } from './model';
 import {
   entries,
@@ -264,20 +271,18 @@ export async function readOpenClaw(home = homedir()): Promise<Found | undefined>
       for (const p of Object.values(profiles)) {
         const provider = str(p.provider);
         const key = str(p.key) ?? str(p.apiKey);
-        // An API key, not a Claude sign-in (those are Claude Code's to keep).
-        if (provider === 'anthropic' && key && p.type !== 'oauth' && p.type !== 'token')
-          env.ANTHROPIC_API_KEY ??= key;
-        if (provider === 'openrouter' && key) env.OPENROUTER_API_KEY ??= key;
+        // An API key, not a sign-in (a Claude or ChatGPT sign-in is its own app's to keep).
+        if (!key || p.type === 'oauth' || p.type === 'token') continue;
+        const source = KEY_SOURCES.find((s) => provider && s.names.includes(provider));
+        const variable = source?.env[0];
+        if (variable) env[variable] ??= key;
       }
     } catch {
       const problem = 'Its saved sign-ins couldn’t be read; add keys in Conch yourself.';
       if (!found.problems.includes(problem)) found.problems.push(problem);
     }
   }
-  if (env.ANTHROPIC_API_KEY)
-    found.keys.push({ provider: 'anthropic-api', value: env.ANTHROPIC_API_KEY, from: 'OpenClaw' });
-  if (env.OPENROUTER_API_KEY)
-    found.keys.push({ provider: 'openrouter', value: env.OPENROUTER_API_KEY, from: 'OpenClaw' });
+  found.keys.push(...keysInEnv(env, 'OpenClaw'));
 
   found.agents = [...others.values()].filter(
     (a) => a.persona || a.about || a.memories.length || a.skills.length || a.routines.length,

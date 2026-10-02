@@ -58,8 +58,10 @@ import {
   type FoundChannel,
   type FoundKey,
   type FoundRoutine,
+  type KeyProvider,
   slackHalf,
 } from './found';
+import { PROVIDER_COPY } from '../providers/catalog';
 import { readHermes } from './hermes';
 import { type CatalogEntry, choiceTitle, mapModel, modelWords } from './model';
 import { readOpenClaw } from './openclaw';
@@ -68,7 +70,10 @@ const CHANNEL_NAMES = { telegram: 'Telegram', discord: 'Discord', slack: 'Slack'
 const KEY_WORDS = { botToken: 'bot token', appToken: 'app-level token' } as const;
 /** The app's id inside an app-level token: `xapp-1-A0123ABCD-…`. */
 const APP_IN_TOKEN = /^xapp-\d+-(A[A-Z0-9]{6,20})-/;
-const KEY_NAMES = { 'anthropic-api': 'Anthropic API', openrouter: 'OpenRouter' } as const;
+/** A provider's name, as its card says it. */
+const keyName = (provider: KeyProvider) => PROVIDER_COPY.get(provider)?.name ?? provider;
+/** The keys an older Conch's ledger knows; the rest are kept apart so it still reads (ADR 0051). */
+const FIRST_KEYS = new Set<string>(['anthropic-api', 'openrouter']);
 
 /** What an import added and replaced, so Undo can put things back. */
 const Ledger = z.object({
@@ -83,6 +88,8 @@ const Ledger = z.object({
         routines: z.array(z.string()).default([]),
         channels: z.array(z.string()).default([]),
         keys: z.array(z.enum(['anthropic-api', 'openrouter'])).default([]),
+        /** Keys for the providers ADR 0053 added, apart from `keys` so an older Conch reads the ledger. */
+        moreKeys: z.array(z.string().max(40)).default([]),
       }),
       before: z
         .object({
@@ -422,10 +429,10 @@ export class ImportService {
       items.push({
         id: `key:${k.provider}`,
         group: 'keys',
-        title: `Your ${KEY_NAMES[k.provider]} key`,
+        title: `Your ${keyName(k.provider)} key`,
         detail: has
-          ? `Conch already has a key for ${KEY_NAMES[k.provider]}; it stays as it is.`
-          : `Saved in Conch’s encrypted key file, so ${KEY_NAMES[k.provider]} works here too. It’s never shown.`,
+          ? `Conch already has a key for ${keyName(k.provider)}; it stays as it is.`
+          : `Saved in Conch’s encrypted key file, so ${keyName(k.provider)} works here too. It’s never shown.`,
         checked: false,
         ...(has && { duplicate: true }),
       });
@@ -609,6 +616,7 @@ export class ImportService {
         routines: [],
         channels: [],
         keys: [],
+        moreKeys: [],
       };
       const before: NonNullable<Ledger['last']>['before'] = {};
       const settings = await t.settings.get();
@@ -762,11 +770,12 @@ export class ImportService {
       }
 
       for (const k of found.keys)
-        await step(`key:${k.provider}`, 'keys', `${KEY_NAMES[k.provider]} key`, async () => {
+        await step(`key:${k.provider}`, 'keys', `${keyName(k.provider)} key`, async () => {
           if (await t.keys.has(k.provider))
-            return `Conch already had a ${KEY_NAMES[k.provider]} key; it kept it.`;
+            return `Conch already had a ${keyName(k.provider)} key; it kept it.`;
           await t.keys.set(k.provider, k.value);
-          created.keys.push(k.provider);
+          if (FIRST_KEYS.has(k.provider)) created.keys.push(k.provider as 'anthropic-api' | 'openrouter');
+          else created.moreKeys.push(k.provider);
           return undefined;
         });
 
@@ -838,7 +847,8 @@ export class ImportService {
       for (const id of last.created.skills) await quietly(() => t.skills.remove(id));
       for (const id of last.created.routines) await quietly(() => t.routines.remove(id));
       for (const id of last.created.channels) await quietly(() => t.channels.remove(id));
-      for (const p of last.created.keys) await quietly(() => t.keys.clear(p));
+      for (const p of [...last.created.keys, ...last.created.moreKeys] as KeyProvider[])
+        await quietly(() => t.keys.clear(p));
       if (last.before.persona && Object.keys(last.before.persona).length) {
         await t.settings.update({ persona: last.before.persona });
         restored += 1;
@@ -929,7 +939,14 @@ export class ImportService {
               at: this.#now,
               source,
               count: 1,
-              created: { memories: [], skills: [], routines: [], channels: [made.id], keys: [] },
+              created: {
+                memories: [],
+                skills: [],
+                routines: [],
+                channels: [made.id],
+                keys: [],
+                moreKeys: [],
+              },
               before: {},
             },
         history: last

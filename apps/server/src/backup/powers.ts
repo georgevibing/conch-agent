@@ -113,6 +113,26 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
   const settings = json(read, 'settings.json');
   if (record(settings?.preferences)?.permissionMode === 'bypassPermissions')
     powers.push({ kind: 'chats-never-ask' });
+  // A server you added gets your chats when it answers: an old or someone else's
+  // backup mustn't quietly point Conch at an address you didn't choose.
+  const servers = (Array.isArray(settings?.servers) ? settings.servers : [])
+    .map(record)
+    .filter((server) => typeof server?.url === 'string')
+    .map((server) => {
+      let host = String(server?.url);
+      try {
+        host = new URL(host).host;
+      } catch {
+        /* Shown as written. */
+      }
+      return text(`${text(server?.name, 'A server')} (${host})`, 'A server');
+    });
+  if (servers.length)
+    powers.push({
+      kind: 'provider-servers',
+      servers: servers.slice(0, MAX_LISTED),
+      more: Math.max(0, servers.length - MAX_LISTED),
+    });
 
   for (const path of files.filter((f) => /^routines\/[^/]+(?<!\.runs)\.json$/.test(f)).sort()) {
     const routine = json(read, path);

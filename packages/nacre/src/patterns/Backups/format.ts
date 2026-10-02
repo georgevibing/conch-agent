@@ -34,7 +34,8 @@ export type BackupPowerInfo =
   | { kind: 'terminal-remote' }
   | { kind: 'channel-people'; name: string; people: string[]; more?: number }
   | { kind: 'trusted-publishers'; names: string[]; more?: number }
-  | { kind: 'page-data-sites'; sites: string[]; more?: number };
+  | { kind: 'page-data-sites'; sites: string[]; more?: number }
+  | { kind: 'provider-servers'; servers: string[]; more?: number };
 
 /** What it is (“Files”, “The browser”), when the words need one. */
 export interface PowerWords {
@@ -88,6 +89,11 @@ export function powerWords(power: BackupPowerInfo): PowerWords {
       return {
         subject: 'Pages',
         text: `Read live data from ${named(power.sites, power.more)} without asking again`,
+      };
+    case 'provider-servers':
+      return {
+        subject: 'Providers',
+        text: `Sends your chats to ${named(power.servers, power.more)} when you pick its models`,
       };
     case 'trusted-publishers':
       return {

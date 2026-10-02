@@ -5,6 +5,8 @@ import { dirname, join } from 'node:path';
 import { sandboxSupport } from '../conversations/sandbox';
 import { bundledClaude } from '../engines/claude-code/bundled';
 import { findClaude } from '../engines/claude-code/detect';
+import { ACP_AGENTS, findAgent } from '../engines/acp/agents';
+import { lmStudioInstall } from '../engines/api/lmstudio';
 import { findCodex } from '../engines/codex/detect';
 import { findExecutable, presentSync, run } from '../lib/proc';
 import { parseVersion } from '../updates/version';
@@ -266,6 +268,80 @@ list.push(
       darwin: 'https://developers.openai.com/codex/cli',
       linux: 'https://developers.openai.com/codex/cli',
     },
+  },
+  {
+    // GitHub Copilot's own program (ADR 0053); Conch runs it as an ACP agent.
+    id: 'copilot',
+    name: 'GitHub Copilot CLI',
+    short: 'Copilot',
+    find: () => findAgent(ACP_AGENTS.copilot),
+    install: {
+      win32: [winget('GitHub.Copilot'), npmGlobal('@github/copilot')],
+      darwin: [
+        { manager: 'brew', args: ['install', '--cask', 'copilot-cli'] },
+        npmGlobal('@github/copilot'),
+      ],
+      linux: npmGlobal('@github/copilot'),
+    },
+    ...updatable({ winget: 'GitHub.Copilot', brew: 'copilot-cli', cask: true, npm: '@github/copilot' }),
+    download: {
+      win32: 'https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli',
+      darwin: 'https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli',
+      linux: 'https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli',
+    },
+  },
+  {
+    // Google's Gemini CLI; npm is its one current package (Homebrew's lags behind).
+    id: 'gemini-cli',
+    name: 'Gemini CLI',
+    short: 'Gemini CLI',
+    find: () => findAgent(ACP_AGENTS['gemini-cli']),
+    install: {
+      win32: npmGlobal('@google/gemini-cli'),
+      darwin: npmGlobal('@google/gemini-cli'),
+      linux: npmGlobal('@google/gemini-cli'),
+    },
+    ...updatable({ npm: '@google/gemini-cli' }),
+    download: {
+      win32: 'https://github.com/google-gemini/gemini-cli',
+      darwin: 'https://github.com/google-gemini/gemini-cli',
+      linux: 'https://github.com/google-gemini/gemini-cli',
+    },
+  },
+  {
+    // xAI's Grok Build.
+    id: 'grok',
+    name: 'Grok Build',
+    short: 'Grok',
+    find: () => findAgent(ACP_AGENTS.grok),
+    install: {
+      win32: npmGlobal('@xai-official/grok'),
+      darwin: npmGlobal('@xai-official/grok'),
+      linux: npmGlobal('@xai-official/grok'),
+    },
+    ...updatable({ npm: '@xai-official/grok' }),
+    download: {
+      win32: 'https://x.ai/cli',
+      darwin: 'https://x.ai/cli',
+      linux: 'https://x.ai/cli',
+    },
+  },
+  {
+    // LM Studio keeps itself up to date, so Updates leaves it alone.
+    id: 'lm-studio',
+    name: 'LM Studio',
+    short: 'LM Studio',
+    find: () => lmStudioInstall(),
+    install: {
+      win32: winget('ElementLabs.LMStudio'),
+      darwin: { manager: 'brew', args: ['install', '--cask', 'lm-studio'] },
+    },
+    download: {
+      win32: 'https://lmstudio.ai/download',
+      darwin: 'https://lmstudio.ai/download',
+      linux: 'https://lmstudio.ai/download',
+    },
+    opens: 'lm-studio',
   },
   {
     id: 'op',

@@ -15,7 +15,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import { empty, type Found } from './found';
+import { empty, keysInEnv, type Found } from './found';
 import { hermesModel } from './model';
 import {
   entries,
@@ -110,10 +110,7 @@ export async function readHermes(home = homedir()): Promise<Found | undefined> {
       ...(env.SLACK_APP_TOKEN && { appToken: env.SLACK_APP_TOKEN }),
       from: '.env',
     });
-  if (env.ANTHROPIC_API_KEY)
-    found.keys.push({ provider: 'anthropic-api', value: env.ANTHROPIC_API_KEY, from: 'Hermes' });
-  if (env.OPENROUTER_API_KEY)
-    found.keys.push({ provider: 'openrouter', value: env.OPENROUTER_API_KEY, from: 'Hermes' });
+  found.keys.push(...keysInEnv(env, 'Hermes'));
 
   // The model it answers with.
   const config = await readText(join(path, 'config.yaml'));

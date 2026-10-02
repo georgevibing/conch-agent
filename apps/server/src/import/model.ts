@@ -65,22 +65,60 @@ const PROVIDER_ENGINES: Record<string, EngineId[]> = {
   anthropic: ['anthropic-api', 'claude-code'],
   claude: ['claude-code', 'anthropic-api'],
   openrouter: ['openrouter'],
-  'openai-codex': ['codex-cli'],
-  openai: ['codex-cli'],
+  'openai-codex': ['codex-cli', 'openai'],
+  openai: ['openai', 'codex-cli'],
   codex: ['codex-cli'],
   ollama: ['ollama'],
+  copilot: ['copilot'],
+  'github-copilot': ['copilot'],
+  google: ['gemini', 'gemini-cli'],
+  gemini: ['gemini', 'gemini-cli'],
+  'google-gemini-cli': ['gemini-cli', 'gemini'],
+  xai: ['xai', 'grok'],
+  deepseek: ['deepseek'],
+  mistral: ['mistral'],
+  groq: ['groq'],
+  cerebras: ['cerebras'],
+  zai: ['zai'],
+  moonshot: ['moonshot'],
+  kimi: ['moonshot'],
+  minimax: ['minimax'],
+  'minimax-cn': ['minimax'],
+  qwen: ['qwen'],
+  'ollama-cloud': ['ollama-cloud'],
+  lmstudio: ['lm-studio'],
+  'lm-studio': ['lm-studio'],
 };
 
 /** Where a model maker's models can run in Conch. */
 const VENDOR_ENGINES: Record<string, EngineId[]> = {
   anthropic: ['claude-code', 'anthropic-api', 'openrouter'],
-  openai: ['codex-cli', 'openrouter'],
+  openai: ['codex-cli', 'openai', 'openrouter'],
+  google: ['gemini', 'gemini-cli', 'openrouter'],
+  'x-ai': ['xai', 'grok', 'openrouter'],
+  deepseek: ['deepseek', 'openrouter'],
+  mistralai: ['mistral', 'openrouter'],
+  moonshotai: ['moonshot', 'openrouter'],
+  'z-ai': ['zai', 'openrouter'],
+  minimax: ['minimax', 'openrouter'],
+  qwen: ['qwen', 'openrouter'],
 };
 
 /** Keys the app may have that would connect a provider. */
 const KEYED: Partial<Record<EngineId, FoundKey['provider']>> = {
   'anthropic-api': 'anthropic-api',
   openrouter: 'openrouter',
+  openai: 'openai',
+  gemini: 'gemini',
+  xai: 'xai',
+  deepseek: 'deepseek',
+  mistral: 'mistral',
+  groq: 'groq',
+  cerebras: 'cerebras',
+  zai: 'zai',
+  moonshot: 'moonshot',
+  minimax: 'minimax',
+  qwen: 'qwen',
 };
 
 const engineName = (id: EngineId) => PROVIDER_COPY.get(id)?.name ?? id;

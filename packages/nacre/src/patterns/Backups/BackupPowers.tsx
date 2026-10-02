@@ -8,6 +8,7 @@ import {
   MonitorSmartphone,
   Repeat,
   Router,
+  Server,
   ShieldAlert,
   SquareTerminal,
   Wrench,
@@ -36,6 +37,7 @@ const ICONS: Record<BackupPowerInfo['kind'], ReactNode> = {
   'channel-people': <MessageCircle />,
   'trusted-publishers': <BadgeCheck />,
   'page-data-sites': <AppWindow />,
+  'provider-servers': <Server />,
 };
 
 /**
