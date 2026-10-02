@@ -4,6 +4,8 @@ export { SkillIcon, skillHue } from './SkillIcon';
 export type { SkillIconProps } from './SkillIcon';
 export { SkillUsed } from './SkillUsed';
 export type { SkillUsedProps } from './SkillUsed';
+export { SkillHold, SkillHoldEnded } from './SkillHold';
+export type { SkillHoldEntry, SkillHoldEndedProps, SkillHoldProps } from './SkillHold';
 export { SkillProblem } from './SkillProblem';
 export type { DescriptionDraft, SkillProblemFix, SkillProblemProps } from './SkillProblem';
 export { SkillReview } from './SkillReview';

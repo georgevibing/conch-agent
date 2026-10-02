@@ -45,7 +45,7 @@ function phrase(text: string) {
 }
 
 /**
- * What a skill may do while it's in use (ADR 0031), in plain words: "This
+ * What a skill may do (ADR 0031), in plain words, held to in any chat it's in (ADR 0040): "This
  * skill can: run commands (only `git`), change files in your work folder".
  * Anything else it tries asks you first. A skill that doesn't say gets the
  * usual list, and this says that too.

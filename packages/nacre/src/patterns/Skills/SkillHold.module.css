@@ -1,0 +1,115 @@
+@layer nacre.components {
+  .holds {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+  }
+
+  /* One quiet line per skill: felt, not loud. Nothing's wrong; it's holding. */
+  .hold {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    min-block-size: var(--nc-control-sm);
+    padding: var(--nc-space-0-5);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-wash-1);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    animation: nc-surface-in var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .label {
+    appearance: none;
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+    min-block-size: var(--nc-control-sm);
+    padding: var(--nc-space-1) var(--nc-space-2-5);
+    border: 0;
+    border-radius: calc(var(--nc-radius-md) - 2px);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .label:hover {
+      background: var(--nc-wash-2);
+    }
+  }
+
+  .label:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 0;
+  }
+
+  .icon {
+    flex-shrink: 0;
+    inline-size: 0.95rem;
+    block-size: 0.95rem;
+    color: var(--nc-accent-11);
+  }
+
+  .text {
+    flex: 1;
+    min-inline-size: 0;
+    text-wrap: pretty;
+  }
+
+  .name {
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  .stop {
+    flex-shrink: 0;
+  }
+
+  .popover {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    max-inline-size: min(22rem, calc(100vw - var(--nc-space-6)));
+  }
+
+  .fine {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-snug);
+    text-wrap: pretty;
+  }
+
+  .ended {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    margin: 0;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    text-wrap: pretty;
+  }
+
+  .ended > svg {
+    flex-shrink: 0;
+    inline-size: 0.9rem;
+    block-size: 0.9rem;
+    margin-block-start: 0.1rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hold {
+      animation: none;
+    }
+  }
+}

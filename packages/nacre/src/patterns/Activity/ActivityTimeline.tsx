@@ -6,6 +6,7 @@ import {
   Clock,
   FilePen,
   Globe,
+  ListChecks,
   ShieldAlert,
   ShieldCheck,
   SquareTerminal,
@@ -17,7 +18,7 @@ import { cx } from '../../utils/cx';
 import styles from './Activity.module.css';
 
 export type ActivityRowKind =
-  'command' | 'file' | 'web' | 'app' | 'approval' | 'read' | 'memory' | 'artifact';
+  'command' | 'file' | 'web' | 'app' | 'approval' | 'read' | 'memory' | 'artifact' | 'skill';
 export type ActivityRowStatus = 'done' | 'failed' | 'allowed' | 'denied' | 'waiting' | 'noted';
 
 export interface ActivityRow {
@@ -49,6 +50,8 @@ const ICONS: Record<ActivityRowKind, typeof Globe> = {
   read: ShieldAlert,
   memory: Brain,
   artifact: ChartColumn,
+  /** A skill's list the chat was held to (ADR 0040). */
+  skill: ListChecks,
 };
 
 const SPOKEN: Record<ActivityRowStatus, string> = {
