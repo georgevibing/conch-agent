@@ -92,7 +92,7 @@ function ChannelsHint() {
       onClick={() => void navigate('/channels')}
       className={styles.connectHint}
     >
-      Talk to it from Telegram, Discord or Slack
+      Talk to it from your chat apps
     </Button>
   );
 }

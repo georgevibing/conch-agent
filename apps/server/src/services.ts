@@ -192,7 +192,7 @@ export class Services {
   readonly backups: BackupService;
   /** When a chat last did anything: backups wait for a quiet moment. */
   #lastActivity = Date.now();
-  /** Telegram, Discord and Slack bots that reach your assistant (ADR 0018). */
+  /** Every chat app that reaches your assistant (ADR 0018, 0043, 0044, 0045). */
   readonly channels: ChannelService;
   /** Come home: bringing your things from OpenClaw or Hermes (ADR 0035). */
   readonly imports: ImportService;

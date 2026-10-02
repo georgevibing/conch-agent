@@ -145,7 +145,7 @@
     flex-shrink: 0;
   }
 
-  /* A chat that started in Telegram, Discord or Slack wears the app's logo. */
+  /* A chat that started in a chat app (a channel) wears the app's logo. */
   .origin {
     --il-size: 0.9rem;
     flex-shrink: 0;

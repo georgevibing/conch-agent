@@ -238,7 +238,7 @@ export const CheckupPlace = z.enum([
   'reach',
   /** Settings › Models, where new chats' mode is chosen. */
   'models',
-  /** The Channels page: who may talk to your assistant from Telegram, Discord or Slack. */
+  /** The Channels page: who may talk to your assistant from each chat app. */
   'channels',
   /** Settings › Security › Devices: what's signed in, what's waiting, and approving new ones. */
   'devices',
