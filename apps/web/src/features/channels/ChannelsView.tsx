@@ -88,7 +88,8 @@ export function ChannelsView() {
               </li>
               <li>
                 <Text as="span" size="sm">
-                  Make a bot of your own there. Conch shows you every click and checks each step.
+                  Make a bot of your own there, or link your own WhatsApp or Signal by scanning a
+                  code. Conch shows you every click and checks each step.
                 </Text>
               </li>
               <li>

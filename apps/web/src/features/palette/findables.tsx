@@ -377,7 +377,7 @@ export function useFindables(query: string, conversationId: string | undefined):
     ...(channels?.channels ?? []).map((c) => ({
       id: c.id,
       label: `${c.bot.name} on ${APPS[c.kind].name}`,
-      keywords: `${APPS[c.kind].name} ${c.bot.username ?? ''} channel bot phone`,
+      keywords: `${APPS[c.kind].name} ${c.bot.username ?? ''} ${c.bot.phone ?? ''} channel bot phone`,
       brand: c.kind as string,
       color: APPS[c.kind].color,
       to: `/channels/${c.id}`,
@@ -388,7 +388,9 @@ export function useFindables(query: string, conversationId: string | undefined):
       .map((c) => ({
         id: `new-${c.id}`,
         label: `Connect ${c.name}`,
-        keywords: `${c.name} channel bot phone chat message reach`,
+        keywords: `${c.name} channel bot phone chat message reach${
+          c.id === 'whatsapp' || c.id === 'signal' ? ' link qr code linked device scan' : ''
+        }`,
         brand: c.id,
         color: c.color,
         to: `/channels/new/${c.id}`,

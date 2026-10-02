@@ -1,6 +1,8 @@
 import {
   Channel,
   ChannelCheck,
+  ChannelLink,
+  type LinkableKind,
   ChannelList,
   type ChannelSecrets,
   type CheckChannelBody,
@@ -34,5 +36,13 @@ export const channelsApi = {
     }),
   repair: (id: string) =>
     request(Channel, `/api/channels/${id}/repair`, { method: 'POST', body: {} }),
+  /** Show a code to link WhatsApp or Signal (`channelId`: link that channel again). */
+  link: (kind: LinkableKind, channelId?: string) =>
+    request(ChannelLink, '/api/channels/link', {
+      method: 'POST',
+      body: { kind, ...(channelId && { channelId }) },
+    }),
+  linkStatus: (id: string) => request(ChannelLink, `/api/channels/link/${id}`),
+  stopLink: (id: string) => request(z.unknown(), `/api/channels/link/${id}`, { method: 'DELETE' }),
   test: (id: string) => request(Ok, `/api/channels/${id}/test`, { method: 'POST', body: {} }),
 };

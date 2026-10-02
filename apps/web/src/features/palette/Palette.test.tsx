@@ -786,6 +786,32 @@ describe('Palette search', () => {
     useUi.setState({ settings: null, settingsFocus: undefined });
   });
 
+  it('finds WhatsApp by what linking it means: a code to scan', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'GET /api/channels': () => ({
+        channels: [],
+        catalog: [
+          {
+            id: 'whatsapp',
+            name: 'WhatsApp',
+            tagline: '',
+            color: '#25D366',
+            minutes: 1,
+            available: true,
+          },
+        ],
+      }),
+    });
+    renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'scan qr');
+    expect(await screen.findByRole('option', { name: /Connect WhatsApp/ })).toBeInTheDocument();
+  });
+
   it('finds channels: the bots you connected, and each app to connect', async () => {
     const user = userEvent.setup();
     mockFetch({

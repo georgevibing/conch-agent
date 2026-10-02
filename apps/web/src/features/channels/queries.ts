@@ -1,4 +1,4 @@
-import type { Channel, ChannelList, ServerEvent } from '@conch/protocol';
+import type { Channel, ChannelLink, ChannelList, ServerEvent } from '@conch/protocol';
 import { toast } from '@conch/nacre';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
@@ -6,6 +6,30 @@ import { ApiError } from '../../api/client';
 import { channelsApi } from './api';
 
 export const channelKeys = { all: ['channels'] as const };
+
+export const linkKey = (id: string) => ['channel-link', id] as const;
+
+/**
+ * A code being shown to link WhatsApp or Signal, kept current by the live
+ * socket (`channel.link`), and asked for again now and then in case an
+ * event was missed.
+ */
+export function useChannelLink(id: string | undefined) {
+  return useQuery({
+    queryKey: linkKey(id ?? ''),
+    queryFn: () => channelsApi.linkStatus(id ?? ''),
+    enabled: Boolean(id),
+    refetchInterval: (query) => {
+      const state = query.state.data?.state;
+      return state === 'linked' ||
+        state === 'expired' ||
+        state === 'failed' ||
+        state === 'needs-install'
+        ? false
+        : 5_000;
+    },
+  });
+}
 
 export function useChannels() {
   return useQuery({ queryKey: channelKeys.all, queryFn: channelsApi.list, staleTime: 30_000 });
@@ -38,6 +62,10 @@ export function applyChannelEvent(
   event: Extract<ServerEvent, { type: `channel.${string}` }>,
   navigate: (to: string) => void,
 ) {
+  if (event.type === 'channel.link') {
+    client.setQueryData<ChannelLink>(linkKey(event.link.id), event.link);
+    return;
+  }
   if (event.type === 'channel.deleted') {
     client.setQueryData<ChannelList>(channelKeys.all, (data) =>
       data ? { ...data, channels: data.channels.filter((c) => c.id !== event.channelId) } : data,

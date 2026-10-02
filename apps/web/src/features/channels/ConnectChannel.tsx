@@ -49,6 +49,7 @@ import {
   telegramNames,
 } from './guides';
 import { HelloStep } from './HelloStep';
+import { LinkedSetup } from './LinkedSetup';
 import { useKeyCheck, usePasteAnywhere, usePointerFine } from './hooks';
 import { errorText, putChannel, useChannel } from './queries';
 
@@ -61,11 +62,12 @@ export function ConnectChannel({ kind }: { kind: string }) {
   if (!isKind(kind)) return null;
   if (kind === 'telegram') return <TelegramSetup />;
   if (kind === 'discord') return <DiscordSetup />;
+  if (kind === 'whatsapp' || kind === 'signal') return <LinkedSetup kind={kind} />;
   return <SlackSetup />;
 }
 
 /** The page around a setup: the path on the left, the picture on the right. */
-function SetupPage({
+export function SetupPage({
   kind,
   intro,
   preview,
@@ -171,7 +173,7 @@ function OpenButton({ href, children }: { href: string; children: ReactNode }) {
   );
 }
 
-const stepState = (index: number, at: number) =>
+export const stepState = (index: number, at: number) =>
   index < at ? 'done' : index === at ? 'current' : 'upcoming';
 
 // ── Telegram ─────────────────────────────────────────────────────────────

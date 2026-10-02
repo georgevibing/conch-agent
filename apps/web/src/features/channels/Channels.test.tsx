@@ -410,3 +410,129 @@ describe('When connecting fails', () => {
     expect(calls.filter((c) => c.method === 'POST' && c.path === '/api/channels')).toHaveLength(2);
   });
 });
+
+describe('Linking WhatsApp and Signal', () => {
+  const wa = channel({
+    id: 'ch_wa',
+    kind: 'whatsapp',
+    bot: { id: '15550001111', name: 'Ada Lovelace', phone: '+15550001111' },
+    people: [{ id: '15550001111', name: 'Ada Lovelace', since: 1 }],
+    settings: { notifyRoutines: true, others: 'ignore' },
+  });
+
+  it('shows the code at once, says plainly what it risks, and welcomes you once scanned', async () => {
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'POST /api/channels/link': () => ({ id: 'lk_1', kind: 'whatsapp', state: 'starting' }),
+      'GET /api/channels/link/lk_1': () => ({ id: 'lk_1', kind: 'whatsapp', state: 'starting' }),
+    });
+    const { client } = renderApp(<ConnectChannel kind="whatsapp" />, {
+      route: '/channels/new/whatsapp',
+    });
+    expect(await screen.findByText(/WhatsApp’s terms allow only its own apps/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'POST' && c.path === '/api/channels/link')).toBe(true),
+    );
+    // The phone's own screen, with the button to press.
+    expect(screen.getByRole('figure', { name: /Linked devices in WhatsApp/ })).toBeInTheDocument();
+    await screen.findByRole('heading', { name: 'Getting a code from WhatsApp' });
+    act(() =>
+      FakeSocket.last?.push({
+        type: 'channel.link',
+        link: {
+          id: 'lk_1',
+          kind: 'whatsapp',
+          state: 'showing',
+          qr: 'https://wa.me/settings/linked_devices#2@abc,def,ghi,jkl,7',
+        },
+      }),
+    );
+    expect(
+      await screen.findByRole('img', { name: 'Scan with WhatsApp on your phone' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Link a device', { selector: 'li b' })).toBeInTheDocument();
+    client.setQueryData(['channels'], { channels: [], catalog });
+    act(() => {
+      FakeSocket.last?.push({ type: 'channel.changed', channel: wa });
+      FakeSocket.last?.push({
+        type: 'channel.link',
+        link: {
+          id: 'lk_1',
+          kind: 'whatsapp',
+          state: 'linked',
+          channelId: 'ch_wa',
+          phone: '+15550001111',
+        },
+      });
+    });
+    expect(await screen.findByText('You’re connected, Ada')).toBeInTheDocument();
+    expect(screen.getByText(/Message yourself/, { selector: 'b' })).toBeInTheDocument();
+  });
+
+  it('Signal without signal-cli: one button to install it', async () => {
+    mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'GET /api/needs/signal-cli': () => ({
+        id: 'signal-cli',
+        name: 'signal-cli',
+        short: 'signal-cli',
+        present: false,
+      }),
+      'POST /api/channels/link': () => ({
+        id: 'lk_2',
+        kind: 'signal',
+        state: 'needs-install',
+        need: 'signal-cli',
+        message: 'Signal needs signal-cli, which isn’t on this computer yet.',
+      }),
+    });
+    renderApp(<ConnectChannel kind="signal" />, { route: '/channels/new/signal' });
+    expect(await screen.findByText(/Signal needs signal-cli/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show the code' })).toBeInTheDocument();
+  });
+
+  it('unlinked on the phone: link again from the channel’s page; your own number stays yours', async () => {
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({
+        channels: [
+          {
+            ...wa,
+            health: { state: 'needs-token', message: 'WhatsApp unlinked Conch.' },
+          },
+        ],
+        catalog,
+      }),
+      'PATCH /api/channels/ch_wa': () => ({
+        ...wa,
+        settings: { notifyRoutines: true, others: 'ask' },
+      }),
+      'POST /api/channels/link': () => ({
+        id: 'lk_3',
+        kind: 'whatsapp',
+        state: 'starting',
+        channelId: 'ch_wa',
+      }),
+      'GET /api/channels/link/lk_3': () => ({ id: 'lk_3', kind: 'whatsapp', state: 'starting' }),
+    });
+    const user = userEvent.setup();
+    renderApp(<ChannelDetailView channelId="ch_wa" />, { route: '/channels/ch_wa' });
+    expect(await screen.findByText('Link WhatsApp again')).toBeInTheDocument();
+    expect(screen.getByText(/\+1 555 000 1111 on WhatsApp/)).toBeInTheDocument();
+    expect(screen.getByText(/Conch never reads their chats/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Show the code' }));
+    await waitFor(() =>
+      expect(
+        calls.find((c) => c.method === 'POST' && c.path === '/api/channels/link')?.body,
+      ).toEqual({ kind: 'whatsapp', channelId: 'ch_wa' }),
+    );
+    await user.click(screen.getByRole('switch', { name: /A number just for/ }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({
+        settings: { others: 'ask' },
+      }),
+    );
+  });
+});

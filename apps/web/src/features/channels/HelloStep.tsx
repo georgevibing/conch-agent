@@ -7,7 +7,7 @@ import { relativeTime } from '../../lib/time';
 import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
 import { channelsApi } from './api';
-import { APPS, handleOf } from './describe';
+import { APPS, handleOf, isLinkedKind, SELF_CHAT } from './describe';
 import { usePointerFine } from './hooks';
 import { errorText, useChannelAction } from './queries';
 
@@ -75,10 +75,18 @@ export function HelloStep({
           </>
         }
       >
-        <p>
-          Message {who} in {app} anytime. Everything you say there is also here, in Conch, and your
-          assistant asks you there before it does anything important.
-        </p>
+        {isLinkedKind(channel.kind) ? (
+          <p>
+            Write to your assistant in <b>{SELF_CHAT[channel.kind]}</b> in {app}, from your phone or
+            any device. Everything you say there is also here, in Conch. Before anything important
+            it asks there, and you answer with a number.
+          </p>
+        ) : (
+          <p>
+            Message {who} in {app} anytime. Everything you say there is also here, in Conch, and
+            your assistant asks you there before it does anything important.
+          </p>
+        )}
       </HelloCard>
     );
   }

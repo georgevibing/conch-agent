@@ -28,7 +28,9 @@ import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
 import { channelsApi } from './api';
 import styles from './Channels.module.css';
-import { APPS, channelState, handleOf } from './describe';
+import { APPS, channelState, handleOf, isLinkedKind, readablePhone, SELF_CHAT } from './describe';
+import { LinkStep } from './LinkedSetup';
+import { GetIt } from '../setup/GetIt';
 import { HelloStep } from './HelloStep';
 import { useKeyCheck } from './hooks';
 import { channelKeys, errorText, putChannel, useChannel, useChannelAction } from './queries';
@@ -145,7 +147,9 @@ function Detail({ channel }: { channel: Channel }) {
             <Text size="sm" tone="muted">
               {handle
                 ? `@${handle} on ${app.name}`
-                : `${app.name}${channel.bot.workspace ? `, ${channel.bot.workspace}` : ''}`}
+                : channel.bot.phone
+                  ? `${readablePhone(channel.bot.phone)} on ${app.name}`
+                  : `${app.name}${channel.bot.workspace ? `, ${channel.bot.workspace}` : ''}`}
             </Text>
             <Badge tone={meta.tone} dot={state === 'online' ? true : undefined}>
               {meta.label}
@@ -253,8 +257,11 @@ function Detail({ channel }: { channel: Channel }) {
             ))}
           </ul>
           <Text size="sm" tone="subtle">
-            Anyone else who writes to {handle ? `@${handle}` : channel.bot.name} gets one polite
-            reply and shows up here for you to let in or block.
+            {isLinkedKind(channel.kind)
+              ? channel.settings.others === 'ask'
+                ? `You talk to ${assistant} in ${SELF_CHAT[channel.kind]}. Anyone else who writes to this number gets one polite reply and shows up here for you to let in or block. Groups never hear from it.`
+                : `You talk to ${assistant} in ${SELF_CHAT[channel.kind]}. Other people who write to this number are writing to you: Conch never reads their chats, or your groups.`
+              : `Anyone else who writes to ${handle ? `@${handle}` : channel.bot.name} gets one polite reply and shows up here for you to let in or block.`}
             {channel.blocked > 0 &&
               ` You’ve blocked ${channel.blocked === 1 ? 'one person' : `${channel.blocked} people`}.`}
           </Text>
@@ -311,6 +318,26 @@ function Detail({ channel }: { channel: Channel }) {
             onCheckedChange={(notifyRoutines) => update.mutate([{ settings: { notifyRoutines } }])}
           />
         </div>
+        {isLinkedKind(channel.kind) && (
+          <div className={styles.setting}>
+            <Stack gap={0}>
+              <Text weight="medium" id="ch-others">
+                A number just for {assistant}
+              </Text>
+              <Text size="sm" tone="muted">
+                Others who write to it can ask to be let in. Leave this off for your own number, so
+                your friends’ chats stay yours.
+              </Text>
+            </Stack>
+            <Switch
+              aria-labelledby="ch-others"
+              checked={channel.settings.others === 'ask'}
+              onCheckedChange={(on) =>
+                update.mutate([{ settings: { others: on ? 'ask' : 'ignore' } }])
+              }
+            />
+          </div>
+        )}
         <Button
           variant="ghost"
           tone="danger"
@@ -327,9 +354,11 @@ function Detail({ channel }: { channel: Channel }) {
           <AlertDialog.Header>
             <AlertDialog.Title>Disconnect {app.name}?</AlertDialog.Title>
             <AlertDialog.Description>
-              {assistant} stops answering {handle ? `@${handle}` : channel.bot.name}, and Conch
-              forgets its key. Your conversations stay here. The bot itself stays in {app.name}{' '}
-              until you delete it there.
+              {channel.kind === 'whatsapp'
+                ? `${assistant} stops answering in ${app.name}, Conch leaves your Linked devices and forgets its keys. Your conversations stay here.`
+                : channel.kind === 'signal'
+                  ? `${assistant} stops answering in ${app.name}, and Conch forgets its keys. Your conversations stay here. Remove Conch under Linked devices in Signal too.`
+                  : `${assistant} stops answering ${handle ? `@${handle}` : channel.bot.name}, and Conch forgets its key. Your conversations stay here. The bot itself stays in ${app.name} until you delete it there.`}
             </AlertDialog.Description>
           </AlertDialog.Header>
           <AlertDialog.Footer>
@@ -356,7 +385,22 @@ function Health({
   repairing: boolean;
 }) {
   const state = channelState(channel);
+  if (state === 'needs-token' && isLinkedKind(channel.kind))
+    return (
+      <Callout tone="warning" title={`Link ${APPS[channel.kind].name} again`}>
+        <Stack gap={3}>
+          <Text size="sm">{channel.health.message}</Text>
+          <LinkStep kind={channel.kind} channelId={channel.id} auto={false} />
+        </Stack>
+      </Callout>
+    );
   if (state === 'needs-token') return <ReplaceKey channel={channel} />;
+  if (channel.health.need)
+    return (
+      <Callout tone="warning" title="Something to install first">
+        <GetIt needId={channel.health.need} lead={channel.health.message} />
+      </Callout>
+    );
   if (state === 'conflict' || state === 'error' || state === 'reconnecting')
     return (
       <Callout
@@ -399,12 +443,14 @@ function ReplaceKey({ channel }: { channel: Channel }) {
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const slack = channel.kind === 'slack';
+  // Linked accounts have no key: they link again instead (`Health`).
+  const kind = channel.kind as 'telegram' | 'discord' | 'slack';
   const body = slack
     ? token.trim()
       ? ({ kind: 'slack', botToken: token } as const)
       : undefined
     : token.trim()
-      ? ({ kind: channel.kind, token } as const)
+      ? ({ kind: kind === 'discord' ? 'discord' : 'telegram', token } as const)
       : undefined;
   const { status, check } = useKeyCheck(body, token);
   const where = {
@@ -412,7 +458,7 @@ function ReplaceKey({ channel }: { channel: Channel }) {
     discord: 'In the Developer Portal, open your app → Bot → Reset Token, then Copy.',
     slack:
       'In your Slack app’s settings: Install App for the bot token, Basic Information → App-Level Tokens for the other.',
-  }[channel.kind];
+  }[kind];
 
   const save = async () => {
     const secrets: ChannelSecrets = slack
