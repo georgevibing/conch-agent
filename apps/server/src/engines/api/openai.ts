@@ -374,7 +374,7 @@ export function mapChatError(
     return new ApiError('payment', `Your ${label} credit has run out. Top up to keep going.`);
   if (/model_not_found|not_found|\b1211\b|does not exist|unknown model|not found|has reached its end of life/.test(words) || status === 404 || status === 410)
     return new ApiError('not-found', `That model isn’t available at ${label} any more. Pick another one.`);
-  if (/context.?length|too long|maximum context|exceeds? the (context|model)|token limit|\b1261\b|input length|too_many_tokens|reduce the length/.test(words))
+  if (/context.?length|too long|maximum context|exceeds? the (context|model)|token limit|\b1261\b|input length|too_many_tokens|reduce the length|token count \+ max_tokens/.test(words))
     return new ApiError(
       'context',
       'This conversation is longer than the model can read. Start a new chat, or pick a model with a bigger context.',

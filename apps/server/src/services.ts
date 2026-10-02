@@ -361,6 +361,7 @@ export class Services {
       settings: this.settings,
       keys: this.keys,
       makeServer: (server) => serverEngine(server, registry),
+      lookAround: { env: process.env },
       pinned: config.CONCH_ENGINE,
       emit: (event) => this.broadcast.emit(event),
       // A different provider means different limits and a different model list.

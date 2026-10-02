@@ -11,7 +11,7 @@
  * change something ask first over ACP, and Conch declines them, the way it
  * declines Codex's: an action Conch can't seal or put back doesn't happen.
  */
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 
 import {
   EffortChoice,
@@ -129,6 +129,20 @@ const PermissionRequest = z.object({
 /** What starting the program takes: tests give their own pretend agent. */
 export type AcpSpawn = (file: string, args: string[], env: Record<string, string>) => AcpStreams;
 
+/** What the engine needs from this computer; tests replace each piece. */
+export interface AcpOptions {
+  explicitPath?: string;
+  spawn?: AcpSpawn;
+  /** Find the program (default: where its installers put it). */
+  find?: () => Promise<string | undefined>;
+  /** Its version (default: `--version`). */
+  version?: (file: string) => Promise<string | undefined>;
+  /** Whether it was ever signed in (default: a file the program keeps). */
+  signedInBefore?: () => boolean | undefined;
+  /** Start its sign-in command (default: the program itself). */
+  spawnLogin?: (file: string, args: string[], env: Record<string, string>) => ChildProcess;
+}
+
 function spawnProgram(file: string, args: string[], env: Record<string, string>): AcpStreams {
   const { command, prefix } = launch(file);
   const child = spawn(command, [...prefix, ...args], {
@@ -151,6 +165,15 @@ function spawnProgram(file: string, args: string[], env: Record<string, string>)
       }
     },
   };
+}
+
+function spawnLogin(file: string, args: string[], env: Record<string, string>): ChildProcess {
+  const { command, prefix } = launch(file);
+  return spawn(command, [...prefix, ...args], {
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
 }
 
 /** One running program, initialised and ready for sessions. */
@@ -283,7 +306,7 @@ export class AcpEngine implements Engine {
   constructor(
     private readonly agent: AcpAgent,
     private readonly settings: SettingsStore,
-    private readonly options: { explicitPath?: string; spawn?: AcpSpawn } = {},
+    private readonly options: AcpOptions = {},
   ) {
     this.id = agent.id;
     this.label = agent.label;
@@ -418,7 +441,7 @@ export class AcpEngine implements Engine {
       this.#status = { value, at: Date.now() };
       return value;
     };
-    const file = await findAgent(this.agent, this.options.explicitPath);
+    const file = await this.#find();
     if (!file)
       return remember({
         ...base,
@@ -426,8 +449,7 @@ export class AcpEngine implements Engine {
         fix: { need: this.agent.need, kind: 'install' },
         message: `Install ${this.label} to use it here. Conch can do that for you.`,
       });
-    const versionRun = await run(file, ['--version'], { env: this.#env(), timeout: 15_000 });
-    const version = parseVersion(`${versionRun.stdout}\n${versionRun.stderr}`);
+    const version = await (this.options.version ?? ((path) => this.#version(path)))(file);
     if (version && !isAtLeast(version, this.agent.minVersion))
       return remember({
         ...base,
@@ -438,7 +460,7 @@ export class AcpEngine implements Engine {
         message: `Update ${this.label} to ${this.agent.minVersion} or newer to use it with Conch.`,
       });
     // A Gemini or Grok that was never signed in can't be: no need to start it to find out.
-    if (signedInBefore(this.agent) === false)
+    if ((this.options.signedInBefore ?? (() => signedInBefore(this.agent)))() === false)
       return remember({
         ...base,
         state: 'signed-out',
@@ -476,6 +498,15 @@ export class AcpEngine implements Engine {
           : `${this.label} didn’t start: ${error instanceof Error ? error.message : 'it stopped.'}`,
       });
     }
+  }
+
+  #find(): Promise<string | undefined> {
+    return this.options.find?.() ?? findAgent(this.agent, this.options.explicitPath);
+  }
+
+  async #version(file: string): Promise<string | undefined> {
+    const result = await run(file, ['--version'], { env: this.#env(), timeout: 15_000 });
+    return parseVersion(`${result.stdout}\n${result.stderr}`);
   }
 
   // ── Models ────────────────────────────────────────────────────────────────
@@ -529,7 +560,7 @@ export class AcpEngine implements Engine {
     queueMicrotask(() => {
       void (async () => {
         emit({ phase: 'starting' });
-        const file = await findAgent(this.agent, this.options.explicitPath);
+        const file = await this.#find();
         if (!file) throw new Error(`Install ${this.label} first.`);
         if (this.agent.login.kind === 'command') await this.#loginCommand(file, emit, abort.signal);
         else await this.#loginAuthenticate(file, this.agent.login.methodId, emit, abort.signal);
@@ -573,12 +604,7 @@ export class AcpEngine implements Engine {
   ): Promise<void> {
     if (this.agent.login.kind !== 'command') return;
     const { args, hosts } = this.agent.login;
-    const { command, prefix } = launch(file);
-    const child = spawn(command, [...prefix, ...args], {
-      env: this.#env(),
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
+    const child = (this.options.spawnLogin ?? spawnLogin)(file, args, this.#env());
     let seen = '';
     let shown = false;
     const look = (chunk: Buffer) => {
@@ -590,8 +616,8 @@ export class AcpEngine implements Engine {
         emit({ phase: 'waiting-for-browser', url: found.url, code: found.code });
       }
     };
-    child.stdout.on('data', look);
-    child.stderr.on('data', look);
+    child.stdout?.on('data', look);
+    child.stderr?.on('data', look);
     const stop = () => child.kill();
     signal.addEventListener('abort', stop, { once: true });
     try {

@@ -230,7 +230,8 @@ async function listAt(
 /** Ollama and LM Studio have cards of their own, with more than a server can offer. */
 async function ownCard(fetchImpl: FetchLike, base: string): Promise<string | undefined> {
   const origin = new URL(base).origin;
-  if (!isLoopbackUrl(`${origin}/`)) return undefined;
+  const host = new URL(base).hostname;
+  if (host !== 'localhost' && !isLoopbackUrl(`${origin}/`)) return undefined;
   const look = async (path: string) => {
     try {
       const response = await fetchImpl(`${origin}${path}`, {
