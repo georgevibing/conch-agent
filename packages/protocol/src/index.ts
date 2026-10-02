@@ -7,6 +7,7 @@
  */
 import { z } from 'zod';
 
+import { AppNeed, AppsModel } from './apps';
 import { Artifact, ArtifactKind } from './artifacts';
 import { ATTACHMENT_LIMITS, Attachment } from './attachments';
 import { BrowserHandoff, BrowserPermission, BrowserStatus, BrowserStep } from './browser';
@@ -36,6 +37,7 @@ import { UpdatesStatus } from './updates';
 import { UsageSnapshot } from './usage';
 
 export * from './access';
+export * from './apps';
 export * from './artifacts';
 export * from './attachments';
 export * from './background';
@@ -270,7 +272,15 @@ export const UpdateSettingsBody = z.object({
 export type UpdateSettingsBody = z.infer<typeof UpdateSettingsBody>;
 
 /** Send a message that's waiting for the internet now — optionally with another provider. */
-export const ReleaseTurnBody = z.object({ engine: EngineId.optional() }).strict();
+/**
+ * Send a waiting message now: with `engine` (the model on this computer, while
+ * offline), or switched to `model` of `engine` (one that can use the apps the
+ * message needs, ADR 0050) — which the chat then keeps.
+ */
+export const ReleaseTurnBody = z
+  .object({ engine: EngineId.optional(), model: z.string().min(1).max(200).optional() })
+  .strict()
+  .refine((body) => !body.model || body.engine, { message: 'A model needs its provider.' });
 export type ReleaseTurnBody = z.infer<typeof ReleaseTurnBody>;
 
 // ── Conversations ───────────────────────────────────────────────────────────
@@ -500,6 +510,20 @@ export const ConversationEvent = z.discriminatedUnion('type', [
    * back (or now, with a model on this computer).
    */
   z.object({ ...logged, type: z.literal('turn.held'), reason: z.literal('offline') }),
+  /**
+   * The chat's model can't use what this message needs (an app, a skill's
+   * tools — ADR 0050): it waits for a choice. Switch to `switchTo` and it goes
+   * by itself; or it's answered without.
+   */
+  z.object({
+    ...logged,
+    type: z.literal('turn.needs-apps'),
+    needs: z.array(AppNeed).min(1).max(5),
+    /** The model that can't. */
+    model: z.object({ engine: EngineId, id: z.string(), label: z.string() }),
+    /** The best model you already set up that can; absent when there's none. */
+    switchTo: AppsModel.optional(),
+  }),
   /** This turn was answered by another provider than the chat's, and why. */
   z.object({
     ...logged,
