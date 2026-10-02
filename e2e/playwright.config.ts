@@ -48,6 +48,11 @@ const trustHome = (process.env.CONCH_E2E_TRUST_HOME ??= mkdtempSync(
   join(tmpdir(), 'conch-e2e-trust-'),
 ));
 
+/** The `skill-scope` journey puts a skill where its gateway looks, and signs one from the terminal. */
+const skillScopeHome = (process.env.CONCH_E2E_SKILL_SCOPE_HOME ??= mkdtempSync(
+  join(tmpdir(), 'conch-e2e-skill-scope-'),
+));
+
 const scenarios = {
   ready: { port: 4391, env: { CONCH_MOCK_STATE: 'ready' } },
   models: { port: 4394, env: { CONCH_MOCK_STATE: 'ready' } },
@@ -85,6 +90,8 @@ const scenarios = {
   tasks: { port: 4372, env: { CONCH_MOCK_STATE: 'ready' } },
   // Skill trust (ADR 0031): a signed skill, trusting its publisher, held to what it says it needs.
   trust: { port: 4374, env: { CONCH_MOCK_STATE: 'ready', CONCH_HOME: trustHome } },
+  // Skill scope (ADR 0040): a chat stays held to a skill's list until you stop it; the signing key is locked.
+  'skill-scope': { port: 4361, env: { CONCH_MOCK_STATE: 'ready', CONCH_HOME: skillScopeHome } },
   // Conch in your pocket: the app, the offline screen, the phone's address (a pretend Tailscale).
   pocket: { port: 4379, env: { CONCH_MOCK_STATE: 'ready' } },
   // Under the supervisor, like `pnpm start`: Conch runs "in a Terminal window", and can quit.
