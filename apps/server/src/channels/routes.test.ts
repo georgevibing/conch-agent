@@ -9,6 +9,7 @@ import { loadConfig } from '../config';
 import { Services } from '../services';
 import { MockMail } from './mock/email';
 import { MockTelegram } from './mock/telegram';
+import { MockWeChat } from './mock/wechat';
 
 const PASSWORD = 'purple otters juggle at dawn';
 const REMOTE = { remoteAddress: '192.168.1.20', host: 'conch.example' };
@@ -273,5 +274,73 @@ describe('channel routes', () => {
       payload: { place: 'full-disk-access' },
     });
     expect(there.statusCode).toBe(403);
+  });
+
+  it('the public door: opening it, and reading WeChat’s keys, need a fresh sign-in from elsewhere', async () => {
+    const { app } = await setup();
+    const made = await app.inject({
+      method: 'POST',
+      url: '/api/channels',
+      payload: {
+        kind: 'wechat',
+        mode: 'official',
+        appId: MockWeChat.APP_ID,
+        secret: MockWeChat.APP_SECRET,
+      },
+    });
+    expect(made.statusCode).toBe(200);
+    expect(made.body).not.toContain(MockWeChat.APP_SECRET);
+    const id = made.json().id as string;
+    const cookie = await phone(app);
+    // Right after signing in, the keys come back (and never with the list).
+    const hook = await remote(app, `/api/channels/${id}/hook`, { cookie });
+    expect(hook.json()).toMatchObject({
+      token: expect.stringMatching(/^[A-Za-z0-9]+$/),
+      aesKey: expect.stringMatching(/^[A-Za-z0-9]{43}$/),
+    });
+    const list = await remote(app, '/api/channels', { cookie });
+    expect(list.body).not.toContain(hook.json().aesKey as string);
+    // Ten minutes on, opening the door or reading them again asks again.
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 11 * 60_000);
+    for (const [method, url, payload] of [
+      ['POST', '/api/channels/door/tailscale', {}],
+      ['PUT', '/api/channels/door', { url: 'https://conch.example.org' }],
+      ['GET', `/api/channels/${id}/hook`, undefined],
+    ] as const) {
+      const res = await remote(app, url, { method, cookie, ...(payload && { payload }) });
+      expect(res.statusCode, url).toBe(403);
+      expect(res.json()).toMatchObject({ error: 'verify-required' });
+    }
+    // Closing it never needs that.
+    expect((await remote(app, '/api/channels/door', { method: 'DELETE', cookie })).statusCode).toBe(
+      200,
+    );
+  });
+
+  it('an address of your own must be plain HTTPS', async () => {
+    const { app } = await setup();
+    for (const url of [
+      'http://conch.example.org',
+      'https://user:pw@conch.example.org',
+      'https://conch.example.org/?k=1',
+      'not a url at all',
+    ])
+      expect(
+        (await app.inject({ method: 'PUT', url: '/api/channels/door', payload: { url } }))
+          .statusCode,
+        url,
+      ).toBe(400);
+  });
+
+  it('offers the Teams app only for a Teams channel', async () => {
+    const { app } = await setup();
+    const made = await app.inject({
+      method: 'POST',
+      url: '/api/channels',
+      payload: { kind: 'telegram', token: MockTelegram.TOKEN },
+    });
+    expect(
+      (await app.inject(`/api/channels/${made.json().id as string}/teams-app`)).statusCode,
+    ).toBe(404);
   });
 });

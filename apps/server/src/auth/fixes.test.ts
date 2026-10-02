@@ -94,6 +94,7 @@ describe('checkup findings', () => {
         { app: 'Telegram', bot: '@adas_conch_bot', others: ['Grace Hopper'] },
         { app: 'Slack', bot: 'Conch', others: [] },
       ],
+      door: { url: 'https://mac.tail1.ts.net/conch', apps: ['Microsoft Teams', 'WeChat'] },
     });
 
   it('offer every problem one thing to press or copy', () => {
@@ -119,6 +120,7 @@ describe('checkup findings', () => {
       files: { kind: 'act', action: 'secure-files' },
       'channels-full-trust': { kind: 'act', action: 'ask-first', label: 'Ask first' },
       'channel-people': { kind: 'open', place: 'channels' },
+      'channel-door': { kind: 'open', place: 'channels', label: 'Review' },
     });
   });
 
@@ -129,6 +131,9 @@ describe('checkup findings', () => {
     );
     expect(items.find((i) => i.id === 'channel-people')?.title).toBe(
       'Grace Hopper can use your assistant from Telegram',
+    );
+    expect(items.find((i) => i.id === 'channel-door')?.title).toBe(
+      'https://mac.tail1.ts.net/conch is open to the internet, for Microsoft Teams and WeChat',
     );
   });
 

@@ -1354,6 +1354,8 @@ export class Services {
     if (engine) await this.engines.get(engine)?.detect({ force: true });
     await this.integrations.recheckNeeding(id);
     await this.channels.recheckNeeding(id);
+    // Tailscale just landed: the public door carries on turning itself on.
+    if (id === 'tailscale') await this.door.check().catch(() => undefined);
   }
 
   async engineStatus(force = false) {

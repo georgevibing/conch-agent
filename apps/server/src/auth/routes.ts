@@ -15,6 +15,7 @@ import {
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { z } from 'zod';
 
+import { CHANNEL_NAMES } from '../channels/catalog';
 import type { Gatekeeper } from '../security';
 import type { Services } from '../services';
 import { checkup, findTokenProfile, workspaceRules } from './checkup';
@@ -155,6 +156,13 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
         terminalRemote: (await services.terminal.settings()).allowRemote,
         provider: await services.providers.checkupCopy(),
         channels: await services.channels.checkupCopy(),
+        ...(services.door.status().state === 'ready' &&
+          services.door.status().url && {
+            door: {
+              url: services.door.status().url ?? '',
+              apps: services.door.status().apps.map((kind) => CHANNEL_NAMES[kind]),
+            },
+          }),
         safety: {
           checkAfterReading: preferences.checkAfterReading,
           sealedCommands: preferences.sealedCommands,

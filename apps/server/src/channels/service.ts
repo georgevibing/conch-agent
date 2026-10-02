@@ -139,7 +139,8 @@ const hiTo = (name: string) => (/[@+]|^\d/.test(name) ? 'Hi!' : `Hi ${firstName(
 export function normalizeSecrets(secrets: ChannelSecrets, kept?: ChannelSecrets): ChannelSecrets {
   if (secrets.kind === 'microsoftteams')
     return normalizeTeams(secrets, kept?.kind === 'microsoftteams' ? kept : undefined);
-  if (secrets.kind === 'matrix') return normalizeMatrix(secrets);
+  if (secrets.kind === 'matrix')
+    return normalizeMatrix(secrets, kept?.kind === 'matrix' ? kept : undefined);
   if (secrets.kind === 'wechat')
     return normalizeWeChat(secrets, kept?.kind === 'wechat' ? kept : undefined);
   const pick = (value: string, pattern: RegExp) => pattern.exec(value)?.[1] ?? value.trim();

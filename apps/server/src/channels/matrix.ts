@@ -116,9 +116,11 @@ const serverOf = (user: string) => /^@?[^:\s]+:([^\s/]+)$/.exec(user.trim())?.[1
  * left empty, and what only Conch sets (its session, its store key) is
  * never taken from the page.
  */
-export function normalizeMatrix(secrets: MatrixSecrets): MatrixSecrets {
-  const user = secrets.user?.trim();
-  const homeserver = secrets.homeserver.trim() || (user && serverOf(user)) || '';
+export function normalizeMatrix(secrets: MatrixSecrets, kept?: MatrixSecrets): MatrixSecrets {
+  // Signing in again (a new password) keeps the account and homeserver it had.
+  const user = secrets.user?.trim() || kept?.user;
+  const homeserver =
+    secrets.homeserver.trim() || kept?.homeserver || (user && serverOf(user)) || '';
   return {
     kind: 'matrix',
     homeserver,

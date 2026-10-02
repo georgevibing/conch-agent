@@ -127,6 +127,8 @@ export class ChannelDoorService {
   #secret = randomBytes(32);
   #timer?: NodeJS.Timeout;
   #checking?: Promise<DoorView>;
+  /** The address being checked right now (it isn't the door's until it answers). */
+  #candidate?: string;
 
   constructor(
     private readonly deps: {
@@ -167,7 +169,7 @@ export class ChannelDoorService {
    * deliver here, as the internet would through Funnel).
    */
   localFor(url: string): string {
-    const base = this.#state.url;
+    const base = this.#candidate ?? this.#state.url;
     const local = this.local;
     if (!base || !local || !url.startsWith(base)) return url;
     return `${local}${url.slice(base.length)}`;
@@ -363,6 +365,7 @@ export class ChannelDoorService {
     const nonce = randomBytes(16).toString('base64url');
     const fetcher = this.deps.fetch ?? fetch;
     let ok = false;
+    this.#candidate = url;
     try {
       const response = await fetcher(`${url}/ping/${nonce}`, {
         signal: AbortSignal.timeout(15_000),
@@ -372,6 +375,8 @@ export class ChannelDoorService {
       ok = equal(said, this.#proof(nonce));
     } catch {
       ok = false;
+    } finally {
+      this.#candidate = undefined;
     }
     if (ok) {
       this.#set({ state: 'ready', via, url, checkedAt: Date.now() });

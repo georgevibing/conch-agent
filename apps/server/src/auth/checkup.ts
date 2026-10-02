@@ -178,6 +178,8 @@ export interface CheckupInput {
   platform?: NodeJS.Platform;
   /** Chat apps that reach the assistant, and who besides you may use each. */
   channels?: { app: string; bot: string; others: string[] }[];
+  /** The public door (ADR 0045): where the internet reaches it, and for which apps. */
+  door?: { url: string; apps: string[] };
   /** Safe hands (ADR 0028): the guard, and the sealed box for commands. */
   safety?: { checkAfterReading: boolean; sealedCommands: boolean; sandboxAvailable: boolean };
 }
@@ -376,6 +378,17 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       level: 'info',
       title: `${people.length === 1 ? people[0] : `${people.length} other people`} can use your assistant from ${shared.map((c) => c.app).join(' and ')}`,
       detail: `They can ask it things. Anything that could send something out or change this computer comes to you to OK first, in Conch. Remove anyone you no longer want there.`,
+      fix: { kind: 'open', label: 'Review', place: 'channels' },
+    });
+  }
+
+  if (input.door) {
+    const apps = input.door.apps.length ? input.door.apps.join(' and ') : 'Teams and WeChat';
+    items.push({
+      id: 'channel-door',
+      level: 'info',
+      title: `${input.door.url} is open to the internet, for ${apps}`,
+      detail: `It leads to a small door of its own, not to Conch: it lets in only messages ${apps} signed, for the channels you connected, and nothing on this computer can be reached through it. Turn it off when you no longer use ${apps}.`,
       fix: { kind: 'open', label: 'Review', place: 'channels' },
     });
   }
