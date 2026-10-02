@@ -390,6 +390,12 @@ export function GoogleAppConnection({
   const app = integration.id as GoogleAppId;
   const client = useQueryClient();
   const status = useQuery({ queryKey: ['google'], queryFn: googleApi.status });
+  // The app's health changed (a check, a refused password): the accounts did too.
+  const { refetch } = status;
+  const healthKey = `${integration.health.state}:${integration.health.checkedAt ?? ''}`;
+  useEffect(() => {
+    void refetch();
+  }, [healthKey, refetch]);
   const accounts = (status.data?.accounts ?? []).filter((a) =>
     NEEDS[app]?.some((c) => a.capabilities.includes(c)),
   );
