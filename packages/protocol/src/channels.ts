@@ -295,8 +295,14 @@ export const UpdateChannelBody = z
   .partial();
 export type UpdateChannelBody = z.infer<typeof UpdateChannelBody>;
 
-/** `PUT /api/channels/:id/token`: a new key for the same bot (after it was reset). */
-export const ReplaceChannelTokenBody = ChannelSecrets;
+/**
+ * `PUT /api/channels/:id/token`: a new key for the same bot (after it was
+ * reset). Email can send only the new app password: the rest stays as it was.
+ */
+export const ReplaceChannelTokenBody = z.union([
+  ChannelSecrets,
+  z.object({ kind: z.literal('email'), password: secret }),
+]);
 export type ReplaceChannelTokenBody = z.infer<typeof ReplaceChannelTokenBody>;
 
 /** A request answered from the page: let them in, or turn them away for good. */

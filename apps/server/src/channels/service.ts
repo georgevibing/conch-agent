@@ -12,6 +12,7 @@ import {
   type ConversationEvent,
   type ImessageSetup,
   type OpenImessageBody,
+  type ReplaceChannelTokenBody,
   type RoutineRun,
   type ServerEvent,
   type UpdateChannelBody,
@@ -119,6 +120,9 @@ interface Ask {
 const hash = (code: string) => createHash('sha256').update(code).digest();
 
 const firstName = (name: string) => name.split(/\s+/)[0] ?? name;
+
+/** "Hi Ada!", or just "Hi!" when all Conch knows is an address. */
+const hiTo = (name: string) => (/[@+]|^\d/.test(name) ? 'Hi!' : `Hi ${firstName(name)}!`);
 
 /** Find the key in whatever was pasted (BotFather's whole message is fine). */
 export function normalizeSecrets(secrets: ChannelSecrets): ChannelSecrets {
@@ -559,14 +563,24 @@ export class ChannelService {
   }
 
   /** A new key for the same bot, after the old one was reset. */
-  async replaceToken(id: string, input: ChannelSecrets): Promise<Channel> {
+  async replaceToken(id: string, input: ReplaceChannelTokenBody): Promise<Channel> {
     const current = await this.#require(id);
     if (isLinked(current.kind) || isLinked(input.kind))
       throw new ChannelServiceError(
         'invalid',
         `${CHANNEL_NAMES[current.kind]} has no key to paste: link it again with the code on its page.`,
       );
-    const secrets = normalizeSecrets(input);
+    // Only a new app password for an email account: everything else stays as it was.
+    const kept = await this.deps.store.secrets(id);
+    const merged: ChannelSecrets | undefined =
+      'address' in input || input.kind !== 'email'
+        ? input
+        : kept?.kind === 'email'
+          ? { ...kept, password: input.password }
+          : undefined;
+    if (!merged)
+      throw new ChannelServiceError('invalid', 'Connect this email account again.', 'password');
+    const secrets = normalizeSecrets(merged);
     if (secrets.kind !== current.kind)
       throw new ChannelServiceError('invalid', `That’s a key for ${CHANNEL_NAMES[secrets.kind]}.`);
     let bot;
@@ -848,14 +862,16 @@ export class ChannelService {
       await live.connection.send(
         chat,
         owner
-          ? `Hi ${firstName(user.name)}! 👋 I’m **${assistant}**, and I’m connected to Conch on your computer.\n\n` +
+          ? `${hiTo(user.name)} 👋 I’m **${assistant}**, and I’m connected to Conch on your computer.\n\n` +
               (isLinked(stored.kind)
                 ? 'Write to me here, in the chat with yourself. Nobody else’s chats reach me. '
                 : '') +
               'Ask me anything — I can work with your files, the web and your apps, just like in Conch. ' +
               'Before I do anything important, I’ll ask you here.\n\n' +
-              '/new starts a fresh conversation · /stop stops me'
-          : `Hi ${firstName(user.name)}! 👋 ${ownerName ? firstName(ownerName) : 'The owner'} let you in. I’m **${assistant}**: ask me anything.`,
+              (stored.kind === 'email'
+                ? 'A new email starts a fresh conversation; reply in a thread to carry on it.'
+                : '/new starts a fresh conversation · /stop stops me')
+          : `${hiTo(user.name)} 👋 ${ownerName && !/[@+]/.test(ownerName) ? firstName(ownerName) : 'The owner'} let you in. I’m **${assistant}**: ask me anything.`,
       );
     } catch (error) {
       this.#log(`welcome: ${explain(error)}`);

@@ -146,6 +146,10 @@ describe('Email through Conch', () => {
       state: 'needs-you',
       action: { label: 'Paste a new app password' },
     });
+    // A new app password alone is enough: the rest of the account stays as it was.
+    mail.password = 'qrstuvwxyzabcdef';
+    await s.channels.replaceToken(channel.id, { kind: 'email', password: 'qrst uvwx yzab cdef' });
+    await until(async () => (await s.channels.get(channel.id)).health.state === 'online', 'online');
   }, 30_000);
 
   it('keeps the app password out of what the page sees', async () => {
