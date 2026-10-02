@@ -7,7 +7,7 @@
  * Everything is written by the real services, the way using Conch writes it.
  * The backup tests use it to check nothing Conch writes is left unclassified.
  */
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -16,6 +16,8 @@ import type { ServerEvent } from '@conch/protocol';
 import { buildApp } from '../app';
 import { loadConfig } from '../config';
 import { sessionsDir, TranscriptStore } from '../engines/api/session';
+import { MockMatrix } from '../channels/mock/matrix';
+import { MockTeams } from '../channels/mock/teams';
 import { MockTelegram } from '../channels/mock/telegram';
 import { recordGateway } from '../port';
 import { Services } from '../services';
@@ -237,6 +239,50 @@ export async function useConch(g: Gateway) {
     }
   }
   await services.linked.whatsapp.sessions.flush();
+  // The public door, open, and a Teams bot that has heard from you (it remembers where your chat is)…
+  await ok(await app.inject({ method: 'POST', url: '/api/channels/door/tailscale', payload: {} }));
+  const teams = await ok(
+    await app.inject({
+      method: 'POST',
+      url: '/api/channels',
+      payload: { kind: 'microsoftteams', appId: MockTeams.APP_ID, appPassword: MockTeams.SECRET },
+    }),
+  );
+  const soon = async <T>(fn: () => Promise<T | undefined>): Promise<T> => {
+    for (let i = 0; i < 400; i++) {
+      const value = await fn();
+      if (value) return value;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    throw new Error('timed out');
+  };
+  const hook = await soon(async () => (await services.channels.get(String(teams.id))).hook?.url);
+  services.mockTeams?.endpoint(hook);
+  await services.mockTeams?.say('hi');
+  await soon(
+    async () =>
+      (await readdir(join(home, 'channels')).catch(() => [])).some((f) => f.startsWith('teams-')) ||
+      undefined,
+  );
+  // …and a Matrix account, with its encryption store.
+  await ok(
+    await app.inject({
+      method: 'POST',
+      url: '/api/channels',
+      payload: {
+        kind: 'matrix',
+        homeserver: services.mockMatrix?.base,
+        user: 'conch',
+        password: MockMatrix.PASSWORD,
+      },
+    }),
+  );
+  await soon(
+    async () =>
+      (await readdir(join(home, 'channels')).catch(() => [])).some((f) =>
+        f.startsWith('matrix-'),
+      ) || undefined,
+  );
   await services.backups.backupNow();
   // Sign-in last: from here on, requests need the cookie.
   const signedIn = await app.inject({

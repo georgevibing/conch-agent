@@ -191,6 +191,44 @@ export function toTelegramHtml(markdown: string): string {
     .trim();
 }
 
+/**
+ * HTML for apps that read it (Matrix's `formatted_body`, Teams messages):
+ * the tags both render, with line breaks kept, since HTML would fold them.
+ */
+export function toChatHtml(markdown: string): string {
+  const style = {
+    escape: escapeHtml,
+    code: (s: string) => `<code>${escapeHtml(s)}</code>`,
+    bold: (s: string) => `<strong>${s}</strong>`,
+    italic: (s: string) => `<em>${s}</em>`,
+    strike: (s: string) => `<del>${s}</del>`,
+    link: (label: string, url: string) =>
+      `<a href="${escapeHtml(url).replaceAll('"', '&quot;')}">${escapeHtml(label)}</a>`,
+  };
+  const breaks = (html: string) =>
+    html
+      .split(/(<pre>[\s\S]*?<\/pre>)/)
+      .map((part, i) => (i % 2 ? part : part.replaceAll('\n', '<br>')))
+      .join('');
+  return blocks(markdown)
+    .map((block) =>
+      block.kind === 'code'
+        ? `<pre><code${block.lang ? ` class="language-${escapeHtml(block.lang)}"` : ''}>${escapeHtml(block.text)}</code></pre>`
+        : breaks(
+            prose(block.text.replace(/^\n+|\n+$/g, ''), {
+              line: (s) => inline(s, style),
+              heading: (s) => `<strong>${s}</strong>`,
+              quote: (lines) => `<blockquote>${lines.join('\n')}</blockquote>`,
+              table: (rows) => `<pre>${escapeHtml(rows)}</pre>`,
+              bullet: '•',
+            }),
+          ),
+    )
+    .filter(Boolean)
+    .join('<br>')
+    .trim();
+}
+
 /** Slack's mrkdwn. */
 export function toSlackMrkdwn(markdown: string): string {
   const escape = (s: string) => escapeHtml(s);

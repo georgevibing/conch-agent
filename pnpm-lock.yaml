@@ -302,6 +302,9 @@ importers:
       '@huggingface/transformers':
         specifier: 4.3.0
         version: 4.3.0(@types/node@24.19.0)
+      '@matrix-org/matrix-sdk-crypto-wasm':
+        specifier: ^18.9.0
+        version: 18.9.0
       '@modelcontextprotocol/sdk':
         specifier: ^1.31.0
         version: 1.31.0(supports-color@7.2.0)(zod@4.6.5)
@@ -314,6 +317,9 @@ importers:
       cronstrue:
         specifier: ^3.27.0
         version: 3.27.0
+      fake-indexeddb:
+        specifier: ^6.2.5
+        version: 6.2.5
       fastify:
         specifier: ^5.12.5
         version: 5.12.5
@@ -326,6 +332,9 @@ importers:
       imapflow:
         specifier: ^2.2.0
         version: 2.2.1
+      jose:
+        specifier: ^6.2.12
+        version: 6.2.12
       nodemailer:
         specifier: ^10.0.13
         version: 10.0.13
@@ -1506,6 +1515,10 @@ packages:
 
   '@marijn/find-cluster-break@1.0.4':
     resolution: {integrity: sha512-Wy0V7+SGUjnF9/TkiM1hKVDPj7jKXduPNboMVtHTA8dySMURWqfg/JZ9E2Sq8JgSJmkl7k7Qe9FLeMSrSraWmQ==}
+
+  '@matrix-org/matrix-sdk-crypto-wasm@18.9.0':
+    resolution: {integrity: sha512-NtLzNDTEfNASBjNCTGZHuk7N0jrQhS6Zx2CM857rCHZYYh/rpbKGQNrJ7azktm4S1P5Jy3WU3nwJTGohGw26qQ==}
+    engines: {node: '>= 18'}
 
   '@mdx-js/react@3.1.1':
     resolution: {integrity: sha512-f++rKLQgUVYDAtECQ6fn/is15GkEH9+nZPM3MS0RcxVqoTfawHvDlSCH7JbMhAM6uJ32v3eXLvLmLvjGu7PTQw==}
@@ -4058,6 +4071,10 @@ packages:
 
   extend@3.0.2:
     resolution: {integrity: sha512-fjquC59cD7CyW6urNXK0FBufkZcoiGG80wTuPujX590cB5Ttln20E2UB4S/WARVqhXffZl2LNgS+gQdPIIim/g==}
+
+  fake-indexeddb@6.2.5:
+    resolution: {integrity: sha512-CGnyrvbhPlWYMngksqrSSUT1BAVP49dZocrHuK0SvtR0D5TMs5wP0o3j7jexDJW01KSadjBp1M/71o/KR3nD1w==}
+    engines: {node: '>=18'}
 
   fast-decode-uri-component@1.0.1:
     resolution: {integrity: sha512-WKgKWg5eUxvRZGwW8FvfbaH7AXSh2cL+3j5fMGzUMCxWBJ3dV3a7Wz8y2f/uQ0e3B6WmodD3oS54jTQ9HVTIIg==}
@@ -7088,6 +7105,8 @@ snapshots:
 
   '@marijn/find-cluster-break@1.0.4': {}
 
+  '@matrix-org/matrix-sdk-crypto-wasm@18.9.0': {}
+
   '@mdx-js/react@3.1.1(@types/react@19.3.0)(react@19.3.0)':
     dependencies:
       '@types/mdx': 2.0.14
@@ -9810,6 +9829,8 @@ snapshots:
       - supports-color
 
   extend@3.0.2: {}
+
+  fake-indexeddb@6.2.5: {}
 
   fast-decode-uri-component@1.0.1: {}
 

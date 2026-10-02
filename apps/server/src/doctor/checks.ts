@@ -140,7 +140,7 @@ export function integrationsCheck(services: Services): DoctorCheck {
 }
 
 /**
- * Your bots on Telegram, Discord and Slack (ADR 0018). A blip reconnects by
+ * Your bots on Telegram, Discord, Slack, Teams, Matrix and WeChat (ADR 0018, 0045). A blip reconnects by
  * itself; Repair asks again now. A key the app stopped accepting, or another
  * program reading the bot's messages, only a person can sort out.
  */

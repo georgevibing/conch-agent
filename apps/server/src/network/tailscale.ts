@@ -77,6 +77,69 @@ export function serveProblem(output: string): PhoneAddress['problem'] {
   return undefined;
 }
 
+/** `tailscale serve status --json`, read for the public door. */
+export function funnelOf(
+  json: string,
+  path: string,
+  target: string,
+): { port?: number; busy: number[] } {
+  let config: {
+    Web?: Record<string, { Handlers?: Record<string, { Proxy?: string }> }>;
+    AllowFunnel?: Record<string, boolean>;
+  };
+  try {
+    config = JSON.parse(json) as typeof config;
+  } catch {
+    return { busy: [] };
+  }
+  const same = (proxy: string | undefined) =>
+    (proxy ?? '').replace(/\/+$/, '') === target.replace(/\/+$/, '');
+  let port: number | undefined;
+  const busy: number[] = [];
+  for (const [hostPort, site] of Object.entries(config.Web ?? {})) {
+    const at = Number(hostPort.split(':').at(-1));
+    const handlers = Object.entries(site.Handlers ?? {});
+    if (
+      handlers.some(([mount, h]) => mount === path && same(h.Proxy)) &&
+      config.AllowFunnel?.[hostPort]
+    )
+      port = at;
+    else if (handlers.length) busy.push(at);
+  }
+  return { ...(port && { port }), busy };
+}
+
+/** What `tailscale funnel` said, as the step only a person can take. */
+export function funnelProblem(output: string): PhoneAddress['problem'] {
+  const enable = /(https:\/\/login\.tailscale\.com\/f\/[a-z]+\?[^\s"']+)/i.exec(output)?.[1];
+  if (enable)
+    return {
+      kind: 'enable-https',
+      message:
+        'Tailscale needs your OK to make one address of this computer public. Open the page, press Enable, and Conch carries on by itself.',
+      url: enable,
+    };
+  if (/funnel.*(not (enabled|allowed)|policy|attribute|nodeAttrs)/i.test(output))
+    return {
+      kind: 'other',
+      message:
+        'Your tailnet doesn’t allow public addresses yet. In Tailscale’s admin console, open Access controls and allow Funnel for this computer, then press Turn on again.',
+      url: 'https://login.tailscale.com/admin/acls',
+    };
+  return serveProblem(output);
+}
+
+export interface FunnelStatus {
+  state: 'missing' | 'stopped' | 'signed-out' | 'off' | 'on';
+  name?: string;
+  /** The public port the door is on. */
+  port?: number;
+  /** Public ports already carrying something else. */
+  busy: number[];
+  waiting?: boolean;
+  problem?: PhoneAddress['problem'];
+}
+
 export interface TailscaleDeps {
   port: () => number;
   binary?: () => string | undefined;
@@ -138,9 +201,34 @@ export class Tailscale {
     if (before.state !== 'off') return before;
     const binary = (this.deps.binary ?? tailscaleBinary)();
     if (!binary) return { state: 'missing' };
+    const { settled, said } = await this.#background(binary, [
+      'serve',
+      '--bg',
+      String(this.deps.port()),
+    ]);
+    const now = await this.status();
+    if (now.state === 'ready') return now;
+    const problem = serveProblem(said());
+    if (settled && settled.code !== 0)
+      return {
+        ...now,
+        problem: problem ?? {
+          kind: 'other',
+          message: `Tailscale didn’t turn the address on: ${said().trim().split('\n').pop() || 'it gave no reason'}`,
+        },
+      };
+    return { ...now, waiting: true, ...(problem && { problem }) };
+  }
+
+  /**
+   * Run a `tailscale serve`/`funnel` that may wait for an OK on Tailscale's
+   * page: left waiting (up to ten minutes) while the person presses Enable.
+   * Resolves after it finished, or after a few seconds with what it said so far.
+   */
+  async #background(binary: string, args: string[]) {
     this.#pending?.kill();
     this.#said = '';
-    const child = (this.deps.spawn ?? spawn)(binary, ['serve', '--bg', String(this.deps.port())], {
+    const child = (this.deps.spawn ?? spawn)(binary, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });
@@ -165,18 +253,70 @@ export class Tailscale {
       done.then((code) => ({ code })),
       new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 4_000)),
     ]);
-    const now = await this.status();
-    if (now.state === 'ready') return now;
-    const problem = serveProblem(this.#said);
+    return { settled, said: () => this.#said, waiting: () => this.#pending === child };
+  }
+
+  // ── Funnel: the public door's address (ADR 0045) ───────────────────────
+
+  /**
+   * Where the public door stands on Tailscale Funnel: whether `path` on one
+   * of Funnel's ports is public and sent to `target`, and which public ports
+   * already carry something else (the phone's private address on 443).
+   * Never changes anything.
+   */
+  async funnelStatus(path: string, target: string): Promise<FunnelStatus> {
+    const binary = (this.deps.binary ?? tailscaleBinary)();
+    if (!binary) return { state: 'missing', busy: [] };
+    const phone = await this.status();
+    if (phone.state === 'missing' || phone.state === 'stopped' || phone.state === 'signed-out')
+      return { state: phone.state, busy: [] };
+    const serve = await this.#exec(binary, ['serve', 'status', '--json']);
+    const found = serve.code === 0 ? funnelOf(serve.stdout, path, target) : { busy: [] };
+    const waiting = Boolean(this.#pending) && this.#funneling;
+    return {
+      state: found.port ? 'on' : 'off',
+      ...(phone.name && { name: phone.name }),
+      ...(found.port && { port: found.port }),
+      busy: found.busy,
+      ...(waiting && { waiting: true }),
+      ...(waiting && this.#said && { problem: serveProblem(this.#said) }),
+    };
+  }
+
+  #funneling = false;
+
+  /** Make `path` on `port` public, sent to `target` (`http://127.0.0.1:4319`). */
+  async funnel(port: number, path: string, target: string): Promise<FunnelStatus> {
+    const binary = (this.deps.binary ?? tailscaleBinary)();
+    if (!binary) return { state: 'missing', busy: [] };
+    this.#funneling = true;
+    const { settled, said, waiting } = await this.#background(binary, [
+      'funnel',
+      '--bg',
+      `--https=${port}`,
+      `--set-path=${path}`,
+      target,
+    ]);
+    const now = await this.funnelStatus(path, target);
+    if (now.state === 'on') return now;
+    const problem = funnelProblem(said());
     if (settled && settled.code !== 0)
       return {
         ...now,
         problem: problem ?? {
           kind: 'other',
-          message: `Tailscale didn’t turn the address on: ${this.#said.trim().split('\n').pop() || 'it gave no reason'}`,
+          message: `Tailscale didn’t open the address: ${said().trim().split('\n').pop() || 'it gave no reason'}`,
         },
       };
-    return { ...now, waiting: true, ...(problem && { problem }) };
+    return { ...now, ...(waiting() && { waiting: true }), ...(problem && { problem }) };
+  }
+
+  /** Close the public address again. */
+  async unfunnel(port: number, path: string): Promise<void> {
+    const binary = (this.deps.binary ?? tailscaleBinary)();
+    if (!binary) return;
+    if (this.#funneling) this.#pending?.kill();
+    await this.#exec(binary, ['funnel', `--https=${port}`, `--set-path=${path}`, 'off'], 10_000);
   }
 
   stop(): void {

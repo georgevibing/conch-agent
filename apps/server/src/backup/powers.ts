@@ -39,6 +39,9 @@ const APP_NAMES: Record<string, string> = {
   signal: 'Signal',
   imessage: 'iMessage',
   email: 'Email',
+  microsoftteams: 'Microsoft Teams',
+  matrix: 'Matrix',
+  wechat: 'WeChat',
 };
 
 const text = (value: unknown, fallback: string) => {

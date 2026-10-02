@@ -4,7 +4,9 @@ import {
   type Channel,
   type ChannelBot,
   type ChannelCheck,
+  type ChannelField,
   type ChannelHealth,
+  type ChannelHookSecrets,
   type ChannelList,
   type ChannelSecrets,
   type ChannelState,
@@ -16,6 +18,7 @@ import {
   type RoutineRun,
   type ServerEvent,
   type UpdateChannelBody,
+  ChannelSecrets as ChannelSecretsSchema,
   DISCORD_TOKEN,
   SLACK_APP_TOKEN,
   SLACK_BOT_TOKEN,
@@ -29,18 +32,20 @@ import { newId } from '../lib/ids';
 import type { SettingsStore } from '../settings/store';
 import { CHANNEL_NAMES, catalogFor } from './catalog';
 import { isLinked, ownAccount } from './linked';
+import { normalizeMatrix } from './matrix';
 import type { ChannelStore, StoredChannel } from './store';
+import { normalizeTeams } from './teams';
 import {
   type ChannelAdapter,
   type ChannelConnection,
   ChannelError,
-  type ChannelField,
   type ChannelMessage,
   type ChannelPress,
   type ChannelUser,
   type SentRef,
   type StateDetail,
 } from './types';
+import { normalizeWeChat } from './wechat';
 
 /** A hello link works this long. */
 export const PAIRING_MS = 10 * 60_000;
@@ -83,6 +88,8 @@ interface LiveChannel {
   downSince?: number;
   /** How far it has read, waiting to be kept. */
   cursor?: string;
+  /** Teams, WeChat: when the app last delivered something to the channel's address. */
+  heardAt?: number;
 }
 
 /** One turn Conch is relaying back to a chat. */
@@ -124,8 +131,17 @@ const firstName = (name: string) => name.split(/\s+/)[0] ?? name;
 /** "Hi Ada!", or just "Hi!" when all Conch knows is an address. */
 const hiTo = (name: string) => (/[@+]|^\d/.test(name) ? 'Hi!' : `Hi ${firstName(name)}!`);
 
-/** Find the key in whatever was pasted (BotFather's whole message is fine). */
-export function normalizeSecrets(secrets: ChannelSecrets): ChannelSecrets {
+/**
+ * Find the key in whatever was pasted (BotFather's whole message is fine).
+ * `kept` is what the channel already has (a new key for the same bot keeps
+ * its web address, and WeChat's token and key that were pasted into WeChat).
+ */
+export function normalizeSecrets(secrets: ChannelSecrets, kept?: ChannelSecrets): ChannelSecrets {
+  if (secrets.kind === 'microsoftteams')
+    return normalizeTeams(secrets, kept?.kind === 'microsoftteams' ? kept : undefined);
+  if (secrets.kind === 'matrix') return normalizeMatrix(secrets);
+  if (secrets.kind === 'wechat')
+    return normalizeWeChat(secrets, kept?.kind === 'wechat' ? kept : undefined);
   const pick = (value: string, pattern: RegExp) => pattern.exec(value)?.[1] ?? value.trim();
   if (secrets.kind === 'telegram')
     return { kind: 'telegram', token: pick(secrets.token, TELEGRAM_TOKEN) };
@@ -297,6 +313,10 @@ export class ChannelService {
       ...(active && {
         pairing: { expiresAt: active.expiresAt, ...(active.link && { link: active.link }) },
       }),
+      ...(stored.enabled &&
+        live?.adapter.hook && {
+          hook: { ...live.adapter.hook(), ...(live.heardAt && { heardAt: live.heardAt }) },
+        }),
       ...(stored.lastMessageAt && { lastMessageAt: stored.lastMessageAt }),
     };
   }
@@ -350,21 +370,60 @@ export class ChannelService {
         })
         .checkSlack(parts);
     }
-    const secrets = normalizeSecrets(body);
+    // Teams and WeChat have two boxes: say what's still missing rather than check half.
+    const whole = ChannelSecretsSchema.safeParse(body);
+    if (!whole.success)
+      return { ok: false, message: 'Paste the other one too, and Conch checks them together.' };
+    const secrets = normalizeSecrets(whole.data);
     try {
       const bot = await this.deps.adapter(secrets).identify(AbortSignal.timeout(20_000));
       return {
         ok: true,
         bot,
-        checked: [secrets.kind === 'email' ? 'password' : 'token'],
+        checked:
+          secrets.kind === 'email'
+            ? ['password']
+            : secrets.kind === 'telegram' || secrets.kind === 'discord'
+              ? ['token']
+              : [],
       };
     } catch (error) {
       const field = error instanceof ChannelError ? error.detail?.field : undefined;
       return {
         ok: false,
-        field: field ?? (secrets.kind === 'email' ? 'password' : 'token'),
+        field:
+          field ??
+          (secrets.kind === 'email'
+            ? 'password'
+            : secrets.kind === 'telegram' || secrets.kind === 'discord'
+              ? 'token'
+              : undefined),
         message: explain(error),
       };
+    }
+  }
+
+  /** Sign in where the app needs it (Matrix), then say who the bot is. */
+  async #settle(
+    secrets: ChannelSecrets,
+  ): Promise<{ secrets: ChannelSecrets; bot: Channel['bot'] }> {
+    let kept = secrets;
+    const first = this.deps.adapter(secrets);
+    try {
+      if (first.settle) kept = await first.settle(AbortSignal.timeout(30_000));
+      const bot = await (kept === secrets ? first : this.deps.adapter(kept)).identify(
+        AbortSignal.timeout(20_000),
+      );
+      return { secrets: kept, bot };
+    } catch (error) {
+      // A session made just now that won't be used: end it.
+      if (kept !== secrets)
+        await this.deps
+          .adapter(kept)
+          .forget?.()
+          .catch(() => undefined);
+      const field = error instanceof ChannelError ? error.detail?.field : undefined;
+      throw new ChannelServiceError('invalid', explain(error), field);
     }
   }
 
@@ -375,15 +434,8 @@ export class ChannelService {
         'invalid',
         `${CHANNEL_NAMES[input.kind]} links with a code: open Channels and choose ${CHANNEL_NAMES[input.kind]}.`,
       );
-    const secrets = normalizeSecrets(input);
+    const { secrets, bot } = await this.#settle(normalizeSecrets(input));
     const adapter = this.deps.adapter(secrets);
-    let bot;
-    try {
-      bot = await adapter.identify(AbortSignal.timeout(20_000));
-    } catch (error) {
-      const field = error instanceof ChannelError ? error.detail?.field : undefined;
-      throw new ChannelServiceError('invalid', explain(error), field);
-    }
     // The same bot again (a new key, or connected twice): update it instead of adding another.
     const same = (await this.deps.store.all()).find(
       (c) => c.kind === secrets.kind && c.bot.id === bot.id,
@@ -550,6 +602,15 @@ export class ChannelService {
     });
   }
 
+  /** The assistant's name, and the owner's first name, for what a bot says about itself. */
+  async profile(): Promise<{ assistant: string; owner?: string }> {
+    const settings = await this.deps.settings.get();
+    return {
+      assistant: settings.persona.name,
+      ...(settings.profile.name && { owner: firstName(settings.profile.name) }),
+    };
+  }
+
   async #prepare(adapter: ChannelAdapter, id: string) {
     const settings = await this.deps.settings.get();
     await adapter
@@ -596,22 +657,32 @@ export class ChannelService {
           : undefined;
     if (!merged)
       throw new ChannelServiceError('invalid', 'Connect this email account again.', 'password');
-    const secrets = normalizeSecrets(merged);
-    if (secrets.kind !== current.kind)
-      throw new ChannelServiceError('invalid', `That’s a key for ${CHANNEL_NAMES[secrets.kind]}.`);
-    let bot;
-    try {
-      bot = await this.deps.adapter(secrets).identify(AbortSignal.timeout(20_000));
-    } catch (error) {
-      const field = error instanceof ChannelError ? error.detail?.field : undefined;
-      throw new ChannelServiceError('invalid', explain(error), field);
-    }
-    if (bot.id !== current.bot.id)
+    if (merged.kind !== current.kind)
+      throw new ChannelServiceError('invalid', `That’s a key for ${CHANNEL_NAMES[merged.kind]}.`);
+    const { secrets, bot } = await this.#settle(normalizeSecrets(merged, kept));
+    if (bot.id !== current.bot.id) {
+      await this.deps
+        .adapter(secrets)
+        .forget?.()
+        .catch(() => undefined);
       throw new ChannelServiceError(
         'invalid',
         `That key belongs to another bot${bot.username ? ` (@${bot.username})` : ''}. To use it, connect it as a new channel.`,
-        secrets.kind === 'slack' ? 'botToken' : secrets.kind === 'email' ? 'address' : 'token',
+        secrets.kind === 'slack'
+          ? 'botToken'
+          : secrets.kind === 'email'
+            ? 'address'
+            : secrets.kind === 'telegram' || secrets.kind === 'discord'
+              ? 'token'
+              : undefined,
       );
+    }
+    // The old session (Matrix) is replaced by the new one.
+    if (kept && kept.kind === 'matrix' && JSON.stringify(kept) !== JSON.stringify(secrets))
+      await this.deps
+        .adapter(kept)
+        .forget?.()
+        .catch(() => undefined);
     await this.deps.store.setSecrets(id, secrets);
     const stored =
       (await this.deps.store.update(id, (c) => ({ ...c, bot, enabled: true }))) ?? current;
@@ -728,6 +799,12 @@ export class ChannelService {
         stop: (chatId) => this.#quietly(this.#stopFromApp(id, chatId), 'stop'),
         healed: (message) => this.deps.onHeal(message),
         joined: () => this.#quietly(this.#refreshBot(id), 'refresh'),
+        heard: () => {
+          const first = live.heardAt === undefined;
+          live.heardAt = this.#now;
+          if (first) void this.#emit(id);
+        },
+        changed: () => void this.#emit(id),
         // Kept a moment later, so a busy minute is one write, not hundreds.
         cursor: (value) => {
           live.cursor = value;
@@ -813,6 +890,15 @@ export class ChannelService {
     this.#openPairing(stored);
     await this.#emit(id);
     return this.#view(stored);
+  }
+
+  /** What to paste in the app's settings (WeChat's token and key), for the setup page. */
+  async hookSecrets(id: string): Promise<ChannelHookSecrets> {
+    await this.#require(id);
+    const live = this.#live.get(id);
+    const secrets = live?.adapter.hookSecrets?.() ?? live?.adapter.hook?.();
+    if (!secrets) throw new ChannelServiceError('not-found', 'This channel has no web address.');
+    return secrets;
   }
 
   #openPairing(stored: StoredChannel) {

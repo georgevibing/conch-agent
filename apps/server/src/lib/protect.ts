@@ -19,6 +19,10 @@ export function protectedPaths(home: string): string[] {
     // A linked WhatsApp or Signal: whoever has these reads and sends your messages (ADR 0043).
     join(home, 'whatsapp.secrets.json'),
     join(home, 'signal'),
+    // A Matrix session's encryption store, and what Teams chats Conch knows (ADR 0045).
+    join(home, 'channels'),
+    // Whether the public door is open: the agent mustn't open it.
+    join(home, 'door.json'),
     join(home, 'access.json'),
     // Task evidence is authority: the model must never forge completion or erase dedupe.
     join(home, 'tasks.json'),

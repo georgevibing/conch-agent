@@ -45,14 +45,19 @@ import { backupCheck } from './backup/doctor';
 import { BackupService } from './backup/service';
 import { BrowserService } from './browser/service';
 import { adapterFor, type ChannelEndpoints, slackCheckFor } from './channels/adapters';
+import { ChannelDoorService, doorCheck } from './channels/door';
 import { ChatDb, imessageSetup, MESSAGES_DB, openForImessage } from './channels/imessage';
-import { MockDiscord } from './channels/mock/discord';
 import { MockMail } from './channels/mock/email';
 import { MockMessages } from './channels/mock/imessage';
+import { channelKeys } from './channels/keys';
+import { MockDiscord } from './channels/mock/discord';
+import { MockMatrix } from './channels/mock/matrix';
 import { MockSlack } from './channels/mock/slack';
+import { MockTeams } from './channels/mock/teams';
 import { MockTelegram } from './channels/mock/telegram';
 import { linkedChannels, type LinkedChannels } from './channels/linked-setup';
 import { ChannelLinking } from './channels/linking';
+import { MockWeChat } from './channels/mock/wechat';
 import { CHANNEL_NAMES, ChannelService } from './channels/service';
 import { ChannelStore } from './channels/store';
 import { TerminalService } from './terminal/service';
@@ -221,6 +226,11 @@ export class Services {
   readonly channelLinking: ChannelLinking;
   readonly mockMail?: MockMail;
   readonly mockMessages?: MockMessages;
+  readonly mockTeams?: MockTeams;
+  readonly mockMatrix?: MockMatrix;
+  readonly mockWeChat?: MockWeChat;
+  /** The public door, for the channels that only deliver to a web address (ADR 0045). */
+  readonly door: ChannelDoorService;
   #login?: { handle: LoginHandle; state: LoginState };
   #channelStore?: ChannelStore;
   #sweeper?: NodeJS.Timeout;
@@ -627,6 +637,27 @@ export class Services {
     this.mockTelegram = config.CONCH_ENGINE === 'mock' ? new MockTelegram() : undefined;
     this.mockDiscord = config.CONCH_ENGINE === 'mock' ? new MockDiscord() : undefined;
     this.mockSlack = config.CONCH_ENGINE === 'mock' ? new MockSlack() : undefined;
+    this.mockTeams = config.CONCH_ENGINE === 'mock' ? new MockTeams() : undefined;
+    this.mockMatrix = config.CONCH_ENGINE === 'mock' ? new MockMatrix() : undefined;
+    this.mockWeChat = config.CONCH_ENGINE === 'mock' ? new MockWeChat() : undefined;
+    // In mock mode the "internet" is this computer: what's sent to the public address reaches the door.
+    const door: ChannelDoorService = new ChannelDoorService({
+      home: config.CONCH_HOME,
+      port: config.CONCH_ENGINE === 'mock' ? 0 : config.CONCH_DOOR_PORT,
+      tailscale: {
+        funnelStatus: (path, target) => this.tailscale.funnelStatus(path, target),
+        funnel: (port, path, target) => this.tailscale.funnel(port, path, target),
+        unfunnel: (port, path) => this.tailscale.unfunnel(port, path),
+      },
+      ...(config.CONCH_ENGINE === 'mock' && {
+        fetch: (url: string | URL | Request, init?: RequestInit) =>
+          fetch(door.localFor(String(url)), init),
+      }),
+      onHeal: (message) => void this.healed.note('channels', message),
+    });
+    this.door = door;
+    if (this.mockTeams) this.mockTeams.resolve = (url) => door.localFor(url);
+    if (this.mockWeChat) this.mockWeChat.resolve = (url) => door.localFor(url);
     this.mockMail = config.CONCH_ENGINE === 'mock' ? new MockMail() : undefined;
     this.mockMessages = config.CONCH_ENGINE === 'mock' ? new MockMessages() : undefined;
     this.linked = linkedChannels({
@@ -635,6 +666,8 @@ export class Services {
       heal,
     });
     const endpoints: ChannelEndpoints = {
+      door,
+      home: config.CONCH_HOME,
       whatsapp: this.linked.whatsapp,
       signal: this.linked.signal,
       ...(this.mockMessages && { imessage: this.mockMessages.endpoints }),
@@ -670,6 +703,8 @@ export class Services {
     });
     // Conversations and routine runs reach the channels through the same stream as the web app.
     this.broadcast.on((event) => this.channels.onEvent(event));
+    door.onChange((now) => this.broadcast.emit({ type: 'channel.door', door: now }));
+    this.doctor.register(doorCheck(door));
     this.background = this.#background(config);
     this.push = this.#push(config);
     this.broadcast.on((event) => void this.push.onEvent(event).catch(() => undefined));
@@ -732,6 +767,21 @@ export class Services {
       }
       if (this.mockMessages)
         await this.mockMessages.start(Number(process.env.CONCH_MOCK_MESSAGES_PORT ?? 0));
+      if (this.mockTeams) {
+        await this.mockTeams.start(Number(process.env.CONCH_MOCK_TEAMS_PORT ?? 0));
+        endpoints.teamsLogin = this.mockTeams.login;
+        endpoints.teamsOpenId = this.mockTeams.openId;
+        endpoints.teamsConnectors = [this.mockTeams.serviceUrl];
+      }
+      // The Matrix homeserver is whatever's typed: the pretend one says where it is.
+      if (this.mockMatrix)
+        await this.mockMatrix.start(Number(process.env.CONCH_MOCK_MATRIX_PORT ?? 0));
+      if (this.mockWeChat) {
+        await this.mockWeChat.start(Number(process.env.CONCH_MOCK_WECHAT_PORT ?? 0));
+        endpoints.wechat = this.mockWeChat.base;
+        endpoints.wecom = this.mockWeChat.socket;
+        endpoints.wechatFiles = [this.mockWeChat.base];
+      }
     })();
   }
 
@@ -1113,18 +1163,7 @@ export class Services {
         });
         continue;
       }
-      const tokens: [string, string][] =
-        secrets.kind === 'slack'
-          ? [
-              ['bot token', secrets.botToken],
-              ['app token', secrets.appToken],
-            ]
-          : secrets.kind === 'email'
-            ? [['app password', secrets.password]]
-            : secrets.kind === 'imessage'
-              ? []
-              : [['bot token', secrets.token]];
-      for (const [label, value] of tokens)
+      for (const [label, value] of channelKeys(secrets))
         out.push({
           id: id('channel', channel.id, label),
           title: `${name} ${label}`,
@@ -1180,6 +1219,7 @@ export class Services {
     await this.providers.load();
     this.network.start();
     await this.#channelsReady;
+    void this.door.start().catch((error: unknown) => console.error('[door]', error));
     void this.channels.start().catch((error: unknown) => console.error('[channels]', error));
     // Uploads nobody sent (a closed tab, a dropped draft) are cleared on start and hourly.
     void this.attachments.sweep().catch(() => undefined);
@@ -1197,6 +1237,7 @@ export class Services {
     this.channels.stop();
     this.channelLinking.stop();
     this.linked.stop();
+    this.door.stop();
     this.tailscale.stop();
     this.tidy.stop();
     this.memoryIndex.close();
@@ -1206,6 +1247,9 @@ export class Services {
     void this.mockSlack?.stop();
     void this.mockMail?.stop();
     void this.mockMessages?.stop();
+    void this.mockTeams?.stop();
+    void this.mockMatrix?.stop();
+    void this.mockWeChat?.stop();
     clearInterval(this.#sweeper);
     this.#sweeper = undefined;
     this.network.stop();

@@ -10,6 +10,8 @@ import type { TailscaleDeps } from './tailscale';
 
 export function pretendTailscale(): Pick<TailscaleDeps, 'binary' | 'exec' | 'spawn'> {
   let serving = false;
+  /** The public door's Funnel, once someone turned it on: `{port, path, target}`. */
+  let funnel: { port: number; path: string; target: string } | undefined;
   const name = 'conch-studio.tail1234.ts.net';
   return {
     binary: () => '/pretend/tailscale',
@@ -20,26 +22,40 @@ export function pretendTailscale(): Pick<TailscaleDeps, 'binary' | 'exec' | 'spa
           stderr: '',
           code: 0,
         };
-      if (args[0] === 'serve' && args[1] === 'status')
+      if (args[0] === 'serve' && args[1] === 'status') {
+        const web: Record<string, { Handlers: Record<string, { Proxy: string }> }> = {};
+        if (serving)
+          web[`${name}:443`] = {
+            Handlers: { '/': { Proxy: `http://127.0.0.1:${process.env.CONCH_PORT ?? '4317'}` } },
+          };
+        if (funnel)
+          web[`${name}:${funnel.port}`] = { Handlers: { [funnel.path]: { Proxy: funnel.target } } };
         return {
-          stdout: JSON.stringify(
-            serving
-              ? { Web: { [`${name}:443`]: { Handlers: { '/': { Proxy: 'http://127.0.0.1:0' } } } } }
-              : {},
-          ).replace(':0', `:${process.env.CONCH_PORT ?? '4317'}`),
+          stdout: JSON.stringify({
+            Web: web,
+            ...(funnel && { AllowFunnel: { [`${name}:${funnel.port}`]: true } }),
+          }),
           stderr: '',
           code: 0,
         };
+      }
+      if (args[0] === 'funnel' && args.at(-1) === 'off') funnel = undefined;
       return { stdout: '', stderr: '', code: 0 };
     },
-    spawn: (() => {
+    spawn: ((_file: string, args: string[]) => {
       const child = Object.assign(new EventEmitter(), {
         stdout: new EventEmitter(),
         stderr: new EventEmitter(),
         kill: () => true,
       });
       setTimeout(() => {
-        serving = true;
+        if (args[0] === 'funnel') {
+          const port = Number(
+            /^--https=(\d+)$/.exec(args.find((a) => a.startsWith('--https=')) ?? '')?.[1] ?? 443,
+          );
+          const path = args.find((a) => a.startsWith('--set-path='))?.slice(11) ?? '/';
+          funnel = { port, path, target: args.at(-1) ?? '' };
+        } else serving = true;
         child.emit('close', 0);
       }, 50);
       return child;

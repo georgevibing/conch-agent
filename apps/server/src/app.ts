@@ -210,7 +210,11 @@ export async function buildApp(services: Services) {
         signal: services.linked.mockSignal?.base,
         email: services.mockMail?.base,
         imessage: services.mockMessages?.base,
+        microsoftteams: services.mockTeams?.base,
+        matrix: services.mockMatrix?.base,
+        wechat: services.mockWeChat?.base,
       })),
+    services.door,
   );
   registerChannelLinkRoutes(app, services.channelLinking, gate);
   app.addHook('onClose', () => services.browser.stop());

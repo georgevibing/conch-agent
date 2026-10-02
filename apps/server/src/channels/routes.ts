@@ -5,14 +5,17 @@ import {
   Id,
   OpenImessageBody,
   ReplaceChannelTokenBody,
+  SetChannelDoorBody,
   UpdateChannelBody,
 } from '@conch/protocol';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { z } from 'zod';
 
 import type { Gatekeeper } from '../security';
+import { type ChannelDoorService, DoorError } from './door';
 import type { ChannelService } from './service';
 import { ChannelServiceError } from './service';
+import { teamsAppPackage } from './teams-app';
 
 const STATUS: Record<ChannelServiceError['code'], number> = {
   'not-found': 404,
@@ -33,6 +36,8 @@ export function registerChannelRoutes(
   gate: Gatekeeper,
   /** With the mock engine only: where the pretend apps are, for tests and demos. */
   mocks?: () => Record<string, string | undefined>,
+  /** The public door (Teams, WeChat), ADR 0045. */
+  door?: ChannelDoorService,
 ) {
   const parse = <T extends z.ZodType>(schema: T, value: unknown, reply: FastifyReply) => {
     const result = schema.safeParse(value);
@@ -66,6 +71,30 @@ export function registerChannelRoutes(
   };
 
   app.get('/api/channels', () => channels.list());
+
+  // ── The public door (ADR 0045) ──────────────────────────────────────────
+  // Opening it lets the internet reach this computer's door: a trust decision,
+  // like connecting a bot. Closing it never needs one.
+  if (door) {
+    app.get('/api/channels/door', () => door.status());
+    app.post('/api/channels/door/tailscale', async (request, reply) => {
+      if (!trusted(request, reply)) return reply;
+      return door.useTailscale();
+    });
+    app.put('/api/channels/door', async (request, reply) => {
+      const body = parse(SetChannelDoorBody, request.body, reply);
+      if (!body || !trusted(request, reply)) return reply;
+      try {
+        return await door.useOwn(body.url);
+      } catch (error) {
+        if (error instanceof DoorError)
+          return reply.code(400).send({ error: 'invalid', message: error.message });
+        throw error;
+      }
+    });
+    app.post('/api/channels/door/check', () => door.check());
+    app.delete('/api/channels/door', () => door.turnOff());
+  }
 
   if (mocks) app.get('/api/channels/mock', () => mocks());
 
@@ -137,6 +166,43 @@ export function registerChannelRoutes(
     try {
       await channels.remove(request.params.id);
       return reply.code(204).send();
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
+
+  // What to paste in WeChat's server settings: its Token and EncodingAESKey are keys.
+  app.get<{ Params: { id: string } }>('/api/channels/:id/hook', async (request, reply) => {
+    if (!trusted(request, reply)) return reply;
+    try {
+      const hook = await channels.hookSecrets(request.params.id);
+      return reply.header('cache-control', 'no-store').send(hook);
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
+
+  /** The Teams app to upload, made for this bot. */
+  app.get<{ Params: { id: string } }>('/api/channels/:id/teams-app', async (request, reply) => {
+    try {
+      const channel = await channels.get(request.params.id);
+      if (channel.kind !== 'microsoftteams')
+        return reply.code(404).send({ error: 'not-found', message: 'That isn’t a Teams channel.' });
+      const profile = await channels.profile();
+      const zip = teamsAppPackage({
+        appId: channel.bot.id,
+        name: profile.assistant,
+        ...(profile.owner && { owner: profile.owner }),
+        website: door?.status().url ?? 'https://teams.microsoft.com',
+      });
+      return reply
+        .header('content-type', 'application/zip')
+        .header(
+          'content-disposition',
+          `attachment; filename="${profile.assistant.replace(/[^\w.-]+/g, '-') || 'Conch'}-teams-app.zip"`,
+        )
+        .header('cache-control', 'no-store')
+        .send(zip);
     } catch (error) {
       return fail(reply, error);
     }

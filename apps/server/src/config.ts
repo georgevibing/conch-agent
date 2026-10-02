@@ -8,6 +8,7 @@ import { z } from 'zod';
 export const Env = z.object({
   CONCH_HOST: z.string().default('127.0.0.1'),
   CONCH_PORT: z.coerce.number().int().min(1).max(65535).default(4317),
+  CONCH_DOOR_PORT: z.coerce.number().int().min(1).max(65535).default(4319),
   CONCH_ALLOW_REMOTE: z
     .enum(['0', '1'])
     .default('0')
@@ -66,6 +67,11 @@ export const ENV_ABOUT: Record<keyof Config, EnvAbout> = {
     about:
       'Pins the port. A pinned port that’s taken is reported, never swapped for the next free one.',
     unset: '4317, or the next free port when another program has it',
+  },
+  CONCH_DOOR_PORT: {
+    about:
+      'The port of the public door, the separate listener on this computer that Teams and WeChat deliver messages to (ADR 0045). It serves only those channels’ signed deliveries; the next free one of the ten after it is used when it’s taken.',
+    unset: '4319',
   },
   CONCH_ALLOW_REMOTE: {
     about:

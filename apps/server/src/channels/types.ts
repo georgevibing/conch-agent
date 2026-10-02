@@ -1,4 +1,12 @@
-import type { ChannelBot, ChannelKind, ChannelSecrets, ChannelState } from '@conch/protocol';
+import type {
+  ChannelBot,
+  ChannelField,
+  ChannelHook,
+  ChannelHookSecrets,
+  ChannelKind,
+  ChannelSecrets,
+  ChannelState,
+} from '@conch/protocol';
 
 /** Someone writing to the bot, as the app describes them. */
 export interface ChannelUser {
@@ -73,6 +81,10 @@ export interface ChannelEvents {
   healed(message: string): void;
   /** Discord: the bot joined a server (so people there can now message it). */
   joined?(): void;
+  /** Teams, WeChat: the app delivered something to the channel's address that checked out. */
+  heard?(): void;
+  /** Something the page shows changed (the public address), though the state didn't. */
+  changed?(): void;
   /**
    * How far it has read (iMessage's last row, email's last UID), kept with the
    * channel so a restart carries on from there instead of answering twice.
@@ -139,10 +151,19 @@ export interface ChannelAdapter {
    * own mail, iMessage to yourself): they're let in on connecting, with no hello.
    */
   owner?(): ChannelUser | undefined;
+  /**
+   * Turn what the person typed into what Conch keeps (Matrix: sign in with
+   * the password once, and keep only the session's access token).
+   */
+  settle?(signal?: AbortSignal): Promise<ChannelSecrets>;
+  /** Teams, WeChat: the address their servers deliver to (ADR 0045). */
+  hook?(): ChannelHook | undefined;
+  /** WeChat: what to paste in its server settings, with the token and key Conch made. */
+  hookSecrets?(): ChannelHookSecrets | undefined;
 }
 
-/** Which box on the connect page was wrong. */
-export type ChannelField = 'token' | 'botToken' | 'appToken' | 'password' | 'address' | 'server';
+/** Which box on the connect page was wrong (the protocol's list). */
+export type { ChannelField };
 
 export type AdapterFactory = (secrets: ChannelSecrets) => ChannelAdapter;
 
@@ -219,4 +240,22 @@ export function redact(text: string, ...secrets: (string | undefined)[]): string
 export function dataUrl(bytes: Buffer, mimeType = 'image/jpeg'): string | undefined {
   if (!bytes.length || bytes.length > 120_000 || !mimeType.startsWith('image/')) return undefined;
   return `data:${mimeType};base64,${bytes.toString('base64')}`;
+}
+
+/**
+ * A person's id in the app as a Conch `Id` (letters, digits, `_` and `-`):
+ * kept as it is when it already is one, otherwise written in base64url
+ * behind an `X` (Matrix's `@ada:matrix.org`, a WeCom id with a dot). It
+ * always reads back with `appId`.
+ */
+export function personId(raw: string): string {
+  if (/^[A-WYZa-z0-9][A-Za-z0-9_-]{0,127}$/.test(raw)) return raw;
+  const encoded = `X${Buffer.from(raw, 'utf8').toString('base64url')}`;
+  if (encoded.length > 128) throw new ChannelError('refused', 'That account’s name is too long.');
+  return encoded;
+}
+
+/** The app's own id for someone, from `personId`. */
+export function appId(id: string): string {
+  return id.startsWith('X') ? Buffer.from(id.slice(1), 'base64url').toString('utf8') : id;
 }

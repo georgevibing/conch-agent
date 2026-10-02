@@ -5,11 +5,15 @@ import { SignalAdapter } from './signal';
 import type { SignalDaemon } from './signal-cli';
 import { EmailAdapter, type MailEndpoints } from './email';
 import { ImessageAdapter, type ImessageOptions } from './imessage';
+import type { ChannelDoorService } from './door';
+import { MatrixAdapter } from './matrix';
 import { SLACK_API, SlackAdapter } from './slack';
+import { TeamsAdapter } from './teams';
 import { TELEGRAM_API, TelegramAdapter } from './telegram';
 import type { ChannelAdapter } from './types';
 import { type WaConnect, WhatsAppAdapter } from './whatsapp';
 import type { WhatsAppSessions } from './whatsapp-sessions';
+import { WeChatOfficialAdapter, WeComBotAdapter } from './wechat';
 
 /** Where each app's API lives; tests and the mock engine point these at pretend ones. */
 export interface ChannelEndpoints {
@@ -24,6 +28,18 @@ export interface ChannelEndpoints {
   email?: MailEndpoints;
   /** The pretend Messages: its database, its attachments and how it sends. */
   imessage?: Omit<ImessageOptions, 'mode' | 'handle'>;
+  /** Teams: Microsoft's sign-in (tokens), Bot Framework's OpenID metadata, and connector hosts allowed besides Microsoft's. */
+  teamsLogin?: string;
+  teamsOpenId?: string;
+  teamsConnectors?: string[];
+  /** WeChat: the Official Account API, and WeCom's bot WebSocket. */
+  wechat?: string;
+  wecom?: string;
+  /** Where files may come from besides Tencent's own servers (the pretend WeChat). */
+  wechatFiles?: string[];
+  /** The public door (Teams, Official Accounts), and where channels keep what they remember. */
+  door?: ChannelDoorService;
+  home?: string;
 }
 
 /** The adapter for a bot's keys. */
@@ -52,6 +68,14 @@ export function adapterFor(
       });
     case 'email':
       return new EmailAdapter(secrets, endpoints.email);
+    case 'microsoftteams':
+      return new TeamsAdapter(secrets, endpoints);
+    case 'matrix':
+      return new MatrixAdapter(secrets, endpoints);
+    case 'wechat':
+      return secrets.mode === 'wecom'
+        ? new WeComBotAdapter(secrets, endpoints)
+        : new WeChatOfficialAdapter(secrets, endpoints);
   }
 }
 

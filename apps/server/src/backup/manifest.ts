@@ -275,7 +275,19 @@ export const RULES: readonly BackupRule[] = [
     match: 'channels.json',
     class: 'kept',
     group: 'integrations',
-    why: 'Your channels (bots on Telegram, Discord and Slack; your linked WhatsApp and Signal; iMessage; your email account) and who may talk to them, not their keys.',
+    why: 'Your channels (bots on Telegram, Discord, Slack, Microsoft Teams, Matrix and WeChat; your linked WhatsApp and Signal; iMessage; your email account) and who may talk to them, not their keys.',
+  },
+  {
+    match: 'channels/teams-*.json',
+    class: 'kept',
+    group: 'integrations',
+    why: 'Where each Teams chat with your bot lives, so routine results reach you there. No keys.',
+  },
+  {
+    match: 'door.json',
+    class: 'kept',
+    group: 'integrations',
+    why: 'Whether Teams and WeChat reach Conch through Tailscale Funnel or an address of your own. Restored on another computer, it opens nothing by itself.',
   },
   {
     match: 'conversations/index.json',
@@ -361,6 +373,12 @@ export const RULES: readonly BackupRule[] = [
     class: 'secret',
     group: 'secrets',
     why: 'Your Signal link: signal-cli’s keys as a linked device and its database. Whoever has them can read and send your messages.',
+  },
+  {
+    match: 'channels/matrix-*.json',
+    class: 'secret',
+    group: 'secrets',
+    why: 'A Matrix session’s encryption keys and where its sync left off. They open only with that channel’s key.',
   },
   {
     match: 'vault/vault.json',

@@ -66,11 +66,27 @@ export const CHANNEL_CATALOG: ChannelCatalogEntry[] = [
   {
     id: 'microsoftteams',
     name: 'Microsoft Teams',
-    tagline: 'Coming soon.',
+    tagline: 'A private chat with your assistant, at work.',
     color: '#6264A7',
-    available: false,
+    minutes: 8,
+    available: true,
   },
-  { id: 'matrix', name: 'Matrix', tagline: 'Coming soon.', color: '#0DBD8B', available: false },
+  {
+    id: 'matrix',
+    name: 'Matrix',
+    tagline: 'Encrypted, on the homeserver you choose.',
+    color: '#0DBD8B',
+    minutes: 3,
+    available: true,
+  },
+  {
+    id: 'wechat',
+    name: 'WeChat',
+    tagline: 'Through a WeCom bot, or your own Official Account. 微信',
+    color: '#07C160',
+    minutes: 5,
+    available: true,
+  },
 ];
 
 export const CHANNEL_NAMES: Record<ChannelKind, string> = {
@@ -81,6 +97,9 @@ export const CHANNEL_NAMES: Record<ChannelKind, string> = {
   signal: 'Signal',
   imessage: 'iMessage',
   email: 'Email',
+  microsoftteams: 'Microsoft Teams',
+  matrix: 'Matrix',
+  wechat: 'WeChat',
 };
 
 /** Channels that only work on some systems: elsewhere the tile says so and can't be chosen. */
