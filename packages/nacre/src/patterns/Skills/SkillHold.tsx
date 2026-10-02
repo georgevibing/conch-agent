@@ -90,7 +90,12 @@ export function SkillHold({
                 </span>
               </button>
             </Popover.Trigger>
-            <Popover.Content align="start" side="top" className={styles.popover}>
+            <Popover.Content
+              align="start"
+              side="top"
+              className={styles.popover}
+              aria-label={`What ${hold.title} can do`}
+            >
               <SkillPermissionList
                 variant="compact"
                 capabilities={hold.capabilities}
