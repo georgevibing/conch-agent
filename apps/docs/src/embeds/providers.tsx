@@ -106,7 +106,10 @@ export function ProviderFacts({ id }: { id: string }) {
     ],
   ];
   if (provider.can.account)
-    facts.push(['Also brings', `The connectors of ${provider.can.account}`]);
+    facts.push([
+      'Also brings',
+      `The connectors of ${provider.can.account}; Conch brings in the ones it can connect, for every model`,
+    ]);
   if (provider.key) facts.push(['A key looks like', provider.key.placeholder]);
 
   return (

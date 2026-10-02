@@ -4,7 +4,7 @@ description: Connect Notion, GitHub, Gmail and more from a gallery, and decide w
 order: 4
 ---
 
-Connect the apps you already use, and your assistant can look things up and act in them: find a page in Notion, open an issue in GitHub, check your calendar. Apps connected to Conch work across providers with models that support tools. Connections owned by a provider stay with that provider. There is no file to edit.
+Connect the apps you already use, and your assistant can look things up and act in them: find a page in Notion, open an issue in GitHub, catch up on Slack. Every app in the gallery belongs to Conch, so it works with every provider and every model that can use tools. There is no file to edit.
 
 In Conch, the page is called **Integrations**.
 
@@ -16,7 +16,7 @@ In Conch, the page is called **Integrations**.
 
 You sign in on the app's own page, so Conch never sees your password. What it keeps stays on this computer, readable by you alone, and is never shown again.
 
-Gmail, Google Calendar and Google Drive are apps like the others: press their tile. Gmail connects with an app password; Calendar and Drive need your own Google Cloud app, once. Both are described below. Slack may connect through your provider’s account; that connection works only with that provider’s models. Provider-owned connections are shown separately.
+Gmail, Google Calendar and Google Drive are apps like the others: press their tile. Gmail connects with an app password; Calendar and Drive need your own Google Cloud app, once. Both are described below. Slack connects with your own Slack app, also described below.
 
 ## Or connect from a chat
 
@@ -61,7 +61,24 @@ Conch checks your apps and keeps their sign-ins fresh. One that needs you moves 
 > [!WARNING]
 > A program you add runs as you and can do anything you can. Only add programs from people you trust.
 
-Apps a provider set up by itself are listed under **From your providers**, and only work with that provider. Where Conch can connect the same app, **Use with every model** brings it in.
+## Apps a provider set up by itself
+
+A provider can have apps of its own: set up in its settings, brought by a plugin, or connected in its account. When Conch can connect the same app itself, it does so on its own and shows it under **Connected**, so it works with every model. If it needs you to sign in, its card says so. **Health → Fixed on its own** notes each one.
+
+What Conch can't connect (a program in the provider's settings, a plugin) only works with that provider. It's in **Settings → Providers → Set up inside a provider**, folded away. Something you disconnect stays disconnected; to bring it back, press **Use with every model** there.
+
+## Connect Slack
+
+Slack belongs to Conch too, so every model can read and send in it. You make a small Slack app in your own workspace, once, and paste one key.
+
+1. In **Integrations**, choose **Slack**. If you already connected the Slack channel, Conch offers to use the same app: press **Use it**.
+2. Otherwise press **Make the app in Slack**. Slack opens with everything filled in: pick your workspace, press **Next**, then **Create**.
+3. Open **Install App**, press **Install to Workspace** (or **Reinstall**), then **Allow**.
+4. Copy the **User OAuth Token**. It starts with `xoxp-`. Paste it in Conch, and it's connected.
+
+Your assistant can then see the channels you're in, search, and catch up on a channel. Sending a message always shows you the exact words and the channel, and asks; you can turn sending off, but never let it go by itself. What it reads in Slack is other people's words, so after reading, anything that could send something out asks first.
+
+An app made before Slack worked this way can't read for you yet. The dialog says so, and **No User OAuth Token there?** has the settings to paste on the app's **App Manifest** page. **Disconnect** makes Conch forget the key and asks Slack to forget it too.
 
 ## Connect Gmail with an app password
 

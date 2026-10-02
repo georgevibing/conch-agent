@@ -27,3 +27,4 @@ Once Conch knows it's you, the app greets you by name.
 - **Slack showed an empty form?** Conch has the settings ready to paste: on the first step, open **Slack showed an empty form?**
 - **While it works** your message gets 👀. Slack has no "typing…" for apps.
 - **It answers direct messages only.**
+- **The same app reads Slack for you too.** To let your assistant search and catch up on your channels with any model, choose **Slack** in **Integrations** and press **Use it**: it needs one more key from the same app, the **User OAuth Token**. See [Apps](../features/apps.md#connect-slack).

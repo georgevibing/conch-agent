@@ -18,7 +18,7 @@ const AUTH: Record<IntegrationRef['auth'], { label: string; tone: BadgeTone }> =
   oauth: { label: 'One-click sign-in', tone: 'accent' },
   token: { label: 'Paste a token', tone: 'neutral' },
   none: { label: 'Nothing to sign in to', tone: 'neutral' },
-  account: { label: 'Through your provider’s account', tone: 'info' },
+  slack: { label: 'Your own Slack app · one key', tone: 'accent' },
 };
 
 /** Every app in Conch's gallery, by kind, with how each one signs in. */

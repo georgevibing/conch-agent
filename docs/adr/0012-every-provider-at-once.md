@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-09-29
+- Amended by: [ADR 0049](./0049-every-app-works-with-every-model.md) (every app in the gallery is Conch's own; provider servers come in by themselves)
 - Amends: [ADR 0010](./0010-providers.md) ("Conch uses one provider at a time")
 
 ## Context

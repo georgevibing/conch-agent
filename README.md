@@ -108,7 +108,8 @@ shows it all, searchable and exportable. ([ADR 0032](./docs/adr/0032-it-learns-y
 
 **Apps, skills and routines — for every provider.** Connect Notion, Gmail, Google
 Calendar and Drive, Slack, GitHub, Linear, Atlassian, Home Assistant, Stripe and
-more from a gallery, no JSON editing; Conch keeps their sign-ins fresh, and offers
+more from a gallery, no JSON editing — every one works with every model, whichever
+provider answers, and what a provider set up by itself comes in on its own; Conch keeps their sign-ins fresh, and offers
 to connect one when you ask about it in a chat. Agent Skills (`SKILL.md`) and your
 own commands work with every model. Routines run tasks on a schedule you read in
 plain words, and nothing runs until you turn it on.

@@ -173,7 +173,12 @@ src/
   provider. Engines declare `integrations.mode`: `native`
   engines get servers over stdin (`setMcpServers`, never argv), `bridge` engines get
   `bridgedTools` from Conch's own MCP client. Servers a provider configured itself
-  are listed per provider (`ExternalIntegration.provider`) and only work with it.
+  are brought into Conch when Conch can connect them (a portable catalog app or a
+  plain web address, through the SSRF guard, never one you disconnected:
+  `integrations.json` `removed`); the rest are listed per provider
+  (`ExternalIntegration.provider`) and only work with it (ADR 0049). Slack is
+  Conch's own too: `slack/` keeps the person's user token in sealed
+  `slack.secrets.json` and gives every engine the `slack_*` host tools.
   OAuth callback: `GET /oauth/callback`.
   Google accounts use native `google/` host tools shared by every engine, not
   provider account connectors. Google Auth Library handles PKCE/token verification;
@@ -695,17 +700,18 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   1Password reference. First run asks which provider to start with instead of
   assuming Claude Code (there, the same content is a dialog).
 - **Integrations.** `/integrations` shows what's connected in Conch (broken first,
-  each with its one fix) and a catalog with bundled logos — never counting a service
-  only one provider's account reaches as connected. "From your providers" folds away
-  what each provider set up itself, with "Use with every model" where Conch can
-  connect the same service; `/integrations?connect=<id>` opens a connect dialog;
+  each with its one fix) and a catalog with bundled logos, every one of them Conch's
+  own (ADR 0049). What a provider set up and Conch can't connect is in Settings →
+  Providers → Set up inside a provider (`ProviderServers`), folded;
+  `/integrations?connect=<id>` opens a connect dialog; `/integrations/slack` is
+  Slack's own page;
   `/integrations/:id` has the policy, per-tool Allow · Ask · Off and the connection.
   Connecting opens a dialog whose handshake animates through waiting → connected /
   failed; OAuth runs in a popup that lands on `/integrations/done`. Apps that run on
   this computer show a `SetupChecklist` of what they need, with the next step as the
   main button (Install → Open → Connect); `/integrations?setup=<id>` (a card's
-  “Finish setup”) reopens it for one already added. "From your providers" offers
-  "Use with every model" for any provider-owned web server
+  “Finish setup”) reopens it for one already added. Settings → Providers offers
+  "Use with every model" to bring back one you disconnected
   (`POST /api/integrations/adopt`; the address stays on the gateway). A failed
   turn's callout offers the fix for its `problem` and resends by itself after a
   sign-in; Settings → Security lists what was "Fixed on its own". Broken

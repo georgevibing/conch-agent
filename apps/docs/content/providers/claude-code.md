@@ -14,7 +14,7 @@ Already use Claude Code? There is nothing to do. Conch uses the copy you have, s
 
 Conch drives the Claude Code that's on your computer, so everything you've set up there comes along: your `~/.claude` settings, `CLAUDE.md` files, MCP servers, hooks and skills.
 
-Signed in with a Claude plan, it also brings your Claude account's connectors (Gmail, Calendar, Drive, Slack). Those work with Claude Code only. Anything you connect in Conch's own [Apps](../features/apps.md) works with every provider.
+Signed in with a Claude plan, it also loads your Claude account's connectors by itself. Where Conch can connect the same app, it brings it into its own [Apps](../features/apps.md), so it works with every provider; the rest are listed in **Settings → Providers → Set up inside a provider**, and only work with Claude Code.
 
 ## Good to know
 
