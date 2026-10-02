@@ -132,6 +132,9 @@ import { SERVER_VERSION } from './version';
 
 export { SERVER_VERSION };
 
+/** How long Passwords waits on a provider's sign-in before using what it last said. */
+const SIGN_IN_LOOK_MS = 1_500;
+
 /** Every past turn's cost, oldest conversations included. */
 async function turnCosts(store: ConversationStore) {
   const turns: { at: number; costUsd: number }[] = [];
@@ -1114,6 +1117,30 @@ export class Services {
 
   #channelsReady: Promise<void>;
 
+  /** Each provider's sign-in as last detected, for when a fresh look takes too long. */
+  readonly #signIns = new Map<EngineId, boolean>();
+
+  async #signedIn(engine: Engine): Promise<boolean> {
+    const looked = engine
+      .detect()
+      .then((status) => {
+        const subscribed = status.auth?.method === 'subscription';
+        this.#signIns.set(engine.id, subscribed);
+        return subscribed;
+      })
+      .catch(() => this.#signIns.get(engine.id) ?? false);
+    let timer: NodeJS.Timeout | undefined;
+    const waited = new Promise<boolean>((resolve) => {
+      timer = setTimeout(() => resolve(this.#signIns.get(engine.id) ?? false), SIGN_IN_LOOK_MS);
+      timer.unref?.();
+    });
+    try {
+      return await Promise.race([looked, waited]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   /**
    * The keys Conch itself uses, for Passwords (ADR 0025 § Keys Conch uses):
    * provider keys, integration keys and sign-ins, channel bot keys. Shown
@@ -1124,33 +1151,47 @@ export class Services {
       `sys_${createHash('sha256').update(parts.join('\0')).digest('base64url').slice(0, 22)}`;
     const tail = (v: string) => (v.length > 8 ? `…${v.slice(-4)}` : 'saved');
     const out: SystemKey[] = [];
-    for (const [engineId, engine] of this.engines) {
-      if (engineId === 'mock') continue;
-      const described = await this.keys.describe(engineId).catch(() => undefined);
-      if (!described) {
-        if (engine.disconnect) {
-          const status = await engine.detect().catch(() => undefined);
-          if (status?.auth?.method === 'subscription')
-            out.push({
-              id: id('provider', engineId, 'subscription'),
-              title: `${engine.label} sign-in`,
-              usedBy: engine.label,
-              hint: 'Connected',
-              manage: { label: 'Open Providers', place: 'providers', focus: engineId },
-              reveal: () =>
-                Promise.reject(
-                  new Error('Conch renews this sign-in itself; there is no key to copy.'),
-                ),
-            });
-        }
+    const engines = [...this.engines].filter(([engineId]) => engineId !== 'mock');
+    const described = new Map<EngineId, Awaited<ReturnType<typeof this.keys.describe>>>();
+    for (const [engineId] of engines)
+      described.set(engineId, await this.keys.describe(engineId).catch(() => undefined));
+    // A sign-in is only known by detecting its provider, which can mean starting its program
+    // (Codex: ~10s). Passwords never waits on that: the looks run side by side, briefly, and
+    // one still going counts as what it last said. Only providers Conch shows are looked at:
+    // with CONCH_ENGINE pinned, that one alone.
+    const listed = new Set(this.providers.listed());
+    const signedIn = new Map(
+      await Promise.all(
+        engines
+          .filter(
+            ([engineId, e]) => !described.get(engineId) && e.disconnect && listed.has(engineId),
+          )
+          .map(async ([engineId, e]) => [engineId, await this.#signedIn(e)] as const),
+      ),
+    );
+    for (const [engineId, engine] of engines) {
+      const key = described.get(engineId);
+      if (!key) {
+        if (signedIn.get(engineId))
+          out.push({
+            id: id('provider', engineId, 'subscription'),
+            title: `${engine.label} sign-in`,
+            usedBy: engine.label,
+            hint: 'Connected',
+            manage: { label: 'Open Providers', place: 'providers', focus: engineId },
+            reveal: () =>
+              Promise.reject(
+                new Error('Conch renews this sign-in itself; there is no key to copy.'),
+              ),
+          });
         continue;
       }
       out.push({
         id: id('provider', engineId),
         title: `${engine.label} key`,
         usedBy: engine.label,
-        hint: described.hint,
-        savedAt: described.savedAt || undefined,
+        hint: key.hint,
+        savedAt: key.savedAt || undefined,
         manage: { label: 'Open Providers', place: 'providers', focus: engineId },
         reveal: async () => (await this.keys.value(engineId)) ?? '',
       });

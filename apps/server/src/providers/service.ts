@@ -121,6 +121,11 @@ export class ProviderService {
     );
   }
 
+  /** The providers Conch shows and uses: with a pin, that one alone. */
+  listed(): EngineId[] {
+    return this.#listed(this.activeIdNow());
+  }
+
   /** Providers worth showing: the pin alone, else every real one (the test double only as the default). */
   #listed(active: EngineId): EngineId[] {
     if (this.deps.pinned) return [this.deps.pinned];

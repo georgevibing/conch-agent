@@ -9,7 +9,7 @@ import { buildApp } from './app';
 import { loadConfig } from './config';
 import { Services } from './services';
 
-async function setup(env: Record<string, string> = {}) {
+async function setup(env: Record<string, string | undefined> = {}) {
   process.env.CONCH_MOCK_SPEED = '0.05';
   const home = await mkdtemp(join(tmpdir(), 'conch-app-'));
   const config = loadConfig({
@@ -623,5 +623,49 @@ describe('gateway WebSocket', () => {
     ws.send(JSON.stringify({ type: 'conversation.send', clientMessageId: 'u1', text: 'hi' }));
     expect(await error).toMatchObject({ code: 'engine-unavailable', clientMessageId: 'u1' });
     ws.close();
+  });
+});
+
+describe('Passwords and the providers’ sign-ins', () => {
+  const titles = async (app: Awaited<ReturnType<typeof setup>>['app']) =>
+    ((await app.inject('/api/vault')).json() as { items: { title: string }[] }).items.map(
+      (i) => i.title,
+    );
+
+  it('looks only at the pinned provider, never the others on this computer', async () => {
+    const { app, services } = await setup();
+    close = () => app.close();
+    const codex = services.engines.get('codex-cli');
+    const detect = vi.spyOn(codex as NonNullable<typeof codex>, 'detect');
+    expect(await titles(app)).toEqual([]);
+    expect(detect).not.toHaveBeenCalled();
+  });
+
+  it('never waits on a provider that is slow to say whether it’s signed in', async () => {
+    const { app, services } = await setup({ CONCH_ENGINE: undefined });
+    close = () => app.close();
+    // Codex's look takes as long as starting Codex; like the real one, a second ask joins it.
+    let answer: (signedIn: boolean) => void = () => {};
+    const answered = new Promise<boolean>((resolve) => (answer = resolve));
+    for (const [id, engine] of services.engines) {
+      const status = (signedIn: boolean) => ({
+        engine: id,
+        label: engine.label,
+        state: 'ready' as const,
+        install: [],
+        canSignIn: true,
+        checkedAt: Date.now(),
+        ...(signedIn && { auth: { method: 'subscription' as const, description: 'ChatGPT' } }),
+      });
+      vi.spyOn(engine, 'detect').mockImplementation(() =>
+        id === 'codex-cli' ? answered.then(status) : Promise.resolve(status(false)),
+      );
+    }
+    const started = Date.now();
+    expect(await titles(app)).not.toContain('Codex sign-in');
+    expect(Date.now() - started).toBeLessThan(5_000);
+    // Once it has answered, the next look shows it.
+    answer(true);
+    await vi.waitFor(async () => expect(await titles(app)).toContain('Codex sign-in'));
   });
 });
