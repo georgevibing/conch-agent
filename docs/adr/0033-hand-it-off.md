@@ -182,3 +182,8 @@ tasks' chats are backed up with your other chats. Worktrees are `outside`.
   them.
 - A helper's worktree branch is left for you to merge. Conch never merges on
   its own.
+
+## Superseded completion and resumption semantics
+
+[ADR 0038 — Durable verified tasks](./0038-durable-verified-tasks.md) replaces the
+original retry-from-start, derived-backup and model-completion semantics.

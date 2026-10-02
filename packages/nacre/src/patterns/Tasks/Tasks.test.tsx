@@ -62,7 +62,27 @@ describe('TaskCard', () => {
         onRetry={() => undefined}
       />,
     );
-    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Resume safely' })).toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
+  it('shows unverified and partial results without claiming completion', async () => {
+    const { container, rerender } = renderNacre(
+      <TaskCard
+        title="Draft follow-ups"
+        status="unverified"
+        summary="One draft is confirmed."
+        error="The second write could not be verified."
+        onRetry={() => undefined}
+      />,
+    );
+    expect(screen.getByRole('article')).toHaveTextContent('Result not verified');
+    expect(screen.getByRole('article')).toHaveTextContent('One draft is confirmed.');
+    expect(screen.queryByText('Verified complete')).not.toBeInTheDocument();
+    rerender(
+      <TaskCard title="Draft follow-ups" status="stopped" summary="One draft is confirmed." />,
+    );
+    expect(screen.getByRole('article')).toHaveTextContent('One draft is confirmed.');
     await expectAccessible(container);
   });
 

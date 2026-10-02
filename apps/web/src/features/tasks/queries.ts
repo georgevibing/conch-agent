@@ -55,6 +55,8 @@ export function applyTaskEvent(
   const here = where && window.location.pathname === `/c/${where}`;
   if (task.status === 'done' && !here)
     toast.success(`Done: ${task.title}`, { description: task.summary, action: open });
+  else if (task.status === 'unverified' && !here)
+    toast(`Result needs checking: ${task.title}`, { description: task.error, action: open });
   else if (task.status === 'failed')
     toast.error(`Didn’t finish: ${task.title}`, { description: task.error, action: open });
   else if (task.status === 'needs-you' && task.conversationId)

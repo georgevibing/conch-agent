@@ -41,7 +41,7 @@ export interface BackupRule {
    * Restored by merging with what's here rather than replacing it (and never
    * removed when the backup has none): `usage` keeps money already spent.
    */
-  merge?: 'usage';
+  merge?: 'usage' | 'tasks';
   /** Why, in one line (the ADR quotes these). */
   why: string;
 }
@@ -120,8 +120,10 @@ export const RULES: readonly BackupRule[] = [
   },
   {
     match: 'tasks.json',
-    class: 'derived',
-    why: 'Where background tasks stand. Each task’s work is its own chat, which is backed up with your chats; a restore has nothing running.',
+    class: 'kept',
+    group: 'chats',
+    merge: 'tasks',
+    why: 'Goals and operation receipts prevent duplicate effects. Restored tasks require explicit resumption and provider reconciliation.',
   },
   {
     match: 'worktrees/**',

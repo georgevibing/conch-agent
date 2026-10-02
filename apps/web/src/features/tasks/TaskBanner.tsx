@@ -21,7 +21,7 @@ export function TaskBanner({ conversationId }: { conversationId?: string }) {
           : 'Working in the background.'}{' '}
         {task?.status === 'needs-you'
           ? 'It’s waiting for your OK below.'
-          : 'You can watch, answer what it asks, or stop it.'}
+          : 'You can watch, answer what it asks, or stop it. When it finishes, add instructions below to continue with its saved results and the same tool permissions.'}
       </span>
       {from ? <Link to={`/c/${from}`}>Back to the chat</Link> : <Link to="/tasks">All tasks</Link>}
     </div>

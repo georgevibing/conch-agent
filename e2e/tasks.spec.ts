@@ -35,7 +35,7 @@ test('sent to the background, it works while you chat, and its result comes back
   await composer.press('Enter');
   await expect(page.getByText('what’s the weather like?', { exact: true })).toBeVisible();
 
-  await expect(card).toContainText('Done', { timeout: 15_000 });
+  await expect(card).toContainText('Result not verified', { timeout: 15_000 });
   await expect(card).toContainText('Finished: Run the checks slowly');
 
   // Its own chat stays out of the list, and opens from the card.
@@ -78,7 +78,7 @@ test('a task stops when you say, runs again with one press, and goes when you re
   await expect(card).toContainText('Running npm run watch');
   await card.getByRole('button', { name: 'Stop' }).click();
   await expect(card).toContainText('Stopped');
-  await card.getByRole('button', { name: 'Try again' }).click();
+  await card.getByRole('button', { name: 'Resume safely' }).click();
   await expect(card).toContainText('Running npm run watch');
   await card.getByRole('button', { name: 'Stop' }).click();
   await card.getByRole('button', { name: 'Remove' }).click();
@@ -97,7 +97,9 @@ test('helpers work side by side, each with its own card, and their results come 
   await expect(page.getByText('I split that into three')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('heading', { name: 'Check the tests' })).toBeVisible();
   for (const name of ['Read the README', 'Check the tests', 'Skim the changelog'])
-    await expect(page.getByRole('article', { name: new RegExp(name) })).toContainText('Done');
+    await expect(page.getByRole('article', { name: new RegExp(name) })).toContainText(
+      'Result not verified',
+    );
 });
 
 test('a task that needs your OK says so, and waits only for you', async ({ page }) => {
@@ -120,5 +122,5 @@ test('a task that needs your OK says so, and waits only for you', async ({ page 
     .first()
     .click();
   await page.getByRole('link', { name: 'Back to the chat' }).click();
-  await expect(card).toContainText('Done', { timeout: 15_000 });
+  await expect(card).toContainText('Result not verified', { timeout: 15_000 });
 });

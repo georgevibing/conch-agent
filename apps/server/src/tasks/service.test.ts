@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import type { Capabilities, EngineId, EngineStatus, ServerEvent, Task } from '@conch/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
-import { ConversationManager } from '../conversations/manager';
+import { ConversationManager, type ToolProvider } from '../conversations/manager';
 import { ConversationStore } from '../conversations/store';
 import type { Engine, EngineEvent, TurnInput } from '../engines/types';
 import { MemoryStore } from '../memory/store';
@@ -66,7 +66,7 @@ class Scripted implements Engine {
       yield { type: 'done', outcome: 'error', error: 'You reached your limit.', problem: 'limit' };
       return;
     }
-    if (/ask/.test(said)) {
+    if (/^ask(?:\s|$)/.test(said)) {
       yield {
         type: 'tool-start',
         toolUseId: 't-ask',
@@ -93,6 +93,8 @@ class Scripted implements Engine {
       yield { type: 'tool-end', toolUseId: 't-web', status: 'success', output: 'page' };
     }
     if (/edit/.test(said)) writeFileSync(join(input.cwd, 'changed.txt'), 'hi');
+    if (/trusted workflow/.test(said))
+      await input.tools.find((tool) => tool.name === 'fixture_read')?.run({});
     const report = input.tools.find((t) => t.name === 'report_result');
     await report?.run({ summary: `${this.label} did: ${said.slice(0, 40)}` } as never);
     yield { type: 'text', messageId: 'm', delta: 'All done.' };
@@ -101,7 +103,12 @@ class Scripted implements Engine {
 }
 
 async function setup(
-  options: { background?: number; helpers?: number; overBudget?: boolean } = {},
+  options: {
+    background?: number;
+    helpers?: number;
+    overBudget?: boolean;
+    tools?: ToolProvider;
+  } = {},
 ) {
   const home = mkdtempSync(join(tmpdir(), 'conch-tasks-'));
   const engines = new Map<EngineId, Scripted>([
@@ -115,6 +122,7 @@ async function setup(
     store: new ConversationStore(join(home, 'conversations')),
     settings,
     memory: new MemoryStore(join(home, 'memory')),
+    tools: options.tools,
     engine: (id) => engines.get(id ?? 'mock') ?? (engines.get('mock') as Scripted),
   });
   const make = () =>
@@ -161,7 +169,7 @@ describe('a task sent to the background', () => {
     });
     const done = await until(
       () => tasks.get(task.id),
-      (t) => t.status === 'done',
+      (t) => t.status === 'unverified',
     );
     expect(done.summary).toBe('Scripted did: tidy the README');
     expect(done.conversationId).toBeDefined();
@@ -171,7 +179,7 @@ describe('a task sent to the background', () => {
     expect(cards.map((e) => (e.type === 'task' ? e.state : ''))).toEqual([
       'queued',
       'running',
-      'done',
+      'unverified',
     ]);
     expect(cards.at(-1)).toMatchObject({ summary: 'Scripted did: tidy the README' });
   });
@@ -189,9 +197,9 @@ describe('a task sent to the background', () => {
     engines.get('mock')?.release?.();
     await until(
       () => status(tasks, second.id),
-      (s) => s === 'done',
+      (s) => s === 'unverified',
     );
-    expect(await status(tasks, first.id)).toBe('done');
+    expect(await status(tasks, first.id)).toBe('unverified');
   });
 
   it('waits for your OK without holding up the others', async () => {
@@ -204,7 +212,7 @@ describe('a task sent to the background', () => {
     );
     await until(
       () => status(tasks, other.id),
-      (s) => s === 'done',
+      (s) => s === 'unverified',
     );
     const conversationId = (await tasks.get(asking.id)).conversationId ?? '';
     const request = (await conversations.detail(conversationId)).events.find(
@@ -214,9 +222,9 @@ describe('a task sent to the background', () => {
     await conversations.respond(conversationId, request.permissionId, 'allow');
     const done = await until(
       () => tasks.get(asking.id),
-      (t) => t.status === 'done',
+      (t) => t.status === 'unverified',
     );
-    expect(done.steps.map((s) => s.label)).toContain('Ran `npm test`');
+    expect(done.steps.map((s) => s.label)).toContain('Tool returned: Run `npm test`');
   });
 
   it('stops when you stop it, queued or running', async () => {
@@ -261,11 +269,11 @@ describe('a task sent to the background', () => {
     const task = await tasks.create({ kind: 'background', text: 'hit the limit' });
     const done = await until(
       () => tasks.get(task.id),
-      (t) => t.status === 'done' || t.status === 'failed',
+      (t) => t.status === 'unverified' || t.status === 'failed',
     );
     expect(done).toMatchObject({
-      status: 'done',
-      summary: 'Other did: hit the limit',
+      status: 'unverified',
+      summary: expect.stringContaining('Other did:'),
       note: 'Scripted reached its limit, so Other carried on.',
     });
   });
@@ -278,6 +286,191 @@ describe('a task sent to the background', () => {
       (t) => t.status === 'failed',
     );
     expect(done.error).toMatch(/limit/);
+  });
+});
+
+describe('safe continuation and bounded workflow requests', () => {
+  it('reuses the existing conversation and confirmed progress, rejecting simultaneous retry', async () => {
+    const { tasks, conversations } = await setup();
+    const first = await tasks.create({ kind: 'background', text: 'research this topic' });
+    const before = await until(
+      () => tasks.get(first.id),
+      (task) => task.status === 'unverified',
+    );
+    const retries = await Promise.allSettled([tasks.retry(first.id), tasks.retry(first.id)]);
+    expect(retries.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const after = await until(
+      () => tasks.get(first.id),
+      (task) => task.status === 'unverified',
+    );
+    expect(after.conversationId).toBe(before.conversationId);
+    const chat = await conversations.detail(after.conversationId ?? '');
+    expect(chat.events.filter((event) => event.type === 'user.message')).toHaveLength(2);
+    expect(
+      chat.events.some(
+        (event) => event.type === 'user.message' && event.text.includes('Confirmed progress'),
+      ),
+    ).toBe(true);
+  });
+
+  it('HTTP retry/double click is idempotent, while altered scope with the same key is rejected', async () => {
+    const { tasks } = await setup({ background: 0 });
+    const input = {
+      kind: 'background' as const,
+      text: 'draft only',
+      requestKey: 'one-click',
+      workflow: 'followups' as const,
+      toolScope: { names: ['draft'], accountId: 'account_1' },
+    };
+    const [first, duplicate] = await Promise.all([tasks.create(input), tasks.create(input)]);
+    expect(duplicate.id).toBe(first.id);
+    expect((await tasks.list()).tasks).toHaveLength(1);
+    await expect(tasks.create({ ...input, toolScope: { names: ['Bash'] } })).rejects.toThrow(
+      /different work/,
+    );
+    await tasks.remove(first.id);
+    expect((await tasks.list()).tasks).toHaveLength(0);
+    expect((await tasks.create(input)).id).toBe(first.id);
+  });
+
+  it('user continuation preserves scope and chat; replay cannot revise the request', async () => {
+    const { tasks, conversations } = await setup();
+    const initial = await tasks.create({
+      kind: 'background',
+      text: 'first draft',
+      toolScope: { names: ['artifact_create'], accountId: 'same-account' },
+      expectations: [{ tool: 'artifact_create', minimum: 1 }],
+    });
+    const before = await until(
+      () => tasks.get(initial.id),
+      (task) => task.status === 'unverified',
+    );
+    await expect(
+      conversations.send({
+        conversationId: before.conversationId,
+        text: 'bypass task scope',
+        clientMessageId: 'bypass',
+      }),
+    ).rejects.toThrow(/Resume safely/);
+    await tasks.continue(initial.id, 'Make the introduction shorter', 'revision-1');
+    const after = await until(
+      () => tasks.get(initial.id),
+      (task) => task.status === 'unverified',
+    );
+    expect(after.conversationId).toBe(before.conversationId);
+    expect(after.toolScope).toEqual(before.toolScope);
+    expect(after.expectations).toEqual(before.expectations);
+    expect(after.goalRevision).toBe(1);
+    expect(
+      (await tasks.continue(initial.id, 'Make the introduction shorter', 'revision-1')).rev,
+    ).toBe(after.rev);
+    await expect(tasks.continue(initial.id, 'Now send it', 'revision-1')).rejects.toThrow(
+      /different instruction/,
+    );
+    await expect(tasks.continue(initial.id, '   ')).rejects.toThrow(/instruction/);
+  });
+
+  it('does not change the instruction while queued or running', async () => {
+    const { tasks } = await setup({ background: 0 });
+    const task = await tasks.create({ kind: 'background', text: 'queued' });
+    await expect(tasks.continue(task.id, 'a different goal')).rejects.toThrow(/Wait/);
+    expect((await tasks.get(task.id)).prompt).toBe('queued');
+  });
+
+  it('scoped jobs receive only their approved common tools and verify real tool evidence', async () => {
+    let read = false;
+    const forbidden = vi.fn(async () => 'must not run');
+    const { tasks, engines } = await setup({
+      tools: () => [
+        {
+          name: 'fixture_read',
+          description: 'Read fixture',
+          input: {},
+          run: async () => {
+            read = true;
+            return 'Actual fixture contents';
+          },
+          verification: {
+            effect: 'read',
+            scope: async () => ({
+              account: 'fixture',
+              authorization: 'read',
+              expiresAt: Number.MAX_SAFE_INTEGER,
+            }),
+            reconcile: async () =>
+              read
+                ? {
+                    state: 'confirmed',
+                    receipt: { provider: 'fixture', id: 'read-1', label: 'Read fixture contents' },
+                  }
+                : { state: 'unknown' },
+          },
+        },
+        { name: 'delegate', description: 'Not allowed', input: {}, run: forbidden },
+      ],
+    });
+    const task = await tasks.create({
+      kind: 'background',
+      text: 'trusted workflow',
+      toolScope: { names: ['fixture_read'] },
+      expectations: [{ tool: 'fixture_read', minimum: 1 }],
+    });
+    const result = await until(
+      () => tasks.get(task.id),
+      (value) => value.finishedAt !== undefined,
+    );
+    expect(result.status).toBe('done');
+    expect(result.verification).toBe('verified');
+    expect(result.operations?.[0]?.receipt?.id).toBe('read-1');
+    expect(
+      engines
+        .get('mock')
+        ?.turns[0]?.tools.map((tool) => tool.name)
+        .sort(),
+    ).toEqual(['fixture_read', 'report_result']);
+    expect(forbidden).not.toHaveBeenCalled();
+  });
+
+  it('scoped tasks do not silently switch the selected provider after a quota limit', async () => {
+    const { tasks, settings, engines } = await setup();
+    await settings.update({ preferences: { limitFallback: 'openrouter' } });
+    const task = await tasks.create({
+      kind: 'background',
+      text: 'hit the limit',
+      toolScope: { names: ['artifact_create'] },
+    });
+    const result = await until(
+      () => tasks.get(task.id),
+      (value) => value.finishedAt !== undefined,
+    );
+    expect(result.status).toBe('failed');
+    expect(engines.get('openrouter')?.turns).toHaveLength(0);
+  });
+
+  it('workflow scope rejects arbitrary native tools regardless of permission mode', async () => {
+    const { tasks, engines } = await setup();
+    const task = await tasks.create({
+      kind: 'background',
+      text: 'draft a note',
+      options: { permissionMode: 'default' },
+      toolScope: { names: ['artifact_create'] },
+    });
+    await until(
+      () => tasks.get(task.id),
+      (value) => value.status === 'unverified',
+    );
+    const turn = engines.get('mock')?.turns[0];
+    if (!turn) throw new Error('Expected a running scripted turn');
+    for (const toolName of [
+      'Bash',
+      'Write',
+      'browser_click',
+      'mcp__gmail__send',
+      'mcp__conch__start_background_task',
+    ]) {
+      expect(await turn.guard?.({ toolName, input: {} })).toMatchObject({ decision: 'deny' });
+      expect(await turn.requestPermission({ toolName, input: {} }, turn.signal)).toBe('deny');
+    }
   });
 });
 
@@ -307,7 +500,9 @@ describe('helpers side by side (delegate)', () => {
         { title: 'Check B', instructions: 'look at B', model: 'same', worktree: false },
       ],
     } as never);
-    expect(out).toBe('## Check A\nScripted did: look at A\n\n## Check B\nScripted did: look at B');
+    expect(out).toBe(
+      '## Check A\nNot verified: Scripted did: look at A\n\n## Check B\nNot verified: Scripted did: look at B',
+    );
     const helpers = (await tasks.list()).tasks.filter((t) => t.kind === 'helper');
     expect(helpers).toHaveLength(2);
     expect(new Set(helpers.map((t) => t.group)).size).toBe(1);

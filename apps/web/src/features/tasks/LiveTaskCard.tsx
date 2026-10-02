@@ -36,7 +36,31 @@ export function LiveTaskCard({
       finishedAt={task.finishedAt}
       current={task.current && withCode(task.current)}
       steps={task.steps.map((s) => withCode(s.label))}
-      summary={task.summary}
+      summary={
+        <>
+          {task.summary && <p>{task.summary}</p>}
+          {task.operations?.some((operation) => operation.receipt) && (
+            <ul aria-label="Confirmed results">
+              {task.operations
+                .filter((operation) => operation.state === 'confirmed' && operation.receipt)
+                .map((operation) => (
+                  <li key={operation.id}>
+                    {operation.receipt?.url ? (
+                      <a href={operation.receipt.url} target="_blank" rel="noreferrer">
+                        {operation.receipt.label}
+                      </a>
+                    ) : (
+                      operation.receipt?.label
+                    )}
+                  </li>
+                ))}
+            </ul>
+          )}
+          {task.operations?.some((operation) => operation.state !== 'confirmed') && (
+            <p>Some actions have no confirmed result. They will not be repeated automatically.</p>
+          )}
+        </>
+      }
       error={task.error}
       note={task.note}
       branch={task.worktree?.changed ? task.worktree.branch : undefined}

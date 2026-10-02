@@ -108,6 +108,17 @@ export interface TurnExtras {
   /** Appended after the usual personality/memory prompt. */
   systemExtra?: string;
   tools?: HostTool[];
+  /** Durable task ledger: invoked outside every host tool, independent of engine. */
+  wrapTool?: (tool: HostTool) => HostTool;
+  beforeTool?: (
+    name: string,
+    input: Record<string, unknown>,
+    invocationId?: string,
+    phase?: 'guard' | 'permission',
+  ) => Promise<string | undefined>;
+  toolAllowed?: (name: string) => boolean;
+  /** Persist the task→chat link before any tool can execute. */
+  onConversation?: (id: string) => Promise<void>;
   /** Overrides the conversation's permission mode for this turn. */
   permissionMode?: PermissionMode;
   onStatus?: (status: ConversationStatus) => void;
@@ -473,6 +484,11 @@ export class ConversationManager {
     untrusted?: TaintSource;
   }) {
     const existing = input.conversationId ? await this.#get(input.conversationId) : undefined;
+    if (existing?.record.origin?.kind === 'task')
+      throw new ConversationError(
+        'busy',
+        'Use Resume safely on the task card to continue this work with its saved results and approval scope.',
+      );
     if (existing?.abort)
       throw new ConversationError('busy', 'Still replying to your last message.');
     // Whichever provider the conversation (or this message) chose answers —
@@ -604,12 +620,29 @@ export class ConversationManager {
    * turn has started, with a promise for its result.
    */
   async start(input: {
+    conversationId?: string;
     title: string;
     text: string;
     options?: TurnOptions;
     origin: NonNullable<ConversationRecord['origin']>;
     extras: TurnExtras;
   }): Promise<{ conversationId: string; result: Promise<TurnResult> }> {
+    if (input.conversationId) {
+      const live = await this.#get(input.conversationId);
+      if (live.abort) throw new ConversationError('busy', 'This task is already running.');
+      // Approval grants are turn-scoped. Never replay a previous turn's answers.
+      live.alwaysAllow.clear();
+      live.permissions.clear();
+      this.#applyOptions(live, input.options ?? {});
+      const engine = this.deps.engine(live.record.options.engine);
+      this.#append(live, { type: 'user.message', messageId: newId('u'), text: input.text });
+      this.#claim(live);
+      live.extras = input.extras;
+      this.#setStatus(live, 'running');
+      await this.#persist(live);
+      await input.extras.onConversation?.(live.record.id);
+      return { conversationId: live.record.id, result: this.#runTurn(live, engine, input.text) };
+    }
     const engine = this.deps.engine(input.options?.engine);
     const expanded = await this.deps.expand?.(input.text, engine).catch(() => undefined);
     const now = Date.now();
@@ -641,6 +674,7 @@ export class ConversationManager {
     live.extras = input.extras;
     this.#setStatus(live, 'running');
     await this.#persist(live);
+    await input.extras.onConversation?.(record.id);
     return {
       conversationId: record.id,
       result: this.#runTurn(live, engine, expanded?.prompt ?? input.text),
@@ -886,7 +920,7 @@ export class ConversationManager {
     tools.push(
       // Unattended runs (routines) don't get the routine tools: a run that read
       // something hostile must not be able to reschedule or rewrite routines.
-      ...(extras
+      ...(extras && !extras.toolAllowed
         ? []
         : (this.deps.tools?.({
             conversationId,
@@ -903,6 +937,11 @@ export class ConversationManager {
           }) ?? [])),
       ...(extras?.tools ?? []),
     );
+    // Scoped tasks may use the common connector/artifact tools, never the rest
+    // of the normal chat's powers. Guards enforce this again at execution time.
+    if (extras?.toolAllowed)
+      for (let i = tools.length - 1; i >= 0; i--)
+        if (!extras.toolAllowed(tools[i]?.name ?? '')) tools.splice(i, 1);
     // Conch's browser reads the outside world: what it brings back taints the chat.
     // (New objects: the same tools may be handed to the next turn.)
     for (const [i, tool] of tools.entries()) {
@@ -910,15 +949,19 @@ export class ConversationManager {
       if (!source) continue;
       tools[i] = {
         ...tool,
-        run: async (args) => {
-          const result = await tool.run(args);
+        run: async (args, context) => {
+          const result = await tool.run(args, context);
           this.#taint(live, taintFrom(tool.name, args) ?? source);
           return result;
         },
       };
     }
+    if (extras?.wrapTool) for (const [i, tool] of tools.entries()) tools[i] = extras.wrapTool(tool);
     // This provider's own session, and whatever it missed while others answered.
-    const session = live.record.sessions?.[engine.id];
+    const session =
+      'conversationHistory' in engine && engine.conversationHistory
+        ? undefined
+        : live.record.sessions?.[engine.id];
     const asked = askedSeq(live.events) ?? live.seq;
     const missed = handoff(live.events, { afterSeq: session?.seq ?? -1, beforeSeq: asked });
     let answeredWith: string | undefined;
@@ -1022,6 +1065,11 @@ export class ConversationManager {
       request: { toolName: string; toolUseId?: string; input: Record<string, unknown> },
       signal: AbortSignal,
     ): Promise<PermissionDecision> => {
+      if (extras?.toolAllowed && !extras.toolAllowed(request.toolName)) return 'deny';
+      if (
+        await extras?.beforeTool?.(request.toolName, request.input, request.toolUseId, 'permission')
+      )
+        return 'deny';
       await keepBefore(request.toolUseId, request.toolName, request.input);
       // Your choices on the Integrations page come first: "Don't ask", or a tool you turned off.
       const policy = await integrations?.decide(request.toolName).catch(() => undefined);
@@ -1054,6 +1102,13 @@ export class ConversationManager {
       toolUseId?: string;
       input: Record<string, unknown>;
     }): Promise<GuardDecision | undefined> => {
+      const blocked = await extras?.beforeTool?.(
+        request.toolName,
+        request.input,
+        request.toolUseId,
+        'guard',
+      );
+      if (blocked) return { decision: 'deny', message: blocked };
       await keepBefore(request.toolUseId, request.toolName, request.input);
       if ((await integrations?.decide(request.toolName).catch(() => undefined)) === 'off')
         return {
@@ -1155,6 +1210,7 @@ export class ConversationManager {
               .join('\n\n'),
             cwd: workspace,
             tools,
+            wrapTool: extras?.wrapTool,
             options: resolved,
             mcpServers: engine.integrations.mode === 'native' ? loaded?.servers : undefined,
             disallowedTools: loaded?.disallowedTools,

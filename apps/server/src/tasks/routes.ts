@@ -1,4 +1,4 @@
-import { CreateTaskBody } from '@conch/protocol';
+import { ContinueTaskBody, CreateTaskBody } from '@conch/protocol';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 
 import { TaskError, type TaskService } from './service';
@@ -27,6 +27,7 @@ export function registerTaskRoutes(app: FastifyInstance, tasks: TaskService): vo
       return await tasks.create({
         kind: 'background',
         text: body.data.text,
+        requestKey: body.data.requestKey,
         ...(body.data.title && { title: body.data.title }),
         ...(body.data.conversationId && { parentConversationId: body.data.conversationId }),
         ...(body.data.options && { options: body.data.options }),
@@ -45,6 +46,18 @@ export function registerTaskRoutes(app: FastifyInstance, tasks: TaskService): vo
   app.post<{ Params: { id: string } }>('/api/tasks/:id/retry', async (request, reply) => {
     try {
       return await tasks.retry(request.params.id);
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
+  app.post<{ Params: { id: string } }>('/api/tasks/:id/continue', async (request, reply) => {
+    const body = ContinueTaskBody.safeParse(request.body);
+    if (!body.success)
+      return reply
+        .code(400)
+        .send({ error: 'bad-request', message: 'Write an instruction for this task.' });
+    try {
+      return await tasks.continue(request.params.id, body.data.text, body.data.requestKey);
     } catch (error) {
       return fail(reply, error);
     }

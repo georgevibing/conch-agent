@@ -19,7 +19,7 @@ import { cx } from '../../utils/cx';
 import styles from './Tasks.module.css';
 
 export type TaskCardStatus =
-  'queued' | 'running' | 'needs-you' | 'done' | 'failed' | 'stopped' | 'interrupted';
+  'queued' | 'running' | 'needs-you' | 'done' | 'unverified' | 'failed' | 'stopped' | 'interrupted';
 
 export interface TaskCardProps extends Omit<ComponentProps<'article'>, 'title'> {
   title: string;
@@ -54,7 +54,8 @@ const LABELS: Record<TaskCardStatus, string> = {
   queued: 'Waiting its turn',
   running: 'Working',
   'needs-you': 'Needs your OK',
-  done: 'Done',
+  done: 'Verified complete',
+  unverified: 'Result not verified',
   failed: 'Didn’t finish',
   stopped: 'Stopped',
   interrupted: 'Stopped when Conch did',
@@ -167,9 +168,9 @@ export function TaskCard({
           ))}
         </ol>
       )}
-      {status === 'done' && summary && <div className={styles.summary}>{summary}</div>}
+      {!going(status) && summary && <div className={styles.summary}>{summary}</div>}
       {note && <p className={styles.note}>{note}</p>}
-      {(status === 'failed' || status === 'interrupted') && error && (
+      {(status === 'failed' || status === 'interrupted' || status === 'unverified') && error && (
         <p className={styles.error}>{error}</p>
       )}
       {branch && (
@@ -196,11 +197,15 @@ export function TaskCard({
               Stop
             </Button>
           )}
-          {(status === 'failed' || status === 'interrupted' || status === 'stopped') && onRetry && (
-            <Button size="sm" variant="surface" onClick={onRetry} leadingIcon={<RotateCcw />}>
-              Try again
-            </Button>
-          )}
+          {(status === 'failed' ||
+            status === 'interrupted' ||
+            status === 'stopped' ||
+            status === 'unverified') &&
+            onRetry && (
+              <Button size="sm" variant="surface" onClick={onRetry} leadingIcon={<RotateCcw />}>
+                Resume safely
+              </Button>
+            )}
           {!going(status) && onRemove && variant === 'full' && (
             <Button size="sm" variant="ghost" onClick={onRemove} leadingIcon={<Trash2 />}>
               Remove

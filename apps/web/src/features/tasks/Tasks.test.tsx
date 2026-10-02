@@ -73,7 +73,7 @@ describe('Tasks', () => {
     await user.click(await screen.findByRole('button', { name: 'Stop' }));
     await user.click(
       within(screen.getByRole('article', { name: 'Cut off' })).getByRole('button', {
-        name: 'Try again',
+        name: 'Resume safely',
       }),
     );
     expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual(

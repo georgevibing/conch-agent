@@ -38,6 +38,7 @@ import { useSlashCommands } from '../commands/useSlashCommands';
 import { ChannelBanner } from '../channels/ChannelBanner';
 import { useChannels } from '../channels/queries';
 import { RunBanner } from '../routines/RunBanner';
+import { tasksApi } from '../tasks/api';
 import { TaskBanner } from '../tasks/TaskBanner';
 import { useStartTask } from '../tasks/queries';
 import { ComposerControls } from '../models/ComposerControls';
@@ -338,14 +339,41 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   }, [conversationId]);
 
   const turn = useTurnOptions(conversationId);
-  const isRoutineRun =
-    useConversations().data?.find((c) => c.id === conversationId)?.origin?.kind === 'routine';
+  const origin = useConversations().data?.find((c) => c.id === conversationId)?.origin;
+  const isRoutineRun = origin?.kind === 'routine';
+  const continuingTask = useRef(false);
 
   /** Send words, and whatever is attached (the draft's cards unless given). */
   const send = (text: string, attached: Attachment[] = attachments.ready) => {
     const trimmed = text.trim();
     if (!trimmed && !attached.length) return;
     setEngineIssue(undefined);
+    if (origin?.kind === 'task') {
+      if (attached.length) {
+        toast.error(
+          'Task follow-ups cannot include attachments yet. Your files are still in the composer.',
+        );
+        return;
+      }
+      if (continuingTask.current) return;
+      continuingTask.current = true;
+      void tasksApi
+        .continue(origin.taskId, trimmed, crypto.randomUUID())
+        .then(() => {
+          setDraft('');
+        })
+        .catch((error: unknown) => {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : 'Couldn’t continue this task. Your instruction is still here.',
+          );
+        })
+        .finally(() => {
+          continuingTask.current = false;
+        });
+      return;
+    }
     const id = live.send(trimmed, conversationId, turn.takeDraft(), attached);
     if (!conversationId) setSentId(id);
     setDraft('');

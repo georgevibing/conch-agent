@@ -15,6 +15,8 @@ export const TaskStatus = z.enum([
   /** Waiting for your OK on something (in-app and as a notification). */
   'needs-you',
   'done',
+  /** The model finished, but the requested outcome is not independently verified. */
+  'unverified',
   'failed',
   /** You stopped it. */
   'stopped',
@@ -35,6 +37,40 @@ export type TaskKind = z.infer<typeof TaskKind>;
 export const TaskStep = z.object({ at: z.number(), label: z.string().max(240) });
 export type TaskStep = z.infer<typeof TaskStep>;
 
+export const TaskReceipt = z.object({
+  empty: z.boolean().optional(),
+  provider: z.string().max(100),
+  id: z.string().max(500),
+  label: z.string().max(500),
+  url: z
+    .string()
+    .refine((value) => /^(https:\/\/|\/(?!\/))/.test(value) && !/[\\\s]/.test(value))
+    .optional(),
+});
+export type TaskReceipt = z.infer<typeof TaskReceipt>;
+export const TaskOperation = z.object({
+  id: z.string(),
+  key: z.string(),
+  tool: z.string(),
+  inputHash: z.string().optional(),
+  effect: z.enum(['read', 'write', 'unknown']),
+  account: z.string(),
+  authorization: z.string(),
+  expiresAt: z.number(),
+  state: z.enum(['running', 'confirmed', 'unresolved', 'not-run']),
+  goalRevision: z.number().int().nonnegative().optional(),
+  startedAt: z.number(),
+  confirmedAt: z.number().optional(),
+  receipt: TaskReceipt.optional(),
+  error: z.string().max(1000).optional(),
+});
+export type TaskOperation = z.infer<typeof TaskOperation>;
+export const TaskExpectation = z.object({
+  unlessEmpty: z.string().optional(),
+  tool: z.string().min(1),
+  minimum: z.number().int().positive().max(100),
+});
+
 export const Task = z.object({
   id: z.string(),
   kind: TaskKind,
@@ -43,6 +79,25 @@ export const Task = z.object({
   /** What it was asked to do, in full. */
   prompt: z.string().max(20_000),
   status: TaskStatus,
+  /** Server-defined outcome criteria, never a grant of tool permission. */
+  expectations: z.array(TaskExpectation).max(100).optional(),
+  workflow: z.enum(['document', 'today', 'followups']).optional(),
+  requestKey: z.string().max(200).optional(),
+  requestHash: z.string().optional(),
+  archivedAt: z.number().optional(),
+  restored: z.boolean().optional(),
+  goalRevision: z.number().int().nonnegative().optional(),
+  continuations: z.array(z.object({ key: z.string(), text: z.string() })).optional(),
+  toolScope: z
+    .object({
+      names: z.array(z.string()),
+      accountId: z.string().optional(),
+      limits: z.record(z.string(), z.number().int().nonnegative().max(100)).optional(),
+    })
+    .optional(),
+  operations: z.array(TaskOperation).optional(),
+  verification: z.enum(['pending', 'verified', 'unverified']).optional(),
+  modelCompleted: z.boolean().optional(),
   /** The chat it was sent from, where its result comes back. */
   parentConversationId: z.string().optional(),
   /** Helpers started together share a group: their results are merged. */
@@ -78,6 +133,7 @@ export const TaskList = z.object({
 export type TaskList = z.infer<typeof TaskList>;
 
 export const CreateTaskBody = z.object({
+  requestKey: z.string().min(1).max(200).optional(),
   text: z.string().trim().min(1).max(20_000),
   /** The chat it's sent from: the result comes back there. */
   conversationId: z.string().max(128).optional(),
@@ -85,3 +141,8 @@ export const CreateTaskBody = z.object({
   options: TurnOptions.optional(),
 });
 export type CreateTaskBody = z.infer<typeof CreateTaskBody>;
+
+export const ContinueTaskBody = z.object({
+  text: z.string().trim().min(1).max(20_000),
+  requestKey: z.string().min(1).max(200).optional(),
+});

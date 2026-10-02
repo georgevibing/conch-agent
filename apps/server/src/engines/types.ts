@@ -22,6 +22,8 @@ import type { z } from 'zod';
  */
 export interface HostToolResult {
   text: string;
+  /** Trusted tool guarantee: no write was attempted (e.g. approval declined). */
+  effect?: 'not-executed';
   images?: { data: string; mimeType: 'image/jpeg' | 'image/png' }[];
 }
 

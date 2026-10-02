@@ -15,6 +15,7 @@ import { z } from 'zod';
 
 import { BACKUP_EXTENSION } from '@conch/protocol';
 
+import { mergeTaskLedgers } from '../tasks/store';
 import { safeJoin, writeFileAtomic, writeJson } from '../lib/fs';
 import { writeBackup } from './format';
 import { classify, GROUP_DIRS, walk, type BackupGroup } from './manifest';
@@ -135,6 +136,14 @@ export async function applyPlan(home: string, plan: Plan): Promise<void> {
     const from = safeJoinPath(staged, path);
     const to = safeJoinPath(home, path);
     await mkdir(dirname(to), { recursive: true, mode: 0o700 });
+    if (rule.merge === 'tasks') {
+      const current = await readFile(to).catch(() => undefined);
+      await writeJson(
+        to,
+        JSON.parse(mergeTaskLedgers(current, await readFile(from)).toString('utf8')),
+      );
+      continue;
+    }
     if (rule.merge === 'usage') {
       const current = await readFile(to).catch(() => undefined);
       await writeJson(to, JSON.parse(mergeUsage(current, await readFile(from)).toString('utf8')));

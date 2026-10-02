@@ -14,6 +14,9 @@ export function tasksCheck(tasks: TaskService): DoctorCheck {
     async run() {
       const { tasks: all } = await tasks.list();
       const stuck = all.filter((t) => t.kind === 'background' && t.status === 'interrupted');
+      const uncertain = all.filter(
+        (t) => t.status === 'unverified' || t.operations?.some((op) => op.state !== 'confirmed'),
+      );
       const waiting = all.filter((t) => t.status === 'needs-you');
       const items: DoctorItem[] = [];
       if (stuck.length)
@@ -39,6 +42,15 @@ export function tasksCheck(tasks: TaskService): DoctorCheck {
               ? `“${waiting[0]?.title}” is waiting for your OK.`
               : `${waiting.length} tasks are waiting for your OK.`,
           action: { kind: 'open', label: 'Open Tasks', place: 'tasks' },
+        });
+      if (uncertain.length)
+        items.push({
+          id: 'tasks:unverified',
+          group: GROUP,
+          title: 'Results need checking',
+          state: 'warning',
+          message: `${uncertain.length} task results are not fully verified. Confirmed changes are kept; uncertain actions are not automatically repeated.`,
+          action: { kind: 'open', label: 'Inspect results', place: 'tasks' },
         });
       if (!items.length)
         items.push({

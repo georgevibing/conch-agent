@@ -32,7 +32,17 @@ A task asks before it acts, as its chat would, and holds nothing else up. Its ca
 
 Conch tells you in the app, and on your devices when notifications are on. The switch is **When a background task finishes**, in **Settings → Notifications**. See [On your phone](../start/phone.md).
 
-A task that didn't finish says why, and **Try again** runs it from the start. If Conch stopped while a task was working, the task says so. On the Tasks page, **Remove** takes a finished task off the list.
+**Verified complete** means Conch checked the workflow's required results against real tool or provider receipts. The card lists confirmed changes and links you can inspect, such as a saved draft. A saved draft is not a sent message.
+
+**Result not verified** means the assistant finished replying, but Conch cannot independently prove the requested outcome. Its summary is preserved, not treated as evidence. General free-form tasks without a result-checking contract use this state, even if the assistant says “done”. Partial results stay visible after failure or cancellation.
+
+**Resume safely** continues in the same chat with saved progress. It does not restart from a blank conversation. Confirmed writes are not repeated. If Conch lost a provider's response and cannot prove whether a write happened, it stops rather than create a duplicate. Open the original app to inspect the result. A search returning no matches is not always proof that a write failed.
+
+After a restart or backup restore, both running and queued tasks wait for you to resume. Old approval answers do not carry over. A declined approval that provably prevented a write can be asked again; a lost network response cannot be treated as a decline. An account change or renewed consent cannot silently reuse an earlier account's operations.
+
+Open a finished task and type a clarification or revision to continue. The same tool and account boundaries remain; asking a draft-only job to send a message does not give it permission to send. Previous results remain inspectable, but do not by themselves verify a revised goal.
+
+On the Tasks page, **Remove** hides a finished task's card. Conch retains its operation receipts and request identity to prevent repeated effects; removing a card does not undo changes in other apps. Task goals and receipts are included with chats in backups. Restoring merges newer local receipts rather than erasing them. A restored task cannot issue a new write when the historical backup cannot prove whether it already happened; inspect the original app before starting a new job.
 
 ## Helpers, side by side
 

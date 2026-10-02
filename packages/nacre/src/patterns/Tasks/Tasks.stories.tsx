@@ -106,3 +106,13 @@ export const HelpersInAChat: Story = {
     </Stack>
   ),
 };
+
+export const Unverified: Story = {
+  args: {
+    status: 'unverified',
+    finishedAt: NOW,
+    summary: 'A draft may have been saved.',
+    error:
+      'The provider response was lost. Inspect your drafts; Conch will not create another one automatically.',
+  },
+};

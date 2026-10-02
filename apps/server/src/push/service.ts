@@ -242,14 +242,17 @@ export class PushService {
     if (event.type === 'task.changed') {
       // A task you sent away finished (ADR 0033); a helper's result goes back to its chat instead.
       const task = event.task;
-      if (task.kind !== 'background' || !['done', 'failed'].includes(task.status)) return;
+      if (task.kind !== 'background' || !['done', 'unverified', 'failed'].includes(task.status))
+        return;
       if (this.#told.has(`${task.id}:${task.finishedAt}`)) return;
       this.#told.add(`${task.id}:${task.finishedAt}`);
       await this.notify('tasks', {
         title:
           task.status === 'done'
-            ? `Done: ${clip(task.title, 60)}`
-            : `Didn’t finish: ${clip(task.title, 60)}`,
+            ? `Verified complete: ${clip(task.title, 60)}`
+            : task.status === 'unverified'
+              ? `Result needs checking: ${clip(task.title, 60)}`
+              : `Didn’t finish: ${clip(task.title, 60)}`,
         body: clip(
           task.status === 'done'
             ? (task.summary ?? 'It’s ready.')

@@ -1,15 +1,16 @@
 /**
  * The tasks list (ADR 0033): `~/.conch/tasks.json`. Each task's work lives in
- * its own conversation, which is backed up with your chats; this list is only
- * where they stand, so it isn't backed up (a restore has no running tasks).
+ * its own conversation. The ledger is backed up with chats: losing it would
+ * lose the evidence needed to prevent repeated external effects.
  */
-import { join } from 'node:path';
+import { open } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 
 import { Task } from '@conch/protocol';
 import { z } from 'zod';
 
-import { Mutex, writeJson } from '../lib/fs';
-import { readStore, type Heal } from '../lib/recover';
+import { Mutex, readJson, writeJson } from '../lib/fs';
+import { type Heal } from '../lib/recover';
 
 const TasksFile = z.object({ tasks: z.array(Task).default([]) });
 
@@ -31,13 +32,29 @@ export class TaskStore {
   }
 
   list(): Promise<Task[]> {
-    this.#tasks ??= readStore(this.#path, TasksFile, {
-      onRepair: () =>
+    this.#tasks ??= readJson<unknown>(this.#path).then((raw) => {
+      const parsed = TasksFile.safeParse(raw ?? {});
+      if (!parsed.success) {
         this.heal?.(
           'conversations',
-          'The tasks list was damaged, so Conch started it again. Each task’s chat is still there.',
-        ),
-    }).then((read) => read.value.tasks);
+          'The task ledger needs recovery. Conch kept it unchanged and stopped background actions to avoid repeating them.',
+        );
+        throw new Error(
+          'The task ledger is damaged. Restore a known-good backup before starting background actions; Conch will not discard operation receipts.',
+        );
+      }
+      return parsed.data.tasks.map((task) =>
+        task.status === 'done' && task.verification !== 'verified'
+          ? {
+              ...task,
+              status: 'unverified' as const,
+              verification: 'unverified' as const,
+              error:
+                'This older task finished before result verification was available. Its summary is not proof of completion.',
+            }
+          : task,
+      );
+    });
     return this.#tasks;
   }
 
@@ -52,7 +69,9 @@ export class TaskStore {
       const at = tasks.findIndex((t) => t.id === task.id);
       if (at >= 0) tasks[at] = task;
       else tasks.push(task);
-      const finished = tasks.filter((t) => t.finishedAt !== undefined);
+      const finished = tasks.filter(
+        (t) => t.finishedAt !== undefined && !t.operations?.length && !t.requestKey,
+      );
       const drop = new Set(
         finished
           .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0))
@@ -60,7 +79,7 @@ export class TaskStore {
           .map((t) => t.id),
       );
       const kept = tasks.filter((t) => !drop.has(t.id));
-      await writeJson(this.#path, { tasks: kept });
+      await this.#write(kept);
       this.#tasks = Promise.resolve(kept);
       return task;
     });
@@ -71,9 +90,53 @@ export class TaskStore {
       const tasks = await this.list();
       const kept = tasks.filter((t) => t.id !== id);
       if (kept.length === tasks.length) return false;
-      await writeJson(this.#path, { tasks: kept });
+      await this.#write(kept);
       this.#tasks = Promise.resolve(kept);
       return true;
     });
   }
+  async #write(tasks: Task[]): Promise<void> {
+    await writeJson(this.#path, { tasks });
+    // Receipt/intention must reach stable storage before external effects proceed.
+    const file = await open(this.#path, 'r');
+    try {
+      await file.sync();
+    } finally {
+      await file.close();
+    }
+    if (process.platform !== 'win32') {
+      const directory = await open(dirname(this.#path), 'r');
+      try {
+        await directory.sync();
+      } finally {
+        await directory.close();
+      }
+    }
+  }
+}
+
+/** Backup rollback cannot roll back external effects or forget newer receipts. */
+export function mergeTaskLedgers(current: Buffer | undefined, restored: Buffer): Buffer {
+  const read = (value: Buffer | undefined) =>
+    TasksFile.parse(value ? JSON.parse(value.toString('utf8')) : {}).tasks;
+  const local = read(current);
+  const combined = new Map(local.map((task) => [task.id, task]));
+  for (const older of read(restored)) {
+    const here = combined.get(older.id);
+    const newest = here && here.rev >= older.rev ? here : older;
+    const operations = new Map((older.operations ?? []).map((op) => [op.id, op]));
+    for (const op of here?.operations ?? []) operations.set(op.id, op);
+    combined.set(older.id, {
+      ...newest,
+      restored: true,
+      status: newest.archivedAt ? newest.status : 'interrupted',
+      verification: 'unverified',
+      modelCompleted: false,
+      error:
+        'Restored from a historical backup. Existing results must be checked before this task can continue.',
+      operations: [...operations.values()].map((op) => ({ ...op, state: 'unresolved' as const })),
+      rev: Math.max(here?.rev ?? 0, older.rev) + 1,
+    });
+  }
+  return Buffer.from(JSON.stringify({ tasks: [...combined.values()] }));
 }

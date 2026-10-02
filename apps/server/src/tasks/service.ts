@@ -17,6 +17,8 @@
  * runs again with one press; one that reached its provider's limit carries on
  * with your fallback provider (ADR 0023).
  */
+import { createHash } from 'node:crypto';
+
 import type {
   ConversationEvent,
   EngineId,
@@ -29,10 +31,11 @@ import type {
 } from '@conch/protocol';
 import { z } from 'zod';
 
-import { didWhat } from '../activity/service';
 import type { ConversationManager, ToolContext } from '../conversations/manager';
 import { summarizeToolUse } from '../conversations/summarize';
 import type { Engine, HostTool } from '../engines/types';
+import { Mutex } from '../lib/fs';
+import { TaskOperations, verifiedOutcome } from './operations';
 import { newId } from '../lib/ids';
 import type { SettingsStore } from '../settings/store';
 import type { TaskStore } from './store';
@@ -47,7 +50,7 @@ export const MAX_PARTS = 6;
 const STEPS_KEPT = 12;
 
 const RUNNING: readonly TaskStatus[] = ['running', 'needs-you'];
-const FINISHED: readonly TaskStatus[] = ['done', 'failed', 'stopped', 'interrupted'];
+const FINISHED: readonly TaskStatus[] = ['done', 'unverified', 'failed', 'stopped', 'interrupted'];
 
 export class TaskError extends Error {
   constructor(
@@ -102,6 +105,7 @@ export class TaskService {
   readonly #worktrees = new Map<string, Worktree>();
   readonly #waiters = new Map<string, Set<(task: Task) => void>>();
   #pumping = Promise.resolve();
+  readonly #creation = new Mutex();
 
   constructor(private readonly deps: TaskDeps) {}
 
@@ -116,7 +120,7 @@ export class TaskService {
   async start(): Promise<void> {
     for (const task of await this.deps.store.list()) {
       if (task.conversationId) this.#byConversation.set(task.conversationId, task.id);
-      if (RUNNING.includes(task.status))
+      if (RUNNING.includes(task.status) || task.status === 'queued')
         await this.#save({
           ...task,
           status: 'interrupted',
@@ -129,7 +133,9 @@ export class TaskService {
   }
 
   async list(): Promise<TaskList> {
-    const tasks = [...(await this.deps.store.list())].sort((a, b) => b.createdAt - a.createdAt);
+    const tasks = [...(await this.deps.store.list())]
+      .filter((task) => task.archivedAt === undefined)
+      .sort((a, b) => b.createdAt - a.createdAt);
     return { tasks, concurrent: this.deps.background ?? BACKGROUND_AT_ONCE };
   }
 
@@ -156,37 +162,67 @@ export class TaskService {
     group?: string;
     /** A helper's own git worktree (code tasks). */
     worktree?: boolean;
+    expectations?: Task['expectations'];
+    requestKey?: string;
+    workflow?: Task['workflow'];
+    toolScope?: Task['toolScope'];
   }): Promise<Task> {
-    const text = input.text.trim();
-    if (!text) throw new TaskError('invalid', 'Say what the task is.');
-    const options = await this.#optionsFor(input.parentConversationId, input.options);
-    const task: Task = {
-      id: newId('task'),
-      kind: input.kind,
-      title: (input.title?.trim() || titleOf(text)).slice(0, 120),
-      prompt: text,
-      status: 'queued',
-      options,
-      createdAt: this.#now,
-      steps: [],
-      rev: 0,
-      ...(input.parentConversationId && { parentConversationId: input.parentConversationId }),
-      ...(input.group && { group: input.group }),
-    };
-    if (input.worktree) {
-      const workspace = await this.deps.settings.workspace();
-      const wt = await createWorktree(workspace, this.deps.home, task.id, this.deps.git).catch(
-        () => undefined,
-      );
-      if (wt) {
-        this.#worktrees.set(task.id, wt);
-        task.worktree = { path: wt.path, branch: wt.branch, changed: false };
+    return this.#creation.run(async () => {
+      const requestHash = createHash('sha256')
+        .update(JSON.stringify({ ...input, requestKey: undefined }))
+        .digest('hex');
+      if (input.requestKey) {
+        const existing = (await this.deps.store.list()).find(
+          (task) => task.requestKey === input.requestKey,
+        );
+        if (existing) {
+          if (existing.requestHash !== requestHash)
+            throw new TaskError(
+              'invalid',
+              'That request was already used for different work. Start a new request.',
+            );
+          return existing;
+        }
       }
-    }
-    await this.#save(task);
-    await this.#tell(task);
-    this.#pump();
-    return task;
+      const text = input.text.trim();
+      if (!text) throw new TaskError('invalid', 'Say what the task is.');
+      const options = await this.#optionsFor(input.parentConversationId, input.options);
+      const task: Task = {
+        id: newId('task'),
+        kind: input.kind,
+        title: (input.title?.trim() || titleOf(text)).slice(0, 120),
+        prompt: text,
+        status: 'queued',
+        expectations: input.expectations,
+        workflow: input.workflow,
+        toolScope: input.toolScope,
+        requestKey: input.requestKey,
+        requestHash,
+        operations: [],
+        verification: 'pending',
+        modelCompleted: false,
+        options,
+        createdAt: this.#now,
+        steps: [],
+        rev: 0,
+        ...(input.parentConversationId && { parentConversationId: input.parentConversationId }),
+        ...(input.group && { group: input.group }),
+      };
+      if (input.worktree) {
+        const workspace = await this.deps.settings.workspace();
+        const wt = await createWorktree(workspace, this.deps.home, task.id, this.deps.git).catch(
+          () => undefined,
+        );
+        if (wt) {
+          this.#worktrees.set(task.id, wt);
+          task.worktree = { path: wt.path, branch: wt.branch, changed: false };
+        }
+      }
+      await this.#save(task);
+      await this.#tell(task);
+      this.#pump();
+      return task;
+    });
   }
 
   /** The chat's own provider and mode, unless asked for something else. */
@@ -205,40 +241,89 @@ export class TaskService {
 
   async stop(id: string): Promise<Task> {
     const task = await this.get(id);
-    if (task.status === 'queued')
-      return this.#finish(task, { status: 'stopped', error: undefined });
-    if (!RUNNING.includes(task.status)) return task;
+    if (task.status !== 'queued' && !RUNNING.includes(task.status)) return task;
     this.#stopping.add(id);
+    if (task.status === 'queued') {
+      const stopped = await this.#finish(task, { status: 'stopped', error: undefined });
+      const current = await this.get(id);
+      if (current.conversationId) await this.deps.conversations.interrupt(current.conversationId);
+      return stopped;
+    }
     if (task.conversationId) await this.deps.conversations.interrupt(task.conversationId);
     return this.get(id);
   }
 
-  /** Run a task that didn't finish again, from the start, in a new chat. */
+  /** Resume confirmed progress in the same conversation; never reset the ledger. */
   async retry(id: string): Promise<Task> {
-    const task = await this.get(id);
-    if (!FINISHED.includes(task.status) || task.status === 'done')
-      throw new TaskError('busy', 'This task is still going.');
-    const again = await this.#save({
-      ...task,
-      status: 'queued',
-      conversationId: undefined,
-      startedAt: undefined,
-      finishedAt: undefined,
-      summary: undefined,
-      error: undefined,
-      note: undefined,
-      current: undefined,
-      steps: [],
+    const again = await this.#mutate(id, (task) => {
+      if (!FINISHED.includes(task.status) || task.status === 'done')
+        throw new TaskError('busy', 'This task is still going or already verified.');
+      return {
+        status: 'queued',
+        finishedAt: undefined,
+        error: undefined,
+        current: undefined,
+        verification: 'pending',
+        modelCompleted: false,
+      };
     });
+    this.#stopping.delete(id);
     this.#pump();
     return again;
   }
 
+  /** An explicit new instruction, with the original scope and evidence retained. */
+  async continue(id: string, text: string, requestKey?: string): Promise<Task> {
+    const instruction = text.trim();
+    if (!instruction || instruction.length > 20_000)
+      throw new TaskError('invalid', 'Write a short instruction for this task.');
+    const updated = await this.#mutate(id, (task) => {
+      const prior = requestKey && task.continuations?.find((entry) => entry.key === requestKey);
+      if (prior) {
+        if (prior.text !== instruction)
+          throw new TaskError(
+            'invalid',
+            'That request was already used for a different instruction.',
+          );
+        return undefined;
+      }
+      if (!FINISHED.includes(task.status))
+        throw new TaskError(
+          'busy',
+          'Wait for this task to finish or stop it before adding instructions.',
+        );
+      return {
+        prompt: instruction,
+        status: 'queued',
+        finishedAt: undefined,
+        archivedAt: undefined,
+        verification: 'pending',
+        modelCompleted: false,
+        error: undefined,
+        current: undefined,
+        goalRevision: (task.goalRevision ?? 0) + 1,
+        continuations: requestKey
+          ? [...(task.continuations ?? []), { key: requestKey, text: instruction }]
+          : task.continuations,
+      };
+    });
+    this.#stopping.delete(id);
+    this.#pump();
+    return updated;
+  }
+
   async remove(id: string): Promise<void> {
-    const task = await this.get(id);
+    let task = await this.get(id);
+    if (task.status === 'queued') {
+      await this.stop(id);
+      task = await this.get(id);
+    }
     if (!FINISHED.includes(task.status) && task.status !== 'done' && task.status !== 'queued')
       throw new TaskError('busy', 'Stop it first, then remove it.');
-    await this.deps.store.remove(id);
+    // Hide the card, not the evidence. Deleting receipts would re-enable duplicates.
+    if (task.operations?.length || task.requestKey)
+      await this.#mutate(id, () => ({ archivedAt: this.#now }));
+    else await this.deps.store.remove(id);
     this.deps.emit({ type: 'task.deleted', taskId: id });
   }
 
@@ -281,8 +366,12 @@ export class TaskService {
             .sort((a, b) => a.createdAt - b.createdAt)) {
             if (room-- <= 0) break;
             // Marked running before the next look, so one pass never starts it twice.
-            await this.#save({ ...task, status: 'running', startedAt: this.#now });
-            void this.#run(task.id).catch(() => undefined);
+            const claimed = await this.#mutate(task.id, (current) =>
+              current.status === 'queued'
+                ? { status: 'running', startedAt: current.startedAt ?? this.#now }
+                : undefined,
+            );
+            if (claimed.status === 'running') void this.#run(task.id).catch(() => undefined);
           }
         }
       },
@@ -292,9 +381,14 @@ export class TaskService {
 
   async #run(id: string, fallback?: { engine: EngineId; from: string }): Promise<void> {
     let task = await this.get(id);
+    if (this.#stopping.has(id) || task.status !== 'running') return;
     const options = fallback ? { ...task.options, engine: fallback.engine } : task.options;
     const engine = this.deps.engine(options.engine);
     const ready = await engine.detect().catch(() => undefined);
+    if (this.#stopping.has(id)) {
+      await this.#finish(await this.get(id), { status: 'stopped' });
+      return;
+    }
     if (ready?.state !== 'ready') {
       await this.#finish(task, {
         status: 'failed',
@@ -320,17 +414,65 @@ export class TaskService {
       ? await this.deps.conversations.taintOf(task.parentConversationId).catch(() => [])
       : [];
     const wt = this.#worktrees.get(task.id);
+    const operations = new TaskOperations(
+      () => this.get(id),
+      (change) => this.#mutate(id, change),
+      () => this.#stopping.has(id),
+      () => this.#now,
+    );
+    const hostNames = new Set<string>();
+    const permitted = (name: string) => {
+      const plain = name.replace(/^mcp__conch__/, '');
+      return !task.toolScope || plain === 'report_result' || task.toolScope.names.includes(plain);
+    };
     try {
       const { conversationId, result } = await this.deps.conversations.start({
+        conversationId: task.conversationId,
         title: task.title,
-        text: task.prompt,
+        text: task.conversationId
+          ? `Resume the existing goal: ${task.prompt}\nConfirmed progress and unresolved operations: ${JSON.stringify(task.operations ?? [])}\nContinue from confirmed results. Never repeat an unresolved external action. Previously granted approvals do not carry over.`
+          : task.prompt,
         options,
         origin: { kind: 'task', taskId: task.id },
         extras: {
           systemExtra: brief(task),
+          toolAllowed: task.toolScope ? permitted : undefined,
+          onConversation: async (conversationId) => {
+            this.#byConversation.set(conversationId, id);
+            await this.#update(id, { conversationId });
+          },
+          wrapTool: (tool) => {
+            hostNames.add(tool.name);
+            const wrapped = operations.wrap(tool);
+            return {
+              ...wrapped,
+              run: async (args, context) => {
+                if (!permitted(tool.name))
+                  throw new Error(
+                    'This task is only authorized to use its listed read-only or draft tools.',
+                  );
+                if (task.toolScope?.accountId && tool.name.startsWith('google_')) {
+                  const scope = await tool.verification?.scope(args);
+                  if (scope?.account !== task.toolScope.accountId)
+                    throw new Error(
+                      'The Google account changed. Start a new task for this account.',
+                    );
+                }
+                return wrapped.run(args, context);
+              },
+            };
+          },
+          beforeTool: async (name, args, invocationId, phase) => {
+            if (!permitted(name))
+              return 'This task is only authorized to use its listed tools. Shell commands, browser actions, and other tools are not authorized.';
+            if (hostNames.has(name.replace(/^mcp__conch__/, ''))) return undefined;
+            return operations.beforeNative(name, args, invocationId, phase);
+          },
           tools: [finishTool as HostTool],
           taint,
-          ...(wt && { cwd: wt.path }),
+          ...((wt?.path ?? (task.worktree?.changed ? task.worktree.path : undefined)) && {
+            cwd: wt?.path ?? task.worktree?.path,
+          }),
           onStatus: (s) => {
             if (s === 'awaiting-permission') void this.#update(task.id, { status: 'needs-you' });
             if (s === 'running') void this.#update(task.id, { status: 'running' });
@@ -344,12 +486,11 @@ export class TaskService {
           note: `${fallback.from} reached its limit, so ${engine.label} carried on.`,
         }),
       });
-      await this.#tell(task);
       // Stopped while it was starting: it stops now.
       if (this.#stopping.has(id)) await this.deps.conversations.interrupt(conversationId);
       const turn = await result;
       // A limit another provider can answer (ADR 0023): carry on with it, once.
-      if (turn.outcome === 'error' && turn.problem === 'limit' && !fallback) {
+      if (turn.outcome === 'error' && turn.problem === 'limit' && !fallback && !task.toolScope) {
         const { preferences } = await this.deps.settings.get();
         const next = preferences.limitFallback;
         if (next && next !== engine.id) return this.#run(id, { engine: next, from: engine.label });
@@ -357,14 +498,27 @@ export class TaskService {
       const stopped = this.#stopping.delete(id);
       await this.#finish(
         await this.get(id),
-        turn.outcome === 'success'
-          ? { status: 'done', summary: tidy(reported ?? turn.finalText ?? 'Done.', 4_000) }
-          : turn.outcome === 'interrupted'
+        stopped
+          ? { status: 'stopped', verification: 'unverified', error: undefined }
+          : turn.outcome === 'success'
             ? {
-                status: stopped ? 'stopped' : 'interrupted',
-                error: stopped ? undefined : 'It stopped before it finished.',
+                status: verifiedOutcome(await this.get(id)) ? 'done' : 'unverified',
+                verification: verifiedOutcome(await this.get(id)) ? 'verified' : 'unverified',
+                modelCompleted: true,
+                summary: tidy(
+                  reported ?? turn.finalText ?? 'The assistant finished its turn.',
+                  4_000,
+                ),
+                error: verifiedOutcome(await this.get(id))
+                  ? undefined
+                  : 'The assistant finished, but Conch has not verified the requested outcome. Confirmed results below are kept; unresolved actions will not be repeated.',
               }
-            : { status: 'failed', error: tidy(turn.error ?? 'Something went wrong.', 1_000) },
+            : turn.outcome === 'interrupted'
+              ? {
+                  status: stopped ? 'stopped' : 'interrupted',
+                  error: stopped ? undefined : 'It stopped before it finished.',
+                }
+              : { status: 'failed', error: tidy(turn.error ?? 'Something went wrong.', 1_000) },
       );
     } catch (error) {
       await this.#finish(await this.get(id), {
@@ -486,7 +640,7 @@ export class TaskService {
               {
                 at: e.at,
                 label: tidy(
-                  `${didWhat(call.name, call.input)}${e.status === 'success' ? '' : ' (didn’t work)'}`,
+                  `${e.status === 'success' ? 'Tool returned: ' : 'Tool failed: '}${summarizeToolUse(call.name, call.input)}`,
                   240,
                 ),
               },
@@ -604,6 +758,8 @@ export function merged(tasks: Task[]): string {
       const branch = t.worktree?.changed
         ? `\n(Changes are on branch \`${t.worktree.branch}\` in ${t.worktree.path}.)`
         : '';
+      if (t.status === 'unverified')
+        return `${head}\nNot verified: ${t.summary ?? t.error}${branch}`;
       if (t.status === 'done') return `${head}\n${t.summary ?? 'Done.'}${branch}`;
       if (t.status === 'stopped') return `${head}\nStopped before it finished.`;
       return `${head}\nDidn’t finish: ${t.error ?? 'something went wrong.'}`;

@@ -14,6 +14,8 @@ export function protectedPaths(home: string): string[] {
     join(home, 'google.secrets.json'),
     join(home, 'channels.secrets.json'),
     join(home, 'access.json'),
+    // Task evidence is authority: the model must never forge completion or erase dedupe.
+    join(home, 'tasks.json'),
     // Whose skills are trusted, and your signing key (ADR 0031): an assistant
     // that could write the one would vouch for its own skills.
     join(home, 'skills.trust.json'),
