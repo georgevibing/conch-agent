@@ -190,6 +190,7 @@ test('a release that doesn’t start: Conch goes back by itself, says so once, a
     .getByRole('region', { name: 'Conch 0.3 is ready' })
     .getByRole('button', { name: 'Update' })
     .click();
+  await expect(page.getByText('Updating Conch…').first()).toBeVisible({ timeout: 60_000 });
   await expect
     .poll(() => bootId(request), { timeout: 150_000 })
     .not.toMatch(new RegExp(`^(${before})?$`));
@@ -197,8 +198,11 @@ test('a release that doesn’t start: Conch goes back by itself, says so once, a
     .poll(async () => (await status(request)).conch.version, { timeout: 30_000 })
     .toBe('0.2.0');
 
-  await page.goto('/?open=updates');
+  // The gateway can be ready before RestartWatch reloads the browser. Let it
+  // finish and reopen Settings itself; navigating here races that reload and
+  // would also hide a broken automatic recovery from this journey.
   const settings = page.getByRole('dialog', { name: /Settings/ });
+  await expect(settings).toBeVisible({ timeout: 60_000 });
   await expect(
     settings.getByText(
       'Conch 0.3.0 didn’t start properly, so Conch went back to 0.2.0 by itself.',
