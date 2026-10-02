@@ -356,7 +356,8 @@ describe('Ollama, streamed', () => {
       ['qwen3.5:9b', true, ['high']],
       ['gemma3:1b', false, []],
     ]);
-    expect(models[2]?.info.description).toBe('2.5 GB · can’t use your apps or memory');
+    // Chat only is the picker's badge, not the description's words (ADR 0050).
+    expect(models[2]?.info.description).toBe('2.5 GB');
   });
 });
 

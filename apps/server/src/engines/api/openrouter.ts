@@ -351,13 +351,8 @@ export class OpenRouterWire implements Wire {
       info: {
         id: entry.id,
         label: entry.name?.trim() || entry.id,
-        description: [
-          contextLabel(entry.context_length),
-          cost,
-          tools ? undefined : 'can’t use your integrations',
-        ]
-          .filter(Boolean)
-          .join(' · '),
+        // Chat only is the picker's badge (ADR 0050), not words here.
+        description: [contextLabel(entry.context_length), cost].filter(Boolean).join(' · '),
         // Only the levels OpenRouter enumerated for this model: guessing here
         // would offer a choice the provider rejects.
         efforts: knownEfforts(entry.reasoning?.supported_efforts ?? undefined),

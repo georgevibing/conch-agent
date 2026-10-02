@@ -175,10 +175,10 @@ export class OllamaWire implements Wire {
         info: {
           id: m.name,
           label: m.label,
-          description: [
-            gigabytes(m.sizeBytes),
-            tools ? 'uses your apps' : 'can’t use your apps or memory',
-          ].join(' · '),
+          // One that can't use apps wears the picker's "Chat only" badge instead (ADR 0050).
+          description: [gigabytes(m.sizeBytes), tools && 'uses your apps']
+            .filter(Boolean)
+            .join(' · '),
           // Thinking is on or off for most; gpt-oss takes a level.
           efforts: thinking ? (LEVELS.test(m.name) ? ['low', 'medium', 'high'] : ['high']) : [],
           supportsFastMode: false,

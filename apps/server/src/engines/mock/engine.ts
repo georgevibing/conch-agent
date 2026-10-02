@@ -227,6 +227,16 @@ export class MockEngine implements Engine {
           supportsFastMode: false,
           supportsAutoMode: false,
         },
+        // Chat only, like some API and small local models (ADR 0050): no tools at all.
+        {
+          id: 'chat-lite',
+          label: 'Chat Lite',
+          description: 'Conversation only',
+          efforts: [],
+          supportsFastMode: false,
+          supportsAutoMode: false,
+          tools: false,
+        },
       ],
       commands: [
         {
@@ -404,12 +414,23 @@ export class MockEngine implements Engine {
     ];
   }
 
-  async *runTurn(input: TurnInput): AsyncIterable<EngineEvent> {
+  async *runTurn(turn: TurnInput): AsyncIterable<EngineEvent> {
+    // A chat-only model is never shown any tools, as a model API's isn't (ADR 0050).
+    const chatOnly =
+      (await this.capabilities()).models.find((m) => m.id === turn.options.model)?.tools === false;
+    const input: TurnInput = chatOnly ? { ...turn, tools: [], bridgedTools: [] } : turn;
     const wait = (ms: number) => sleep(ms * this.#speed, input.signal);
     const messageId = newId('msg');
     this.#spend();
     try {
       yield { type: 'session', resumeId: input.resumeId ?? newId('mock-session'), model: 'mock' };
+      if (chatOnly)
+        yield {
+          type: 'notice',
+          code: 'chat-only',
+          message:
+            'This model is chat-only: it cannot use files, commands, memory or connected apps. Choose a tool-capable model for actions.',
+        };
       // Scripted for tests and demos: the sign-in ends in the middle of a chat
       // (once, so the message that goes again after signing in gets its reply).
       if (
@@ -441,7 +462,7 @@ export class MockEngine implements Engine {
 
       const text = input.prompt.toLowerCase();
       const rememberMatch = /remember (?:that )?(.+)/i.exec(input.prompt);
-      if (rememberMatch?.[1]) {
+      if (rememberMatch?.[1] && !chatOnly) {
         const toolUseId = newId('tool');
         const args = { content: rememberMatch[1].replace(/[.!]$/, ''), kind: 'fact' as const };
         yield { type: 'tool-start', toolUseId, name: 'mcp__conch__remember', input: args };
@@ -822,7 +843,7 @@ export class MockEngine implements Engine {
         };
       }
 
-      if (/\b(run|list|files?|test)\b/.test(text)) {
+      if (!chatOnly && /\b(run|list|files?|test)\b/.test(text)) {
         const toolUseId = newId('tool');
         const command = /test/.test(text) ? 'npm test' : 'ls -la';
         const decision = await input.requestPermission(

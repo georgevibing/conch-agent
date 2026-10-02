@@ -359,13 +359,8 @@ export class ApiEngine implements Engine {
         ...(key && { key }),
         signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
       });
-      models = listed.map((model) => ({
-        ...model.info,
-        tools: model.tools,
-        description: model.tools
-          ? model.info.description
-          : `Chat only — no files, commands or connected apps. ${model.info.description}`.trim(),
-      }));
+      // A chat-only model says so with its own badge in the picker (ADR 0050).
+      models = listed.map((model) => ({ ...model.info, tools: model.tools }));
     } catch {
       // An empty list is the honest answer: Conch never invents model names.
       models = [];

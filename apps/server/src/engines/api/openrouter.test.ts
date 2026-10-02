@@ -153,7 +153,8 @@ describe('OpenRouter models', () => {
 
     const models = await or.models({});
     expect(models.map((m) => m.info.id)).toEqual(['some/text-only']);
-    expect(models[0]?.info.description).toContain('can’t use your integrations');
+    // It says it can't use apps with the picker's badge (ADR 0050).
+    expect(models[0]?.tools).toBe(false);
   });
 
   it('finds a small model in the list, and invents none when there isn’t one', async () => {
