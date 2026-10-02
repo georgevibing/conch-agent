@@ -112,12 +112,15 @@ more from a gallery, no JSON editing; Conch keeps their sign-ins fresh, and offe
 to connect one when you ask about it in a chat. Agent Skills (`SKILL.md`) and your
 own commands work with every model. Routines run tasks on a schedule you read in
 plain words, and nothing runs until you turn it on.
-Google setup guides you through your own project, imports its Desktop credential
-file, and supports local sign-in or remote paste-back without a hosted Conch
-connection service. Existing Web clients still work.
+Gmail, Google Calendar and Google Drive are apps like the rest, with one Google
+account shared between them. Gmail connects with an app password in two steps
+(reads, searches and saves drafts, never sends); Calendar and Drive use your own
+Google Cloud app, which the setup guides you through, locally or on a server,
+without a hosted Conch connection service.
 ([ADR 0009](./docs/adr/0009-integrations.md), [0013](./docs/adr/0013-skills.md),
 [0006](./docs/adr/0006-routines.md), [0021](./docs/adr/0021-connect-from-chat.md),
-[0040](./docs/adr/0040-google-setup-without-a-broker.md))
+[0040](./docs/adr/0040-google-setup-without-a-broker.md),
+[0048](./docs/adr/0048-google-apps-and-gmail-app-password.md))
 
 **It can use the web for you.** Conch has a browser of its own, with nothing to
 install. You watch it work live beside the chat and can take the wheel at any time.

@@ -16,7 +16,7 @@ In Conch, the page is called **Integrations**.
 
 You sign in on the app's own page, so Conch never sees your password. What it keeps stays on this computer, readable by you alone, and is never shown again.
 
-Gmail, Google Calendar and Google Drive connect directly to Conch after one-time Google app setup, described below. Slack may connect through your provider’s account; that connection works only with that provider’s models. Provider-owned connections are shown separately.
+Gmail, Google Calendar and Google Drive are apps like the others: press their tile. Gmail connects with an app password; Calendar and Drive need your own Google Cloud app, once. Both are described below. Slack may connect through your provider’s account; that connection works only with that provider’s models. Provider-owned connections are shown separately.
 
 ## Or connect from a chat
 
@@ -34,7 +34,7 @@ Ask one of them about an app you connected, and your message waits with a card: 
 
 ## Decide what it may do
 
-For connected MCP apps, choose how your assistant uses them. Direct Google access instead follows the permissions requested for your job, and saving a draft always asks for your approval:
+Choose how your assistant uses each app. Saving a Gmail draft always asks, whatever you choose, so it only offers **Ask** or **Off**:
 
 - **Ask every time.** It asks before every action.
 - **Ask before changes.** It looks things up on its own, and asks before it creates, sends, changes or deletes anything. Apps from the gallery start here.
@@ -63,14 +63,28 @@ Conch checks your apps and keeps their sign-ins fresh. One that needs you moves 
 
 Apps a provider set up by itself are listed under **From your providers**, and only work with that provider. Where Conch can connect the same app, **Use with every model** brings it in.
 
-## Connect Google directly
+## Connect Gmail with an app password
 
-Google accounts belong to **Conch**, not your model provider. In Integrations,
-choose Google, Gmail or Google Calendar. Choose the personal or work account you
-want; Conch shows its email address and the access actually granted. Reading
-mail, saving drafts, reading calendar events and searching Drive have separate
-permissions. New connections request the permissions for your job. Reconnecting
-an account keeps its existing access and requests the additional permissions.
+The simple way, for Gmail only. It takes about two minutes.
+
+1. In **Integrations**, press **Gmail**. Type your Gmail address and press **Next**.
+2. Press **Open Google’s app passwords page**. Google only offers app passwords once [2-Step Verification](https://myaccount.google.com/signinoptions/two-step-verification) is on; its page says how. Name the password “Conch” and press **Create**.
+3. Paste the 16 letters into **App password**. Conch checks them by signing in to Gmail as they land, and says so if Google refuses them.
+
+If your email channel already signs in to Gmail, Conch asks whether Gmail may use the same app password: press **Use it for Gmail**. It's never shared without asking.
+
+With an app password, your assistant can search Gmail, read emails and save drafts in your **Drafts** folder. It can't send: Conch only reads mail and adds drafts (IMAP), and asks you before every draft. Google Calendar and Google Drive can't use an app password; they need the Google Cloud way below.
+
+If Google stops taking the password (you removed it, or changed your Google password), Gmail moves to the top of **Connected** with **Sign in again**. Its page has the field to paste a new one. **Disconnect** forgets the password; to stop it working at Google too, remove it on Google’s app passwords page.
+
+## Connect with your own Google Cloud app
+
+The way for Google Calendar and Google Drive, and the advanced way for Gmail (press **Use your own Google Cloud app instead (advanced)** in its dialog). One Google account can serve all three apps; each asks Google only for what it needs, and a later one adds its permission to the same account.
+
+Google accounts belong to **Conch**, not your model provider. Choose the personal
+or work account you want; Conch shows its email address and the access actually
+granted. Reconnecting an account keeps its existing access and requests the
+additional permissions.
 
 ### One-time setup, with no hosted connection service
 
@@ -139,7 +153,8 @@ can restrict access. Public applications using Gmail or Drive scopes may require
 Google verification; a testing app’s refresh tokens can expire after seven days.
 Conch does not claim that a public OAuth application has been verified for you.
 
-**Disconnect** revokes Google access before removing its local sign-in. If Google
+**Disconnect** on one app keeps a Google account the other Google apps still use.
+When no app uses it any more, Conch revokes Google access before removing its local sign-in. If Google
 is offline, Conch keeps the entry so you can retry deliberately; you can also
 remove access in your Google account’s third-party connections. **Repair everything**
 checks connected accounts and refreshes access when it safely can.
