@@ -88,6 +88,7 @@ const result: ImportResult = {
   source: 'openclaw',
   counts: {
     persona: 1,
+    model: 0,
     about: 0,
     memories: 1,
     skills: 0,
@@ -174,6 +175,85 @@ describe('Come home', () => {
       expect(calls.some((c) => c.method === 'POST' && c.path === '/api/import/undo')).toBe(true),
     );
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('groups another agent’s things, and sends a half Slack bot to finish in Channels (ADR 0042)', async () => {
+    const user = userEvent.setup();
+    const atlas = { id: 'work', name: 'Atlas' };
+    mockFetch({
+      'GET /api/import': () => status(),
+      'GET /api/import/openclaw': () => ({
+        ...plan,
+        problems: [],
+        items: [
+          {
+            id: 'model',
+            group: 'model',
+            title: 'Use Claude Opus, as in OpenClaw',
+            detail: 'New chats start with Opus on Claude Code.',
+            checked: true,
+          },
+          {
+            id: 'agent:work:persona',
+            group: 'skills',
+            title: 'Talk as Atlas',
+            checked: true,
+            agent: atlas,
+          },
+          {
+            id: 'agent:work:memory:1',
+            group: 'memories',
+            title: 'Charles reviews every pull request.',
+            checked: true,
+            agent: atlas,
+          },
+          { id: 'channel:slack', group: 'channels', title: 'Your Slack bot', checked: false },
+        ],
+      }),
+      'POST /api/import': () => ({
+        ...result,
+        counts: { ...result.counts, model: 1, channels: 0 },
+        outcomes: [
+          {
+            id: 'model',
+            group: 'model',
+            title: 'Model: Claude Opus 4.6',
+            ok: true,
+            message: 'New chats start with Opus on Claude Code.',
+          },
+          {
+            id: 'channel:slack',
+            group: 'channels',
+            title: 'Slack bot',
+            ok: true,
+            message:
+              'Slack needs one more key, the app-level token: Conch shows you where to get it.',
+            finish: 'slack-key',
+          },
+        ],
+      }),
+      'GET /api/auth': () => auth,
+    });
+    renderApp(<ComeHomeSection />);
+    await user.click(await screen.findByRole('button', { name: 'Take a look' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Bring your things from OpenClaw' });
+    const agent = await within(dialog).findByRole('region', { name: 'Atlas' });
+    expect(agent).toHaveTextContent('Talk as Atlas');
+    expect(agent).toHaveTextContent('Charles reviews');
+    expect(within(dialog).getByRole('region', { name: 'Model' })).toHaveTextContent(
+      'Use Claude Opus, as in OpenClaw',
+    );
+    await user.click(within(dialog).getByRole('checkbox', { name: /Your Slack bot/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Bring 4 things over' }));
+    const summary = await within(dialog).findByRole('region', {
+      name: 'Your things from OpenClaw are here',
+    });
+    expect(summary).toHaveTextContent('1 model choice');
+    expect(summary).toHaveTextContent('New chats start with Opus');
+    expect(within(summary).getByRole('link', { name: 'Finish connecting Slack' })).toHaveAttribute(
+      'href',
+      '/channels/new/slack?from=openclaw',
+    );
   });
 
   it('shows progress while things come over', async () => {

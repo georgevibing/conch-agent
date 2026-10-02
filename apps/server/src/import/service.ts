@@ -463,7 +463,7 @@ export class ImportService {
         id: 'model',
         group: 'model',
         title: `Use ${modelWords(model.model)}, as in ${found.label}`,
-        detail: `From ${found.label}’s ${model.from}, for new chats. Chats you’ve started keep theirs.`,
+        detail: `From ${found.label}’s ${model.from}, for new chats.`,
         checked: false,
         warning: mapped.reason,
       };
@@ -480,7 +480,7 @@ export class ImportService {
       title: `Use ${choiceTitle(model, choice)}, as in ${found.label}`,
       detail: `New chats start with ${choice.modelLabel} on ${choice.engineLabel}${
         choice.exact ? '' : `, the nearest here to ${modelWords(model.model)}`
-      }. Now it’s ${nowLabel}. Chats you’ve started keep theirs.`,
+      }. Now it’s ${nowLabel}.`,
       // Only when you haven't chosen one yourself, like the name.
       checked: !current.model && !duplicate,
       ...(duplicate && { duplicate }),

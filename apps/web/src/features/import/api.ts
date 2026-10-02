@@ -1,8 +1,11 @@
 import {
+  Channel,
   ImportPlan,
   ImportResult,
+  ImportSlackStatus,
   ImportStatus,
   UndoImportResult,
+  type FinishSlackImportBody,
   type ImportSourceId,
 } from '@conch/protocol';
 import { useQuery } from '@tanstack/react-query';
@@ -18,7 +21,14 @@ export const importApi = {
   run: (source: ImportSourceId, items: string[]) =>
     request(ImportResult, '/api/import', { method: 'POST', body: { source, items } }),
   undo: () => request(UndoImportResult, '/api/import/undo', { method: 'POST', body: {} }),
+  /** A Slack bot another app had one key for (ADR 0042): which key and app, never the key. */
+  slack: () => request(ImportSlackStatus, '/api/import/slack'),
+  finishSlack: (source: ImportSourceId, body: FinishSlackImportBody) =>
+    request(Channel, `/api/import/${encodeURIComponent(source)}/slack`, { method: 'POST', body }),
 };
+
+/** Where the Slack setup picks up from, for a bot that came over with one key. */
+export const finishSlackPath = (source: ImportSourceId) => `/channels/new/slack?from=${source}`;
 
 export const importKeys = { status: ['import'] as const };
 

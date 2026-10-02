@@ -3,12 +3,15 @@ import {
   type ChannelKind,
   type ChannelSecrets,
   DISCORD_TOKEN,
+  ImportSourceId,
+  type ImportSlackHalf,
   SLACK_APP_TOKEN,
   SLACK_BOT_TOKEN,
   TELEGRAM_TOKEN,
 } from '@conch/protocol';
 import {
   Button,
+  Callout,
   CodeBlock,
   Collapsible,
   CopyButton,
@@ -24,14 +27,15 @@ import {
   Stack,
   Text,
 } from '@conch/nacre';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, SquareArrowOutUpRight } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 
 import { useAppState } from '../../api/queries';
 import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
+import { importApi } from '../import/api';
 import { channelsApi } from './api';
 import styles from './Channels.module.css';
 import { APPS, isKind } from './describe';
@@ -39,6 +43,7 @@ import {
   BOTFATHER_URL,
   DISCORD_PORTAL_URL,
   randomDigits,
+  slackAppUrl,
   slackCreateUrl,
   slackManifest,
   telegramNames,
@@ -103,8 +108,12 @@ function SetupPage({
   );
 }
 
-/** Keeps the key, connects, and remembers the channel made (for the steps after). */
-function useConnect() {
+/**
+ * Keeps the key, connects, and remembers the channel made (for the steps
+ * after). `create` connects another way: a Slack bot brought from another
+ * app with one key, finished with the other (ADR 0042).
+ */
+function useConnect(create: (secrets: ChannelSecrets) => Promise<Channel> = channelsApi.create) {
   const client = useQueryClient();
   const auth = useAuth();
   const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
@@ -122,7 +131,7 @@ function useConnect() {
     setError(undefined);
     try {
       await guard(async () => {
-        const made = await channelsApi.create(secrets);
+        const made = await create(secrets);
         putChannel(client, made);
         setId(made.id);
       });
@@ -594,6 +603,60 @@ function DiscordPreview({
 
 // ── Slack ────────────────────────────────────────────────────────────────
 
+/**
+ * A Slack bot another app had one of the two keys for (ADR 0042): offered
+ * here, and used when the person came from Come home or says so. The key
+ * itself never reaches the page; the gateway adds it when connecting.
+ */
+function useSlackHalf() {
+  const [params] = useSearchParams();
+  const from = ImportSourceId.safeParse(params.get('from'));
+  const { data } = useQuery({
+    queryKey: ['import', 'slack'],
+    queryFn: importApi.slack,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const [chosen, setChosen] = useState(false);
+  const half = data?.half;
+  const usable = half && !half.problem ? half : undefined;
+  const used =
+    usable && (chosen || (from.success && from.data === usable.source)) ? usable : undefined;
+  return { half, used, use: () => setChosen(true), from: from.success ? from.data : undefined };
+}
+
+function SlackHalfNote({
+  half,
+  used,
+  onUse,
+  from,
+}: {
+  half: ImportSlackHalf | undefined;
+  used: ImportSlackHalf | undefined;
+  onUse: () => void;
+  from: string | undefined;
+}) {
+  if (!half || used) return null;
+  if (half.problem)
+    return from === half.source ? <Callout tone="warning" title={half.problem} /> : null;
+  return (
+    <Callout
+      tone="info"
+      title={`${half.label} had this bot’s ${half.has === 'botToken' ? 'bot token' : 'app-level token'}`}
+      action={
+        <Button size="sm" variant="surface" onClick={onUse}>
+          Use it
+        </Button>
+      }
+    >
+      {half.bot
+        ? `It’s ${half.bot.name}${half.bot.workspace ? ` in ${half.bot.workspace}` : ''}. `
+        : ''}
+      Then you only need the other key.
+    </Callout>
+  );
+}
+
 function SlackSetup() {
   const navigate = useNavigate();
   const state = useAppState();
@@ -601,6 +664,7 @@ function SlackSetup() {
   const [created, setCreated] = useState(false);
   const [botToken, setBotToken] = useState('');
   const [appToken, setAppToken] = useState('');
+  const { half, used, use, from } = useSlackHalf();
 
   // Keys pasted into each other's boxes are put right.
   const place = (value: string, into: 'bot' | 'app') => {
@@ -620,29 +684,58 @@ function SlackSetup() {
     appToken.trim() ? { kind: 'slack', botToken: botToken || undefined, appToken } : undefined,
     appToken,
   );
-  const { channel, connect, busy, error, reset, dialog } = useConnect();
+  const { channel, connect, busy, error, reset, dialog } = useConnect(
+    used
+      ? // Only the key that was missing travels; the gateway has the other.
+        (secrets) =>
+          importApi.finishSlack(
+            used.source,
+            secrets.kind === 'slack'
+              ? used.has === 'botToken'
+                ? { appToken: secrets.appToken }
+                : { botToken: secrets.botToken }
+              : {},
+          )
+      : undefined,
+  );
+  const hasBot = used?.has === 'botToken';
+  const hasApp = used?.has === 'appToken';
+  const botOk = hasBot || botCheck.status === 'ok';
+  const appOk = hasApp || appCheck.status === 'ok';
   useEffect(() => {
-    if (botCheck.status === 'ok' && appCheck.status === 'ok' && !channel)
+    if (botOk && appOk && !channel)
+      // With a bot from another app, the key it had is empty here: the gateway adds it.
       void connect({ kind: 'slack', botToken, appToken });
   });
 
-  const at = channel ? 3 : botCheck.status === 'ok' ? 2 : created || botToken ? 1 : 0;
-  const bot = botCheck.check?.ok ? botCheck.check.bot : channel?.bot;
+  const at = channel ? 3 : botOk ? 2 : used || created || botToken ? 1 : 0;
+  const bot = botCheck.check?.ok ? botCheck.check.bot : (channel?.bot ?? used?.bot);
+  // The app's id, from a key: links go straight to its own settings pages.
+  const appId =
+    used?.appId ??
+    (botCheck.check?.ok ? botCheck.check.appId : undefined) ??
+    (appCheck.check?.ok ? appCheck.check.appId : undefined);
   const manifest = JSON.stringify(slackManifest(assistant), null, 2);
+  const kept = used && `From ${used.label}`;
 
   return (
     <SetupPage
       kind="slack"
-      intro="About four minutes. Slack makes the app from settings Conch fills in; you press a few buttons and copy two keys."
+      intro={
+        used
+          ? `Your Slack app is already made: ${used.label} had one of its two keys. Get the other from Slack, and it’s connected.`
+          : 'About four minutes. Slack makes the app from settings Conch fills in; you press a few buttons and copy two keys.'
+      }
       preview={<SlackPreview at={at} channel={channel} assistant={assistant} />}
     >
+      <SlackHalfNote half={half} used={used} onUse={use} from={from} />
       <GuideSteps label="Connect Slack">
         <GuideSteps.Step
           number={1}
           title="Make the Slack app"
-          state={stepState(0, at)}
-          summary="Made in Slack"
-          onEdit={channel ? undefined : () => setCreated(false)}
+          state={used ? 'done' : stepState(0, at)}
+          summary={used ? `Made, in ${used.label}` : 'Made in Slack'}
+          onEdit={channel || used ? undefined : () => setCreated(false)}
         >
           <Text tone="muted">
             This opens Slack with everything filled in. Pick your workspace, press <b>Next</b>, then{' '}
@@ -677,41 +770,88 @@ function SlackSetup() {
         <GuideSteps.Step
           number={2}
           title="Install it, and copy its key"
-          state={stepState(1, at)}
-          summary={bot?.workspace ? `Installed in ${bot.workspace}` : 'Installed'}
+          state={hasBot ? 'done' : stepState(1, at)}
+          summary={
+            hasBot
+              ? `${kept}${bot ? `: ${bot.name}${bot.workspace ? ` in ${bot.workspace}` : ''}` : ''}`
+              : bot?.workspace
+                ? `Installed in ${bot.workspace}`
+                : 'Installed'
+          }
         >
-          <Text tone="muted">
-            In your app’s settings, open <b>Install App</b> and press <b>Install to Workspace</b>,
-            then <b>Allow</b>. Copy the <b>Bot User OAuth Token</b> it shows.
-          </Text>
+          {hasApp ? (
+            <>
+              <Text tone="muted">
+                {used?.label} only had the app-level token. Open your app’s <b>Install App</b> page
+                and press <b>Install to Workspace</b> (or <b>Reinstall</b>), then <b>Allow</b>. Copy
+                the <b>Bot User OAuth Token</b> it shows.
+              </Text>
+              <OpenButton href={slackAppUrl(appId, 'install-on-team')}>
+                Open your app’s Install App page
+              </OpenButton>
+            </>
+          ) : (
+            <Text tone="muted">
+              In your app’s settings, open <b>Install App</b> and press <b>Install to Workspace</b>,
+              then <b>Allow</b>. Copy the <b>Bot User OAuth Token</b> it shows.
+            </Text>
+          )}
           <KeyField
             label="Bot token"
             value={botToken}
-            onValueChange={(v) => place(v, 'bot')}
-            status={botCheck.status}
+            onValueChange={(v) => {
+              reset();
+              place(v, 'bot');
+            }}
+            status={hasApp && error ? 'error' : botCheck.status}
             placeholder="xoxb-…"
             checkingLabel="Checking with Slack…"
             description="It starts with xoxb-."
             found={
               <>
-                Found <b>{bot?.name}</b> in {bot?.workspace ?? 'your workspace'}.
+                Found <b>{bot?.name}</b> in {bot?.workspace ?? 'your workspace'}.{' '}
+                {hasApp && busy ? 'Connecting…' : ''}
               </>
             }
-            error={botCheck.check && !botCheck.check.ok ? botCheck.check.message : undefined}
+            error={
+              (hasApp ? error : undefined) ??
+              (botCheck.check && !botCheck.check.ok ? botCheck.check.message : undefined)
+            }
             focusOnShow
           />
         </GuideSteps.Step>
         <GuideSteps.Step
           number={3}
           title="Let it stay connected"
-          state={stepState(2, at)}
-          summary="Connected"
+          state={hasApp ? 'done' : stepState(2, at)}
+          summary={hasApp ? kept : 'Connected'}
         >
-          <Text tone="muted">
-            Open <b>Basic Information</b>, scroll to <b>App-Level Tokens</b> and press{' '}
-            <b>Generate Token and Scopes</b>. Name it “conch”, press <b>Add Scope</b>, choose{' '}
-            <b>connections:write</b>, then <b>Generate</b>. Copy the token.
-          </Text>
+          {hasBot ? (
+            <>
+              <Text tone="muted">
+                {used?.label} only had the bot token, so Slack needs the app-level token too. Open
+                your app’s <b>Socket Mode</b> page and turn on <b>Enable Socket Mode</b>. Slack asks
+                for a token: name it “conch”, keep the <b>connections:write</b> scope it suggests,
+                and press <b>Generate</b>. Copy the token.
+              </Text>
+              <OpenButton href={slackAppUrl(appId, 'socket-mode')}>
+                Open your app’s Socket Mode page
+              </OpenButton>
+            </>
+          ) : (
+            <>
+              <Text tone="muted">
+                Open <b>Basic Information</b>, scroll to <b>App-Level Tokens</b> and press{' '}
+                <b>Generate Token and Scopes</b>. Name it “conch”, press <b>Add Scope</b>, choose{' '}
+                <b>connections:write</b>, then <b>Generate</b>. Copy the token.
+              </Text>
+              {appId && (
+                <OpenButton href={slackAppUrl(appId, 'general')}>
+                  Open your app’s Basic Information
+                </OpenButton>
+              )}
+            </>
+          )}
           <KeyField
             label="App-level token"
             value={appToken}
@@ -719,13 +859,14 @@ function SlackSetup() {
               reset();
               place(v, 'app');
             }}
-            status={error ? 'error' : appCheck.status}
+            status={error && !hasApp ? 'error' : appCheck.status}
             placeholder="xapp-…"
             checkingLabel="Checking with Slack…"
             description="It starts with xapp-. This lets Conch reach Slack without a public address."
             found={<>That’s the one. {busy ? 'Connecting…' : ''}</>}
             error={
-              error ?? (appCheck.check && !appCheck.check.ok ? appCheck.check.message : undefined)
+              (hasApp ? undefined : error) ??
+              (appCheck.check && !appCheck.check.ok ? appCheck.check.message : undefined)
             }
           />
         </GuideSteps.Step>

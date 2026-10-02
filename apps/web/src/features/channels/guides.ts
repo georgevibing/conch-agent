@@ -90,6 +90,19 @@ export function slackManifest(assistant: string) {
   };
 }
 
+/**
+ * A page of one Slack app's settings, straight there when its id is known
+ * (a key gives it away), else the list of your apps to pick it from.
+ */
+export function slackAppUrl(
+  appId: string | undefined,
+  page: 'general' | 'install-on-team' | 'socket-mode',
+): string {
+  return appId && /^A[A-Z0-9]{6,20}$/.test(appId)
+    ? `${SLACK_APPS_URL}/${appId}/${page}`
+    : SLACK_APPS_URL;
+}
+
 /** Opens Slack's "create an app" with everything filled in. */
 export function slackCreateUrl(assistant: string): string {
   return `${SLACK_APPS_URL}?new_app=1&manifest_json=${encodeURIComponent(

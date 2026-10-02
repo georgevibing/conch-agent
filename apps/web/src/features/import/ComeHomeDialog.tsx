@@ -13,10 +13,12 @@ import {
   type ImportPreviewItem,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Link } from 'react-router';
 
 import { ApiError } from '../../api/client';
-import { importApi, useImportProgress } from './api';
+import { useUi } from '../../app/ui';
+import { finishSlackPath, importApi, useImportProgress } from './api';
 
 type Guard = (task: () => Promise<unknown>) => Promise<boolean>;
 
@@ -29,11 +31,32 @@ type Step =
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** What to do next, a sentence each: say hello to a bot, turn a skill on. */
-function nextSteps(result: ImportResult): string[] {
-  const next = result.outcomes
-    .filter((o) => o.ok && o.message && (o.group === 'channels' || o.group === 'keys'))
-    .map((o) => o.message as string);
+/** What to do next, a sentence each: say hello to a bot, turn a skill on, get Slack's other key. */
+function nextSteps(result: ImportResult, onClose: () => void): ReactNode[] {
+  const next: ReactNode[] = result.outcomes
+    .filter(
+      (o) =>
+        o.ok && o.message && (o.group === 'channels' || o.group === 'keys' || o.group === 'model'),
+    )
+    .map((o) =>
+      o.finish === 'slack-key' ? (
+        <>
+          {o.message}{' '}
+          <Link
+            to={finishSlackPath(result.source)}
+            onClick={() => {
+              // Settings may be open around Come home: the Slack setup is a page of its own.
+              onClose();
+              useUi.getState().closeSettings();
+            }}
+          >
+            Finish connecting Slack
+          </Link>
+        </>
+      ) : (
+        o.message
+      ),
+    );
   if (result.counts.skills)
     next.push(
       result.counts.skills === 1
@@ -135,6 +158,7 @@ function ComeHomeFlow({
         warning: i.warning,
         duplicate: i.duplicate,
         review: i.review && <SkillReview verdict={i.review.verdict} findings={i.review.findings} />,
+        ...(i.agent && { agent: i.agent }),
       })),
     [plan],
   );
@@ -240,7 +264,7 @@ function ComeHomeFlow({
               failed={step.result.outcomes
                 .filter((o) => !o.ok)
                 .map((o) => ({ title: o.title, message: o.message ?? 'It didn’t come over.' }))}
-              next={nextSteps(step.result)}
+              next={nextSteps(step.result, onClose)}
               backedUp={Boolean(step.result.backupId)}
               action={
                 step.result.undoable && (

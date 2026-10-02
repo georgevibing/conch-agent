@@ -229,6 +229,74 @@ describe('Saying hello on Discord and Slack', () => {
   });
 });
 
+describe('Connecting a Slack bot another app had one key for (ADR 0042)', () => {
+  const half = {
+    source: 'hermes' as const,
+    label: 'Hermes',
+    has: 'botToken' as const,
+    bot: { id: 'U0BOT', name: 'Pearl', workspace: 'Babbage & Co' },
+    appId: 'A0MOCKAPP',
+  };
+  const appKey = ['xapp', '1', 'A0MOCKAPP', '3333333333', 'mockmockmockmockmock'].join('-');
+
+  it('picks up from Come home: the app is made, the bot token is there, and Slack’s page for the other key is one press away', async () => {
+    const made = channel({ id: 'ch_s', kind: 'slack', bot: half.bot });
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'GET /api/import/slack': () => ({ half }),
+      'GET /api/auth': () => ({
+        method: 'none',
+        signedIn: true,
+        setupRequired: false,
+        secure: true,
+      }),
+      'POST /api/channels/check': () => ({
+        ok: true,
+        bot: { id: '', name: 'Slack app' },
+        checked: ['appToken'],
+        appId: 'A0MOCKAPP',
+      }),
+      'POST /api/import/hermes/slack': () => made,
+    });
+    renderApp(<ConnectChannel kind="slack" />, { route: '/channels/new/slack?from=hermes' });
+    expect(await screen.findByText('Made, in Hermes')).toBeInTheDocument();
+    expect(screen.getByText('From Hermes: Pearl in Babbage & Co')).toBeInTheDocument();
+    const open = screen.getByRole('link', { name: /Open your app’s Socket Mode page/ });
+    expect(open).toHaveAttribute('href', 'https://api.slack.com/apps/A0MOCKAPP/socket-mode');
+    expect(screen.getByText(/only had the bot token/)).toHaveTextContent(
+      'keep the connections:write scope it suggests',
+    );
+    // No box asks for the key Conch already has.
+    expect(screen.queryByLabelText('Bot token')).toBeNull();
+
+    await userEvent.click(screen.getByLabelText('App-level token'));
+    await userEvent.paste(appKey);
+    await waitFor(() =>
+      expect(calls.filter((c) => c.path === '/api/import/hermes/slack').at(-1)?.body).toEqual({
+        appToken: appKey,
+      }),
+    );
+    // The bot token never travelled from the page.
+    expect(JSON.stringify(calls)).not.toContain('xoxb-');
+    expect(calls.some((c) => c.method === 'POST' && c.path === '/api/channels')).toBe(false);
+  });
+
+  it('offers the key it found when you open Connect Slack yourself, and only uses it if you say so', async () => {
+    mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'GET /api/import/slack': () => ({ half }),
+    });
+    renderApp(<ConnectChannel kind="slack" />, { route: '/channels/new/slack' });
+    const offer = await screen.findByText('Hermes had this bot’s bot token');
+    expect(screen.getByRole('link', { name: /Make the app in Slack/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Use it' }));
+    expect(offer).not.toBeInTheDocument();
+    expect(await screen.findByText('Made, in Hermes')).toBeInTheDocument();
+  });
+});
+
 describe('A channel’s page', () => {
   it('asks for a new key when the app stopped taking the old one, and reconnects', async () => {
     const broken = channel({
