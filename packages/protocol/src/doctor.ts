@@ -17,6 +17,8 @@ export const DoctorState = z.enum([
   'ok',
   /** It was broken, and Conch just fixed it. */
   'fixed',
+  /** Nothing wrong, just news (a new release of Conch). */
+  'info',
   /** Works, but worth knowing (an update, an old backup). */
   'warning',
   /** Only a person can fix it; `action` says how. */

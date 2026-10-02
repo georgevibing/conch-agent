@@ -1,10 +1,12 @@
 /**
- * Updates — for Conch itself and the programs it uses (ADR 0019).
+ * Updates — for Conch itself and the programs it uses (ADR 0019, ADR 0048).
  *
  * Conch checks quietly, once a day, and says what's waiting in a few plain
  * words. Updating is one press: a program goes through the package manager
- * it came from (ADR 0016); Conch pulls its own checkout forward, installs,
- * rebuilds, and starts itself again, or goes back to what you had.
+ * it came from (ADR 0016). Conch itself follows signed releases in a
+ * channel: the new version is made ready beside the one running, then
+ * swapped in with a restart, and the one before is kept to go back to. A
+ * developer's copy follows its branch instead, as before.
  */
 import { z } from 'zod';
 
@@ -19,8 +21,51 @@ export const UpdateProgress = z.object({
 export type UpdateProgress = z.infer<typeof UpdateProgress>;
 
 /** A step of Conch's own update. */
-export const ConchUpdateStep = z.enum(['fetch', 'install', 'build', 'restart', 'rollback']);
+export const ConchUpdateStep = z.enum([
+  'fetch',
+  /** Checking the release's signature against the keys this copy trusts. */
+  'verify',
+  'install',
+  'build',
+  /** A backup of your things, made before the new version is swapped in. */
+  'backup',
+  'restart',
+  'rollback',
+]);
 export type ConchUpdateStep = z.infer<typeof ConchUpdateStep>;
+
+/**
+ * Which releases Conch follows. Stable is the default; beta also takes
+ * beta releases, alpha everything (ADR 0048).
+ */
+export const ReleaseChannel = z.enum(['stable', 'beta', 'alpha']);
+export type ReleaseChannel = z.infer<typeof ReleaseChannel>;
+
+/**
+ * What one release brings, as its notes say it: a line per benefit, from
+ * your side, in at most three groups, and a "Heads up" when you must do
+ * something.
+ */
+export const ReleaseNotes = z.object({
+  /** "0.3.0", "0.4.0-beta.2" */
+  version: z.string(),
+  channel: ReleaseChannel,
+  /** When it was released (the tag's date). */
+  date: z.number().optional(),
+  headsUp: z.array(z.string()).default([]),
+  new: z.array(z.string()).default([]),
+  better: z.array(z.string()).default([]),
+  fixed: z.array(z.string()).default([]),
+});
+export type ReleaseNotes = z.infer<typeof ReleaseNotes>;
+
+/**
+ * Where Conch's own updates come from: signed `releases` in a channel, or
+ * every change on its `branch` (a developer's copy, a checkout from before
+ * the first release, or "every change on main" turned on).
+ */
+export const UpdateSource = z.enum(['releases', 'branch']);
+export type UpdateSource = z.infer<typeof UpdateSource>;
 
 export const ConchUpdate = z.object({
   /** Conch runs from a git checkout it can look after; `problem` says why not. */
@@ -56,10 +101,39 @@ export const ConchUpdate = z.object({
       message: z.string(),
       at: z.number(),
       whatsNew: z.array(z.string()).default([]),
+      /** The notes of what arrived, for a release. */
+      releases: z.array(ReleaseNotes).default([]),
       /** When only a person can finish it: what to run in Conch's folder. */
       command: z.string().optional(),
     })
     .optional(),
+
+  // ── Releases (ADR 0048) ───────────────────────────────────────────────
+  source: UpdateSource.default('branch'),
+  /** Why it follows its branch, in a sentence (a developer's copy, no releases yet). */
+  sourceWhy: z.string().optional(),
+  channel: ReleaseChannel.default('stable'),
+  /** "Every change on main" is on: a contributor's choice, hidden from everyone else. */
+  everyChange: z.boolean().default(false),
+  /** The release offered: the newest in the channel above this version. */
+  latest: z.object({ version: z.string(), channel: ReleaseChannel }).optional(),
+  /** What each waiting release brings, newest first. */
+  releases: z.array(ReleaseNotes).default([]),
+  /** A new release worth a quiet word at the top of the app (not dismissed yet). */
+  announce: z.boolean().default(false),
+  /**
+   * Back to a steadier channel waits for a release newer than this one:
+   * "Conch moves to stable with its next release after 0.4.0-beta.2."
+   */
+  waiting: z.string().optional(),
+  /** A newer release that isn't signed by a key this copy trusts: it's refused, in a sentence. */
+  refused: z.string().optional(),
+  /** Releases that didn't start here: not offered again until a newer one. */
+  failed: z.array(z.string()).default([]),
+  /** The version kept to go back to at once. */
+  previous: z.string().optional(),
+  /** Said once, until it's put away: Conch now follows releases; or it went back by itself. */
+  notice: z.object({ id: z.string(), message: z.string() }).optional(),
 });
 export type ConchUpdate = z.infer<typeof ConchUpdate>;
 
@@ -106,5 +180,18 @@ export const UpdatesStatus = z.object({
 });
 export type UpdatesStatus = z.infer<typeof UpdatesStatus>;
 
-export const UpdatesSettingsBody = z.object({ auto: z.boolean() });
+export const UpdatesSettingsBody = z
+  .object({
+    auto: z.boolean(),
+    /** Which releases Conch follows: beta and alpha need a recent password or key. */
+    channel: ReleaseChannel,
+    /** Every change on main (developers): needs a recent password or key to turn on. */
+    everyChange: z.boolean(),
+    /** "Conch 0.3 is ready" was seen and put away: not shown again for that version. */
+    dismiss: z.string().max(64),
+    /** A notice that's been read. */
+    dismissNotice: z.string().max(64),
+  })
+  .partial()
+  .refine((body) => Object.keys(body).length > 0, 'Nothing to change.');
 export type UpdatesSettingsBody = z.infer<typeof UpdatesSettingsBody>;
