@@ -90,23 +90,34 @@ describe('Email through Conch', () => {
     expect(answer.subject).toBe('Re: Quick one');
   });
 
-  it('never answers a stranger, and lists them quietly', async () => {
+  it('never reads a stranger, unless you said the address is for your assistant', async () => {
     const { s, mail, channel } = await connected();
+    expect(channel.settings.others).toBe('ignore');
     await until(async () => (await s.channels.get(channel.id)).health.state === 'online', 'online');
     const before = mail.sent.length;
-    mail.deliver({
+    const grace = {
       from: MockMail.FRIEND,
       fromName: 'Grace Hopper',
       subject: 'Hi',
       text: 'Can I use your assistant?',
-    });
+    };
+    mail.deliver(grace);
+    await new Promise((r) => setTimeout(r, 800));
+    expect((await s.channels.get(channel.id)).requests).toEqual([]);
+    expect(mail.sent.slice(before).filter((m) => m.to.includes(MockMail.FRIEND))).toEqual([]);
+
+    // Just for your assistant: they ask to be let in, with one polite reply, and nothing reaches a chat.
+    await s.channels.update(channel.id, { settings: { others: 'ask' } });
+    mail.deliver({ ...grace, subject: 'Hi again' });
     const request = await until(
       async () => (await s.channels.get(channel.id)).requests[0],
       'a request',
     );
     expect(request).toMatchObject({ name: 'Grace Hopper', username: MockMail.FRIEND });
-    await new Promise((r) => setTimeout(r, 400));
-    expect(mail.sent.slice(before)).toEqual([]);
+    await until(
+      () => mail.sent.slice(before).find((m) => m.to.includes(MockMail.FRIEND)),
+      'one polite reply',
+    );
     expect(await channelChats(s)).toEqual([]);
   });
 
@@ -197,7 +208,10 @@ describe('iMessage through Conch', () => {
     const { s, messages, channel } = await connected();
     await until(async () => (await s.channels.get(channel.id)).health.state === 'online', 'online');
     messages.say('please run the tests');
-    await until(() => messages.sent.find((m) => m.text.includes('Reply yes')), 'a question');
+    await until(
+      () => messages.sent.find((m) => m.text.includes('Reply with a number')),
+      'a question',
+    );
     messages.say('yes');
     const [chat] = await until(async () => {
       const chats = await channelChats(s);

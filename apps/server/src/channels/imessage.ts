@@ -6,15 +6,9 @@ import { DatabaseSync } from 'node:sqlite';
 import type { ChannelBot } from '@conch/protocol';
 
 import { run, type RunResult } from '../lib/proc';
-import {
-  handleId,
-  matchReply,
-  normalHandle,
-  replyChoices,
-  replyHint,
-  type ReplyChoice,
-} from './answers';
 import { plain, split } from './format';
+import { handleId, normalHandle } from './handles';
+import { CONCH_MARK, STALE_MS, TextChoices } from './linked';
 import { attributedText } from './typedstream';
 import {
   Backoff,
@@ -40,8 +34,6 @@ const PART = 3500;
 const POLL_MS = 1_000;
 /** How often to look again for Full Disk Access while it's off. */
 const ACCESS_POLL_MS = 3_000;
-/** Messages older than this, found after a restart, aren't answered: it's too late to be useful. */
-const STALE_MS = 24 * 60 * 60_000;
 /** Apple's clock starts on 1 January 2001. */
 const APPLE_EPOCH_MS = 978_307_200_000;
 const FILE_LIMIT = 25 * 1024 * 1024;
@@ -268,13 +260,13 @@ export function sendError(result: RunResult): ChannelError {
  * - `account`: the Mac has an Apple ID of its own that people text. Only
  *   one-to-one chats count, and nobody gets in without you letting them.
  *
- * Either way it's your account answering, so it never replies to anyone it
- * doesn't know or to a group (`quiet`). Messages has no buttons: a question
- * says which word to reply with.
+ * Either way it's your account answering: groups never hear from it, and
+ * strangers only when you said so (`ownAccount`, `settings.others`).
+ * Messages has no buttons: a question lists numbered answers (`TextChoices`),
+ * and what Conch sends ends with `CONCH_MARK`, so it's never read back.
  */
 export class ImessageAdapter implements ChannelAdapter {
   readonly kind = 'imessage' as const;
-  readonly quiet = true;
   readonly #db: ChatDb;
   readonly #handle: string;
 
@@ -320,12 +312,10 @@ export class ImessageAdapter implements ChannelAdapter {
 
   connect(events: ChannelEvents, options: ConnectOptions = {}): ChannelConnection {
     const stop = new AbortController();
-    /** Questions waiting for a word, per chat. */
-    const pending = new Map<string, { choices: ReplyChoice[]; ref: SentRef }>();
-    /** What Conch sent lately, so its own words read back from the database aren't taken as yours. */
-    const echoes = new Map<string, number>();
+    /** Questions waiting for an answer, per chat: Messages has no buttons. */
+    const choices = new TextChoices();
     /** Your own texts to yourself can be stored twice (sent and received): each is read once. */
-    const seen = new Map<string, number>();
+    const seen = new Map<string, { at: number; fromMe: number }>();
     const state = { selfChat: undefined as string | undefined, blocked: false };
 
     void this.#poll(events, stop.signal, options.cursor, (row) => {
@@ -335,32 +325,36 @@ export class ImessageAdapter implements ChannelAdapter {
         .trim();
       // Reactions, edits, "named the group": not messages.
       if (row.assoc || row.itemType) return;
+      // Conch's own words, read back from the database (or another Conch's): never yours.
+      if (text.endsWith(CONCH_MARK)) return;
       const self = this.options.mode === 'self';
       if (self) {
         if (row.style === STYLE_GROUP || normalHandle(row.chatHandle ?? '') !== this.#handle)
           return;
         state.selfChat = row.chat ?? state.selfChat;
+        // The same words as sent and as received, close together: the second copy.
         const key = `${text}\u0000${row.hasFiles}`;
         const now = Date.now();
-        for (const [k, at] of seen) if (now - at > 15_000) seen.delete(k);
-        if (seen.has(key)) return;
-        seen.set(key, now);
-        if (consume(echoes, text)) return;
+        for (const [k, was] of seen) if (now - was.at > 15_000) seen.delete(k);
+        const twin = seen.get(key);
+        if (twin && twin.fromMe !== row.fromMe) {
+          seen.delete(key);
+          return;
+        }
+        seen.set(key, { at: now, fromMe: row.fromMe });
       } else if (row.fromMe) return;
 
       const sender = self ? this.#handle : normalHandle(row.sender ?? '');
       if (!sender) return;
       const user: ChannelUser = { id: handleId('i', sender), name: sender, username: sender };
       const chatId = row.chat ?? `to:${sender}`;
-      const question = pending.get(chatId);
-      const choice = question && matchReply(text, question.choices);
-      if (question && choice) {
-        pending.delete(chatId);
+      const answer = choices.match(chatId, text);
+      if (answer) {
         events.press({
           chatId,
           user,
-          data: choice.data,
-          message: question.ref,
+          data: answer.data,
+          message: answer.ref,
           ack: () => Promise.resolve(),
         });
         return;
@@ -391,14 +385,12 @@ export class ImessageAdapter implements ChannelAdapter {
     });
 
     const send = async (chatId: string, markdown: string, sendOptions?: SendOptions) => {
-      let words = plain(markdown);
-      const choices = sendOptions?.buttons ? replyChoices(sendOptions.buttons) : [];
-      if (choices.length) words = `${words}\n\n${plain(replyHint(choices))}`;
+      const buttons = sendOptions?.buttons ?? [];
+      const words = plain(buttons.length ? TextChoices.render(markdown, buttons) : markdown);
       const sent: SentRef[] = [];
       for (const part of split(words, PART)) {
-        remember(echoes, part);
         try {
-          await this.#send(chatId, part);
+          await this.#send(chatId, `${part}${CONCH_MARK}`);
         } catch (error) {
           // Only a person can allow it: say so on the page, and carry on once a send works.
           if (error instanceof ChannelError && error.message.includes('Automation')) {
@@ -414,7 +406,7 @@ export class ImessageAdapter implements ChannelAdapter {
         sent.push({ chatId, messageId: `${Date.now()}-${sent.length}` });
       }
       const last = sent.at(-1);
-      if (choices.length && last) pending.set(chatId, { choices, ref: last });
+      if (buttons.length && last) choices.remember(last, buttons);
       return sent;
     };
 
@@ -422,8 +414,7 @@ export class ImessageAdapter implements ChannelAdapter {
       send,
       // Messages can't change a text once sent: what was decided goes as a new one.
       edit: async (ref, markdown) => {
-        const question = pending.get(ref.chatId);
-        if (question?.ref.messageId === ref.messageId) pending.delete(ref.chatId);
+        choices.forget(ref);
         await send(ref.chatId, markdown);
       },
       // AppleScript can't show typing… in Messages.
@@ -559,20 +550,6 @@ const userIdHandle = (userId: string) => {
     throw new ChannelError('refused', 'Conch doesn’t know where to text them.');
   return raw;
 };
-
-function remember(echoes: Map<string, number>, text: string) {
-  const key = text.trim();
-  const now = Date.now();
-  for (const [k, at] of echoes) if (now - at > 120_000) echoes.delete(k);
-  echoes.set(key, now);
-}
-
-/** Whether `text` is something Conch just sent (it's read back once, then forgotten). */
-function consume(echoes: Map<string, number>, text: string): boolean {
-  if (!echoes.has(text)) return false;
-  echoes.delete(text);
-  return true;
-}
 
 /**
  * The program macOS asks Full Disk Access for: the app Conch was started

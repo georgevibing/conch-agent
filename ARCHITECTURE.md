@@ -474,10 +474,12 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
       `Authentication-Results` or your Sent mail (`mail-read.ts`), answers in
       the thread.
 
-    iMessage and email are the person's own accounts: the adapter declares
-    `owner()` (let in on connecting), `quiet` (strangers never hear back) and
-    reports a `cursor` the store keeps. Questions there are answered with a
-    word (`answers.ts`).
+    WhatsApp, Signal, iMessage and email are the person's own accounts
+    (`linked.ts` `ownAccount`): groups never hear from them, other people are
+    read only with `settings.others: 'ask'`, the owner is let in without a
+    hello (a scanned code, or the adapter's `owner()`), and questions are
+    answered with a number (`TextChoices`). iMessage and email also report a
+    `cursor` the store keeps, so a restart answers nothing twice.
 
     Keys live in `channels.secrets.json`. `store.ts` keeps who may talk and
     each person's current conversation.

@@ -1,7 +1,7 @@
 import PostalMime from 'postal-mime';
 import { describe, expect, it } from 'vitest';
 
-import { handleId, handleOf, matchReply, replyChoices, replyHint } from './answers';
+import { handleId, handleOf } from './handles';
 import { automatic, newWords, parseAuthResults, senderVerdict } from './mail-read';
 
 const google = (id: string) => id === 'mx.google.com';
@@ -130,30 +130,7 @@ describe('the new words of an email', () => {
   });
 });
 
-describe('words for buttons', () => {
-  const buttons = [
-    { label: 'Allow', data: 'p:k:a', style: 'primary' as const },
-    { label: 'Always in this chat', data: 'p:k:A' },
-    { label: 'Don’t allow', data: 'p:k:d', style: 'danger' as const },
-  ];
-
-  it('says which word to reply with, and only that word presses it', () => {
-    const choices = replyChoices(buttons);
-    expect(replyHint(choices)).toBe(
-      'Reply **yes** to allow it, **always** to allow it for the rest of this chat, or **no**.',
-    );
-    expect(matchReply('Yes!', choices)?.data).toBe('p:k:a');
-    expect(matchReply('  always ', choices)?.data).toBe('p:k:A');
-    expect(matchReply('no.', choices)?.data).toBe('p:k:d');
-    expect(matchReply('👍', choices)?.data).toBe('p:k:a');
-    // An answer that says more is a message, not a press.
-    expect(matchReply('yes but only the first file', choices)).toBeUndefined();
-    expect(matchReply('no idea what you mean', choices)).toBeUndefined();
-    expect(replyHint(replyChoices(buttons.filter((b) => b.data !== 'p:k:A')))).toBe(
-      'Reply **yes** to allow it or **no**.',
-    );
-  });
-
+describe('addresses as ids', () => {
   it('turns any address into an id and back', () => {
     for (const handle of ['ada@gmail.com', '+15551234567', 'A.Lovelace@Example.org'])
       expect(handleOf(handleId('m', handle))).toBe(handle.toLowerCase());

@@ -33,23 +33,25 @@ What the platforms allow:
 
 ## Decision
 
-**Two channels through accounts that are already yours.** They plug into
-ADR 0018's service unchanged in shape, with a few declared capabilities on
-`ChannelAdapter` that any later channel can use:
+**Two channels through accounts that are already yours**, on the same
+pieces as WhatsApp and Signal (ADR 0043, `channels/linked.ts`), so every
+account of the person's own behaves one way:
 
-- `owner()`: who the owner already is. Connecting lets them in, with no hello.
-- `quiet`: the account is the person's own, so an answer would come from them. Strangers and groups never hear back; strangers are still listed, quietly.
+- `ownAccount(kind)`: an answer would come from the person, so groups never hear from it, and other people's chats are never read unless `settings.others` is `ask` (on by default only for a Mac with its own Apple ID, which is for the assistant).
+- The owner is let in without a hello: the adapter's `owner()` (your email address, iMessage to yourself) goes through the same `#ownerIn` as a scanned QR code, welcomed once the channel is online.
+- What Conch sends ends with `CONCH_MARK`, so it's never read back as yours (email: a `<conch.…>` Message-ID).
 - `ChannelEvents.cursor` / `ConnectOptions.cursor`: how far it has read, kept with the channel (`channels.json`), so a restart answers nothing twice.
 - `ChannelMessage.outside`: someone else's words even from the owner (a forward). It taints the chat (ADR 0028).
 - `ChannelMessage.fresh`: a new email thread starts a new conversation, as `/new` would.
 - Health can carry `access` (`full-disk-access`, `automation`): a macOS switch only a person can turn on, shown on the card and in Repair everything.
 
-**Questions are answered with a word** (`channels/answers.ts`). Neither app has
-buttons, so a question ends "Reply **yes** to allow it, **always** …, or
-**no**", and a reply that is only that word (a full stop or 👍 is fine)
-presses the button, while the question is open, in the chat it was asked
-in. Anything longer is a message. The press still goes through the service,
-so only people let in can answer.
+**Questions are answered with a number** (`TextChoices`, as on WhatsApp
+and Signal). Neither app has buttons, so a question ends "Reply with a
+number: 1 Allow · 2 Always in this chat · 3 Don't allow", and a reply of
+`1`, the answer's words, or a plain yes or no presses it, in the chat it
+was asked in. Email answers the question the reply is In-Reply-To. Anything
+longer is a message. The press still goes through the service, so only
+people let in can answer.
 
 ### iMessage (`channels/imessage.ts`, Mac only)
 
@@ -84,14 +86,14 @@ so only people let in can answer.
 ## Security
 
 - **Who can reach it**:
-  - iMessage: anyone who can text you. In "text myself" only your own devices can write in the chat that's read; elsewhere, strangers are listed and never answered.
+  - iMessage: anyone who can text you. In "text myself" only your own devices can write in the chat that's read; elsewhere, strangers are never read unless the account is for the assistant.
   - Email: anyone can send mail to `you+conch@`. It's read only when the provider vouches for the sender; a let-in person's words are untrusted (ADR 0028) like on every channel, and their questions go to you in Conch.
   - A forged sender (`From:` you, with its own `Authentication-Results: …dmarc=pass` below the provider's `fail`) is dropped: tested.
 - **The agent can't let anyone in, or connect an account**: there's no tool; connecting and letting in are HTTP routes that need a fresh sign-in from another device (ADR 0018).
 - **No shell, no script built from text**: osascript's arguments are fixed but for the words, after a program file. Opening System Settings takes one of four fixed places.
 - **Read-only Messages**: the database is opened read-only; attachment paths from it are checked against Messages' own folder after resolving links.
 - **The app password** is never returned, logged or put in an error (`redact`); TLS is required to every mail server (only the pretend one in tests is plain, and only through the mock engine's endpoints).
-- Tests: `imessage.test.ts` (only the self-chat, echoes, approvals by word, path escapes, Full Disk Access, Automation, osascript argument safety), `email.test.ts` (forged, failed and unchecked senders, Sent-mail proof, loops, threads, revoke, UIDVALIDITY), `mail-read.test.ts`, `personal.test.ts` (end to end through the service), `routes.test.ts`.
+- Tests: `imessage.test.ts` (only the self-chat, echoes, numbered approvals, path escapes, Full Disk Access, Automation, osascript argument safety), `email.test.ts` (forged, failed and unchecked senders, Sent-mail proof, loops, threads, revoke, UIDVALIDITY), `mail-read.test.ts`, `personal.test.ts` (end to end through the service), `routes.test.ts`.
 
 ## Consequences
 

@@ -266,7 +266,7 @@ describe('Email — answering', () => {
     expect(reply.fresh).toBeUndefined();
   });
 
-  it('asks with words, and a reply of just “yes” answers', async () => {
+  it('asks with numbered answers, and a reply of “2” answers', async () => {
     const { m, got, presses, connection } = await connect();
     m.deliver({ subject: 'Tidy up', text: 'Delete old logs' });
     const message = await until(() => got[0], 'an email');
@@ -279,15 +279,15 @@ describe('Email — answering', () => {
     });
     const question = m.last();
     expect(question?.text).toContain(
-      'Reply yes to allow it, always to allow it for the rest of this chat, or no.',
+      'Reply with a number: 1 Allow · 2 Always in this chat · 3 Don’t allow',
     );
     m.deliver({
       subject: 'Re: Tidy up',
-      text: 'Yes\n\nOn Fri, ada@gmail.com wrote:\n> Reply yes to allow it',
+      text: '2\n\nOn Fri, ada@gmail.com wrote:\n> Reply with a number',
       inReplyTo: question?.messageId,
     });
     const press = await until(() => presses[0], 'a press');
-    expect(press).toMatchObject({ chatId: message.chatId, data: 'p:k:a' });
+    expect(press).toMatchObject({ chatId: message.chatId, data: 'p:k:A' });
   });
 
   it('starts a new thread for a message Conch begins (a routine’s result)', async () => {

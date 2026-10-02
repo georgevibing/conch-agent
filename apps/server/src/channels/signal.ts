@@ -4,7 +4,7 @@ import type { ChannelBot } from '@conch/protocol';
 
 import { safeJoin } from '../lib/fs';
 import { fit } from './format';
-import { digitsOf, LinkError, Recent, STALE_MS, TextChoices } from './linked';
+import { CONCH_MARK, digitsOf, LinkError, Recent, STALE_MS, TextChoices } from './linked';
 import type { ChannelLinker, LinkProgress } from './linked';
 import { toSignal } from './linked-format';
 import { type SignalDaemon, SignalRpcError, type SignalReceive } from './signal-cli';
@@ -19,12 +19,7 @@ import {
   type SentRef,
 } from './types';
 
-/**
- * Ends every message Conch sends (an invisible separator), so one Conch never
- * reads another's answers in Note to Self as you writing: two computers
- * linked to the same account would otherwise answer each other forever.
- */
-export const CONCH_MARK = '\u2063';
+export { CONCH_MARK } from './linked';
 
 /** Signal shows up to 2,000 characters as a message; longer goes as a file, so parts stay under. */
 const PART = 1900;

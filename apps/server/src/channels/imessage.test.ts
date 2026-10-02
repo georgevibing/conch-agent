@@ -87,7 +87,8 @@ describe('iMessage — texting yourself', () => {
       'Here’s **your** day:\n\n- Dentist at 3',
     );
     expect(mock.last()).toEqual({
-      text: 'Here’s your day:\n\n• Dentist at 3',
+      // Ends with Conch's mark, so it's never read back as yours.
+      text: 'Here’s your day:\n\n• Dentist at 3\u2063',
       target: `iMessage;-;${MockMessages.ME}`,
       kind: 'chat',
     });
@@ -97,7 +98,7 @@ describe('iMessage — texting yourself', () => {
     expect(got.map((m) => m.text)).toEqual(['thanks']);
   });
 
-  it('asks with words instead of buttons, and a reply of just that word answers', async () => {
+  it('asks with numbered answers instead of buttons, and a reply of one answers', async () => {
     const { got, presses, online, mock, connection } = connect('self');
     await online();
     const chat = `iMessage;-;${MockMessages.ME}`;
@@ -107,14 +108,15 @@ describe('iMessage — texting yourself', () => {
         { label: 'Don’t allow', data: 'p:x:d', style: 'danger' },
       ],
     });
-    expect(mock.last()?.text).toContain('Reply yes to allow it or no.');
+    expect(mock.last()?.text).toContain('Reply with a number: 1 Allow · 2 Don’t allow');
     mock.say('yes but which file?');
     await until(() => got.length, 'a message');
-    mock.say('Yes');
+    mock.say('1');
     await until(() => presses.length, 'a press');
     expect(presses[0]).toMatchObject({ data: 'p:x:a', chatId: chat });
-    // Answered: a later "yes" is just a message.
-    mock.say('yes');
+    // Answered (the service says so by editing the question): a later "1" is just a message.
+    await connection.edit(presses[0]?.message ?? { chatId: chat, messageId: '' }, '✅ Allowed');
+    mock.say('1');
     await until(() => got.length === 2, 'another message');
   });
 

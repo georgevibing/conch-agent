@@ -1,14 +1,17 @@
 /**
- * What WhatsApp and Signal have in common (ADR 0043): neither has bots you
- * can make, so Conch joins your own account as a linked device, like
- * WhatsApp Web or Signal Desktop. That changes three things from a bot:
+ * What accounts that are already the person's own have in common: WhatsApp
+ * and Signal, which Conch joins as a linked device (ADR 0043), and iMessage
+ * and email, which it answers through (ADR 0044). That changes three things
+ * from a bot:
  *
  * - **You are the account.** You talk to your assistant in the chat with
- *   yourself ("Message yourself", "Note to Self"), and linking by QR code is
- *   your hello: only someone holding your phone can scan it.
+ *   yourself ("Message yourself", "Note to Self", texting or emailing
+ *   yourself), and you're let in without a hello: linking by QR code is
+ *   your hello on WhatsApp and Signal, and the account itself on the others.
  * - **Everyone else is writing to you, not to it.** Their chats are never
- *   read unless you said the number is just for your assistant
- *   (`settings.others: 'ask'`); groups are never answered at all.
+ *   read unless you said the account is just for your assistant
+ *   (`settings.others: 'ask'`); groups are never answered at all
+ *   (`ownAccount`).
  * - **No buttons.** A question lists its answers as numbers, and replying
  *   with one presses it (`TextChoices`).
  */
@@ -20,6 +23,27 @@ import type { ChannelButton, SentRef } from './types';
 export const LINKED_KINDS: ReadonlySet<ChannelKind> = new Set<ChannelKind>(['whatsapp', 'signal']);
 
 export const isLinked = (kind: ChannelKind): kind is LinkableKind => LINKED_KINDS.has(kind);
+
+/** Accounts that are the person's own: the linked ones, iMessage and email. */
+const OWN_KINDS: ReadonlySet<ChannelKind> = new Set<ChannelKind>([
+  ...LINKED_KINDS,
+  'imessage',
+  'email',
+]);
+
+/**
+ * The account is the person's own, so an answer would come from them:
+ * strangers are never read unless `settings.others` is `ask`, and groups
+ * never hear from it.
+ */
+export const ownAccount = (kind: ChannelKind) => OWN_KINDS.has(kind);
+
+/**
+ * Ends what Conch writes in an account that's also yours (an invisible
+ * separator, U+2063), so it never reads its own answers back as yours, and
+ * two Conches on one account never answer each other.
+ */
+export const CONCH_MARK = '\u2063';
 
 /** Messages older than this when they arrive (Conch was off) are left unanswered. */
 export const STALE_MS = 24 * 60 * 60_000;

@@ -330,15 +330,16 @@ function Detail({ channel }: { channel: Channel }) {
             onCheckedChange={(notifyRoutines) => update.mutate([{ settings: { notifyRoutines } }])}
           />
         </div>
-        {isLinkedKind(channel.kind) && (
+        {isOwnAccount(channel.kind) && (
           <div className={styles.setting}>
             <Stack gap={0}>
               <Text weight="medium" id="ch-others">
-                A number just for {assistant}
+                {channel.kind === 'email' ? 'An address' : 'A number'} just for {assistant}
               </Text>
               <Text size="sm" tone="muted">
-                Others who write to it can ask to be let in. Leave this off for your own number, so
-                your friends’ chats stay yours.
+                Others who write to it can ask to be let in. Leave this off for your own{' '}
+                {channel.kind === 'email' ? 'address' : 'number'}, so your friends’ chats stay
+                yours.
               </Text>
             </Stack>
             <Switch

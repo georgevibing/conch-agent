@@ -21,8 +21,8 @@ In Conch, open **Channels** and choose **iMessage**.
 ## Good to know
 
 - **Only the chat with yourself is read.** Your other conversations on the Mac are never looked at, and nobody else can write in the chat with yourself.
-- **Strangers never hear back.** It's your own account answering, so Conch never replies to someone it doesn't know, or in a group. On a Mac with its own Apple ID, they show up in Conch for you to **Let in** or **Block**.
-- **Approvals are a word.** Messages has no buttons: when your assistant asks, reply **yes**, **always** or **no**.
+- **Other people's messages are never read.** It's your own account answering, so Conch never reads or answers someone else, or a group. On a Mac with its own Apple ID, **A number just for Conch** is on: people who text it get one polite reply and show up in Conch for you to **Let in** or **Block**.
+- **Approvals are a number.** Messages has no buttons: when your assistant asks, the question lists its answers, and you reply with one's number (or yes, or no).
 - **The first answer asks macOS once.** macOS asks whether Conch may use Messages. Press **Allow**. If you said no, the channel page says so, with **Open System Settings** (**Privacy & Security** → **Automation**).
 - **Photos come as photos.** Pictures from your iPhone (HEIC) arrive as JPEG, so every provider can see them.
 - **Your Mac has to be on**, with Conch running. Texts sent while it's off are answered when it's back, for up to a day.

@@ -139,12 +139,6 @@ export interface ChannelAdapter {
    * own mail, iMessage to yourself): they're let in on connecting, with no hello.
    */
   owner?(): ChannelUser | undefined;
-  /**
-   * The account is the person's own (their Apple ID, their email): an answer
-   * would come from them, so people it doesn't know, and groups, never hear
-   * back. Requests are still listed, quietly.
-   */
-  readonly quiet?: boolean;
 }
 
 /** Which box on the connect page was wrong. */

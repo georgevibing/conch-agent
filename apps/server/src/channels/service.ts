@@ -28,7 +28,7 @@ import type { PermissionDecision } from '../engines/types';
 import { newId } from '../lib/ids';
 import type { SettingsStore } from '../settings/store';
 import { CHANNEL_NAMES, catalogFor } from './catalog';
-import { isLinked } from './linked';
+import { isLinked, ownAccount } from './linked';
 import type { ChannelStore, StoredChannel } from './store';
 import {
   type ChannelAdapter,
@@ -404,7 +404,14 @@ export class ChannelService {
           people: [],
           requests: [],
           blocked: [],
-          settings: { notifyRoutines: true },
+          settings: {
+            notifyRoutines: true,
+            // Your own account: other people's chats with you stay yours (a Mac with an
+            // Apple ID of its own is for your assistant, so people may ask to be let in).
+            ...(ownAccount(secrets.kind) && {
+              others: secrets.kind === 'imessage' && secrets.mode === 'account' ? 'ask' : 'ignore',
+            }),
+          },
           chats: {},
         },
         secrets,
@@ -415,8 +422,8 @@ export class ChannelService {
     // Your own account (your email, iMessage to yourself): you're in already, no hello needed.
     const owner = adapter.owner?.();
     if (owner && !stored.people.length) {
-      const name = (await this.deps.settings.get()).profile.name?.trim();
-      await this.#admit(stored.id, { ...owner, ...(name && { name }) });
+      const name = (await this.deps.settings.get().catch(() => undefined))?.profile.name?.trim();
+      await this.#ownerIn(stored.id, { ...owner, ...(name && { name }) });
       stored = (await this.deps.store.get(stored.id)) ?? stored;
     } else if (!stored.people.length) this.#openPairing(stored);
     const view = this.#view(stored);
@@ -495,19 +502,18 @@ export class ChannelService {
       id: bot.id,
       name: settings?.profile.name || (bot.name === bot.phone ? 'You' : bot.name),
     };
-    // The welcome waits for the connection, so it lands in the chat with yourself.
-    this.#quietly(
-      this.#whenOnline(stored.id, 60_000).then(() => this.#admit(stored.id, owner)),
-      'welcome',
-    );
-    await this.#admitQuietly(stored.id, owner);
+    await this.#ownerIn(stored.id, owner);
     const view = this.#view((await this.deps.store.get(stored.id)) ?? stored);
     this.deps.emit({ type: 'channel.changed', channel: view });
     return view;
   }
 
-  /** Let the owner in without a welcome yet (it follows once the channel is online). */
-  async #admitQuietly(id: string, user: ChannelUser) {
+  /**
+   * The account is the owner's own (a linked device, iMessage to yourself,
+   * an email address): they're in now, and welcomed once the channel is
+   * online, so the welcome lands in the chat with yourself.
+   */
+  async #ownerIn(id: string, user: ChannelUser) {
     await this.deps.store.update(id, (c) =>
       c.people.some((p) => p.id === user.id)
         ? c
@@ -515,9 +521,19 @@ export class ChannelService {
             ...c,
             people: [
               ...c.people,
-              { id: user.id, name: user.name, since: this.#now, lastSeenAt: this.#now },
+              {
+                id: user.id,
+                name: user.name,
+                ...(user.username && { username: user.username }),
+                since: this.#now,
+                lastSeenAt: this.#now,
+              },
             ],
           },
+    );
+    this.#quietly(
+      this.#whenOnline(id, 60_000).then(() => this.#admit(id, user)),
+      'welcome',
     );
   }
 
@@ -863,9 +879,11 @@ export class ChannelService {
         chat,
         owner
           ? `${hiTo(user.name)} 👋 I’m **${assistant}**, and I’m connected to Conch on your computer.\n\n` +
-              (isLinked(stored.kind)
+              (isLinked(stored.kind) || stored.kind === 'imessage'
                 ? 'Write to me here, in the chat with yourself. Nobody else’s chats reach me. '
-                : '') +
+                : stored.kind === 'email'
+                  ? 'Write to me at this address from any mail app. Nobody else’s mail reaches me. '
+                  : '') +
               'Ask me anything — I can work with your files, the web and your apps, just like in Conch. ' +
               'Before I do anything important, I’ll ask you here.\n\n' +
               (stored.kind === 'email'
@@ -951,7 +969,7 @@ export class ChannelService {
     // seem broken, say so there (at most every half hour per group).
     if (!message.direct) {
       // Your own account would be the one answering in your groups (ADR 0043, 0044): say nothing.
-      if (isLinked(stored.kind) || live.adapter.quiet) return;
+      if (ownAccount(stored.kind)) return;
       const key = `${id}:group:${message.chatId}`;
       if (!this.#mayAnswer(key)) return;
       const where = stored.bot.username ? ` Message @${stored.bot.username} directly.` : '';
@@ -975,7 +993,7 @@ export class ChannelService {
     const person = stored.people.find((p) => p.id === message.user.id);
     if (!person) {
       // Someone writing to your own number is writing to you: never read, never answered.
-      if (isLinked(stored.kind) && stored.settings.others !== 'ask') return;
+      if (ownAccount(stored.kind) && stored.settings.others !== 'ask') return;
       await this.#request(stored, live, message);
       return;
     }
@@ -1130,8 +1148,6 @@ export class ChannelService {
       return { ...c, requests: [...others, request].slice(-MAX_REQUESTS) };
     });
     await this.#emit(stored.id);
-    // Your own account doesn't answer people you don't know: they're only listed for you.
-    if (live.adapter.quiet) return;
     const key = `${stored.id}:${message.user.id}`;
     if (!this.#mayAnswer(key)) return;
     const hello = firstName(message.user.name);

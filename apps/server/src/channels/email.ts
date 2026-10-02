@@ -6,15 +6,9 @@ import nodemailer from 'nodemailer';
 import PostalMime, { type Email } from 'postal-mime';
 import { getDomain } from 'tldts';
 
-import {
-  handleId,
-  matchReply,
-  normalHandle,
-  replyChoices,
-  replyHint,
-  type ReplyChoice,
-} from './answers';
 import { plain, toEmailHtml } from './format';
+import { handleId, normalHandle } from './handles';
+import { TextChoices } from './linked';
 import { automatic, bareSubject, messageIds, newWords, senderVerdict } from './mail-read';
 import {
   Backoff,
@@ -26,7 +20,6 @@ import {
   type ChannelUser,
   type ConnectOptions,
   type SendOptions,
-  type SentRef,
   pause,
   redact,
 } from './types';
@@ -151,7 +144,6 @@ export function conchAddress(address: string, plus: boolean): string {
  */
 export class EmailAdapter implements ChannelAdapter {
   readonly kind = 'email' as const;
-  readonly quiet = true;
   readonly #address: string;
   readonly #preset: MailPreset;
   readonly #writeTo: string;
@@ -279,7 +271,8 @@ export class EmailAdapter implements ChannelAdapter {
     const threads = new Map<string, Thread>();
     /** Which chat each message Conch has seen or sent belongs to, so a reply finds its thread. */
     const known = new Map<string, string>();
-    const pending = new Map<string, { choices: ReplyChoice[]; ref: SentRef }>();
+    /** Questions waiting for an answer, per thread: email has no buttons. */
+    const choices = new TextChoices();
     const files = new Map<string, { name: string; bytes: Buffer; mimeType: string; at: number }>();
     const domain = this.#address.split('@')[1] ?? 'conch.invalid';
 
@@ -319,15 +312,14 @@ export class EmailAdapter implements ChannelAdapter {
         name: email.from?.name?.trim() || from,
         username: from,
       };
-      const question = pending.get(chatId);
-      const choice = question && !words.forwarded && matchReply(words.text, question.choices);
-      if (question && choice) {
-        pending.delete(chatId);
+      // A reply to a question answers it (the one it replies to, else the newest in the thread).
+      const answer = words.forwarded ? undefined : choices.match(chatId, words.text, parent);
+      if (answer) {
         events.press({
           chatId,
           user,
-          data: choice.data,
-          message: question.ref,
+          data: answer.data,
+          message: answer.ref,
           ack: () => Promise.resolve(),
         });
         return;
@@ -369,8 +361,8 @@ export class EmailAdapter implements ChannelAdapter {
         subject: subjectFrom(markdown),
         references: [],
       };
-      const choices = sendOptions?.buttons ? replyChoices(sendOptions.buttons) : [];
-      const body = choices.length ? `${markdown}\n\n${replyHint(choices)}` : markdown;
+      const buttons = sendOptions?.buttons ?? [];
+      const body = buttons.length ? TextChoices.render(markdown, buttons) : markdown;
       const messageId = `<conch.${randomBytes(12).toString('base64url')}@${domain}>`;
       const subject = this.#preset.plus ? thread.subject : `Conch: ${thread.subject}`;
       const smtp = this.#smtp();
@@ -403,7 +395,7 @@ export class EmailAdapter implements ChannelAdapter {
         references: [...thread.references, messageId].slice(-20),
       });
       const ref = { chatId, messageId };
-      if (choices.length) pending.set(chatId, { choices, ref });
+      if (buttons.length) choices.remember(ref, buttons);
       return [ref];
     };
 
@@ -411,7 +403,7 @@ export class EmailAdapter implements ChannelAdapter {
       send,
       // An email can't change once sent; the question's buttons just stop working.
       edit: async (ref) => {
-        if (pending.get(ref.chatId)?.ref.messageId === ref.messageId) pending.delete(ref.chatId);
+        choices.forget(ref);
       },
       typing: () => Promise.resolve(),
       download: async (file) => {
