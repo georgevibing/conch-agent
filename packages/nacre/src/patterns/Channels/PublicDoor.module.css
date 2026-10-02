@@ -1,0 +1,107 @@
+@layer nacre.components {
+  .door {
+    --pd-tint: var(--nc-surface-hi);
+
+    display: flex;
+    gap: var(--nc-space-4);
+    align-items: flex-start;
+    padding: var(--nc-space-5);
+    border-radius: var(--nc-radius-xl);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--pd-tint), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+  }
+
+  .door[data-state='ready'] {
+    --pd-tint: color-mix(in oklch, var(--nc-accent-3) 55%, var(--nc-surface-hi));
+  }
+
+  .door[data-state='needs-you'],
+  .door[data-state='error'] {
+    --pd-tint: light-dark(
+      oklch(0.96 0.03 var(--nc-warning-h)),
+      oklch(0.28 0.04 var(--nc-warning-h))
+    );
+  }
+
+  .icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--nc-space-10);
+    block-size: var(--nc-space-10);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text-muted);
+  }
+
+  .door[data-state='ready'] .icon {
+    color: var(--nc-accent-11);
+  }
+
+  .icon svg {
+    inline-size: var(--nc-space-5);
+    block-size: var(--nc-space-5);
+  }
+
+  .body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    min-inline-size: 0;
+  }
+
+  .address {
+    display: flex;
+    gap: var(--nc-space-2);
+    align-items: center;
+    padding: var(--nc-space-2) var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .address code {
+    flex: 1;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-sm);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-2);
+    align-items: center;
+  }
+
+  .actions:empty {
+    display: none;
+  }
+
+  .more {
+    align-self: flex-start;
+  }
+
+  .own {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    padding-block-start: var(--nc-space-2);
+  }
+
+  .own code {
+    font-family: var(--nc-font-mono);
+  }
+
+  .own > button {
+    align-self: flex-start;
+  }
+}

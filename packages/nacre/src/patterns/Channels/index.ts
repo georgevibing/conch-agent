@@ -18,3 +18,5 @@ export { DeviceLinkCard } from './DeviceLinkCard';
 export type { DeviceLinkCardProps, DeviceLinkState } from './DeviceLinkCard';
 export { LinkedDevicesSketch } from './LinkedDevicesSketch';
 export type { LinkedDevicesSketchProps } from './LinkedDevicesSketch';
+export { PublicDoor } from './PublicDoor';
+export type { PublicDoorProps, PublicDoorState } from './PublicDoor';

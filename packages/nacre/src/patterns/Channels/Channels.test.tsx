@@ -12,6 +12,7 @@ import { Handset } from './Handset';
 import { HelloCard } from './HelloCard';
 import { KeyField } from './KeyField';
 import { PortalSketch } from './PortalSketch';
+import { PublicDoor } from './PublicDoor';
 
 describe('Channel logos', () => {
   it('keeps Slack’s own colours, and draws the others as marks', async () => {
@@ -374,5 +375,73 @@ describe('PortalSketch.Toggle', () => {
   it('draws email as an envelope, since it isn’t one company', () => {
     renderNacre(<IntegrationLogo brand="email" name="Email" color="#5B6B7F" />);
     expect(screen.getByRole('img', { name: 'Email' }).querySelector('svg')).not.toBeNull();
+  });
+});
+
+describe('PublicDoor', () => {
+  it('off: says why, and turns on with one press', async () => {
+    const onTailscale = vi.fn();
+    const { container } = renderNacre(
+      <PublicDoor
+        state="off"
+        apps={['Teams', 'WeChat']}
+        onTailscale={onTailscale}
+        onOwn={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole('heading', { name: /public address, just for these messages/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Teams and WeChat only deliver messages to a web address/),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Turn on with Tailscale' }));
+    expect(onTailscale).toHaveBeenCalled();
+    await expectAccessible(container);
+  });
+
+  it('takes an address of your own, from the keyboard', async () => {
+    const onOwn = vi.fn();
+    renderNacre(
+      <PublicDoor state="off" apps={['WeChat']} onTailscale={vi.fn()} onOwn={onOwn} port={4320} />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'I have an address of my own' }));
+    expect(screen.getByText('http://127.0.0.1:4320')).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Your address'), 'https://conch.example.com{Enter}');
+    expect(onOwn).toHaveBeenCalledWith('https://conch.example.com');
+  });
+
+  it('on: shows the address to copy, and how to turn it off', async () => {
+    const onOff = vi.fn();
+    const { container } = renderNacre(
+      <PublicDoor
+        state="ready"
+        via="tailscale"
+        url="https://mac.tail1.ts.net/conch"
+        apps={['Teams']}
+        onOff={onOff}
+      />,
+    );
+    expect(screen.getByText('https://mac.tail1.ts.net/conch')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy the public address' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'I have an address of my own' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Turn off' }));
+    expect(onOff).toHaveBeenCalled();
+    await expectAccessible(container);
+  });
+
+  it('needs you: the one step, with Tailscale’s page or the command to copy', async () => {
+    const { container } = renderNacre(
+      <PublicDoor
+        state="needs-you"
+        apps={['Teams']}
+        problem={{ message: 'Run this once.', command: 'sudo tailscale set --operator=$USER' }}
+        onTailscale={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Run this once.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy the command' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    await expectAccessible(container);
   });
 });

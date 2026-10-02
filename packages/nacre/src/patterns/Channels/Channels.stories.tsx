@@ -13,6 +13,7 @@ import { Handset, type HandsetMessage } from './Handset';
 import { HelloCard } from './HelloCard';
 import { KeyField, type KeyFieldStatus } from './KeyField';
 import { PortalSketch } from './PortalSketch';
+import { PublicDoor, type PublicDoorState } from './PublicDoor';
 
 const meta = {
   title: 'Patterns/Channels',
@@ -630,4 +631,54 @@ export const MacAndMail: Story = {
       />
     </Stack>
   ),
+};
+
+/**
+ * The public door Teams and WeChat deliver to: off with its one button (and
+ * an address of your own folded under it), turning on, on with its address
+ * behind a lock, and the step only a person can take.
+ */
+export const PublicAddress: Story = {
+  render: function Render() {
+    const [state, setState] = useState<PublicDoorState>('off');
+    return (
+      <Stack gap={4} style={{ maxInlineSize: 560 }}>
+        <PublicDoor
+          state={state}
+          apps={['Teams', 'WeChat']}
+          via="tailscale"
+          url={state === 'ready' ? 'https://studio-mac.tail1234.ts.net/conch' : undefined}
+          onTailscale={() => {
+            setState('starting');
+            setTimeout(() => setState('ready'), 1200);
+          }}
+          onOwn={() => setState('ready')}
+          onOff={() => setState('off')}
+          onCheck={() => undefined}
+        />
+        <PublicDoor
+          state="needs-you"
+          apps={['Teams']}
+          via="tailscale"
+          problem={{
+            message:
+              'Tailscale needs your OK to make one address of this computer public. Open the page, press Enable, and Conch carries on by itself.',
+            url: 'https://login.tailscale.com/f/funnel?node=n123',
+          }}
+          onTailscale={() => undefined}
+          onOwn={() => undefined}
+        />
+        <PublicDoor
+          state="error"
+          via="own"
+          apps={['WeChat']}
+          message="https://conch.example.com doesn’t reach Conch. Make it forward to http://127.0.0.1:4319 on this computer, then press Try again."
+          onTailscale={() => undefined}
+          onOwn={() => undefined}
+          onOff={() => undefined}
+          ownError="Teams and WeChat only deliver to HTTPS addresses. Use one starting https://."
+        />
+      </Stack>
+    );
+  },
 };
