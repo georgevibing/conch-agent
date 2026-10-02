@@ -225,6 +225,41 @@ class Dpapi implements Keystore {
 }
 
 /**
+ * Which keystore a Conch home uses. The gateway and `pnpm conch` choose the
+ * same way, so the terminal opens the device key the gateway sealed with:
+ * the operating system's, or the file for test runs and the mock engine.
+ */
+export function keystoreMode(config: {
+  CONCH_VAULT_KEYSTORE?: 'auto' | 'file';
+  CONCH_ENGINE?: string;
+}): 'auto' | 'file' {
+  return (
+    config.CONCH_VAULT_KEYSTORE ??
+    (config.CONCH_ENGINE === 'mock' || process.env.VITEST ? 'file' : 'auto')
+  );
+}
+
+/**
+ * This home's device key for a process that isn't the gateway (`pnpm
+ * conch`): found the first time it's needed, so commands that never open a
+ * key never touch the keychain.
+ */
+export function deviceKeyFor(home: string, mode: 'auto' | 'file'): () => Promise<Buffer> {
+  let keystore: Promise<Keystore> | undefined;
+  let key: Promise<Buffer> | undefined;
+  return () => {
+    keystore ??= chooseKeystore(join(home, 'vault'), home, mode);
+    key ??= keystore
+      .then((k) => k.deviceKey())
+      .catch((error: unknown) => {
+        key = undefined;
+        throw error;
+      });
+    return key;
+  };
+}
+
+/**
  * The best keystore this computer has. `mode: 'file'` forces the file (tests,
  * `CONCH_VAULT_KEYSTORE=file`); `auto` tries the operating system's first and
  * checks it really works before trusting it with the only copy of the key.

@@ -44,11 +44,19 @@ import { PROVIDER_COPY } from './providers/catalog';
 import { SettingsStore } from './settings/store';
 import { skillsCommand } from './skills/cli';
 import { SkillTrust } from './skills/trust';
+import { deviceSealer, registerSealer } from './lib/sealed';
+import { deviceKeyFor, keystoreMode } from './vault/keystore';
 
 const config = loadConfig();
 // Conch may have started on another port (the usual one was busy): links point where it really is.
 const running = await runningGateway(config.CONCH_HOME);
 if (running) config.CONCH_PORT = running.port;
+// Conch's own keys open here as they do in the gateway: with this computer's
+// device key, found the same way and only when a sealed file is read (ADR 0040).
+registerSealer(
+  config.CONCH_HOME,
+  deviceSealer(deviceKeyFor(config.CONCH_HOME, keystoreMode(config))),
+);
 const healed = new Healed(config.CONCH_HOME);
 const heal: Heal = (area, message) => void healed.note(area, message);
 const store = new AccessStore(config.CONCH_HOME, heal);

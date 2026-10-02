@@ -15,6 +15,7 @@ import {
   signSkill,
   type SignatureFile,
 } from './signing';
+import { deviceSealer, isSealed } from '../lib/sealed';
 import { SIGNER_FILE, SkillTrust, TRUST_FILE } from './trust';
 
 async function skill(name = 'weekly', body = 'Do the weekly review.') {
@@ -213,15 +214,18 @@ describe('whose skills you trust', () => {
     expect(await trust.list()).toEqual([]);
   });
 
-  it('your own key is made once, kept private, and trusted', async () => {
+  it('your own key is made once, locked, and trusted', async () => {
     const home = await mkdtemp(join(tmpdir(), 'conch-trust-'));
-    const trust = new SkillTrust(home);
+    const trust = new SkillTrust(home, { sealer: deviceSealer(async () => Buffer.alloc(32, 9)) });
     const first = await trust.signer('Ada');
     const again = await trust.signer('Someone else');
     expect(again).toEqual(first);
     expect(await trust.list()).toMatchObject([{ name: 'Ada', you: true }]);
     // The private key never lands in the trust list (which backups keep).
     expect(await readFile(join(home, TRUST_FILE), 'utf8')).not.toContain(first.privateKey);
-    expect(await readFile(join(home, SIGNER_FILE), 'utf8')).toContain(first.privateKey);
+    // Locked with this computer's key (ADR 0040): never in the clear.
+    const kept = await readFile(join(home, SIGNER_FILE), 'utf8');
+    expect(isSealed(kept)).toBe(true);
+    expect(kept).not.toContain(first.privateKey);
   });
 });

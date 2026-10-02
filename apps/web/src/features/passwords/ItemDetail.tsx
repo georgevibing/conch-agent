@@ -80,6 +80,7 @@ export function ItemDetail({
     if (place === 'integrations')
       return void navigate(focus ? `/integrations/${focus}` : '/integrations');
     if (place === 'channels') return void navigate(focus ? `/channels/${focus}` : '/channels');
+    if (place === 'skills') return void navigate('/skills', { state: { focus: 'publishers' } });
     openSettings(place as SettingsTab, focus);
   };
   const refresh = () => {

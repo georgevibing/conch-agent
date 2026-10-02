@@ -46,6 +46,7 @@ import type { ConversationRecord, ConversationStore } from './store';
 import { summarizeToolUse, titleFrom } from './summarize';
 import { allows, missing, needs } from '../skills/permissions';
 import { describeTaint, leavesSandbox, sinkReason, taintFrom } from './taint';
+import { CONCH_POWER_MESSAGE, runsConchPower } from '../lib/protect';
 import { didWhat } from '../activity/service';
 import { changedFiles, type UndoService } from '../undo/service';
 import { shownPath } from '../undo/tracker';
@@ -1077,6 +1078,7 @@ export class ConversationManager {
       signal: AbortSignal,
     ): Promise<PermissionDecision> => {
       if (extras?.toolAllowed && !extras.toolAllowed(request.toolName)) return 'deny';
+      if (runsConchPower(request.toolName, request.input)) return 'deny';
       if (
         await extras?.beforeTool?.(request.toolName, request.input, request.toolUseId, 'permission')
       )
@@ -1120,6 +1122,9 @@ export class ConversationManager {
         'guard',
       );
       if (blocked) return { decision: 'deny', message: blocked };
+      // Your key and whose skills you trust are yours to use (ADR 0040), in every mode.
+      if (runsConchPower(request.toolName, request.input))
+        return { decision: 'deny', message: CONCH_POWER_MESSAGE };
       await keepBefore(request.toolUseId, request.toolName, request.input);
       if ((await integrations?.decide(request.toolName).catch(() => undefined)) === 'off')
         return {

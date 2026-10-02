@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import { skillsCommand, type SkillsIo } from './cli';
 import { checkSignature, fingerprintOf, newSigner, SIG_FILE } from './signing';
+import { deviceSealer } from '../lib/sealed';
 import { SkillTrust } from './trust';
 
 async function setup() {
@@ -19,7 +20,9 @@ async function setup() {
     cwd: root,
     defaultName: 'ada',
   };
-  const trust = new SkillTrust(join(root, 'home'));
+  const trust = new SkillTrust(join(root, 'home'), {
+    sealer: deviceSealer(async () => Buffer.alloc(32, 4)),
+  });
   const folder = join(root, 'weekly-review');
   await mkdir(folder);
   await writeFile(

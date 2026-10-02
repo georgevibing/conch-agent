@@ -17,6 +17,8 @@ import { gzipSync } from 'node:zlib';
 
 import { BackupPreview } from '@conch/protocol';
 
+import { isSealed } from '../lib/sealed';
+
 import { cookieOf, gateway, PASSWORD, useConch, type Gateway } from '../test/session';
 import { BackupError, padding, tarHeader } from './archive';
 import { backupCheck, OVERDUE_MS } from './doctor';
@@ -87,6 +89,9 @@ describe('back up, restore on another computer, undo', () => {
     const a = await open();
     const made = await useConch(a);
     const cookie = made.cookie;
+    // Your key for signing skills, locked with this computer's key (ADR 0040).
+    const signer = await a.services.skillTrust.signer('Ada');
+    expect(isSealed(await readFile(join(a.home, 'skills.signing.json'), 'utf8'))).toBe(true);
 
     const created = await a.app.inject({
       method: 'POST',
@@ -194,6 +199,11 @@ describe('back up, restore on another computer, undo', () => {
     expect(await b.services.settings.providerSecret('openrouter')).toMatchObject({
       value: 'sk-or-v1-0123456789abcdef',
     });
+    // The signing key came in the passphrase-locked part, and is locked with this computer's key now.
+    await vi.waitFor(async () =>
+      expect(isSealed(await readFile(join(b.home, 'skills.signing.json'), 'utf8'))).toBe(true),
+    );
+    expect(await b.services.skillTrust.signer('x')).toEqual(signer);
     const convo = await b.services.conversations.detail(made.conversationId);
     expect(convo.events.some((e) => e.type === 'user.message' && e.attachments?.length === 1)).toBe(
       true,
@@ -249,9 +259,17 @@ describe('back up, restore on another computer, undo', () => {
 
   it('restores without the keys when asked, and keeps this computer’s own', async () => {
     const a = await open();
-    await useConch(a);
-    const [daily] = await a.services.backups.list();
-    const file = await readFile(a.services.backups.pathOf(daily?.id ?? ''));
+    const { cookie } = await useConch(a);
+    // A backup without a passphrase leaves the signing key behind, like every key (ADR 0040).
+    await a.services.skillTrust.signer('Ada');
+    const plain = await a.app.inject({
+      method: 'POST',
+      url: '/api/backups',
+      headers: { cookie },
+      payload: { chats: false },
+    });
+    expect(plain.statusCode).toBe(200);
+    const file = await readFile(a.services.backups.pathOf(String(json(plain).id)));
 
     let b = await open();
     await b.services.settings.setProviderSecret('anthropic-api', {
@@ -278,6 +296,7 @@ describe('back up, restore on another computer, undo', () => {
       value: 'sk-ant-mine',
     });
     expect(await b.services.settings.providerSecret('openrouter')).toBeUndefined();
+    expect(await b.services.skillTrust.signingKey()).toEqual({ state: 'none' });
     expect((await b.services.memory.list()).map((m) => m.content)).toEqual([
       'Ada takes her tea with lemon.',
     ]);

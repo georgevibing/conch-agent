@@ -358,3 +358,26 @@ describe('a skill’s list holds for the whole chat (ADR 0040)', () => {
     ]);
   });
 });
+
+describe('the assistant can’t sign or trust skills from its own shell (ADR 0040)', () => {
+  it('is refused in every mode, skill or not', async () => {
+    const { manager, engine } = await setup();
+    engine.script.push(
+      tries(engine, [
+        { toolName: 'Bash', input: { command: 'pnpm conch skills sign ./mine --as Ada' } },
+        {
+          toolName: 'Bash',
+          input: { command: 'cd ~/conch && pnpm conch skills trust AAAA --as x' },
+        },
+        { toolName: 'Bash', input: { command: 'node --import tsx src/cli.ts skills forget 1234' } },
+        { toolName: 'Bash', input: { command: 'pnpm conch skills trusted' } },
+      ]),
+    );
+    await turn(manager, 'sign it');
+    expect(engine.guarded.slice(0, 3)).toEqual(
+      Array(3).fill({ decision: 'deny', message: expect.stringMatching(/for the user to do/) }),
+    );
+    // Only looking is fine.
+    expect(engine.guarded[3]).toBeUndefined();
+  });
+});

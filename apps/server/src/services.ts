@@ -16,12 +16,15 @@ import { ImportService } from './import/service';
 import { ArtifactService } from './artifacts/service';
 import { ArtifactStore } from './artifacts/store';
 import { tasksCheck } from './tasks/doctor';
+import { signingKeyCheck } from './skills/doctor';
+import { fingerprintOf } from './skills/signing';
 import { TASKS_PROMPT, TaskService } from './tasks/service';
 import { TaskStore } from './tasks/store';
 import { AttachmentStore } from './attachments/store';
 import { type SystemKey, VaultService } from './vault/service';
 import { vaultTools } from './vault/tools';
 import { vaultCheck } from './vault/doctor';
+import { keystoreMode } from './vault/keystore';
 import { deviceSealer, registerSealer } from './lib/sealed';
 import { protectedPaths } from './lib/protect';
 import { pretendBackend } from './background/backends';
@@ -237,9 +240,7 @@ export class Services {
     this.attachments = new AttachmentStore(join(config.CONCH_HOME, 'attachments'));
     this.vault = new VaultService({
       home: config.CONCH_HOME,
-      keystore:
-        config.CONCH_VAULT_KEYSTORE ??
-        (config.CONCH_ENGINE === 'mock' || process.env.VITEST ? 'file' : 'auto'),
+      keystore: keystoreMode(config),
       emit: () => {
         this.broadcast.emit({ type: 'vault.changed' });
         // Repair everything says what's true now (unlocked, locked, turned off).
@@ -349,6 +350,14 @@ export class Services {
       onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
       trust: this.skillTrust,
     });
+    // A signing key written in the clear (an older Conch, a restored backup) is locked now (ADR 0040).
+    void this.skillTrust
+      .lockIfClear()
+      .then((locked) => {
+        if (locked) heal('skills', 'Locked your key for signing skills with this computer’s key.');
+      })
+      .catch(() => undefined);
+    this.doctor.register(signingKeyCheck(this.skillTrust));
     this.terminal = new TerminalService({
       home: config.CONCH_HOME,
       heal,
@@ -1049,6 +1058,22 @@ export class Services {
           reveal: async () => value,
         });
     }
+    // Your key for signing skills (ADR 0040): shown, never copied out.
+    const signing = await this.skillTrust.signingKey({ lock: false }).catch(() => undefined);
+    if (signing?.state === 'locked' || signing?.state === 'clear')
+      out.push({
+        id: id('skills', 'signing'),
+        title: 'Key for signing skills',
+        usedBy: 'Skills you sign',
+        hint: fingerprintOf(signing.publicKey),
+        manage: { label: 'Open Skills', place: 'skills' },
+        reveal: () =>
+          Promise.reject(
+            new Error(
+              'Your signing key never leaves this computer. Share your public key instead: pnpm conch skills key',
+            ),
+          ),
+      });
     return out;
   }
 

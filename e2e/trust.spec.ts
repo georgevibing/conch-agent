@@ -26,7 +26,8 @@ const folder = join(home, 'skills', 'weekly-review');
 async function onAdasComputer(adaHome: string, ...args: string[]) {
   const { stdout } = await run(process.execPath, ['--import', 'tsx', 'src/cli.ts', ...args], {
     cwd: join(root, 'apps/server'),
-    env: { ...process.env, CONCH_HOME: adaHome, FORCE_COLOR: '0' },
+    // Her key is locked with her computer's device key: a file one here, never this machine's keychain.
+    env: { ...process.env, CONCH_HOME: adaHome, CONCH_VAULT_KEYSTORE: 'file', FORCE_COLOR: '0' },
   });
   return stdout;
 }

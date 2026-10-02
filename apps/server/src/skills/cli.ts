@@ -4,9 +4,11 @@
  * `pnpm conch password`.
  *
  * - `skills sign <folder> [--as "Your name"]` writes `SKILL.sig` with your key
- *   (made the first time, kept in `skills.signing.json`).
+ *   (made the first time, kept in `skills.signing.json`, locked with this
+ *   computer's device key: ADR 0040).
  * - `skills key` shows your public key and its fingerprint, to give people who
- *   want to trust you before they install anything of yours.
+ *   want to trust you before they install anything of yours. `skills key
+ *   --new` makes a new one, only when yours can't be opened.
  * - `skills trust <key> --as "Their name"`, `skills trusted`, `skills forget <fingerprint>`.
  */
 import { lstat, readFile } from 'node:fs/promises';
@@ -15,7 +17,7 @@ import { basename, join, resolve } from 'node:path';
 import { SKILLS_SUBCOMMANDS } from '../cliCommands';
 import { readKey, splitSkill } from './frontmatter';
 import { fingerprintOf, publicKeyFrom, SIG_FILE, signSkill } from './signing';
-import type { SkillTrust } from './trust';
+import { NEW_KEY_COMMAND, SigningKeyError, type SkillTrust } from './trust';
 
 export interface SkillsIo {
   say: (line?: string) => void;
@@ -47,6 +49,24 @@ export async function skillsCommand(
   trust: SkillTrust,
   io: SkillsIo,
 ): Promise<number> {
+  try {
+    return await run(args, trust, io);
+  } catch (error) {
+    if (!(error instanceof SigningKeyError)) throw error;
+    // Fail closed, in words: nothing signed, nothing replaced, and what to do.
+    io.say(`✗ ${error.message} Nothing was signed.`);
+    io.say(
+      io.dim(
+        error.reason === 'keychain'
+          ? 'Unlock this computer’s keychain (or sign in again), then run this again.'
+          : `Restore it from a passphrase-locked backup, or make a new one: ${NEW_KEY_COMMAND}`,
+      ),
+    );
+    return 1;
+  }
+}
+
+async function run(args: string[], trust: SkillTrust, io: SkillsIo): Promise<number> {
   const { say, bold, dim, green } = io;
   const [verb = 'help', target] = positional(args);
   const as = option(args, '--as');
@@ -74,6 +94,19 @@ export async function skillsCommand(
     );
     say(dim(`People who trust your key see “Verified: signed by ${signer.name}”.`));
     say(dim(`Your key's fingerprint: ${fingerprintOf(signer.publicKey)}`));
+    return 0;
+  }
+
+  if (verb === 'key' && args.includes('--new')) {
+    const { signer, replaced } = await trust.replaceSigner(as ?? io.defaultName);
+    if (!replaced) {
+      say(`Your key opens fine, so it was kept (${fingerprintOf(signer.publicKey)}).`);
+      return 0;
+    }
+    say(`${green('✓')} A new signing key for ${bold(signer.name)}.`);
+    say(dim(`Fingerprint  ${fingerprintOf(signer.publicKey)}`));
+    say(dim('Skills you signed with the old key still say “Verified” here.'));
+    say(dim('Anyone who trusts you needs the new one: pnpm conch skills key'));
     return 0;
   }
 

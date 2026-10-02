@@ -42,3 +42,22 @@ export function touchesProtected(input: unknown, paths: readonly string[]): bool
 
 export const PROTECTED_MESSAGE =
   'That’s where Conch keeps the user’s passwords and its own keys; it isn’t for reading or changing with files or commands. Use passwords_find, passwords_read or passwords_request instead.';
+
+/**
+ * `pnpm conch skills sign|trust|forget|key` from the assistant's own shell:
+ * signing with your key, or changing whose skills you trust, would let it
+ * vouch for its own skills (ADR 0040). The terminal command opens your key
+ * the way the gateway does, so these are the person's to type, never the
+ * assistant's. A fence for the obvious spellings, not a box: protected paths
+ * and sealing still stand behind it.
+ */
+const CONCH_POWERS = /\b(?:conch|cli\.[cm]?[jt]s)["']?\s+skills\s+(?:sign|trust|forget|key)\b/i;
+
+export function runsConchPower(toolName: string, input: unknown): boolean {
+  if (toolName !== 'Bash') return false;
+  const command = (input as { command?: unknown } | undefined)?.command;
+  return typeof command === 'string' && CONCH_POWERS.test(command);
+}
+
+export const CONCH_POWER_MESSAGE =
+  'Signing skills and choosing whose skills to trust are for the user to do in their own terminal, not for the assistant. Tell them the command to run instead.';

@@ -43,6 +43,7 @@ export const DEVICES_SUBCOMMANDS = [
 export const SKILLS_SUBCOMMANDS = [
   { usage: 'sign <folder> [--as name]', summary: 'Sign a skill you share' },
   { usage: 'key', summary: 'Your public key, for people who trust you' },
+  { usage: 'key --new', summary: 'A new key, when yours can’t be opened' },
   { usage: 'trust <key> --as name', summary: 'Trust a publisher’s key' },
   { usage: 'trusted', summary: 'Whose skills you trust' },
   { usage: 'forget <fingerprint>', summary: 'Stop trusting a publisher' },
@@ -181,7 +182,7 @@ export const CLI_COMMANDS = [
     summary: 'Sign a skill you share (skills help)',
     group: 'Your things',
     detail:
-      'Signs a skill folder with your key, so people who trust you see “Verified”, and manages whose signed skills you trust.',
+      'Signs a skill folder with your key, so people who trust you see “Verified”, and manages whose signed skills you trust. Your key is locked with this computer’s own key, so it opens here and nowhere else (a passphrase-locked backup carries it to a new computer).',
     subcommands: SKILLS_SUBCOMMANDS,
   },
 ] as const satisfies readonly CliCommand[];

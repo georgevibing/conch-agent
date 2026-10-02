@@ -11,6 +11,10 @@
  * a home registers its sealer once (`Services`), and every read and write of
  * those three files goes through it. A plain file (an older Conch, a file a
  * backup just restored) is read as it is and sealed the moment it's read.
+ *
+ * Your key for signing skills (`skills.signing.json`, ADR 0040) is sealed
+ * the same way, but opened by `SkillTrust` itself: a key that won't open
+ * fails closed instead of going back to a default, as `readStore` would.
  */
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
 import { basename, dirname, resolve } from 'node:path';
@@ -23,6 +27,7 @@ export const SEALED_FILES = new Set([
   'google.secrets.json',
   'channels.secrets.json',
   'push.secrets.json',
+  'skills.signing.json',
 ]);
 
 const MAGIC = 'conch-sealed';
