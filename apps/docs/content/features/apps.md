@@ -17,7 +17,7 @@ A card that needs you comes first, with its one button, such as **Sign in again*
 The page has three parts, top to bottom:
 
 1. **Connected**: the apps you have.
-2. **Add another app**: what Conch offers, by kind. The kinds are **Work**, **Talk to me here**, **Files**, **Design**, **Business**, **Developer** and **Home**. Pick a kind above the gallery to see only that one, or type a name in **Find an app**.
+2. **Add another app**: what Conch offers, by kind. The kinds are **Work**, **Talk to me here**, **Files**, **Passwords**, **Design**, **Business**, **Developer** and **Home**. **Passwords** has the password managers Conch can read: turn one on from its page here or from **Passwords**, it's the same switch. Pick a kind above the gallery to see only that one, or type a name in **Find an app**.
 3. **Found in** and a provider's name: apps Conch came across there. See [Apps a provider set up by itself](#apps-a-provider-set-up-by-itself).
 
 Every app in the gallery is one Conch can really connect: before an app goes in, Conch's own sign-in is tried against the service. A few well-known services only let apps they already know sign in, so they aren't offered. **Zapier** reaches many of those, and **Add your own** takes any other.

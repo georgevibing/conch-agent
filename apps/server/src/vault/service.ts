@@ -492,6 +492,7 @@ export class VaultService {
         writable: false,
         ...(source.need && { need: source.need }),
         unlock: source.unlock,
+        ...(source.available === false && { available: false }),
         ...(kept[source.id] !== undefined && { keptUnlocked: true }),
         ...(state.state === 'locked' &&
           this.#reopenFailed.has(source.id) && { message: this.#reopenFailed.get(source.id) }),

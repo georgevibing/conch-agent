@@ -37,8 +37,8 @@ const plus = (address: string) => address.replace(/@/, '+conch@');
 
 /**
  * What an app does, as plain switches (ADR 0052): its tools in a few groups,
- * "Talk to me here" for an app you can chat in, and for 1Password, filling
- * sign-ins. A half that isn't set up yet has the button that sets it up;
+ * "Talk to me here" for an app you can chat in, and for a password manager,
+ * filling sign-ins. A half that isn't set up yet has the button that sets it up;
  * one that can share a sign-in Conch already has turns on in one tap, and
  * only when the person flips it.
  */
@@ -197,21 +197,21 @@ export function AppAbilitiesSection({
       });
   }
 
-  // 1Password's sign-ins, in Passwords.
-  if (catalogId === '1password' && source) rows.unshift(fillRow(source));
+  // A password manager's sign-ins, in Passwords: 1Password's, and every other's.
+  if (source) rows.unshift(fillRow(source));
 
   function fillRow(from: VaultSource): AppAbility {
     const base = {
       id: 'fill',
-      title: 'Fill sign-ins from 1Password',
-      description: `Your 1Password logins show in Passwords, and ${assistant} fills one in the browser when you say OK. Nothing is copied.`,
+      title: `Fill sign-ins from ${from.name}`,
+      description: `Your ${from.name} logins show in Passwords, and ${assistant} fills one in the browser when you say OK. Nothing is copied.`,
       icon: <KeyRound />,
     };
     if (from.state === 'missing')
       return {
         ...base,
         on: false,
-        note: from.message ?? 'Needs 1Password’s command line on this computer.',
+        note: from.message ?? `Needs ${from.name}’s program on this computer.`,
         setup: {
           label: 'Set up',
           onClick: () => void navigate('/passwords', { state: { sources: true } }),
@@ -226,7 +226,13 @@ export function AppAbilitiesSection({
           await vaultApi.setSource(from.id, { enabled });
           await client.invalidateQueries({ queryKey: vaultKeys.all });
         }),
-      ...(from.state === 'locked' && { note: 'Locked. Unlock 1Password to use it.' }),
+      ...(from.state === 'locked' && {
+        note:
+          from.message ??
+          (from.unlock === 'password'
+            ? 'Locked. Unlock it in Passwords.'
+            : `Locked. Unlock ${from.name} to use it.`),
+      }),
       ...(from.state === 'error' && { note: from.message, attention: true }),
       ...(from.state === 'ready' &&
         from.count !== undefined && {

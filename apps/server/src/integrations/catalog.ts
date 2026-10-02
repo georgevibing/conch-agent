@@ -391,7 +391,8 @@ const raw: CatalogItem[] = [
     // One app with two halves (ADR 0052): sign-ins in Passwords, and Environments here.
     tagline: 'Sign-ins and Environments',
     description: 'Manage your 1Password Environments by name. Secret values never leave 1Password.',
-    category: 'developer',
+    // A password manager first, to a person: with the others, under Passwords.
+    category: 'passwords',
     auth: 'none',
     local: true,
     color: '#145FE4',

@@ -214,6 +214,8 @@ export const VaultSource = z.object({
   need: z.string().optional(),
   /** What unlocking takes: nothing (it asks itself, e.g. Touch ID) or a password typed here. */
   unlock: z.enum(['none', 'app', 'password']).default('none'),
+  /** `false`: it can't work on this computer (the macOS Keychain off a Mac), so it isn't offered. */
+  available: z.boolean().optional(),
   /** When its items were last read. */
   syncedAt: z.number().optional(),
   /** Kept unlocked on this computer: it opens by itself when Conch starts. */

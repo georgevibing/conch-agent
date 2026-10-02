@@ -8,6 +8,7 @@ const CATEGORIES: Record<string, string> = {
   productivity: 'Work and notes',
   developer: 'Building things',
   files: 'Files',
+  passwords: 'Passwords',
   design: 'Design and websites',
   business: 'Customers and money',
   home: 'Home',

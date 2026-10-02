@@ -128,6 +128,11 @@ export function vaultSourceName(source: VaultSourceKind): string {
   return SOURCE_NAMES[source];
 }
 
+/** A password manager's colour, for its logo tile wherever it shows (Apps, ⌘K). */
+export function vaultSourceColor(source: VaultSourceKind): string | undefined {
+  return source === 'conch' || source === 'system' ? undefined : SOURCE_COLORS[source];
+}
+
 export interface VaultItemIconProps extends Omit<ComponentProps<'span'>, 'children'> {
   kind: VaultKind;
   /** For logins: the site, shown as its monogram. */

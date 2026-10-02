@@ -3,6 +3,7 @@ import {
   ARTIFACT_KINDS,
   CHAT_ONLY_WORDS,
   IntegrationLogo,
+  vaultSourceColor,
   ProviderLogo,
   SkillIcon,
   toast,
@@ -63,6 +64,7 @@ import { DEVICES_FOCUS } from '../auth/focus';
 import { FALLBACK_FOCUS } from '../settings/FallbackSection';
 import { APP_WORDS, APPS } from '../channels/describe';
 import { useChannels } from '../channels/queries';
+import { isManager } from '../integrations/apps';
 import { useIntegrations } from '../integrations/queries';
 import { downloadMemories } from '../memory/api';
 import { copySecret } from '../passwords/clipboard';
@@ -362,6 +364,16 @@ export function useFindables(query: string, conversationId: string | undefined):
     ...(integrations?.catalog ?? [])
       .filter((c) => !connected.some((i) => i.catalogId === c.id))
       .map((c) => ({ id: c.id, name: c.name, brand: c.id, color: c.color, connected: false })),
+    // Password managers are apps too (ADR 0052): each opens its page, on or not.
+    ...(vault?.status.sources ?? [])
+      .filter((s) => s.id !== '1password' && isManager(s))
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        brand: s.id,
+        color: vaultSourceColor(s.id),
+        connected: true,
+      })),
   ];
   const appItems = find(
     apps,
