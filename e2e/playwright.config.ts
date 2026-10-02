@@ -67,7 +67,7 @@ const scenarios = {
   passwords: { port: 4386, env: { CONCH_MOCK_STATE: 'ready' } },
   suggest: { port: 4383, env: { CONCH_MOCK_STATE: 'ready' } },
   // A model that can only chat (ADR 0050): a message that needs an app offers one that can.
-  'chat-only': { port: 4359, env: { CONCH_MOCK_STATE: 'ready' } },
+  'chat-only': { port: 4358, env: { CONCH_MOCK_STATE: 'ready' } },
   // Runs under the supervisor (`pnpm start`), so a restore can start Conch again.
   backups: { port: 4382, env: { CONCH_MOCK_STATE: 'ready', CONCH_SUPERVISE: '1' }, entry: 'start' },
   channels: { port: 4387, env: { CONCH_MOCK_STATE: 'ready' } },
