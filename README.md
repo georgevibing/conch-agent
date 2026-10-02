@@ -230,7 +230,7 @@ working, and goes back at once if it doesn't start. Conch restarts itself after 
 Maintainers release with `pnpm release` ([docs/RELEASING.md](./docs/RELEASING.md)).
 ([ADR 0016](./docs/adr/0016-getting-what-a-feature-needs.md),
 [0019](./docs/adr/0019-updates.md), [0020](./docs/adr/0020-backups.md),
-[0048](./docs/adr/0048-releases.md))
+[0051](./docs/adr/0051-releases.md))
 
 **One box for everything.** <kbd>⌘</kbd> + <kbd>K</kbd> finds chats and messages,
 models, skills, apps, routines, pages and settings by name.
@@ -277,4 +277,4 @@ Its lists are read from the code, so they are never behind it
 - [docs/BROWSER.md](./docs/BROWSER.md) — the browser: watching, taking over, what it asks
 - [docs/TERMINAL.md](./docs/TERMINAL.md) — the terminal: shortcuts, the assistant, other devices
 - [docs/design/NACRE.md](./docs/design/NACRE.md) — the design language
-- [docs/adr](./docs/adr) — decision records (0001–0047)
+- [docs/adr](./docs/adr) — decision records (0001–0051)

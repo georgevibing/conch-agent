@@ -521,7 +521,7 @@ describe('quiet signals when updates wait', () => {
   });
 });
 
-/** Conch following its releases (ADR 0048). */
+/** Conch following its releases (ADR 0051). */
 const notes = (version: string, line: string, extra = {}) => ({
   version,
   channel: 'stable' as const,

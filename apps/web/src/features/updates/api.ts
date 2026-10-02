@@ -15,7 +15,7 @@ export const updatesApi = {
     }),
   setAuto: (auto: boolean) =>
     request(UpdatesStatus, '/api/updates/settings', { method: 'PATCH', body: { auto } }),
-  /** The channel, every change on main, and what's been put away (ADR 0048). */
+  /** The channel, every change on main, and what's been put away (ADR 0051). */
   setSettings: (body: UpdatesSettingsBody) =>
     request(UpdatesStatus, '/api/updates/settings', { method: 'PATCH', body }),
   /** Back to the version before, at once. */

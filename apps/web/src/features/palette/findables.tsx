@@ -790,7 +790,7 @@ export function useFindables(query: string, conversationId: string | undefined):
         ]
       : []),
     {
-      // Stable, beta or alpha (ADR 0048): Settings → Health → Updates.
+      // Stable, beta or alpha (ADR 0051): Settings → Health → Updates.
       id: 'release-channel',
       label: 'Release channel: stable, beta or alpha',
       keywords: 'release channel stable beta alpha preview early versions updates choose',

@@ -93,7 +93,7 @@ await recordGateway(config.CONCH_HOME, {
   startedAt: Date.now(),
   ...(background && { background }),
 });
-// A release just swapped in proves itself by answering (ADR 0048); until it
+// A release just swapped in proves itself by answering (ADR 0051); until it
 // does, the supervisor is ready to go back to the version before.
 const releaseRoot = process.env.CONCH_RELEASE_ROOT;
 if (releaseRoot && readState(config.CONCH_HOME).pending) {

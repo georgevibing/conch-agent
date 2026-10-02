@@ -1,6 +1,6 @@
 # Releasing Conch
 
-One command, one question. The details are in [ADR 0048](./adr/0048-releases.md).
+One command, one question. The details are in [ADR 0051](./adr/0051-releases.md).
 
 ## A release
 

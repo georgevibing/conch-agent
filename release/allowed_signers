@@ -1,4 +1,4 @@
-# The SSH keys Conch's releases are signed with (ADR 0048, docs/RELEASING.md).
+# The SSH keys Conch's releases are signed with (ADR 0051, docs/RELEASING.md).
 #
 # Every Conch checks a release's tag against this list as it is in the
 # version already installed, so a release that changes it must be signed by

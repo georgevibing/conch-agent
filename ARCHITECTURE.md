@@ -95,8 +95,8 @@ src/
   providers/                  the words for each engine, connecting them, switching, keys
   secrets/                    where a key lives: this computer, or 1Password (`op read`)
   setup/                      what features need from this computer; find, install, update, open
-  updates/                    daily quiet checks, one-click updates, Conch following signed releases (ADR 0048)
-  release/                    `pnpm release`: version, notes, signing (ADR 0048)
+  updates/                    daily quiet checks, one-click updates, Conch following signed releases (ADR 0051)
+  release/                    `pnpm release`: version, notes, signing (ADR 0051)
   lib/healed.ts               "fixed on its own" notes (~/.conch/healed.json, `healed` event)
   lib/lifecycle.ts            this run's `BOOT_ID`; `restart()` (exit 75, the supervisor starts it again)
   start.ts, supervisor.ts     `pnpm start` runs Conch as a child it restarts (on request, or after a crash),
@@ -208,7 +208,7 @@ src/
   under `/api/updates` (updating and turning automation on need sudo mode);
   `updates.changed` is pushed live. Repair everything's `updates` check lists what
   waits.
-- **Releases** (`release/`, `updates/{releases,layout}.ts`, [ADR 0048](./docs/adr/0048-releases.md)).
+- **Releases** (`release/`, `updates/{releases,layout}.ts`, [ADR 0051](./docs/adr/0051-releases.md)).
   `pnpm release` makes a signed, annotated `vX.Y.Z` tag with notes written from
   the commits. An install follows releases in its channel (stable, beta,
   alpha). A developer's copy follows its branch as above. Tags are fetched into

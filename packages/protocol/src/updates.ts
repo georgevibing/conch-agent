@@ -1,5 +1,5 @@
 /**
- * Updates — for Conch itself and the programs it uses (ADR 0019, ADR 0048).
+ * Updates — for Conch itself and the programs it uses (ADR 0019, ADR 0051).
  *
  * Conch checks quietly, once a day, and says what's waiting in a few plain
  * words. Updating is one press: a program goes through the package manager
@@ -36,7 +36,7 @@ export type ConchUpdateStep = z.infer<typeof ConchUpdateStep>;
 
 /**
  * Which releases Conch follows. Stable is the default; beta also takes
- * beta releases, alpha everything (ADR 0048).
+ * beta releases, alpha everything (ADR 0051).
  */
 export const ReleaseChannel = z.enum(['stable', 'beta', 'alpha']);
 export type ReleaseChannel = z.infer<typeof ReleaseChannel>;
@@ -108,7 +108,7 @@ export const ConchUpdate = z.object({
     })
     .optional(),
 
-  // ── Releases (ADR 0048) ───────────────────────────────────────────────
+  // ── Releases (ADR 0051) ───────────────────────────────────────────────
   source: UpdateSource.default('branch'),
   /** Why it follows its branch, in a sentence (a developer's copy, no releases yet). */
   sourceWhy: z.string().optional(),

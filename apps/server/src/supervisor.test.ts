@@ -83,7 +83,7 @@ describe('keeping Conch running', () => {
   });
 });
 
-/** A folder that looks like a Conch to start (ADR 0048). */
+/** A folder that looks like a Conch to start (ADR 0051). */
 function version(home: string, name: string): string {
   const folder = join(home, 'versions', name);
   mkdirSync(join(folder, 'apps', 'server', 'src'), { recursive: true });

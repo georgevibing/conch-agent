@@ -8,7 +8,7 @@
  * one says so quietly. The supervisor stays attached to the terminal, so Ctrl+C
  * still stops everything and the logs stay where they were.
  *
- * After a release is swapped in (ADR 0048), the gateway starts from the folder
+ * After a release is swapped in (ADR 0051), the gateway starts from the folder
  * `CONCH_HOME/versions/current` names, read afresh every time. A new version
  * has to prove itself: until it's answering (it says so in
  * `versions/state.json`), stopping or staying silent for too long means it's

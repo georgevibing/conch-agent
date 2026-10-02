@@ -1,5 +1,5 @@
 /**
- * Conch's release numbers (ADR 0048): `v0.3.0` is a stable release,
+ * Conch's release numbers (ADR 0051): `v0.3.0` is a stable release,
  * `v0.4.0-beta.2` and `v0.4.0-alpha.1` are pre-releases. Nothing else is a
  * release, however it's spelt: a tag is read strictly, because what it says
  * decides what installs.

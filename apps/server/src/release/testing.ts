@@ -1,5 +1,5 @@
 /**
- * Real git repositories and real SSH keys for the release tests (ADR 0048):
+ * Real git repositories and real SSH keys for the release tests (ADR 0051):
  * a bare "origin", a maintainer's clone that signs tags with `git tag -s`,
  * and keys made by `ssh-keygen`. Nothing here touches this repository or the
  * network. Used by the unit tests and by the `releases` e2e journey.

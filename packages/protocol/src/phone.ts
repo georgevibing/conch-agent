@@ -53,7 +53,7 @@ export const PushTopic = z.enum([
   'devices',
   /** A task you sent to the background finished (ADR 0033). */
   'tasks',
-  /** A new release of Conch is ready (ADR 0048). Off until you turn it on. */
+  /** A new release of Conch is ready (ADR 0051). Off until you turn it on. */
   'updates',
 ]);
 export type PushTopic = z.infer<typeof PushTopic>;

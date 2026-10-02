@@ -49,7 +49,7 @@ export function findCheckout(
 
 /**
  * The folder `git worktree` folders belong to: Conch's own checkout, where
- * every version comes from (ADR 0048). A version folder's `.git` is a file
+ * every version comes from (ADR 0051). A version folder's `.git` is a file
  * naming it.
  */
 export function repositoryOf(root: string): string {

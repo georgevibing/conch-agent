@@ -25,7 +25,7 @@ export function updatesCheck(updates: UpdatesService, home: string): DoctorCheck
         void updates.check();
       const items: DoctorItem[] = [];
       const { conch } = status;
-      // A release is news, not a problem (ADR 0048).
+      // A release is news, not a problem (ADR 0051).
       if (conch.source === 'releases' && conch.latest)
         items.push({
           id: 'updates:conch',

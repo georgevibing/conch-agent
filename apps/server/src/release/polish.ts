@@ -1,5 +1,5 @@
 /**
- * Notes, polished by a model (ADR 0048) — optional, and held to the
+ * Notes, polished by a model (ADR 0051) — optional, and held to the
  * deterministic notes it starts from.
  *
  * The model gets the groups `notes.ts` found (each a line and the commits it

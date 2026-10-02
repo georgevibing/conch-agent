@@ -1,5 +1,5 @@
 /**
- * The gateway for the `releases` journey (ADR 0048), under the supervisor
+ * The gateway for the `releases` journey (ADR 0051), under the supervisor
  * like `pnpm start`, beside a pretend upstream: a bare git "origin" with
  * releases tagged and signed by a key made here with `ssh-keygen`, and a
  * pretend Conch installed from it at v0.1.0. Nothing reaches the network.

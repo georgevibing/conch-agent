@@ -53,7 +53,7 @@ const skillScopeHome = (process.env.CONCH_E2E_SKILL_SCOPE_HOME ??= mkdtempSync(
   join(tmpdir(), 'conch-e2e-skill-scope-'),
 ));
 
-/** The `releases` journey's pretend upstream: a bare origin with signed release tags (ADR 0048). */
+/** The `releases` journey's pretend upstream: a bare origin with signed release tags (ADR 0051). */
 const releasesWorld = (process.env.CONCH_E2E_RELEASES_WORLD ??= mkdtempSync(
   join(tmpdir(), 'conch-e2e-releases-'),
 ));
@@ -121,7 +121,7 @@ const scenarios = {
     env: { CONCH_MOCK_STATE: 'ready', CONCH_SUPERVISE: '1' },
     entry: 'start',
   },
-  // Releases (ADR 0048): signed tags from a pretend upstream, a staged swap, and the restart.
+  // Releases (ADR 0051): signed tags from a pretend upstream, a staged swap, and the restart.
   releases: {
     port: 4367,
     env: { CONCH_MOCK_STATE: 'ready', CONCH_E2E_RELEASES_WORLD: releasesWorld },

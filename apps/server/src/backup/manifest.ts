@@ -174,7 +174,7 @@ export const RULES: readonly BackupRule[] = [
   {
     match: 'versions/**',
     class: 'derived',
-    why: 'Conch’s own versions, made ready beside the one running, and which one runs (ADR 0048): installed again from its releases.',
+    why: 'Conch’s own versions, made ready beside the one running, and which one runs (ADR 0051): installed again from its releases.',
   },
   {
     match: 'updates.json',

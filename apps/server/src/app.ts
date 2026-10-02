@@ -671,7 +671,7 @@ export async function buildApp(services: Services) {
     if (raises && verifyRequired(request, reply)) return;
     return services.updates.setSettings(body);
   });
-  // Back to the version before, at once (ADR 0048): it changes the code that runs, so it asks that it's you.
+  // Back to the version before, at once (ADR 0051): it changes the code that runs, so it asks that it's you.
   app.post('/api/updates/conch/back', async (request, reply) => {
     if (verifyRequired(request, reply)) return;
     return guarded(reply, async () => {

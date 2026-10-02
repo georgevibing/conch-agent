@@ -1,4 +1,4 @@
-# 0048 — Releases: `pnpm release`, channels, signed tags and the staged swap
+# 0051 — Releases: `pnpm release`, channels, signed tags and the staged swap
 
 - Status: accepted
 - Date: 2026-10-02

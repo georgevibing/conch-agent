@@ -238,7 +238,7 @@ export class PushService {
   }
 
   /**
-   * A new release of Conch is ready (ADR 0048): said once per version, only
+   * A new release of Conch is ready (ADR 0051): said once per version, only
    * to devices that turned `updates` on (it's off until they do).
    */
   async releaseReady(version: string): Promise<void> {

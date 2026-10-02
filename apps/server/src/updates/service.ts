@@ -53,7 +53,7 @@ const ConchCache = z.object({
   blocked: z.object({ reason: z.string(), command: z.string().optional() }).optional(),
 });
 
-/** What the last look at releases found (ADR 0048). */
+/** What the last look at releases found (ADR 0051). */
 const ReleaseCache = z.object({
   source: z.enum(['releases', 'branch']).default('branch'),
   sourceWhy: z.string().optional(),
@@ -81,7 +81,7 @@ const Cache = z.object({
   conch: ConchCache.prefault({}),
   programs: z.record(z.string(), Program).default({}),
   outcome: ConchUpdate.shape.outcome,
-  // ── Releases (ADR 0048) ──
+  // ── Releases (ADR 0051) ──
   /** Chosen in Settings; unset, it's what the installer set (`CONCH_CHANNEL`), else stable. */
   channel: ReleaseChannel.optional(),
   /** "Every change on main", a developer's choice. */
@@ -118,7 +118,7 @@ export interface UpdatesDeps {
   lookup: LatestLookup;
   /** Conch's own checkout, when it runs from one it can update. */
   conch?: ConchCheckout;
-  /** The same folder, following releases (ADR 0048). */
+  /** The same folder, following releases (ADR 0051). */
   releases?: ReleaseFollower;
   /** Tell phones that asked: "Conch 0.3 is ready" (push topic `updates`). */
   announce?: (version: string) => void;
@@ -331,7 +331,7 @@ export class UpdatesService {
   #notice(): { id: string; message: string } | undefined {
     const rel = this.#cache.releases;
     const seen = new Set(this.#cache.seen);
-    // A copy of main that just started following releases (ADR 0048 § Migrating).
+    // A copy of main that just started following releases (ADR 0051 § Migrating).
     if (this.#followsReleases() && this.#cache.conch.branch === 'main' && !seen.has('releases'))
       return {
         id: 'releases',
@@ -387,7 +387,7 @@ export class UpdatesService {
   }
 
   /**
-   * Look at releases (ADR 0048). True when this copy follows them, and the
+   * Look at releases (ADR 0051). True when this copy follows them, and the
    * look is done; false for a copy that follows its branch.
    */
   async #checkReleases(fetch: boolean): Promise<boolean> {
@@ -632,7 +632,7 @@ export class UpdatesService {
     return this.deps.restart();
   }
 
-  /** A release: made ready beside this one, swapped in, then a restart (ADR 0048). */
+  /** A release: made ready beside this one, swapped in, then a restart (ADR 0051). */
   async #updateRelease(offer: Offer): Promise<void> {
     const releases = this.deps.releases;
     const now = () => this.#now();

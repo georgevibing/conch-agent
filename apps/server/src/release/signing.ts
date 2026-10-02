@@ -1,5 +1,5 @@
 /**
- * Is this release really from Conch's makers? (ADR 0048)
+ * Is this release really from Conch's makers? (ADR 0051)
  *
  * Every release is an annotated tag signed with an SSH key. Which keys count
  * is pinned in `release/allowed_signers` — read from the Conch already

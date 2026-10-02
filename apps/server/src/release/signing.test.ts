@@ -39,7 +39,7 @@ async function repo() {
 describe('the pinned list of signers', () => {
   it('reads keys, not comments, and writes a line for one', () => {
     const list = [
-      '# Releases are signed by these keys (ADR 0048).',
+      '# Releases are signed by these keys (ADR 0051).',
       '',
       'ada@example.com namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHk ada',
     ].join('\n');

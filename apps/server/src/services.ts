@@ -827,7 +827,7 @@ export class Services {
     const programs = mock
       ? mockPrograms(config.CONCH_HOME)
       : { specs: KNOWN_NEEDS, setup: this.setup, lookup: lookup() };
-    // The folder running: the release the supervisor started (ADR 0048), else the checkout.
+    // The folder running: the release the supervisor started (ADR 0051), else the checkout.
     const root =
       process.env.CONCH_RELEASE_ROOT?.trim() ||
       (mock && !config.CONCH_CHECKOUT
@@ -864,7 +864,7 @@ export class Services {
    */
   #background(config: Config): BackgroundService {
     const mock = config.CONCH_ENGINE === 'mock';
-    // Conch's checkout itself: the launcher finds the version to run (ADR 0048).
+    // Conch's checkout itself: the launcher finds the version to run (ADR 0051).
     const checkout = findRepository(import.meta.dirname, config.CONCH_CHECKOUT);
     const backend = mock ? pretendBackend() : backendFor(config.CONCH_HOME);
     const spec = {
@@ -946,7 +946,7 @@ export class Services {
       alwaysOn: status.on,
       approvals: conversations.filter((c) => c.status === 'awaiting-permission').length,
       devices: requests.filter((r) => !r.rejected && !r.script).length,
-      // A new release, in words (ADR 0048): the menu offers to open Updates.
+      // A new release, in words (ADR 0051): the menu offers to open Updates.
       ...(latest && {
         update: `Conch ${latest.version.replace(/^(\d+\.\d+)\.0$/, '$1')} is ready`,
       }),

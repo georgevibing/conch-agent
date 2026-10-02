@@ -1,5 +1,5 @@
 /**
- * Where each version of Conch lives, and which one runs (ADR 0048).
+ * Where each version of Conch lives, and which one runs (ADR 0051).
  *
  * A release is made ready in its own folder, `CONCH_HOME/versions/<version>`
  * (a git worktree of Conch's own checkout, at the release's commit), while

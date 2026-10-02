@@ -30,7 +30,7 @@ export function protectedPaths(home: string): string[] {
     // that could write the one would vouch for its own skills.
     join(home, 'skills.trust.json'),
     join(home, 'skills.signing.json'),
-    // Conch's own versions and which one runs (ADR 0048): writing there would run the assistant's code as Conch.
+    // Conch's own versions and which one runs (ADR 0051): writing there would run the assistant's code as Conch.
     join(home, 'versions'),
   ];
 }

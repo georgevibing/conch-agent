@@ -7,7 +7,7 @@
 # Conch in its own folder, builds it, keeps it running in the background,
 # adds "Conch" to your apps and opens it. System packages ask for permission;
 # Conch itself always runs as you.
-# It installs the newest stable release (ADR 0048), checked against the
+# It installs the newest stable release (ADR 0051), checked against the
 # signing keys Conch ships; after that Conch updates itself.
 # Run it again any time: it repairs anything that moved.
 #
@@ -309,7 +309,7 @@ if [ -n "$UNINSTALL" ]; then
     ok "Conch has stopped and won't start at login"
   fi
   rm -rf "$DIR"
-  # The versions Conch's updates made ready (ADR 0048) are Conch's code, not your data.
+  # The versions Conch's updates made ready (ADR 0051) are Conch's code, not your data.
   rm -rf "$HOME_DIR/versions"
   ok "Removed Conch from $DIR"
   if [ -n "$DELETE_DATA" ]; then
@@ -342,7 +342,7 @@ if ! has_git; then get_git; fi
 ok "Git"
 
 if [ -d "$DIR/.git" ]; then
-  # A release swapped in by Conch's own updates is the one that runs (ADR 0048).
+  # A release swapped in by Conch's own updates is the one that runs (ADR 0051).
   CURRENT=
   [ -f "$HOME_DIR/versions/current" ] && CURRENT=$(head -n 1 "$HOME_DIR/versions/current")
   if [ -n "$CURRENT" ] && [ -f "$CURRENT/apps/server/src/start.ts" ]; then

@@ -153,7 +153,7 @@ export function conchCard(
   };
 }
 
-/** Conch following its releases (ADR 0048): the release waiting, and its own notes. */
+/** Conch following its releases (ADR 0051): the release waiting, and its own notes. */
 function releaseCard(
   conch: ConchUpdate,
   {

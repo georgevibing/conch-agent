@@ -9,7 +9,7 @@ import { useUpdates } from './queries';
 const short = (version: string) => version.replace(/^(\d+\.\d+)\.0$/, '$1');
 
 /**
- * A new release, said once at the top of the app (ADR 0048): "Conch 0.3 is
+ * A new release, said once at the top of the app (ADR 0051): "Conch 0.3 is
  * ready · What's new · Update". Put away, it isn't shown again for that
  * version, on any device.
  */

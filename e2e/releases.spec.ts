@@ -7,7 +7,7 @@ import { commit, git, makeKey, tag, type Key } from '../apps/server/src/release/
 import { brokenConch, notes, pretendConch } from './releases-world';
 
 /**
- * Releases (ADR 0048), end to end, against a pretend upstream: a bare git
+ * Releases (ADR 0051), end to end, against a pretend upstream: a bare git
  * origin whose release tags are really signed (`git tag -s` with a key from
  * `ssh-keygen`), and a pretend Conch installed from it at 0.1.0, running
  * under the supervisor like `pnpm start`.

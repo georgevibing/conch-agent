@@ -70,7 +70,7 @@ describe('quoting', () => {
       path: 'C:\\bin',
     });
     expect(cmd).toContain('set "CHECKOUT=C:\\Users\\100%% me\\Conch"');
-    // A release swapped in (ADR 0048) is read from its pointer file: no symlink needed.
+    // A release swapped in (ADR 0051) is read from its pointer file: no symlink needed.
     expect(cmd).toContain(
       'if exist "%CONCH_HOME%\\versions\\current" set /p CURRENT=<"%CONCH_HOME%\\versions\\current"',
     );

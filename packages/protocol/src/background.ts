@@ -37,7 +37,7 @@ export const TrayInfo = z.object({
   /** Questions waiting in chats, and devices waiting to be approved. */
   approvals: z.number().int().min(0),
   devices: z.number().int().min(0),
-  /** A new release is ready: "Conch 0.3 is ready" (ADR 0048). */
+  /** A new release is ready: "Conch 0.3 is ready" (ADR 0051). */
   update: z.string().optional(),
   /** Where the page is. */
   url: z.string(),

@@ -282,7 +282,7 @@ test('terminal prerequisites', { skip: process.platform === 'win32' }, async (t)
   });
 });
 
-// ── Releases (ADR 0048) ──────────────────────────────────────────────────
+// ── Releases (ADR 0051) ──────────────────────────────────────────────────
 
 const installerText = readFileSync(new URL('./install.sh', import.meta.url), 'utf8');
 /** Just the part that picks a release, run on its own. */

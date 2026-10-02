@@ -1,5 +1,5 @@
 /**
- * A release's notes, written from its commits (ADR 0048).
+ * A release's notes, written from its commits (ADR 0051).
  *
  * What a person reads is a few short lines in at most three groups — New,
  * Better, Fixed — and a "Heads up" when they must do something. Each line is

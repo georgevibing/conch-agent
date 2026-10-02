@@ -422,7 +422,7 @@ const offer = (version: string, line: string): Offer => ({
   notes: { version, channel: 'stable', headsUp: [], new: [line], better: [], fixed: [] },
 });
 
-describe('following releases (ADR 0048)', () => {
+describe('following releases (ADR 0051)', () => {
   /** Conch on a release, with a pretend follower whose answers the test sets. */
   async function releaseWorld(found: Partial<ReleaseCheck>, staged?: StagedResult) {
     const checks: { channel: string }[] = [];

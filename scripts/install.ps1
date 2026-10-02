@@ -5,7 +5,7 @@
 # It gets what Conch needs (Node.js and Git, when they're missing) into your
 # own folders, builds Conch, keeps it running in the background, adds it to
 # the Start menu and opens it. Nothing needs an administrator. It installs
-# the newest stable release (ADR 0048), checked against the signing keys
+# the newest stable release (ADR 0051), checked against the signing keys
 # Conch ships; after that Conch updates itself. Run it again any time: it
 # repairs anything that moved.
 #
@@ -133,7 +133,7 @@ function Get-Git {
   Remove-Item $zip
 }
 
-# ── Releases (ADR 0048) ──────────────────────────────────────────────────
+# ── Releases (ADR 0051) ──────────────────────────────────────────────────
 
 # The release to install from a list of tags: vX.Y.Z is stable, vX.Y.Z-beta.N
 # and vX.Y.Z-alpha.N are pre-releases. Stable takes only stable, beta also
@@ -215,7 +215,7 @@ if ($env:CONCH_UNINSTALL) {
     Ok "Conch has stopped and won't start when you sign in"
   }
   if (Test-Path $Dir) { Remove-Item $Dir -Recurse -Force }
-  # The versions Conch's updates made ready (ADR 0048) are Conch's code, not your data.
+  # The versions Conch's updates made ready (ADR 0051) are Conch's code, not your data.
   $versions = Join-Path $ConchHome 'versions'
   if (Test-Path $versions) { Remove-Item $versions -Recurse -Force }
   Ok "Removed Conch from $Dir"
@@ -246,7 +246,7 @@ $env:PATH = "$(Split-Path $git);$env:PATH"
 Ok 'Git'
 
 if (Test-Path (Join-Path $Dir '.git')) {
-  # A release swapped in by Conch's own updates is the one that runs (ADR 0048).
+  # A release swapped in by Conch's own updates is the one that runs (ADR 0051).
   $pointer = Join-Path $ConchHome 'versions\current'
   $current = if (Test-Path $pointer) { (Get-Content $pointer -TotalCount 1).Trim() } else { '' }
   & $git -C $Dir symbolic-ref -q HEAD *> $null

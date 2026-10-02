@@ -1,5 +1,5 @@
 /**
- * `pnpm release` from the terminal (ADR 0048, docs/RELEASING.md). The work is
+ * `pnpm release` from the terminal (ADR 0051, docs/RELEASING.md). The work is
  * in `run.ts`; this asks its one question on the terminal.
  */
 import { execFileSync } from 'node:child_process';

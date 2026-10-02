@@ -1,5 +1,5 @@
 /**
- * `pnpm release`: one command and one question to make a release (ADR 0048).
+ * `pnpm release`: one command and one question to make a release (ADR 0051).
  *
  *   pnpm release              a stable release (the version comes from the commits)
  *   pnpm release beta         a beta: v0.4.0-beta.1, then -beta.2…
