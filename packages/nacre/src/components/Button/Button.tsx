@@ -17,6 +17,12 @@ export interface ButtonProps extends ComponentProps<'button'> {
   leadingIcon?: ReactNode;
   /** Icon rendered after the label. */
   trailingIcon?: ReactNode;
+  /**
+   * Something after the label that isn't an icon and keeps its own size: a
+   * count, a key hint. In a button wider than its words it sits at the far
+   * end. Like the icons it isn't read aloud, so say what it means in the label.
+   */
+  trailing?: ReactNode;
   /** Shows a spinner, sets `aria-busy` and blocks activation without collapsing width. */
   loading?: boolean;
   /** Stretch to the width of the container. */
@@ -31,6 +37,7 @@ export function Button({
   size = 'md',
   leadingIcon,
   trailingIcon,
+  trailing,
   loading = false,
   block = false,
   asChild = false,
@@ -76,6 +83,11 @@ export function Button({
       {trailingIcon != null && (
         <span className={styles.icon} aria-hidden>
           {trailingIcon}
+        </span>
+      )}
+      {trailing != null && (
+        <span className={styles.trailing} aria-hidden>
+          {trailing}
         </span>
       )}
     </Comp>
