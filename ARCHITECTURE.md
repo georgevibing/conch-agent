@@ -320,11 +320,18 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   carries on once on `limitFallback`. Push topic `tasks`; doctor check `tasks`.
 
 - **Skill trust** ([ADR 0031](./docs/adr/0031-skill-trust.md)). `skills/permissions.ts`
-  turns `allowed-tools` or `permissions:` into capabilities shown in words; while a
-  skill is in use (`skill.used` this turn), `mustAsk` asks for anything outside them,
-  in every mode. `skills/signing.ts` checks `SKILL.sig` (Ed25519 over a domain line,
-  the name and the folder hash); `skills/trust.ts` keeps trusted keys
-  (`skills.trust.json`) and your own (`skills.signing.json`), both protected paths.
+  turns `allowed-tools` or `permissions:` into capabilities shown in words. A chat is
+  held to every skill whose instructions are in it ([ADR 0040](./docs/adr/0040-skill-scope.md)):
+  `skillHolds` (protocol) folds `skill.used` (with the list it came in with) and
+  `skill.hold.ended` from the log, and `mustAsk` asks for anything outside any held
+  list, in every mode and every later turn. Tasks inherit holds (`TurnExtras.skills`)
+  and a helper's own come back (`addHolds`); only a person ends one
+  (`POST …/skills/:skillId/stop-holding`, Nacre `SkillHold`). `skills/signing.ts` checks
+  `SKILL.sig` (Ed25519 over a domain line, the name and the folder hash);
+  `skills/trust.ts` keeps trusted keys (`skills.trust.json`) and your own
+  (`skills.signing.json`, sealed under the device key, opened by `pnpm conch` through
+  the same keystore; it fails closed), both protected paths; the guard refuses
+  `pnpm conch skills sign|trust|forget|key` from the assistant's shell.
   An invalid signature turns a skill off; a trusted publisher's signed update keeps
   it on. API and Codex commands always use Conch’s OS sandbox (workspace writes,
   no network, protected secrets); if unavailable they expose no command tool.

@@ -188,12 +188,14 @@ in its own copy of the folder if it's code. Helpers ask as you would, stay as
 careful as their chat, and stop when you stop. ([ADR 0033](./docs/adr/0033-hand-it-off.md))
 
 **Skills you can trust.** Every skill says what it can do ("run commands (only
-`git`)"), and while it's in use anything else asks first. Signed skills say who
-made them: trust a publisher once and their skills say **Verified**, and their
-updates carry on. A skill changed after it was signed turns off. Sign your own with
-`pnpm conch skills sign <folder>`. Commands are sealed in Codex too, and
-**Settings → Security → Safety** says plainly which providers are sealed.
-([ADR 0031](./docs/adr/0031-skill-trust.md))
+`git`)"). Once it's in a chat, anything else asks first, in every later turn too:
+a quiet line says "Held to Quick setup's list", and only you can stop it. Signed
+skills say who made them: trust a publisher once and their skills say **Verified**,
+and their updates carry on. A skill changed after it was signed turns off. Sign your
+own with `pnpm conch skills sign <folder>`; your key is locked with this computer's
+own key. Commands are sealed in Codex too, and **Settings → Security → Safety** says
+plainly which providers are sealed. ([ADR 0031](./docs/adr/0031-skill-trust.md),
+[0040](./docs/adr/0040-skill-scope.md))
 
 **It looks after itself.** **Settings → Health** has one **Repair everything**
 button, a quiet list of what Conch fixed on its own, daily backups you can restore

@@ -263,9 +263,14 @@ too. Conch never shows a protection that isn't there.
 
 Every skill is read through before it's used (above), and says what it can do:
 "This skill can: run commands (only `git`), change files in your work folder".
-While it's in use, anything else it tries **asks you first**, in every mode,
-with the skill's name in the question. A skill that doesn't say gets the usual:
-files in your work folder and the web.
+Once its instructions are in a chat, anything else it tries **asks you first**,
+in every mode, with the skill's name in the question. That holds in every later
+turn too, in helpers and background tasks started from the chat, and after a
+restart, because the instructions are still there: a summary or a long chat
+doesn't let a skill out of its list. A line above the message box says "Held to
+Quick setup's list"; only you can stop it, it asks first, and **Activity** keeps a
+note. Several skills held together hold the strictest way. A skill that doesn't
+say gets the usual: files in your work folder and the web.
 
 A skill can be **signed**. Its `SKILL.sig` proves which key signed exactly these
 files under exactly this name. Trust a publisher once (it asks that it's you)
@@ -276,7 +281,12 @@ is shown as a possible impostor. A name proves nothing; the key does.
 
 Sign your own with `pnpm conch skills sign <folder>`. Share `pnpm conch skills
 key` so people can check it's you. Your private key stays in
-`skills.signing.json`, readable only by you and never by the assistant.
+`skills.signing.json`, locked with this computer's own key (the Keychain, Windows'
+DPAPI or the Secret Service) like Conch's other keys, readable only by you and never
+by the assistant, whose shell also can't run `pnpm conch skills sign` or `trust`. A
+copy of the file is no use on another computer; a passphrase-locked backup is how it
+moves. If the file was changed, nothing is signed and **Repair everything** says
+what to do.
 
 ## Undoing what the assistant changed
 
