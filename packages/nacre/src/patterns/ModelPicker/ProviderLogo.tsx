@@ -4,8 +4,30 @@ import { cx } from '../../utils/cx';
 import { brandMarks, OPENAI } from '../Integrations/brands';
 import styles from './ModelPicker.module.css';
 
-/** `local`: a model on this computer (Ollama), drawn as the computer it runs on. */
-export type ProviderId = 'claude' | 'openai' | 'openrouter' | 'local' | 'generic';
+/**
+ * `local`: a model on this computer (Ollama), drawn as the computer it runs on.
+ * `server`: a server someone added themselves, drawn as a server.
+ */
+export type ProviderId =
+  | 'claude'
+  | 'openai'
+  | 'openrouter'
+  | 'copilot'
+  | 'gemini'
+  | 'xai'
+  | 'deepseek'
+  | 'mistral'
+  | 'groq'
+  | 'cerebras'
+  | 'zai'
+  | 'kimi'
+  | 'minimax'
+  | 'qwen'
+  | 'ollama'
+  | 'lmstudio'
+  | 'local'
+  | 'server'
+  | 'generic';
 
 export interface ProviderLogoProps extends Omit<ComponentProps<'svg'>, 'children'> {
   provider: ProviderId;
@@ -24,6 +46,23 @@ const claudeRays = Array.from({ length: 12 }, (_, i) => ({
 const marks: Partial<Record<ProviderId, string>> = {
   openai: OPENAI,
   openrouter: brandMarks.openrouter,
+  copilot: brandMarks.copilot,
+  gemini: brandMarks.gemini,
+  deepseek: brandMarks.deepseek,
+  mistral: brandMarks.mistral,
+  kimi: brandMarks.moonshot,
+  minimax: brandMarks.minimax,
+  qwen: brandMarks.qwen,
+  ollama: brandMarks['ollama-cloud'],
+  lmstudio: brandMarks['lm-studio'],
+};
+
+/** A letter for the labs Simple Icons has no mark for, on a soft tile. */
+const letters: Partial<Record<ProviderId, string>> = {
+  xai: 'x',
+  groq: 'g',
+  cerebras: 'c',
+  zai: 'Z',
 };
 
 /** Small mark that identifies which provider serves a model. */
@@ -69,6 +108,18 @@ export function ProviderLogo({
           <rect x="4" y="4.5" width="16" height="11.5" rx="2" />
           <path d="M1.5 20h21" />
         </g>
+      ) : provider === 'server' ? (
+        <g
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <rect x="3" y="3.5" width="18" height="7" rx="2" />
+          <rect x="3" y="13.5" width="18" height="7" rx="2" />
+          <path d="M7 7h.01M7 17h.01" />
+        </g>
       ) : marks[provider] ? (
         <path fill="currentColor" d={marks[provider]} />
       ) : (
@@ -91,7 +142,7 @@ export function ProviderLogo({
             fill="currentColor"
             fontFamily="var(--nc-font-sans)"
           >
-            •
+            {letters[provider] ?? '•'}
           </text>
         </>
       )}

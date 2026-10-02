@@ -69,7 +69,7 @@ import { useIntegrations } from '../integrations/queries';
 import { downloadMemories } from '../memory/api';
 import { copySecret } from '../passwords/clipboard';
 import { useVault } from '../passwords/queries';
-import { modelLabel, providerLogos } from '../models/catalog';
+import { modelLabel, providerLogo } from '../models/catalog';
 import { modelKey, useTurnOptions } from '../models/useTurnOptions';
 import { useArtifacts } from '../artifacts/queries';
 import { useRoutines } from '../routines/queries';
@@ -317,7 +317,7 @@ export function useFindables(query: string, conversationId: string | undefined):
         .filter(Boolean)
         .join(' · '),
       hint: current ? 'In use' : conversationId ? 'Use in this chat' : 'Use',
-      icon: <ProviderLogo provider={providerLogos[item.provider.engine]} size={16} />,
+      icon: <ProviderLogo provider={providerLogo(item.provider.engine)} size={16} />,
       run: () => {
         turn.choose(key);
         toast.success(`Using ${item.label}`, {

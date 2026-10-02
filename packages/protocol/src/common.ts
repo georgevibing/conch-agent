@@ -8,19 +8,52 @@ import { z } from 'zod';
 export const Id = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/, 'Invalid id.');
 
 /**
- * Engines Conch can drive — the providers behind the model picker. Every
- * connected one is available at once (ADR 0012); `ollama` runs a model on this
- * computer (ADR 0022); `mock` is the test double.
+ * The providers Conch knows by name. Every connected one is available at once
+ * (ADR 0012); `ollama` and `lm-studio` run a model on this computer (ADR
+ * 0022); `mock` is the test double. The model APIs that speak OpenAI's chat
+ * shape share one adapter, each a row of words and addresses (ADR 0053).
  */
-export const EngineId = z.enum([
+export const BuiltInEngineId = z.enum([
   'claude-code',
   'codex-cli',
+  'copilot',
+  'gemini-cli',
   'anthropic-api',
   'openrouter',
+  'openai',
+  'gemini',
+  'xai',
+  'deepseek',
+  'mistral',
+  'groq',
+  'cerebras',
+  'zai',
+  'moonshot',
+  'minimax',
+  'qwen',
+  'ollama-cloud',
   'ollama',
+  'lm-studio',
   'mock',
 ]);
+export type BuiltInEngineId = z.infer<typeof BuiltInEngineId>;
+
+/**
+ * A server you added yourself (Settings → Providers → Another server): `server-`
+ * and eight lowercase letters or digits, made when it's added and kept when it's
+ * renamed, so a chat that used it still finds it.
+ */
+export const ServerId = z.templateLiteral(['server-', z.string().regex(/^[a-z0-9]{8}$/)]);
+export type ServerId = z.infer<typeof ServerId>;
+
+/** Engines Conch can drive: the ones it knows by name, and the servers you added. */
+export const EngineId = z.union([BuiltInEngineId, ServerId]);
 export type EngineId = z.infer<typeof EngineId>;
+
+/** Whether a provider id names a server you added, rather than one Conch knows. */
+export function isServerId(id: string): id is ServerId {
+  return ServerId.safeParse(id).success;
+}
 
 /** How hard the model thinks. `auto` lets the model decide (engine default). */
 export const EffortChoice = z.enum(['auto', 'low', 'medium', 'high', 'xhigh', 'max']);

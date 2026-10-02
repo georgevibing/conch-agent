@@ -1,4 +1,4 @@
-import { Globe, Laptop, Mail, Plug } from 'lucide-react';
+import { Globe, Laptop, Mail, Plug, Server } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 
 import { cx } from '../../utils/cx';
@@ -31,6 +31,8 @@ const glyphs: Record<string, ReactNode> = {
   ollama: <Laptop />,
   // Email isn't one company: an envelope says what it is.
   email: <Mail />,
+  // A server someone runs themselves (llama.cpp, vLLM, a gateway at work).
+  server: <Server />,
 };
 
 /** A stable hue per name, so a custom integration always gets the same tile. */

@@ -1,5 +1,6 @@
-import { canUseApps } from '@conch/protocol';
+import { canUseApps, isServerId } from '@conch/protocol';
 import type {
+  BuiltInEngineId,
   EffortChoice,
   EngineId,
   ModelInfo,
@@ -65,15 +66,35 @@ export function isSecondaryModel(model: ModelInfo): boolean {
   return /previous|legacy|older|deprecated/i.test(model.description) || /\b1M\b/i.test(model.label);
 }
 
-/** The mark each provider wears in the picker. */
-export const providerLogos: Record<EngineId, ProviderId> = {
+/** The mark each provider Conch knows by name wears in the picker. */
+const providerLogos: Record<BuiltInEngineId, ProviderId> = {
   'claude-code': 'claude',
   'anthropic-api': 'claude',
   'codex-cli': 'openai',
+  openai: 'openai',
+  copilot: 'copilot',
+  'gemini-cli': 'gemini',
+  gemini: 'gemini',
   openrouter: 'openrouter',
+  xai: 'xai',
+  deepseek: 'deepseek',
+  mistral: 'mistral',
+  groq: 'groq',
+  cerebras: 'cerebras',
+  zai: 'zai',
+  moonshot: 'kimi',
+  minimax: 'minimax',
+  qwen: 'qwen',
+  'ollama-cloud': 'ollama',
   ollama: 'local',
+  'lm-studio': 'lmstudio',
   mock: 'claude',
 };
+
+/** The mark a provider wears in the picker: a server you added wears a server. */
+export function providerLogo(engine: EngineId): ProviderId {
+  return isServerId(engine) ? 'server' : providerLogos[engine];
+}
 
 /** A provider with a long list (OpenRouter) opens on its first few; search finds the rest. */
 const FEATURED = 6;
@@ -94,7 +115,7 @@ export function pickerProviders(
     return {
       id: provider.engine,
       label: provider.label,
-      logo: providerLogos[provider.engine],
+      logo: providerLogo(provider.engine),
       note: many && provider.engine === defaultEngine ? 'Default' : undefined,
       message:
         provider.message ??
