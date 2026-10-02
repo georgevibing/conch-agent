@@ -205,7 +205,10 @@ describe('What Conch knows about you', () => {
         within(screen.getByRole('list', { name: 'Memories' })).getAllByRole('listitem'),
       ).toHaveLength(1),
     );
-    expect(calls.some((c) => c.path === '/api/memories/search?q=coffe')).toBe(true);
+    // Under load a part of the word can be searched (and listed) first; the whole word follows.
+    await waitFor(() =>
+      expect(calls.some((c) => c.path === '/api/memories/search?q=coffe')).toBe(true),
+    );
     await userEvent.click(screen.getByRole('button', { name: 'Tidy up now' }));
     expect(await screen.findByRole('button', { name: /Tidying/ })).toBeInTheDocument();
   });

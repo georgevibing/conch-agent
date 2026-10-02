@@ -161,20 +161,24 @@ describe('Palette search', () => {
 
   it('says search is catching up while its index rebuilds, not that nothing matches', async () => {
     const user = userEvent.setup();
+    // Catching up until the whole word has been asked once. Under load the typing can also
+    // search a part of the word first; that mustn't use up the catching-up answer.
     let asked = 0;
-    mockFetch({
+    const calls = mockFetch({
       'GET /api/state': () => appState(),
       'GET /api/conversations': () => [],
       'GET /api/search': () =>
-        ++asked === 1
-          ? { ...results, groups: [], total: 0, catchingUp: true }
-          : { ...results, catchingUp: undefined },
+        /^\/api\/search\?q=redeploy(&|$)/.test(calls.at(-1)?.path ?? '') && ++asked > 1
+          ? { ...results, catchingUp: undefined }
+          : { ...results, groups: [], total: 0, catchingUp: true },
     });
     renderApp(<Palette />);
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'redeploy');
     expect(await screen.findByText(/Search is catching up on your chats/)).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('Search is catching up…');
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('Search is catching up…'),
+    );
     expect(screen.queryByText(/Nothing matches/)).not.toBeInTheDocument();
     // It asks again by itself, and the results fill in.
     expect(
@@ -204,16 +208,22 @@ describe('Palette search', () => {
     renderApp(<Palette />);
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'redeploy');
-    const repair = await screen.findByRole('button', { name: 'Repair search' });
+    await screen.findByRole('button', { name: 'Repair search' });
     expect(await screen.findByText(/Repair rebuilds it from your chats/)).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByRole('status')).toHaveTextContent('Search isn’t working right now'),
     );
     expect(screen.queryByText(/Nothing matches/)).not.toBeInTheDocument();
     // Not retried on its own: only a person's Repair tries again. (Under load the typing
-    // can also search a part of the word first; the whole word is searched once.)
-    expect(calls.filter((c) => /^\/api\/search\?q=redeploy(&|$)/.test(c.path))).toHaveLength(1);
-    await user.click(repair);
+    // can also search a part of the word first, and show Repair for it; the whole word is
+    // then searched once, a moment later.)
+    const whole = () => calls.filter((c) => /^\/api\/search\?q=redeploy(&|$)/.test(c.path));
+    await waitFor(() => expect(whole()).toHaveLength(1));
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('Search isn’t working right now'),
+    );
+    expect(whole()).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: 'Repair search' }));
     expect(
       await screen.findByRole('option', { name: /Run the redeploy script/ }),
     ).toBeInTheDocument();
