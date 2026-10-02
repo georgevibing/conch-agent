@@ -930,7 +930,12 @@ class OfficialSession {
 
   /** The message, to the service (or a press, for a number answering the last question). */
   #receive(message: Record<string, string>, openid: string): 'fetch' | undefined {
-    const user: ChannelUser = { id: personId(openid), name: `WeChat ${openid.slice(-4)}` };
+    // An Official Account only knows an id: the page shows its end, and the owner by your own name.
+    const user: ChannelUser = {
+      id: personId(openid),
+      name: `WeChat user ·${openid.slice(-4)}`,
+      anonymous: true,
+    };
     const type = message.MsgType ?? '';
     if (type === 'event') {
       // Following the account is the hello on WeChat.

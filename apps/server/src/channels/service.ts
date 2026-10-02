@@ -929,8 +929,12 @@ export class ChannelService {
   }
 
   /** Let someone in (a request you allowed, or the owner saying hello). */
-  async #admit(id: string, user: ChannelUser, chatId?: string) {
+  async #admit(id: string, given: ChannelUser, chatId?: string) {
     let owner = false;
+    // An app that doesn't say who someone is: the owner is you, by the name you gave Conch.
+    const you = given.anonymous ? (await this.deps.settings.get()).profile.name : undefined;
+    const before = await this.deps.store.get(id);
+    const user = you && before?.people.length === 0 ? { ...given, name: you } : given;
     const stored = await this.deps.store.update(id, (c) => {
       owner = c.people.length === 0 || c.people[0]?.id === user.id;
       return {
@@ -1088,7 +1092,13 @@ export class ChannelService {
       ...c,
       lastMessageAt: this.#now,
       people: c.people.map((p) =>
-        p.id === person.id ? { ...p, name: message.user.name, lastSeenAt: this.#now } : p,
+        p.id === person.id
+          ? {
+              ...p,
+              ...(!message.user.anonymous && { name: message.user.name }),
+              lastSeenAt: this.#now,
+            }
+          : p,
       ),
     }));
     void this.#emit(id);
@@ -1227,6 +1237,7 @@ export class ChannelService {
         id: message.user.id,
         name: message.user.name,
         ...(message.user.username && { username: message.user.username }),
+        ...(message.user.anonymous && { anonymous: true }),
         preview: preview || existing?.preview || '',
         at: this.#now,
         count: (existing?.count ?? 0) + 1,

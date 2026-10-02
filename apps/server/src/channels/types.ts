@@ -14,6 +14,8 @@ export interface ChannelUser {
   id: string;
   name: string;
   username?: string;
+  /** The app doesn't say who they are (a WeChat Official Account only knows an id). */
+  anonymous?: boolean;
 }
 
 /** A file someone sent with a message; `ref` is whatever the app needs to fetch it. */

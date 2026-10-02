@@ -129,6 +129,8 @@ export const ChannelRequest = z.object({
   at: z.number(),
   /** How many messages they sent while waiting. */
   count: z.number().int().positive().default(1),
+  /** The app doesn't say who they are (a WeChat Official Account only knows an id). */
+  anonymous: z.boolean().optional(),
 });
 export type ChannelRequest = z.infer<typeof ChannelRequest>;
 

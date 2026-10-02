@@ -901,6 +901,14 @@ describe('Palette search', () => {
             minutes: 4,
             available: true,
           },
+          {
+            id: 'wechat',
+            name: 'WeChat',
+            tagline: 'Through a WeCom bot, or your own Official Account. 微信',
+            color: '#07C160',
+            minutes: 5,
+            available: true,
+          },
           { id: 'signal', name: 'Signal', tagline: '', color: '#3A76F0', available: false },
           {
             id: 'email',
@@ -938,6 +946,10 @@ describe('Palette search', () => {
       await screen.findByRole('option', { name: /Ada’s Conch on Telegram/ }),
     ).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /^Channels/ })).toBeInTheDocument();
+    // Found by the words people type, in their own language too.
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), '微信');
+    expect(await screen.findByRole('option', { name: /Connect WeChat/ })).toBeInTheDocument();
     // What's coming isn't offered as if it were here.
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'signal');
