@@ -586,7 +586,7 @@ describe('Integrations belong to Conch, not to a provider', () => {
 
     renderApp(<IntegrationDetailView integrationId="slack" />, { route: '/integrations/slack' });
     const send = await screen.findByRole('radiogroup', { name: 'Send a message' });
-    expect(within(send).getByRole('radio', { name: 'Allow' })).toBeDisabled();
+    expect(within(send).queryByRole('radio', { name: 'Allow' })).toBeNull();
     await userEvent.click(within(send).getByRole('radio', { name: 'Off' }));
     await waitFor(() =>
       expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({

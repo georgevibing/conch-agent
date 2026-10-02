@@ -74,7 +74,7 @@ test('connect Slack once, catch up on a channel, and nothing is sent without you
   // Its page: sending can be Ask or Off, never Allow.
   await page.goto('/integrations/slack');
   const send = page.getByRole('radiogroup', { name: 'Send a message' });
-  await expect(send.getByRole('radio', { name: 'Allow' })).toBeDisabled();
+  await expect(send.getByRole('radio', { name: 'Allow' })).toHaveCount(0);
   await send.getByRole('radio', { name: 'Off' }).click();
   await expect(send.getByRole('radio', { name: 'Off' })).toHaveAttribute('aria-checked', 'true');
 });
