@@ -10,7 +10,14 @@
  * Conch supplies guarded work-folder tools and sandboxed commands. Model
  * support is checked separately: chat-only models never receive tools.
  */
-import type { Capabilities, EngineStatus, ModelInfo, ToolStatus, Usage } from '@conch/protocol';
+import type {
+  Capabilities,
+  EngineStatus,
+  ModelInfo,
+  ToolStatus,
+  TurnProblem,
+  Usage,
+} from '@conch/protocol';
 import { z } from 'zod';
 import { sandboxSupport } from '../../conversations/sandbox';
 import { authorizeTool, hostComputerTools, HOST_NAMES } from '../host';
@@ -114,6 +121,39 @@ interface Notice {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** The key couldn't be had: none saved, or 1Password wouldn't hand it over. */
+class KeyProblem extends Error {
+  constructor(
+    message: string,
+    readonly problem: TurnProblem,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Why a turn failed, in the few kinds the chat reacts to (ADR 0023): a refused
+ * key needs the person, a limit or an outage can be answered by another
+ * provider. Said by the engine, which knows, rather than guessed from words.
+ */
+export function problemOf(error: unknown): TurnProblem | undefined {
+  if (error instanceof KeyProblem) return error.problem;
+  if (!(error instanceof ApiError)) return undefined;
+  switch (error.kind) {
+    case 'auth':
+      return 'signed-out';
+    case 'payment':
+    case 'rate-limit':
+      return 'limit';
+    case 'overloaded':
+    case 'timeout':
+    case 'network':
+      return 'unavailable';
+    default:
+      return undefined;
+  }
 }
 
 /** One plain sentence for anything that went wrong, with no key in it. */
@@ -268,11 +308,16 @@ export class ApiEngine implements Engine {
     try {
       key = await this.keys.value(this.id, signal ? { signal } : {});
     } catch {
-      throw new Error(
+      throw new KeyProblem(
         `Conch couldn’t read your ${this.label} key. Check it in Settings, or unlock 1Password.`,
+        'key-locked',
       );
     }
-    if (!key) throw new Error(`Add your ${this.label} key in Settings to start chatting.`);
+    if (!key)
+      throw new KeyProblem(
+        `Add your ${this.label} key in Settings to start chatting.`,
+        'signed-out',
+      );
     return key;
   }
 
@@ -637,10 +682,12 @@ export class ApiEngine implements Engine {
         yield { type: 'done', outcome: 'interrupted', usage: usage() };
         return;
       }
+      const problem = problemOf(error);
       yield {
         type: 'done',
         outcome: 'error',
         error: plainMessage(error, this.label, key),
+        ...(problem && { problem }),
         usage: usage(),
       };
     }

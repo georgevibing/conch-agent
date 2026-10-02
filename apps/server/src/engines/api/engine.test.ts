@@ -418,6 +418,28 @@ describe('a turn against the real OpenRouter wire', () => {
       error: 'no endpoints found',
     });
   });
+
+  it.each([
+    ['auth', 'signed-out'],
+    ['payment', 'limit'],
+    ['rate-limit', 'limit'],
+    ['overloaded', 'unavailable'],
+    ['network', 'unavailable'],
+    ['context', undefined],
+  ] as const)('says a %s failure is %s, so the chat knows who can help', async (kind, problem) => {
+    const wire = stubWire({
+      stream: () =>
+        (async function* (): AsyncIterable<WireEvent> {
+          yield* [];
+          throw new ApiError(kind, 'It went wrong.');
+        })(),
+    });
+    const { engine } = await engineFor(wire);
+
+    const done = (await collect(engine.runTurn(turn()))).at(-1);
+    expect(done).toMatchObject({ type: 'done', outcome: 'error', error: 'It went wrong.' });
+    expect(done && 'problem' in done ? done.problem : undefined).toBe(problem);
+  });
 });
 
 // ── The loop ────────────────────────────────────────────────────────────────
@@ -673,7 +695,7 @@ describe('when a turn is interrupted or retried', () => {
     expect(events.at(-1)).toMatchObject({ type: 'done', outcome: 'error' });
   });
 
-  it('says what to do when there is no key at all', async () => {
+  it('says what to do when there is no key at all, as a sign-in the person gives', async () => {
     const { engine } = await engineFor(stubWire(), { key: false });
 
     const events = await collect(engine.runTurn(turn()));
@@ -682,6 +704,7 @@ describe('when a turn is interrupted or retried', () => {
         type: 'done',
         outcome: 'error',
         error: 'Add your OpenRouter key in Settings to start chatting.',
+        problem: 'signed-out',
         usage: expect.objectContaining({ inputTokens: 0 }),
       },
     ]);
