@@ -46,7 +46,7 @@ let base = ${swiftString(spec.url)}
 let tokenFile = ${swiftString(spec.tokenFile)}
 let startScript = ${swiftString(spec.startScript)}
 
-struct Info { var name = "Conch"; var alwaysOn = false; var approvals = 0; var devices = 0 }
+struct Info { var name = "Conch"; var alwaysOn = false; var approvals = 0; var devices = 0; var update = "" }
 
 final class Menu: NSObject, NSApplicationDelegate, NSMenuDelegate {
   let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -107,7 +107,8 @@ final class Menu: NSObject, NSApplicationDelegate, NSMenuDelegate {
           name: json["name"] as? String ?? "Conch",
           alwaysOn: json["alwaysOn"] as? Bool ?? false,
           approvals: json["approvals"] as? Int ?? 0,
-          devices: json["devices"] as? Int ?? 0)
+          devices: json["devices"] as? Int ?? 0,
+          update: json["update"] as? String ?? "")
         self.starting = false
       } else {
         self.info = nil
@@ -130,6 +131,7 @@ final class Menu: NSObject, NSApplicationDelegate, NSMenuDelegate {
       add(info.alwaysOn ? "\\(info.name) is running · Always on" : "\\(info.name) is running", nil)
       if info.approvals > 0 { add(info.approvals == 1 ? "1 question is waiting for you" : "\\(info.approvals) questions are waiting for you", #selector(open)) }
       if info.devices > 0 { add(info.devices == 1 ? "A new device wants to sign in" : "\\(info.devices) devices want to sign in", #selector(openDevices)) }
+      if !info.update.isEmpty { add("\\(info.update) · What’s new", #selector(openUpdates)) }
       menu.addItem(.separator())
       add("Open Conch", #selector(open), key: "o")
       add(info.alwaysOn ? "Always on: On…" : "Always on: Off…", #selector(openAlwaysOn))
@@ -149,6 +151,7 @@ final class Menu: NSObject, NSApplicationDelegate, NSMenuDelegate {
   @objc func open() { openPage("/") }
   @objc func openDevices() { openPage("/?open=devices") }
   @objc func openAlwaysOn() { openPage("/?open=background") }
+  @objc func openUpdates() { openPage("/?open=updates") }
 
   @objc func start() {
     starting = true
@@ -236,6 +239,7 @@ export function powershellSource(spec: TraySpec): string {
     '    Add ($(if ($i.alwaysOn) { "$($i.name) is running · Always on" } else { "$($i.name) is running" })) $null',
     '    if ($i.approvals -gt 0) { Add "$($i.approvals) waiting for you" { OpenPage "/" } }',
     '    if ($i.devices -gt 0) { Add "A new device wants to sign in" { OpenPage "/?open=devices" } }',
+    '    if ($i.update) { Add "$($i.update) · What’s new" { OpenPage "/?open=updates" } }',
     '    [void]$menu.MenuItems.Add("-")',
     '    Add "Open Conch" { OpenPage "/" }',
     '    Add ($(if ($i.alwaysOn) { "Always on: On…" } else { "Always on: Off…" })) { OpenPage "/?open=background" }',
@@ -336,6 +340,8 @@ def build(info):
             item(menu, f"{info['approvals']} waiting for you", lambda: webbrowser.open(BASE + "/"))
         if info.get("devices"):
             item(menu, "A new device wants to sign in", lambda: webbrowser.open(BASE + "/?open=devices"))
+        if info.get("update"):
+            item(menu, f"{info['update']} · What’s new", lambda: webbrowser.open(BASE + "/?open=updates"))
         menu.append(Gtk.SeparatorMenuItem())
         item(menu, "Open Conch", lambda: webbrowser.open(BASE + "/"))
         item(menu, "Always on: On…" if info.get("alwaysOn") else "Always on: Off…", lambda: webbrowser.open(BASE + "/?open=background"))

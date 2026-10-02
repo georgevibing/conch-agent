@@ -1,18 +1,19 @@
 /**
  * Repair everything's look at updates: what's waiting, each with its one
- * action. Nothing here updates Conch itself — that restarts it, so it's
+ * action. A new release is news (`info`), never a warning. Nothing here updates Conch itself — that restarts it, so it's
  * always a person's choice in Settings → Health.
  */
 import type { DoctorItem } from '@conch/protocol';
 
 import type { DoctorCheck } from '../doctor/service';
+import { clearPointer, pointerBroken } from './layout';
 import { HOUR } from './schedule';
 import type { UpdatesService } from './service';
 import { shortVersion } from './version';
 
 const GROUP = 'Updates';
 
-export function updatesCheck(updates: UpdatesService): DoctorCheck {
+export function updatesCheck(updates: UpdatesService, home: string): DoctorCheck {
   return {
     id: 'updates',
     group: GROUP,
@@ -24,7 +25,17 @@ export function updatesCheck(updates: UpdatesService): DoctorCheck {
         void updates.check();
       const items: DoctorItem[] = [];
       const { conch } = status;
-      if (conch.behind > 0) {
+      // A release is news, not a problem (ADR 0048).
+      if (conch.source === 'releases' && conch.latest)
+        items.push({
+          id: 'updates:conch',
+          group: GROUP,
+          title: 'Conch',
+          state: 'info',
+          message: `Conch ${shortVersion(conch.latest.version)} is ready.`,
+          action: { kind: 'open', label: 'See what’s new', place: 'health', focus: 'updates' },
+        });
+      else if (conch.behind > 0) {
         const n = conch.improvements || conch.behind;
         items.push({
           id: 'updates:conch',
@@ -33,6 +44,27 @@ export function updatesCheck(updates: UpdatesService): DoctorCheck {
           state: 'warning',
           message: `Conch has an update: ${n} ${n === 1 ? 'improvement' : 'improvements'}.`,
           action: { kind: 'open', label: 'See what’s new', place: 'health' },
+        });
+      }
+      if (conch.refused)
+        items.push({
+          id: 'updates:refused',
+          group: GROUP,
+          title: 'Conch’s releases',
+          state: 'warning',
+          message: conch.refused,
+        });
+      // A pointer at a version that's gone: Conch starts from its checkout instead, and the pointer goes.
+      if (pointerBroken(home)) {
+        if (repair) clearPointer(home);
+        items.push({
+          id: 'updates:versions',
+          group: GROUP,
+          title: 'Conch’s versions',
+          state: repair ? 'fixed' : 'warning',
+          message: repair
+            ? 'Conch’s note of which version to run named one that’s gone, so Conch went back to running from its own folder.'
+            : 'Conch’s note of which version to run names one that’s gone. Repair puts it right.',
         });
       }
       for (const program of status.programs) {

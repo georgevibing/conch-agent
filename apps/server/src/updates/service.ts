@@ -82,7 +82,8 @@ const Cache = z.object({
   programs: z.record(z.string(), Program).default({}),
   outcome: ConchUpdate.shape.outcome,
   // ── Releases (ADR 0048) ──
-  channel: ReleaseChannel.default('stable'),
+  /** Chosen in Settings; unset, it's what the installer set (`CONCH_CHANNEL`), else stable. */
+  channel: ReleaseChannel.optional(),
   /** "Every change on main", a developer's choice. */
   everyChange: z.boolean().default(false),
   releases: ReleaseCache.prefault({}),
@@ -162,6 +163,8 @@ export class UpdatesService {
   #earliest = Number.POSITIVE_INFINITY;
   #timer?: NodeJS.Timeout;
   #stopped = false;
+  /** The channel the installer chose (`git config conch.channel`). */
+  #installed?: ReleaseChannel;
 
   constructor(private readonly deps: UpdatesDeps) {}
 
@@ -241,6 +244,11 @@ export class UpdatesService {
   }
 
   /** This copy's version: what its folder says, else `SERVER_VERSION`. */
+  /** The channel followed: yours, else the installer's, else stable. */
+  #channel(): ReleaseChannel {
+    return this.#cache.channel ?? this.#installed ?? 'stable';
+  }
+
   #version(): string {
     return this.deps.releases?.version() ?? this.deps.version;
   }
@@ -265,7 +273,7 @@ export class UpdatesService {
         whatsNew: [],
         restartNeeded: false,
         source: 'branch',
-        channel: this.#cache.channel,
+        channel: this.#channel(),
         everyChange: false,
         releases: [],
         announce: false,
@@ -303,14 +311,14 @@ export class UpdatesService {
       ...(outcome && this.#now() - outcome.at < OUTCOME_FOR_MS && { outcome }),
       source: releases ? 'releases' : 'branch',
       ...(rel.sourceWhy && !releases && { sourceWhy: rel.sourceWhy }),
-      channel: this.#cache.channel,
+      channel: this.#channel(),
       everyChange: this.#cache.everyChange,
       ...(releases && newest && { latest: { version: newest.version, channel: newest.channel } }),
       releases: releases ? notes : [],
       announce: Boolean(releases && newest && this.#cache.dismissed !== newest.version && !job),
       ...(releases &&
-        this.deps.releases?.waiting(this.#cache.channel) && {
-          waiting: this.deps.releases.waiting(this.#cache.channel),
+        this.deps.releases?.waiting(this.#channel()) && {
+          waiting: this.deps.releases.waiting(this.#channel()),
         }),
       ...(releases && rel.refused && { refused: rel.refused }),
       failed: swap.failed,
@@ -386,15 +394,17 @@ export class UpdatesService {
     const releases = this.deps.releases;
     const conch = this.deps.conch;
     if (!releases || !conch) return false;
+    this.#installed ??= await releases.installedChannel().catch(() => undefined);
     const found = await releases
       .check({
         fetch,
-        channel: this.#cache.channel,
+        channel: this.#channel(),
         everyChange: this.#cache.everyChange,
         failed: readState(this.deps.home).failed,
       })
       .catch(() => undefined);
     if (!found) return false;
+    this.#installed = found.installedChannel;
     const before = this.#cache.releases;
     this.#cache.releases = {
       source: found.source,
@@ -711,7 +721,7 @@ export class UpdatesService {
     if (body.dismissNotice && !this.#cache.seen.includes(body.dismissNotice))
       this.#cache.seen = [...this.#cache.seen, body.dismissNotice].slice(-50);
     const moved =
-      (body.channel !== undefined && body.channel !== this.#cache.channel) ||
+      (body.channel !== undefined && body.channel !== this.#channel()) ||
       (body.everyChange !== undefined && body.everyChange !== this.#cache.everyChange);
     if (body.channel) this.#cache.channel = body.channel;
     if (body.everyChange !== undefined) this.#cache.everyChange = body.everyChange;

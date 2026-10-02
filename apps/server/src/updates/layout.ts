@@ -15,7 +15,7 @@
  * versions that didn't start here. The supervisor reads and writes it with
  * plain synchronous file calls: it must never need the gateway's code.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 export const versionsDir = (home: string) => join(home, 'versions');
@@ -159,4 +159,19 @@ export function goBack(
   delete next.pending;
   writeState(home, next);
   return { version: pending.version, to: pending.from.version };
+}
+
+/** The pointer names a folder that isn't a Conch any more (deleted by hand, a disk tidy-up). */
+export function pointerBroken(home: string): boolean {
+  try {
+    const folder = readFileSync(pointerFile(home), 'utf8').trim();
+    return !runnable(folder);
+  } catch {
+    return false;
+  }
+}
+
+/** Forget the pointer: everything starts from Conch's checkout again. */
+export function clearPointer(home: string): void {
+  rmSync(pointerFile(home), { force: true });
 }

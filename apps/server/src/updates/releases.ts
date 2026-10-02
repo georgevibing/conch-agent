@@ -27,7 +27,7 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 
-import type { ConchUpdateStep, ReleaseChannel, ReleaseNotes } from '@conch/protocol';
+import { ReleaseChannel, type ConchUpdateStep, type ReleaseNotes } from '@conch/protocol';
 
 import { findExecutable, type Launch } from '../lib/proc';
 import { SERVER_VERSION } from '../version';
@@ -100,6 +100,8 @@ export interface ReleaseCheck {
   anyReleases: boolean;
   /** Who this copy trusts was learnt from the release itself (an install from before the first one). */
   firstTrust?: string;
+  /** The channel the installer chose (`CONCH_CHANNEL`, kept as `git config conch.channel`). */
+  installedChannel?: ReleaseChannel;
 }
 
 export type StagedResult =
@@ -159,6 +161,13 @@ export class ReleaseFollower {
   /** This copy's version. */
   version(): string {
     return versionOf(this.root) ?? SERVER_VERSION;
+  }
+
+  /** The channel the installer chose (`CONCH_CHANNEL`, kept as `git config conch.channel`). */
+  async installedChannel(): Promise<ReleaseChannel | undefined> {
+    const git = await this.#runner();
+    const said = git ? (await git(['config', 'conch.channel'])).stdout.trim() : '';
+    return ReleaseChannel.safeParse(said).data;
   }
 
   /** Where upstream is: the branch's remote, else `origin`, else the only one. */
@@ -328,11 +337,13 @@ export class ReleaseFollower {
     } else if (fetch) fetched = true;
 
     const all = await this.#found(git);
+    const installedChannel = await this.installedChannel();
     const anyReleases = all.some(({ release }) => !release.pre);
     // A copy of main switches with the first stable release, not with a beta.
     const { source, why } = await this.source(git, { everyChange, anyReleases });
     const base = {
       ...none,
+      ...(installedChannel && { installedChannel }),
       source,
       ...(why && { sourceWhy: why }),
       fetched,

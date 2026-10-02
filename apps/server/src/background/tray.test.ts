@@ -402,6 +402,14 @@ describe('its source', () => {
     }
   });
 
+  it('says when a new release is ready, and opens Updates for it (never updates by itself)', () => {
+    for (const source of [swiftSource(spec), powershellSource(spec), pythonSource(spec)]) {
+      expect(source).toContain('/?open=updates');
+      expect(source).toContain('What’s new');
+      expect(source).not.toContain('/api/updates');
+    }
+  });
+
   it('offers no way to hide itself: showing it is a switch in Settings', () => {
     for (const source of [swiftSource(spec), powershellSource(spec), pythonSource(spec)]) {
       expect(source).not.toMatch(/Hide from/);

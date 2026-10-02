@@ -649,7 +649,7 @@ export class Services {
       });
     });
     this.updates = this.#updates(config);
-    this.doctor.register(updatesCheck(this.updates));
+    this.doctor.register(updatesCheck(this.updates, config.CONCH_HOME));
     this.conversations.events.on((event) => {
       if (event.type === 'conversation.event') this.#lastActivity = Date.now();
     });
@@ -933,17 +933,23 @@ export class Services {
 
   /** What the menu bar helper shows: counts only, nothing from a chat (ADR 0029). */
   async trayInfo(): Promise<TrayInfo> {
-    const [settings, status, conversations, requests] = await Promise.all([
+    const [settings, status, conversations, requests, updates] = await Promise.all([
       this.settings.get(),
       this.background.status(),
       this.conversations.list().catch(() => []),
       this.access.requests().catch(() => []),
+      this.updates.status().catch(() => undefined),
     ]);
+    const latest = updates?.conch.source === 'releases' ? updates.conch.latest : undefined;
     return {
       name: settings.persona.name,
       alwaysOn: status.on,
       approvals: conversations.filter((c) => c.status === 'awaiting-permission').length,
       devices: requests.filter((r) => !r.rejected && !r.script).length,
+      // A new release, in words (ADR 0048): the menu offers to open Updates.
+      ...(latest && {
+        update: `Conch ${latest.version.replace(/^(\d+\.\d+)\.0$/, '$1')} is ready`,
+      }),
       url: `http://localhost:${this.config.CONCH_PORT}`,
     };
   }

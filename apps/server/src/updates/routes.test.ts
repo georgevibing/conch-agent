@@ -159,6 +159,52 @@ describe('updates over HTTP', () => {
     });
     expect(off.statusCode).toBe(200);
     expect(off.json().auto).toBe(false);
+    // Less settled releases, every change on main, and going back change what runs: they ask too.
+    for (const payload of [{ channel: 'beta' }, { channel: 'alpha' }, { everyChange: true }]) {
+      const raised = await app.inject({
+        method: 'PATCH',
+        url: '/api/updates/settings',
+        headers: { cookie },
+        payload,
+      });
+      expect(raised.json().error, JSON.stringify(payload)).toBe('verify-required');
+    }
+    const back = await app.inject({
+      method: 'POST',
+      url: '/api/updates/conch/back',
+      headers: { cookie },
+      payload: {},
+    });
+    expect(back.json().error).toBe('verify-required');
+    // Back to stable, and putting a notice away, take nothing from you.
+    for (const payload of [
+      { channel: 'stable' },
+      { everyChange: false },
+      { dismiss: '0.3.0' },
+      { dismissNotice: 'releases' },
+    ]) {
+      const calm = await app.inject({
+        method: 'PATCH',
+        url: '/api/updates/settings',
+        headers: { cookie },
+        payload,
+      });
+      expect(calm.statusCode, JSON.stringify(payload)).toBe(200);
+    }
+    const nothing = await app.inject({
+      method: 'PATCH',
+      url: '/api/updates/settings',
+      headers: { cookie },
+      payload: {},
+    });
+    expect(nothing.statusCode).toBe(400);
+    const junk = await app.inject({
+      method: 'PATCH',
+      url: '/api/updates/settings',
+      headers: { cookie },
+      payload: { channel: 'nightly' },
+    });
+    expect(junk.statusCode).toBe(400);
   });
 
   it('updates only programs it knows, whatever the address says', async () => {

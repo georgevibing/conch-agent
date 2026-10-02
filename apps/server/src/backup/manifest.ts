@@ -172,6 +172,11 @@ export const RULES: readonly BackupRule[] = [
     why: 'What Conch said while running in the background: about this computer and these runs.',
   },
   {
+    match: 'versions/**',
+    class: 'derived',
+    why: 'Conch’s own versions, made ready beside the one running, and which one runs (ADR 0048): installed again from its releases.',
+  },
+  {
     match: 'updates.json',
     class: 'derived',
     why: 'What’s installed on this computer and what’s newest: looked up again. Automatic updates are switched on again by you (it asks that it’s you), never by a restore.',

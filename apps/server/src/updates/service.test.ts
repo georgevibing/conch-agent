@@ -9,6 +9,8 @@ import { type LatestLookup, type NeedSpec, Setup } from '../setup/needs';
 import type { ConchCheck, ConchCheckout, ConchResult, UpdateProgressReport } from './conch';
 import { updatesCheck } from './doctor';
 import { DAY, MINUTE } from './schedule';
+import { readState, writeState } from './layout';
+import type { Offer, ReleaseCheck, ReleaseFollower, StagedResult } from './releases';
 import { UpdatesService } from './service';
 
 const homes: string[] = [];
@@ -27,7 +29,13 @@ const lookup: LatestLookup = {
  * Programs whose versions live in a JSON file; "updating" one runs Node (the
  * package manager here) with a script that moves it on — or fails.
  */
-async function world(options: { fail?: boolean; conch?: Partial<ConchCheckout> } = {}) {
+async function world(
+  options: {
+    fail?: boolean;
+    conch?: Partial<ConchCheckout>;
+    releases?: Partial<ReleaseFollower>;
+  } = {},
+) {
   const home = await mkdtemp(join(tmpdir(), 'conch-updates-'));
   homes.push(home);
   const file = join(home, 'versions.json');
@@ -68,12 +76,15 @@ async function world(options: { fail?: boolean; conch?: Partial<ConchCheckout> }
   let busy = false;
   let now = new Date(2026, 8, 30, 14, 0).getTime();
   const restart = vi.fn(() => true);
+  const announced: string[] = [];
   const service = new UpdatesService({
     home,
     setup,
     specs,
     lookup,
     conch: options.conch as ConchCheckout | undefined,
+    releases: options.releases as ReleaseFollower | undefined,
+    announce: (version) => announced.push(version),
     version: '0.2.0',
     bootId: 'boot-1',
     emit: (status) => seen.push(status),
@@ -95,6 +106,7 @@ async function world(options: { fail?: boolean; conch?: Partial<ConchCheckout> }
     landed,
     restart,
     read,
+    announced,
     setBusy: (b: boolean) => (busy = b),
     at: (t: number) => (now = t),
     now: () => now,
@@ -353,7 +365,7 @@ describe('updating Conch itself', () => {
 
 describe('Repair everything’s look at updates', () => {
   it('lists what’s waiting, each with its one action, and never updates Conch itself', async () => {
-    const { service } = await world({
+    const { service, home } = await world({
       conch: {
         head: async () => 'a'.repeat(40),
         check: async () => ({
@@ -367,7 +379,7 @@ describe('Repair everything’s look at updates', () => {
         update: vi.fn(),
       },
     });
-    const doctor = updatesCheck(service);
+    const doctor = updatesCheck(service, home);
     await service.check();
     const items = await doctor.run({ repair: true, signal: new AbortController().signal });
     expect(items).toEqual([
@@ -387,8 +399,8 @@ describe('Repair everything’s look at updates', () => {
   });
 
   it('says all is well once it has looked and nothing waits', async () => {
-    const { service } = await world();
-    const doctor = updatesCheck(service);
+    const { service, home } = await world();
+    const doctor = updatesCheck(service, home);
     expect(await doctor.run({ repair: false, signal: new AbortController().signal })).toEqual([]);
     await service.updateProgram('codex').catch(() => undefined);
     await service.check();
@@ -397,5 +409,212 @@ describe('Repair everything’s look at updates', () => {
     expect(await doctor.run({ repair: false, signal: new AbortController().signal })).toEqual([
       expect.objectContaining({ id: 'updates:current', state: 'ok' }),
     ]);
+  });
+});
+
+/** A release, as the follower offers it. */
+const offer = (version: string, line: string): Offer => ({
+  version,
+  channel: version.includes('beta') ? 'beta' : 'stable',
+  tag: `v${version}`,
+  object: 'b'.repeat(40),
+  commit: 'c'.repeat(40),
+  notes: { version, channel: 'stable', headsUp: [], new: [line], better: [], fixed: [] },
+});
+
+describe('following releases (ADR 0048)', () => {
+  /** Conch on a release, with a pretend follower whose answers the test sets. */
+  async function releaseWorld(found: Partial<ReleaseCheck>, staged?: StagedResult) {
+    const checks: { channel: string }[] = [];
+    const stage = vi.fn(async () => staged ?? ({ kind: 'failed', message: 'no' } as StagedResult));
+    const w = await world({
+      conch: {
+        head: async () => 'a'.repeat(40),
+        check: async (): Promise<ConchCheck> => ({
+          head: 'a'.repeat(40),
+          behind: 0,
+          ahead: 0,
+          improvements: 0,
+          whatsNew: [],
+          fetched: false,
+        }),
+      },
+      releases: {
+        root: '/conch/versions/0.2.0',
+        version: () => '0.2.0',
+        installedChannel: async () => undefined,
+        waiting: () => undefined,
+        prune: async () => [],
+        check: async (options) => {
+          checks.push(options);
+          return {
+            source: 'releases',
+            current: '0.2.0',
+            offers: [],
+            fetched: true,
+            anyReleases: true,
+            ...found,
+          };
+        },
+        stage,
+      },
+    });
+    return { ...w, checks, stage };
+  }
+
+  it('offers the newest release with its notes, announces it once, and calls it news in Repair', async () => {
+    const w = await releaseWorld({
+      offers: [offer('0.4.0', 'Talk to it'), offer('0.3.0', 'Edit by hand')],
+    });
+    await w.service.check();
+    await w.service.check();
+    const { conch } = await w.service.status();
+    expect(conch).toMatchObject({
+      source: 'releases',
+      version: '0.2.0',
+      latest: { version: '0.4.0', channel: 'stable' },
+      behind: 2,
+      announce: true,
+      whatsNew: ['Talk to it'],
+    });
+    expect(conch.releases.map((r) => r.version)).toEqual(['0.4.0', '0.3.0']);
+    expect(w.announced).toEqual(['0.4.0']);
+    const items = await updatesCheck(w.service, w.home).run({
+      repair: false,
+      signal: new AbortController().signal,
+    });
+    expect(items[0]).toMatchObject({
+      id: 'updates:conch',
+      state: 'info',
+      message: 'Conch 0.4 is ready.',
+    });
+    // Put away: not shown again for this version.
+    await w.service.setSettings({ dismiss: '0.4.0' });
+    expect((await w.service.status()).conch.announce).toBe(false);
+  });
+
+  it('follows the channel chosen, and says a refused release in a sentence', async () => {
+    const w = await releaseWorld({
+      refused: 'Conch 0.3.1 isn’t signed, so Conch won’t install it.',
+    });
+    await w.service.check();
+    await w.service.setSettings({ channel: 'beta' });
+    expect(w.checks.at(-1)?.channel).toBe('beta');
+    const status = await w.service.status();
+    expect(status.conch).toMatchObject({
+      channel: 'beta',
+      refused: 'Conch 0.3.1 isn’t signed, so Conch won’t install it.',
+    });
+    const items = await updatesCheck(w.service, w.home).run({
+      repair: false,
+      signal: new AbortController().signal,
+    });
+    expect(items).toContainEqual(
+      expect.objectContaining({ id: 'updates:refused', state: 'warning' }),
+    );
+  });
+
+  it('a release made ready is swapped in with a restart, and says what it brought', async () => {
+    const notes = [offer('0.3.0', 'Edit by hand').notes];
+    const w = await releaseWorld(
+      { offers: [offer('0.3.0', 'Edit by hand')] },
+      { kind: 'staged', version: '0.3.0', folder: '/conch/versions/0.3.0', notes },
+    );
+    await w.service.check();
+    await w.service.updateConch();
+    await vi.waitUntil(() => w.restart.mock.calls.length > 0);
+    expect(w.stage).toHaveBeenCalledOnce();
+    const status = await w.service.status();
+    expect(status.conch.outcome).toMatchObject({
+      kind: 'updated',
+      message: 'Conch was updated to 0.3.0.',
+      releases: notes,
+    });
+    expect(status.conch.running?.phase).toBe('restart');
+  });
+
+  it('a release that couldn’t be made ready leaves the version you have, and says so', async () => {
+    const w = await releaseWorld(
+      { offers: [offer('0.3.0', 'Edit by hand')] },
+      {
+        kind: 'failed',
+        message:
+          'The update didn’t install (the new version wouldn’t build), so Conch kept the version you have. Nothing of yours changed.',
+      },
+    );
+    await w.service.check();
+    await w.service.updateConch();
+    await vi.waitUntil(async () => !(await w.service.status()).conch.running);
+    expect((await w.service.status()).conch.outcome).toMatchObject({
+      kind: 'rolled-back',
+      message: expect.stringMatching(/kept the version you have/),
+    });
+    expect(w.restart).not.toHaveBeenCalled();
+  });
+
+  it('says once that the supervisor went back by itself, and offers going back by hand', async () => {
+    const w = await releaseWorld({});
+    writeState(w.home, {
+      current: { folder: '/conch/versions/0.2.0', version: '0.2.0' },
+      previous: { folder: '/conch', version: '0.1.0' },
+      failed: ['0.3.0'],
+      wentBack: { version: '0.3.0', to: '0.2.0', at: w.now() },
+    });
+    w.service.start();
+    await vi.waitUntil(async () => Boolean((await w.service.status()).conch.outcome));
+    const { conch } = await w.service.status();
+    expect(conch.outcome?.message).toBe(
+      'Conch 0.3.0 didn’t start properly, so Conch went back to 0.2.0 by itself. It won’t offer 0.3.0 again; the next release will be.',
+    );
+    expect(conch.failed).toEqual(['0.3.0']);
+    expect(conch.previous).toBe('0.1.0');
+    expect(readState(w.home).wentBack).toBeUndefined();
+    await w.service.goBack();
+    await vi.waitUntil(() => w.restart.mock.calls.length > 0);
+    const state = readState(w.home);
+    expect(state.pending).toMatchObject({ version: '0.1.0', from: { version: '0.2.0' } });
+    expect(state.failed).toEqual(['0.3.0', '0.2.0']);
+    w.service.stop();
+  });
+
+  it('a copy of main that now follows releases hears it once', async () => {
+    const w = await releaseWorld({});
+    const onMain = await world({
+      conch: {
+        head: async () => 'a'.repeat(40),
+        check: async (): Promise<ConchCheck> => ({
+          head: 'a'.repeat(40),
+          branch: 'main',
+          behind: 0,
+          ahead: 0,
+          improvements: 0,
+          whatsNew: [],
+          fetched: false,
+        }),
+      },
+      releases: {
+        root: '/conch',
+        version: () => '0.3.0',
+        installedChannel: async () => undefined,
+        waiting: () => undefined,
+        check: async () => ({
+          source: 'releases',
+          current: '0.3.0',
+          offers: [],
+          fetched: true,
+          anyReleases: true,
+        }),
+      },
+    });
+    await onMain.service.check();
+    expect((await onMain.service.status()).conch.notice).toMatchObject({
+      id: 'releases',
+      message: expect.stringMatching(/^Conch now follows its releases instead of every change/),
+    });
+    await onMain.service.setSettings({ dismissNotice: 'releases' });
+    expect((await onMain.service.status()).conch.notice).toBeUndefined();
+    // Installed from a release: nothing to say.
+    await w.service.check();
+    expect((await w.service.status()).conch.notice).toBeUndefined();
   });
 });
