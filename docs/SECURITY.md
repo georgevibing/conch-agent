@@ -169,6 +169,24 @@ copy.
 - **Disconnecting** makes Conch forget the sign-in. To revoke it on the app's side
   too, remove Conch from that app's "connected apps" settings.
 
+## Your own WhatsApp or Signal
+
+- **Linking makes this computer one of your devices.** Whoever can use Conch can read
+  and send your WhatsApp or Signal messages through it, like WhatsApp Web open on
+  your desk. Its keys stay on this computer, encrypted (WhatsApp) or readable by you
+  alone (Signal), never shown, and only in backups you lock with a passphrase.
+- **Only you talk to your assistant there,** in the chat with yourself. What other
+  people send you is never read, and your groups never hear from it, unless you say
+  the number is just for your assistant. Then they wait for you to let them in, and
+  what they write is treated like a web page: it can't approve anything.
+- **Showing the code asks you to confirm it's you** from another device: whoever scans
+  it links their account to your assistant. Codes last minutes and are never saved.
+- **WhatsApp's terms allow only its own apps.** Conch uses an unofficial client, and
+  WhatsApp can restrict a number it thinks is automated. Link a spare number if yours
+  matters too much to risk.
+- **Disconnecting** takes Conch off WhatsApp's Linked devices and deletes its keys. For
+  Signal, also remove it under Linked devices on your phone.
+
 ## Backups
 
 - **Conch backs itself up every day, on this computer** (Settings → Health). Those

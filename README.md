@@ -64,7 +64,7 @@ with notifications. [docs/SECURITY.md](./docs/SECURITY.md) explains it in
 two minutes (Tailscale recommended; `pnpm conch reset` if you forget). For a second
 lock, turn on **Approve new devices**: a new device then waits, even with the right
 password, until you run `pnpm conch devices approve` on your computer. Or skip the
-browser entirely and reach your assistant from Telegram, Discord or Slack.
+browser entirely and reach your assistant from Telegram, Discord, Slack, WhatsApp or Signal.
 
 ## What it does
 
@@ -130,6 +130,9 @@ pastes fold into a card, and each provider gets them in the way it can use.
 **Reach it from your chat apps.** Connect Telegram, Discord or Slack in a few guided
 steps — no public address or tunnel — and approve what the assistant asks right
 there. Nobody gets in unless you let them. ([ADR 0018](./docs/adr/0018-channels.md))
+Or link your own WhatsApp or Signal by scanning a code, and talk to your assistant
+in the chat with yourself; your friends' chats are never read.
+([ADR 0043](./docs/adr/0043-whatsapp-and-signal.md))
 
 **In your pocket.** On your phone Conch is an app, with no app store needed.
 Notifications tell you when it needs your OK, with Deny right there; when an answer

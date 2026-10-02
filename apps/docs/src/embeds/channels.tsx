@@ -5,6 +5,7 @@ import {
   Handset,
   IntegrationLogo,
   LinkCard,
+  LinkedDevicesSketch,
   PortalSketch,
 } from '@conch/nacre';
 import type { ReactNode } from 'react';
@@ -75,7 +76,9 @@ export function ChannelFacts({ id }: { id: string }) {
         </li>
       )}
       <li>
-        <Badge tone="neutral">A bot of your own</Badge>
+        <Badge tone="neutral">
+          {id === 'whatsapp' || id === 'signal' ? 'Your own account, linked' : 'A bot of your own'}
+        </Badge>
       </li>
       <li>
         <Badge tone="neutral">No public address</Badge>
@@ -92,6 +95,9 @@ export function ChannelFacts({ id }: { id: string }) {
 
 const BOT = 'Conch';
 const KEY = '7312945602:AAHf3kX9…';
+/** What your assistant writes in the chat with yourself once linked (`channels/service.ts`). */
+const SELF_WELCOME = `Hi Ada! 👋 I’m ${BOT}, and I’m connected to Conch on your computer. Write to me here, in the chat with yourself.`;
+
 /** What the bot says once it knows you (`channels/service.ts`). */
 const WELCOME = `Hi Ada! 👋 I’m ${BOT}, and I’m connected to Conch on your computer. Ask me anything.`;
 
@@ -214,6 +220,54 @@ const SCENES: Record<string, Record<string, () => ReactNode>> = {
           { id: '2', from: 'them', text: WELCOME },
         ]}
         footer={<Handset.Composer placeholder={`Message ${BOT}`} />}
+      />
+    ),
+  },
+  whatsapp: {
+    link: () => (
+      <LinkedDevicesSketch
+        label="Linked devices in WhatsApp, with Link a device to press"
+        color={colorOf('whatsapp')}
+        action="Link a device"
+        note="Your personal messages are end-to-end encrypted on all your devices."
+        alive
+      />
+    ),
+    hello: () => (
+      <Handset
+        label="Message yourself in WhatsApp, where you talk to your assistant"
+        brand="whatsapp"
+        color={colorOf('whatsapp')}
+        title="Ada Lovelace (You)"
+        subtitle="Message yourself"
+        messages={[
+          { id: '1', from: 'you', text: SELF_WELCOME },
+          { id: '2', from: 'you', text: 'What’s on my calendar tomorrow?' },
+        ]}
+        footer={<Handset.Composer />}
+      />
+    ),
+  },
+  signal: {
+    link: () => (
+      <LinkedDevicesSketch
+        label="Linked devices in Signal, with Link a new device to press"
+        color={colorOf('signal')}
+        action="Link a new device"
+        alive
+      />
+    ),
+    hello: () => (
+      <Handset
+        label="Note to Self in Signal, where you talk to your assistant"
+        brand="signal"
+        color={colorOf('signal')}
+        title="Note to Self"
+        messages={[
+          { id: '1', from: 'you', text: SELF_WELCOME },
+          { id: '2', from: 'you', text: 'Did the build pass?' },
+        ]}
+        footer={<Handset.Composer />}
       />
     ),
   },

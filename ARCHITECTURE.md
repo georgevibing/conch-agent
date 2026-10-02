@@ -87,7 +87,7 @@ src/
   attachments/                uploads: sniffing, storage + sweep, per-engine prompt, sandboxed serving (ADR 0017)
   vault/                      Passwords: encrypted vault, keychain, other managers, import, fills (ADR 0025)
   backup/                     what's in a backup (manifest), the .conchbackup format, daily backups, restore (ADR 0020)
-  channels/                   Telegram, Discord and Slack bots that reach your assistant; pairing, relay, healing (ADR 0018)
+  channels/                   Telegram, Discord and Slack bots, your linked WhatsApp and Signal; pairing, relay, healing (ADR 0018, 0043)
   engines/
     types.ts                  Engine / HostTool / EngineEvent contracts
     claude-code/              detect, login, env scrub, SDK → EngineEvent translator
@@ -455,6 +455,18 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
     Keys live in `channels.secrets.json`. `store.ts` keeps who may talk and
     each person's current conversation.
 
+    WhatsApp and Signal aren't bots: Conch is a linked device of your own
+    account ([ADR 0043](./docs/adr/0043-whatsapp-and-signal.md)), linked by QR
+    code (`linking.ts`, `link-routes.ts`, `channel.link` on the socket):
+    - `whatsapp.ts` on Baileys (`whatsapp-baileys.ts`, loaded only when used),
+      its keys in `whatsapp.secrets.json` (sealed, `whatsapp-sessions.ts`);
+    - `signal.ts` on one `signal-cli jsonRpc` process over stdin/stdout
+      (`signal-cli.ts`), its files in `~/.conch/signal`;
+    - `linked.ts`: what they share — the owner is the account, talking in the
+      chat with yourself; others' chats are never read unless
+      `settings.others` is `ask`; groups are never answered; numbered replies
+      for approvals (`TextChoices`). `linked-setup.ts` makes them once per Conch.
+
   - **Relay** (`service.ts`). A message from someone let in becomes
     `ConversationManager.send({ origin: { kind: 'channel' } })`. The service
     watches `broadcast` for that conversation's events and sends back:
@@ -484,9 +496,12 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
     `PUT /api/channels/:id/token`, `POST /api/channels/:id/pair|repair|test`,
     `POST /api/channels/:id/requests/:personId`,
     `DELETE /api/channels/:id/people/:personId`.
-    `channel.changed` / `channel.deleted` go out on the socket.
+    `POST /api/channels/link`, `GET|DELETE /api/channels/link/:id` (WhatsApp,
+    Signal). `channel.changed` / `channel.deleted` / `channel.link` go out on
+    the socket.
   - **Mocks.** With the mock engine, a pretend Telegram, Discord and Slack
-    start too (`channels/mock/`). `CONCH_MOCK_*_PORT` asks for a port, and a
+    start too (`channels/mock/`), and a pretend WhatsApp (at the Baileys seam)
+    and signal-cli (at the process seam). `CONCH_MOCK_*_PORT` asks for a port, and a
     taken one falls back to any free port. `GET /api/channels/mock` (mock mode
     only) says where they are.
 - **Search.** `search/` keeps a SQLite FTS5 (trigram) index of every message in

@@ -40,7 +40,7 @@ working agreement 11: _fix it before you ask_.
 | Attachments (long pastes, files, pictures, drop, previews)                                           | `apps/server/src/attachments/`, `apps/web/src/features/chat/`, Nacre `Attachments` + [ADR 0017](./docs/adr/0017-attachments.md) — security-relevant                                                                                                                                                                                                                                             |
 | Passwords (the vault, other password managers, filling sign-ins)                                     | `apps/server/src/vault/`, `apps/web/src/features/passwords/`, Nacre `Passwords` + [ADR 0025](./docs/adr/0025-passwords.md), [§ Adding a password manager](#adding-a-password-manager) — security-relevant                                                                                                                                                                                       |
 | Backups (what's in one, the format, restore, automatic backups)                                      | `apps/server/src/backup/`, `apps/web/src/features/health/`, Nacre `Backups` + [ADR 0020](./docs/adr/0020-backups.md) — security-relevant                                                                                                                                                                                                                                                        |
-| Channels (Telegram, Discord, Slack: reaching your assistant)                                         | `apps/server/src/channels/`, `apps/web/src/features/channels/`, Nacre `Channels` + [ADR 0018](./docs/adr/0018-channels.md), [§ Adding a channel](#adding-a-channel) — security-relevant                                                                                                                                                                                                         |
+| Channels (Telegram, Discord, Slack, WhatsApp, Signal: reaching your assistant)                       | `apps/server/src/channels/`, `apps/web/src/features/channels/`, Nacre `Channels` + [ADR 0018](./docs/adr/0018-channels.md), [ADR 0043](./docs/adr/0043-whatsapp-and-signal.md), [§ Adding a channel](#adding-a-channel) — security-relevant                                                                                                                                                     |
 | What ⌘K can find by name                                                                             | `apps/web/src/features/palette/` (`findables.tsx`) — see working agreement 10                                                                                                                                                                                                                                                                                                                   |
 | Repair everything (the whole-Conch checkup, Settings → Health)                                       | `apps/server/src/doctor/` (`checks.ts`), `apps/web/src/features/health/`, Nacre `RepairPanel` — see working agreement 12                                                                                                                                                                                                                                                                        |
 | Offline, usage limits, who answers a turn                                                            | `Services.route`, `apps/server/src/network/`, `ConversationManager` + [ADR 0023](./docs/adr/0023-offline-and-limits.md)                                                                                                                                                                                                                                                                         |
@@ -453,7 +453,18 @@ coming, and each one follows the same shape:
 5. **Nobody gets in by default.** Only two things admit anyone: the owner's
    hello (a one-time code, or **That's me** in Conch), or a person pressing
    **Let in**.
-6. **Its page in the documentation** (working agreement 13):
+6. **An app without bots** (WhatsApp, Signal) links your own account as a
+   device instead (ADR 0043, `channels/linked.ts`):
+   - a `ChannelLinker` shows codes until the phone scans; that's the hello,
+     and the account is the owner, talking in the chat with yourself;
+   - other people's chats are never read unless `settings.others` is `ask`,
+     and groups never answered (`isLinked` in the service);
+   - no buttons: `TextChoices` writes numbered answers and reads replies;
+   - mark what Conch sends, so two Conches on one account never answer each
+     other; never change the person's own profile;
+   - its keys in a sealed file or a folder that's `secret` in backups and
+     in `lib/protect.ts`; a program it needs is a need with Install.
+7. **Its page in the documentation** (working agreement 13):
    `apps/docs/content/channels/<app>.md` with the same steps in words, and a
    picture of the other app in `apps/docs/src/embeds/channels.tsx`. The tile and
    the facts come from the catalog entry.
