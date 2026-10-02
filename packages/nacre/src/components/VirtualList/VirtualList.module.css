@@ -1,0 +1,30 @@
+@layer nacre.components {
+  .root {
+    position: relative;
+    overflow-y: auto;
+    /* Rows come and go as it scrolls: the browser mustn't re-anchor on one that left. */
+    overflow-anchor: none;
+  }
+
+  /* As tall as every row together, so the scrollbar is honest. */
+  .size {
+    position: relative;
+    block-size: calc(var(--vl-size) * 1rem);
+  }
+
+  .row {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-start: calc(var(--vl-at) * 1rem);
+    block-size: calc(var(--vl-h) * 1rem);
+  }
+
+  /* The heading held at the top: in the flow, taking no room. */
+  .sticky {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 1;
+    block-size: calc(var(--vl-h) * 1rem);
+    margin-block-end: calc(var(--vl-h) * -1rem);
+  }
+}

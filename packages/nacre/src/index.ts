@@ -18,6 +18,7 @@ export * from './components/Text';
 export * from './components/Separator';
 export * from './components/ResizeHandle';
 export * from './components/ScrollArea';
+export * from './components/VirtualList';
 
 // Actions
 export * from './components/Button';
