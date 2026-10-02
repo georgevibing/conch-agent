@@ -21,12 +21,24 @@ The section only shows when Conch has found one of the two apps.
 ## What comes over
 
 - **Personality.** Your assistant's name, and how it should behave. The name is ticked only if yours is still "Conch". The instructions are ticked only if you've written none here, because they replace yours.
+- **Model.** The one you used there, for new chats: "Use Claude Sonnet, as in Hermes". Conch finds the same model, or the nearest of its family, among the providers you've connected. It's ticked only if you haven't chosen a model yourself. If none can run it, the list says why under what stays behind, and nothing changes. See [providers](../providers/index.md).
 - **About you.** Added to what's already in About you.
 - **Memories.** Ticked, except the ones Conch already has and OpenClaw's daily notes. See [memory](../features/memory.md).
 - **Skills.** Conch reads every one first. They come over off, for you to turn on in [Skills](../features/skills.md).
 - **Routines.** Scheduled jobs come over as drafts. Nothing runs until you turn it on in [Routines](../features/routines.md).
 - **Chat apps.** Your Telegram, Discord or Slack bot. Conch checks it with its app, then it waits for your hello, so nobody else gets in. See [Channels](../channels/index.md).
 - **Keys.** Your Anthropic API or OpenRouter key, if Conch has none yet. It goes into Conch's encrypted key file and is never shown.
+- **Other agents.** OpenClaw can run more than one agent. Each one is listed under its name, with one tick for all of it. Its personality becomes a skill, **Talk as Atlas**, that you pick in a chat; it comes over off. Its memories, skills and routines come over like the main agent's.
+
+## A Slack bot with one key
+
+Slack needs two keys, and the other app may have kept only one. Tick the bot anyway. The summary then has **Finish connecting Slack**:
+
+1. The Slack setup opens with the app already made and the key Conch has already done.
+2. Press the button to open your app's page in Slack: **Socket Mode** if the app-level token is missing, **Install App** if the bot token is. The step says which button to press there.
+3. Paste the key. Conch checks it with Slack, connects, and waits for your hello.
+
+If you open **Connect Slack** yourself, Conch offers the key it found, with **Use it**.
 
 ## What starts unticked
 
@@ -45,7 +57,7 @@ Invisible characters are removed from the persona, About you, memories and routi
 
 Conch [backs itself up](./backups.md) before it brings anything over.
 
-The summary has an **Undo** button. For a week after, **Settings → Memory** has one too: **Undo that import**. Undo removes what came over and puts back what it replaced: your assistant's name, its instructions and About you. Anything you've already removed yourself is skipped. It may ask you to confirm it's you.
+The summary has an **Undo** button. For a week after, **Settings → Memory** has one too: **Undo that import**. Undo removes what came over, a Slack bot you finished later included, and puts back what it replaced: your assistant's name, its instructions, About you and the model new chats start with. Anything you've already removed yourself is skipped. It may ask you to confirm it's you.
 
 After a week, what came over is yours.
 

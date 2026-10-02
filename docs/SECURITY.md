@@ -196,6 +196,14 @@ copy.
   waits for your hello. They're never shown, logged or written anywhere else.
 - **Conch backs itself up first, and Undo takes the whole import back.** Both
   bringing things over and Undo ask that it's you.
+- **The model you used comes over only in words you read, and never brings a key.**
+  If it needs the other app's key, that key must be ticked too. A key written in
+  `config.yaml` stays there.
+- **Another agent's personality comes over as a skill that starts off**, read first
+  like everything else. Its memories, skills and routines follow the same rules.
+- **A Slack bot with one key is finished on the Slack page without the key ever
+  reaching it.** Conch reads the key it has from the other app's folder when it
+  connects, asks that it's you, and Undo takes the bot back.
 
 ## Good habits
 

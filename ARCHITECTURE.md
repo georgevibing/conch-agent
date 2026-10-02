@@ -270,7 +270,13 @@ src/
   stores (`skills.store.adopt` off, routines as drafts, `ChannelService.create`,
   `providers.setKey`) with `import.progress` events, and records ids in
   `import.json`; `undo` takes exactly those back. Secrets never enter a plan, a log
-  or the ledger.
+  or the ledger. [ADR 0042](./docs/adr/0042-come-home-the-rest.md) adds `model.ts`
+  (Hermes `config.yaml` through `read.ts`'s small YAML reader, OpenClaw
+  `agents.defaults.model`, matched against `ProviderService.models()` and applied
+  last, `before.preferences` for Undo), OpenClaw's other agents (`Found.agents`, each
+  persona a skill made off, `ImportItem.agent`), and a Slack bot with one key
+  (`slackHalf`, `GET /api/import/slack`, finished by `POST /api/import/:source/slack`
+  into the same ledger).
 
 - **Show me** ([ADR 0034](./docs/adr/0034-show-me.md)). `artifact_create`/`artifact_update`
   (or a fenced ` ```artifact ` block from a provider without tools, taken out on

@@ -1,6 +1,6 @@
 # 0035 — Come home: bring your things from OpenClaw and Hermes
 
-- Status: accepted
+- Status: accepted (extended by [ADR 0042](./0042-come-home-the-rest.md))
 - Date: 2026-10-01
 - Builds on: [ADR 0013](./0013-skills.md) (other agents' skill folders),
   [ADR 0018](./0018-channels.md) (chat bots and the owner's hello),
@@ -174,8 +174,6 @@ the preview, bringing things over, the summary, Undo, and the CLI dry run.
   - The formats are undocumented contracts. A future OpenClaw that moves a
     file would make that part stay behind, with a sentence. The parsers fail
     per item, never as a whole.
-  - Hermes's `config.yaml` (model choice) and OpenClaw's per-agent
-    workspaces beyond `main` aren't brought over. Conch's own provider
-    setup covers the model. Other agents are rare.
-  - A Slack bot needs both the bot and the app token. With only one, it
-    isn't offered.
+  - Hermes's `config.yaml` (model choice), OpenClaw's agents beyond `main`
+    and a Slack bot with only one of its two keys now come over too: see
+    [ADR 0042](./0042-come-home-the-rest.md), and its own known limits.

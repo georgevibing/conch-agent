@@ -162,12 +162,15 @@ Redo puts it back again. Memories it saved can be forgotten there too.
 ([ADR 0030](./docs/adr/0030-undo.md))
 
 **Come home.** Coming from OpenClaw or Hermes? Conch finds them and shows exactly
-what would come over: your memories, persona and what it knows about you, skills
-(read through first, and off until you turn them on), scheduled jobs (as draft
-routines) and, only if you tick them, your chat bots and keys. It backs up first,
+what would come over: your memories, persona and what it knows about you, the model
+you used (matched to what's connected here, or a sentence why not), skills (read
+through first, and off until you turn them on), scheduled jobs (as draft routines),
+OpenClaw's other agents (each as a skill you pick in a chat) and, only if you tick
+them, your chat bots and keys. A Slack bot with one of its two keys comes with a
+button to the Slack page that has the other. It backs up first,
 leaves the other app's folder alone, and Undo takes it all back.
 `pnpm conch import --from openclaw --dry-run` shows the same list in a terminal.
-([ADR 0035](./docs/adr/0035-come-home.md))
+([ADR 0035](./docs/adr/0035-come-home.md), [ADR 0042](./docs/adr/0042-come-home-the-rest.md))
 
 **Show me.** Ask for a chart, a page, a document, a diagram or a table, and it opens
 beside the chat: every version kept, with what changed, ready to copy, download or open
