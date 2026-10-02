@@ -16,9 +16,9 @@ export function PasswordsLink({ onNavigate }: { onNavigate?: () => void }) {
       tone="neutral"
       block
       leadingIcon={<KeyRound />}
-      trailingIcon={
+      trailing={
         breached > 0 ? (
-          <Badge tone="danger" variant="solid">
+          <Badge size="sm" tone="danger" variant="solid">
             {breached}
           </Badge>
         ) : undefined

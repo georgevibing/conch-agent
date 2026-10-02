@@ -23,9 +23,9 @@ export function RoutinesLink({ onNavigate }: { onNavigate?: () => void }) {
       tone="neutral"
       block
       leadingIcon={<Repeat />}
-      trailingIcon={
+      trailing={
         attention > 0 ? (
-          <Badge tone="accent" variant="solid" aria-label={`${attention} need attention`}>
+          <Badge size="sm" tone="accent" variant="solid" aria-label={`${attention} need attention`}>
             {attention}
           </Badge>
         ) : undefined

@@ -31,9 +31,9 @@ export function AppsLink({ onNavigate }: { onNavigate?: () => void }) {
       tone="neutral"
       block
       leadingIcon={<Blocks />}
-      trailingIcon={
+      trailing={
         count > 0 ? (
-          <Badge tone={broken ? 'warning' : 'info'} variant="solid">
+          <Badge size="sm" tone={broken ? 'warning' : 'info'} variant="solid">
             {count}
           </Badge>
         ) : undefined
