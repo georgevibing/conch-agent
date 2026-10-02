@@ -1,4 +1,4 @@
-import type { CatalogEntry, ExternalList, Integration } from '@conch/protocol';
+import type { CatalogEntry, ExternalList, Integration, SlackStatus } from '@conch/protocol';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -8,6 +8,7 @@ import { FakeSocket, mockFetch, renderApp } from '../../test/harness';
 import { splitCommand } from './CustomDialog';
 import { IntegrationDetailView } from './IntegrationDetailView';
 import { IntegrationsView } from './IntegrationsView';
+import { ProviderServers } from './ProviderServers';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -45,7 +46,13 @@ const catalog: CatalogEntry[] = [
     ],
     steps: ['Open GitHub’s token page.'],
   }),
-  entry({ id: 'gmail', name: 'Gmail', auth: 'account' }),
+  entry({
+    id: 'slack',
+    name: 'Slack',
+    auth: 'slack',
+    access: ['Search your messages'],
+    examples: ['Catch me up on #general'],
+  }),
   entry({ id: 'linear', name: 'Linear', auth: 'oauth' }),
 ];
 
@@ -72,11 +79,7 @@ const provider = {
   engine: 'Claude Code',
   mode: 'native' as const,
   hasOwnServers: true,
-  account: {
-    label: 'your Claude account',
-    url: 'https://claude.ai/settings/connectors',
-    ready: true,
-  },
+  account: { label: 'your Claude account', url: 'https://claude.ai/settings/connectors' },
 };
 
 const external: ExternalList = {
@@ -131,9 +134,9 @@ describe('Integrations page', () => {
     const add = screen.getByRole('region', { name: 'Add another app' });
     expect(within(add).queryByRole('button', { name: 'Notion' })).toBeNull();
     expect(within(add).getByRole('button', { name: 'GitHub' })).toBeInTheDocument();
-    // What a provider set up by itself is folded away under its name.
-    await userEvent.click(await screen.findByRole('button', { name: /Claude Code/ }));
-    expect(await screen.findByText('filesystem')).toBeInTheDocument();
+    // What only a provider can use isn't on this page: it's in Settings → Providers.
+    expect(screen.queryByText('filesystem')).toBeNull();
+    expect(screen.queryByText(/From your providers/)).toBeNull();
   });
 
   it('updates live when an integration recovers', async () => {
@@ -376,50 +379,6 @@ describe('Integrations page', () => {
     });
   });
 
-  it('brings a provider’s own web server into Conch, for every model', async () => {
-    const withWiki: ExternalList = {
-      ...external,
-      servers: [
-        ...external.servers,
-        {
-          name: 'Team wiki',
-          provider: 'claude-code',
-          providerName: 'Claude Code',
-          source: 'engine',
-          state: 'ok',
-          toolCount: 3,
-          adoptable: true,
-        },
-      ],
-    };
-    const calls = mockFetch({
-      'GET /api/integrations': () => ({ catalog, providers: [provider], integrations: [] }),
-      'GET /api/integrations/external': () => withWiki,
-      'POST /api/integrations/adopt': () => ({
-        integration: integration({
-          id: 'int_wiki',
-          catalogId: undefined,
-          name: 'Team wiki',
-          server: 'team-wiki',
-          auth: 'none',
-        }),
-      }),
-    });
-    vi.stubGlobal(
-      'open',
-      vi.fn(() => null),
-    );
-    renderApp(<IntegrationsView />, { route: '/integrations' });
-    await userEvent.click(await screen.findByRole('button', { name: /Claude Code/ }));
-    await userEvent.click(await screen.findByRole('button', { name: 'Use with every model' }));
-    await waitFor(() =>
-      expect(calls.find((c) => c.path.startsWith('/api/integrations/adopt'))?.body).toEqual({
-        provider: 'claude-code',
-        name: 'Team wiki',
-      }),
-    );
-  });
-
   it('offers to install the program one you added runs with', async () => {
     const fetchServer = integration({
       id: 'int_fetch',
@@ -489,55 +448,203 @@ describe('Integrations page', () => {
   });
 });
 
+const slackStatus = (patch: Partial<SlackStatus> = {}): SlackStatus => ({
+  connected: false,
+  enabled: true,
+  health: { state: 'needs-auth' },
+  missing: [],
+  tools: [
+    {
+      name: 'slack_search',
+      title: 'Search messages',
+      description: '',
+      access: 'read',
+      destructive: false,
+      alwaysAsks: false,
+    },
+    {
+      name: 'slack_send_message',
+      title: 'Send a message',
+      description: '',
+      access: 'write',
+      destructive: false,
+      alwaysAsks: true,
+    },
+  ],
+  ...patch,
+});
+
 describe('Integrations belong to Conch, not to a provider', () => {
-  it('never shows a service only one provider can reach as connected, and offers to bring one into Conch', async () => {
-    const openrouter = {
-      id: 'openrouter' as const,
-      engine: 'OpenRouter',
-      mode: 'bridge' as const,
-      hasOwnServers: false,
-    };
+  it('every tile is an app Conch connects itself, with nothing that only one provider reaches', async () => {
     mockFetch({
-      'GET /api/integrations': () => ({
-        catalog,
-        providers: [provider, openrouter],
-        integrations: [],
-      }),
-      'GET /api/integrations/external': () => ({
-        servers: [
-          {
-            name: 'Gmail',
-            provider: 'claude-code',
-            providerName: 'Claude Code',
-            source: 'account',
-            state: 'ok',
-            toolCount: 6,
-            catalogId: 'gmail',
-          },
-          {
-            name: 'linear',
-            provider: 'claude-code',
-            providerName: 'Claude Code',
-            source: 'plugin',
-            plugin: 'engineering',
-            state: 'needs-auth',
-            toolCount: 0,
-            catalogId: 'linear',
-          },
-        ],
-        checkedAt: 1,
-      }),
+      'GET /api/integrations': () => ({ catalog, providers: [provider], integrations: [] }),
+      'GET /api/slack': () => slackStatus(),
     });
     renderApp(<IntegrationsView />, { route: '/integrations' });
     expect(await screen.findByText(/with every model you pick/)).toBeInTheDocument();
-    const gmail = await screen.findByRole('button', { name: 'Gmail' });
-    const tile = gmail.closest('article') as HTMLElement;
-    expect(await within(tile).findByText('Only with Claude Code models')).toBeInTheDocument();
-    expect(within(tile).queryByLabelText(/connected/i)).toBeNull();
+    const slack = await screen.findByRole('button', { name: 'Slack' });
+    expect(within(slack.closest('article') as HTMLElement).queryByText(/Only with/)).toBeNull();
+    expect(screen.queryByText(/Claude/)).toBeNull();
+  });
 
-    await userEvent.click(screen.getByRole('button', { name: /Claude Code.*1 server/ }));
-    await userEvent.click(await screen.findByRole('button', { name: 'Use with every model' }));
-    expect(await screen.findByRole('dialog', { name: 'Connect Linear' })).toBeInTheDocument();
+  it('connects Slack with the one token Slack shows, for every model', async () => {
+    let status = slackStatus();
+    const calls = mockFetch({
+      'GET /api/integrations': () => ({ catalog, providers: [provider], integrations: [] }),
+      'GET /api/slack': () => status,
+      'POST /api/slack/connect': () => {
+        status = slackStatus({
+          connected: true,
+          workspace: 'Acme',
+          user: 'ada',
+          health: { state: 'ok', checkedAt: 1, okAt: 1 },
+        });
+        return status;
+      },
+    });
+    renderApp(<IntegrationsView />, { route: '/integrations' });
+    await userEvent.click(await screen.findByRole('button', { name: 'Slack' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Connect Slack' });
+    const make = within(dialog).getByRole('link', { name: 'Make the app in Slack' });
+    expect(make.getAttribute('href')).toMatch(/^https:\/\/api\.slack\.com\/apps\?new_app=1/);
+    expect(decodeURIComponent(make.getAttribute('href') ?? '')).toContain('search:read');
+    await userEvent.type(
+      within(dialog).getByLabelText(/User OAuth Token/),
+      'xoxp-' + '1111111111-2222222222-3333333333-abcdef',
+    );
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
+    expect(await screen.findByRole('dialog', { name: 'Slack is connected' })).toBeInTheDocument();
+    expect(calls.find((c) => c.path === '/api/slack/connect')?.body).toEqual({
+      token: 'xoxp-' + '1111111111-2222222222-3333333333-abcdef',
+    });
+  });
+
+  it('asks before using the Slack channel’s app, and says which key to copy from it', async () => {
+    mockFetch({
+      'GET /api/integrations': () => ({ catalog, providers: [provider], integrations: [] }),
+      'GET /api/slack': () =>
+        slackStatus({
+          channelApp: { name: 'Ada’s helper', workspace: 'Acme', appId: 'A0MOCKAPP' },
+        }),
+    });
+    renderApp(<IntegrationsView />, { route: '/integrations?connect=slack' });
+    const dialog = await screen.findByRole('dialog', { name: 'Connect Slack' });
+    expect(within(dialog).queryByLabelText(/User OAuth Token/)).toBeNull();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Use it' }));
+    expect(
+      within(dialog).getByRole('link', { name: 'Open your app’s Install App page' }),
+    ).toHaveAttribute('href', 'https://api.slack.com/apps/A0MOCKAPP/install-on-team');
+    expect(within(dialog).getByLabelText(/User OAuth Token/)).toBeInTheDocument();
+  });
+
+  it('a wrong key says which one to copy instead', async () => {
+    mockFetch({
+      'GET /api/integrations': () => ({ catalog, providers: [provider], integrations: [] }),
+      'GET /api/slack': () => slackStatus(),
+      'POST /api/slack/connect': () =>
+        new Response(
+          JSON.stringify({
+            error: 'invalid',
+            message:
+              'This Slack app can’t search yet. Give it what it needs, then copy its new token.',
+          }),
+          { status: 400 },
+        ),
+    });
+    renderApp(<IntegrationsView />, { route: '/integrations?connect=slack' });
+    const dialog = await screen.findByRole('dialog', { name: 'Connect Slack' });
+    await userEvent.type(within(dialog).getByLabelText(/User OAuth Token/), 'xoxp-' + '0000000000-x');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
+    expect(await within(dialog).findByText(/can’t search yet/)).toBeInTheDocument();
+    // The settings that fix it are right there.
+    expect(within(dialog).getByText('Slack app settings')).toBeInTheDocument();
+  });
+
+  it('a connected Slack is a card like any other, and sending can be Ask or Off only', async () => {
+    let status = slackStatus({
+      connected: true,
+      workspace: 'Acme',
+      user: 'ada',
+      health: { state: 'ok', checkedAt: 1, okAt: 1 },
+    });
+    const calls = mockFetch({
+      'GET /api/integrations': () => ({ catalog, providers: [provider], integrations: [] }),
+      'GET /api/slack': () => status,
+      'PATCH /api/slack': () => {
+        status = { ...status, tools: status.tools.map((t) => ({ ...t, policy: 'off' as const })) };
+        return status;
+      },
+    });
+    renderApp(<IntegrationsView />, { route: '/integrations' });
+    const connected = await screen.findByRole('region', { name: 'Connected' });
+    expect(within(connected).getByText('Slack')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: 'Add another app' })).queryByRole('button', {
+        name: 'Slack',
+      }),
+    ).toBeNull();
+
+    renderApp(<IntegrationDetailView integrationId="slack" />, { route: '/integrations/slack' });
+    const send = await screen.findByRole('radiogroup', { name: 'Send a message' });
+    expect(within(send).getByRole('radio', { name: 'Allow' })).toBeDisabled();
+    await userEvent.click(within(send).getByRole('radio', { name: 'Off' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({
+        tools: { slack_send_message: 'off' },
+      }),
+    );
+  });
+});
+
+describe('Settings → Providers → Set up inside a provider', () => {
+  it('lists what only a provider can use, and brings back one you disconnected', async () => {
+    const calls = mockFetch({
+      'GET /api/integrations': () => ({ catalog, providers: [provider], integrations: [] }),
+      'GET /api/integrations/external': () => ({
+        ...external,
+        servers: [
+          ...external.servers,
+          {
+            name: 'Team wiki',
+            provider: 'claude-code',
+            providerName: 'Claude Code',
+            source: 'engine',
+            state: 'ok',
+            toolCount: 3,
+            adoptable: true,
+          },
+        ],
+      }),
+      'POST /api/integrations/adopt': () => ({
+        integration: integration({
+          id: 'int_wiki',
+          catalogId: undefined,
+          name: 'Team wiki',
+          server: 'team-wiki',
+          auth: 'none',
+        }),
+      }),
+    });
+    vi.stubGlobal(
+      'open',
+      vi.fn(() => null),
+    );
+    renderApp(<ProviderServers />);
+    await userEvent.click(await screen.findByRole('button', { name: /2 servers/ }));
+    const list = await screen.findByRole('list', { name: 'Set up in Claude Code' });
+    expect(within(list).getAllByText(/only with Claude Code/, { selector: 'span' })).toHaveLength(
+      2,
+    );
+    // Only the one you disconnected offers a way back; the rest only work there.
+    const back = within(list).getAllByRole('button', { name: 'Use with every model' });
+    expect(back).toHaveLength(1);
+    await userEvent.click(back[0] as HTMLElement);
+    await waitFor(() =>
+      expect(calls.find((c) => c.path.startsWith('/api/integrations/adopt'))?.body).toEqual({
+        provider: 'claude-code',
+        name: 'Team wiki',
+      }),
+    );
   });
 });
 

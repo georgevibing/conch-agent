@@ -3,6 +3,7 @@ import { AlertDialog, Button, Callout, ProviderCard, Skeleton, Stack, Text } fro
 import { useState } from 'react';
 
 import { useAppState } from '../../api/queries';
+import { ProviderServers } from '../integrations/ProviderServers';
 import { Section } from '../settings/Section';
 import { useUi } from '../../app/ui';
 import { ProviderDetail } from './ConnectProviderDialog';
@@ -156,6 +157,8 @@ export function ProvidersTab() {
           </Text>
         </Stack>
       </Section>
+
+      <ProviderServers />
 
       <AlertDialog.Root
         open={Boolean(removing)}

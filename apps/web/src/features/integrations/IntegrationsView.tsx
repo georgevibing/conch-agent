@@ -1,49 +1,27 @@
-import type {
-  CatalogEntry,
-  ExternalIntegration,
-  Integration,
-  IntegrationProvider,
-} from '@conch/protocol';
+import type { CatalogEntry, Integration } from '@conch/protocol';
 import {
   Button,
-  Collapsible,
   Heading,
   Input,
   IntegrationCard,
-  IntegrationLogo,
-  IntegrationStatusBadge,
   SegmentedControl,
   Skeleton,
   Stack,
   Text,
   toast,
 } from '@conch/nacre';
-import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, ShieldCheck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
-import { integrationsApi } from './api';
 import { ConnectDialog } from './ConnectDialog';
 import { CustomDialog } from './CustomDialog';
-import {
-  categoryLabel,
-  accountConnected,
-  fixLabel,
-  needsAttention,
-  quietMeta,
-  sourceLabel,
-} from './describe';
+import { categoryLabel, fixLabel, needsAttention, quietMeta } from './describe';
 import styles from './Integrations.module.css';
-import {
-  integrationKeys,
-  useAssistantName,
-  useExternal,
-  useIntegrations,
-  useUpdateIntegration,
-} from './queries';
+import { useAssistantName, useIntegrations, useUpdateIntegration } from './queries';
+import { SlackCard } from './SlackDetail';
+import { useSlack } from './slackApi';
 import { useFix } from './useFix';
-import { useSignIn } from './useSignIn';
 
 const results: Record<string, { tone: 'success' | 'error' | 'info'; text: string }> = {
   connected: { tone: 'success', text: 'Connected' },
@@ -74,22 +52,18 @@ function order(a: Integration, b: Integration) {
 type Category = 'all' | CatalogEntry['category'];
 
 /**
- * Integrations belong to Conch, not to a provider (ADR 0012): everything
- * connected here goes to every model you pick. What a provider set up by
- * itself is listed apart, folded away, and says it only works with that
- * provider.
+ * Integrations belong to Conch, not to a provider (ADR 0012, ADR 0049):
+ * everything here works with every model you pick. What a provider set up by
+ * itself and Conch can't connect lives in Settings → Providers, folded away.
  */
 export function IntegrationsView() {
   useSignInResult();
   const { data, isPending } = useIntegrations();
-  const providers = useMemo(() => data?.providers ?? [], [data]);
   const assistant = useAssistantName();
-  const external = useExternal(providers.some((p) => p.hasOwnServers));
+  const { data: slack } = useSlack();
   const update = useUpdateIntegration();
   const { fix, pending } = useFix();
   const navigate = useNavigate();
-  const signIn = useSignIn();
-  const client = useQueryClient();
   const [connecting, setConnecting] = useState<CatalogEntry>();
   const [custom, setCustom] = useState(false);
   const [category, setCategory] = useState<Category>('all');
@@ -97,6 +71,8 @@ export function IntegrationsView() {
 
   const integrations = useMemo(() => [...(data?.integrations ?? [])].sort(order), [data]);
   const catalog = useMemo(() => data?.catalog ?? [], [data]);
+  /** Apps connected another way than an MCP server (Slack): their own card above. */
+  const connectedApp = (id: string) => id === 'slack' && Boolean(slack?.connected);
   const categories = useMemo(
     () => ['all', ...new Set(catalog.map((c) => c.category))] as Category[],
     [catalog],
@@ -104,7 +80,7 @@ export function IntegrationsView() {
   const needle = query.trim().toLowerCase();
   const shown = catalog
     // Ones you've connected here live in "Connected" above.
-    .filter((c) => !integrations.some((i) => i.catalogId === c.id))
+    .filter((c) => !integrations.some((i) => i.catalogId === c.id) && !connectedApp(c.id))
     .filter((c) => category === 'all' || c.category === category)
     .filter(
       (c) =>
@@ -115,21 +91,10 @@ export function IntegrationsView() {
     )
     .sort((a, b) => Number(b.featured) - Number(a.featured));
 
-  // The provider whose own account brings the services that only admit approved apps.
-  const accountProvider = providers.find((p) => p.account);
-
-  /** What a tile says about a service a provider's account brings. It's never "connected" here. */
-  const accountNote = (entry: CatalogEntry) => {
-    if (entry.auth !== 'account' || !accountProvider?.account) return undefined;
-    const found = accountConnected(external.data?.servers, entry);
-    if (found?.state === 'ok') return `Only with ${accountProvider.engine} models`;
-    if (found?.state === 'needs-auth') return `Reconnect in ${accountProvider.account.label}`;
-    return `Through ${accountProvider.account.label}`;
-  };
-
   const openEntry = (entry: CatalogEntry) => {
     const mine = integrations.find((i) => i.catalogId === entry.id);
     if (mine) void navigate(`/integrations/${mine.id}`);
+    else if (connectedApp(entry.id)) void navigate(`/integrations/${entry.id}`);
     else setConnecting(entry);
   };
 
@@ -137,7 +102,12 @@ export function IntegrationsView() {
   const [params, setParams] = useSearchParams();
   const connectId = params.get('connect');
   const linked = connectId
-    ? catalog.find((c) => c.id === connectId && !integrations.some((i) => i.catalogId === c.id))
+    ? catalog.find(
+        (c) =>
+          c.id === connectId &&
+          !integrations.some((i) => i.catalogId === c.id) &&
+          !connectedApp(c.id),
+      )
     : undefined;
   // `?setup=<id>` (a card's “Finish setup”): finish the one you already added.
   const unfinished = integrations.find((i) => i.id === params.get('setup'));
@@ -147,7 +117,11 @@ export function IntegrationsView() {
     if (!connectId) return;
     const mine = integrations.find((i) => i.catalogId === connectId);
     if (mine) void navigate(`/integrations/${mine.id}`, { replace: true });
-  }, [connectId, integrations, navigate]);
+    else if (connectId === 'slack' && slack?.connected)
+      void navigate('/integrations/slack', { replace: true });
+  }, [connectId, integrations, navigate, slack?.connected]);
+  const slackEntry = catalog.find((c) => c.id === 'slack');
+  const anyConnected = integrations.length > 0 || Boolean(slack?.connected);
 
   return (
     <div className={styles.page}>
@@ -170,12 +144,17 @@ export function IntegrationsView() {
           <Skeleton shape="block" height="5.5rem" />
         </div>
       ) : (
-        integrations.length > 0 && (
+        anyConnected && (
           <section aria-labelledby="int-connected" className={styles.section}>
             <Heading level={2} id="int-connected" size="sm" tone="muted">
               Connected
             </Heading>
             <ul className={styles.cards}>
+              {slack?.connected && slackEntry && (
+                <li>
+                  <SlackCard status={slack} entry={slackEntry} />
+                </li>
+              )}
               {integrations.map((integration, index) => {
                 const entry = catalog.find((c) => c.id === integration.catalogId);
                 const label = fixLabel(integration);
@@ -216,7 +195,7 @@ export function IntegrationsView() {
       <section aria-labelledby="int-catalog" className={styles.section}>
         <div className={styles.catalogHeader}>
           <Heading level={2} id="int-catalog" size="sm" tone="muted">
-            {integrations.length ? 'Add another app' : 'Connect your first app'}
+            {anyConnected ? 'Add another app' : 'Connect your first app'}
           </Heading>
           <div className={styles.filters}>
             {categories.length > 2 && (
@@ -263,7 +242,6 @@ export function IntegrationsView() {
                   color={entry.color}
                   tagline={entry.tagline}
                   local={entry.local}
-                  note={accountNote(entry)}
                   connected={false}
                   onOpen={() => openEntry(entry)}
                 />
@@ -285,32 +263,6 @@ export function IntegrationsView() {
         )}
       </section>
 
-      <ProviderServers
-        providers={providers}
-        loading={providers.some((p) => p.hasOwnServers) && external.isPending}
-        servers={(external.data?.servers ?? []).filter(
-          // Account services already have a tile of their own above.
-          (s) =>
-            !(
-              s.source === 'account' &&
-              catalog.some((c) => c.id === s.catalogId && c.auth === 'account')
-            ),
-        )}
-        catalog={catalog}
-        connected={integrations}
-        message={external.data?.message}
-        onUseEverywhere={setConnecting}
-        onAdopt={(server) =>
-          void signIn((display) =>
-            integrationsApi.adopt({ provider: server.provider, name: server.name }, display),
-          ).then((result) => {
-            if (!result) return;
-            void client.invalidateQueries({ queryKey: integrationKeys.external });
-            if (!result.authorizeUrl) toast.success(`${server.name} works with every model now.`);
-          })
-        }
-      />
-
       <footer className={styles.pageFooter}>
         <ShieldCheck aria-hidden />
         <Text size="xs" tone="subtle">
@@ -327,143 +279,8 @@ export function IntegrationsView() {
           setConnecting(undefined);
           if (connectId || unfinished) setParams({}, { replace: true });
         }}
-        onAlternative={(id) => setConnecting(catalog.find((c) => c.id === id))}
       />
       <CustomDialog open={custom} onOpenChange={setCustom} />
     </div>
-  );
-}
-
-/**
- * Servers a provider set up by itself (its own settings, plugins, its
- * account). They only work when that provider answers, so they sit apart from
- * Conch's integrations, folded away, one group per provider — each with a way
- * to bring the service into Conch when Conch can connect it itself.
- */
-function ProviderServers({
-  providers,
-  loading,
-  servers,
-  catalog,
-  connected,
-  message,
-  onUseEverywhere,
-  onAdopt,
-}: {
-  providers: IntegrationProvider[];
-  loading: boolean;
-  servers: ExternalIntegration[];
-  catalog: CatalogEntry[];
-  connected: Integration[];
-  message?: string;
-  onUseEverywhere: (entry: CatalogEntry) => void;
-  /** Connect a provider's own web server from Conch, so every model gets it. */
-  onAdopt: (server: ExternalIntegration) => void;
-}) {
-  if (!loading && !servers.length && !message) return null;
-  const groups = providers
-    .map((provider) => ({
-      provider,
-      servers: servers.filter((s) => s.provider === provider.id),
-    }))
-    .filter((g) => g.servers.length > 0);
-  return (
-    <section aria-labelledby="int-external" className={styles.section}>
-      <Stack gap={0.5}>
-        <Heading level={2} id="int-external" size="sm" tone="muted">
-          From your providers
-        </Heading>
-        <Text size="xs" tone="subtle">
-          Set up inside a provider rather than in Conch, so they only work when that provider
-          answers. Change them there — or bring one into Conch to use it with every model.
-        </Text>
-      </Stack>
-      {loading ? (
-        <div className={styles.externalList}>
-          <Skeleton shape="text" width="60%" />
-          <Skeleton shape="text" width="45%" />
-        </div>
-      ) : (
-        <>
-          {groups.map(({ provider, servers: list }) => {
-            const broken = list.filter((s) => s.state === 'error' || s.state === 'needs-auth');
-            return (
-              <Collapsible key={provider.id} className={styles.providerGroup}>
-                <Collapsible.Trigger className={styles.providerTrigger}>
-                  <span className={styles.providerName}>{provider.engine}</span>
-                  <Text as="span" size="xs" tone="subtle">
-                    {list.length === 1 ? '1 server' : `${list.length} servers`}
-                    {broken.length ? ` · ${broken.length} need attention there` : ''}
-                  </Text>
-                </Collapsible.Trigger>
-                <Collapsible.Content>
-                  <ul className={styles.externalList}>
-                    {list.map((server) => {
-                      const entry = catalog.find((c) => c.id === server.catalogId);
-                      // Conch can connect this service itself, and hasn't yet.
-                      const portable =
-                        entry &&
-                        entry.auth !== 'account' &&
-                        !connected.some((i) => i.catalogId === entry.id)
-                          ? entry
-                          : undefined;
-                      return (
-                        <li
-                          key={`${server.source}:${server.plugin ?? ''}:${server.name}`}
-                          className={styles.externalRow}
-                        >
-                          <IntegrationLogo
-                            brand={server.catalogId}
-                            name={server.name}
-                            color={entry?.color}
-                            size="sm"
-                            decorative
-                          />
-                          <span className={styles.externalName}>
-                            <Text as="span" size="sm" weight="medium">
-                              {server.name}
-                            </Text>
-                            <Text as="span" size="xs" tone="subtle">
-                              {server.plugin
-                                ? `Plugin: ${server.plugin}`
-                                : sourceLabel(server.source, provider)}
-                              {server.state === 'ok' && server.toolCount
-                                ? ` · ${server.toolCount} tools`
-                                : ''}
-                              {server.message ? ` · ${server.message}` : ''}
-                            </Text>
-                          </span>
-                          {portable ? (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => onUseEverywhere(portable)}
-                            >
-                              Use with every model
-                            </Button>
-                          ) : (
-                            server.adoptable && (
-                              <Button size="sm" variant="ghost" onClick={() => onAdopt(server)}>
-                                Use with every model
-                              </Button>
-                            )
-                          )}
-                          <IntegrationStatusBadge state={server.state} />
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </Collapsible.Content>
-              </Collapsible>
-            );
-          })}
-          {message && (
-            <Text size="sm" tone="muted">
-              {message}
-            </Text>
-          )}
-        </>
-      )}
-    </section>
   );
 }

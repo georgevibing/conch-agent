@@ -43,6 +43,7 @@ import {
   useRemoveIntegration,
   useUpdateIntegration,
 } from './queries';
+import { SlackDetailView } from './SlackDetail';
 import { useFix } from './useFix';
 
 const policyHelp: Record<IntegrationPolicy, (name: string, assistant: string) => string> = {
@@ -54,6 +55,12 @@ const policyHelp: Record<IntegrationPolicy, (name: string, assistant: string) =>
 };
 
 export function IntegrationDetailView({ integrationId }: { integrationId: string }) {
+  // Slack is Conch's own (ADR 0049), not an MCP server: its page is its own.
+  if (integrationId === 'slack') return <SlackDetailView />;
+  return <McpDetailView integrationId={integrationId} />;
+}
+
+function McpDetailView({ integrationId }: { integrationId: string }) {
   useSignInResult();
   const { integration, entry, isPending } = useIntegration(integrationId);
   const navigate = useNavigate();

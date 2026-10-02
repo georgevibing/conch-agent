@@ -14,8 +14,8 @@ import { useAppState, useUpdateSettings } from '../../api/queries';
 import type { TranscriptItem } from '../../live/reducer';
 import styles from './ChatBits.module.css';
 import { ConnectDialog } from './ConnectDialog';
-import { accountConnected } from './describe';
-import { useAssistantName, useExternal, useIntegrations } from './queries';
+import { useAssistantName, useIntegrations } from './queries';
+import { slackWorks, useSlack } from './slackApi';
 import { useFix } from './useFix';
 
 type Issue = Extract<TranscriptItem, { kind: 'integration-issue' }>;
@@ -72,6 +72,7 @@ export function IntegrationSuggestion({
   onGone?: () => void;
 }) {
   const { data } = useIntegrations();
+  const { data: slack } = useSlack(item.catalogId === 'slack');
   const { data: app } = useAppState();
   const update = useUpdateSettings();
   const assistant = useAssistantName();
@@ -82,10 +83,7 @@ export function IntegrationSuggestion({
   /** Muted or unmuted from this card; otherwise the setting decides. */
   const [mutedHere, setMutedHere] = useState<boolean>();
 
-  // What connecting means: the app itself, or the entry that reaches it (Zapier).
-  const target = data?.catalog.find((c) => c.id === (item.via ?? item.catalogId));
-  const viaAccount = target?.auth === 'account';
-  const external = useExternal(viaAccount);
+  const target = data?.catalog.find((c) => c.id === item.catalogId);
   const integration = data?.integrations.find((i) => i.catalogId === target?.id);
   const muted = app?.preferences.mutedSuggestions ?? [];
   const isMuted = mutedHere ?? muted.includes(item.catalogId);
@@ -94,9 +92,10 @@ export function IntegrationSuggestion({
   if (!data || gone || (item.dismissed && !leaving) || (isMuted && mutedHere === undefined))
     return null;
 
-  const connected = viaAccount
-    ? target && accountConnected(external.data?.servers, target)?.state === 'ok'
-    : integration?.health.state === 'ok' || integration?.health.state === 'warning';
+  const connected =
+    target?.auth === 'slack'
+      ? slackWorks(slack)
+      : integration?.health.state === 'ok' || integration?.health.state === 'warning';
   const state: IntegrationSuggestionState = leaving
     ? 'dismissed'
     : isMuted
@@ -125,7 +124,6 @@ export function IntegrationSuggestion({
         color={item.color}
         description={item.description}
         assistant={assistant}
-        via={item.via ? (target?.name ?? item.via) : undefined}
         state={state}
         onConnect={target ? () => setDialog(target) : undefined}
         onNotNow={() => {
@@ -145,7 +143,6 @@ export function IntegrationSuggestion({
         entry={dialog}
         existingId={dialog && dialog.id === integration?.catalogId ? integration.id : undefined}
         onOpenChange={(open) => !open && setDialog(undefined)}
-        onAlternative={(id) => setDialog(data?.catalog.find((c) => c.id === id))}
         inChat
         onAskAgain={onAskAgain}
         onCloseAutoFocus={(event) => {

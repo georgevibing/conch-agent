@@ -1,4 +1,4 @@
-import type { MailProvider } from '@conch/protocol';
+import { type MailProvider, SLACK_USER_SCOPES } from '@conch/protocol';
 
 /**
  * The words and links for setting up each app, worked out for the person so
@@ -58,7 +58,9 @@ export function randomDigits(): string {
 /**
  * Everything the Slack app needs, so the person only presses Next and Create:
  * a bot you can DM (Messages tab on), the events and permissions it uses, and
- * Socket Mode (no public address needed).
+ * Socket Mode (no public address needed). One app does both Slack jobs: the
+ * channel (its bot) and Slack with every model (ADR 0049), which reads and
+ * sends as you with the user scopes. Installing it once covers both.
  */
 export function slackManifest(assistant: string) {
   const name = assistant.slice(0, 35) || 'Conch';
@@ -94,6 +96,7 @@ export function slackManifest(assistant: string) {
           'files:read',
           'reactions:write',
         ],
+        user: [...SLACK_USER_SCOPES],
       },
     },
     settings: {
@@ -112,7 +115,7 @@ export function slackManifest(assistant: string) {
  */
 export function slackAppUrl(
   appId: string | undefined,
-  page: 'general' | 'install-on-team' | 'socket-mode',
+  page: 'general' | 'install-on-team' | 'socket-mode' | 'app-manifest',
 ): string {
   return appId && /^A[A-Z0-9]{6,20}$/.test(appId)
     ? `${SLACK_APPS_URL}/${appId}/${page}`

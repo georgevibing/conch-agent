@@ -374,6 +374,10 @@ describe('Guides', () => {
     expect(manifest.oauth_config.scopes.bot).toEqual(
       expect.arrayContaining(['chat:write', 'im:history']),
     );
+    // The same app is Slack with every model: it reads and sends as you (ADR 0049).
+    expect(manifest.oauth_config.scopes.user).toEqual(
+      expect.arrayContaining(['search:read', 'channels:history', 'chat:write']),
+    );
     const url = new URL(slackCreateUrl('Conch'));
     expect(url.searchParams.get('new_app')).toBe('1');
     expect(JSON.parse(url.searchParams.get('manifest_json') ?? '{}')).toEqual(manifest);

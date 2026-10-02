@@ -65,11 +65,6 @@ export function sourceLabel(
 
 const capitalise = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
-/** Provider-account connectors (e.g. from a Claude account) that the engine reports, by catalog id. */
-export function accountConnected(external: ExternalIntegration[] | undefined, entry: CatalogEntry) {
-  return external?.find((s) => s.source === 'account' && s.catalogId === entry.id);
-}
-
 export const categoryLabel: Record<CatalogEntry['category'], string> = {
   productivity: 'Work',
   developer: 'Developer',

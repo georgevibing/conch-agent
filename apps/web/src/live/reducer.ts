@@ -160,8 +160,6 @@ export type TranscriptItem =
       name: string;
       description: string;
       color?: string;
-      /** Connected through this catalog entry instead (Zapier). */
-      via?: string;
       /** “Not now” was pressed. */
       dismissed: boolean;
       /** The message that brought it up: what “Ask again” sends. */
@@ -601,7 +599,6 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             name: event.name,
             description: event.description,
             ...(event.color && { color: event.color }),
-            ...(event.via && { via: event.via }),
             dismissed: false,
             ...(asked && { askedIn: asked.id }),
           },

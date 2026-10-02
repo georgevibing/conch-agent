@@ -1,5 +1,5 @@
 import { GoogleAppConnect } from './GoogleAppConnect';
-import type { CatalogEntry, Integration, IntegrationProvider } from '@conch/protocol';
+import type { CatalogEntry, Integration } from '@conch/protocol';
 import {
   Button,
   Callout,
@@ -13,19 +13,11 @@ import {
   type HandshakePhase,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  ArrowUpRight,
-  Check,
-  CornerDownLeft,
-  KeyRound,
-  MessageSquare,
-  RotateCw,
-} from 'lucide-react';
+import { ArrowUpRight, Check, CornerDownLeft, KeyRound, MessageSquare } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 
 import { integrationsApi } from './api';
-import { accountConnected } from './describe';
 import styles from './Integrations.module.css';
 import { useLocalSetup } from './LocalSetup';
 import {
@@ -33,9 +25,9 @@ import {
   integrationKeys,
   putIntegration,
   useAssistantName,
-  useExternal,
   useIntegrations,
 } from './queries';
+import { SlackConnect } from './SlackConnect';
 import { useSignIn } from './useSignIn';
 
 function phaseOf(integration: Integration | undefined): HandshakePhase {
@@ -56,7 +48,7 @@ function phaseOf(integration: Integration | undefined): HandshakePhase {
 }
 
 /** What the assistant can do with it, as a short checked list. */
-function AccessList({ entry }: { entry: CatalogEntry }) {
+export function AccessList({ entry }: { entry: CatalogEntry }) {
   const assistant = useAssistantName();
   if (!entry.access.length) return null;
   return (
@@ -113,7 +105,6 @@ function StandardConnectDialog({
   entry,
   existingId,
   onOpenChange,
-  onAlternative,
   inChat,
   onAskAgain,
   onCloseAutoFocus,
@@ -122,8 +113,6 @@ function StandardConnectDialog({
   /** Finish setting up one that's already added (its card said “Finish setup”). */
   existingId?: string;
   onOpenChange: (open: boolean) => void;
-  /** Switch to another catalog entry (e.g. Zapier, to reach a service with every model). */
-  onAlternative?: (catalogId: string) => void;
   /**
    * Opened from a chat's offer to connect: once connected it offers to ask
    * the question again, and nothing in it leads away from the chat.
@@ -144,7 +133,6 @@ function StandardConnectDialog({
             entry={entry}
             existingId={existingId}
             onClose={() => onOpenChange(false)}
-            onAlternative={onAlternative}
             inChat={inChat}
             onAskAgain={onAskAgain}
           />
@@ -158,14 +146,12 @@ function ConnectFlow({
   entry,
   existingId,
   onClose,
-  onAlternative,
   inChat,
   onAskAgain,
 }: {
   entry: CatalogEntry;
   existingId?: string;
   onClose: () => void;
-  onAlternative?: (catalogId: string) => void;
   inChat?: boolean;
   onAskAgain?: () => void;
 }) {
@@ -181,35 +167,7 @@ function ConnectFlow({
   const [values, setValues] = useState<Record<string, string>>({});
   const current = data?.integrations.find((i) => i.id === startedId);
   const assistant = useAssistantName();
-  // The provider whose own account brings services that only admit approved apps.
-  const accountProvider = data?.providers.find((p) => p.account);
-  const account = accountProvider?.account;
-  const zapier = data?.catalog.find((c) => c.id === 'zapier');
-  const zapierConnected = data?.integrations.some((i) => i.catalogId === 'zapier');
-  const viaAccount = entry.auth === 'account';
-  const external = useExternal(viaAccount);
-  const found = viaAccount ? accountConnected(external.data?.servers, entry) : undefined;
-  const phase: HandshakePhase = viaAccount
-    ? found?.state === 'ok'
-      ? 'connected'
-      : external.isFetching
-        ? 'waiting'
-        : 'idle'
-    : phaseOf(current);
-
-  // Coming back from the provider's settings (or anywhere): look again straight away.
-  useEffect(() => {
-    if (!viaAccount) return;
-    const recheck = () => {
-      if (document.visibilityState !== 'visible') return;
-      void integrationsApi
-        .external(true)
-        .then((list) => client.setQueryData(integrationKeys.external, list))
-        .catch(() => undefined);
-    };
-    document.addEventListener('visibilitychange', recheck);
-    return () => document.removeEventListener('visibilitychange', recheck);
-  }, [viaAccount, client]);
+  const phase: HandshakePhase = phaseOf(current);
 
   // A first attempt that never worked leaves nothing behind when you walk away —
   // unless it's only waiting on something being installed or switched on.
@@ -267,9 +225,7 @@ function ConnectFlow({
 
   const setup = useLocalSetup(entry, current, () => void submit());
   const failure =
-    !viaAccount && phase === 'failed' && current?.health.action !== 'setup'
-      ? current?.health.message
-      : undefined;
+    phase === 'failed' && current?.health.action !== 'setup' ? current?.health.message : undefined;
   const title =
     phase === 'connected'
       ? `${entry.name} is connected`
@@ -284,7 +240,7 @@ function ConnectFlow({
           name={entry.name}
           brand={entry.id}
           color={entry.color}
-          phase={phase === 'waiting' && viaAccount ? 'idle' : phase}
+          phase={phase}
         />
         <Dialog.Title className={styles.connectTitle}>{title}</Dialog.Title>
         <Text tone="muted" align="center" className={styles.connectLead}>
@@ -305,18 +261,6 @@ function ConnectFlow({
                 <Callout tone="warning">{current.health.message}</Callout>
               )}
             </Stack>
-          ) : viaAccount ? (
-            <AccountSteps
-              entry={entry}
-              account={account}
-              provider={accountProvider?.engine}
-              found={found?.state}
-              alternative={
-                zapier && !zapierConnected && onAlternative
-                  ? () => onAlternative(zapier.id)
-                  : undefined
-              }
-            />
           ) : (
             <Stack gap={5}>
               <AccessList entry={entry} />
@@ -382,28 +326,6 @@ function ConnectFlow({
               </Button>
             )}
             <Button onClick={onClose}>Done</Button>
-          </>
-        ) : viaAccount ? (
-          <>
-            <Button
-              variant="ghost"
-              leadingIcon={<RotateCw />}
-              loading={external.isFetching}
-              onClick={() =>
-                void integrationsApi
-                  .external(true)
-                  .then((list) => client.setQueryData(integrationKeys.external, list))
-              }
-            >
-              Check again
-            </Button>
-            {account && (
-              <Button asChild trailingIcon={<ArrowUpRight />}>
-                <a href={account.url} target="_blank" rel="noopener noreferrer">
-                  Open settings
-                </a>
-              </Button>
-            )}
           </>
         ) : entry.auth === 'oauth' ? (
           phase === 'waiting' ? (
@@ -541,71 +463,6 @@ function TokenForm({
   );
 }
 
-function AccountSteps({
-  entry,
-  account,
-  provider,
-  found,
-  alternative,
-}: {
-  entry: CatalogEntry;
-  account?: IntegrationProvider['account'];
-  /** The provider that brings it ("Claude Code"). */
-  provider?: string;
-  found?: string;
-  /** Connect a service that reaches it for every model instead (Zapier). */
-  alternative?: () => void;
-}) {
-  const where = account?.label ?? 'your AI provider’s account';
-  return (
-    <Stack gap={4}>
-      <AccessList entry={entry} />
-      <Text size="sm" tone="muted">
-        {entry.name} only lets approved apps sign in, so it connects through {where} — and Conch
-        picks it up from there.
-      </Text>
-      <ol className={styles.steps}>
-        {[
-          `Open the connector settings for ${where} (the button below).`,
-          `Find ${entry.name} and press Connect.`,
-          'Come back here. Conch notices by itself.',
-        ].map((step, i) => (
-          <li key={step}>
-            <span className={styles.stepNumber} aria-hidden>
-              {i + 1}
-            </span>
-            <span>{step}</span>
-          </li>
-        ))}
-      </ol>
-      {found === 'needs-auth' && (
-        <Callout tone="warning">
-          {entry.name} is in {where} but needs you to reconnect it there.
-        </Callout>
-      )}
-      {account && !account.ready && account.hint && <Callout tone="info">{account.hint}</Callout>}
-      {provider && (
-        <Callout
-          tone="info"
-          title={`Only with ${provider} models`}
-          action={
-            alternative && (
-              <Button size="sm" variant="surface" onClick={alternative}>
-                Connect Zapier
-              </Button>
-            )
-          }
-        >
-          {entry.name} comes through {where}, so other models you pick can’t reach it.
-          {alternative
-            ? ` To use ${entry.name} with every model, connect it through Zapier instead.`
-            : ''}
-        </Callout>
-      )}
-    </Stack>
-  );
-}
-
 export function ConnectDialog(props: Parameters<typeof StandardConnectDialog>[0]) {
   // Gmail, Google Calendar and Google Drive: one Google account, each asking only for what it needs.
   if (props.entry?.auth === 'google') {
@@ -628,5 +485,22 @@ export function ConnectDialog(props: Parameters<typeof StandardConnectDialog>[0]
       </Dialog.Root>
     );
   }
+  if (props.entry?.auth === 'slack')
+    return (
+      <Dialog.Root open onOpenChange={(open) => !open && props.onOpenChange(false)}>
+        <Dialog.Content
+          size="md"
+          aria-describedby={undefined}
+          onCloseAutoFocus={props.onCloseAutoFocus}
+        >
+          <SlackConnect
+            entry={props.entry}
+            inChat={props.inChat}
+            onClose={() => props.onOpenChange(false)}
+            onAskAgain={props.onAskAgain}
+          />
+        </Dialog.Content>
+      </Dialog.Root>
+    );
   return <StandardConnectDialog {...props} />;
 }
