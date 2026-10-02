@@ -179,10 +179,24 @@ export function HelloStep({
                 allow Direct Messages.
               </Text>
             </>
-          ) : (
+          ) : channel.kind === 'slack' ? (
             <p>
               Open {who} in Slack (it’s under Apps) and send it anything, like “hi”. Then press{' '}
               <b>That’s me</b> here.
+            </p>
+          ) : (
+            <p>
+              {
+                {
+                  microsoftteams: `Open ${who} in Teams (under Chat, once the app is added) and send it anything, like “hi”.`,
+                  matrix: `In Element (or any Matrix app), start a direct message with ${channel.bot.id} and send it anything, like “hi”.`,
+                  wechat:
+                    channel.bot.account === 'official'
+                      ? 'Follow the account in WeChat (scan its QR code on the account’s page) and send it anything, like “你好”.'
+                      : 'Open the bot in WeCom (find it by its name) and send it anything, like “你好”.',
+                }[channel.kind as 'microsoftteams' | 'matrix' | 'wechat']
+              }{' '}
+              Then press <b>That’s me</b> here.
             </p>
           )}
         </HelloCard>

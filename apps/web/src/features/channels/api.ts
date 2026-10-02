@@ -3,6 +3,8 @@ import {
   ChannelCheck,
   ChannelLink,
   type LinkableKind,
+  ChannelDoor,
+  ChannelHookSecrets,
   ChannelList,
   type ChannelSecrets,
   type CheckChannelBody,
@@ -51,4 +53,15 @@ export const channelsApi = {
   imessage: (signal?: AbortSignal) => request(ImessageSetup, '/api/channels/imessage', { signal }),
   openImessage: (place: OpenImessageBody['place']) =>
     request(Ok, '/api/channels/imessage/open', { method: 'POST', body: { place } }),
+  /** What to paste in WeChat's server settings (its Token and EncodingAESKey). */
+  hook: (id: string) => request(ChannelHookSecrets, `/api/channels/${id}/hook`),
+  /** The Teams app to upload, made for this bot. */
+  teamsAppUrl: (id: string) => `/api/channels/${id}/teams-app`,
+  door: () => request(ChannelDoor, '/api/channels/door'),
+  doorTailscale: () =>
+    request(ChannelDoor, '/api/channels/door/tailscale', { method: 'POST', body: {} }),
+  doorOwn: (url: string) =>
+    request(ChannelDoor, '/api/channels/door', { method: 'PUT', body: { url } }),
+  doorCheck: () => request(ChannelDoor, '/api/channels/door/check', { method: 'POST', body: {} }),
+  doorOff: () => request(ChannelDoor, '/api/channels/door', { method: 'DELETE' }),
 };

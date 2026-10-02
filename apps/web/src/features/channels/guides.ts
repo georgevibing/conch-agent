@@ -8,6 +8,10 @@ import type { MailProvider } from '@conch/protocol';
 export const BOTFATHER_URL = 'https://t.me/BotFather';
 export const DISCORD_PORTAL_URL = 'https://discord.com/developers/applications';
 export const SLACK_APPS_URL = 'https://api.slack.com/apps';
+export const TEAMS_BOTS_URL = 'https://dev.teams.microsoft.com/bots';
+export const WECOM_URL = 'https://work.weixin.qq.com/';
+export const WECOM_BOT_DOCS_URL = 'https://developer.work.weixin.qq.com/document/path/101463';
+export const WECHAT_SANDBOX_URL = 'https://mp.weixin.qq.com/debug/cgi-bin/sandbox?t=sandbox/login';
 
 /** Letters, digits and underscores only, as Telegram usernames allow. */
 function slug(text: string): string {
@@ -34,6 +38,16 @@ export function telegramNames(
   const who = slug(first ?? '') || 'my';
   const what = slug(assistant) || 'conch';
   return { name: name.slice(0, 64), username: `${who}_${what}_${digits}_bot`.slice(0, 32) };
+}
+
+/** A username and a display name for the assistant's own Matrix account. */
+export function matrixNames(
+  assistant: string,
+  owner: string | undefined,
+  digits: string,
+): { name: string; username: string } {
+  const { name, username } = telegramNames(assistant, owner, digits);
+  return { name, username: username.replace(/_bot$/, '').replaceAll('_', '-') };
 }
 
 /** Four digits, fixed for a visit so the suggestion doesn't change under you. */

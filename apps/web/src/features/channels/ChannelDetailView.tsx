@@ -42,6 +42,8 @@ import {
 import { LinkStep } from './LinkedSetup';
 import { GetIt } from '../setup/GetIt';
 import { HelloStep } from './HelloStep';
+import { HookSection } from './HookSection';
+import { SignInAgain } from './SignInAgain';
 import { useKeyCheck } from './hooks';
 import { channelKeys, errorText, putChannel, useChannel, useChannelAction } from './queries';
 import { AlwaysOnHint } from '../background/AlwaysOnHint';
@@ -212,6 +214,8 @@ function Detail({ channel }: { channel: Channel }) {
             there.
           </Callout>
         )}
+
+      {channel.enabled && <HookSection channel={channel} />}
 
       {!owner && channel.enabled && (
         <section aria-labelledby="ch-hello" className={styles.section}>
@@ -426,6 +430,11 @@ function Health({
         {channel.health.message}
       </Callout>
     );
+  if (
+    state === 'needs-token' &&
+    (channel.kind === 'microsoftteams' || channel.kind === 'matrix' || channel.kind === 'wechat')
+  )
+    return <SignInAgain channel={channel} />;
   if (state === 'needs-token') return <ReplaceKey channel={channel} />;
   if (channel.health.need)
     return (
@@ -499,6 +508,9 @@ function ReplaceKey({ channel }: { channel: Channel }) {
     whatsapp: '',
     signal: '',
     imessage: '',
+    microsoftteams: '',
+    matrix: '',
+    wechat: '',
   };
 
   const save = async () => {

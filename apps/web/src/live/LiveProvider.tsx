@@ -233,6 +233,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         case 'channel.changed':
         case 'channel.deleted':
         case 'channel.link':
+        case 'channel.door':
           applyChannelEvent(client, event, (to) =>
             window.dispatchEvent(new CustomEvent('conch:navigate', { detail: to })),
           );

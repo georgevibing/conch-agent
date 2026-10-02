@@ -710,3 +710,187 @@ describe('Connecting email', () => {
     );
   });
 });
+
+describe('Connecting Matrix', () => {
+  it('signs in with the password once, and never checks it by itself', async () => {
+    const made = channel({
+      kind: 'matrix',
+      bot: {
+        id: '@pearl:matrix.org',
+        name: 'Pearl',
+        username: 'pearl:matrix.org',
+        chatUrl: 'https://matrix.to/#/%40pearl%3Amatrix.org',
+      },
+    });
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'POST /api/channels': () => made,
+    });
+    renderApp(<ConnectChannel kind="matrix" />, { route: '/channels/new/matrix' });
+    expect(await screen.findByRole('heading', { name: 'Connect Matrix' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'It has an account' }));
+    expect(screen.getByLabelText('Homeserver')).toHaveValue('matrix.org');
+    await userEvent.type(screen.getByLabelText('Username'), 'pearl');
+    await userEvent.type(screen.getByLabelText('Password'), 'correct horse');
+    expect(calls.some((c) => c.path === '/api/channels/check')).toBe(false);
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST' && c.path === '/api/channels')?.body).toEqual({
+        kind: 'matrix',
+        homeserver: 'matrix.org',
+        user: 'pearl',
+        password: 'correct horse',
+      }),
+    );
+    expect(
+      await screen.findByText(/start a direct message with @pearl:matrix.org/),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('Connecting Microsoft Teams', () => {
+  const door = (state: string, url?: string) => ({
+    state,
+    apps: ['microsoftteams'],
+    ...(url && { url, via: 'tailscale' }),
+  });
+  it('checks the Bot ID and secret together, then asks for a public address, then where to paste it', async () => {
+    const made = channel({
+      kind: 'microsoftteams',
+      bot: { id: '00000000-0000-4000-8000-00000000c0c4', name: 'Teams bot' },
+      hook: {},
+      health: { state: 'error', message: 'Teams can’t reach Conch yet.' },
+    });
+    let doorState = door('off');
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'POST /api/channels/check': () => ({ ok: true, bot: made.bot, checked: [] }),
+      'POST /api/channels': () => made,
+      'GET /api/channels/door': () => doorState,
+      'POST /api/channels/door/tailscale': () => {
+        doorState = door('ready', 'https://mac.tail1.ts.net/conch');
+        return doorState;
+      },
+      'GET /api/auth': () => ({ method: 'none' }),
+    });
+    renderApp(<ConnectChannel kind="microsoftteams" />, { route: '/channels/new/microsoftteams' });
+    expect(
+      await screen.findByRole('heading', { name: 'Connect Microsoft Teams' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open the Developer Portal' })).toHaveAttribute(
+      'href',
+      'https://dev.teams.microsoft.com/bots',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'I made it' }));
+    await userEvent.type(
+      screen.getByLabelText('Bot ID'),
+      'App ID: 00000000-0000-4000-8000-00000000c0c4',
+    );
+    expect(screen.getByLabelText('Bot ID')).toHaveValue('00000000-0000-4000-8000-00000000c0c4');
+    await userEvent.type(screen.getByLabelText('Client secret'), 'secret~value');
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST' && c.path === '/api/channels')?.body).toEqual({
+        kind: 'microsoftteams',
+        appId: '00000000-0000-4000-8000-00000000c0c4',
+        appPassword: 'secret~value',
+      }),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Turn on with Tailscale' }));
+    // The step closes on the address; the next says where to paste the channel's own.
+    expect(await screen.findByText(/At https:\/\/mac\.tail1\.ts\.net\/conch/)).toBeInTheDocument();
+  });
+
+  it('asks for the directory (tenant) ID only when Microsoft needs it', async () => {
+    mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'POST /api/channels/check': () => ({
+        ok: false,
+        field: 'tenantId',
+        message:
+          'This bot belongs to your organisation only (single-tenant). Paste its Directory (tenant) ID too.',
+      }),
+      'GET /api/channels/door': () => door('off'),
+    });
+    renderApp(<ConnectChannel kind="microsoftteams" />, { route: '/channels/new/microsoftteams' });
+    await userEvent.click(await screen.findByRole('button', { name: 'I made it' }));
+    expect(screen.queryByLabelText('Directory (tenant) ID')).toBeNull();
+    await userEvent.type(screen.getByLabelText('Bot ID'), '00000000-0000-4000-8000-00000000c0c4');
+    await userEvent.type(screen.getByLabelText('Client secret'), 'secret');
+    expect(await screen.findByLabelText('Directory (tenant) ID')).toBeInTheDocument();
+  });
+});
+
+describe('Connecting WeChat', () => {
+  it('offers the WeCom bot first, and says why personal WeChat can’t be one', async () => {
+    const made = channel({
+      kind: 'wechat',
+      bot: { id: 'aibMock', name: 'WeCom bot', account: 'wecom' },
+    });
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'POST /api/channels/check': () => ({ ok: true, bot: made.bot, checked: [] }),
+      'POST /api/channels': () => made,
+    });
+    renderApp(<ConnectChannel kind="wechat" />, { route: '/channels/new/wechat' });
+    expect(await screen.findByRole('heading', { name: 'Connect WeChat' })).toBeInTheDocument();
+    expect(screen.getByText(/Personal WeChat accounts can’t be bots/)).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /A WeCom bot/ })).toBeChecked();
+    await userEvent.click(screen.getByRole('button', { name: 'I made it' }));
+    await userEvent.type(screen.getByLabelText('Bot ID'), 'aibMock');
+    await userEvent.type(screen.getByLabelText('Secret'), 'the-secret');
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST' && c.path === '/api/channels')?.body).toEqual({
+        kind: 'wechat',
+        mode: 'wecom',
+        appId: 'aibMock',
+        secret: 'the-secret',
+      }),
+    );
+  });
+
+  it('an Official Account: the test account’s page, then the public address and the three things to paste', async () => {
+    const made = channel({
+      kind: 'wechat',
+      bot: { id: 'wx0123456789abcdef', name: 'Official Account', account: 'official' },
+      hook: { url: 'https://mac.tail1.ts.net/conch/hooks/abc' },
+    });
+    mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'POST /api/channels/check': () => ({ ok: true, bot: made.bot, checked: [] }),
+      'POST /api/channels': () => made,
+      'GET /api/channels/door': () => ({
+        state: 'ready',
+        apps: ['wechat'],
+        via: 'tailscale',
+        url: 'https://mac.tail1.ts.net/conch',
+      }),
+      'GET /api/channels/ch_1/hook': () => ({
+        url: made.hook?.url,
+        token: 'Tok3n',
+        aesKey: 'k'.repeat(43),
+      }),
+      'GET /api/auth': () => ({ method: 'none' }),
+    });
+    renderApp(<ConnectChannel kind="wechat" />, { route: '/channels/new/wechat' });
+    await userEvent.click(await screen.findByRole('radio', { name: /An Official Account/ }));
+    expect(screen.getByRole('link', { name: 'Open the test account page' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('mp.weixin.qq.com/debug'),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'I have one' }));
+    await userEvent.type(screen.getByLabelText('AppID'), 'wx0123456789abcdef');
+    await userEvent.type(screen.getByLabelText('AppSecret'), '0123456789abcdef0123456789abcdef');
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Show the Token and EncodingAESKey' }),
+    );
+    expect(await screen.findByDisplayValue('Tok3n')).toBeInTheDocument();
+    expect(
+      screen.getByDisplayValue('https://mac.tail1.ts.net/conch/hooks/abc'),
+    ).toBeInTheDocument();
+  });
+});

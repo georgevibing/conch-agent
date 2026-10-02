@@ -52,6 +52,9 @@ import { EmailSetup } from './ConnectEmail';
 import { ImessageSetup } from './ConnectImessage';
 import { HelloStep } from './HelloStep';
 import { LinkedSetup } from './LinkedSetup';
+import { MatrixSetup } from './MatrixSetup';
+import { TeamsSetup } from './TeamsSetup';
+import { WeChatSetup } from './WeChatSetup';
 import { useKeyCheck, usePasteAnywhere, usePointerFine } from './hooks';
 import { errorText, putChannel, useChannel } from './queries';
 
@@ -67,6 +70,9 @@ export function ConnectChannel({ kind }: { kind: string }) {
   if (kind === 'whatsapp' || kind === 'signal') return <LinkedSetup kind={kind} />;
   if (kind === 'imessage') return <ImessageSetup />;
   if (kind === 'email') return <EmailSetup />;
+  if (kind === 'microsoftteams') return <TeamsSetup />;
+  if (kind === 'matrix') return <MatrixSetup />;
+  if (kind === 'wechat') return <WeChatSetup />;
   return <SlackSetup />;
 }
 
@@ -155,7 +161,7 @@ export function useConnect(
   return { channel, connect, busy, error, reset, dialog };
 }
 
-function Answer({ label, value }: { label: string; value: string }) {
+export function Answer({ label, value }: { label: string; value: string }) {
   return (
     <Field>
       <Field.Label size="sm">{label}</Field.Label>

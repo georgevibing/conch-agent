@@ -5,7 +5,17 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { ApiError } from '../../api/client';
 import { channelsApi } from './api';
 
-export const channelKeys = { all: ['channels'] as const };
+export const channelKeys = { all: ['channels'] as const, door: ['channel-door'] as const };
+
+/** The public door Teams and WeChat deliver to (ADR 0045), kept current by `channel.door`. */
+export function useDoor(enabled = true) {
+  return useQuery({
+    queryKey: channelKeys.door,
+    queryFn: channelsApi.door,
+    enabled,
+    staleTime: 30_000,
+  });
+}
 
 export const linkKey = (id: string) => ['channel-link', id] as const;
 
@@ -64,6 +74,10 @@ export function applyChannelEvent(
 ) {
   if (event.type === 'channel.link') {
     client.setQueryData<ChannelLink>(linkKey(event.link.id), event.link);
+    return;
+  }
+  if (event.type === 'channel.door') {
+    client.setQueryData(channelKeys.door, event.door);
     return;
   }
   if (event.type === 'channel.deleted') {

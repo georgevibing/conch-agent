@@ -12,6 +12,9 @@ export const APPS: Record<ChannelKind, { name: string; color: string }> = {
   signal: { name: 'Signal', color: '#3A76F0' },
   imessage: { name: 'iMessage', color: '#34DA50' },
   email: { name: 'Email', color: '#5B6B7F' },
+  microsoftteams: { name: 'Microsoft Teams', color: '#6264A7' },
+  matrix: { name: 'Matrix', color: '#0DBD8B' },
+  wechat: { name: 'WeChat', color: '#07C160' },
 };
 
 /** More words people would type to find each app (⌘K). */
@@ -20,6 +23,9 @@ export const APP_WORDS: Partial<Record<string, string>> = {
   signal: 'link qr code linked device scan',
   imessage: 'messages text sms apple iphone mac',
   email: 'mail gmail icloud fastmail inbox imap',
+  microsoftteams: 'teams microsoft office work school bot',
+  matrix: 'element encrypted homeserver matrix.org',
+  wechat: '微信 企业微信 wecom weixin 公众号 测试号 official account',
 };
 
 export const isKind = (value: string | undefined): value is ChannelKind =>
@@ -112,9 +118,17 @@ export function channelFix(channel: Channel): string | undefined {
   return undefined;
 }
 
-/** The bot's handle as people type it (Slack has none worth showing; a linked account has a number). */
+/**
+ * The bot's handle as people type it (Slack, Teams and WeChat have none worth
+ * showing; a linked account has a number).
+ */
 export function handleOf(channel: Channel): string | undefined {
-  return channel.kind === 'slack' || isLinkedKind(channel.kind) ? undefined : channel.bot.username;
+  return channel.kind === 'slack' ||
+    channel.kind === 'microsoftteams' ||
+    channel.kind === 'wechat' ||
+    isLinkedKind(channel.kind)
+    ? undefined
+    : channel.bot.username;
 }
 
 /** Who to write to, in words: "@my_bot", "ada+conch@gmail.com", or the bot's name. */

@@ -137,6 +137,19 @@
     gap: var(--nc-space-2);
   }
 
+  .form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+  }
+
+  .inlineIcon {
+    display: inline;
+    inline-size: 1em;
+    block-size: 1em;
+    vertical-align: -0.125em;
+  }
+
   .fallback {
     padding-block-start: var(--nc-space-2);
   }
