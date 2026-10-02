@@ -1,6 +1,6 @@
 /**
- * A Conch that's been used for a while, in a temp home: settings, a memory,
- * a command, a routine that ran, a skill, an integration with its token, a
+ * A Conch that's been used for a while, in a temp home: settings, a memory
+ * (searchable by meaning, with its model), a command, a routine that ran, a skill, an integration with its token, a
  * chat with an attachment, a model API's transcript, the browser's and
  * terminal's settings, a note the assistant wrote (and Undo's copy), a budget, a password, a provider key, and a backup.
  * Everything is written by the real services, the way using Conch writes it.
@@ -85,6 +85,9 @@ export async function useConch(g: Gateway) {
       payload: { content: 'Ada takes her tea with lemon.' },
     }),
   );
+  // Memory search by meaning: the (pretend) model, downloaded, and its vectors.
+  await services.onDevice.get(['en-GB']);
+  await services.memoryIndex.sync();
   await ok(
     await app.inject({
       method: 'PUT',

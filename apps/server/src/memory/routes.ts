@@ -1,4 +1,4 @@
-import { DismissSuggestionBody, TidyAnswerBody } from '@conch/protocol';
+import { DismissSuggestionBody, GetMeaningBody, TidyAnswerBody } from '@conch/protocol';
 import type { FastifyInstance } from 'fastify';
 
 import type { SkillSuggester } from '../skills/suggest';
@@ -19,9 +19,9 @@ export function registerLearningRoutes(
     index: MemoryIndex;
     tidy: MemoryTidy;
     suggester: SkillSuggester;
-    /** Get the local embedding model (Ollama), and how far it got. */
-    getMeaningModel: () => Promise<void>;
-    gettingMeaning: () => number | undefined;
+    /** Get Conch's own model for meaning (ADR 0041), and how far it got. */
+    getMeaningModel: (languages: string[]) => Promise<void>;
+    meaningState: () => { getting?: number; problem?: string };
   },
 ): void {
   const { store, index, tidy, suggester } = deps;
@@ -76,18 +76,40 @@ export function registerLearningRoutes(
       .send(body);
   });
 
-  const indexStatus = async () => {
-    const getting = deps.gettingMeaning();
-    return { ...(await index.status()), ...(getting !== undefined && { getting }) };
+  /** `lang`: the browser's languages, which choose the model on offer. */
+  const languagesOf = (lang: unknown) =>
+    typeof lang === 'string'
+      ? lang
+          .split(',')
+          .slice(0, 20)
+          .map((l) => l.slice(0, 35))
+      : [];
+  const indexStatus = async (languages: string[]) => {
+    const { getting, problem } = deps.meaningState();
+    const status = await index.status(languages);
+    return {
+      ...status,
+      ...(getting !== undefined && { getting }),
+      // A problem matters while there's no meaning; once there is, it's past.
+      ...(problem && status.mode === 'words' && { problem }),
+    };
   };
-  app.get('/api/memory/index', indexStatus);
+  app.get<{ Querystring: { lang?: string } }>('/api/memory/index', (request) =>
+    indexStatus(languagesOf(request.query.lang)),
+  );
   app.post('/api/memory/index/rebuild', async () => {
     await index.rebuild();
-    return indexStatus();
+    return indexStatus([]);
   });
-  app.post('/api/memory/index/model', async () => {
-    void deps.getMeaningModel().catch(() => undefined);
-    return indexStatus();
+  // The person pressed Get it: that's the consent for the download.
+  app.post('/api/memory/index/model', async (request, reply) => {
+    const body = GetMeaningBody.safeParse(request.body ?? {});
+    if (!body.success)
+      return reply.code(400).send({ error: 'bad-request', message: body.error.issues[0]?.message });
+    void deps.getMeaningModel(body.data.languages).catch(() => undefined);
+    // Let it start, so the answer already shows progress.
+    await new Promise((resolve) => setImmediate(resolve));
+    return indexStatus(body.data.languages);
   });
 
   app.get('/api/memory/tidy', () => tidy.status());

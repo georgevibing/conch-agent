@@ -19,6 +19,7 @@
     "@conch/protocol": "workspace:*",
     "@fastify/static": "^10.1.5",
     "@fastify/websocket": "^11.3.1",
+    "@huggingface/transformers": "4.3.0",
     "@modelcontextprotocol/sdk": "^1.31.0",
     "croner": "^10.0.1",
     "cronstrue": "^3.27.0",

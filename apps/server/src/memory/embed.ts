@@ -1,19 +1,34 @@
 /**
  * Turning words into vectors, for memory search that finds what you meant
- * (ADR 0032). Two ways, both on this computer:
+ * (ADR 0032, ADR 0041). Three ways, all on this computer:
  *
- * - `meaning`: an embedding model in Ollama (nomic-embed-text and the like).
- *   "anniversary" finds "married on 12 June"; nothing leaves the computer.
+ * - `ollama`: an embedding model in Ollama (nomic-embed-text and the like),
+ *   when the person has one.
+ * - `built-in`: Conch's own small model (`ondevice.ts`), downloaded once
+ *   when the person says so. "anniversary" finds "married on 12 June".
  * - `words`: Conch's own, always there. Words and their spellings, hashed
  *   into a fixed-size vector (word stems plus letter trigrams), so a typo or
- *   another form of a word ("runs", "running") still matches. It doesn't know
- *   synonyms — that's what the model is for — and says so.
+ *   another form of a word ("runs", "running") still matches, plus the few
+ *   concepts `concepts.ts` knows ("car" is a vehicle). It knows no other
+ *   synonyms — that's what a model is for — and says so.
  */
 import type { OllamaClient } from '../local/ollama';
+import { concepts } from './concepts';
 
 export interface Embedder {
   /** What made the vectors: vectors from another embedder are never compared. */
   id: string;
+  source: 'words' | 'built-in' | 'ollama';
+  /** Its name, for people: "nomic-embed-text". */
+  label?: string;
+  /**
+   * How close a memory's vector must be to a search's to count as a match.
+   * Every model has its own scale: MiniLM puts related sentences near 0.4,
+   * nomic near 0.6.
+   */
+  floor: number;
+  /** How close two requests must be to be the same request (skill suggestions, ADR 0041). */
+  same: number;
   embed(texts: string[], signal?: AbortSignal): Promise<Float32Array[]>;
 }
 
@@ -84,10 +99,11 @@ function normalize(v: Float32Array): Float32Array {
   return v;
 }
 
-/** Conch's own vectors: word stems and their letter trigrams, hashed. */
+/** Conch's own vectors: word stems and their letter trigrams, hashed, and the concepts they're about. */
 export function wordsVector(text: string): Float32Array {
   const v = new Float32Array(DIMS);
-  for (const token of tokens(text)) {
+  const stems = tokens(text);
+  for (const token of stems) {
     const h = hash(`w:${token}`);
     v[h % DIMS] = (v[h % DIMS] ?? 0) + (h & 1 ? 1 : -1) * 1;
     const padded = `#${token}#`;
@@ -96,11 +112,19 @@ export function wordsVector(text: string): Float32Array {
       v[g % DIMS] = (v[g % DIMS] ?? 0) + (g & 1 ? 0.4 : -0.4);
     }
   }
+  // "car" and "vehicle" share a concept: as much as a shared word.
+  for (const concept of concepts(stems)) {
+    const h = hash(`c:${concept}`);
+    v[h % DIMS] = (v[h % DIMS] ?? 0) + (h & 1 ? 1 : -1);
+  }
   return normalize(v);
 }
 
 export const wordsEmbedder: Embedder = {
-  id: 'words-v1',
+  id: 'words-v2',
+  source: 'words',
+  floor: 0.35,
+  same: 0.55,
   async embed(texts) {
     return texts.map(wordsVector);
   },
@@ -110,6 +134,11 @@ export const wordsEmbedder: Embedder = {
 export function ollamaEmbedder(client: Pick<OllamaClient, 'embed'>, model: string): Embedder {
   return {
     id: `ollama:${model}`,
+    source: 'ollama',
+    label: model.replace(/:latest$/, ''),
+    // Its sentences sit higher on the scale than MiniLM's.
+    floor: 0.5,
+    same: 0.8,
     async embed(texts, signal) {
       const out: Float32Array[] = [];
       // A few at a time: a thousand memories never become one giant request.
@@ -130,7 +159,7 @@ export function cosine(a: Float32Array, b: Float32Array): number {
   return dot;
 }
 
-/** Embedding models Conch knows, smallest good one first. */
+/** Embedding models Ollama can have that Conch knows by name, smallest good one first. */
 export const MEANING_MODELS = [
   'nomic-embed-text',
   'embeddinggemma',
@@ -139,5 +168,3 @@ export const MEANING_MODELS = [
   'bge-m3',
   'all-minilm',
 ];
-/** What Conch offers to get when Ollama is here and has none. */
-export const OFFERED_MODEL = { model: 'nomic-embed-text', bytes: 274_000_000 };

@@ -54,6 +54,10 @@ describe('words into vectors', () => {
 /** An "embedding model" that knows anniversaries are about marriage. */
 const meaning: Embedder = {
   id: 'ollama:test',
+  source: 'ollama',
+  label: 'test',
+  floor: 0.5,
+  same: 0.8,
   async embed(texts) {
     return texts.map((t) => {
       const v = new Float32Array(3);
@@ -100,11 +104,68 @@ describe('memory search', () => {
     words.close();
   });
 
+  it('knows a few concepts with words alone: anniversary → wedding, car → vehicle', async () => {
+    const memories = store();
+    await memories.add({ content: 'Got married on 12 June 2019', source: 'user' });
+    await memories.add({ content: 'Drives a red vehicle to work', source: 'user' });
+    await memories.add({ content: 'Prefers espresso', source: 'user' });
+    const words = new MemoryIndex({
+      path: join(home, 'idx.db'),
+      store: memories,
+      meaning: async () => undefined,
+    });
+    expect((await words.search('our wedding anniversary'))[0]?.memory.content).toMatch(/married/);
+    expect((await words.search('my car'))[0]?.memory.content).toMatch(/vehicle/);
+    expect((await words.search('a latte'))[0]?.memory.content).toBe('Prefers espresso');
+    // A concept is only a few unambiguous words: nothing else turns up.
+    expect(await words.search('football')).toEqual([]);
+    expect((await words.search('my car')).map((r) => r.memory.content)).toEqual([
+      'Drives a red vehicle to work',
+    ]);
+    words.close();
+  });
+
+  it('keeps exactly each vector, even when a model hands back views of one buffer', async () => {
+    const memories = store();
+    await memories.add({ content: 'Got married on 12 June 2019', source: 'user' });
+    await memories.add({ content: 'Prefers espresso', source: 'user' });
+    const shared: Embedder = {
+      ...meaning,
+      async embed(texts) {
+        const made = await meaning.embed(texts);
+        const buffer = new Float32Array(made.length * 3);
+        made.forEach((v, i) => buffer.set(v, i * 3));
+        return made.map((_, i) => buffer.subarray(i * 3, i * 3 + 3));
+      },
+    };
+    const index = new MemoryIndex({
+      path: join(home, 'idx.db'),
+      store: memories,
+      meaning: async () => shared,
+    });
+    await index.sync();
+    // Read back from the file, not from what was just made.
+    const again = new MemoryIndex({
+      path: join(home, 'idx.db'),
+      store: memories,
+      meaning: async () => shared,
+    });
+    expect((await again.search('our anniversary'))[0]?.memory.content).toMatch(/married/);
+    expect((await again.search('coffee')).map((r) => r.memory.content)).toEqual([
+      'Prefers espresso',
+    ]);
+    index.close();
+    again.close();
+  });
+
   it('falls back to words when the model stops answering', async () => {
     const memories = store();
     await memories.add({ content: 'Prefers espresso', source: 'user' });
     const broken: Embedder = {
       id: 'ollama:gone',
+      source: 'ollama',
+      floor: 0.5,
+      same: 0.8,
       embed: async () => Promise.reject(new Error('down')),
     };
     const index = new MemoryIndex({
@@ -388,6 +449,112 @@ describe('skills you keep asking for', () => {
     });
     await suggester.dismiss(first?.id ?? '', true);
     expect(await suggester.list({ fresh: true })).toEqual([]);
+  });
+
+  /** A model for meaning that knows summaries of the week are one thing, and so are trips. */
+  const meaningOf: Embedder = {
+    id: 'built-in:test',
+    source: 'built-in',
+    floor: 0.3,
+    same: 0.5,
+    async embed(texts) {
+      return texts.map((t) => {
+        const v = new Float32Array(4);
+        if (/summar|recap|what happened|week in review/i.test(t)) v[0] = 1;
+        else if (/trip|travel|flight/i.test(t)) v[1] = 1;
+        else if (/newsletter/i.test(t)) v.set([0.45, 0, 0.89, 0]);
+        else v[3] = 1;
+        return v;
+      });
+    },
+  };
+  const differently = [
+    ask('Write my weekly summary of calendar meetings', 'a'),
+    ask('Give me a recap of this week’s meetings', 'b'),
+    ask('What happened in my meetings this week? Sum it up', 'c'),
+  ];
+
+  it('by meaning: three differently worded requests are one habit; unrelated ones aren’t', async () => {
+    // By words alone, they're three different things.
+    expect(habits(differently)).toEqual([]);
+    const suggester = new SkillSuggester({
+      home,
+      asked: async () => [
+        ...differently,
+        ask('Write a weekly newsletter for my customers', 'd'),
+        ask('Plan a weekend trip to Porto', 'e'),
+        ask('Book flights for the trip to Rome', 'f'),
+        ask('What is the weather in Lisbon tomorrow', 'g'),
+      ],
+      skills: async () => [],
+      model: async () => undefined,
+      meaning: async () => meaningOf,
+    });
+    const found = await suggester.list();
+    expect(found).toHaveLength(1);
+    expect(found[0]?.times).toBe(3);
+    expect(found[0]?.examples.map((e) => e.conversationId).sort()).toEqual(['a', 'b', 'c']);
+    // Never saved by itself: only a draft to look at.
+    expect(found[0]?.draft.instructions).toMatch(/When I ask for this/);
+  });
+
+  it('by meaning: twice in one chat is still a conversation, not a habit', async () => {
+    const suggester = new SkillSuggester({
+      home,
+      asked: async () => differently.map((a, i) => (i === 1 ? { ...a, conversationId: 'a' } : a)),
+      skills: async () => [],
+      model: async () => undefined,
+      meaning: async () => meaningOf,
+    });
+    expect(await suggester.list()).toEqual([]);
+  });
+
+  it('by meaning: nothing you already have as a skill, in other words', async () => {
+    const suggester = new SkillSuggester({
+      home,
+      asked: async () => differently,
+      skills: async () => [
+        { title: 'Week in review', description: 'Goes over the meetings you had.' },
+      ],
+      model: async () => undefined,
+      meaning: async () => meaningOf,
+    });
+    expect(await suggester.list()).toEqual([]);
+  });
+
+  it('by meaning: turned down, it stays down when asked for in new words', async () => {
+    let asked = differently;
+    const suggester = new SkillSuggester({
+      home,
+      asked: async () => asked,
+      skills: async () => [],
+      model: async () => undefined,
+      meaning: async () => meaningOf,
+    });
+    const [first] = await suggester.list();
+    await suggester.dismiss(first?.id ?? '', true);
+    asked = [
+      ask('Recap my week please', 'x'),
+      ask('Summarise everything from this week', 'y'),
+      ask('What happened this week at work?', 'z'),
+    ];
+    expect(await suggester.list({ fresh: true })).toEqual([]);
+  });
+
+  it('without a model, or when it fails, finds habits by words as before', async () => {
+    const failing: Embedder = { ...meaningOf, embed: () => Promise.reject(new Error('gone')) };
+    const suggester = new SkillSuggester({
+      home,
+      asked: async () => [
+        ask('Write my weekly summary of calendar meetings', 'a'),
+        ask('write the weekly summary of my calendar meetings', 'b'),
+        ask('Please write my weekly calendar summary of meetings', 'c'),
+      ],
+      skills: async () => [],
+      model: async () => undefined,
+      meaning: async () => failing,
+    });
+    expect(await suggester.list()).toHaveLength(1);
   });
 
   it('offers nothing you already have as a skill', async () => {

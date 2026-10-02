@@ -7,6 +7,11 @@ allowBuilds:
   # Optional: picks a prebuilt binary (or compiles on Linux). If it fails,
   # installation still succeeds and terminals use Python/basic mode.
   node-pty: true
+  # Memory search by meaning (ADR 0041) runs on the CPU with the binaries the
+  # package ships; its install script would only fetch CUDA libraries.
+  onnxruntime-node: false
+  # Its install script only checks the protobufjs version; nothing to build.
+  protobufjs: false
 autoInstallPeers: true
 minimumReleaseAgeExclude:
   - '@typescript-eslint/eslint-plugin@8.71.0'

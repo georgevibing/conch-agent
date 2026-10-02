@@ -57,6 +57,7 @@ import { ClaudeCodeEngine } from './engines/claude-code/engine';
 import { canCarryTools } from './providers/capabilities';
 import { CodexEngine } from './engines/codex/engine';
 import { MockEngine } from './engines/mock/engine';
+import { MOCK_MEANING_SPEC, mockMeaningFetch, mockMeaningLoad } from './engines/mock/meaning';
 import type { Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
 import { findExecutable } from './lib/proc';
@@ -85,6 +86,7 @@ import { type Blueprint, CATALOG } from './integrations/catalog';
 import { MockVendor } from './integrations/mock/vendor';
 import { IntegrationService } from './integrations/service';
 import { MemoryIndex } from './memory/index';
+import { OnDeviceModel } from './memory/ondevice';
 import { cheapModel, MeaningModel, yourRequests, yourWords } from './memory/learning';
 import { registerLearningDoctor } from './memory/doctor';
 import { MemoryStore } from './memory/store';
@@ -143,6 +145,7 @@ export class Services {
   /** It learns you (ADR 0032): meaning search, the tidy-up, skills you keep asking for. */
   readonly memoryIndex: MemoryIndex;
   readonly meaning: MeaningModel;
+  readonly onDevice: OnDeviceModel;
   readonly tidy: MemoryTidy;
   readonly suggester: SkillSuggester;
   readonly commands: CommandStore;
@@ -392,19 +395,32 @@ export class Services {
       conversations: () => this.conversations,
       emit: (event) => this.broadcast.emit(event),
     });
-    // It learns you (ADR 0032).
+    // It learns you (ADR 0032), by meaning (ADR 0041).
+    const mock = config.CONCH_ENGINE === 'mock';
     this.meaning = new MeaningModel(this.local.client);
+    // The mock engine never reaches for a real Ollama or Hugging Face.
+    this.onDevice = new OnDeviceModel({
+      dir: join(config.CONCH_HOME, 'models'),
+      heal: (message) => void this.healed.note('settings', message),
+      ...(mock && { specs: [MOCK_MEANING_SPEC], fetch: mockMeaningFetch, load: mockMeaningLoad }),
+    });
+    // Ollama's model when there is one (bigger, and the person chose it), else Conch's own.
+    const meaning = async () =>
+      (mock ? undefined : await this.meaning.embedder().catch(() => undefined)) ??
+      (await this.onDevice.embedder());
     this.memoryIndex = new MemoryIndex({
       path: join(config.CONCH_HOME, 'memory-index.db'),
       store: this.memory,
-      // The mock engine never reaches for a real Ollama.
-      meaning: () =>
-        config.CONCH_ENGINE === 'mock' ? Promise.resolve(undefined) : this.meaning.embedder(),
-      canOffer: () =>
-        config.CONCH_ENGINE === 'mock' ? Promise.resolve(false) : this.meaning.canOffer(),
+      meaning,
+      offer: (languages) => this.onDevice.offer(languages),
       heal: (message) => void this.healed.note('settings', message),
     });
     this.memory.changed.on(() => void this.memoryIndex.sync());
+    // A download cut short by a restart carries on; then every memory is indexed.
+    void this.onDevice
+      .resume(() => this.meaningLanded())
+      .then(() => this.memoryIndex.sync())
+      .catch(() => undefined);
     this.tidy = new MemoryTidy({
       home: config.CONCH_HOME,
       store: this.memory,
@@ -427,11 +443,14 @@ export class Services {
           description: s.description,
         })),
       model: () => cheapModel(this.providers.engine()),
+      meaning,
     });
     registerLearningDoctor(this.doctor, {
       index: this.memoryIndex,
       store: this.memory,
       tidy: this.tidy,
+      model: this.onDevice,
+      reindex: () => this.memoryIndex.sync(),
     });
     this.conversations = new ConversationManager({
       store: conversationStore,
@@ -1078,6 +1097,7 @@ export class Services {
     this.tailscale.stop();
     this.tidy.stop();
     this.memoryIndex.close();
+    void this.onDevice.unload();
     void this.mockTelegram?.stop();
     void this.mockDiscord?.stop();
     void this.mockSlack?.stop();
@@ -1156,6 +1176,13 @@ export class Services {
       }
     }
     return { kind: 'use', engine };
+  }
+
+  /** Conch's own model for meaning arrived (ADR 0041): index every memory, and look at habits again. */
+  meaningLanded(): void {
+    this.suggester.refresh();
+    // Then every open search asks again: it understands more now.
+    void this.memoryIndex.sync().finally(() => this.broadcast.emit({ type: 'memory.changed' }));
   }
 
   /**

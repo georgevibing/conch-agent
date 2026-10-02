@@ -105,6 +105,11 @@ export const RULES: readonly BackupRule[] = [
     why: 'What the last import from OpenClaw or Hermes added, for its Undo: about this computer’s copy of things.',
   },
   {
+    match: 'models/**',
+    class: 'derived',
+    why: 'Conch’s own model for memory search by meaning: a download pinned by hash, fetched again when missing.',
+  },
+  {
     match: 'memory-index.db*',
     class: 'derived',
     why: 'Memory search by meaning: vectors made from your memories, made again when missing.',
@@ -224,7 +229,7 @@ export const RULES: readonly BackupRule[] = [
     match: 'skill-suggestions.json',
     class: 'kept',
     group: 'skills',
-    why: 'Skill suggestions you turned down, so they stay down.',
+    why: 'Skill suggestions you turned down, and a line of what each was about, so they stay down.',
   },
   {
     match: 'skills.trust.json',

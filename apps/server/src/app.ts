@@ -181,8 +181,9 @@ export async function buildApp(services: Services) {
     index: services.memoryIndex,
     tidy: services.tidy,
     suggester: services.suggester,
-    getMeaningModel: () => services.meaning.get(() => void services.memoryIndex.sync()),
-    gettingMeaning: () => services.meaning.progress,
+    getMeaningModel: (languages) =>
+      services.onDevice.get(languages, () => services.meaningLanded()),
+    meaningState: () => services.onDevice.status(),
   });
   registerPhoneRoutes(app, { tailscale: services.tailscale, gate });
   registerPushRoutes(app, { push: services.push, conversations: services.conversations });

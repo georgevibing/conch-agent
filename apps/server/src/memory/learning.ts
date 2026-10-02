@@ -1,5 +1,5 @@
 /**
- * It learns you (ADR 0032), put together: the search index, the tidy-up and
+ * It learns you (ADR 0032, ADR 0041), put together: the search index, the tidy-up and
  * skill suggestions, fed by what you said in your chats — your own words,
  * never a chat app's other people — and the default provider's cheapest model.
  */
@@ -10,7 +10,7 @@ import { cheapestModel } from '../conversations/title';
 import type { Engine } from '../engines/types';
 import type { OllamaClient } from '../local/ollama';
 import type { Asked } from '../skills/suggest';
-import { ollamaEmbedder, OFFERED_MODEL, type Embedder } from './embed';
+import { ollamaEmbedder, type Embedder } from './embed';
 import { findMeaningModel } from './index';
 import type { Said } from './tidy';
 
@@ -61,11 +61,14 @@ export async function cheapModel(engine: Engine) {
   return { complete: engine.complete.bind(engine), ...(model && { model }) };
 }
 
-/** Ollama's embedding model, looked up now and then (never more than every few minutes). */
+/**
+ * Ollama's embedding model, when the person has one (looked up now and then,
+ * never more than every few minutes). Conch doesn't offer to pull one any
+ * more: its own model (`ondevice.ts`, ADR 0041) is a tenth of the size and
+ * needs no Ollama.
+ */
 export class MeaningModel {
-  #found?: { at: number; model?: string; running: boolean };
-  #getting?: Promise<void>;
-  progress?: number;
+  #found?: { at: number; model?: string };
 
   constructor(private readonly client: OllamaClient) {}
 
@@ -73,40 +76,12 @@ export class MeaningModel {
     if (this.#found && Date.now() - this.#found.at < 5 * 60_000) return this.#found;
     const running = Boolean(await this.client.version());
     const model = running ? await findMeaningModel(this.client).catch(() => undefined) : undefined;
-    this.#found = { at: Date.now(), running, ...(model && { model }) };
+    this.#found = { at: Date.now(), ...(model && { model }) };
     return this.#found;
   }
 
   async embedder(): Promise<Embedder | undefined> {
     const found = await this.#look();
     return found.model ? ollamaEmbedder(this.client, found.model) : undefined;
-  }
-
-  /** Ollama is running, with no embedding model: Conch can get one. */
-  async canOffer(): Promise<boolean> {
-    const found = await this.#look();
-    return found.running && !found.model;
-  }
-
-  /** Get the offered model, with progress; then searches use it. */
-  get(onDone?: () => void): Promise<void> {
-    this.#getting ??= (async () => {
-      try {
-        this.progress = 0;
-        for await (const line of this.client.pull(
-          OFFERED_MODEL.model,
-          AbortSignal.timeout(30 * 60_000),
-        )) {
-          if (line.total && line.completed)
-            this.progress = Math.round((line.completed / line.total) * 100);
-        }
-        this.#found = undefined;
-        onDone?.();
-      } finally {
-        this.progress = undefined;
-        this.#getting = undefined;
-      }
-    })();
-    return this.#getting;
   }
 }

@@ -3,10 +3,13 @@
  * your memories two ways at once and blends them:
  *
  * - by the words in them (BM25: rarer shared words count for more), and
- * - by vectors (`embed.ts`): a local embedding model's when Ollama has one
- *   ("meaning"), else Conch's own words-and-spellings vectors ("words").
+ * - by vectors (`embed.ts`): an embedding model's when Ollama has one, else
+ *   Conch's own model once it's downloaded (`ondevice.ts`, ADR 0041) —
+ *   "meaning" — else Conch's own words-and-spellings vectors ("words").
  *
- * Only a model's vectors cost anything to make, so only those are kept, in
+ * Both know the few concepts in `concepts.ts`, so "car" finds "vehicle" even
+ * with words alone. Only a model's vectors cost anything to make, so only
+ * those are kept, in
  * `memory-index.db` (derived: rebuilt whenever it's missing, damaged or from
  * another model). A memory waiting for your OK is never found.
  */
@@ -17,14 +20,8 @@ import { DatabaseSync } from 'node:sqlite';
 
 import type { Memory, MemoryIndexStatus } from '@conch/protocol';
 
-import {
-  cosine,
-  MEANING_MODELS,
-  OFFERED_MODEL,
-  tokens,
-  wordsEmbedder,
-  type Embedder,
-} from './embed';
+import { withConcepts } from './concepts';
+import { cosine, MEANING_MODELS, tokens, wordsEmbedder, type Embedder } from './embed';
 import type { MemoryStore } from './store';
 
 /** What the prompt carries of your memories; the rest is a `recall` away. */
@@ -93,10 +90,10 @@ export function bm25(queryTokens: string[], docs: string[][], k1 = 1.4, b = 0.75
 export interface MemoryIndexDeps {
   path: string;
   store: MemoryStore;
-  /** The local embedding model, if Ollama has one now (looked up by the index, cached). */
+  /** The best embedding model here now: Ollama's, else Conch's own; none means words. */
   meaning: () => Promise<Embedder | undefined>;
-  /** Ollama is here, with no embedding model: what Conch would get. */
-  canOffer?: () => Promise<boolean>;
+  /** What Conch would get for meaning, for people who speak these languages. */
+  offer?: (languages: string[]) => Promise<MemoryIndexStatus['offer']>;
   heal?: (message: string) => void;
 }
 
@@ -173,16 +170,28 @@ export class MemoryIndex {
       else missing.push(m);
     }
     if (missing.length) {
-      const made = await embedder.embed(missing.map((m) => m.content));
       const put = db.prepare(
         'INSERT OR REPLACE INTO vectors (id, model, hash, vec) VALUES (?, ?, ?, ?)',
       );
-      missing.forEach((m, i) => {
-        const vec = made[i];
-        if (!vec) return;
-        put.run(m.id, embedder.id, contentHash(m), new Uint8Array(vec.buffer.slice(0)));
-        out.set(m.id, vec);
-      });
+      // A batch at a time, kept as it's made: a re-index shows its progress
+      // and survives being cut short, and the chat isn't kept waiting.
+      for (let start = 0; start < missing.length; start += 64) {
+        const batch = missing.slice(start, start + 64);
+        const made = await embedder.embed(batch.map((m) => m.content));
+        batch.forEach((m, i) => {
+          const vec = made[i];
+          if (!vec) return;
+          // Exactly this vector's bytes: a view can sit inside a bigger buffer.
+          put.run(
+            m.id,
+            embedder.id,
+            contentHash(m),
+            new Uint8Array(vec.buffer, vec.byteOffset, vec.byteLength).slice(),
+          );
+          out.set(m.id, vec);
+        });
+        await new Promise((resolve) => setImmediate(resolve));
+      }
     }
     // Forgotten memories leave no vectors behind.
     const ids = new Set(memories.map((m) => m.id));
@@ -217,10 +226,10 @@ export class MemoryIndex {
       vectors = await this.#vectors(embedder, memories);
       [qv] = await embedder.embed([query]);
     }
-    const docs = memories.map((m) => tokens(m.content));
-    const lexical = bm25(forgive(q, docs), docs);
+    // Words and the concepts they're about: "car" meets "vehicle" here too.
+    const docs = memories.map((m) => withConcepts(tokens(m.content)));
+    const lexical = bm25(withConcepts(forgive(q, docs)), docs);
     const top = Math.max(...lexical, 0) || 1;
-    const meaning = embedder !== wordsEmbedder;
     const now = Date.now();
     const scored = memories.map((memory, i) => {
       const words = (lexical[i] ?? 0) / top;
@@ -228,10 +237,9 @@ export class MemoryIndex {
       const fresh = Math.exp(-(now - memory.updatedAt) / (90 * 86_400_000));
       return { memory, score: 0.5 * words + 0.5 * vec + 0.03 * fresh, words, vec };
     });
-    // What counts as a match: a shared word, or a close enough vector.
-    const floor = meaning ? 0.5 : 0.35;
+    // What counts as a match: a shared word or concept, or a vector close enough on its model's scale.
     return scored
-      .filter((s) => s.words > 0 || s.vec >= floor)
+      .filter((s) => s.words > 0 || s.vec >= embedder.floor)
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
       .map(({ memory, score }) => ({ memory, score }));
@@ -278,11 +286,12 @@ export class MemoryIndex {
     return this.#syncing;
   }
 
-  async status(): Promise<MemoryIndexStatus> {
+  /** How search works now; `languages` (the browser's) choose what would be offered. */
+  async status(languages: string[] = []): Promise<MemoryIndexStatus> {
     const active = await this.#active();
     const embedder = await this.#embedder();
     if (embedder === wordsEmbedder) {
-      const offer = (await this.deps.canOffer?.().catch(() => false)) ? OFFERED_MODEL : undefined;
+      const offer = await this.deps.offer?.(languages).catch(() => undefined);
       return {
         mode: 'words',
         indexed: active.length,
@@ -301,9 +310,12 @@ export class MemoryIndex {
         .filter((r) => active.some((m) => m.id === r.id && contentHash(m) === r.hash))
         .map((r) => r.id),
     );
+    // Some aren't indexed yet (a model just arrived, a sync was cut short): carry on.
+    if (ids.size < active.length) void this.sync();
     return {
       mode: 'meaning',
-      model: embedder.id.replace(/^ollama:/, ''),
+      model: embedder.label ?? embedder.id,
+      source: embedder.source === 'ollama' ? 'ollama' : 'built-in',
       indexed: ids.size,
       total: active.length,
     };
