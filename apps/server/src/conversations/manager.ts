@@ -21,7 +21,7 @@ import type {
   Usage,
 } from '@conch/protocol';
 
-import { honouredMode, type PermissionMode } from '@conch/protocol';
+import { honouredMode, skillHolds, type PermissionMode, type SkillHold } from '@conch/protocol';
 
 import type {
   BridgedTool,
@@ -126,6 +126,8 @@ export interface TurnExtras {
   cwd?: string;
   /** Starts as wary as the chat it came from (ADR 0028): what that chat had read. */
   taint?: readonly TaintSource[];
+  /** Starts held to the skills the chat it came from was held to (ADR 0040), from there. */
+  skills?: readonly (SkillHold & { from: string })[];
 }
 
 export interface TurnResult {
@@ -290,7 +292,11 @@ export type MessageExpander = (
   text: string,
   engine: Engine,
 ) => Promise<
-  { prompt: string; skill?: { skillId: string; name: string; title: string } } | undefined
+  | {
+      prompt: string;
+      skill?: { skillId: string; name: string; title: string; permissions?: SkillPermissions };
+    }
+  | undefined
 >;
 
 interface Live {
@@ -670,6 +676,7 @@ export class ConversationManager {
     this.#append(live, { type: 'user.message', messageId: newId('u'), text: input.text });
     if (expanded?.skill) this.#append(live, { type: 'skill.used', ...expanded.skill, by: 'user' });
     for (const source of input.extras.taint ?? []) this.#taint(live, source);
+    this.#carry(live, input.extras.skills ?? []);
     this.#claim(live);
     live.extras = input.extras;
     this.#setStatus(live, 'running');
@@ -1006,31 +1013,31 @@ export class ConversationManager {
      * read something untrusted and this could send it out or change the
      * computer, or a command wants out of the sealed box.
      */
-    // The skills in use this turn are held to what they say they need (ADR 0031).
+    // Every skill whose instructions are in this chat holds it to its list (ADR 0031,
+    // ADR 0040): the one loaded this turn, and the ones before it until you end them.
     const turnFrom = live.events.findLast((e) => e.type === 'user.message')?.seq ?? -1;
+    const listOf = async (hold: SkillHold) =>
+      hold.permissions ??
+      (await this.deps.skillPermissions?.(hold.skillId).catch(() => undefined))?.permissions;
     const skillLimit = async (need: SkillNeed | undefined): Promise<string | undefined> => {
       if (!need) return undefined;
-      const used = new Set(
-        live.events.flatMap((e) =>
-          e.type === 'skill.used' && e.seq >= turnFrom ? [e.skillId] : [],
-        ),
-      );
-      for (const skillId of used) {
-        const info = await this.deps.skillPermissions?.(skillId).catch(() => undefined);
-        if (info && !allows(info.permissions, need))
-          return `The “${info.title}” skill is in use, and it doesn’t say it needs to ${missing(need)}. So I’m checking first.`;
+      for (const hold of skillHolds(live.events)) {
+        const permissions = await listOf(hold);
+        if (!permissions || allows(permissions, need)) continue;
+        return hold.seq >= turnFrom && !hold.from
+          ? `The “${hold.title}” skill is in use, and it doesn’t say it needs to ${missing(need)}. So I’m checking first.`
+          : `This chat is held to the “${hold.title}” skill’s list, and it doesn’t say it needs to ${missing(need)}. So I’m checking first.`;
       }
       return undefined;
     };
 
-    // Engines that can't ask (Codex) run tighter while a skill that doesn't say it may run any command is in use.
+    // Engines that can't ask (Codex) run tighter while held to a skill that doesn't say it may run any command.
     const skillTightens = async () => {
-      for (const e of live.events) {
-        if (e.type !== 'skill.used' || e.seq < turnFrom) continue;
-        const info = await this.deps.skillPermissions?.(e.skillId).catch(() => undefined);
+      for (const hold of skillHolds(live.events)) {
+        const permissions = await listOf(hold);
         if (
-          info &&
-          !(info.permissions.capabilities.includes('commands') && !info.permissions.commands)
+          permissions &&
+          !(permissions.capabilities.includes('commands') && !permissions.commands)
         )
           return true;
       }
@@ -1540,6 +1547,66 @@ export class ConversationManager {
     await this.#persist(live);
   }
 
+  /** What a chat is held to (ADR 0040), from its own log: for work handed on from it (ADR 0033). */
+  async holdsOf(id: string): Promise<readonly SkillHold[]> {
+    return skillHolds((await this.#get(id)).events);
+  }
+
+  /**
+   * A helper's skills come back with its result (ADR 0040): what it was held
+   * to, it learned in this chat's name. Only what it used itself, never what
+   * it was handed from here, so ending a hold here isn't undone by a helper.
+   */
+  async addHolds(id: string, holds: readonly SkillHold[], from: string): Promise<void> {
+    const own = holds.filter((h) => !h.from);
+    if (!own.length) return;
+    const live = await this.#get(id);
+    this.#carry(
+      live,
+      own.map((h) => ({ ...h, from })),
+    );
+    if (!live.abort) await this.#persist(live);
+  }
+
+  /** Note each hold carried in from another chat, once. */
+  #carry(live: Live, holds: readonly (SkillHold & { from: string })[]) {
+    const held = skillHolds(live.events);
+    for (const hold of holds) {
+      const same = JSON.stringify(hold.permissions ?? null);
+      if (
+        held.some(
+          (h) => h.skillId === hold.skillId && JSON.stringify(h.permissions ?? null) === same,
+        )
+      )
+        continue;
+      this.#append(live, {
+        type: 'skill.used',
+        skillId: hold.skillId,
+        name: hold.name,
+        title: hold.title,
+        by: 'carried',
+        ...(hold.permissions && { permissions: hold.permissions }),
+        from: hold.from,
+      });
+    }
+  }
+
+  /**
+   * Stop holding a chat to a skill's list (ADR 0040): a person's choice, from
+   * the chat or ⌘K, never the assistant's (it has no tool for this), and
+   * written in the log, so Activity shows who ended it and when. Not while a
+   * turn is running: the skill may be steering it right now.
+   */
+  async stopHolding(id: string, skillId: string): Promise<void> {
+    const live = await this.#get(id);
+    const hold = skillHolds(live.events).find((h) => h.skillId === skillId);
+    if (!hold) throw new ConversationError('not-found', 'This chat isn’t held to that skill.');
+    if (live.abort)
+      throw new ConversationError('busy', 'Wait for this answer to finish, then try again.');
+    this.#append(live, { type: 'skill.hold.ended', skillId, title: hold.title, reason: 'you' });
+    await this.#persist(live);
+  }
+
   async #get(id: string): Promise<Live> {
     const cached = this.#live.get(id);
     if (cached) {
@@ -1690,6 +1757,7 @@ function heldFromLog(events: readonly ConversationEvent[]): Held | undefined {
 const BETWEEN_WAITING = new Set<ConversationEvent['type']>([
   'turn.held',
   'skill.used',
+  'skill.hold.ended',
   'options',
   'title',
 ]);

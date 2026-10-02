@@ -133,3 +133,25 @@ describe('the timeline', () => {
     expect(commands.next).toBeUndefined();
   });
 });
+
+describe('what a chat is held to (ADR 0040)', () => {
+  it('says when a skill’s list started holding, and that you ended it', () => {
+    seq = 0;
+    const used = { skillId: 's', name: 'quick-setup', title: 'Quick setup' };
+    const events = [
+      ev({ type: 'skill.used', ...used, by: 'user' }),
+      ev({ type: 'skill.hold.ended', skillId: 's', title: 'Quick setup', reason: 'you' }),
+      ev({ type: 'skill.used', ...used, by: 'carried', from: 'c2' }),
+    ];
+    expect(
+      entriesOf({ id: 'c1', title: 'Set up' }, events).map((e) => [e.kind, e.status, e.title]),
+    ).toEqual([
+      ['skill', 'noted', 'Held to Quick setup’s list'],
+      ['skill', 'done', 'You stopped holding this chat to Quick setup’s list'],
+      ['skill', 'noted', 'Held to Quick setup’s list, which a helper used'],
+    ]);
+    expect(
+      entriesOf({ id: 'c3', title: 'Part', origin: { kind: 'task' } }, events.slice(2))[0]?.title,
+    ).toBe('Held to Quick setup’s list, like the chat it came from');
+  });
+});

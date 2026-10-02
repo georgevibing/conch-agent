@@ -12,8 +12,8 @@
  *   results come back together.
  *
  * Everything a task does is held to what the chat it came from could do:
- * the same provider and permission mode, as wary as it was (ADR 0028), and
- * stopped with it. A task that was running when Conch stopped says so and
+ * the same provider and permission mode, as wary as it was (ADR 0028), held
+ * to the same skills' lists (ADR 0040), and stopped with it. A task that was running when Conch stopped says so and
  * runs again with one press; one that reached its provider's limit carries on
  * with your fallback provider (ADR 0023).
  */
@@ -457,6 +457,14 @@ export class TaskService {
     const taint = task.parentConversationId
       ? await this.deps.conversations.taintOf(task.parentConversationId).catch(() => [])
       : [];
+    // Held to the skills its chat is held to (ADR 0040), as it inherits what that chat read.
+    const parent = task.parentConversationId;
+    const skills = parent
+      ? (await this.deps.conversations.holdsOf(parent).catch(() => [])).map((hold) => ({
+          ...hold,
+          from: parent,
+        }))
+      : [];
     const wt = this.#worktrees.get(task.id);
     const operations = new TaskOperations(
       () => this.get(id),
@@ -519,6 +527,7 @@ export class TaskService {
           },
           tools: [finishTool as HostTool],
           taint,
+          skills,
           ...((wt?.path ?? (task.worktree?.changed ? task.worktree.path : undefined)) && {
             cwd: wt?.path ?? task.worktree?.path,
           }),
@@ -601,6 +610,11 @@ export class TaskService {
         await this.deps.conversations
           .addTaint(done.parentConversationId, read)
           .catch(() => undefined);
+      // And the skills it used: their instructions shaped what came back (ADR 0040).
+      const held = await this.deps.conversations.holdsOf(done.conversationId).catch(() => []);
+      await this.deps.conversations
+        .addHolds(done.parentConversationId, held, done.conversationId)
+        .catch(() => undefined);
     }
     this.#pump();
     return done;

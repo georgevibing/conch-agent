@@ -155,6 +155,32 @@ export function entriesOf(
           status: 'noted',
         });
         break;
+      // What the chat was held to from here, and who ended it (ADR 0040).
+      case 'skill.used':
+        out.push({
+          ...base,
+          id: `${chat.id}:${e.seq}`,
+          at: e.at,
+          kind: 'skill',
+          title:
+            e.by !== 'carried'
+              ? `Held to ${e.title}’s list`
+              : chat.origin?.kind === 'task'
+                ? `Held to ${e.title}’s list, like the chat it came from`
+                : `Held to ${e.title}’s list, which a helper used`,
+          status: 'noted',
+        });
+        break;
+      case 'skill.hold.ended':
+        out.push({
+          ...base,
+          id: `${chat.id}:${e.seq}`,
+          at: e.at,
+          kind: 'skill',
+          title: `You stopped holding this chat to ${e.title}’s list`,
+          status: 'done',
+        });
+        break;
       case 'artifact':
         out.push({
           ...base,

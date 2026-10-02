@@ -240,12 +240,14 @@ export class SkillService {
           const instructions = await this.deps.store.instructions(skill);
           if (!shown.has(skill.id)) {
             shown.add(skill.id);
+            // Its list as it is now: what the chat is held to from here (ADR 0040).
             ctx.append({
               type: 'skill.used',
               skillId: skill.id,
               name: skill.name,
               title: skill.title,
               by: 'assistant',
+              permissions: skill.permissions ?? readPermissions(undefined),
             });
           }
           return [
@@ -269,10 +271,12 @@ export class SkillService {
    * typed after the name. Anything that isn't a usable skill's name is left
    * alone (Conch's own commands never reach the gateway; the provider's do).
    */
-  async expand(
-    text: string,
-  ): Promise<
-    { prompt: string; skill: { skillId: string; name: string; title: string } } | undefined
+  async expand(text: string): Promise<
+    | {
+        prompt: string;
+        skill: { skillId: string; name: string; title: string; permissions: SkillPermissions };
+      }
+    | undefined
   > {
     const match = /^\/([a-z0-9][a-z0-9-]{0,63})(?:\s+([\s\S]*))?$/i.exec(text.trim());
     if (!match?.[1]) return undefined;
@@ -293,7 +297,12 @@ export class SkillService {
           ? `The user asked you to use the “${skill.title}” skill above for this:\n\n${request}`
           : `The user asked you to use the “${skill.title}” skill above. Follow it now.`,
       ].join('\n'),
-      skill: { skillId: skill.id, name: skill.name, title: skill.title },
+      skill: {
+        skillId: skill.id,
+        name: skill.name,
+        title: skill.title,
+        permissions: skill.permissions ?? readPermissions(undefined),
+      },
     };
   }
 }

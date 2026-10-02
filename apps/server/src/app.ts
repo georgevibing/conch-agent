@@ -892,6 +892,23 @@ export async function buildApp(services: Services) {
       services.network.simulate(request.body?.online === true);
       return services.network.status;
     });
+  // Stop holding this chat to a skill's list (ADR 0040): a person in Conch, never a script's key.
+  app.post<{ Params: { id: string; skillId: string } }>(
+    '/api/conversations/:id/skills/:skillId/stop-holding',
+    async (request, reply) => {
+      if (request.access?.kind === 'bearer')
+        return reply.code(403).send({
+          error: 'person-only',
+          message: 'Only you can do this, in Conch itself, not with an access key.',
+        });
+      try {
+        await services.conversations.stopHolding(request.params.id, request.params.skillId);
+        return { ok: true };
+      } catch (error) {
+        return sendError(reply, error);
+      }
+    },
+  );
   // “Not now” on an offer to connect an app, for the rest of this conversation.
   app.post<{ Params: { id: string; catalogId: string } }>(
     '/api/conversations/:id/suggestions/:catalogId/dismiss',

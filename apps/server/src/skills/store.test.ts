@@ -242,6 +242,7 @@ describe('SkillService', () => {
     });
     const expanded = await skills.expand('/weekly-review focus on work');
     expect(expanded?.skill).toEqual({
+      permissions: expect.objectContaining({ capabilities: ['files', 'web'] }),
       skillId: 'weekly-review',
       name: 'weekly-review',
       title: 'Weekly review',
@@ -274,6 +275,8 @@ describe('SkillService', () => {
         name: 'release-notes',
         title: 'Release notes',
         by: 'assistant',
+        // The list it came in with: what the chat is held to from here (ADR 0040).
+        permissions: expect.objectContaining({ declared: false }),
       },
     ]);
     expect(await run({ name: 'nope' })).toMatch(/no skill called/);

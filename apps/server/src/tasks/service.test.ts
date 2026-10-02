@@ -659,6 +659,51 @@ describe('helpers side by side (delegate)', () => {
     });
   });
 
+  it('helpers are held to the skills their chat is held to (ADR 0040)', async () => {
+    const { tasks, conversations, engines } = await setup();
+    const chat = await conversations.send({ clientMessageId: 'u1', text: 'hi' });
+    await until(
+      () => conversations.detail(chat.id),
+      (d) => d.conversation.status === 'idle',
+    );
+    const git = {
+      declared: true,
+      capabilities: ['commands' as const],
+      commands: ['git'],
+      words: ['run commands (only `git`)'],
+    };
+    await conversations.addHolds(
+      chat.id,
+      [
+        {
+          skillId: 'quick-setup',
+          name: 'quick-setup',
+          title: 'Quick setup',
+          permissions: git,
+          seq: 0,
+        },
+      ],
+      'c_elsewhere',
+    );
+    const delegate = tasks
+      .tools(ctx(chat.id, engines.get('mock') as Engine))
+      .find((t) => t.name === 'delegate');
+    await delegate?.run({
+      parts: [{ title: 'A', instructions: 'look around', model: 'fast', worktree: false }],
+    } as never);
+    const helper = (await tasks.list()).tasks[0] as Task;
+    expect(await conversations.holdsOf(helper.conversationId ?? '')).toMatchObject([
+      { skillId: 'quick-setup', permissions: git, from: chat.id },
+    ]);
+    const { events } = await conversations.detail(helper.conversationId ?? '');
+    expect(events.find((e) => e.type === 'skill.used')).toMatchObject({
+      by: 'carried',
+      from: chat.id,
+    });
+    // What it was handed doesn't come back as a second hold.
+    expect(await conversations.holdsOf(chat.id)).toHaveLength(1);
+  });
+
   it('a code part gets its own worktree: kept with its branch when it changed things, gone when not', async () => {
     const { tasks, conversations, engines, settings, home } = await setup();
     const repo = mkdtempSync(join(tmpdir(), 'conch-repo-'));

