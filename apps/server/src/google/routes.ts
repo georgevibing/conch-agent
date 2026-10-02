@@ -181,6 +181,6 @@ export function googleRoutes(
         }
       }
     }
-    return reply.redirect(`/integrations?google=${result}`, 303);
+    return reply.redirect(`/apps?google=${result}`, 303);
   });
 }

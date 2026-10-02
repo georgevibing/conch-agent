@@ -29,9 +29,11 @@ function ActionButton({ action }: { action: DoctorAction }) {
         // A page, not a part of Settings: close Settings and go there, in the app.
         const page =
           action.place === 'integrations'
-            ? '/integrations'
+            ? '/apps'
             : action.place === 'channels'
-              ? `/channels${action.focus ? `/${encodeURIComponent(action.focus)}` : ''}`
+              ? action.focus
+                ? `/channels/${encodeURIComponent(action.focus)}`
+                : '/apps?show=talk'
               : action.place === 'passwords'
                 ? '/passwords'
                 : action.place === 'memory'

@@ -89,7 +89,7 @@ function ChannelsHint() {
       variant="ghost"
       size="sm"
       trailingIcon={<ArrowRight />}
-      onClick={() => void navigate('/channels')}
+      onClick={() => void navigate('/apps?show=talk')}
       className={styles.connectHint}
     >
       Talk to it from your chat apps
@@ -107,7 +107,7 @@ function ConnectAppsHint() {
       variant="ghost"
       size="sm"
       trailingIcon={<ArrowRight />}
-      onClick={() => void navigate('/integrations')}
+      onClick={() => void navigate('/apps')}
       className={styles.connectHint}
     >
       Connect Gmail, Notion, GitHub and more

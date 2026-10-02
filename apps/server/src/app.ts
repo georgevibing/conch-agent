@@ -813,9 +813,9 @@ export async function buildApp(services: Services) {
     const code = oauthParam(query.code);
     const error = oauthParam(query.error, 200);
     const back = (flow: { integrationId: string; display: string } | undefined, result: string) => {
-      if (!flow) return reply.redirect(`/integrations?result=${result}`, 303);
-      const base =
-        flow.display === 'popup' ? `/integrations/done` : `/integrations/${flow.integrationId}`;
+      // Apps (ADR 0052); `/integrations/done` is the sign-in window's own page.
+      if (!flow) return reply.redirect(`/apps?result=${result}`, 303);
+      const base = flow.display === 'popup' ? `/integrations/done` : `/apps/${flow.integrationId}`;
       return reply.redirect(`${base}?id=${flow.integrationId}&result=${result}`, 303);
     };
     if (!state) return back(undefined, 'expired');

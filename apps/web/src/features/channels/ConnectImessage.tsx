@@ -115,7 +115,9 @@ export function ImessageSetup() {
         <EmptyState
           title="iMessage only works on a Mac"
           description="Conch reads and sends iMessages through the Messages app, which only a Mac has. Run Conch on a Mac to use it, or connect Telegram, Discord, Slack or email instead."
-          actions={<Button onClick={() => void navigate('/channels')}>See the other apps</Button>}
+          actions={
+            <Button onClick={() => void navigate('/apps?show=talk')}>See the other apps</Button>
+          }
         />
       </div>
     );

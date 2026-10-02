@@ -319,7 +319,7 @@ function ConnectFlow({
                 variant="ghost"
                 onClick={() => {
                   onClose();
-                  void navigate(`/integrations/${current.id}`);
+                  void navigate(`/apps/${current.id}`);
                 }}
               >
                 Choose what it can do

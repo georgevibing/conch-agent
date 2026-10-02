@@ -44,7 +44,7 @@ export function IntegrationIssue({ item }: { item: Issue }) {
       onFix={() =>
         integration && integration.health.action === 'reconnect' && integration.auth === 'oauth'
           ? fix(integration)
-          : void navigate(integration ? `/integrations/${integration.id}` : '/integrations')
+          : void navigate(integration ? `/apps/${integration.id}` : '/apps')
       }
     />
   );

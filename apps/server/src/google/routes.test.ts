@@ -218,7 +218,7 @@ describe('Google HTTP boundary', () => {
       'http://localhost:80',
     );
     expect(response.statusCode).toBe(303);
-    expect(response.headers.location).toBe('/integrations?google=connected');
+    expect(response.headers.location).toBe('/apps?google=connected');
     expect(response.headers['referrer-policy']).toBe('no-referrer');
     expect(response.headers['cache-control']).toBe('no-store');
     service.finish.mockClear();
@@ -232,6 +232,6 @@ describe('Google HTTP boundary', () => {
       url: `/oauth/google/callback?state=${state}&error=access_denied`,
     });
     expect(service.cancel).toHaveBeenCalledWith(state, '', 'http://localhost:80', 'access_denied');
-    expect(response.headers.location).toBe('/integrations?google=denied');
+    expect(response.headers.location).toBe('/apps?google=denied');
   });
 });

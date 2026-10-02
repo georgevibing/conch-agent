@@ -385,7 +385,8 @@ export function useFindables(query: string, conversationId: string | undefined):
     ),
     run: () =>
       void navigate(
-        item.connected ? `/integrations/${item.id}` : `/integrations?connect=${item.id}`,
+        // 1Password is one entry point for its two halves: its page, either way.
+        item.connected || item.id === '1password' ? `/apps/${item.id}` : `/apps?connect=${item.id}`,
       ),
   }));
 
@@ -696,18 +697,21 @@ export function useFindables(query: string, conversationId: string | undefined):
       run: () => void navigate('/routines'),
     },
     {
-      id: 'channels',
-      label: 'Channels',
-      keywords: 'telegram discord slack whatsapp phone mobile chat message reach bot remote',
+      // What used to be the Channels page: a filter of Apps now (ADR 0052).
+      id: 'talk',
+      label: 'Talk to me here',
+      keywords:
+        'channels chat apps telegram discord slack whatsapp signal imessage email teams matrix wechat phone mobile message reach bot remote',
       icon: <MessagesSquare />,
-      run: () => void navigate('/channels'),
+      run: () => void navigate('/apps?show=talk'),
     },
     {
-      id: 'integrations',
-      label: 'Integrations',
-      keywords: 'apps connect mcp Google Gmail calendar Drive personal work account app password',
+      id: 'apps',
+      label: 'Apps',
+      keywords:
+        'integrations integration connect mcp Google Gmail calendar Drive Slack 1Password personal work account app password',
       icon: <Blocks />,
-      run: () => void navigate('/integrations'),
+      run: () => void navigate('/apps'),
     },
     ...(conversationId
       ? [...new Map((holds ?? []).map((h) => [h.skillId, h])).values()].map((hold) => ({
@@ -824,8 +828,8 @@ export function useFindables(query: string, conversationId: string | undefined):
     { heading: 'Passwords', items: passwordItems },
     { heading: 'Skills', items: skillItems },
     { heading: 'Models', items: modelItems },
-    { heading: 'Integrations', items: appItems },
-    { heading: 'Channels', items: channelItems },
+    { heading: 'Apps', items: appItems },
+    { heading: 'Talk to me here', items: channelItems },
     { heading: 'Routines', items: routineItems },
     { heading: 'Made for you', items: [...artifactItems, ...editItems] },
     { heading: 'Tasks', items: taskItems },

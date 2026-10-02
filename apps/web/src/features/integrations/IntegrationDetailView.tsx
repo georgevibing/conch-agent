@@ -33,7 +33,10 @@ import { APP_PASSWORDS_URL, GoogleAppConnection } from './GoogleAppConnect';
 import { fixLabel, needsAttention } from './describe';
 import { GetIt } from '../setup/GetIt';
 import styles from './Integrations.module.css';
-import { useSignInResult } from './IntegrationsView';
+import { useSignInResult } from './useSignInResult';
+import { AppAbilitiesSection } from './AppAbilitiesSection';
+import type { AppItem } from './apps';
+import { APPS_PATH } from './paths';
 import {
   errorText,
   putIntegration,
@@ -54,7 +57,17 @@ const policyHelp: Record<IntegrationPolicy, (name: string, assistant: string) =>
     `${assistant} acts in ${name} without asking. Only choose this if mistakes there are easy to undo — something it reads could try to trick it.`,
 };
 
-export function IntegrationDetailView({ integrationId }: { integrationId: string }) {
+export function IntegrationDetailView({
+  integrationId,
+  item,
+  onSetUp,
+}: {
+  integrationId: string;
+  /** The whole app it's a half of (ADR 0052), for its switches. */
+  item?: AppItem;
+  /** Opens the app's connect dialog, kept by the page. */
+  onSetUp?: () => void;
+}) {
   useSignInResult();
   const { integration, entry, isPending } = useIntegration(integrationId);
   const navigate = useNavigate();
@@ -71,26 +84,36 @@ export function IntegrationDetailView({ integrationId }: { integrationId: string
     return (
       <div className={styles.page}>
         <EmptyState
-          title="This integration isn’t here any more"
+          title="This app isn’t here any more"
           description="It may have been disconnected on another device."
-          actions={
-            <Button onClick={() => void navigate('/integrations')}>See all integrations</Button>
-          }
+          actions={<Button onClick={() => void navigate(APPS_PATH)}>See all apps</Button>}
         />
       </div>
     );
   }
-  return <Detail integration={integration} color={entry?.color} entry={entry} />;
+  return (
+    <Detail
+      integration={integration}
+      color={entry?.color}
+      entry={entry}
+      item={item}
+      onSetUp={onSetUp}
+    />
+  );
 }
 
 function Detail({
   integration,
   color,
   entry,
+  item,
+  onSetUp,
 }: {
   integration: Integration;
   color?: string;
   entry: ReturnType<typeof useIntegration>['entry'];
+  item?: AppItem;
+  onSetUp?: () => void;
 }) {
   const navigate = useNavigate();
   const update = useUpdateIntegration();
@@ -126,9 +149,9 @@ function Detail({
           variant="ghost"
           size="sm"
           leadingIcon={<ArrowLeft />}
-          onClick={() => void navigate('/integrations')}
+          onClick={() => void navigate(APPS_PATH)}
         >
-          Integrations
+          Apps
         </Button>
       </div>
 
@@ -217,6 +240,22 @@ function Detail({
         </Callout>
       )}
 
+      <AppAbilitiesSection
+        onSetUp={onSetUp}
+        item={
+          item ?? {
+            key: integration.id,
+            name: integration.name,
+            brand: integration.catalogId ?? 'custom',
+            integration,
+            ...(entry && { entry }),
+            channels: [],
+            to: '',
+            talks: false,
+          }
+        }
+      />
+
       <section className={styles.section} aria-labelledby="int-policy">
         <Heading level={2} id="int-policy" size="md">
           When {assistant} uses {integration.name}
@@ -247,10 +286,11 @@ function Detail({
       <section className={styles.section} aria-labelledby="int-tools">
         <Stack gap={0.5}>
           <Heading level={2} id="int-tools" size="md">
-            What it can do
+            Each tool
           </Heading>
           <Text size="sm" tone="muted">
-            Turn off what you don’t need — {assistant} stays more focused with fewer tools.
+            Choose for each one, or turn off what you don’t need — {assistant} stays more focused
+            with fewer tools.
           </Text>
         </Stack>
         {integration.tools.length ? (
@@ -355,7 +395,7 @@ function Detail({
               tone="danger"
               onClick={() => {
                 remove.mutate(integration);
-                void navigate('/integrations');
+                void navigate(APPS_PATH);
               }}
             >
               Disconnect

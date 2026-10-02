@@ -1010,7 +1010,7 @@ function useCheckupFix(guard: Guard) {
       else if (fix.place === 'channels') {
         // A page, not a part of Settings: close Settings and go there.
         useUi.getState().closeSettings();
-        window.dispatchEvent(new CustomEvent('conch:navigate', { detail: '/channels' }));
+        window.dispatchEvent(new CustomEvent('conch:navigate', { detail: '/apps?show=talk' }));
       } else setFocus({ place: fix.place, done: () => setFocus(undefined) });
       return undefined;
     }

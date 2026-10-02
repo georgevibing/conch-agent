@@ -19,20 +19,20 @@ export function useFix() {
           // Gmail, Calendar, Drive, Slack: their page has the fix (a new app password,
           // Google's sign-in, Slack's dialog).
           if (integration.transport.type === 'host')
-            return void navigate(`/integrations/${integration.id}`, { state: { focus: 'token' } });
+            return void navigate(`/apps/${integration.id}`, { state: { focus: 'token' } });
           if (integration.auth === 'oauth')
             return void signIn((display) => integrationsApi.connect(integration.id, display));
-          return void navigate(`/integrations/${integration.id}`, { state: { focus: 'token' } });
+          return void navigate(`/apps/${integration.id}`, { state: { focus: 'token' } });
         case 'edit':
-          return void navigate(`/integrations/${integration.id}`, { state: { focus: 'token' } });
+          return void navigate(`/apps/${integration.id}`, { state: { focus: 'token' } });
         case 'turn-on':
           return update.mutate({ id: integration.id, patch: { enabled: true } });
         case 'setup':
           // One you added yourself: its page offers to get the program it runs with.
           if (integration.health.need && !integration.catalogId)
-            return void navigate(`/integrations/${integration.id}`);
+            return void navigate(`/apps/${integration.id}`);
           // From the catalog: its connect dialog shows what's missing and offers to get it.
-          return void navigate(`/integrations?setup=${integration.id}`);
+          return void navigate(`/apps?setup=${integration.id}`);
         default:
           return check.mutate(integration.id);
       }

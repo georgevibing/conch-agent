@@ -52,6 +52,7 @@ import { EmailSetup } from './ConnectEmail';
 import { ImessageSetup } from './ConnectImessage';
 import { HelloStep } from './HelloStep';
 import { LinkedSetup } from './LinkedSetup';
+import { TALK_PATH } from '../integrations/paths';
 import { MatrixSetup } from './MatrixSetup';
 import { TeamsSetup } from './TeamsSetup';
 import { WeChatSetup } from './WeChatSetup';
@@ -62,7 +63,7 @@ import { errorText, putChannel, useChannel } from './queries';
 export function ConnectChannel({ kind }: { kind: string }) {
   const navigate = useNavigate();
   useEffect(() => {
-    if (!isKind(kind)) void navigate('/channels', { replace: true });
+    if (!isKind(kind)) void navigate('/apps?show=talk', { replace: true });
   }, [kind, navigate]);
   if (!isKind(kind)) return null;
   if (kind === 'telegram') return <TelegramSetup />;
@@ -101,7 +102,7 @@ export function SetupPage({
             leadingIcon={<ArrowLeft />}
             className={styles.back}
           >
-            <Link to="/channels">Channels</Link>
+            <Link to={TALK_PATH}>Apps</Link>
           </Button>
           <Stack gap={2}>
             <IntegrationLogo brand={kind} name={app.name} color={app.color} size="lg" decorative />
@@ -680,6 +681,10 @@ function SlackSetup() {
   const [botToken, setBotToken] = useState('');
   const [appToken, setAppToken] = useState('');
   const { half, used, use, from } = useSlackHalf();
+  // From Slack's page in Apps (ADR 0052): the app is made already, with the user token Slack
+  // in Apps has. Its bot token and app-level token are separate keys, copied on purpose.
+  const [params] = useSearchParams();
+  const fromApp = !used && params.get('with') === 'app';
 
   // Keys pasted into each other's boxes are put right.
   const place = (value: string, into: 'bot' | 'app') => {
@@ -723,7 +728,7 @@ function SlackSetup() {
       void connect({ kind: 'slack', botToken, appToken });
   });
 
-  const at = channel ? 3 : botOk ? 2 : used || created || botToken ? 1 : 0;
+  const at = channel ? 3 : botOk ? 2 : used || fromApp || created || botToken ? 1 : 0;
   const bot = botCheck.check?.ok ? botCheck.check.bot : (channel?.bot ?? used?.bot);
   // The app's id, from a key: links go straight to its own settings pages.
   const appId =
@@ -739,7 +744,9 @@ function SlackSetup() {
       intro={
         used
           ? `Your Slack app is already made: ${used.label} had one of its two keys. Get the other from Slack, and it’s connected.`
-          : 'About four minutes. Slack makes the app from settings Conch fills in; you press a few buttons and copy two keys.'
+          : fromApp
+            ? `Your Slack app is already made: Slack in Apps uses it. Copy two more keys from it, and you can message ${assistant} there.`
+            : 'About four minutes. Slack makes the app from settings Conch fills in; you press a few buttons and copy two keys.'
       }
       preview={<SlackPreview at={at} channel={channel} assistant={assistant} />}
     >
@@ -748,9 +755,15 @@ function SlackSetup() {
         <GuideSteps.Step
           number={1}
           title="Make the Slack app"
-          state={used ? 'done' : stepState(0, at)}
-          summary={used ? `Made, in ${used.label}` : 'Made in Slack'}
-          onEdit={channel || used ? undefined : () => setCreated(false)}
+          state={used || fromApp ? 'done' : stepState(0, at)}
+          summary={
+            used
+              ? `Made, in ${used.label}`
+              : fromApp
+                ? 'Made: Slack in Apps uses it'
+                : 'Made in Slack'
+          }
+          onEdit={channel || used || fromApp ? undefined : () => setCreated(false)}
         >
           <Text tone="muted">
             This opens Slack with everything filled in. Pick your workspace, press <b>Next</b>, then{' '}
@@ -803,6 +816,16 @@ function SlackSetup() {
               </Text>
               <OpenButton href={slackAppUrl(appId, 'install-on-team')}>
                 Open your app’s Install App page
+              </OpenButton>
+            </>
+          ) : fromApp ? (
+            <>
+              <Text tone="muted">
+                Open your app’s <b>Install App</b> page, where you copied the User OAuth Token. Copy
+                the <b>Bot User OAuth Token</b> from the same page.
+              </Text>
+              <OpenButton href={slackAppUrl(appId, 'install-on-team')}>
+                Open your Slack apps
               </OpenButton>
             </>
           ) : (

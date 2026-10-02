@@ -1,0 +1,158 @@
+import {
+  Button,
+  EmptyState,
+  Heading,
+  IntegrationLogo,
+  IntegrationStatusBadge,
+  Skeleton,
+  Stack,
+  Text,
+} from '@conch/nacre';
+import { ArrowLeft } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Navigate, useNavigate } from 'react-router';
+
+import { useChannels } from '../channels/queries';
+import { useVault } from '../passwords/queries';
+import { AppAbilitiesSection } from './AppAbilitiesSection';
+import { describeApp, joinApps, type AppItem } from './apps';
+import { ConnectDialog } from './ConnectDialog';
+import { IntegrationDetailView } from './IntegrationDetailView';
+import styles from './Integrations.module.css';
+import { APPS_PATH, connectPath } from './paths';
+import { useIntegrations } from './queries';
+
+/**
+ * `/apps/:id`: one app's page (ADR 0052). An app the assistant uses has its
+ * full page; one that's only half here — Slack you talk to but haven't let
+ * it read, 1Password filling sign-ins — has the same switches, with the
+ * button that sets up the other half.
+ */
+export function AppDetailView({ appId }: { appId: string }) {
+  const { data, isPending } = useIntegrations();
+  const { data: channelList, isPending: channelsPending } = useChannels();
+  const { data: vault, isPending: vaultPending } = useVault();
+  const navigate = useNavigate();
+  // The page keeps the connect dialog, so it stays open when the half it sets up arrives.
+  const [connecting, setConnecting] = useState(false);
+
+  const items = useMemo(
+    () =>
+      joinApps({
+        integrations: data?.integrations ?? [],
+        catalog: data?.catalog ?? [],
+        channels: channelList?.channels ?? [],
+        sources: vault?.status.sources ?? [],
+      }),
+    [data, channelList, vault?.status.sources],
+  );
+  const item =
+    items.find((i) => i.integration?.id === appId) ??
+    items.find((i) => i.key === appId) ??
+    items.find((i) => i.integration?.catalogId === appId);
+  const entry = data?.catalog.find((c) => c.id === appId);
+
+  if (isPending || channelsPending || (vaultPending && appId === '1password'))
+    return (
+      <div className={styles.page}>
+        <Skeleton shape="block" height="4.5rem" />
+        <Skeleton shape="block" height="12rem" />
+      </div>
+    );
+
+  const dialogEntry = item?.entry ?? entry;
+  const setUp = () => setConnecting(true);
+  const withDialog = (page: ReactNode) => (
+    <>
+      {page}
+      {dialogEntry && (
+        <ConnectDialog
+          entry={connecting ? dialogEntry : undefined}
+          onOpenChange={(open) => !open && setConnecting(false)}
+        />
+      )}
+    </>
+  );
+
+  if (item?.integration)
+    return withDialog(
+      <IntegrationDetailView integrationId={item.integration.id} item={item} onSetUp={setUp} />,
+    );
+  if (item) return withDialog(<HalfDetail item={item} onSetUp={setUp} />);
+  // 1Password is one entry point for both its halves, even before either is on.
+  if (entry?.id === '1password')
+    return withDialog(
+      <HalfDetail
+        item={{
+          key: entry.id,
+          name: entry.name,
+          brand: entry.id,
+          ...(entry.color && { color: entry.color }),
+          entry,
+          channels: [],
+          to: '',
+          talks: false,
+        }}
+        onSetUp={setUp}
+      />,
+    );
+  // Another catalog app that isn't connected: its connect dialog.
+  if (entry) return <Navigate to={connectPath(entry.id)} replace />;
+  return (
+    <div className={styles.page}>
+      <EmptyState
+        title="This app isn’t here any more"
+        description="It may have been disconnected on another device."
+        actions={<Button onClick={() => void navigate(APPS_PATH)}>See all apps</Button>}
+      />
+    </div>
+  );
+}
+
+/** An app with only one of its halves (or, for 1Password, none yet): its switches, and the steps. */
+function HalfDetail({ item, onSetUp }: { item: AppItem; onSetUp: () => void }) {
+  const navigate = useNavigate();
+  const card = describeApp(item);
+  useEffect(() => {
+    document.title = `${item.name} · Conch`;
+  }, [item.name]);
+  const anything = item.channels.length > 0 || Boolean(item.source);
+  return (
+    <div className={styles.page}>
+      <div>
+        <Button
+          variant="ghost"
+          size="sm"
+          leadingIcon={<ArrowLeft />}
+          onClick={() => void navigate(APPS_PATH)}
+        >
+          Apps
+        </Button>
+      </div>
+      <header className={styles.detailHeader}>
+        <IntegrationLogo
+          brand={item.brand}
+          name={item.name}
+          color={item.color}
+          size="xl"
+          status={anything ? card.state : undefined}
+          decorative
+        />
+        <Stack gap={1} className={styles.detailTitle}>
+          <Heading level={1} size="2xl">
+            {item.name}
+          </Heading>
+          <Stack direction="row" gap={2} align="center" wrap>
+            {anything && <IntegrationStatusBadge state={card.state} />}
+            {item.entry && (
+              <Text as="span" size="sm" tone="muted">
+                {item.entry.tagline}
+              </Text>
+            )}
+          </Stack>
+        </Stack>
+      </header>
+      <AppAbilitiesSection item={item} onSetUp={onSetUp} />
+    </div>
+  );
+}

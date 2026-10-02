@@ -36,10 +36,9 @@ import { dayGroup, type DayGroup } from '../../lib/time';
 import { useAutoFocus } from '../../lib/useAutoFocus';
 import { ActivityLink } from '../activity/ActivityLink';
 import { PinnedApps } from '../artifacts/PinnedApps';
-import { ChannelsLink } from '../channels/ChannelsLink';
 import { PasswordsLink } from '../passwords/PasswordsLink';
 import { APPS } from '../channels/describe';
-import { IntegrationsLink } from '../integrations/IntegrationsLink';
+import { AppsLink } from '../integrations/AppsLink';
 import { RoutinesLink } from '../routines/RoutinesLink';
 import { SkillsLink } from '../skills/SkillsLink';
 import { TasksLink } from '../tasks/TasksLink';
@@ -272,8 +271,7 @@ export function Sidebar({
         <TasksLink onNavigate={onNavigate} />
         <RoutinesLink onNavigate={onNavigate} />
         <SkillsLink onNavigate={onNavigate} />
-        <IntegrationsLink onNavigate={onNavigate} />
-        <ChannelsLink onNavigate={onNavigate} />
+        <AppsLink onNavigate={onNavigate} />
         <PasswordsLink onNavigate={onNavigate} />
         <ActivityLink onNavigate={onNavigate} />
       </div>

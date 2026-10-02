@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { mockFetch, renderApp } from '../../test/harness';
 import { IntegrationDetailView } from './IntegrationDetailView';
-import { IntegrationsView } from './IntegrationsView';
+import { AppsView } from './AppsView';
 
 configure({ asyncUtilTimeout: 4000 });
 afterEach(() => vi.unstubAllGlobals());
@@ -88,7 +88,7 @@ describe('Google apps on the Integrations page', () => {
     mockFetch({
       'GET /api/integrations': () => ({ catalog, providers: [], integrations: [gmail()] }),
     });
-    renderApp(<IntegrationsView />, { route: '/integrations' });
+    renderApp(<AppsView />, { route: '/apps' });
     const connected = await screen.findByRole('region', { name: 'Connected' });
     expect(within(connected).getByRole('button', { name: 'Gmail' })).toBeInTheDocument();
     expect(within(connected).getByRole('switch', { name: /Gmail/ })).toBeChecked();
@@ -116,7 +116,7 @@ describe('Google apps on the Integrations page', () => {
             )
           : { configured: false, accounts: [account()] },
     });
-    renderApp(<IntegrationsView />, { route: '/integrations' });
+    renderApp(<AppsView />, { route: '/apps' });
     await userEvent.click(await screen.findByRole('button', { name: 'Gmail' }));
     const dialog = await screen.findByRole('dialog', { name: 'Connect Gmail' });
     await userEvent.type(within(dialog).getByLabelText('Gmail address'), 'ada@gmail.com');
@@ -142,7 +142,7 @@ describe('Google apps on the Integrations page', () => {
       'GET /api/google/mail/reusable': () => ({ address: 'ada@gmail.com' }),
       'POST /api/google/mail/reuse': () => ({ configured: false, accounts: [account()] }),
     });
-    renderApp(<IntegrationsView />, { route: '/integrations' });
+    renderApp(<AppsView />, { route: '/apps' });
     await userEvent.click(await screen.findByRole('button', { name: 'Gmail' }));
     const dialog = await screen.findByRole('dialog', { name: 'Connect Gmail' });
     expect(
@@ -159,7 +159,7 @@ describe('Google apps on the Integrations page', () => {
       'GET /api/integrations': () => ({ catalog, providers: [], integrations: [] }),
       'GET /api/google': () => ({ configured: false, accounts: [] }),
     });
-    renderApp(<IntegrationsView />, { route: '/integrations' });
+    renderApp(<AppsView />, { route: '/apps' });
     await userEvent.click(await screen.findByRole('button', { name: 'Google Calendar' }));
     const dialog = await screen.findByRole('dialog', { name: 'Connect Google Calendar' });
     expect(
@@ -178,7 +178,7 @@ describe('Google apps on the Integrations page', () => {
       'GET /api/google/mail/reusable': () => ({}),
       'GET /api/google': () => ({ configured: false, accounts: [] }),
     });
-    renderApp(<IntegrationsView />, { route: '/integrations' });
+    renderApp(<AppsView />, { route: '/apps' });
     await userEvent.click(await screen.findByRole('button', { name: 'Gmail' }));
     const dialog = await screen.findByRole('dialog', { name: 'Connect Gmail' });
     await userEvent.click(
@@ -202,7 +202,7 @@ describe('a Google app’s page', () => {
       'PATCH /api/integrations/gmail': (body) =>
         gmail({ tools: gmail().tools, ...(body as object) }),
     });
-    renderApp(<IntegrationDetailView integrationId="gmail" />, { route: '/integrations/gmail' });
+    renderApp(<IntegrationDetailView integrationId="gmail" />, { route: '/apps/gmail' });
     expect(await screen.findByRole('heading', { name: 'Gmail' })).toBeInTheDocument();
     const draft = screen.getByRole('radiogroup', { name: 'Save a draft' });
     expect(within(draft).queryByRole('radio', { name: 'Allow' })).toBeNull();
@@ -246,7 +246,7 @@ describe('a Google app’s page', () => {
       'GET /api/google/mail/reusable': () => ({}),
       'POST /api/google/mail/password': () => ({ configured: false, accounts: [account()] }),
     });
-    renderApp(<IntegrationDetailView integrationId="gmail" />, { route: '/integrations/gmail' });
+    renderApp(<IntegrationDetailView integrationId="gmail" />, { route: '/apps/gmail' });
     expect(await screen.findByRole('button', { name: 'Sign in again' })).toBeInTheDocument();
     expect(
       await screen.findByRole('heading', { name: /done:\s*Your Gmail address/ }),

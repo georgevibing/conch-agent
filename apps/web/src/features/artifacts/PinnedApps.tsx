@@ -4,16 +4,19 @@ import { useLocation, useNavigate } from 'react-router';
 import styles from '../sidebar/Sidebar.module.css';
 import { usePinnedApps } from './queries';
 
-/** Pinned things, as apps in the sidebar (ADR 0034): one press, from anywhere. */
+/**
+ * Pinned things, in the sidebar (ADR 0034): one press, from anywhere. Called
+ * "Pinned" since the apps you connect are Apps (ADR 0052).
+ */
 export function PinnedApps({ onNavigate }: { onNavigate?: () => void }) {
   const apps = usePinnedApps();
   const navigate = useNavigate();
   const path = useLocation().pathname;
   if (!apps.length) return null;
   return (
-    <section className={styles.group} aria-label="Apps">
+    <section className={styles.group} aria-label="Pinned">
       <Text as="span" size="xs" weight="medium" tone="subtle" className={styles.groupLabel}>
-        Apps
+        Pinned
       </Text>
       <ul className={styles.list}>
         {apps.map((a) => {

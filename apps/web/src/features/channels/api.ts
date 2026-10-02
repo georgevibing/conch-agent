@@ -39,6 +39,11 @@ export const channelsApi = {
     request(Channel, `/api/channels/${id}/people/${encodeURIComponent(personId)}`, {
       method: 'DELETE',
     }),
+  /** Gmail the app's sign-in, offered for talking by email too (ADR 0052): only its address. */
+  gmailOffer: () =>
+    request(z.object({ address: z.string().optional() }), '/api/channels/email/gmail'),
+  /** Talk by email with the app password Gmail already has: only when a person says so. */
+  fromGmail: () => request(Channel, '/api/channels/email/gmail', { method: 'POST', body: {} }),
   repair: (id: string) =>
     request(Channel, `/api/channels/${id}/repair`, { method: 'POST', body: {} }),
   /** Show a code to link WhatsApp or Signal (`channelId`: link that channel again). */

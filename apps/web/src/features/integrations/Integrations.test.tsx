@@ -7,7 +7,8 @@ import { reduceAll } from '../../live/reducer';
 import { FakeSocket, mockFetch, renderApp } from '../../test/harness';
 import { splitCommand } from './CustomDialog';
 import { IntegrationDetailView } from './IntegrationDetailView';
-import { IntegrationsView } from './IntegrationsView';
+import { AppDetailView } from './AppDetailView';
+import { AppsView } from './AppsView';
 import { ProviderServers } from './ProviderServers';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -118,7 +119,7 @@ describe('Integrations page', () => {
       }),
       'GET /api/integrations/external': () => external,
     });
-    renderApp(<IntegrationsView />, { route: '/integrations' });
+    renderApp(<AppsView />, { route: '/apps' });
     const connected = await screen.findByRole('region', { name: 'Connected' });
     const cards = within(connected).getAllByRole('article');
     expect(
@@ -152,7 +153,7 @@ describe('Integrations page', () => {
       }),
       'GET /api/integrations/external': () => external,
     });
-    renderApp(<IntegrationsView />, { route: '/integrations' });
+    renderApp(<AppsView />, { route: '/apps' });
     expect(await screen.findByText('Notion is having problems.')).toBeInTheDocument();
     act(() => FakeSocket.last?.push({ type: 'integration.changed', integration: integration({}) }));
     await waitFor(() => expect(screen.queryByText('Notion is having problems.')).toBeNull());
@@ -172,7 +173,7 @@ describe('Integrations page', () => {
         }),
       }),
     });
-    renderApp(<IntegrationsView />, { route: '/integrations' });
+    renderApp(<AppsView />, { route: '/apps' });
     await userEvent.click(await screen.findByRole('button', { name: 'GitHub' }));
     const dialog = await screen.findByRole('dialog', { name: 'Connect GitHub' });
     const field = within(dialog).getByLabelText(/Access token/);
@@ -206,7 +207,7 @@ describe('Integrations page', () => {
         authorizeUrl: 'https://mcp.notion.com/authorize?state=abc',
       }),
     });
-    renderApp(<IntegrationsView />, { route: '/integrations' });
+    renderApp(<AppsView />, { route: '/apps' });
     await userEvent.click(await screen.findByRole('button', { name: 'Notion' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Continue with Notion' }));
     await waitFor(() =>
@@ -300,8 +301,11 @@ describe('Integrations page', () => {
         },
         'POST /api/integrations': () => ({ integration: added() }),
       });
-      renderApp(<IntegrationsView />, { route: '/integrations' });
-      await userEvent.click(await screen.findByRole('button', { name: '1Password' }));
+      // 1Password's page is the one entry point for both its halves (ADR 0052).
+      renderApp(<AppDetailView appId="1password" />, { route: '/apps/1password' });
+      const does = await screen.findByRole('list', { name: 'What 1Password does' });
+      expect(within(does).getByText('Manage Environments')).toBeInTheDocument();
+      await userEvent.click(within(does).getByRole('button', { name: 'Set up' }));
       const dialog = await screen.findByRole('dialog', { name: 'Connect 1Password' });
       const needs = await within(dialog).findByRole('list', { name: 'What 1Password needs' });
       expect(
@@ -360,7 +364,7 @@ describe('Integrations page', () => {
         }),
         'POST /api/integrations/int_1p/check': () => added(),
       });
-      renderApp(<IntegrationsView />, { route: '/integrations' });
+      renderApp(<AppsView />, { route: '/apps' });
       expect(await screen.findByText('Turn on the MCP server in 1Password.')).toBeInTheDocument();
       await userEvent.click(screen.getByRole('button', { name: 'Finish setup' }));
 
@@ -417,7 +421,7 @@ describe('Integrations page', () => {
       'POST /api/needs/uv/install': () => ({ ready: false, needs: [] }),
     });
     renderApp(<IntegrationDetailView integrationId="int_fetch" />, {
-      route: '/integrations/int_fetch',
+      route: '/apps/int_fetch',
     });
     expect(await screen.findByText('Needs uv (runs Python tools).')).toBeInTheDocument();
     await userEvent.click(await screen.findByRole('button', { name: 'Install uv' }));
@@ -440,7 +444,7 @@ describe('Integrations page', () => {
         authorizeUrl: 'javascript:alert(1)',
       }),
     });
-    renderApp(<IntegrationsView />, { route: '/integrations' });
+    renderApp(<AppsView />, { route: '/apps' });
     await userEvent.click(await screen.findByRole('button', { name: 'Notion' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Continue with Notion' }));
     await waitFor(() => expect(popup.close).toHaveBeenCalled());
@@ -484,7 +488,7 @@ describe('Integrations belong to Conch, not to a provider', () => {
       'GET /api/integrations': () => ({ catalog, providers: [provider], integrations: [] }),
       'GET /api/slack/setup': () => ({}),
     });
-    renderApp(<IntegrationsView />, { route: '/integrations' });
+    renderApp(<AppsView />, { route: '/apps' });
     expect(await screen.findByText(/with every model you pick/)).toBeInTheDocument();
     const slack = await screen.findByRole('button', { name: 'Slack' });
     expect(within(slack.closest('article') as HTMLElement).queryByText(/Only with/)).toBeNull();
@@ -497,7 +501,7 @@ describe('Integrations belong to Conch, not to a provider', () => {
       'GET /api/slack/setup': () => ({}),
       'POST /api/slack/connect': () => slackApp(),
     });
-    renderApp(<IntegrationsView />, { route: '/integrations' });
+    renderApp(<AppsView />, { route: '/apps' });
     await userEvent.click(await screen.findByRole('button', { name: 'Slack' }));
     const dialog = await screen.findByRole('dialog', { name: 'Connect Slack' });
     const make = await within(dialog).findByRole('link', { name: 'Make the app in Slack' });
@@ -521,7 +525,7 @@ describe('Integrations belong to Conch, not to a provider', () => {
         channelApp: { name: 'Ada’s helper', workspace: 'Acme', appId: 'A0MOCKAPP' },
       }),
     });
-    renderApp(<IntegrationsView />, { route: '/integrations?connect=slack' });
+    renderApp(<AppsView />, { route: '/apps?connect=slack' });
     const dialog = await screen.findByRole('dialog', { name: 'Connect Slack' });
     expect(within(dialog).queryByLabelText(/User OAuth Token/)).toBeNull();
     await userEvent.click(await within(dialog).findByRole('button', { name: 'Use it' }));
@@ -545,7 +549,7 @@ describe('Integrations belong to Conch, not to a provider', () => {
           { status: 400 },
         ),
     });
-    renderApp(<IntegrationsView />, { route: '/integrations?connect=slack' });
+    renderApp(<AppsView />, { route: '/apps?connect=slack' });
     const dialog = await screen.findByRole('dialog', { name: 'Connect Slack' });
     await userEvent.type(
       await within(dialog).findByLabelText(/User OAuth Token/),
@@ -570,7 +574,7 @@ describe('Integrations belong to Conch, not to a provider', () => {
         return slack;
       },
     });
-    renderApp(<IntegrationsView />, { route: '/integrations' });
+    renderApp(<AppsView />, { route: '/apps' });
     const connected = await screen.findByRole('region', { name: 'Connected' });
     expect(within(connected).getByText('Slack')).toBeInTheDocument();
     expect(
@@ -579,7 +583,7 @@ describe('Integrations belong to Conch, not to a provider', () => {
       }),
     ).toBeNull();
 
-    renderApp(<IntegrationDetailView integrationId="slack" />, { route: '/integrations/slack' });
+    renderApp(<IntegrationDetailView integrationId="slack" />, { route: '/apps/slack' });
     const send = await screen.findByRole('radiogroup', { name: 'Send a message' });
     expect(within(send).queryByRole('radio', { name: 'Allow' })).toBeNull();
     expect(screen.getByText(/Sending a message always asks/)).toBeInTheDocument();

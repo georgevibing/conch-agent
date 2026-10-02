@@ -77,9 +77,9 @@ export function ItemDetail({
 
   const external = item.readOnly;
   const openPlace = (place: string, focus?: string) => {
-    if (place === 'integrations')
-      return void navigate(focus ? `/integrations/${focus}` : '/integrations');
-    if (place === 'channels') return void navigate(focus ? `/channels/${focus}` : '/channels');
+    if (place === 'integrations') return void navigate(focus ? `/apps/${focus}` : '/apps');
+    if (place === 'channels')
+      return void navigate(focus ? `/channels/${focus}` : '/apps?show=talk');
     if (place === 'skills') return void navigate('/skills', { state: { focus: 'publishers' } });
     openSettings(place as SettingsTab, focus);
   };

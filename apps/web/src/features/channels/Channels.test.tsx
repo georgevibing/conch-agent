@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { appState, FakeSocket, mockFetch, renderApp } from '../../test/harness';
 import { ChannelDetailView } from './ChannelDetailView';
-import { ChannelsView } from './ChannelsView';
 import { ConnectChannel } from './ConnectChannel';
 import { slackCreateUrl, slackManifest, telegramNames } from './guides';
 
@@ -58,54 +57,7 @@ const base = {
   'GET /api/conversations': () => [],
 };
 
-describe('Channels page', () => {
-  it('with none yet: explains how it works and offers each app', async () => {
-    mockFetch({ ...base, 'GET /api/channels': () => ({ channels: [], catalog }) });
-    renderApp(<ChannelsView />, { route: '/channels' });
-    expect(await screen.findByRole('list', { name: 'How it works' })).toBeInTheDocument();
-    const add = screen.getByRole('region', { name: 'Pick an app' });
-    for (const name of ['Telegram', 'Discord', 'Slack'])
-      expect(within(add).getByRole('button', { name: `Connect ${name}` })).toBeInTheDocument();
-    expect(within(add).getByRole('list', { name: 'Coming soon' })).toHaveTextContent('Signal');
-    // An example of what it's like, in the app's own look.
-    expect(screen.getByRole('figure', { name: /example conversation/ })).toBeInTheDocument();
-  });
-
-  it('puts what needs you first, each with its one next step', async () => {
-    mockFetch({
-      ...base,
-      'GET /api/channels': () => ({
-        channels: [
-          channel({ id: 'ch_ok', people: [ada], lastMessageAt: Date.now() - 60_000 }),
-          channel({
-            id: 'ch_key',
-            kind: 'discord',
-            bot: { id: '7', name: 'Old bot', username: 'old_bot' },
-            people: [ada],
-            health: { state: 'needs-token', message: 'Discord stopped accepting the bot’s token.' },
-          }),
-          channel({ id: 'ch_new', kind: 'slack', bot: { id: 'U1', name: 'Slacky' } }),
-        ],
-        catalog,
-      }),
-    });
-    renderApp(<ChannelsView />, { route: '/channels' });
-    const yours = await screen.findByRole('region', { name: 'Your channels' });
-    const cards = within(yours).getAllByRole('article');
-    expect(cards.map((c) => within(c).getAllByRole('button')[0]?.textContent)).toEqual([
-      'Old bot',
-      'Slacky',
-      'Ada’s Conch',
-    ]);
-    expect(
-      within(cards[0] as HTMLElement).getByRole('button', { name: 'Paste the new key' }),
-    ).toBeInTheDocument();
-    expect(
-      within(cards[1] as HTMLElement).getByRole('button', { name: 'Say hello' }),
-    ).toBeInTheDocument();
-    expect(cards[2]).toHaveTextContent(/Just you\. Last message/);
-  });
-});
+// The list of chat apps is a filter of Apps now (ADR 0052): see integrations/Apps.test.tsx.
 
 describe('Connecting Telegram', () => {
   it('suggests names, checks a pasted key at once, connects it and opens the hello link', async () => {

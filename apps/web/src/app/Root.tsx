@@ -1,9 +1,10 @@
 import { Button, Heading, Pearl, Stack, Text } from '@conch/nacre';
 import { RotateCw } from 'lucide-react';
-import { Route, Routes } from 'react-router';
+import { Navigate, Route, Routes, useLocation } from 'react-router';
 
 import { useAppState } from '../api/queries';
 import { OAuthDone } from '../features/integrations/OAuthDone';
+import { APPS_PATH, newHome } from '../features/integrations/paths';
 import { ProviderDone } from '../features/providers/ProviderDone';
 import { Onboarding } from '../features/onboarding/Onboarding';
 import { Shell } from './Shell';
@@ -56,17 +57,25 @@ export function Root() {
       <Route path="/skills" element={<Shell />} />
       <Route path="/skills/new" element={<Shell />} />
       <Route path="/skills/:skillId" element={<Shell />} />
-      <Route path="/integrations" element={<Shell />} />
-      <Route path="/integrations/:integrationId" element={<Shell />} />
-      <Route path="/channels" element={<Shell />} />
+      <Route path="/apps" element={<Shell />} />
+      <Route path="/apps/:appId" element={<Shell />} />
+      {/* Integrations and Channels are Apps now (ADR 0052): old links still arrive. */}
+      <Route path="/integrations" element={<MovedToApps />} />
+      <Route path="/integrations/:integrationId" element={<MovedToApps />} />
+      <Route path="/channels" element={<MovedToApps />} />
       <Route path="/channels/new/:channelKind" element={<Shell />} />
       <Route path="/channels/:channelId" element={<Shell />} />
       <Route path="/passwords" element={<Shell />} />
       <Route path="/activity" element={<Shell />} />
-      <Route path="/apps/:artifactId" element={<Shell />} />
       <Route path="/memory" element={<Shell />} />
       <Route path="/passwords/:itemId" element={<Shell />} />
       <Route path="*" element={<Shell />} />
     </Routes>
   );
+}
+
+/** An address from before Apps: the same place there, with what it asked for. */
+export function MovedToApps() {
+  const { pathname, search, hash } = useLocation();
+  return <Navigate to={`${newHome(pathname, search) ?? APPS_PATH}${hash}`} replace />;
 }

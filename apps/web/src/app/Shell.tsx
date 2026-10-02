@@ -16,13 +16,13 @@ import { UpdateNotice } from '../features/updates/UpdateNotice';
 import { OpenFromLink } from '../features/pwa/OpenFromLink';
 import { RestoredNotice } from '../features/health/RestoredNotice';
 import { ChannelDetailView } from '../features/channels/ChannelDetailView';
-import { ChannelsView } from '../features/channels/ChannelsView';
 import { ConnectChannel } from '../features/channels/ConnectChannel';
 import { ChatView } from '../features/chat/ChatView';
 import { PasswordsView } from '../features/passwords/PasswordsView';
 import { EnginePill } from '../features/engine/EnginePill';
-import { IntegrationDetailView } from '../features/integrations/IntegrationDetailView';
-import { IntegrationsView } from '../features/integrations/IntegrationsView';
+import { AppDetailView } from '../features/integrations/AppDetailView';
+import { AppsView } from '../features/integrations/AppsView';
+import { isPinnedId } from '../features/integrations/paths';
 import { Palette } from '../features/palette/Palette';
 import { RoutineDetailView } from '../features/routines/RoutineDetailView';
 import { RoutinesView } from '../features/routines/RoutinesView';
@@ -56,26 +56,19 @@ function Reconnecting() {
 }
 
 export function Shell() {
-  const {
-    conversationId,
-    routineId,
-    integrationId,
-    skillId,
-    channelId,
-    channelKind,
-    itemId,
-    artifactId,
-  } = useParams();
+  const { conversationId, routineId, appId, skillId, channelId, channelKind, itemId } = useParams();
   const navigate = useNavigate();
   const path = useLocation().pathname;
   const routinesArea = path.startsWith('/routines');
-  const integrationsArea = path.startsWith('/integrations');
+  // `/apps/a_…` is something pinned (ADR 0034); every other `/apps…` is Apps (ADR 0052).
+  const pinnedArea = isPinnedId(appId);
+  const artifactId = pinnedArea ? appId : undefined;
+  const appsArea = (path === '/apps' || path.startsWith('/apps/')) && !pinnedArea;
   const skillsArea = path.startsWith('/skills');
   const channelsArea = path.startsWith('/channels');
   const passwordsArea = path.startsWith('/passwords');
   const activityArea = path.startsWith('/activity');
-  const appsArea = path.startsWith('/apps/');
-  const { data: app } = useArtifact(appsArea ? artifactId : undefined);
+  const { data: app } = useArtifact(artifactId);
   const memoryArea = path.startsWith('/memory');
   const tasksArea = path.startsWith('/tasks');
 
@@ -99,17 +92,17 @@ export function Shell() {
   const current = conversations?.find((c) => c.id === conversationId);
   const title = routinesArea
     ? 'Routines'
-    : integrationsArea
-      ? 'Integrations'
+    : appsArea
+      ? 'Apps'
       : skillsArea
         ? 'Skills'
         : channelsArea
-          ? 'Channels'
+          ? 'Apps'
           : passwordsArea
             ? 'Passwords'
             : activityArea
               ? 'Activity'
-              : appsArea
+              : pinnedArea
                 ? (app?.title ?? '')
                 : memoryArea
                   ? 'What Conch knows'
@@ -171,11 +164,11 @@ export function Shell() {
             <LiveTitle
               pending={
                 !routinesArea &&
-                !integrationsArea &&
+                !appsArea &&
                 !skillsArea &&
                 !channelsArea &&
                 !passwordsArea &&
-                !appsArea &&
+                !pinnedArea &&
                 !tasksArea &&
                 current?.titling
               }
@@ -201,7 +194,7 @@ export function Shell() {
         <UpdateNotice className={styles.notice} />
         {/* The page; it steps aside while the terminal fills the screen. */}
         <div className={styles.area} data-covered={terminalMax || undefined}>
-          {appsArea && artifactId ? (
+          {pinnedArea && artifactId ? (
             <AppView key={artifactId} artifactId={artifactId} />
           ) : memoryArea ? (
             <MemoryView />
@@ -214,10 +207,8 @@ export function Shell() {
           ) : channelsArea ? (
             channelKind ? (
               <ConnectChannel key={channelKind} kind={channelKind} />
-            ) : channelId ? (
-              <ChannelDetailView key={channelId} channelId={channelId} />
             ) : (
-              <ChannelsView />
+              channelId && <ChannelDetailView key={channelId} channelId={channelId} />
             )
           ) : skillsArea ? (
             path === '/skills/new' ? (
@@ -227,11 +218,11 @@ export function Shell() {
             ) : (
               <SkillsView />
             )
-          ) : integrationsArea ? (
-            integrationId ? (
-              <IntegrationDetailView key={integrationId} integrationId={integrationId} />
+          ) : appsArea ? (
+            appId ? (
+              <AppDetailView key={appId} appId={appId} />
             ) : (
-              <IntegrationsView />
+              <AppsView />
             )
           ) : routinesArea ? (
             routineId ? (

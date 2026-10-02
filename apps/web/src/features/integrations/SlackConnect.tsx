@@ -13,12 +13,13 @@ import {
   Text,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowUpRight, CornerDownLeft, KeyRound, RotateCw } from 'lucide-react';
+import { ArrowUpRight, CornerDownLeft, KeyRound, MessageCircle, RotateCw } from 'lucide-react';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
 import { relativeTime } from '../../lib/time';
 import { slackAppUrl, slackCreateUrl, slackManifest } from '../channels/guides';
+import { useChannels } from '../channels/queries';
 import { AccessList, TryIt } from './ConnectDialog';
 import styles from './Integrations.module.css';
 import { errorText, putIntegration, useAssistantName, useIntegration } from './queries';
@@ -73,6 +74,8 @@ export function SlackConnect({
   const navigate = useNavigate();
   const assistant = useAssistantName();
   const { integration } = useIntegration('slack');
+  // Already talking to it in Slack: nothing more to offer.
+  const talking = Boolean(useChannels().data?.channels.some((c) => c.kind === 'slack'));
   const { data: setup, isPending: asking } = useSlackSetup(!again);
   const [choice, setChoice] = useState<'reuse' | 'new'>();
   const [token, setToken] = useState('');
@@ -135,7 +138,32 @@ export function SlackConnect({
       {!(inChat && connected) && (
         <Dialog.Body>
           {connected ? (
-            !inChat && <TryIt entry={entry} onPick={tryIt} />
+            !inChat && (
+              <Stack gap={5}>
+                {!again && !talking && (
+                  <Callout
+                    tone="info"
+                    icon={<MessageCircle />}
+                    title={`Talk to ${assistant} in Slack too?`}
+                    action={
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          onClose();
+                          void navigate('/channels/new/slack?with=app');
+                        }}
+                      >
+                        Set it up
+                      </Button>
+                    }
+                  >
+                    The same Slack app can be where you message {assistant}, from your phone or any
+                    computer. It needs two more keys from it: about two minutes.
+                  </Callout>
+                )}
+                <TryIt entry={entry} onPick={tryIt} />
+              </Stack>
+            )
           ) : (
             <Stack gap={5}>
               <AccessList entry={entry} />
@@ -299,7 +327,7 @@ export function SlackConnect({
               variant="ghost"
               onClick={() => {
                 onClose();
-                void navigate('/integrations/slack');
+                void navigate('/apps/slack');
               }}
             >
               Choose what it can do

@@ -88,7 +88,7 @@ export function CustomDialog({
   const finish = (id: string) => {
     onOpenChange(false);
     reset();
-    void navigate(`/integrations/${id}`);
+    void navigate(`/apps/${id}`);
   };
 
   const submit = async (event: FormEvent) => {

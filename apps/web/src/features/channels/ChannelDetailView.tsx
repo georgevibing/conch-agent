@@ -47,6 +47,12 @@ import { SignInAgain } from './SignInAgain';
 import { useKeyCheck } from './hooks';
 import { channelKeys, errorText, putChannel, useChannel, useChannelAction } from './queries';
 import { AlwaysOnHint } from '../background/AlwaysOnHint';
+import { googleApi } from '../integrations/googleApi';
+import { appPath, connectPath, TALK_PATH } from '../integrations/paths';
+import { integrationKeys, useIntegrations } from '../integrations/queries';
+
+/** The apps a channel can be a half of (ADR 0052), for the way back. */
+const CATALOG_NAMES: Partial<Record<string, string>> = { slack: 'Slack', gmail: 'Gmail' };
 
 /** `/channels/:id`: one channel — who can talk to it, how it's doing, and its settings. */
 export function ChannelDetailView({ channelId }: { channelId: string }) {
@@ -62,9 +68,9 @@ export function ChannelDetailView({ channelId }: { channelId: string }) {
     return (
       <div className={styles.page}>
         <EmptyState
-          title="That channel isn’t connected"
+          title="That isn’t connected any more"
           description="It may have been disconnected on another device."
-          actions={<Button onClick={() => void navigate('/channels')}>See your channels</Button>}
+          actions={<Button onClick={() => void navigate(TALK_PATH)}>See all apps</Button>}
         />
       </div>
     );
@@ -120,7 +126,7 @@ function Detail({ channel }: { channel: Channel }) {
         data ? { ...data, channels: data.channels.filter((c) => c.id !== channel.id) } : data,
       );
       toast(`${app.name} is disconnected.`);
-      void navigate('/channels');
+      void navigate(TALK_PATH);
     } catch (error) {
       toast.error(errorText(error, 'Couldn’t disconnect it.'));
     }
@@ -136,7 +142,10 @@ function Detail({ channel }: { channel: Channel }) {
         leadingIcon={<ArrowLeft />}
         className={styles.back}
       >
-        <Link to="/channels">Channels</Link>
+        {/* Back to the app it's a half of (Slack, Gmail), or to Apps. */}
+        <Link to={channel.app ? appPath(channel.app) : TALK_PATH}>
+          {channel.app ? (CATALOG_NAMES[channel.app] ?? 'Apps') : 'Apps'}
+        </Link>
       </Button>
 
       <header className={styles.detailHeader}>
@@ -192,6 +201,8 @@ function Detail({ channel }: { channel: Channel }) {
       </header>
 
       <Health channel={channel} onRepair={() => repair.mutate([])} repairing={repair.isPending} />
+
+      <OtherHalf channel={channel} />
 
       {channel.enabled && <AlwaysOnHint what={`${app.name} reaches you`} />}
 
@@ -598,5 +609,70 @@ function AccessFix({ channel }: { channel: Channel }) {
     <Callout tone="warning" title="Turn on Full Disk Access">
       <FullDiskAccessSteps app={setup.data?.app ?? 'Terminal'} />
     </Callout>
+  );
+}
+
+/**
+ * A channel that's one half of an app (ADR 0052) offers the other half, once:
+ * Gmail can use the email channel's app password in one tap (asked, never
+ * done by itself, ADR 0048); Slack's reading and sending is a separate key
+ * from the same Slack app, so it opens Slack's own setup.
+ */
+function OtherHalf({ channel }: { channel: Channel }) {
+  const navigate = useNavigate();
+  const client = useQueryClient();
+  const auth = useAuth();
+  const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
+  const assistant = useAppState().data?.persona.name ?? 'Conch';
+  const { data } = useIntegrations();
+  const [busy, setBusy] = useState(false);
+  if (!channel.app || !data || data.integrations.some((i) => i.catalogId === channel.app))
+    return dialog;
+  if (channel.app === 'slack')
+    return (
+      <Callout
+        tone="info"
+        title={`Let ${assistant} read and send in Slack too?`}
+        action={
+          <Button size="sm" variant="surface" onClick={() => void navigate(connectPath('slack'))}>
+            Set it up
+          </Button>
+        }
+      >
+        The same Slack app can let {assistant} catch you up on channels, search, and post for you
+        when you say yes. It takes one more key from it, the one that acts as you.
+      </Callout>
+    );
+  if (channel.app !== 'gmail') return dialog;
+  const shareWithGmail = async () => {
+    setBusy(true);
+    try {
+      await guard(async () => {
+        await googleApi.reuse();
+        await client.invalidateQueries({ queryKey: integrationKeys.all });
+        toast.success(`${assistant} can search your Gmail now.`);
+      });
+    } catch (error) {
+      toast.error(errorText(error, 'Gmail couldn’t be reached. Try again.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      {dialog}
+      <Callout
+        tone="info"
+        title={`Let ${assistant} search your Gmail too?`}
+        action={
+          <Button size="sm" variant="surface" loading={busy} onClick={() => void shareWithGmail()}>
+            Use it for Gmail
+          </Button>
+        }
+      >
+        Gmail the app can use the same app password: {assistant} finds and reads your email, and
+        saves drafts when you say yes. It never sends from there.
+      </Callout>
+    </>
   );
 }

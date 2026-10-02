@@ -81,10 +81,7 @@ export function OAuthDone() {
           onClick={() => {
             window.close();
             // Opened as a tab after all: go back into Conch instead.
-            setTimeout(
-              () => window.location.assign(id ? `/integrations/${id}` : '/integrations'),
-              150,
-            );
+            setTimeout(() => window.location.assign(id ? `/apps/${id}` : '/apps'), 150);
           }}
         >
           {ok ? 'Close' : 'Back to Conch'}

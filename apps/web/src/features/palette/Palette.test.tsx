@@ -83,7 +83,8 @@ const preview: SearchPreview = {
 };
 
 function Where() {
-  return <output data-testid="where">{useLocation().pathname}</output>;
+  const { pathname, search } = useLocation();
+  return <output data-testid="where">{pathname + search}</output>;
 }
 
 describe('Palette search', () => {
@@ -858,6 +859,56 @@ describe('Palette search', () => {
     useUi.setState({ settings: null, settingsFocus: undefined });
   });
 
+  it('finds Apps by its old names too: integrations, and channels for Talk to me here', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'GET /api/integrations': () => ({
+        catalog: [
+          {
+            id: '1password',
+            name: '1Password',
+            tagline: 'Sign-ins and Environments',
+            description: '',
+            category: 'developer',
+            auth: 'none',
+            local: true,
+            fields: [],
+            steps: [],
+            examples: [],
+            access: [],
+            featured: false,
+          },
+        ],
+        providers: [],
+        integrations: [],
+      }),
+    });
+    renderApp(
+      <>
+        <Palette />
+        <Routes>
+          <Route path="*" element={<Where />} />
+        </Routes>
+      </>,
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'integrations');
+    await user.click(await screen.findByRole('option', { name: /^Apps/ }));
+    expect(screen.getByTestId('where')).toHaveTextContent('/apps');
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'channels');
+    await user.click(await screen.findByRole('option', { name: /^Talk to me here/ }));
+    expect(screen.getByTestId('where')).toHaveTextContent('/apps?show=talk');
+    // 1Password is one place for both its halves: its page, not a dialog for one of them.
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), '1password');
+    await user.click(await screen.findByRole('option', { name: /1Password.*Connect/ }));
+    expect(screen.getByTestId('where')).toHaveTextContent('/apps/1password');
+  });
+
   it('finds Gmail, Calendar and Drive as apps: open one that’s connected, connect the others', async () => {
     const user = userEvent.setup();
     const google = (id: string, name: string) => ({
@@ -913,7 +964,7 @@ describe('Palette search', () => {
     const box = await screen.findByRole('combobox');
     await user.type(box, 'gmail');
     await user.click(await screen.findByRole('option', { name: /Gmail.*Open/ }));
-    expect(screen.getByTestId('where')).toHaveTextContent('/integrations/gmail');
+    expect(screen.getByTestId('where')).toHaveTextContent('/apps/gmail');
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'calendar');
     expect(
@@ -1063,7 +1114,7 @@ describe('Palette search', () => {
     expect(
       await screen.findByRole('option', { name: /Ada’s Conch on Telegram/ }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /^Channels/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^Talk to me here/ })).toBeInTheDocument();
     // Found by the words people type, in their own language too.
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), '微信');

@@ -89,14 +89,21 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
   const listPane = useRef<HTMLElement>(null);
   const location = useLocation();
 
-  // ⌘K's "New password", "Import passwords" and "Check my passwords" arrive here.
-  const asked = location.state as { new?: VaultItemType; import?: boolean; check?: boolean } | null;
+  // ⌘K's "New password", "Import passwords" and "Check my passwords" arrive here, and
+  // 1Password's "Set up" in Apps (the other password managers, ADR 0052).
+  const asked = location.state as {
+    new?: VaultItemType;
+    import?: boolean;
+    check?: boolean;
+    sources?: boolean;
+  } | null;
   const [handled, setHandled] = useState<unknown>(null);
   if (asked && asked !== handled) {
     setHandled(asked);
     if (asked.new) setMode({ kind: 'new', type: asked.new });
     if (asked.import) setImporting(true);
     if (asked.check) setFilter({ kind: 'all' });
+    if (asked.sources) setSourcesOpen(true);
   }
   useEffect(() => {
     if (location.state) void navigate(location.pathname, { replace: true, state: null });

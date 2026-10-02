@@ -81,7 +81,7 @@ describe('integrations over HTTP', () => {
       `/integrations/done?id=${integration.id}&result=connected`,
     );
     const replay = await app.inject(`${back.pathname}${back.search}`);
-    expect(replay.headers.location).toBe('/integrations?result=expired');
+    expect(replay.headers.location).toBe('/apps?result=expired');
 
     const detail = (await app.inject(`/api/integrations/${integration.id}`)).json();
     expect(detail.health.state).toBe('ok');
@@ -98,9 +98,7 @@ describe('integrations over HTTP', () => {
     const { integration, authorizeUrl } = created.json();
     const state = new URL(authorizeUrl).searchParams.get('state');
     const res = await app.inject(`/oauth/callback?state=${state}&error=access_denied`);
-    expect(res.headers.location).toBe(
-      `/integrations/${integration.id}?id=${integration.id}&result=denied`,
-    );
+    expect(res.headers.location).toBe(`/apps/${integration.id}?id=${integration.id}&result=denied`);
   });
 
   it('refuses anything cross-site on the API', async () => {
@@ -121,12 +119,10 @@ describe('integrations over HTTP', () => {
 
   it('rejects junk on the callback without touching anything', async () => {
     const { app } = await setup();
-    expect((await app.inject('/oauth/callback')).headers.location).toBe(
-      '/integrations?result=expired',
-    );
+    expect((await app.inject('/oauth/callback')).headers.location).toBe('/apps?result=expired');
     expect(
       (await app.inject(`/oauth/callback?state=${'x'.repeat(300)}&code=abc`)).headers.location,
-    ).toBe('/integrations?result=expired');
+    ).toBe('/apps?result=expired');
   });
 
   it('asks you to confirm before adding a command or trusting an integration', async () => {

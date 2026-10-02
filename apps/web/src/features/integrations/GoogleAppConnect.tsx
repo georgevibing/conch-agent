@@ -1,9 +1,13 @@
 import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
+import { channelsApi } from '../channels/api';
 import { OpenButton, stepState } from '../channels/ConnectChannel';
+import { whoOf } from '../channels/describe';
+import { putChannel, useChannels } from '../channels/queries';
 import {
   GMAIL_APP_PASSWORD,
   type CatalogEntry,
+  type Channel,
   type GoogleAppId,
   type GoogleCapability,
   type Integration,
@@ -24,7 +28,7 @@ import {
   type HandshakePhase,
 } from '@conch/nacre';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CornerDownLeft, RotateCw } from 'lucide-react';
+import { CornerDownLeft, MessageCircle, RotateCw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -110,7 +114,10 @@ export function GoogleAppConnect({
       {!(inChat && connected) && (
         <Dialog.Body>
           {connected ? (
-            <TryIt entry={entry} onPick={tryIt} />
+            <Stack gap={5}>
+              {app === 'gmail' && <TalkByEmail />}
+              <TryIt entry={entry} onPick={tryIt} />
+            </Stack>
           ) : path === 'password' ? (
             <Stack gap={5}>
               <GmailPassword onConnected={done} onChecking={setChecking} />
@@ -190,7 +197,7 @@ export function GoogleAppConnect({
                 variant="ghost"
                 onClick={() => {
                   onClose();
-                  void navigate(`/integrations/${app}`);
+                  void navigate(`/apps/${app}`);
                 }}
               >
                 Choose what it can do
@@ -199,6 +206,73 @@ export function GoogleAppConnect({
             </>
           )}
         </Dialog.Footer>
+      )}
+    </>
+  );
+}
+
+/**
+ * Once Gmail is connected with an app password, talking to the assistant by
+ * email can use the same one (ADR 0052): offered in one tap, never done by
+ * itself, and only the address is ever shown.
+ */
+function TalkByEmail() {
+  const assistant = useAssistantName();
+  const client = useQueryClient();
+  const auth = useAuth();
+  const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
+  const { data: channels } = useChannels();
+  const offer = useQuery({
+    queryKey: ['channels', 'gmail-offer'],
+    queryFn: channelsApi.gmailOffer,
+  });
+  const [made, setMade] = useState<Channel>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const address = offer.data?.address;
+  if (!made && (!address || channels?.channels.some((c) => c.kind === 'email'))) return dialog;
+  const turnOn = async () => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await guard(async () => {
+        const channel = await channelsApi.fromGmail();
+        putChannel(client, channel);
+        setMade(channel);
+      });
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'That didn’t work. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      {dialog}
+      {made ? (
+        <Callout
+          tone="success"
+          icon={<MessageCircle />}
+          title="You can talk to it by email now"
+          live="polite"
+        >
+          Write to {whoOf(made)} from any mail app, and {assistant} answers there.
+        </Callout>
+      ) : (
+        <Callout
+          tone="info"
+          icon={<MessageCircle />}
+          title={`Talk to ${assistant} by email too?`}
+          action={
+            <Button size="sm" loading={busy} onClick={() => void turnOn()}>
+              Turn it on
+            </Button>
+          }
+        >
+          It uses the app password Gmail already has: write to {address?.replace('@', '+conch@')}{' '}
+          from any mail app, and the answer comes back. Only you can reach it.
+          {error && <Text tone="danger">{error}</Text>}
+        </Callout>
       )}
     </>
   );
