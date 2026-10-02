@@ -113,7 +113,9 @@ computer aren't touched.
 
 - **The PTY.**
   - `node-pty` ships prebuilt binaries for Windows and macOS. On Linux it compiles
-    at install.
+    at install. It is an `optionalDependency`, so a failed native build cannot
+    abort dependency installation. The server loads it lazily and has no type
+    dependency on the package being present.
   - If it can't load, Conch falls back without asking: to a small Python PTY bridge
     on POSIX (`python3` is almost always there), else to a basic pipe-backed shell.
     Either way, it notes that it did.

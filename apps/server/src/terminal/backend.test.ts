@@ -1,10 +1,99 @@
-import { mkdirSync, mkdtempSync, statSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { ensureSpawnHelper } from './backend';
+import { basicBackend, ensureSpawnHelper, loadBackend } from './backend';
+
+const noNative = () => {
+  throw Object.assign(new Error("Cannot find module 'node-pty'"), { code: 'MODULE_NOT_FOUND' });
+};
+
+describe('optional native terminal', () => {
+  it('is optional in the package manifest, not a required or development dependency', () => {
+    const manifest = JSON.parse(
+      readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+    );
+    expect(manifest.optionalDependencies['node-pty']).toEqual(expect.any(String));
+    expect(manifest.dependencies['node-pty']).toBeUndefined();
+    expect(manifest.devDependencies['node-pty']).toBeUndefined();
+  });
+
+  it('uses the native backend first without looking for Python', () => {
+    const native = { ...basicBackend(), kind: 'pty' as const };
+    const python = vi.fn();
+    const heal = vi.fn();
+    expect(loadBackend(heal, { native: () => native, python })).toBe(native);
+    expect(python).not.toHaveBeenCalled();
+    expect(heal).not.toHaveBeenCalled();
+  });
+
+  it('uses Python after a missing or failed native build', () => {
+    const heal = vi.fn();
+    expect(
+      loadBackend(heal, { native: noNative, python: () => 'python3', platform: 'linux' }).kind,
+    ).toBe('python');
+    expect(heal).toHaveBeenCalledWith(expect.stringContaining('through Python'));
+  });
+
+  it('still opens basic terminals when Python is missing', () => {
+    const heal = vi.fn();
+    expect(
+      loadBackend(heal, { native: noNative, python: () => undefined, platform: 'linux' }).kind,
+    ).toBe('basic');
+    expect(heal).toHaveBeenCalledWith(expect.stringContaining('full-screen programs don’t'));
+  });
+
+  it('does not attempt the POSIX Python bridge on Windows', () => {
+    const python = vi.fn(() => 'python3');
+    expect(loadBackend(() => {}, { native: noNative, python, platform: 'win32' }).kind).toBe(
+      'basic',
+    );
+    expect(python).not.toHaveBeenCalled();
+  });
+
+  const pythonAvailable =
+    process.platform !== 'win32' &&
+    spawnSync('python3', ['-c', 'import pty, termios, fcntl']).status === 0;
+  it.skipIf(!pythonAvailable)(
+    'runs a real Python PTY with native code absent: input, output, tty, exit status',
+    async () => {
+      const backend = loadBackend(() => {}, { native: noNative, python: () => 'python3' });
+      const child = backend.spawn(
+        '/bin/sh',
+        [
+          '-c',
+          'test -t 0 && test -t 1 || exit 99; printf "READY\\n"; read line; printf "GOT:%s\\n" "$line"; exit 7',
+        ],
+        {
+          cols: 80,
+          rows: 24,
+          cwd: tmpdir(),
+          env: { PATH: process.env.PATH ?? '' },
+        },
+      );
+      let output = '';
+      let code: number | undefined;
+      child.onData((data) => {
+        output += data;
+      });
+      child.onExit((exit) => {
+        code = exit.exitCode;
+      });
+      try {
+        await vi.waitFor(() => expect(output).toContain('READY'));
+        child.resize(100, 30);
+        child.write('hello\n');
+        await vi.waitFor(() => expect(output).toContain('GOT:hello'));
+        await vi.waitFor(() => expect(code).toBe(7));
+      } finally {
+        child.kill();
+      }
+    },
+  );
+});
 
 describe('node-pty’s spawn helper', () => {
   it.skipIf(process.platform === 'win32')(

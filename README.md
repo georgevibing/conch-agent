@@ -35,14 +35,19 @@ On Windows, in PowerShell:
 irm https://raw.githubusercontent.com/giotiskl/conch-agent/main/scripts/install.ps1 | iex
 ```
 
-It gets Node.js and Git if you don't have them (into Conch's own folder, checked
-against their checksums, no administrator), builds Conch, keeps it running in the
+It gets Node.js and Git if you don't have them, builds Conch, keeps it running in the
 background, adds **Conch** to your apps and opens it. Then Conch looks for what you
 already have, helps you connect a provider (and sign in, or install what's missing),
 and asks a couple of optional questions so it can be _yours_. Run the line again to
 update; add `--uninstall` to remove it. For a computer that stays on (a Mac mini, a
 Raspberry Pi), add `--server`: no browser, it keeps running after you log out, and it
 prints your phone's secure address and a QR code to sign the phone in.
+
+Conch runs as you. On Linux and macOS, the installer offers missing terminal build
+tools before installing dependencies, showing what it will run and asking before
+changing system packages. Decline, or use `--no-system-packages`, to continue
+without them: full terminals can use Python 3, with basic commands as a last resort.
+An unavailable native terminal backend never prevents Conch from installing.
 
 From a checkout instead (Node ≥ 24):
 

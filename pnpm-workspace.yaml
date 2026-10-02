@@ -4,7 +4,8 @@ packages:
 
 allowBuilds:
   esbuild: true
-  # Its install step picks the prebuilt binary for this machine (or compiles on Linux).
+  # Optional: picks a prebuilt binary (or compiles on Linux). If it fails,
+  # installation still succeeds and terminals use Python/basic mode.
   node-pty: true
 autoInstallPeers: true
 minimumReleaseAgeExclude:

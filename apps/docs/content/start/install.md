@@ -8,11 +8,19 @@ order: 1
 
 That is the whole setup. The line does three things:
 
-1. Gets Node.js and Git if you don't have them. They go into Conch's own folder, checked against their checksums, and nothing needs an administrator.
+1. Gets Node.js and Git if you don't have them. Node.js goes into Conch's own folder, checked against its checksum. On Linux, installing Git may ask for your administrator password.
 2. Builds Conch and keeps it running in the background, so it's there when you log in.
 3. Adds **Conch** to your apps and opens it.
 
 Conch then looks for what you already have, helps you [connect a provider](./first-chat.md), and asks a couple of optional questions so it can be yours.
+
+## If the installer asks for permission
+
+On Linux and macOS, Conch checks the tools its terminal needs before installing its parts. If any are missing, it shows what it will install and asks first. On Debian and Ubuntu, these are `build-essential` and `python3`. Only system-package installation uses administrator access. Conch itself runs as you.
+
+You can say no. Conch still installs, and full terminals can use Python 3 instead. If neither option is available, terminal commands work in basic mode, without full-screen programs. The installer tells you which one is ready.
+
+To skip optional system packages, add `--no-system-packages` (Git must already be installed). With no keyboard available, the installer never waits for an administrator password. It leaves system packages alone and continues with the terminal fallback.
 
 ## Update or remove
 

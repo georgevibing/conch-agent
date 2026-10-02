@@ -13,6 +13,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "test:installer": "node --test scripts/install.test.mjs",
     "storybook": "pnpm --filter @conch/nacre storybook",
     "build-storybook": "pnpm --filter @conch/nacre build-storybook",
     "docs:dev": "pnpm --filter @conch/docs start",

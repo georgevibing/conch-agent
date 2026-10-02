@@ -5,10 +5,12 @@
 #
 # It gets what Conch needs (Node.js and Git, when they're missing), puts
 # Conch in its own folder, builds it, keeps it running in the background,
-# adds "Conch" to your apps and opens it. Nothing needs an administrator.
+# adds "Conch" to your apps and opens it. System packages ask for permission;
+# Conch itself always runs as you.
 # Run it again any time: it updates Conch and repairs anything that moved.
 #
 #   sh install.sh [--no-background] [--no-shortcut] [--no-open] [--dir PATH]
+#   sh install.sh --no-system-packages   skip optional system-package setup
 #   sh install.sh --server     a little computer: headless, keeps running, your phone's address
 #   sh install.sh --uninstall [--delete-data]
 #
@@ -26,6 +28,7 @@ OPEN=1
 UNINSTALL=
 DELETE_DATA=
 SERVER=
+SYSTEM_PACKAGES=1
 
 case "$(uname -s)" in
   Darwin) OS=darwin; DEFAULT_DIR="$HOME/Library/Application Support/Conch/app" ;;
@@ -39,12 +42,17 @@ while [ $# -gt 0 ]; do
     --no-background) BACKGROUND= ;;
     --no-shortcut) SHORTCUT= ;;
     --no-open) OPEN= ;;
+    --no-system-packages) SYSTEM_PACKAGES= ;;
     --dir) shift; DIR=$1 ;;
     --dir=*) DIR=${1#--dir=} ;;
     --uninstall) UNINSTALL=1 ;;
     --server) SERVER=1; OPEN=; SHORTCUT= ;;
     --delete-data) DELETE_DATA=1 ;;
-    -h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)
+      printf '%s\n' 'Conch installer: --no-background --no-shortcut --no-open --dir PATH' \
+        '  --no-system-packages  Skip optional system packages (Git must already be installed)' \
+        '  --server             Headless setup for a computer that stays on' \
+        '  --uninstall [--delete-data]'; exit 0 ;;
     *) echo "Unknown option: $1 (try --help)" >&2; exit 1 ;;
   esac
   shift
@@ -69,9 +77,12 @@ fail() {
   exit 1
 }
 # Questions come from the keyboard even when this script arrives through a pipe.
+has_keyboard() { ( : < /dev/tty ) 2>/dev/null; }
 ask() {
+  REPLY=n
+  has_keyboard || return 1
   printf '  %s ' "$1"
-  if [ -r /dev/tty ]; then read -r REPLY < /dev/tty || REPLY=; else REPLY=; fi
+  read -r REPLY < /dev/tty || { REPLY=n; return 1; }
 }
 LOG=$(mktemp "${TMPDIR:-/tmp}/conch-install.XXXXXX")
 trap 'rm -f "$LOG"' EXIT
@@ -87,7 +98,7 @@ printf '\n  %s🐚  Conch%s\n\n' "$BOLD" "$RESET"
 
 if [ "$(id -u)" = 0 ]; then
   fail "Run this as yourself, not with sudo." \
-    "Conch lives in your own folders and runs as you; it never needs an administrator."
+    "Conch runs as you. The installer asks separately if it needs to install system packages."
 fi
 
 # ── Node.js ──────────────────────────────────────────────────────────────
@@ -150,12 +161,16 @@ has_git() {
 }
 
 get_git() {
+  [ -n "$SYSTEM_PACKAGES" ] || fail "Conch needs Git before it can continue." \
+    "Install Git, or run this again without --no-system-packages."
   if [ "$OS" = darwin ]; then
     if command -v brew >/dev/null 2>&1; then
       step "Getting Git with Homebrew"
       quietly brew install git || fail "Homebrew couldn't install Git." "Run: brew install git"
       return
     fi
+    has_keyboard || fail "Conch needs Git, which comes with Apple's Command Line Tools." \
+      "Run: xcode-select --install, then run this again."
     say "Conch needs Git, which comes with Apple's Command Line Tools."
     say "${BOLD}A window opens now: press Install, and Conch carries on when it's done.${RESET}"
     xcode-select --install >/dev/null 2>&1 || true
@@ -178,7 +193,8 @@ get_git() {
     esac
     say "Conch needs Git. Installing it needs your password once:"
     say "${DIM}$CMD${RESET}"
-    ask "Install Git now? [Y/n]"
+    command -v sudo >/dev/null 2>&1 && ask "Install Git now? [Y/n]" ||
+      fail "Conch needs Git before it can continue." "Run: $CMD, then run this again."
     case "$REPLY" in [nN]*) fail "Conch needs Git." "Run: $CMD, then run this again." ;; esac
     # shellcheck disable=SC2086
     $CMD < /dev/tty || fail "Git didn't install." "Run: $CMD, then run this again."
@@ -217,7 +233,7 @@ if [ -n "$UNINSTALL" ]; then
   ok "Removed Conch from $DIR"
   if [ -n "$DELETE_DATA" ]; then
     say "This also deletes your chats, memories, routines, settings and passwords in $HOME_DIR."
-    ask "Type ${BOLD}delete${RESET} to delete them for good:"
+    ask "Type ${BOLD}delete${RESET} to delete them for good:" || true
     if [ "$REPLY" = delete ]; then rm -rf "$HOME_DIR"; ok "Deleted $HOME_DIR"
     else say "Kept $HOME_DIR."; fi
   else
@@ -259,9 +275,29 @@ else
 fi
 ok "Conch $(sed -n "s/.*SERVER_VERSION = '\([^']*\)'.*/\1/p" "$DIR/apps/server/src/version.ts" | head -n 1) ${DIM}(in $DIR)${RESET}"
 
+# Sourced from the checkout so the one-line installer also works through a pipe.
+# Older branches may not have this optional setup yet.
+if [ -f "$DIR/scripts/install-prerequisites.sh" ]; then
+  . "$DIR/scripts/install-prerequisites.sh"
+  ensure_terminal_prerequisites
+fi
+
 step "Installing what Conch uses (a minute or two the first time)"
-(cd "$DIR" && quietly pnpm_run install --frozen-lockfile) ||
+(cd "$DIR" && quietly pnpm_run install --frozen-lockfile --config.confirmModulesPurge=false) ||
   fail "Installing didn't finish." "Run this again; the lines above say what went wrong."
+# Check the installed backend, not just whether a compiler was found. Optional
+# native builds can still fail (network, platform, ABI); the fallback is usable.
+if TERMINAL=$(cd "$DIR" && pnpm_run --silent --filter @conch/server exec tsx -e \
+  "import { loadBackend } from './src/terminal/backend.ts'; console.log(loadBackend(() => {}).kind)" 2>"$LOG"); then
+  case "$TERMINAL" in
+    pty) ok "Full terminal ready" ;;
+    python) ok "Full terminal ready (using Python; no native build needed)" ;;
+    basic) warn "Terminal commands work in basic mode; full-screen programs need Python or the native terminal tools." ;;
+    *) warn "Conch will choose the best available terminal when it starts." ;;
+  esac
+else
+  warn "The terminal check couldn't finish; Conch will check again when it starts."
+fi
 step "Building the app"
 (cd "$DIR" && quietly pnpm_run --filter @conch/web build) ||
   fail "Building Conch didn't finish." "Run this again; the lines above say what went wrong."

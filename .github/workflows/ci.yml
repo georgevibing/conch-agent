@@ -20,6 +20,7 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm test:installer
       - run: pnpm check
       - run: pnpm build-storybook
       - run: pnpm docs:build

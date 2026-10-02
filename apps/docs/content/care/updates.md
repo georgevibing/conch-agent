@@ -31,6 +31,8 @@ Conch goes back to the version you had and says what happened in one sentence, w
 
 Conch only moves forward, to exactly the version it showed you, and never over a file of yours. If you changed files in Conch's own folder, it doesn't update by itself. It says why and shows the commands to run by hand, ready to copy.
 
+Updates never ask for your computer's administrator password in the background. The native terminal library is optional: if it cannot build, Conch uses its terminal fallback. If a Linux release requires that build, Conch checks its tools before changing any files. When tools are missing, it leaves the running version untouched and asks you to rerun the [installer](../start/install.md) from a terminal on that computer.
+
 ## Update a program
 
 Press **Update to** and the version number beside a program. Conch updates it the way it was installed and shows the installer's progress. **Update all** does every waiting one, one at a time.

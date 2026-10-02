@@ -97,7 +97,10 @@ Mostly, you won't notice: Conch fixes it by itself.
 - **A graphics problem** switches the terminal to a simpler way of drawing, without
   a flicker.
 - If Conch's usual way of running terminals can't load on this computer, it uses a
-  simpler one. Settings → Terminal lists what it fixed, under _Fixed on its own_.
+  Python 3 terminal on macOS or Linux. If neither is available, basic commands
+  still work, without full-screen programs. The native library is optional, so
+  failing to build it never blocks installation or an update. Settings → Terminal
+  lists what it fixed, under _Fixed on its own_.
 
 ## For developers
 

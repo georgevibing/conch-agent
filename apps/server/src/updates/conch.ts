@@ -18,6 +18,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import type { ConchUpdateStep } from '@conch/protocol';
 
 import { agentEnv, findExecutable, launch, run, type Launch, type RunResult } from '../lib/proc';
+import { missingNativeBuildTools, requiresNativeBuild } from './prerequisites';
 import { whatsNew } from './whatsnew';
 
 /** How long one git or pnpm step may take. */
@@ -186,6 +187,7 @@ export interface CheckoutDeps {
   git?: () => Promise<string | undefined>;
   pnpm?: () => Promise<Launch | undefined>;
   stream?: Stream;
+  nativeBuildTools?: () => Promise<string[]>;
 }
 
 /** What the upstream's host is called, for "GitHub asked for a sign-in". */
@@ -414,6 +416,35 @@ export class ConchCheckout {
     // Exactly the commit that was checked: what "What's new" listed is what arrives.
     const to = check.target;
     if (!to) return { kind: 'failed', message: 'Conch couldn’t read the update it just got.' };
+
+    // A system-package prompt cannot be answered in the background. Check the
+    // target manifest before touching the working checkout or node_modules.
+    // Optional native builds use the terminal fallback and need no approval.
+    const manifest = await git(['show', `${to}:apps/server/package.json`]);
+    if (manifest.code !== 0)
+      return {
+        kind: 'refused',
+        reason:
+          'Conch couldn’t read the update’s package list, so it left the version you have untouched. Check for updates again.',
+      };
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(manifest.stdout);
+    } catch {
+      return {
+        kind: 'refused',
+        reason:
+          'The update has an unreadable package list. Conch left the version you have untouched.',
+      };
+    }
+    if (requiresNativeBuild(parsed)) {
+      const missing = await (this.deps.nativeBuildTools ?? missingNativeBuildTools)();
+      if (missing.length)
+        return {
+          kind: 'refused',
+          reason: `This update requires ${missing.join(', ')} for its terminal. Run Conch’s installer from a terminal on this computer to set them up, then update again. Conch left the version you have untouched.`,
+        };
+    }
 
     // `--no-overwrite-ignore`: a file git ignores (a `.env`, your own notes)
     // that the new version adds is never replaced; the update stops instead.

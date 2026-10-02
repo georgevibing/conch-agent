@@ -59,10 +59,24 @@ in order:
    This is not `~/.conch`, which is the person's data and is backed up
    (ADR 0020).
 
-4. `pnpm install --frozen-lockfile` and the web build, through Node's own
+4. **Terminal prerequisites** (macOS/Linux), before dependency installation.
+   `scripts/install-prerequisites.sh` detects Python 3, make and C/C++ compilers.
+   Linux offers fixed commands for apt, dnf, pacman, zypper or apk; Debian/Ubuntu
+   refresh the package index and install `build-essential python3`. macOS offers
+   Apple's Command Line Tools and, when needed and available, Homebrew Python.
+   Each system change is shown and approved through the controlling terminal.
+   Sudo authenticates there once; package commands use `sudo -n`, never a stored
+   password. Conch, pnpm, lifecycle scripts and the build remain unprivileged.
+   Declined permission, missing sudo, no keyboard, failed package installation,
+   unsupported managers and `--no-system-packages` all continue to the fallback.
+   No repository configuration is changed and no system upgrade is performed.
+5. `pnpm install --frozen-lockfile` and the web build, through Node's own
    corepack (pnpm pinned by `packageManager`). Each step is quiet unless it
-   fails, and then it shows the last lines.
-5. **Conch as an app** (`pnpm conch shortcut`), **Always on**
+   fails, and then it shows the last lines. `node-pty` is optional (including in
+   the generated lockfile): a failed native build is not a failed install. The
+   installer probes the actual installed backend and reports native, Python or
+   basic mode instead of promising that the terminal compiled.
+6. **Conch as an app** (`pnpm conch shortcut`), **Always on**
    (`pnpm conch background on`), and the browser opens.
 
 It refuses to run as root. Running it again updates Conch (a fast-forward
@@ -70,6 +84,24 @@ only, never over local changes) and repairs what moved. `--uninstall` stops
 Conch, takes it off the login items and out of the apps, and removes its
 folder. It keeps `~/.conch` unless `--delete-data` is given and the person
 types `delete`.
+
+### Missing tools during updates
+
+The updater never installs system packages or prompts for administrator access.
+Before moving the checkout it reads the target server manifest with `git show`,
+without running target code. Optional native dependencies do not block updates.
+A Linux target that makes `node-pty` mandatory requires Python 3, make and C/C++
+compilers first; otherwise the current checkout and dependencies remain untouched.
+An unreadable target manifest also stops before mutation. Dependency/build
+failures still use the existing rollback (ADR 0019).
+
+This follows [node-gyp's prerequisites](https://github.com/nodejs/node-gyp#installation),
+[node-pty's platform dependencies](https://github.com/microsoft/node-pty#dependencies),
+and [pnpm's optional dependency contract](https://pnpm.io/package_json#optionaldependencies).
+The installer tests use an isolated PATH with fake package managers: consent,
+no TTY, unavailable sudo, failed authentication, install failure, post-install
+rechecks and repeated runs. Runtime tests force a missing native module and
+exercise the real Python PTY's input, output and exit status.
 
 ### Always on
 
@@ -214,8 +246,9 @@ The question is who can turn it on.
   - the LaunchAgent is `0644`, because launchd refuses agents others can
     write.
 
-  Nothing here needs `sudo`. The installer refuses to run as root, so no
-  root-owned file ends up in a home folder.
+  None of these runtime files needs `sudo`. The installer refuses to run as root;
+  only explicitly approved system-package commands may use sudo, so no
+  root-owned Conch file ends up in a home folder.
 
 - **No secrets in the launcher.** The environment it carries is an allowlist,
   and proxies with credentials are dropped.

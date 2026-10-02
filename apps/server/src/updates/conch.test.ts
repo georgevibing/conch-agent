@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -55,7 +55,7 @@ afterEach(async () => {
 });
 
 /** A bare origin, Conch's clone of it, and another clone to push new commits from. */
-async function world() {
+async function world(deps: { nativeBuildTools?: () => Promise<string[]> } = {}) {
   const base = await mkdtemp(join(tmpdir(), 'conch-update-'));
   dirs.push(base);
   const origin = join(base, 'origin.git');
@@ -66,6 +66,8 @@ async function world() {
   git(upstream, 'checkout', '--quiet', '-b', 'main');
   await writeFile(join(upstream, 'version.txt'), '1\n');
   await writeFile(join(upstream, 'pnpm-workspace.yaml'), 'packages: []\n');
+  await mkdir(join(upstream, 'apps/server'), { recursive: true });
+  await writeFile(join(upstream, 'apps/server/package.json'), '{}\n');
   git(upstream, 'add', '.');
   git(upstream, 'commit', '--quiet', '-m', 'feat: the first version');
   git(upstream, 'push', '--quiet', '-u', 'origin', 'main');
@@ -73,6 +75,7 @@ async function world() {
   const pnpmScript = join(base, 'pnpm.js');
   await writeFile(pnpmScript, PNPM);
   const checkout = new ConchCheckout(conch, {
+    ...deps,
     pnpm: () => Promise.resolve({ command: process.execPath, prefix: [pnpmScript] }),
   });
   /** Commit in the upstream clone and push, like a new release. */
@@ -93,6 +96,53 @@ const steps = () => {
   const seen: UpdateProgressReport[] = [];
   return { seen, onProgress: (p: UpdateProgressReport) => seen.push(p) };
 };
+
+describe('update prerequisites before changing the installation', () => {
+  it.skipIf(process.platform !== 'linux')(
+    'leaves HEAD, dependencies and files untouched if a target requires missing build tools',
+    async () => {
+      const nativeBuildTools = vi.fn(async () => ['make', 'a C++ compiler']);
+      const { checkout, conch, release, log } = await world({ nativeBuildTools });
+      const before = git(conch, 'rev-parse', 'HEAD');
+      await writeFile(join(conch, 'local-data'), 'keep me');
+      await release('feat: native terminal', {
+        'apps/server/package.json': JSON.stringify({ dependencies: { 'node-pty': '1.1.0' } }),
+      });
+      expect(await checkout.update(() => {})).toMatchObject({
+        kind: 'refused',
+        reason: expect.stringContaining('requires make, a C++ compiler'),
+      });
+      expect(git(conch, 'rev-parse', 'HEAD')).toBe(before);
+      expect(await log()).toBe('');
+      expect(await readFile(join(conch, 'local-data'), 'utf8')).toBe('keep me');
+      expect(nativeBuildTools).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('installs updates with optional native dependencies without prompting or requiring compilers', async () => {
+    const nativeBuildTools = vi.fn(async () => ['make']);
+    const { checkout, release, log } = await world({ nativeBuildTools });
+    await release('fix: optional terminal backend', {
+      'version.txt': '2\n',
+      'apps/server/package.json': JSON.stringify({ optionalDependencies: { 'node-pty': '1.1.0' } }),
+    });
+    expect(await checkout.update(() => {})).toMatchObject({ kind: 'updated' });
+    expect(await log()).toBe('install 2\nbuild 2');
+    expect(nativeBuildTools).not.toHaveBeenCalled();
+  });
+
+  it('refuses an unreadable target manifest before changing any files', async () => {
+    const { checkout, conch, release, log } = await world();
+    const before = git(conch, 'rev-parse', 'HEAD');
+    await release('fix: invalid package list', { 'apps/server/package.json': '{' });
+    expect(await checkout.update(() => {})).toMatchObject({
+      kind: 'refused',
+      reason: expect.stringContaining('unreadable package list'),
+    });
+    expect(git(conch, 'rev-parse', 'HEAD')).toBe(before);
+    expect(await log()).toBe('');
+  });
+});
 
 // These drive real git against temporary repositories: dozens of processes per
 // test, which is slow on Windows while the rest of the suite runs alongside.

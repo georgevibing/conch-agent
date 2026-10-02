@@ -94,6 +94,8 @@ export function ensureSpawnHelper(
 }
 
 function nodePty(heal: (message: string) => void = () => {}): PtyBackend {
+  // Deliberately lazy and optional: a failed install must not stop the server
+  // loading. Keep the local interface above independent of node-pty's types.
   const pty = require('node-pty') as NodePty;
   const root = dirname(require.resolve('node-pty/package.json'));
   // A helper that can't run means no shell can start: fall back instead.
@@ -274,24 +276,35 @@ export function basicBackend(): PtyBackend {
 
 function findPython(): string | undefined {
   for (const name of ['python3', 'python']) {
-    const probe = spawnSync(name, ['-c', 'import pty, termios, fcntl'], {
-      stdio: 'ignore',
-      timeout: 5_000,
-    });
+    const probe = spawnSync(
+      name,
+      ['-c', 'import sys, pty, termios, fcntl; sys.exit(0 if sys.version_info.major == 3 else 1)'],
+      {
+        stdio: 'ignore',
+        timeout: 5_000,
+      },
+    );
     if (probe.status === 0) return name;
   }
   return undefined;
 }
 
 /** The best way to run terminals here, noting when it had to fall back. */
-export function loadBackend(heal: (message: string) => void): PtyBackend {
+export function loadBackend(
+  heal: (message: string) => void,
+  deps: {
+    native?: (heal: (message: string) => void) => PtyBackend;
+    python?: () => string | undefined;
+    platform?: NodeJS.Platform;
+  } = {},
+): PtyBackend {
   try {
-    return nodePty(heal);
+    return (deps.native ?? nodePty)(heal);
   } catch {
     // The native module didn't load (no prebuild for this system, or the build failed).
   }
-  if (platform() !== 'win32') {
-    const python = findPython();
+  if ((deps.platform ?? platform()) !== 'win32') {
+    const python = (deps.python ?? findPython)();
     if (python) {
       heal(
         'The terminal library couldn’t load here, so Conch runs terminals through Python instead.',
