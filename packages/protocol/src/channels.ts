@@ -19,9 +19,18 @@ import { Id } from './common';
 
 /**
  * The apps Conch can talk through today. WhatsApp and Signal aren't bots:
- * Conch joins your own account as a linked device (ADR 0043).
+ * Conch joins your own account as a linked device (ADR 0043). iMessage and
+ * email answer through accounts that are already yours, too (ADR 0044).
  */
-export const ChannelKind = z.enum(['telegram', 'discord', 'slack', 'whatsapp', 'signal']);
+export const ChannelKind = z.enum([
+  'telegram',
+  'discord',
+  'slack',
+  'whatsapp',
+  'signal',
+  'imessage',
+  'email',
+]);
 export type ChannelKind = z.infer<typeof ChannelKind>;
 
 /**
@@ -53,6 +62,12 @@ export const ChannelHealth = z.object({
   message: z.string().optional(),
   /** When the next automatic try is (epoch ms), while reconnecting. */
   retryAt: z.number().optional(),
+  /**
+   * A switch only you can turn on in System Settings (iMessage): reading
+   * Messages needs Full Disk Access, and sending needs Automation. Conch
+   * notices by itself when it's on.
+   */
+  access: z.enum(['full-disk-access', 'automation']).optional(),
   /** Since when it has been in this state. */
   since: z.number().optional(),
   /** What has to be installed for it to work (a need id, ADR 0016): Signal needs signal-cli. */
@@ -79,6 +94,8 @@ export const ChannelBot = z.object({
   servers: z.number().int().nonnegative().optional(),
   /** WhatsApp, Signal: the number Conch is linked to, as `+4915123456789`. */
   phone: z.string().max(32).optional(),
+  /** iMessage and email: the address you write to (`you+conch@gmail.com`, your own Apple ID). */
+  address: z.string().max(320).optional(),
 });
 export type ChannelBot = z.infer<typeof ChannelBot>;
 
@@ -178,6 +195,49 @@ export const DISCORD_TOKEN =
 
 const secret = z.string().trim().min(1).max(4000);
 
+/**
+ * Mail services Conch knows the settings of (ADR 0044). `other` takes the
+ * server names by hand.
+ */
+export const MailProvider = z.enum(['gmail', 'icloud', 'fastmail', 'outlook', 'other']);
+export type MailProvider = z.infer<typeof MailProvider>;
+
+const host = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z0-9]([a-z0-9-]{0,62}\.)+[a-z]{2,63}$/, 'That isn’t a server name.');
+
+/** An email account Conch reads (IMAP) and answers from (SMTP). */
+const EmailSecrets = z.object({
+  kind: z.literal('email'),
+  provider: MailProvider,
+  address: z.email().max(254),
+  /** An app password, never your account's own password. */
+  password: secret,
+  /** Only for `other`: where its mail lives. Both always use TLS. */
+  server: z
+    .object({
+      imapHost: host,
+      imapPort: z.number().int().min(1).max(65_535).default(993),
+      smtpHost: host,
+      smtpPort: z.number().int().min(1).max(65_535).default(465),
+    })
+    .optional(),
+});
+
+/**
+ * iMessage on this Mac (ADR 0044): `self` is you texting yourself (the Mac
+ * shares your Apple ID); `account` is the Mac signed in to an Apple ID of its
+ * own that people text. Nothing in it is secret: the Mac already has the account.
+ */
+const ImessageSecrets = z.object({
+  kind: z.literal('imessage'),
+  mode: z.enum(['self', 'account']),
+  /** The address Messages uses on this Mac: a phone number or an Apple ID email. */
+  handle: z.string().trim().min(3).max(254),
+});
+
 export const ChannelSecrets = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('telegram'), token: secret }),
   z.object({ kind: z.literal('discord'), token: secret }),
@@ -185,6 +245,8 @@ export const ChannelSecrets = z.discriminatedUnion('kind', [
   // Linked devices: what's kept is where their keys are, not a key (ADR 0043).
   z.object({ kind: z.literal('whatsapp'), session: Id }),
   z.object({ kind: z.literal('signal'), account: z.string().regex(/^\+\d{6,15}$/) }),
+  ImessageSecrets,
+  EmailSecrets,
 ]);
 export type ChannelSecrets = z.infer<typeof ChannelSecrets>;
 
@@ -198,6 +260,8 @@ export const CheckChannelBody = z.discriminatedUnion('kind', [
     botToken: secret.optional(),
     appToken: secret.optional(),
   }),
+  ImessageSecrets,
+  EmailSecrets,
 ]);
 export type CheckChannelBody = z.infer<typeof CheckChannelBody>;
 
@@ -206,7 +270,7 @@ export const ChannelCheck = z.discriminatedUnion('ok', [
     ok: z.literal(true),
     bot: ChannelBot,
     /** Slack: which of the two keys were checked and good. */
-    checked: z.array(z.enum(['token', 'botToken', 'appToken'])).default([]),
+    checked: z.array(z.enum(['token', 'botToken', 'appToken', 'password'])).default([]),
     /** Slack: the app's id, for links straight to its settings pages. */
     appId: z
       .string()
@@ -216,7 +280,7 @@ export const ChannelCheck = z.discriminatedUnion('ok', [
   z.object({
     ok: z.literal(false),
     /** Which key is wrong, when there are two. */
-    field: z.enum(['token', 'botToken', 'appToken']).optional(),
+    field: z.enum(['token', 'botToken', 'appToken', 'password', 'address', 'server']).optional(),
     /** Plain words: what's wrong and what to do. */
     message: z.string(),
   }),
@@ -246,3 +310,26 @@ export const ChannelOrigin = z.object({
   channel: ChannelKind,
 });
 export type ChannelOrigin = z.infer<typeof ChannelOrigin>;
+
+/**
+ * `GET /api/channels/imessage`: what connecting iMessage on this Mac would
+ * use, read from Messages itself so nobody types an address.
+ *
+ * - `access`: `ready` (Conch can read Messages), `full-disk-access` (macOS
+ *   hides it until you turn that on for `app`), `no-messages` (Messages was
+ *   never set up here), `not-mac`.
+ * - `handles`: the addresses this Mac's Messages sends from, most used first.
+ */
+export const ImessageSetup = z.object({
+  access: z.enum(['ready', 'full-disk-access', 'no-messages', 'not-mac']),
+  handles: z.array(z.string().max(254)).max(20).default([]),
+  /** The app that needs Full Disk Access: Terminal, iTerm, Conch, node… */
+  app: z.string().max(100).optional(),
+});
+export type ImessageSetup = z.infer<typeof ImessageSetup>;
+
+/** `POST /api/channels/imessage/open`: open the System Settings page (or Messages) to fix it. */
+export const OpenImessageBody = z.object({
+  place: z.enum(['full-disk-access', 'automation', 'messages', 'show-app']),
+});
+export type OpenImessageBody = z.infer<typeof OpenImessageBody>;
