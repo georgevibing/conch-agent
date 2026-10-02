@@ -127,7 +127,7 @@ export const BackupPower = z.discriminatedUnion('kind', [
     names: z.array(PowerText).max(20),
     more: z.number().int().nonnegative().default(0),
   }),
-  /** Pages that read live data from these sites without asking again (ADR 0039). */
+  /** Pages that read live data from these sites without asking again (ADR 0046). */
   z.object({
     kind: z.literal('page-data-sites'),
     sites: z.array(PowerText).max(20),

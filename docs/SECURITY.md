@@ -354,4 +354,4 @@ site for that page:
   page can only choose from values it declared.
 - A different address asks again. **Settings → Security → Live data in pages**
   lists every site, and **Take back** removes one.
-  ([ADR 0039](./adr/0039-edit-by-hand-and-live-data.md))
+  ([ADR 0046](./adr/0046-edit-by-hand-and-live-data.md))

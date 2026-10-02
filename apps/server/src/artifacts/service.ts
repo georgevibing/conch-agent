@@ -78,7 +78,7 @@ export interface ArtifactDeps {
   store: ArtifactStore;
   conversations: () => ConversationManager;
   emit: (event: ServerEvent) => void;
-  /** Who said which page may read from where (ADR 0039). */
+  /** Who said which page may read from where (ADR 0046). */
   access: LiveDataAccess;
   /** Conch's own port: a page never reads from it. */
   gatewayPort: number;
@@ -150,7 +150,7 @@ export class ArtifactService {
   }
 
   /**
-   * A version you made by hand (ADR 0039). It's marked as yours, the chat
+   * A version you made by hand (ADR 0046). It's marked as yours, the chat
    * it was made in says so, and the next turn there builds on it.
    */
   async edit(id: string, input: { content: string; base: number; force?: boolean }) {
@@ -402,7 +402,7 @@ export class ArtifactService {
   }
 
   /**
-   * What the user changed by hand in this chat's artifacts (ADR 0039): the
+   * What the user changed by hand in this chat's artifacts (ADR 0046): the
    * newest version is theirs, so the next change starts from it.
    */
   async editedSection(conversationId: string | undefined): Promise<string> {
@@ -541,7 +541,7 @@ export class ArtifactService {
   }
 
   /**
-   * Repair everything: the list of sites pages may read from (ADR 0039). A
+   * Repair everything: the list of sites pages may read from (ADR 0046). A
    * damaged list is set aside as it's read (pages ask again); OKs for pages
    * that are gone, or hosts a page no longer reads from, are tidied away.
    */

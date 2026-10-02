@@ -12,7 +12,7 @@
  * those three files goes through it. A plain file (an older Conch, a file a
  * backup just restored) is read as it is and sealed the moment it's read.
  *
- * Your key for signing skills (`skills.signing.json`, ADR 0040) is sealed
+ * Your key for signing skills (`skills.signing.json`, ADR 0047) is sealed
  * the same way, but opened by `SkillTrust` itself: a key that won't open
  * fails closed instead of going back to a default, as `readStore` would.
  */

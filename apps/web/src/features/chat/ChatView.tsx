@@ -535,7 +535,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
           {view.notice.message}
         </Callout>
       )}
-      {/* What this chat is held to (ADR 0040): quiet, and one press to stop. */}
+      {/* What this chat is held to (ADR 0047): quiet, and one press to stop. */}
       {conversationId && (
         <ChatHolds
           conversationId={conversationId}

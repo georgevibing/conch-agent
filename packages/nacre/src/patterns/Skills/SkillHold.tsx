@@ -30,7 +30,7 @@ export interface SkillHoldProps extends Omit<ComponentProps<'div'>, 'children'> 
 }
 
 /**
- * What this chat is held to (ADR 0040): once a skill's instructions are in a
+ * What this chat is held to (ADR 0047): once a skill's instructions are in a
  * chat, anything it tries that isn't on its list asks first, in every later
  * turn, until you stop holding it. One quiet line above the composer per
  * skill: its name opens the list; **Stop holding** asks once, in words, and

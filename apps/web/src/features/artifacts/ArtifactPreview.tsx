@@ -81,7 +81,7 @@ function askToOpen(url: string) {
 }
 
 /**
- * A page, sealed (ADR 0034), with its live data (ADR 0039): the question for
+ * A page, sealed (ADR 0034), with its live data (ADR 0046): the question for
  * a site it wants to read, when it last read, and the page itself, whose
  * requests are answered through the gateway.
  */

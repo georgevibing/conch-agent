@@ -52,7 +52,7 @@ const config = loadConfig();
 const running = await runningGateway(config.CONCH_HOME);
 if (running) config.CONCH_PORT = running.port;
 // Conch's own keys open here as they do in the gateway: with this computer's
-// device key, found the same way and only when a sealed file is read (ADR 0040).
+// device key, found the same way and only when a sealed file is read (ADR 0047).
 registerSealer(
   config.CONCH_HOME,
   deviceSealer(deviceKeyFor(config.CONCH_HOME, keystoreMode(config))),

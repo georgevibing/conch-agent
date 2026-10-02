@@ -1,5 +1,5 @@
 /**
- * Whose skills you trust, and your own signing key (ADR 0031, ADR 0040).
+ * Whose skills you trust, and your own signing key (ADR 0031, ADR 0047).
  *
  * - `skills.trust.json`: the publishers you said you trust, by their key's
  *   fingerprint. Kept in backups, and named in a restore's preview: a backup

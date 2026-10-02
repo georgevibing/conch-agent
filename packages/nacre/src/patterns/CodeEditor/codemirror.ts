@@ -1,5 +1,5 @@
 /**
- * CodeMirror 6, set up the Nacre way (ADR 0039). Loaded only when someone
+ * CodeMirror 6, set up the Nacre way (ADR 0046). Loaded only when someone
  * edits something: this module and its languages are a chunk of their own.
  *
  * - Colours are Nacre's: every highlight is a `var(--ce-*)` that

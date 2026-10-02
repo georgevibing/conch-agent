@@ -242,7 +242,7 @@ export const CheckupPlace = z.enum([
   'channels',
   /** Settings › Security › Devices: what's signed in, what's waiting, and approving new ones. */
   'devices',
-  /** Settings › Security › Live data in pages: the sites pages may read (ADR 0039). */
+  /** Settings › Security › Live data in pages: the sites pages may read (ADR 0046). */
   'live-data',
 ]);
 export type CheckupPlace = z.infer<typeof CheckupPlace>;

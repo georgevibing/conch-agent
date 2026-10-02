@@ -281,7 +281,7 @@ export function useFindables(query: string, conversationId: string | undefined):
   const { data: channels } = useChannels();
   const { data: terminal } = useTerminalStatus();
   const { data: updates } = useUpdates();
-  // What the open chat is held to (ADR 0040): each can be let go of by name.
+  // What the open chat is held to (ADR 0047): each can be let go of by name.
   const holds = useLiveStore((s) => (conversationId ? s.views[conversationId]?.holds : undefined));
   const q = query.trim();
   if (!q) return [];
@@ -479,7 +479,7 @@ export function useFindables(query: string, conversationId: string | undefined):
       void navigate(`/c/${item.conversationId}`);
     },
   }));
-  // Editing one by hand (ADR 0039): asked for in words ("edit the budget"), the
+  // Editing one by hand (ADR 0046): asked for in words ("edit the budget"), the
   // closest two, straight into the editor. Not offered for a plain name: that opens it.
   const editItems = find(
     /\b(?:edit|change|fix)\b/i.test(q) ? (artifacts ?? []) : [],

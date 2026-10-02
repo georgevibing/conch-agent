@@ -48,7 +48,7 @@ interface LiveStatus {
 const failure = (message: string): LiveDataResult => ({ ok: false, reason: 'failed', message });
 
 /**
- * A page's live data (ADR 0039): what it reads from and what you've said
+ * A page's live data (ADR 0046): what it reads from and what you've said
  * about each site, answering the page's requests (through the gateway),
  * reading again on the page's schedule while it's on screen, and the one
  * question for a site you haven't allowed yet.

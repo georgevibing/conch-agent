@@ -46,7 +46,7 @@ remembering are never limited.
 
 **While a skill is in use, it's held to its list.** A skill is in use when it's
 loaded with `use_skill` or typed as `/name`; a `skill.used` event marks it.
-Since [ADR 0040](./0040-skill-scope.md) the chat stays held to it in every
+Since [ADR 0047](./0047-skill-scope.md) the chat stays held to it in every
 later turn, until you stop holding it. Every tool call goes through `mustAsk` in `conversations/manager.ts`
 (Claude Code's PreToolUse hook, the API engines' permission broker, the
 browser's per-site check). `needs()` says what the call requires; if a skill in
@@ -104,7 +104,7 @@ A signed skill has a `SKILL.sig` next to its `SKILL.md` (`skills/signing.ts`):
   on carries on. Anyone else's change still turns it off, signed or not. A
   `danger` review still wins.
 - **Signing your own.** `pnpm conch skills sign <folder> [--as name]` makes
-  your key the first time (`skills.signing.json`, 0600, sealed since ADR 0040), trusts it, and writes
+  your key the first time (`skills.signing.json`, 0600, sealed since ADR 0047), trusts it, and writes
   `SKILL.sig`. `skills key` shows the public key to share. `skills trust <key>
 --as name`, `skills trusted` and `skills forget <fingerprint>` manage the
   list from the terminal; having it is the proof that it's you.
@@ -112,7 +112,7 @@ A signed skill has a `SKILL.sig` next to its `SKILL.md` (`skills/signing.ts`):
   - `skills.trust.json` is kept in backups (group `skills`). A restore's
     preview names the publishers it would trust (`trusted-publishers`).
   - `skills.signing.json` is a secret in backups. Since
-    [ADR 0040](./0040-skill-scope.md) it's sealed under the device key like
+    [ADR 0047](./0047-skill-scope.md) it's sealed under the device key like
     Conch's other keys; the terminal command opens the device key the same
     way the gateway does.
   - Both are protected paths: the assistant's file and shell tools can't read
@@ -162,12 +162,12 @@ shows it.
   `skills/trust.test.ts`).
 - **Known limits.**
   - A chat is held to a skill's list from the turn it was loaded in until a
-    person stops holding it ([ADR 0040](./0040-skill-scope.md)). This ADR
+    person stops holding it ([ADR 0047](./0047-skill-scope.md)). This ADR
     first held it for that one turn only, though its words stay in the chat.
     Now every later turn is held, and so are helpers and tasks started from
     the chat, and a restart. Compaction, trimming and a provider change don't
     end it.
-  - Your signing key is sealed under the device key (ADR 0040). This ADR
+  - Your signing key is sealed under the device key (ADR 0047). This ADR
     first left it a plain 0600 file, because the terminal command runs
     without the gateway. The terminal now opens the device key the same way
     the gateway does, and a changed key fails closed.

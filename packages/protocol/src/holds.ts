@@ -1,5 +1,5 @@
 /**
- * What a chat is held to (ADR 0040). Once a skill's instructions are in a
+ * What a chat is held to (ADR 0047). Once a skill's instructions are in a
  * chat (`skill.used`), they stay in its context, so the chat is held to that
  * skill's list in every later turn, not just the one it came in, until you
  * say otherwise (`skill.hold.ended`). Several are held together: a call must
@@ -13,7 +13,7 @@ export interface SkillHold {
   skillId: string;
   name: string;
   title: string;
-  /** Its list as it came into the chat; unset in chats from before ADR 0040 (ask the skill). */
+  /** Its list as it came into the chat; unset in chats from before ADR 0047 (ask the skill). */
   permissions?: SkillPermissions;
   /** Where in the log its instructions came in. */
   seq: number;

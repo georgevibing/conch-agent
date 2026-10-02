@@ -8,7 +8,7 @@ import { expect, test } from '@playwright/test';
 import { openConch } from './app';
 
 /**
- * Skill scope, end to end (ADR 0040): once a skill's instructions are in a
+ * Skill scope, end to end (ADR 0047): once a skill's instructions are in a
  * chat, the chat stays held to its list in later turns, after a reload, and
  * says so in one quiet line; only you stop it, it asks first, and Activity
  * notes both. And your key for signing skills is locked with this computer's

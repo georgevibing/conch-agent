@@ -5,7 +5,7 @@ import { openConch } from './app';
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
 
 /**
- * Edit by hand and live data, end to end (ADR 0039): a chart edited in the
+ * Edit by hand and live data, end to end (ADR 0046): a chart edited in the
  * panel with its preview following, mistakes said in words, undo, ⌘S, a
  * version marked as yours that the assistant then builds on; a page edited
  * with its preview still sealed; the phone; and a page that reads live data

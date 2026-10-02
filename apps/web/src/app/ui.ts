@@ -59,7 +59,7 @@ interface UiState {
    * still speaks it.
    */
   talking?: { from?: number };
-  /** Asking whether to stop holding a chat to a skill's list (ADR 0040), e.g. from ⌘K. */
+  /** Asking whether to stop holding a chat to a skill's list (ADR 0047), e.g. from ⌘K. */
   stopHolding?: { conversationId: string; skillId: string };
   find: FindState | null;
   /** What find last searched for, so ⌘F reopens where you left off. */
@@ -107,7 +107,7 @@ interface UiState {
   artifactWidth: number;
   openArtifact(conversationId: string, artifactId: string, version?: number): void;
   closeArtifact(): void;
-  /** Open this one straight into editing by hand (⌘K's "Edit …", ADR 0039). */
+  /** Open this one straight into editing by hand (⌘K's "Edit …", ADR 0046). */
   artifactEditRequest?: string;
   setArtifactWidth(width: number): void;
   /** The terminal drawer is open. */

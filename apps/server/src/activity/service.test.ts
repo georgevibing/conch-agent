@@ -134,7 +134,7 @@ describe('the timeline', () => {
   });
 });
 
-describe('what a chat is held to (ADR 0040)', () => {
+describe('what a chat is held to (ADR 0047)', () => {
   it('says when a skill’s list started holding, and that you ended it', () => {
     seq = 0;
     const used = { skillId: 's', name: 'quick-setup', title: 'Quick setup' };

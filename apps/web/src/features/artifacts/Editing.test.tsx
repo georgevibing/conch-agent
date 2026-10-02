@@ -77,7 +77,7 @@ function open(a: Artifact, extra: Record<string, (body: unknown) => unknown> = {
   return calls;
 }
 
-describe('Edit by hand (ADR 0039)', () => {
+describe('Edit by hand (ADR 0046)', () => {
   it('edits a chart with a live preview, says what’s wrong in words, and saves as yours', async () => {
     const saved = artifact({
       versions: [
@@ -174,7 +174,7 @@ describe('Edit by hand (ADR 0039)', () => {
   });
 });
 
-describe('Live data (ADR 0039)', () => {
+describe('Live data (ADR 0046)', () => {
   const page = artifact({ kind: 'html', title: 'Weather now', pinned: { at: 1 } });
   const info = (allowed: boolean): LiveDataInfo => ({
     sources: [

@@ -13,7 +13,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'What a skill may do, and who made it (ADR 0031). A chat it’s used in is held to the list in every later turn too (ADR 0040): anything else the skill tries asks first, in every mode. A signature that holds from a publisher you trust says “Verified”; one that doesn’t hold turns the skill off.',
+          'What a skill may do, and who made it (ADR 0031). A chat it’s used in is held to the list in every later turn too (ADR 0047): anything else the skill tries asks first, in every mode. A signature that holds from a publisher you trust says “Verified”; one that doesn’t hold turns the skill off.',
       },
     },
   },

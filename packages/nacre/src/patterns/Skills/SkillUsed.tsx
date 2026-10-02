@@ -9,7 +9,7 @@ export interface SkillUsedProps extends Omit<ComponentProps<'div'>, 'title'> {
   title: string;
   /**
    * `user`: you asked for it by name; `assistant`: it matched what you asked;
-   * `carried`: work brought it from another chat (ADR 0040).
+   * `carried`: work brought it from another chat (ADR 0047).
    */
   by: 'user' | 'assistant' | 'carried';
   /** For `carried`: from the chat this one was started in, or from a helper it started. */

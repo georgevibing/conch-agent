@@ -1,4 +1,4 @@
-/** Repair everything's look at your key for signing skills (ADR 0040). */
+/** Repair everything's look at your key for signing skills (ADR 0047). */
 import type { DoctorItem } from '@conch/protocol';
 
 import type { DoctorCheck } from '../doctor/service';

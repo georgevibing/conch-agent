@@ -168,7 +168,7 @@ export interface CheckupInput {
   terminalRemote?: boolean;
   /** The agent's browser may open pages on this computer and your network (Settings › Browser). */
   browserLocal?: boolean;
-  /** Pages allowed to read live data from this computer (ADR 0039), by host. */
+  /** Pages allowed to read live data from this computer (ADR 0046), by host. */
   pagesLocal?: string[];
   /** A connected provider, and whether Conch can ask you before each step with it (the one that can't, if any). */
   provider?: { name: string; asksFirst: boolean };

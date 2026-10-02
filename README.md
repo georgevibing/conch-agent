@@ -185,7 +185,7 @@ it with fresh data whenever you like. ([ADR 0034](./docs/adr/0034-show-me.md))
 Press **Edit** to change it yourself, with the preview following as you type; your
 version is marked as yours, and your assistant builds on it. A page can show live
 data from sites you allow, read by Conch for it, never with your sign-ins.
-([ADR 0039](./docs/adr/0039-edit-by-hand-and-live-data.md))
+([ADR 0046](./docs/adr/0046-edit-by-hand-and-live-data.md))
 
 **Hand it off.** Press ⌘⇧↩ to send something to the background and keep chatting:
 a live card shows what it's doing, **Tasks** shows everything that's working, and
@@ -202,7 +202,7 @@ and their updates carry on. A skill changed after it was signed turns off. Sign 
 own with `pnpm conch skills sign <folder>`; your key is locked with this computer's
 own key. Commands are sealed in Codex too, and **Settings → Security → Safety** says
 plainly which providers are sealed. ([ADR 0031](./docs/adr/0031-skill-trust.md),
-[0040](./docs/adr/0040-skill-scope.md))
+[0047](./docs/adr/0047-skill-scope.md))
 
 **It looks after itself.** **Settings → Health** has one **Repair everything**
 button, a quiet list of what Conch fixed on its own, daily backups you can restore
@@ -255,4 +255,4 @@ Its lists are read from the code, so they are never behind it
 - [docs/BROWSER.md](./docs/BROWSER.md) — the browser: watching, taking over, what it asks
 - [docs/TERMINAL.md](./docs/TERMINAL.md) — the terminal: shortcuts, the assistant, other devices
 - [docs/design/NACRE.md](./docs/design/NACRE.md) — the design language
-- [docs/adr](./docs/adr) — decision records (0001–0035)
+- [docs/adr](./docs/adr) — decision records (0001–0047)

@@ -1,4 +1,4 @@
-# 0039 — Edit by hand and live data: closing what Show me left open
+# 0046 — Edit by hand and live data: closing what Show me left open
 
 - Status: accepted
 - Date: 2026-10-02

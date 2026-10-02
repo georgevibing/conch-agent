@@ -275,7 +275,7 @@ describe('SkillService', () => {
         name: 'release-notes',
         title: 'Release notes',
         by: 'assistant',
-        // The list it came in with: what the chat is held to from here (ADR 0040).
+        // The list it came in with: what the chat is held to from here (ADR 0047).
         permissions: expect.objectContaining({ declared: false }),
       },
     ]);

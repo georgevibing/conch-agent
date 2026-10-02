@@ -1,5 +1,5 @@
 /**
- * Stopping a chat's hold on a skill's list (ADR 0040), through the gateway:
+ * Stopping a chat's hold on a skill's list (ADR 0047), through the gateway:
  * a person in Conch can, a script's access key can't, and it's in the log.
  */
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';

@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { create } from 'zustand';
 
 /**
- * What you're editing by hand (ADR 0039), by artifact. Kept here rather than
+ * What you're editing by hand (ADR 0046), by artifact. Kept here rather than
  * in the panel, so closing it, switching chats or opening the pinned app
  * doesn't lose a word: the edit is there when you come back. Never written
  * to disk; leaving the page with one unsaved asks first.

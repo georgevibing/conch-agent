@@ -896,7 +896,7 @@ export async function buildApp(services: Services) {
       services.network.simulate(request.body?.online === true);
       return services.network.status;
     });
-  // Stop holding this chat to a skill's list (ADR 0040): a person in Conch, never a script's key.
+  // Stop holding this chat to a skill's list (ADR 0047): a person in Conch, never a script's key.
   app.post<{ Params: { id: string; skillId: string } }>(
     '/api/conversations/:id/skills/:skillId/stop-holding',
     async (request, reply) => {

@@ -420,7 +420,7 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     title: z.string(),
     kind: ArtifactKind,
     version: z.number().int().positive(),
-    /** `edited`: you changed it by hand (ADR 0039). */
+    /** `edited`: you changed it by hand (ADR 0046). */
     action: z.enum(['created', 'updated', 'edited']),
     note: z.string().optional(),
   }),
@@ -454,7 +454,7 @@ export const ConversationEvent = z.discriminatedUnion('type', [
   /**
    * A skill was used in this turn — asked for by name, or picked by the
    * assistant — or came with work from another chat. From here on the chat is
-   * held to its list until you say otherwise (ADR 0040).
+   * held to its list until you say otherwise (ADR 0047).
    */
   z.object({
     ...logged,
@@ -472,7 +472,7 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     /** For `carried`: the chat it came from. */
     from: z.string().optional(),
   }),
-  /** You stopped holding the chat to a skill's list (ADR 0040). Only a person does this. */
+  /** You stopped holding the chat to a skill's list (ADR 0047). Only a person does this. */
   z.object({
     ...logged,
     type: z.literal('skill.hold.ended'),

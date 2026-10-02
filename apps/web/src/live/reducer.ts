@@ -119,7 +119,7 @@ export type TranscriptItem =
       title: string;
       artifactKind: ArtifactKind;
       version: number;
-      /** `edited`: you changed it by hand (ADR 0039). */
+      /** `edited`: you changed it by hand (ADR 0046). */
       action: 'created' | 'updated' | 'edited';
       note?: string;
       at: number;
@@ -171,11 +171,11 @@ export type TranscriptItem =
       skillId: string;
       name: string;
       title: string;
-      /** `carried`: work brought it from another chat (ADR 0040). */
+      /** `carried`: work brought it from another chat (ADR 0047). */
       by: 'user' | 'assistant' | 'carried';
     }
   | {
-      /** You stopped holding the chat to a skill's list (ADR 0040). */
+      /** You stopped holding the chat to a skill's list (ADR 0047). */
       kind: 'skill-ended';
       id: string;
       title: string;
@@ -222,7 +222,7 @@ export interface ConversationView {
   notice?: { code: string; message: string };
   /** The conversation's model/effort/mode overrides, as last seen in the log. */
   options?: TurnOptions;
-  /** The skills this chat is held to (ADR 0040), as the gateway reads them from the same log. */
+  /** The skills this chat is held to (ADR 0047), as the gateway reads them from the same log. */
   holds?: readonly SkillHold[];
 }
 

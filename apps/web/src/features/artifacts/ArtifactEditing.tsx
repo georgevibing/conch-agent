@@ -22,7 +22,7 @@ import { artifactKeys } from './queries';
 const SETTLE_MS = 300;
 
 /**
- * Editing one thing by hand (ADR 0039). The preview follows what you type a
+ * Editing one thing by hand (ADR 0046). The preview follows what you type a
  * moment later; a page's preview is served by the gateway, sealed exactly
  * like a saved version. Saving makes a new version marked as yours.
  */

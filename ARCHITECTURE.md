@@ -106,7 +106,7 @@ src/
   activity/                   everything the assistant did, read from the chats' logs (ADR 0028)
   undo/                       what each change was before: blobs, change sets, the preview diff, putting back (ADR 0030)
   import/                     Come home: OpenClaw and Hermes read-only, a plan, a ledger for Undo (ADR 0035)
-  artifacts/                  things made beside the chat: store, tools, fenced blocks, the sealed frame (ADR 0034); edits, drafts, live data (`live.ts`, ADR 0039)
+  artifacts/                  things made beside the chat: store, tools, fenced blocks, the sealed frame (ADR 0034); edits, drafts, live data (`live.ts`, ADR 0046)
   tasks/                      background tasks and helpers side by side (`delegate`), queue, worktrees (ADR 0033)
   doctor/                     Repair everything: every part's `DoctorCheck`, run at once (`doctor.report`)
   network/watch.ts            online or not (`network.status`); offline routing (ADR 0023)
@@ -288,7 +288,7 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   tables, Markdown, SVG and Mermaid are drawn by the web app. Pinned ones are apps at
   `/apps/:id`; a refresh is a chat (origin `artifact`) that may only update that one.
 
-- **Edit by hand and live data** ([ADR 0039](./docs/adr/0039-edit-by-hand-and-live-data.md)).
+- **Edit by hand and live data** ([ADR 0046](./docs/adr/0046-edit-by-hand-and-live-data.md)).
   Nacre's `CodeEditor` (CodeMirror 6, a lazy chunk) inside `ArtifactEditor`; edits
   live in the web's `useEdits` store. `POST …/versions` saves one marked `edited`
   over `base` only (409 otherwise), notes `action: 'edited'` in the chat, and
@@ -335,7 +335,7 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
 
 - **Skill trust** ([ADR 0031](./docs/adr/0031-skill-trust.md)). `skills/permissions.ts`
   turns `allowed-tools` or `permissions:` into capabilities shown in words. A chat is
-  held to every skill whose instructions are in it ([ADR 0040](./docs/adr/0040-skill-scope.md)):
+  held to every skill whose instructions are in it ([ADR 0047](./docs/adr/0047-skill-scope.md)):
   `skillHolds` (protocol) folds `skill.used` (with the list it came in with) and
   `skill.hold.ended` from the log, and `mustAsk` asks for anything outside any held
   list, in every mode and every later turn. Tasks inherit holds (`TurnExtras.skills`)

@@ -5,7 +5,7 @@
  *
  * - `skills sign <folder> [--as "Your name"]` writes `SKILL.sig` with your key
  *   (made the first time, kept in `skills.signing.json`, locked with this
- *   computer's device key: ADR 0040).
+ *   computer's device key: ADR 0047).
  * - `skills key` shows your public key and its fingerprint, to give people who
  *   want to trust you before they install anything of yours. `skills key
  *   --new` makes a new one, only when yours can't be opened.

@@ -230,7 +230,7 @@ describe('offline and at a limit (ADR 0023)', () => {
   });
 });
 
-describe('what the chat is held to (ADR 0040)', () => {
+describe('what the chat is held to (ADR 0047)', () => {
   it('folds holds from the log, and says where one ended', () => {
     const view = reduceAll(
       log(

@@ -1,6 +1,6 @@
 /**
  * Your key for signing skills, locked with this computer's device key (ADR
- * 0040): a key left in the clear is locked in one atomic replace with no
+ * 0047): a key left in the clear is locked in one atomic replace with no
  * copy kept, and a file that was changed (or locked elsewhere) fails closed,
  * in words, without ever being replaced by a new key.
  */

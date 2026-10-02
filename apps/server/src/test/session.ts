@@ -192,7 +192,7 @@ export async function useConch(g: Gateway) {
   await writeFile(join(home, 'browser', 'profile', 'Default', 'Cookies'), 'cookies');
   // Something the agent made in its work folder.
   await writeFile(join(await services.settings.workspace(), 'notes.md'), '# Notes\n');
-  // A page that reads live data, and the site you let it read (ADR 0039).
+  // A page that reads live data, and the site you let it read (ADR 0046).
   const live = await services.artifacts.create({
     conversationId: convo.id,
     kind: 'html',

@@ -686,7 +686,7 @@ export class MockEngine implements Engine {
       ) {
         const toolUseId = newId('tool');
         const remembered = this.#artifacts.get(input.conversationId);
-        // You edited it by hand (ADR 0039): build on your version, and say so.
+        // You edited it by hand (ADR 0046): build on your version, and say so.
         const yours = remembered
           ? new RegExp(
               `\\(id ${remembered.id}\\): version (\\d+) was edited by the user[^\\n]*\\n\`\`\`[a-z]+\\n([\\s\\S]*?)\\n\`\`\``,
@@ -732,7 +732,7 @@ export class MockEngine implements Engine {
             title: 'Budget',
             content: 'Item,Cost\nRent,1200\nFood,400\nTravel,150',
           },
-          // Live data (ADR 0039): the page declares where it reads from and asks Conch for it.
+          // Live data (ADR 0046): the page declares where it reads from and asks Conch for it.
           live: {
             kind: 'html',
             title: 'Weather now',

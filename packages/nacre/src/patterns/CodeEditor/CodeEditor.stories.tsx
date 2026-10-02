@@ -56,7 +56,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'CodeMirror 6 in Nacre’s colours (ADR 0039), loaded the first time an editor opens. Line numbers, undo and redo, ⌘S and Esc; Tab moves on, so the keyboard is never trapped. If it can’t load, a plain text box takes its place.',
+          'CodeMirror 6 in Nacre’s colours (ADR 0046), loaded the first time an editor opens. Line numbers, undo and redo, ⌘S and Esc; Tab moves on, so the keyboard is never trapped. If it can’t load, a plain text box takes its place.',
       },
     },
   },

@@ -240,7 +240,7 @@ export class SkillService {
           const instructions = await this.deps.store.instructions(skill);
           if (!shown.has(skill.id)) {
             shown.add(skill.id);
-            // Its list as it is now: what the chat is held to from here (ADR 0040).
+            // Its list as it is now: what the chat is held to from here (ADR 0047).
             ctx.append({
               type: 'skill.used',
               skillId: skill.id,

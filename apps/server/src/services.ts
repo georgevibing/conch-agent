@@ -357,7 +357,7 @@ export class Services {
       onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
       trust: this.skillTrust,
     });
-    // A signing key written in the clear (an older Conch, a restored backup) is locked now (ADR 0040).
+    // A signing key written in the clear (an older Conch, a restored backup) is locked now (ADR 0047).
     void this.skillTrust
       .lockIfClear()
       .then((locked) => {
@@ -1101,7 +1101,7 @@ export class Services {
           reveal: async () => value,
         });
     }
-    // Your key for signing skills (ADR 0040): shown, never copied out.
+    // Your key for signing skills (ADR 0047): shown, never copied out.
     const signing = await this.skillTrust.signingKey({ lock: false }).catch(() => undefined);
     if (signing?.state === 'locked' || signing?.state === 'clear')
       out.push({

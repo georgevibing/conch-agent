@@ -49,7 +49,7 @@ export const PROTECTED_MESSAGE =
 /**
  * `pnpm conch skills sign|trust|forget|key` from the assistant's own shell:
  * signing with your key, or changing whose skills you trust, would let it
- * vouch for its own skills (ADR 0040). The terminal command opens your key
+ * vouch for its own skills (ADR 0047). The terminal command opens your key
  * the way the gateway does, so these are the person's to type, never the
  * assistant's. A fence for the obvious spellings, not a box: protected paths
  * and sealing still stand behind it.

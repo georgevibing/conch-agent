@@ -51,7 +51,7 @@ export interface LiveDataBarProps extends Omit<ComponentProps<'div'>, 'children'
 }
 
 /**
- * A page that shows live data (ADR 0039): when it last read, how often it
+ * A page that shows live data (ADR 0046): when it last read, how often it
  * reads again, and one press to read now. A failure is calm: the page keeps
  * what it had, and the bar says so in a sentence. "Reads from" lists the
  * sites you allowed, each one a press from taken back.
@@ -144,7 +144,7 @@ export interface LiveDataAskProps extends Omit<ComponentProps<'div'>, 'title'> {
 }
 
 /**
- * The one question a page with live data asks (ADR 0039), in the flow:
+ * The one question a page with live data asks (ADR 0046), in the flow:
  * which site, exactly which addresses, and what it can't do. Once per page
  * and site; a new address asks again.
  */
@@ -248,7 +248,7 @@ export interface LiveDataListProps extends Omit<ComponentProps<'div'>, 'children
 }
 
 /**
- * Every site a page may read live data from, which you allowed (ADR 0039),
+ * Every site a page may read live data from, which you allowed (ADR 0046),
  * each a press from taken back. A page asks again the next time.
  */
 export function LiveDataList({

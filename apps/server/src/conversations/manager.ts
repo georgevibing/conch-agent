@@ -127,7 +127,7 @@ export interface TurnExtras {
   cwd?: string;
   /** Starts as wary as the chat it came from (ADR 0028): what that chat had read. */
   taint?: readonly TaintSource[];
-  /** Starts held to the skills the chat it came from was held to (ADR 0040), from there. */
+  /** Starts held to the skills the chat it came from was held to (ADR 0047), from there. */
   skills?: readonly (SkillHold & { from: string })[];
 }
 
@@ -389,7 +389,7 @@ export class ConversationManager {
       tools?: ToolProvider;
       /**
        * Extra system-prompt context for every turn (e.g. the user's routines and
-       * skills), and for this chat (what the user edited by hand, ADR 0039).
+       * skills), and for this chat (what the user edited by hand, ADR 0046).
        */
       context?: (engine: Engine, conversationId: string) => Promise<string>;
       /**
@@ -1018,7 +1018,7 @@ export class ConversationManager {
      * computer, or a command wants out of the sealed box.
      */
     // Every skill whose instructions are in this chat holds it to its list (ADR 0031,
-    // ADR 0040): the one loaded this turn, and the ones before it until you end them.
+    // ADR 0047): the one loaded this turn, and the ones before it until you end them.
     const turnFrom = live.events.findLast((e) => e.type === 'user.message')?.seq ?? -1;
     const listOf = async (hold: SkillHold) =>
       hold.permissions ??
@@ -1125,7 +1125,7 @@ export class ConversationManager {
         'guard',
       );
       if (blocked) return { decision: 'deny', message: blocked };
-      // Your key and whose skills you trust are yours to use (ADR 0040), in every mode.
+      // Your key and whose skills you trust are yours to use (ADR 0047), in every mode.
       if (runsConchPower(request.toolName, request.input))
         return { decision: 'deny', message: CONCH_POWER_MESSAGE };
       await keepBefore(request.toolUseId, request.toolName, request.input);
@@ -1555,13 +1555,13 @@ export class ConversationManager {
     await this.#persist(live);
   }
 
-  /** What a chat is held to (ADR 0040), from its own log: for work handed on from it (ADR 0033). */
+  /** What a chat is held to (ADR 0047), from its own log: for work handed on from it (ADR 0033). */
   async holdsOf(id: string): Promise<readonly SkillHold[]> {
     return skillHolds((await this.#get(id)).events);
   }
 
   /**
-   * A helper's skills come back with its result (ADR 0040): what it was held
+   * A helper's skills come back with its result (ADR 0047): what it was held
    * to, it learned in this chat's name. Only what it used itself, never what
    * it was handed from here, so ending a hold here isn't undone by a helper.
    */
@@ -1600,7 +1600,7 @@ export class ConversationManager {
   }
 
   /**
-   * Stop holding a chat to a skill's list (ADR 0040): a person's choice, from
+   * Stop holding a chat to a skill's list (ADR 0047): a person's choice, from
    * the chat or ⌘K, never the assistant's (it has no tool for this), and
    * written in the log, so Activity shows who ended it and when. Not while a
    * turn is running: the skill may be steering it right now.

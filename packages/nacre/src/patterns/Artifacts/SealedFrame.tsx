@@ -24,7 +24,7 @@ export interface SealedFrameProps extends Omit<ComponentProps<'div'>, 'children'
   /** The page asked to open a link (an http(s) address): ask before opening it. */
   onOpenLink?: (url: string) => void;
   /**
-   * The page asked for one of its declared sources (ADR 0039). Whatever this
+   * The page asked for one of its declared sources (ADR 0046). Whatever this
    * resolves to goes back to that page, and to nothing else.
    */
   onData?: (request: SealedDataRequest) => Promise<unknown>;
@@ -65,7 +65,7 @@ function params(raw: unknown): Record<string, string | number> | undefined {
  * The iframe is `sandbox="allow-scripts"` — never `allow-same-origin`, popups,
  * forms or top navigation — so the page is nobody: no cookies, no Conch, no
  * reaching up into this page. All it may say is its height, a link it wants
- * opened, and a declared source it wants read (`onData`, ADR 0039), and
+ * opened, and a declared source it wants read (`onData`, ADR 0046), and
  * that is only believed from this very frame. Answers go back only to the
  * page that asked, while it's still the page that loaded. A page that leaves its address
  * anyway (the one thing a sandbox allows) is stopped and blanked.
@@ -121,7 +121,7 @@ export function SealedFrame({
         /^https?:\/\//i.test(data.open)
       )
         openLink.current?.(data.open);
-      // Live data (ADR 0039): a declared source, by name, with short values. The
+      // Live data (ADR 0046): a declared source, by name, with short values. The
       // gateway checks it all again; this only keeps nonsense from getting that far.
       const wanted = (data as { data?: unknown }).data as
         { id?: unknown; source?: unknown; params?: unknown } | undefined;

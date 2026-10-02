@@ -13,7 +13,7 @@ const day = (at: number) =>
   new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
 /**
- * Settings → Security → Live data in pages (ADR 0039): every site a page the
+ * Settings → Security → Live data in pages (ADR 0046): every site a page the
  * assistant made may read from, because you said so, each taken back in one
  * press. A page asks again the next time it wants to.
  */

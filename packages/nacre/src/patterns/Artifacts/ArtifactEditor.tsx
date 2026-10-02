@@ -39,7 +39,7 @@ export interface ArtifactEditorProps extends Omit<ComponentProps<'div'>, 'onChan
 const SPLIT_AT = 760;
 
 /**
- * Editing something by hand (ADR 0039): its code in a proper editor, and
+ * Editing something by hand (ADR 0046): its code in a proper editor, and
  * beside it (or a press away, when there's no room) the thing itself,
  * redrawn as you type. Undo and redo, ⌘S saves, Esc cancels; a problem is
  * said in plain words, and Save waits until it's fixed.

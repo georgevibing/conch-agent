@@ -86,7 +86,7 @@ export function Shell() {
   }, [navigate]);
   // A provider sign-in that had to come back to this tab instead of a popup.
   useProviderSignInResult();
-  // An edit by hand not saved yet: leaving the page asks first (ADR 0039).
+  // An edit by hand not saved yet: leaving the page asks first (ADR 0046).
   useUnsavedGuard();
   const { data: conversations } = useConversations();
   const narrow = useMediaQuery('(max-width: 820px)');

@@ -181,7 +181,7 @@ export const api = {
       method: 'POST',
       body: engine ? { engine } : {},
     }),
-  /** Stop holding this conversation to a skill's list (ADR 0040). */
+  /** Stop holding this conversation to a skill's list (ADR 0047). */
   stopHolding: (id: string, skillId: string) =>
     request(
       Ok,

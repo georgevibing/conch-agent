@@ -89,7 +89,7 @@ describe('back up, restore on another computer, undo', () => {
     const a = await open();
     const made = await useConch(a);
     const cookie = made.cookie;
-    // Your key for signing skills, locked with this computer's key (ADR 0040).
+    // Your key for signing skills, locked with this computer's key (ADR 0047).
     const signer = await a.services.skillTrust.signer('Ada');
     expect(isSealed(await readFile(join(a.home, 'skills.signing.json'), 'utf8'))).toBe(true);
 
@@ -260,7 +260,7 @@ describe('back up, restore on another computer, undo', () => {
   it('restores without the keys when asked, and keeps this computer’s own', async () => {
     const a = await open();
     const { cookie } = await useConch(a);
-    // A backup without a passphrase leaves the signing key behind, like every key (ADR 0040).
+    // A backup without a passphrase leaves the signing key behind, like every key (ADR 0047).
     await a.services.skillTrust.signer('Ada');
     const plain = await a.app.inject({
       method: 'POST',
@@ -580,7 +580,7 @@ describe('the preview before a restore', () => {
     expect(preview.signInStays).toBe(false);
   });
 
-  it('names the sites pages may read live data from (ADR 0039)', async () => {
+  it('names the sites pages may read live data from (ADR 0046)', async () => {
     const g = await open();
     const file = forged(
       {

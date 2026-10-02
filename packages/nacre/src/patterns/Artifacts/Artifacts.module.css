@@ -497,7 +497,7 @@
     font-size: var(--nc-text-xs);
   }
 
-  /* ── Editing by hand (ADR 0039) ───────────────────────────────────── */
+  /* ── Editing by hand (ADR 0046) ───────────────────────────────────── */
 
   .panelEditing {
     display: flex;
@@ -577,7 +577,7 @@
     box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
   }
 
-  /* ── Live data (ADR 0039) ─────────────────────────────────────────── */
+  /* ── Live data (ADR 0046) ─────────────────────────────────────────── */
 
   .live {
     display: flex;

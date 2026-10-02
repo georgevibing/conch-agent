@@ -56,7 +56,7 @@
     padding-block-start: var(--nc-space-2);
   }
 
-  /* A page with its live data above it (ADR 0039). */
+  /* A page with its live data above it (ADR 0046). */
   .livePage {
     display: flex;
     flex-direction: column;

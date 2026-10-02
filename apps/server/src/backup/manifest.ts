@@ -214,7 +214,7 @@ export const RULES: readonly BackupRule[] = [
     match: 'artifacts/access.json',
     class: 'kept',
     group: 'chats',
-    why: 'The sites each page made for you may read live data from, as you allowed (ADR 0039). A restore lists them first.',
+    why: 'The sites each page made for you may read live data from, as you allowed (ADR 0046). A restore lists them first.',
   },
   {
     match: 'artifacts/**',

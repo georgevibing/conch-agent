@@ -1,4 +1,4 @@
-# 0040 — Skill scope: held for the whole chat, and a signing key locked to this computer
+# 0047 — Skill scope: held for the whole chat, and a signing key locked to this computer
 
 - Status: accepted
 - Date: 2026-10-02

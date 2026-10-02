@@ -64,7 +64,7 @@ describe('a page, sealed off', () => {
     expect(doc).toContain('<base target="_blank">');
     expect(doc).toContain('p({open:a.href})');
     expect(doc).toContain('"http://localhost:4317"');
-    // Live data (ADR 0039): answers are believed only from Conch's own page.
+    // Live data (ADR 0046): answers are believed only from Conch's own page.
     expect(doc).toContain('if(e.source!==parent||e.origin!==o)return');
     expect(doc).toContain('window.conch=Object.freeze({data:d,watch:');
     const whole = frameDocument('<html><head><title>x</title></head><body><p>y</p></body></html>', {

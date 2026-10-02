@@ -1,5 +1,5 @@
 /**
- * Live data for a sealed page (ADR 0039).
+ * Live data for a sealed page (ADR 0046).
  *
  * A page still has no network of its own (`connect-src 'none'`, ADR 0034).
  * What it can do is name a source it declared — in the page itself, as

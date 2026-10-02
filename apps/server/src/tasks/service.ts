@@ -13,7 +13,7 @@
  *
  * Everything a task does is held to what the chat it came from could do:
  * the same provider and permission mode, as wary as it was (ADR 0028), held
- * to the same skills' lists (ADR 0040), and stopped with it. A task that was running when Conch stopped says so and
+ * to the same skills' lists (ADR 0047), and stopped with it. A task that was running when Conch stopped says so and
  * runs again with one press; one that reached its provider's limit carries on
  * with your fallback provider (ADR 0023).
  */
@@ -457,7 +457,7 @@ export class TaskService {
     const taint = task.parentConversationId
       ? await this.deps.conversations.taintOf(task.parentConversationId).catch(() => [])
       : [];
-    // Held to the skills its chat is held to (ADR 0040), as it inherits what that chat read.
+    // Held to the skills its chat is held to (ADR 0047), as it inherits what that chat read.
     const parent = task.parentConversationId;
     const skills = parent
       ? (await this.deps.conversations.holdsOf(parent).catch(() => [])).map((hold) => ({
@@ -610,7 +610,7 @@ export class TaskService {
         await this.deps.conversations
           .addTaint(done.parentConversationId, read)
           .catch(() => undefined);
-      // And the skills it used: their instructions shaped what came back (ADR 0040).
+      // And the skills it used: their instructions shaped what came back (ADR 0047).
       const held = await this.deps.conversations.holdsOf(done.conversationId).catch(() => []);
       await this.deps.conversations
         .addHolds(done.parentConversationId, held, done.conversationId)

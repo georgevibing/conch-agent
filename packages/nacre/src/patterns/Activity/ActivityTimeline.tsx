@@ -50,7 +50,7 @@ const ICONS: Record<ActivityRowKind, typeof Globe> = {
   read: ShieldAlert,
   memory: Brain,
   artifact: ChartColumn,
-  /** A skill's list the chat was held to (ADR 0040). */
+  /** A skill's list the chat was held to (ADR 0047). */
   skill: ListChecks,
 };
 

@@ -1,5 +1,5 @@
 /**
- * The gateway for the `canvas` journey (ADR 0039), with a pretend data site
+ * The gateway for the `canvas` journey (ADR 0046), with a pretend data site
  * beside it on a port the system picks: the weather a live page reads.
  * Nothing here reaches the internet. `POST /__control` changes what it says:
  * `{ "temp": 23 }`, `{ "fail": true }`.

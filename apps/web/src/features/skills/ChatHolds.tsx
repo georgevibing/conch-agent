@@ -29,7 +29,7 @@ export function holdEntries(
 }
 
 /**
- * What this chat is held to (ADR 0040), above the composer. Stopping is a
+ * What this chat is held to (ADR 0047), above the composer. Stopping is a
  * person's choice: it asks once, and the chat and Activity say it happened.
  */
 export function ChatHolds({

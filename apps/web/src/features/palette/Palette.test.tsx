@@ -421,7 +421,7 @@ describe('Palette search', () => {
     act(() => useUi.setState({ artifactOpen: null }));
   });
 
-  it('stops holding the open chat to a skill’s list by name (ADR 0040)', async () => {
+  it('stops holding the open chat to a skill’s list by name (ADR 0047)', async () => {
     const user = userEvent.setup();
     mockFetch({
       'GET /api/state': () => appState(),
@@ -455,7 +455,7 @@ describe('Palette search', () => {
     act(() => useUi.setState({ stopHolding: undefined }));
   });
 
-  it('edits a thing made in a chat by hand, and finds what pages may read (ADR 0039)', async () => {
+  it('edits a thing made in a chat by hand, and finds what pages may read (ADR 0046)', async () => {
     const user = userEvent.setup();
     mockFetch({
       'GET /api/state': () => appState(),

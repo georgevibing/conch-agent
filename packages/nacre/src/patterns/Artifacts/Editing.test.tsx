@@ -14,7 +14,7 @@ const message = (source: unknown, data: unknown) =>
     window.dispatchEvent(new MessageEvent('message', { data, source: source as Window }));
   });
 
-describe('SealedFrame: live data (ADR 0039)', () => {
+describe('SealedFrame: live data (ADR 0046)', () => {
   it('passes a declared source on only from its own frame, and answers only it', async () => {
     const onData = vi.fn(async () => ({ ok: true, status: 200, body: '{"t":21}', at: 1 }));
     renderNacre(<SealedFrame src="/frame" title="Weather" onData={onData} />);

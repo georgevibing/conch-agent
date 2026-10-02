@@ -59,7 +59,7 @@ export const ArtifactVersion = z.object({
   refreshed: z.boolean().optional(),
   /** This version has code or links that could send you elsewhere: shown with scripts off until allowed. */
   navigates: z.boolean().optional(),
-  /** Made by you, by hand (ADR 0039): the assistant builds on it rather than over it. */
+  /** Made by you, by hand (ADR 0046): the assistant builds on it rather than over it. */
   edited: z.boolean().optional(),
 });
 export type ArtifactVersion = z.infer<typeof ArtifactVersion>;
@@ -117,7 +117,7 @@ export const ARTIFACT_FILES: Record<ArtifactKind, { ext: string; type: string }>
   table: { ext: 'csv', type: 'text/csv' },
 };
 
-// ── Edit by hand (ADR 0039) ─────────────────────────────────────────────
+// ── Edit by hand (ADR 0046) ─────────────────────────────────────────────
 
 /** "Line 3, near column 5": where `JSON.parse` stopped, in the words of the editor's gutter. */
 function jsonWhere(content: string, error: unknown): string {
@@ -239,7 +239,7 @@ export const SaveArtifactVersionBody = z.object({
 });
 export type SaveArtifactVersionBody = z.infer<typeof SaveArtifactVersionBody>;
 
-/** A page you're editing, so its preview runs sealed off like any other (ADR 0039). */
+/** A page you're editing, so its preview runs sealed off like any other (ADR 0046). */
 export const ArtifactDraftBody = z.object({ content: z.string().max(ARTIFACT_MAX) });
 export type ArtifactDraftBody = z.infer<typeof ArtifactDraftBody>;
 
@@ -250,7 +250,7 @@ export const ArtifactDraft = z.object({
 });
 export type ArtifactDraft = z.infer<typeof ArtifactDraft>;
 
-// ── Live data (ADR 0039) ─────────────────────────────────────────────────
+// ── Live data (ADR 0046) ─────────────────────────────────────────────────
 
 /** How much a page may read, and how often. */
 export const LIVE_DATA = {

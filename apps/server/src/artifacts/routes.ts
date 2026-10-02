@@ -71,7 +71,7 @@ export function registerArtifactRoutes(app: FastifyInstance, artifacts: Artifact
     '/api/artifacts/:id/versions/:n/frame',
     async (request, reply) => {
       try {
-        // The page you're editing is served exactly like a saved one (ADR 0039).
+        // The page you're editing is served exactly like a saved one (ADR 0046).
         const draft = request.params.n === 'draft';
         const { artifact, n, content } = draft
           ? {
@@ -155,7 +155,7 @@ export function registerArtifactRoutes(app: FastifyInstance, artifacts: Artifact
     }
   });
 
-  // Edit by hand (ADR 0039): a new version, marked as yours.
+  // Edit by hand (ADR 0046): a new version, marked as yours.
   app.post<{ Params: { id: string } }>('/api/artifacts/:id/versions', async (request, reply) => {
     const body = SaveArtifactVersionBody.safeParse(request.body);
     if (!body.success)
@@ -178,7 +178,7 @@ export function registerArtifactRoutes(app: FastifyInstance, artifacts: Artifact
     }
   });
 
-  // Live data (ADR 0039). Only Conch's own page calls these, for a page in its
+  // Live data (ADR 0046). Only Conch's own page calls these, for a page in its
   // sealed frame: the frame itself has no network, and its opaque origin is
   // refused here like any other site.
   app.get('/api/live-data', async () => {

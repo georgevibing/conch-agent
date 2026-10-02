@@ -28,7 +28,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'What a chat is held to (ADR 0040). Once a skill’s instructions are in a chat they stay in its context, so the chat stays held to its list in every later turn, not only the one it came in: anything else it tries asks first. One quiet line above the composer per skill; its name opens the list. **Stop holding** asks once, in words, and only a person can do it. Several skills are held together, the strictest way: a call has to be on every list.',
+          'What a chat is held to (ADR 0047). Once a skill’s instructions are in a chat they stay in its context, so the chat stays held to its list in every later turn, not only the one it came in: anything else it tries asks first. One quiet line above the composer per skill; its name opens the list. **Stop holding** asks once, in words, and only a person can do it. Several skills are held together, the strictest way: a call has to be on every list.',
       },
     },
   },

@@ -59,7 +59,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Editing something by hand (ADR 0039): its code in CodeMirror, and the thing itself redrawn as you type — beside it when there is room, a press away when there isn’t. Save makes a version marked as yours. A page with live data says when it last read, asks once per site (showing exactly which addresses), and fails calmly.',
+          'Editing something by hand (ADR 0046): its code in CodeMirror, and the thing itself redrawn as you type — beside it when there is room, a press away when there isn’t. Save makes a version marked as yours. A page with live data says when it last read, asks once per site (showing exactly which addresses), and fails calmly.',
       },
     },
   },

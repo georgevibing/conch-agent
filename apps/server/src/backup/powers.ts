@@ -132,7 +132,7 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
   if (record(json(read, 'terminal.json')?.settings)?.allowRemote === true)
     powers.push({ kind: 'terminal-remote' });
 
-  // Pages that read live data (ADR 0039): an old backup mustn't quietly bring back a
+  // Pages that read live data (ADR 0046): an old backup mustn't quietly bring back a
   // site you took a page's OK from since.
   const approvals = json(read, 'artifacts/access.json')?.approvals;
   const pageSites = [

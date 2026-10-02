@@ -44,7 +44,7 @@ export interface CodeEditorProps extends Omit<
 type Loaded = Editor & { update: (next: Partial<EditorOptions>) => void };
 
 /**
- * A code editor (ADR 0039): CodeMirror 6, loaded the first time one opens,
+ * A code editor (ADR 0046): CodeMirror 6, loaded the first time one opens,
  * with Nacre's colours, line numbers, undo and redo, ⌘S and Esc. Tab moves
  * on, as it does everywhere, so the keyboard is never trapped. If it can't
  * load, a plain text box takes its place: editing never dead-ends.

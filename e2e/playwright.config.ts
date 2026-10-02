@@ -84,7 +84,7 @@ const scenarios = {
   },
   // Show me: things made beside the chat, sealed pages, pinned apps (ADR 0034).
   'show-me': { port: 4371, env: { CONCH_MOCK_STATE: 'ready' } },
-  // Edit by hand and live data (ADR 0039), against a pretend data site on a port the system picks.
+  // Edit by hand and live data (ADR 0046), against a pretend data site on a port the system picks.
   canvas: {
     port: 4360,
     env: { CONCH_MOCK_STATE: 'ready' },
@@ -98,7 +98,7 @@ const scenarios = {
   tasks: { port: 4372, env: { CONCH_MOCK_STATE: 'ready' } },
   // Skill trust (ADR 0031): a signed skill, trusting its publisher, held to what it says it needs.
   trust: { port: 4374, env: { CONCH_MOCK_STATE: 'ready', CONCH_HOME: trustHome } },
-  // Skill scope (ADR 0040): a chat stays held to a skill's list until you stop it; the signing key is locked.
+  // Skill scope (ADR 0047): a chat stays held to a skill's list until you stop it; the signing key is locked.
   'skill-scope': { port: 4361, env: { CONCH_MOCK_STATE: 'ready', CONCH_HOME: skillScopeHome } },
   // Conch in your pocket: the app, the offline screen, the phone's address (a pretend Tailscale).
   pocket: { port: 4379, env: { CONCH_MOCK_STATE: 'ready' } },

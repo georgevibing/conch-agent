@@ -223,7 +223,7 @@ describe('whose skills you trust', () => {
     expect(await trust.list()).toMatchObject([{ name: 'Ada', you: true }]);
     // The private key never lands in the trust list (which backups keep).
     expect(await readFile(join(home, TRUST_FILE), 'utf8')).not.toContain(first.privateKey);
-    // Locked with this computer's key (ADR 0040): never in the clear.
+    // Locked with this computer's key (ADR 0047): never in the clear.
     const kept = await readFile(join(home, SIGNER_FILE), 'utf8');
     expect(isSealed(kept)).toBe(true);
     expect(kept).not.toContain(first.privateKey);

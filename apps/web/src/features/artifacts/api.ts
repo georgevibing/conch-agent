@@ -20,7 +20,7 @@ const Started = z.object({ conversationId: z.string() });
 
 const at = (id: string) => `/api/artifacts/${encodeURIComponent(id)}`;
 
-/** Show me (ADR 0034), edited by hand and with live data (ADR 0039). */
+/** Show me (ADR 0034), edited by hand and with live data (ADR 0046). */
 export const artifactsApi = {
   list: async () => (await request(ArtifactList, '/api/artifacts')).artifacts,
   get: (id: string) => request(Artifact, at(id)),

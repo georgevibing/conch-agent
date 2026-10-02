@@ -155,7 +155,7 @@ export function entriesOf(
           status: 'noted',
         });
         break;
-      // What the chat was held to from here, and who ended it (ADR 0040).
+      // What the chat was held to from here, and who ended it (ADR 0047).
       case 'skill.used':
         out.push({
           ...base,

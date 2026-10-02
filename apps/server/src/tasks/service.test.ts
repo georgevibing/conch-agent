@@ -659,7 +659,7 @@ describe('helpers side by side (delegate)', () => {
     });
   });
 
-  it('helpers are held to the skills their chat is held to (ADR 0040)', async () => {
+  it('helpers are held to the skills their chat is held to (ADR 0047)', async () => {
     const { tasks, conversations, engines } = await setup();
     const chat = await conversations.send({ clientMessageId: 'u1', text: 'hi' });
     await until(
