@@ -2,7 +2,7 @@
  * Show me (ADR 0034): things the assistant makes for you to see and use.
  *
  * Every provider can make them. One with Conch's tools calls
- * `artifact_create` / `artifact_update`; one without (Codex) writes a fenced
+ * `artifact_create` / `artifact_update`; a chat-only model writes a fenced
  * ```artifact block, which Conch takes out of the reply as it finishes.
  * Each version is kept; the chat shows a card, the panel shows the thing.
  *
@@ -12,6 +12,7 @@
  */
 import {
   ArtifactKind,
+  ARTIFACT_MAX,
   ChartSpec,
   type Artifact,
   type ConversationEvent,
@@ -24,7 +25,7 @@ import type { ConversationManager } from '../conversations/manager';
 import type { DoctorCheck } from '../doctor/service';
 import type { HostTool } from '../engines/types';
 import { navigates } from './frame';
-import { ArtifactError, type ArtifactStore } from './store';
+import { artifactOperationId, ArtifactError, type ArtifactStore } from './store';
 
 /** The words a model reads to know when and how to make one. */
 const GUIDE = [
@@ -106,6 +107,7 @@ export class ArtifactService {
     content: string;
     note?: string;
     request?: string;
+    operationId?: string;
   }): Promise<Artifact> {
     const wrong = checkContent(input.kind, input.content);
     if (wrong) throw new ArtifactError('invalid', wrong);
@@ -205,6 +207,43 @@ export class ArtifactService {
     if (options.only) return [update];
     const create: HostTool = {
       name: 'artifact_create',
+      verification: {
+        effect: 'write',
+        scope: async () => ({
+          account: `local:${this.deps.store.dir}`,
+          authorization: `artifact:create:${ctx.conversationId}`,
+          expiresAt: Date.now() + 10 * 60_000,
+        }),
+        reconcile: async (args, operationId) => {
+          try {
+            const saved = await this.deps.store.content(
+              artifactOperationId(ctx.conversationId, operationId),
+              1,
+            );
+            if (
+              saved.artifact.conversationId !== ctx.conversationId ||
+              saved.artifact.kind !== args.kind ||
+              saved.artifact.title !== args.title ||
+              saved.content !== args.content
+            )
+              return { state: 'unknown' };
+            return {
+              state: 'confirmed',
+              receipt: {
+                provider: 'Conch',
+                id: saved.artifact.id,
+                label: `Saved “${saved.artifact.title}”`,
+                url: `/api/artifacts/${saved.artifact.id}/versions/1/download`,
+              },
+            };
+          } catch (error) {
+            return {
+              state:
+                error instanceof ArtifactError && error.code === 'not-found' ? 'absent' : 'unknown',
+            };
+          }
+        },
+      },
       description: GUIDE,
       searchHint: 'artifact page app document chart diagram table svg mermaid visual dashboard',
       input: {
@@ -213,13 +252,19 @@ export class ArtifactService {
         content: z.string().min(1),
         note: z.string().max(200).optional(),
       },
-      run: async (args) => {
+      run: async (args, context) => {
         const { kind, title, content, note } = args as {
           kind: ArtifactKind;
           title: string;
           content: string;
           note?: string;
         };
+        const invalid =
+          checkContent(kind, content) ??
+          (content.length > ARTIFACT_MAX
+            ? 'That document is too large. Save a shorter version.'
+            : undefined);
+        if (invalid) return { text: invalid, effect: 'not-executed' as const };
         try {
           const events = await this.deps
             .conversations()
@@ -232,6 +277,7 @@ export class ArtifactService {
             content,
             note,
             request: this.#request(events),
+            operationId: context?.operationId,
           });
           this.#card(ctx.append, artifact, 'created');
           return say(artifact, 'Made');
@@ -266,6 +312,10 @@ export class ArtifactService {
     if (event.type !== 'conversation.event' || event.event.type !== 'turn.completed') return;
     const id = event.event.conversationId;
     const manager = this.deps.conversations();
+    const detail = await manager.detail(id).catch(() => undefined);
+    // Task side effects must pass their saved scope and write-ahead ledger.
+    // Model text is never an alternate route around those controls.
+    if (!detail || detail.conversation.origin?.kind === 'task') return;
     const events = await manager.eventsAfter(id).catch(() => [] as ConversationEvent[]);
     const turnStart = events.findLastIndex((e) => e.type === 'user.message');
     const text = events

@@ -1,0 +1,111 @@
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
+import type { ServerEvent } from '@conch/protocol';
+import type { ConversationManager } from '../conversations/manager';
+
+import { ArtifactService } from './service';
+import { artifactOperationId, ArtifactStore } from './store';
+
+describe('artifact completion receipts', () => {
+  it('distinguishes rejected content from an uncertain write', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-artifact-preflight-'));
+    const store = new ArtifactStore(home);
+    const service = new ArtifactService({
+      store,
+      conversations: () => {
+        throw new Error('No IO should start');
+      },
+      emit: () => undefined,
+    });
+    const tool = service
+      .tools({ conversationId: 'c_test', append: () => undefined })
+      .find((tool) => tool.name === 'artifact_create')!;
+    expect(
+      await tool.run(
+        { title: 'Bad chart', kind: 'chart', content: 'not JSON' },
+        { operationId: 'op_invalid' },
+      ),
+    ).toMatchObject({ effect: 'not-executed' });
+    expect(await store.list()).toEqual([]);
+  });
+
+  it('cannot bypass a task’s saved scope or operation ledger with a fenced reply', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-artifact-scope-'));
+    const store = new ArtifactStore(home);
+    const eventsAfter = vi.fn().mockResolvedValue([
+      {
+        type: 'assistant.delta',
+        kind: 'text',
+        delta: '```artifact kind="markdown" title="Unapproved"\nBypass\n```',
+      },
+    ]);
+    const manager = {
+      detail: async () => ({ conversation: { origin: { kind: 'task', taskId: 'task_test' } } }),
+      eventsAfter,
+    } as unknown as ConversationManager;
+    const service = new ArtifactService({
+      store,
+      conversations: () => manager,
+      emit: () => undefined,
+    });
+    await service.onEvent({
+      type: 'conversation.event',
+      event: { type: 'turn.completed', conversationId: 'c_task' },
+    } as ServerEvent);
+    expect(eventsAfter).not.toHaveBeenCalled();
+    expect(await store.list()).toEqual([]);
+  });
+
+  it('saves one durable artifact for an operation, even after a restart and duplicate invocation', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-artifact-receipt-'));
+    const first = new ArtifactStore(home);
+    const input = {
+      title: 'My brief',
+      kind: 'markdown' as const,
+      content: '# Verified brief',
+      conversationId: 'c_test',
+      operationId: 'op_saved',
+    };
+    const [a, b] = await Promise.all([first.create(input), first.create(input)]);
+    expect(a.id).toBe(b.id);
+    const restarted = new ArtifactStore(home);
+    expect((await restarted.create(input)).id).toBe(a.id);
+    expect(await restarted.list()).toHaveLength(1);
+    expect((await restarted.content(a.id)).content).toBe(input.content);
+    await expect(restarted.create({ ...input, content: 'Different content' })).rejects.toThrow(
+      'different document',
+    );
+  });
+
+  it('verifies actual saved bytes, not the model summary, and does not confirm a mismatched output', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-artifact-proof-'));
+    const store = new ArtifactStore(home);
+    const service = new ArtifactService({
+      store,
+      conversations: () => {
+        throw new Error('Not called during readback');
+      },
+      emit: () => undefined,
+    });
+    const tool = service
+      .tools({ conversationId: 'c_test', append: () => undefined })
+      .find((tool) => tool.name === 'artifact_create')!;
+    const args = { title: 'Brief', kind: 'markdown', content: '# Fact checked' };
+    expect(await tool.verification?.reconcile(args, 'op_test')).toEqual({ state: 'absent' });
+    await store.create({
+      ...args,
+      kind: 'markdown',
+      conversationId: 'c_test',
+      operationId: 'op_test',
+    });
+    expect(await tool.verification?.reconcile(args, 'op_test')).toMatchObject({
+      state: 'confirmed',
+      receipt: { provider: 'Conch', id: artifactOperationId('c_test', 'op_test') },
+    });
+    const id = artifactOperationId('c_test', 'op_test');
+    await writeFile(join(home, 'artifacts', id, 'v1.md'), 'tampered');
+    expect(await tool.verification?.reconcile(args, 'op_test')).toEqual({ state: 'unknown' });
+  });
+});

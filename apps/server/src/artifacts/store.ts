@@ -4,7 +4,8 @@
  * A damaged `artifact.json` is set aside and rebuilt from the versions that
  * are still there, so nothing you made is lost to one bad write.
  */
-import { mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { mkdir, open, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 
 import {
@@ -29,6 +30,12 @@ export class ArtifactError extends Error {
 }
 
 const versionFile = (kind: ArtifactKind, n: number) => `v${n}.${ARTIFACT_FILES[kind].ext}`;
+
+/** A task's operation always names the same output, including across a crash. */
+export const artifactOperationId = (conversationId: string, operationId: string) =>
+  `a_${createHash('sha256')
+    .update(JSON.stringify([conversationId, operationId]))
+    .digest('hex')}`;
 
 export class ArtifactStore {
   readonly dir: string;
@@ -132,6 +139,7 @@ export class ArtifactStore {
     note?: string;
     refresh?: string;
     navigates?: boolean;
+    operationId?: string;
   }): Promise<Artifact> {
     if (input.content.length > ARTIFACT_MAX)
       throw new ArtifactError(
@@ -139,7 +147,26 @@ export class ArtifactStore {
         `That’s more than ${ARTIFACT_MAX.toLocaleString('en')} characters.`,
       );
     return this.#mutex.run(async () => {
-      const id = newId('a');
+      const id = input.operationId
+        ? artifactOperationId(input.conversationId, input.operationId)
+        : newId('a');
+      if (input.operationId) {
+        const existing = await this.#read(id);
+        if (existing) {
+          const saved = await this.content(id, 1);
+          if (
+            existing.conversationId !== input.conversationId ||
+            existing.kind !== input.kind ||
+            existing.title !== input.title ||
+            saved.content !== input.content
+          )
+            throw new ArtifactError(
+              'invalid',
+              'This operation already saved a different document. Review it before trying again.',
+            );
+          return existing;
+        }
+      }
       const folder = this.#folder(id);
       await mkdir(folder, { recursive: true, mode: 0o700 });
       const now = Date.now();
@@ -164,6 +191,30 @@ export class ArtifactStore {
         ...(input.navigates && { navigates: true }),
       };
       await writeJson(join(folder, 'artifact.json'), artifact);
+      if (input.operationId) {
+        // Only a durable result can support a durable completion receipt.
+        for (const path of [
+          join(folder, versionFile(input.kind, 1)),
+          join(folder, 'artifact.json'),
+        ]) {
+          const file = await open(path, 'r');
+          try {
+            await file.sync();
+          } finally {
+            await file.close();
+          }
+        }
+        if (process.platform !== 'win32') {
+          for (const path of [folder, this.dir]) {
+            const directory = await open(path, 'r');
+            try {
+              await directory.sync();
+            } finally {
+              await directory.close();
+            }
+          }
+        }
+      }
       return artifact;
     });
   }
