@@ -4,6 +4,7 @@ import type { ChannelBot, ChannelSecrets, MailProvider } from '@conch/protocol';
 import { ImapFlow } from 'imapflow';
 import nodemailer from 'nodemailer';
 import PostalMime, { type Email } from 'postal-mime';
+import { getDomain } from 'tldts';
 
 import {
   handleId,
@@ -571,9 +572,12 @@ export class EmailAdapter implements ChannelAdapter {
       if (!ours && !SUBJECT_TAG.test(bareSubject(email.subject))) return 'skip';
     }
     const verdict = senderVerdict(email.headers, from, this.#preset.authserv);
-    if (verdict === 'pass') return 'ok';
+    // A server of your own may not check mail at all, and then a check written by the
+    // sender would be the topmost: your own address needs the Sent-mail proof there.
+    const ownOnOther = this.secrets.provider === 'other' && from === this.#address;
+    if (verdict === 'pass' && !ownOnOther) return 'ok';
     // Your own mail, sent from your phone, often isn't checked: it's yours if it's in your Sent mail.
-    if (verdict === 'none' && from === this.#address && sent && email.messageId) {
+    if ((verdict === 'none' || ownOnOther) && from === this.#address && sent && email.messageId) {
       try {
         await client.mailboxOpen(sent, { readOnly: true });
         const inSent = await client.search(
@@ -657,12 +661,11 @@ function isAuth(error: unknown): boolean {
   return Boolean(e?.authenticationFailed) || e?.serverResponseCode === 'AUTHENTICATIONFAILED';
 }
 
-/** For a server of your own: its checks are signed with its own names, or the domain your mail is at. */
+/** For a server of your own: its checks are signed with its own name (its organisation's domain). */
 function otherAuthserv(secrets: EmailSecrets) {
-  const domains = [secrets.server?.imapHost, secrets.address.split('@')[1]]
-    .filter((d): d is string => Boolean(d))
-    .map((d) => d.split('.').slice(-2).join('.'));
-  return endsWith(...domains);
+  const host = secrets.server?.imapHost;
+  const org = host ? (getDomain(host) ?? host) : undefined;
+  return org ? endsWith(org) : () => false;
 }
 
 /** A first line short enough for a subject. */

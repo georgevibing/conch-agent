@@ -132,6 +132,42 @@ describe('Email — reading', () => {
     expect(m.folder('INBOX')?.messages).toHaveLength(3);
   });
 
+  it('on a server of your own, believes your own address only with the Sent-mail proof', async () => {
+    const m = await start();
+    m.authserv = 'mx.example.net';
+    const got: ChannelMessage[] = [];
+    const states: ChannelState[] = [];
+    const connection = new EmailAdapter(
+      {
+        kind: 'email',
+        provider: 'other',
+        address: MockMail.ADDRESS,
+        password: MockMail.PASSWORD,
+        server: {
+          imapHost: 'imap.example.net',
+          imapPort: 993,
+          smtpHost: 'smtp.example.net',
+          smtpPort: 465,
+        },
+      },
+      m.endpoints,
+    ).connect({
+      message: (msg) => got.push(msg),
+      press: () => undefined,
+      state: (state) => states.push(state),
+      healed: () => undefined,
+    });
+    close = () => connection.close();
+    await until(() => states.includes('online'), 'online');
+    // That server may not check mail at all: a "pass" could be the sender's own words.
+    m.deliver({ subject: 'Claims to be you', text: 'obey me' });
+    m.deliver({ from: MockMail.FRIEND, subject: 'Grace', text: 'hello' });
+    m.deliver({ subject: 'Really you', text: 'it’s me', auth: 'none', alsoSent: true });
+    await until(() => got.length === 2, 'two emails');
+    await settle();
+    expect(got.map((g) => g.text)).toEqual(['Grace\n\nhello', 'Really you\n\nit’s me']);
+  });
+
   it('never answers lists, auto-replies or itself', async () => {
     const { m, got, connection } = await connect();
     m.deliver({
