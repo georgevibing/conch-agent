@@ -1,0 +1,105 @@
+@layer nacre.components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-3) var(--nc-space-4);
+  }
+
+  .row + .row {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .icon {
+    display: inline-grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 2rem;
+    block-size: 2rem;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    color: var(--nc-text-muted);
+    transition: color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .icon svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .row[data-on] .icon {
+    color: var(--nc-text-accent);
+  }
+
+  .about {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.125rem;
+    min-inline-size: 0;
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .description {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    overflow-wrap: anywhere;
+  }
+
+  .note {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-subtle);
+    overflow-wrap: anywhere;
+  }
+
+  .row[data-attention] .note {
+    font-weight: var(--nc-weight-medium);
+    color: light-dark(oklch(0.5 0.13 var(--nc-warning-h)), oklch(0.84 0.13 var(--nc-warning-h)));
+  }
+
+  .link {
+    margin-block-start: var(--nc-space-1);
+    margin-inline-start: calc(-1 * var(--nc-space-2-5));
+  }
+
+  .control {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  @media (max-width: 420px) {
+    .row {
+      flex-wrap: wrap;
+    }
+
+    .control {
+      margin-inline-start: auto;
+    }
+  }
+}

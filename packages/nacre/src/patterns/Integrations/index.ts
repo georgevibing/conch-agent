@@ -1,3 +1,5 @@
+export { AppAbilities } from './AppAbilities';
+export type { AppAbilitiesProps, AppAbility } from './AppAbilities';
 export { brandMarks } from './brands';
 export { IntegrationCard } from './IntegrationCard';
 export type { CatalogCardProps, ConnectedCardProps, IntegrationCardProps } from './IntegrationCard';
