@@ -22,6 +22,7 @@ import { channelsApi } from './api';
 import { SetupPage, stepState } from './ConnectChannel';
 import { APPS, readablePhone, SELF_CHAT } from './describe';
 import { HelloStep } from './HelloStep';
+import { usePointerFine } from './hooks';
 import { errorText, linkKey, useChannel, useChannelLink } from './queries';
 
 type Linked = 'whatsapp' | 'signal';
@@ -114,6 +115,7 @@ export function LinkStep({
   const [busy, setBusy] = useState(false);
   const { data: link } = useChannelLink(linkId);
   const started = useRef(false);
+  const fine = usePointerFine();
   const app = APPS[kind].name;
 
   const start = async () => {
@@ -240,7 +242,15 @@ export function LinkStep({
         retryLabel={state === 'expired' ? 'Show a new code' : 'Try again'}
       >
         {state === 'showing' || state === 'starting' ? (
-          PHONE[kind].steps
+          <>
+            {PHONE[kind].steps}
+            {!fine && (
+              <p>
+                On this phone? A phone can’t scan its own screen: open Conch on your computer, or
+                show this page on another screen, and scan it there.
+              </p>
+            )}
+          </>
         ) : state === 'finishing' ? (
           <p>Keep {app} open on your phone for a moment.</p>
         ) : state === 'linked' && link.phone ? (

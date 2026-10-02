@@ -69,6 +69,8 @@ const scenarios = {
   // Runs under the supervisor (`pnpm start`), so a restore can start Conch again.
   backups: { port: 4382, env: { CONCH_MOCK_STATE: 'ready', CONCH_SUPERVISE: '1' }, entry: 'start' },
   channels: { port: 4387, env: { CONCH_MOCK_STATE: 'ready' } },
+  // WhatsApp and Signal linked by (pretend) QR codes (ADR 0043).
+  'channels-linked': { port: 4364, env: { CONCH_MOCK_STATE: 'ready' } },
   // Safe hands: checking after reading, the timeline, skills read before they're used.
   safety: { port: 4378, env: { CONCH_MOCK_STATE: 'ready' } },
   // Undo (ADR 0030): the mock really writes note.md in the work folder, then it's put back.
