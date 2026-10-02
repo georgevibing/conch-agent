@@ -4,6 +4,7 @@ import {
   GoogleImport,
   GoogleComplete,
   GoogleConnect,
+  GmailPasswordConnect,
   parseGoogleCredentials,
   type GoogleCapability,
   type GoogleStatus,
@@ -11,6 +12,8 @@ import {
 import { CodeChallengeMethod, OAuth2Client } from 'google-auth-library';
 import { z } from 'zod';
 import { safeEqual } from '../auth/secrets';
+import { ChannelError } from '../channels/types';
+import { GmailImap, type GmailLogin } from './imap';
 import { type GoogleStore, type Credential, type GoogleData } from './store';
 
 export const SCOPES: Record<GoogleCapability, string[]> = {
@@ -23,6 +26,29 @@ export const SCOPES: Record<GoogleCapability, string[]> = {
   'drive-read': ['https://www.googleapis.com/auth/drive.metadata.readonly'],
 };
 const ALL_CAPABILITIES = Object.keys(SCOPES) as GoogleCapability[];
+export const APP_PASSWORD_ONLY_MAIL =
+  'This account is signed in with a Gmail app password, which only reaches Gmail. Google Calendar and Google Drive need your own Google Cloud app: connect them from Integrations.';
+/** An app-password account's id: the same address is the same account. */
+export const passwordId = (address: string) =>
+  `pw-${createHash('sha256').update(address.trim().toLowerCase()).digest('base64url').slice(0, 24)}`;
+/** A failed IMAP call in Google's words: a refused password, a setting to change, or a blip. */
+export function toGoogleError(error: unknown): GoogleError {
+  if (error instanceof GoogleError) return error;
+  if (error instanceof ChannelError)
+    return new GoogleError(
+      error.code === 'auth'
+        ? 'expired'
+        : error.code === 'setup'
+          ? 'setup'
+          : error.code === 'network'
+            ? 'unavailable'
+            : 'invalid',
+      error.code === 'auth'
+        ? 'Gmail didn’t take that app password. Make a new one at Google and paste it.'
+        : error.message,
+    );
+  return new GoogleError('unavailable', 'Gmail could not be reached. Try again shortly.');
+}
 export class GoogleError extends Error {
   constructor(
     readonly kind:
@@ -153,6 +179,10 @@ export class GoogleService {
   #processing = new Map<string, Pending>();
   #finished = new Map<string, { accountId?: string; message?: string; expiresAt: number }>();
   #refreshing = new Map<string, Promise<Credential>>();
+  /** Recent app-password tries: a few a minute is a person; more is someone guessing. */
+  #tries: number[] = [];
+  /** Told when an account is connected with these capabilities, so their apps show again. */
+  onConnected?: (capabilities: GoogleCapability[]) => Promise<void>;
   constructor(
     readonly store: GoogleStore,
     private readonly clientFor: (config: Config) => OAuth2Client = (c) =>
@@ -163,6 +193,7 @@ export class GoogleService {
         transporterOptions: { timeout: 20_000, maxRedirects: 0 },
       }),
     private readonly fetcher: typeof fetch = fetch,
+    readonly imap: GmailImap = new GmailImap(),
   ) {}
   async status(): Promise<GoogleStatus> {
     const data = await this.store.read();
@@ -171,8 +202,127 @@ export class GoogleService {
       clientType: data.config?.clientType,
       projectId: data.config?.projectId,
       callbackUrl: data.config?.redirectUrl,
-      accounts: Object.values(data.accounts).map((a) => a.profile),
+      accounts: [
+        ...Object.values(data.accounts).map((a) => a.profile),
+        ...Object.values(data.passwords).map((p) => p.profile),
+      ],
     };
+  }
+
+  // ── Gmail with an app password (ADR 0048) ───────────────────────────────
+
+  /** Whether this account signs in with an app password (Gmail only, over IMAP). */
+  async viaPassword(id: string): Promise<boolean> {
+    return Boolean((await this.store.read()).passwords[id]);
+  }
+
+  /**
+   * Check the app password by signing in to Gmail, then keep it sealed. The
+   * same address again replaces its password (a new one after a revoke).
+   */
+  async connectPassword(raw: unknown): Promise<GoogleStatus> {
+    const parsed = GmailPasswordConnect.safeParse(raw);
+    if (!parsed.success)
+      throw new GoogleError(
+        'invalid',
+        parsed.error.issues[0]?.path[0] === 'password'
+          ? 'An app password is 16 letters, like “abcd efgh ijkl mnop”.'
+          : 'Enter your Gmail address.',
+      );
+    const input = parsed.data;
+    const now = Date.now();
+    this.#tries = this.#tries.filter((t) => now - t < 10 * 60_000);
+    if (this.#tries.length >= 10)
+      throw new GoogleError(
+        'invalid',
+        'That’s a lot of tries. Wait a few minutes, then make a new app password and paste it.',
+      );
+    this.#tries.push(now);
+    const id = passwordId(input.address);
+    if (input.accountId && input.accountId !== id)
+      throw new GoogleError(
+        'invalid',
+        'That app password is for another address. Connect it as a new account instead.',
+      );
+    try {
+      await this.imap.verify({ address: input.address, password: input.password });
+    } catch (error) {
+      throw toGoogleError(error);
+    }
+    await this.store.update((data) => {
+      data.passwords[id] = {
+        profile: {
+          id,
+          email: input.address,
+          name: input.address,
+          capabilities: ['mail-read', 'mail-draft'],
+          state: 'ready',
+          checkedAt: Date.now(),
+          via: 'app-password',
+        },
+        address: input.address,
+        password: input.password,
+        generation: randomBytes(24).toString('base64url'),
+      };
+    });
+    await this.onConnected?.(['mail-read', 'mail-draft']).catch(() => undefined);
+    return this.status();
+  }
+
+  /** The sign-in a Gmail tool uses. Never leaves the gateway. */
+  async passwordLogin(id: string): Promise<GmailLogin & { generation: string }> {
+    const login = (await this.store.read()).passwords[id];
+    if (!login) throw new GoogleError('expired', 'That Gmail account isn’t connected any more.');
+    if (login.profile.state === 'needs-auth')
+      throw new GoogleError(
+        'expired',
+        'Gmail stopped taking this app password. Paste a new one in Integrations → Gmail.',
+      );
+    return { address: login.address, password: login.password, generation: login.generation };
+  }
+
+  /** What a failed Gmail call means for the account: a refused password needs a new one. */
+  async passwordFailed(id: string, generation: string, error: unknown): Promise<GoogleError> {
+    const failure = toGoogleError(error);
+    const state =
+      failure.kind === 'expired'
+        ? 'needs-auth'
+        : failure.kind === 'unavailable'
+          ? 'unavailable'
+          : undefined;
+    if (state)
+      await this.store.update((data) => {
+        const login = data.passwords[id];
+        if (login?.generation !== generation) return;
+        login.profile.state = state;
+        login.profile.message = failure.message;
+        login.profile.checkedAt = Date.now();
+      });
+    return failure;
+  }
+
+  async #checkPassword(id: string) {
+    const login = (await this.store.read()).passwords[id];
+    if (!login) throw new GoogleError('invalid', 'That Google account is not connected.');
+    let failure: GoogleError | undefined;
+    try {
+      await this.imap.verify(login);
+    } catch (error) {
+      failure = toGoogleError(error);
+    }
+    await this.store.update((data) => {
+      const item = data.passwords[id];
+      if (item?.generation !== login.generation) return;
+      item.profile.checkedAt = Date.now();
+      if (!failure) {
+        item.profile.state = 'ready';
+        delete item.profile.message;
+      } else {
+        item.profile.state = failure.kind === 'expired' ? 'needs-auth' : 'unavailable';
+        item.profile.message = failure.message;
+      }
+    });
+    return this.status();
   }
   async configure(raw: unknown, origin: string) {
     const config = GoogleConfigure.parse(raw);
@@ -435,6 +585,7 @@ export class GoogleService {
             capabilities: granted,
             state: 'ready',
             checkedAt: Date.now(),
+            via: 'google',
           },
           credential: {
             accessToken,
@@ -445,6 +596,7 @@ export class GoogleService {
           },
         };
       });
+      await this.onConnected?.(flow.capabilities).catch(() => undefined);
       const checked = await this.check(profile.sub);
       const result = checked.accounts.find((a) => a.id === profile.sub);
       this.#finished.set(state, {
@@ -466,6 +618,7 @@ export class GoogleService {
   async credential(id: string, required: GoogleCapability, force = false): Promise<Credential> {
     const data = await this.store.read(),
       account = data.accounts[id];
+    if (!account && data.passwords[id]) throw new GoogleError('scope', APP_PASSWORD_ONLY_MAIL);
     if (!account || !data.config || account.profile.state === 'needs-auth')
       throw new GoogleError('expired', 'Reconnect this Google account in Integrations.');
     if (!SCOPES[required].every((s) => account.credential.scopes.includes(s)))
@@ -656,6 +809,7 @@ export class GoogleService {
   async check(id: string) {
     const data = await this.store.read(),
       a = data.accounts[id];
+    if (!a && data.passwords[id]) return this.#checkPassword(id);
     if (!a) throw new GoogleError('invalid', 'That Google account is not connected.');
     try {
       for (const c of a.profile.capabilities) {
@@ -696,6 +850,14 @@ export class GoogleService {
     for (const [s, p] of this.#pending) if (p.accountId === id) this.#pending.delete(s);
     const data = await this.store.read(),
       account = data.accounts[id];
+    // An app password has nothing to revoke from here: it's forgotten, and the person can
+    // remove it at Google too (the page says where).
+    if (!account && data.passwords[id]) {
+      await this.store.update((d) => {
+        d.passwords = Object.fromEntries(Object.entries(d.passwords).filter(([key]) => key !== id));
+      });
+      return;
+    }
     if (!account) return;
     // Remote revoke first; if offline, retain the account so revocation can be retried knowingly.
     try {
@@ -726,6 +888,17 @@ export class GoogleService {
       .digest('hex');
   }
   async verificationScope(id: string, required: GoogleCapability) {
+    if (await this.viaPassword(id)) {
+      if (required !== 'mail-read' && required !== 'mail-draft')
+        throw new GoogleError('scope', APP_PASSWORD_ONLY_MAIL);
+      const login = await this.passwordLogin(id);
+      return {
+        account: id,
+        authorization: createHash('sha256').update(`${login.generation}\nimap`).digest('hex'),
+        // An app password doesn't expire; an approval still only holds for a while.
+        expiresAt: Date.now() + 3_600_000,
+      };
+    }
     const c = await this.credential(id, required);
     return { account: id, authorization: this.#authorization(c), expiresAt: c.expiresAt };
   }

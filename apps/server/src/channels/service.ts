@@ -266,6 +266,21 @@ export class ChannelService {
     };
   }
 
+  /**
+   * The email channel's Gmail sign-in (an address and its app password), so
+   * Gmail the app can be offered the same one in a tap (ADR 0048). Only ever
+   * read on the gateway; the browser is told the address, never the password.
+   */
+  async gmailLogin(): Promise<{ address: string; password: string } | undefined> {
+    for (const channel of await this.deps.store.all()) {
+      if (channel.kind !== 'email') continue;
+      const secrets = await this.deps.store.secrets(channel.id).catch(() => undefined);
+      if (secrets?.kind === 'email' && secrets.provider === 'gmail')
+        return { address: secrets.address, password: secrets.password };
+    }
+    return undefined;
+  }
+
   /** What connecting iMessage would use here (read from Messages), or why it can't yet. */
   async imessageSetup(): Promise<ImessageSetup> {
     if ((this.deps.platform ?? process.platform) !== 'darwin' || !this.deps.imessage)

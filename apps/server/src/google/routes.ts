@@ -1,8 +1,16 @@
 import { isLoopbackAddress } from '../auth/network';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
+import { GoogleAppId } from '@conch/protocol';
 import type { Gatekeeper } from '../security';
+import type { GoogleApps } from './apps';
 import { GoogleError, type GoogleService } from './service';
+
+export interface GoogleRouteDeps {
+  apps?: GoogleApps;
+  /** The email channel's Gmail sign-in, if there is one (ADR 0048). */
+  gmailLogin?: () => Promise<{ address: string; password: string } | undefined>;
+}
 
 const Cookie = 'conch_google_flow';
 const FlowParams = z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/) });
@@ -13,7 +21,12 @@ const Params = z.object({
 });
 
 /** Existing gateway Host/Origin/session guards cover /api. Callback only spends a browser-bound state. */
-export function googleRoutes(app: FastifyInstance, service: GoogleService, gate: Gatekeeper) {
+export function googleRoutes(
+  app: FastifyInstance,
+  service: GoogleService,
+  gate: Gatekeeper,
+  deps: GoogleRouteDeps = {},
+) {
   const https = (request: FastifyRequest) =>
     request.protocol === 'https' ||
     (isLoopbackAddress(request.socket.remoteAddress) &&
@@ -119,6 +132,36 @@ export function googleRoutes(app: FastifyInstance, service: GoogleService, gate:
       return { ok: true };
     });
   });
+  // ── Gmail with an app password, and the apps (ADR 0048) ─────────────────
+  // Checked by signing in to Gmail before anything is kept. The password comes
+  // in once, in the body, and never goes back out.
+  app.post('/api/google/mail/password', { bodyLimit: 4_000 }, async (request, reply) => {
+    if (!verified(request, reply)) return;
+    return guarded(reply, () => service.connectPassword(request.body));
+  });
+  // Whether the email channel already signs in to Gmail: only the address is said.
+  app.get('/api/google/mail/reusable', async () => ({
+    address: (await deps.gmailLogin?.().catch(() => undefined))?.address,
+  }));
+  // Use the email channel's sign-in for Gmail too: only when a person asks, and checked first.
+  app.post('/api/google/mail/reuse', async (request, reply) => {
+    if (!verified(request, reply)) return;
+    return guarded(reply, async () => {
+      const login = await deps.gmailLogin?.();
+      if (!login) throw new GoogleError('invalid', 'Email isn’t connected with Gmail any more.');
+      return service.connectPassword(login);
+    });
+  });
+  // An account that's already connected, used for an app again ("Use this account").
+  app.post<{ Params: { app: string } }>('/api/google/apps/:app/use', async (request, reply) => {
+    if (!verified(request, reply)) return;
+    return guarded(reply, async () => {
+      const id = GoogleAppId.parse(request.params.app);
+      await deps.apps?.show(id);
+      return { ok: true };
+    });
+  });
+
   app.get('/oauth/google/callback', async (request, reply) => {
     reply.header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer');
     const query = Params.safeParse(request.query);

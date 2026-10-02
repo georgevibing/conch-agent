@@ -1,4 +1,5 @@
-import { Mail, readMail, replyEnvelope, gmailLink, type ReplyEnvelope } from './mail';
+import { Mail, replyEnvelope, gmailLink, readMail, viaImap, type ReplyEnvelope } from './mail';
+import { DraftUncertain } from './imap';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { GoogleCapability } from '@conch/protocol';
@@ -105,6 +106,24 @@ export async function reconcileDraft(
     const reply = await replyEnvelope(service, args);
     const account = (await service.status()).accounts.find((a) => a.id === args.accountId);
     if (!account) return { state: 'unknown' as const };
+    if (account.via === 'app-password') {
+      // Conch's own Message-ID finds it; exactly one, with exactly what was asked, is a receipt.
+      const found = await viaImap(service, args.accountId, (login) =>
+        service.imap.drafts(login, `<${draftMessageId(operationId)}>`),
+      );
+      const draft = found.length === 1 ? found[0] : undefined;
+      if (!draft || !matchesDraft(draft.source.toString('utf8'), args, operationId, reply))
+        return { state: 'unknown' as const };
+      return {
+        state: 'confirmed' as const,
+        receipt: {
+          provider: 'google',
+          id: draft.id,
+          label: 'Gmail draft verified — not sent',
+          url: gmailLink(account.email, draft.id, 'drafts'),
+        },
+      };
+    }
     let draftId = knownDraftId;
     if (!draftId) {
       const list = DraftList.parse(
@@ -221,9 +240,13 @@ export function googleTools(
     'mail-read',
     async (args) =>
       MailSearchResult.parse(
-        await service.api(String(args.accountId), 'mail-read', '/gmail/v1/users/me/messages', {
-          query: { q: String(args.query), maxResults: String(args.limit) },
-        }),
+        (await service.viaPassword(String(args.accountId)))
+          ? await viaImap(service, String(args.accountId), (login) =>
+              service.imap.search(login, String(args.query), Number(args.limit)),
+            )
+          : await service.api(String(args.accountId), 'mail-read', '/gmail/v1/users/me/messages', {
+              query: { q: String(args.query), maxResults: String(args.limit) },
+            }),
       ),
   );
   const mailRead = read(
@@ -363,6 +386,31 @@ export function googleTools(
           text: 'Google account access changed while waiting for approval. Nothing was saved; start the job again.',
           effect: 'not-executed' as const,
         };
+      if (account.via === 'app-password') {
+        // IMAP APPEND into Drafts: there is no way to send from here at all.
+        try {
+          await viaImap(service, args.accountId, (login) =>
+            service.imap.saveDraft(login, draftRaw(args, context.operationId, reply), ctx.signal),
+          );
+        } catch (error) {
+          if (error instanceof DraftUncertain)
+            throw new GoogleError(
+              'ambiguous',
+              'Gmail may have saved this draft. Check its receipt before trying again.',
+            );
+          return {
+            text: `Nothing was saved. ${error instanceof GoogleError ? error.message : 'Gmail could not be reached.'}`,
+            effect: 'not-executed' as const,
+          };
+        }
+        const saved = await reconcileDraft(service, args, context.operationId);
+        if (saved.state !== 'confirmed')
+          throw new GoogleError(
+            'ambiguous',
+            'Gmail saved a draft but its contents could not be verified. Check Gmail before doing anything again.',
+          );
+        return JSON.stringify({ ...saved, messageId: saved.receipt.id });
+      }
       let result;
       try {
         result = Draft.parse(

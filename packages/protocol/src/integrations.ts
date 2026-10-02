@@ -124,6 +124,8 @@ export const IntegrationTool = z.object({
   access: z.enum(['read', 'write']),
   /** The server says this can delete or overwrite. */
   destructive: z.boolean().default(false),
+  /** Asks every time, whatever the policy says (saving a Gmail draft): only Ask or Off. */
+  alwaysAsks: z.boolean().optional(),
   /** Set when you overrode the integration's policy for this tool. */
   policy: ToolPolicy.optional(),
 });
@@ -179,6 +181,12 @@ export type IntegrationHealth = z.infer<typeof IntegrationHealth>;
 export const IntegrationTransport = z.discriminatedUnion('type', [
   z.object({ type: z.literal('http'), url: z.string() }),
   z.object({ type: z.literal('stdio'), command: z.string(), args: z.array(z.string()) }),
+  /**
+   * Run by Conch itself, as its own tools (Gmail, Google Calendar, Google
+   * Drive: ADR 0048). Nothing to start and no address; `how` says how it's
+   * signed in, in words.
+   */
+  z.object({ type: z.literal('host'), how: z.string() }),
 ]);
 export type IntegrationTransport = z.infer<typeof IntegrationTransport>;
 

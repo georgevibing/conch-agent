@@ -63,6 +63,7 @@ function fixture() {
   );
   const service = {
     api,
+    viaPassword: vi.fn(async () => false),
     status: vi.fn(async () => ({ configured: true, accounts: [profile] })),
     verificationScope: vi.fn(async () => ({
       account: 'account1',

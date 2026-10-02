@@ -529,7 +529,10 @@ export async function buildApp(services: Services) {
     }
   });
 
-  googleRoutes(app, services.google, gate);
+  googleRoutes(app, services.google, gate, {
+    apps: services.googleApps,
+    gmailLogin: () => services.channels.gmailLogin(),
+  });
 
   // ── Integrations ───────────────────────────────────────────────────────
   // Running a program of your choosing, or letting an integration act without

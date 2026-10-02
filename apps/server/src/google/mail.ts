@@ -1,6 +1,7 @@
 import PostalMime, { type Address, type Email } from 'postal-mime';
 import { convert } from 'html-to-text';
 import { z } from 'zod';
+import { DraftUncertain, type GmailLogin } from './imap';
 import { GoogleError, type GoogleService } from './service';
 
 export const Mail = z.object({
@@ -16,9 +17,9 @@ export const addresses = (values: Address[] | undefined): string[] =>
   (values ?? [])
     .flatMap((v) => (v.group ? v.group.map((a) => a.address) : [v.address]))
     .filter((v): v is string => typeof v === 'string' && z.email().safeParse(v).success);
-export async function parseMail(raw: string): Promise<Email> {
+export async function parseMail(raw: Buffer): Promise<Email> {
   try {
-    return await PostalMime.parse(Buffer.from(raw, 'base64url'), {
+    return await PostalMime.parse(raw, {
       maxNestingDepth: 20,
       maxHeadersSize: 64_000,
       maxRfc822NestingDepth: 0,
@@ -33,7 +34,40 @@ export async function parseMail(raw: string): Promise<Email> {
 }
 export const gmailLink = (email: string, id: string, folder = 'all') =>
   `https://mail.google.com/mail/?authuser=${encodeURIComponent(email)}#${folder}/${encodeURIComponent(id)}`;
-export async function readMail(service: GoogleService, accountId: string, messageId: string) {
+/**
+ * Run one Gmail call over IMAP with the account's app password (ADR 0048). A
+ * refused password marks the account as needing a new one; a blip says so.
+ * Nothing about the password or what the server said reaches the caller.
+ */
+export async function viaImap<T>(
+  service: GoogleService,
+  accountId: string,
+  run: (login: GmailLogin) => Promise<T>,
+): Promise<T> {
+  const login = await service.passwordLogin(accountId);
+  try {
+    return await run(login);
+  } catch (error) {
+    if (error instanceof DraftUncertain) throw error;
+    throw await service.passwordFailed(accountId, login.generation, error);
+  }
+}
+
+/** One email as Gmail keeps it, whichever way the account is signed in. */
+export async function mailSource(
+  service: GoogleService,
+  accountId: string,
+  messageId: string,
+): Promise<{ message: { id: string; threadId?: string; labelIds?: string[] }; raw: Buffer }> {
+  if (await service.viaPassword(accountId)) {
+    const found = await viaImap(service, accountId, (login) =>
+      service.imap.message(login, messageId),
+    );
+    return {
+      message: { id: found.id, threadId: found.threadId, labelIds: found.labelIds },
+      raw: found.source,
+    };
+  }
   const message = Mail.parse(
     await service.api(
       accountId,
@@ -47,7 +81,12 @@ export async function readMail(service: GoogleService, accountId: string, messag
       'invalid',
       'Google did not return this email’s content. Open Gmail to read it.',
     );
-  const email = await parseMail(message.raw);
+  return { message, raw: Buffer.from(message.raw, 'base64url') };
+}
+
+export async function readMail(service: GoogleService, accountId: string, messageId: string) {
+  const { message, raw } = await mailSource(service, accountId, messageId);
+  const email = await parseMail(raw);
   const account = (await service.status()).accounts.find((a) => a.id === accountId);
   if (!account) throw new GoogleError('expired', 'That Google account was disconnected.');
   const text =

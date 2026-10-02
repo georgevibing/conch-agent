@@ -132,7 +132,10 @@ function slug(name: string): string {
   return s || 'integration';
 }
 
-function mentions(prompt: string, item: StoredIntegration): boolean {
+function mentions(
+  prompt: string,
+  item: Pick<StoredIntegration, 'name' | 'catalogId' | 'server'>,
+): boolean {
   const text = prompt.toLowerCase();
   const names = [item.name, item.catalogId ?? '', item.server]
     .map((n) =>
@@ -192,6 +195,25 @@ export interface IntegrationServiceDeps {
   /** How long a turn waits to learn what the provider reaches by itself; tests shorten it. */
   providerWaitMs?: number;
   googleConnected?: () => Promise<string[]>;
+  /**
+   * Apps Conch runs itself as its own tools (Gmail, Google Calendar, Google
+   * Drive: ADR 0048). They're listed, opened, switched and checked like any
+   * other integration, but kept by their own service.
+   */
+  hosted?: HostedApps;
+}
+
+/** Integrations whose tools are Conch's own host tools, kept somewhere other than `integrations.json`. */
+export interface HostedApps {
+  owns(id: string): boolean;
+  list(): Promise<Integration[]>;
+  get(id: string): Promise<Integration>;
+  update(id: string, patch: UpdateIntegrationBody): Promise<Integration>;
+  remove(id: string): Promise<void>;
+  check(id: string): Promise<Integration>;
+  /** `off` for a tool the person turned off (the host tools hold the rest themselves). */
+  decide(toolName: string): 'allow' | 'ask' | 'off' | undefined;
+  promptLines(): Promise<{ working: string[]; broken: string[] }>;
 }
 
 /**
@@ -259,12 +281,16 @@ export class IntegrationService {
       catalog: publicCatalog().filter(
         (c) => c.auth !== 'account' || providers.some((p) => p.account),
       ),
-      integrations: items.map((item) => publicView(this.#live(item))),
+      integrations: [
+        ...items.map((item) => publicView(this.#live(item))),
+        ...((await this.deps.hosted?.list().catch(() => [])) ?? []),
+      ],
       providers,
     };
   }
 
   async get(id: string): Promise<Integration> {
+    if (this.deps.hosted?.owns(id)) return this.deps.hosted.get(id);
     return publicView(this.#live(await this.#require(id)));
   }
 
@@ -595,6 +621,7 @@ export class IntegrationService {
   }
 
   async update(id: string, patch: UpdateIntegrationBody): Promise<Integration> {
+    if (this.deps.hosted?.owns(id)) return this.deps.hosted.update(id, patch);
     const current = await this.#require(id);
     let recheck = false;
     let secretPatch: Record<string, string> | undefined;
@@ -672,6 +699,7 @@ export class IntegrationService {
   }
 
   async remove(id: string): Promise<void> {
+    if (this.deps.hosted?.owns(id)) return this.deps.hosted.remove(id);
     const retrying = this.#retries.get(id);
     if (retrying) clearTimeout(retrying.timer);
     this.#retries.delete(id);
@@ -684,6 +712,8 @@ export class IntegrationService {
   // ── Signing in ──────────────────────────────────────────────────────────
 
   async connect(id: string, signIn: SignIn): Promise<IntegrationResult> {
+    if (this.deps.hosted?.owns(id))
+      throw new IntegrationError('invalid', 'Sign in to it again from its page in Integrations.');
     const item = await this.#require(id);
     if (item.transport.type !== 'http' || item.auth !== 'oauth')
       throw new IntegrationError('invalid', 'This integration doesn’t use a sign-in page.');
@@ -758,6 +788,7 @@ export class IntegrationService {
   }
 
   async cancelConnect(id: string): Promise<Integration> {
+    if (this.deps.hosted?.owns(id)) return this.deps.hosted.get(id);
     this.oauth.cancel(id);
     const item = await this.#require(id);
     if (item.health.state !== 'connecting') return publicView(item);
@@ -773,6 +804,8 @@ export class IntegrationService {
 
   /** Connect now and refresh the tool list. Concurrent calls share one check. */
   check(id: string): Promise<StoredIntegration | undefined> {
+    const hosted = this.deps.hosted;
+    if (hosted?.owns(id)) return hosted.check(id).then(() => undefined);
     const running = this.#checking.get(id);
     if (running) return running;
     const task = (async () => {
@@ -985,6 +1018,18 @@ export class IntegrationService {
           issues.push(this.#issue(updated ?? item, health.state, health.message ?? ''));
       }
     }
+    // Conch's own apps (Gmail…) that are broken, when the message is about them.
+    for (const item of (await this.deps.hosted?.list().catch(() => [])) ?? []) {
+      const state = item.health.state;
+      if (item.enabled && (state === 'needs-auth' || state === 'error') && mentions(prompt, item))
+        issues.push({
+          integrationId: item.id,
+          name: item.name,
+          catalogId: item.catalogId,
+          state,
+          message: item.health.message ?? '',
+        });
+    }
     return { servers, disallowedTools, issues };
   }
 
@@ -1149,6 +1194,9 @@ export class IntegrationService {
 
   /** Whether a tool call needs asking. `undefined` for tools that aren't an integration's. */
   async decide(toolName: string): Promise<'allow' | 'ask' | 'off' | undefined> {
+    // Conch's own apps ask inside their tools; only "off" is said here, so nothing asks twice.
+    const hosted = this.deps.hosted?.decide(toolName);
+    if (hosted) return hosted === 'off' ? 'off' : undefined;
     const parsed = parseToolName(toolName);
     if (!parsed) return undefined;
     const item = (await this.store.all()).find((i) => i.server === parsed.server);
@@ -1187,7 +1235,11 @@ export class IntegrationService {
   /** The system-prompt section about integrations. */
   async promptSection(): Promise<string> {
     const items = (await this.store.all()).filter((i) => i.enabled);
-    if (!items.length) return '';
+    const hosted = (await this.deps.hosted?.promptLines().catch(() => undefined)) ?? {
+      working: [],
+      broken: [],
+    };
+    if (!items.length && !hosted.working.length && !hosted.broken.length) return '';
     const working = items.filter(
       (i) => !['needs-auth', 'error', 'connecting'].includes(i.health.state),
     );
@@ -1202,10 +1254,16 @@ export class IntegrationService {
         }),
       );
     }
-    if (broken.length) {
+    if (hosted.working.length)
+      lines.push(
+        'These apps are connected too, and Conch runs their tools itself (call `google_accounts` first to choose the account):',
+        ...hosted.working,
+      );
+    if (broken.length || hosted.broken.length) {
       lines.push(
         'These aren’t working right now. If the user asks for something that needs one, say so plainly and suggest fixing it from Integrations in the sidebar — don’t try to work around it:',
         ...broken.map((i) => `- ${i.name}: ${i.health.message ?? 'needs attention'}`),
+        ...hosted.broken,
       );
     }
     lines.push(
@@ -1244,6 +1302,9 @@ export class IntegrationService {
         reach: 'private',
       };
     }
+    // Conch's own apps are never kept here; one that somehow is starts nothing.
+    if (item.transport.type === 'host')
+      throw new EndpointError('Conch runs this app itself. Disconnect it and connect it again.');
     const url = item.transport.url;
     const reach = await reachOf(url);
     const headers: Record<string, string> = {};

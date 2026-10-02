@@ -97,6 +97,8 @@ import { GoogleService } from './google/service';
 import { GoogleStore } from './google/store';
 import { googleTools } from './google/tools';
 import { registerGoogleDoctor } from './google/doctor';
+import { GoogleApps } from './google/apps';
+import { GMAIL_IMAP, GmailImap } from './google/imap';
 import { type Blueprint, CATALOG } from './integrations/catalog';
 import { MockVendor } from './integrations/mock/vendor';
 import { IntegrationService } from './integrations/service';
@@ -211,6 +213,8 @@ export class Services {
   readonly tasks: TaskService;
   /** Direct Google account connections, shared by every engine. */
   readonly google: GoogleService;
+  /** Gmail, Google Calendar and Google Drive as apps on the Integrations page (ADR 0048). */
+  readonly googleApps: GoogleApps;
   /** Everything the assistant did, in one place (ADR 0028). */
   readonly activity: Activity;
   /** Putting back what the assistant changed (ADR 0030). */
@@ -253,8 +257,21 @@ export class Services {
     });
     /** Every store that repairs itself says so here (AGENTS.md agreement 11). */
     const heal: Heal = (area, message) => void this.healed.note(area, message);
-    this.google = new GoogleService(new GoogleStore(config.CONCH_HOME));
-    registerGoogleDoctor(this.doctor, this.google);
+    this.google = new GoogleService(
+      new GoogleStore(config.CONCH_HOME),
+      undefined,
+      undefined,
+      // Gmail with an app password: imap.gmail.com, or the pretend mail service with the mock engine.
+      new GmailImap(() =>
+        this.mockMail ? { imap: this.mockMail.endpoints.imap, insecure: true } : GMAIL_IMAP,
+      ),
+    );
+    this.googleApps = new GoogleApps(this.google, {
+      emit: (event) => this.broadcast.emit(event),
+      onHeal: (message) => void this.healed.note('integrations', message),
+    });
+    this.google.onConnected = (capabilities) => this.googleApps.showFor(capabilities);
+    registerGoogleDoctor(this.doctor, this.google, this.googleApps);
     this.settings = new SettingsStore(config.CONCH_HOME, heal);
     this.access = new AccessStore(config.CONCH_HOME, heal);
     this.gate = new Gatekeeper(config, this.access);
@@ -337,16 +354,9 @@ export class Services {
     // With the mock engine, integrations talk to a pretend vendor on this machine too.
     this.mockVendor = config.CONCH_ENGINE === 'mock' ? new MockVendor() : undefined;
     this.integrations = new IntegrationService({
-      googleConnected: async () => {
-        const accounts = (await this.google.status()).accounts.filter((a) => a.state === 'ready');
-        return [
-          ['gmail', 'mail-read'],
-          ['google-calendar', 'calendar-read'],
-          ['google-drive', 'drive-read'],
-        ]
-          .filter(([, cap]) => accounts.some((a) => a.capabilities.some((c) => c === cap)))
-          .flatMap(([id]) => (id ? [id] : []));
-      },
+      // Connected (in any state) means not offered again: like every other app.
+      googleConnected: async () => (await this.googleApps.list()).map((app) => app.id),
+      hosted: this.googleApps,
       home: config.CONCH_HOME,
       heal,
       emit: (event) => this.broadcast.emit(event),
@@ -504,8 +514,12 @@ export class Services {
               ...vaultTools(this.vault, ctx),
               ...this.artifacts.tools(ctx),
               ...this.tasks.tools(ctx),
-              ...googleTools(this.google, ctx, (draft) =>
-                this.tasks.createDraft({ parentConversationId: ctx.conversationId, draft }),
+              // Only the Google apps that are connected and on, without the tools turned off.
+              ...this.googleApps.tools(
+                googleTools(this.google, ctx, (draft) =>
+                  this.tasks.createDraft({ parentConversationId: ctx.conversationId, draft }),
+                ),
+                ctx,
               ),
             ],
       context: async (engine, conversationId) =>
@@ -597,6 +611,7 @@ export class Services {
     });
     this.usage.start();
     void (this.mockVendor?.start() ?? Promise.resolve()).then(() => this.integrations.start());
+    this.googleApps.start();
     this.activity = new Activity({
       list: () => conversationStore.list(),
       // What's happening now, not what's reached the disk yet: a "no" said a moment ago counts.
@@ -1117,6 +1132,18 @@ export class Services {
           ),
       });
     for (const account of googleStatus.accounts) {
+      if (account.via === 'app-password') {
+        out.push({
+          id: id('google', account.id),
+          title: `Gmail · ${account.email}`,
+          usedBy: 'Gmail',
+          hint: 'App password',
+          manage: { label: 'Open Integrations', place: 'integrations' },
+          reveal: async () =>
+            (await this.google.store.read()).passwords[account.id]?.password ?? '',
+        });
+        continue;
+      }
       out.push({
         id: id('google', account.id),
         title: `Google · ${account.email}`,
@@ -1251,6 +1278,7 @@ export class Services {
   }
 
   stop() {
+    this.googleApps.stop();
     this.channels.stop();
     this.channelLinking.stop();
     this.linked.stop();

@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { googleRoutes } from './routes';
+import type { GoogleApps } from './apps';
 import type { GoogleService } from './service';
 import type { Gatekeeper } from '../security';
 
@@ -9,7 +10,13 @@ afterEach(async () => {
   for (const app of apps.splice(0)) await app.close();
 });
 function setup(verified = true) {
+  const gmailLogin = vi.fn(async () => ({
+    address: 'ada@gmail.com',
+    password: 'abcdefghijklmnop',
+  }));
+  const shown = vi.fn(async () => undefined);
   const service = {
+    connectPassword: vi.fn(async () => ({ configured: false, accounts: [] })),
     status: vi.fn(async () => ({ configured: true, accounts: [] })),
     configure: vi.fn(async () => undefined),
     importCredentials: vi.fn(async () => undefined),
@@ -32,9 +39,58 @@ function setup(verified = true) {
     app,
     service as unknown as GoogleService,
     { verified: () => verified } as unknown as Gatekeeper,
+    { gmailLogin, apps: { show: shown } as unknown as GoogleApps },
   );
-  return { app, service };
+  return { app, service, gmailLogin, shown };
 }
+describe('Gmail with an app password over HTTP (ADR 0048)', () => {
+  it('needs a recently verified session to keep or reuse a password, or to use an account for an app', async () => {
+    const { app, service, shown } = setup(false);
+    for (const [url, payload] of [
+      ['/api/google/mail/password', { address: 'ada@gmail.com', password: 'abcd efgh ijkl mnop' }],
+      ['/api/google/mail/reuse', {}],
+      ['/api/google/apps/gmail/use', {}],
+    ] as const) {
+      const response = await app.inject({ method: 'POST', url, payload });
+      expect(response.statusCode).toBe(403);
+    }
+    expect(service.connectPassword).not.toHaveBeenCalled();
+    expect(shown).not.toHaveBeenCalled();
+  });
+
+  it('tells the browser only the email channel’s address, and reuses its password on the gateway', async () => {
+    const { app, service } = setup();
+    const reusable = await app.inject({ method: 'GET', url: '/api/google/mail/reusable' });
+    expect(reusable.json()).toEqual({ address: 'ada@gmail.com' });
+    expect(reusable.body).not.toContain('abcdefghijklmnop');
+    const reused = await app.inject({ method: 'POST', url: '/api/google/mail/reuse', payload: {} });
+    expect(reused.statusCode).toBe(200);
+    expect(reused.body).not.toContain('abcdefghijklmnop');
+    expect(service.connectPassword).toHaveBeenCalledWith({
+      address: 'ada@gmail.com',
+      password: 'abcdefghijklmnop',
+    });
+  });
+
+  it('only shows apps Conch knows', async () => {
+    const { app, shown } = setup();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/google/apps/../../x/use',
+      payload: {},
+    });
+    expect(response.statusCode).toBeGreaterThanOrEqual(400);
+    const other = await app.inject({
+      method: 'POST',
+      url: '/api/google/apps/slack/use',
+      payload: {},
+    });
+    expect(other.statusCode).toBe(400);
+    expect(shown).not.toHaveBeenCalled();
+    await app.inject({ method: 'POST', url: '/api/google/apps/google-drive/use', payload: {} });
+    expect(shown).toHaveBeenCalledWith('google-drive');
+  });
+});
 describe('Google HTTP boundary', () => {
   it('keeps simultaneous sign-ins in separate browser cookies and rejects cookie-name injection', async () => {
     const { app, service } = setup();
