@@ -848,6 +848,69 @@ describe('Palette search', () => {
     useUi.setState({ settings: null, settingsFocus: undefined });
   });
 
+  it('finds Gmail, Calendar and Drive as apps: open one that’s connected, connect the others', async () => {
+    const user = userEvent.setup();
+    const google = (id: string, name: string) => ({
+      id,
+      name,
+      tagline: '',
+      description: '',
+      category: 'productivity',
+      auth: 'google',
+      local: false,
+      fields: [],
+      steps: [],
+      examples: [],
+      access: [],
+      featured: true,
+    });
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'GET /api/integrations': () => ({
+        catalog: [google('gmail', 'Gmail'), google('google-calendar', 'Google Calendar')],
+        providers: [],
+        integrations: [
+          {
+            id: 'gmail',
+            catalogId: 'gmail',
+            name: 'Gmail',
+            server: 'gmail',
+            transport: { type: 'host', how: 'With an app password' },
+            auth: 'token',
+            enabled: true,
+            policy: 'ask-writes',
+            health: { state: 'ok' },
+            tools: [],
+            values: {},
+            secrets: [],
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        ],
+      }),
+    });
+    renderApp(
+      <>
+        <Palette />
+        <Routes>
+          <Route path="*" element={<Where />} />
+        </Routes>
+      </>,
+    );
+    act(() => useUi.getState().setPalette(true));
+    const box = await screen.findByRole('combobox');
+    await user.type(box, 'gmail');
+    await user.click(await screen.findByRole('option', { name: /Gmail.*Open/ }));
+    expect(screen.getByTestId('where')).toHaveTextContent('/integrations/gmail');
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'calendar');
+    expect(
+      await screen.findByRole('option', { name: /Google Calendar.*Connect/ }),
+    ).toBeInTheDocument();
+  });
+
   it('finds WhatsApp by what linking it means: a code to scan', async () => {
     const user = userEvent.setup();
     mockFetch({

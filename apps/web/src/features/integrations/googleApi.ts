@@ -6,6 +6,9 @@ import {
   GoogleConnect,
   GoogleConnectResult,
   GoogleStatus,
+  GmailPasswordConnect,
+  GmailReusable,
+  type GoogleAppId,
 } from '@conch/protocol';
 import { z } from 'zod';
 import { request } from '../../api/client';
@@ -38,6 +41,22 @@ export const googleApi = {
     }),
   check: (id: string) =>
     request(GoogleStatus, `/api/google/accounts/${encodeURIComponent(id)}/check`, {
+      method: 'POST',
+      body: {},
+    }),
+  /** Gmail with an app password: checked by signing in before it's kept (ADR 0048). */
+  connectPassword: (body: z.input<typeof GmailPasswordConnect>) =>
+    request(GoogleStatus, '/api/google/mail/password', {
+      method: 'POST',
+      body: GmailPasswordConnect.parse(body),
+    }),
+  /** Whether the email channel already signs in to Gmail (only its address). */
+  reusable: () => request(GmailReusable, '/api/google/mail/reusable'),
+  /** Use the email channel's Gmail sign-in for Gmail too, after a person said yes. */
+  reuse: () => request(GoogleStatus, '/api/google/mail/reuse', { method: 'POST', body: {} }),
+  /** An account already connected, used for this app again. */
+  useApp: (app: GoogleAppId) =>
+    request(z.object({ ok: z.boolean() }), `/api/google/apps/${encodeURIComponent(app)}/use`, {
       method: 'POST',
       body: {},
     }),

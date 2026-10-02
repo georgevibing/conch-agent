@@ -29,6 +29,7 @@ import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
 import { integrationsApi } from './api';
 import { TryIt } from './ConnectDialog';
+import { APP_PASSWORDS_URL, GoogleAppConnection } from './GoogleAppConnect';
 import { fixLabel, needsAttention } from './describe';
 import { GetIt } from '../setup/GetIt';
 import styles from './Integrations.module.css';
@@ -223,6 +224,8 @@ function Detail({
           className={styles.policyHelp}
         >
           {policyHelp[integration.policy](integration.name, assistant)}
+          {integration.tools.some((t) => t.alwaysAsks) &&
+            ` Saving a draft always asks, whatever you choose here, and nothing is ever sent.`}
         </Text>
       </section>
 
@@ -261,11 +264,19 @@ function Detail({
         </section>
       )}
 
-      <Connection
-        integration={integration}
-        onCheck={() => check.mutate(integration.id)}
-        checking={check.isPending}
-      />
+      {integration.transport.type === 'host' ? (
+        <GoogleAppConnection
+          integration={integration}
+          onCheck={() => check.mutate(integration.id)}
+          checking={check.isPending}
+        />
+      ) : (
+        <Connection
+          integration={integration}
+          onCheck={() => check.mutate(integration.id)}
+          checking={check.isPending}
+        />
+      )}
 
       <section className={styles.dangerZone}>
         <Button
@@ -283,9 +294,30 @@ function Detail({
           <AlertDialog.Header>
             <AlertDialog.Title>Disconnect {integration.name}?</AlertDialog.Title>
             <AlertDialog.Description>
-              {assistant} won’t be able to use it any more, and Conch forgets its sign-in.
-              {integration.auth === 'oauth' &&
-                ` To remove Conch from your ${integration.name} account too, look for “connected apps” in ${integration.name}’s settings.`}
+              {integration.transport.type === 'host' ? (
+                <>
+                  {assistant} won’t be able to use it any more. A Google account that no other
+                  Google app uses is disconnected too
+                  {integration.auth === 'token' ? (
+                    <>
+                      , and Conch forgets its app password. To stop that password working at Google
+                      as well, remove it on{' '}
+                      <a href={APP_PASSWORDS_URL} target="_blank" rel="noopener noreferrer">
+                        Google’s app passwords page
+                      </a>
+                      .
+                    </>
+                  ) : (
+                    ', and its access is taken back at Google.'
+                  )}
+                </>
+              ) : (
+                <>
+                  {assistant} won’t be able to use it any more, and Conch forgets its sign-in.
+                  {integration.auth === 'oauth' &&
+                    ` To remove Conch from your ${integration.name} account too, look for “connected apps” in ${integration.name}’s settings.`}
+                </>
+              )}
             </AlertDialog.Description>
           </AlertDialog.Header>
           <AlertDialog.Footer>
@@ -383,7 +415,9 @@ function Connection({
             <code className={styles.command}>
               {transport.type === 'stdio'
                 ? [transport.command, ...transport.args].join(' ')
-                : transport.url}
+                : transport.type === 'http'
+                  ? transport.url
+                  : transport.how}
             </code>
           </dd>
         </div>

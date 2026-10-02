@@ -1,4 +1,4 @@
-import { GoogleConnect } from './GoogleConnect';
+import { GoogleAppConnect } from './GoogleAppConnect';
 import type { CatalogEntry, Integration, IntegrationProvider } from '@conch/protocol';
 import {
   Button,
@@ -607,31 +607,26 @@ function AccountSteps({
 }
 
 export function ConnectDialog(props: Parameters<typeof StandardConnectDialog>[0]) {
-  if (props.entry?.auth === 'google')
+  // Gmail, Google Calendar and Google Drive: one Google account, each asking only for what it needs.
+  if (props.entry?.auth === 'google') {
+    const entry = props.entry;
     return (
-      <Dialog.Root
-        open
-        onOpenChange={(open) => {
-          if (!open) props.onOpenChange(false);
-        }}
-      >
-        <Dialog.Content>
-          <Dialog.Title>Connect {props.entry.name}</Dialog.Title>
-          <GoogleConnect
-            capabilities={
-              props.entry.id === 'gmail'
-                ? ['mail-read', 'mail-draft']
-                : props.entry.id === 'google-calendar'
-                  ? ['calendar-read']
-                  : ['drive-read']
-            }
-            onReady={() => {
-              props.onOpenChange(false);
-              props.onAskAgain?.();
-            }}
+      <Dialog.Root open onOpenChange={(open) => !open && props.onOpenChange(false)}>
+        <Dialog.Content
+          size="md"
+          aria-describedby={undefined}
+          onCloseAutoFocus={props.onCloseAutoFocus}
+        >
+          <GoogleAppConnect
+            key={entry.id}
+            entry={entry}
+            onClose={() => props.onOpenChange(false)}
+            inChat={props.inChat}
+            onAskAgain={props.onAskAgain}
           />
         </Dialog.Content>
       </Dialog.Root>
     );
+  }
   return <StandardConnectDialog {...props} />;
 }

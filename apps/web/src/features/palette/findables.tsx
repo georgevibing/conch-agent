@@ -705,7 +705,7 @@ export function useFindables(query: string, conversationId: string | undefined):
     {
       id: 'integrations',
       label: 'Integrations',
-      keywords: 'apps connect mcp Google Gmail calendar Drive personal work account',
+      keywords: 'apps connect mcp Google Gmail calendar Drive personal work account app password',
       icon: <Blocks />,
       run: () => void navigate('/integrations'),
     },

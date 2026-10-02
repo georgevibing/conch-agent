@@ -21,7 +21,9 @@ export function quietMeta(integration: Integration, now = Date.now()): string {
 export function fixLabel(integration: Integration): string | undefined {
   switch (integration.health.action) {
     case 'reconnect':
-      return integration.auth === 'oauth' ? 'Sign in again' : 'Reconnect';
+      return integration.auth === 'oauth' || integration.transport.type === 'host'
+        ? 'Sign in again'
+        : 'Reconnect';
     case 'edit':
       return integration.auth === 'token' ? 'Paste a new token' : 'Change settings';
     case 'retry':
