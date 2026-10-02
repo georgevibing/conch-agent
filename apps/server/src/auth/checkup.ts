@@ -168,6 +168,8 @@ export interface CheckupInput {
   terminalRemote?: boolean;
   /** The agent's browser may open pages on this computer and your network (Settings › Browser). */
   browserLocal?: boolean;
+  /** Pages allowed to read live data from this computer (ADR 0039), by host. */
+  pagesLocal?: string[];
   /** A connected provider, and whether Conch can ask you before each step with it (the one that can't, if any). */
   provider?: { name: string; asksFirst: boolean };
   /** The shell start-up file that sets `CONCH_TOKEN`, from `findTokenProfile`. */
@@ -430,6 +432,21 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       detail:
         'The assistant’s browser can reach pages on this computer and your network, like a router or a dev server. A web page it visits could try to use them too. Conch itself stays out of reach. If you don’t need it, turn it off.',
       fix: { kind: 'act', label: 'Turn off', action: 'browser-local-off' },
+    });
+  }
+
+  if (input.pagesLocal?.length) {
+    const [first] = input.pagesLocal;
+    items.push({
+      id: 'pages-local',
+      level: 'warn',
+      title:
+        input.pagesLocal.length === 1
+          ? `A page can read from ${first} on this computer`
+          : `Pages can read from ${input.pagesLocal.length} addresses on this computer`,
+      detail:
+        'You let a page the assistant made read live data from a program on this computer, like a dev server. Whatever that program shows, the page can show too. Conch itself stays out of reach. If you don’t need it any more, take it back.',
+      fix: { kind: 'open', label: 'Review', place: 'live-data' },
     });
   }
 

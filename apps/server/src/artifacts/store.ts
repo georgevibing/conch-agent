@@ -22,7 +22,7 @@ import { readStore, type Heal } from '../lib/recover';
 
 export class ArtifactError extends Error {
   constructor(
-    readonly code: 'not-found' | 'invalid' | 'too-big',
+    readonly code: 'not-found' | 'invalid' | 'too-big' | 'conflict',
     message: string,
   ) {
     super(message);
@@ -222,7 +222,15 @@ export class ArtifactStore {
   /** A new version. Old ones go past the limit; the first always stays. */
   async addVersion(
     id: string,
-    input: { content: string; note?: string; refreshed?: boolean; navigates?: boolean },
+    input: {
+      content: string;
+      note?: string;
+      refreshed?: boolean;
+      navigates?: boolean;
+      edited?: boolean;
+      /** Only if the newest version is still this one (`conflict` otherwise). */
+      base?: number;
+    },
   ): Promise<Artifact> {
     if (input.content.length > ARTIFACT_MAX)
       throw new ArtifactError(
@@ -231,7 +239,13 @@ export class ArtifactStore {
       );
     return this.#mutex.run(async () => {
       const artifact = await this.get(id);
-      const n = (artifact.versions.at(-1)?.n ?? 0) + 1;
+      const latest = artifact.versions.at(-1)?.n ?? 0;
+      if (input.base !== undefined && input.base !== latest)
+        throw new ArtifactError(
+          'conflict',
+          `It changed while you were editing: version ${latest} is newer than the one you started from.`,
+        );
+      const n = latest + 1;
       const folder = this.#folder(id);
       await writeFileAtomic(join(folder, versionFile(artifact.kind, n)), input.content);
       const now = Date.now();
@@ -244,6 +258,7 @@ export class ArtifactStore {
           ...(input.note && { note: input.note }),
           ...(input.refreshed && { refreshed: true }),
           ...(input.navigates && { navigates: true }),
+          ...(input.edited && { edited: true }),
         },
       ];
       while (versions.length > ARTIFACT_VERSIONS) {

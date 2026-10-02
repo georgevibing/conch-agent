@@ -387,8 +387,11 @@ export class ConversationManager {
       /** The provider for a turn: the one a conversation chose, else the default. */
       engine: (id?: EngineId) => Engine;
       tools?: ToolProvider;
-      /** Extra system-prompt context for every turn (e.g. the user's routines and skills). */
-      context?: (engine: Engine) => Promise<string>;
+      /**
+       * Extra system-prompt context for every turn (e.g. the user's routines and
+       * skills), and for this chat (what the user edited by hand, ADR 0039).
+       */
+      context?: (engine: Engine, conversationId: string) => Promise<string>;
       /**
        * Who answers: the chat's provider, another, or nobody yet (offline). Asked
        * before a turn, and again after one fails for a limit or an outage.
@@ -1217,7 +1220,7 @@ export class ConversationManager {
                 autoMemory: settings.preferences.autoMemory,
                 tools: engine.hostTools !== false,
               }),
-              await this.deps.context?.(engine),
+              await this.deps.context?.(engine, conversationId),
               notConnectedPrompt(
                 apps.unseen,
                 apps.offers.map((o) => o.name),

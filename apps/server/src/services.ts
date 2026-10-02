@@ -13,6 +13,7 @@ import type {
 import { Activity } from './activity/service';
 import { importCheck } from './import/doctor';
 import { ImportService } from './import/service';
+import { LiveDataAccess } from './artifacts/live';
 import { ArtifactService } from './artifacts/service';
 import { ArtifactStore } from './artifacts/store';
 import { tasksCheck } from './tasks/doctor';
@@ -409,6 +410,8 @@ export class Services {
       store: new ArtifactStore(config.CONCH_HOME, heal),
       conversations: () => this.conversations,
       emit: (event) => this.broadcast.emit(event),
+      access: new LiveDataAccess(config.CONCH_HOME, heal),
+      gatewayPort: config.CONCH_PORT,
     });
     // It learns you (ADR 0032), by meaning (ADR 0041).
     const mock = config.CONCH_ENGINE === 'mock';
@@ -489,7 +492,7 @@ export class Services {
                 this.tasks.createDraft({ parentConversationId: ctx.conversationId, draft }),
               ),
             ],
-      context: async (engine) =>
+      context: async (engine, conversationId) =>
         [
           engine.hostTools === false ? '' : await this.routines.promptSection(),
           await this.skills.promptSection(engine).catch(() => ''),
@@ -497,6 +500,7 @@ export class Services {
           await this.integrations.promptSection(),
           engine.hostTools === false ? '' : this.vault.promptSection(),
           this.artifacts.promptSection(engine.hostTools !== false),
+          await this.artifacts.editedSection(conversationId).catch(() => ''),
           engine.hostTools === false ? '' : TASKS_PROMPT,
         ]
           .filter(Boolean)
@@ -667,6 +671,7 @@ export class Services {
     void this.voice.sweep();
     this.doctor.register(this.voice.doctorCheck());
     this.doctor.register(this.artifacts.doctorCheck());
+    this.doctor.register(this.artifacts.liveDataCheck());
     // A reply from a provider without Conch's tools may carry ```artifact blocks.
     this.broadcast.on((event) => void this.artifacts.onEvent(event).catch(() => undefined));
     this.doctor.register(

@@ -145,6 +145,13 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
         workspaceRules: await workspaceRules(await services.settings.workspace()),
         trustedIntegrations: await services.integrations.store.trusted(),
         browserLocal: (await services.browser.store.settings()).allowLocal,
+        pagesLocal: [
+          ...new Set(
+            (await services.artifacts.live.access.list().catch(() => []))
+              .filter((a) => a.local)
+              .map((a) => a.host),
+          ),
+        ],
         terminalRemote: (await services.terminal.settings()).allowRemote,
         provider: await services.providers.checkupCopy(),
         channels: await services.channels.checkupCopy(),

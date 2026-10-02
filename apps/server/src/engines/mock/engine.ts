@@ -643,7 +643,11 @@ export class MockEngine implements Engine {
         .exec(input.prompt)?.[1]
         ?.toLowerCase();
       // A page with a link out: what a prompt-injected page would try (it opens with its code off).
-      const make = made === 'page' && /\bwith a link\b/i.test(input.prompt) ? 'linked' : made;
+      const make = /\bmake (?:me )?a live page\b/i.test(input.prompt)
+        ? 'live'
+        : made === 'page' && /\bwith a link\b/i.test(input.prompt)
+          ? 'linked'
+          : made;
       const refreshing = /^Refresh “.+” \(id (a_[A-Za-z0-9]+)\)/.exec(input.prompt)?.[1];
       const change = /\bmake it (.+?)[.!]?$/i.exec(input.prompt.trim())?.[1];
       const artifactTool = (name: string) => input.tools.find((t) => t.name === name);
@@ -662,7 +666,8 @@ export class MockEngine implements Engine {
         } catch {
           content = `${content}\n\n_Refreshed._\n`;
         }
-        const args = { id: refreshing, content, note: 'Fresh numbers' };
+        const base = Number(/\(base: (\d+)\)/.exec(input.prompt)?.[1]) || undefined;
+        const args = { id: refreshing, content, note: 'Fresh numbers', ...(base && { base }) };
         yield {
           type: 'tool-start',
           toolUseId,
@@ -680,7 +685,19 @@ export class MockEngine implements Engine {
         (change && artifactTool('artifact_update'))
       ) {
         const toolUseId = newId('tool');
-        const last = this.#artifacts.get(input.conversationId);
+        const remembered = this.#artifacts.get(input.conversationId);
+        // You edited it by hand (ADR 0039): build on your version, and say so.
+        const yours = remembered
+          ? new RegExp(
+              `\\(id ${remembered.id}\\): version (\\d+) was edited by the user[^\\n]*\\n\`\`\`[a-z]+\\n([\\s\\S]*?)\\n\`\`\``,
+            ).exec(input.systemAppend)
+          : null;
+        const last =
+          remembered && yours
+            ? { ...remembered, content: yours[2] ?? remembered.content }
+            : remembered;
+        const base = yours ? Number(yours[1]) : undefined;
+        const live = process.env.CONCH_MOCK_DATA_URL ?? 'https://api.weather.example';
         const samples: Record<string, { kind: string; title: string; content: string }> = {
           chart: {
             kind: 'chart',
@@ -715,6 +732,20 @@ export class MockEngine implements Engine {
             title: 'Budget',
             content: 'Item,Cost\nRent,1200\nFood,400\nTravel,150',
           },
+          // Live data (ADR 0039): the page declares where it reads from and asks Conch for it.
+          live: {
+            kind: 'html',
+            title: 'Weather now',
+            content: `<h1>Weather now</h1><p id="t">Waiting for the weather…</p><script type="application/conch-data">${JSON.stringify(
+              {
+                weather: {
+                  url: `${live}/weather?city={city}`,
+                  params: { city: { choices: ['berlin', 'lisbon'] } },
+                  every: 60,
+                },
+              },
+            )}</script><script>conch.watch("weather",{city:"berlin"},function(r){var t=document.getElementById("t");if(!r.ok){t.textContent=r.message;return}var d=r.json();t.textContent=d.city+": "+d.temp+"°"});</script>`,
+          },
           linked: {
             kind: 'html',
             title: 'Reading list',
@@ -747,9 +778,14 @@ export class MockEngine implements Engine {
             last.kind === 'html'
               ? `<div style="background:#1f1a17;color:#f5efe9;padding:16px;border-radius:12px">${last.content}</div>`
               : last.kind === 'chart'
-                ? last.content.replace('"bar"', '"line"')
+                ? last.content.replace(/"type":(\s*)"bar"/, '"type":$1"line"')
                 : `${last.content}\n\n_${change}_\n`;
-          const args = { id: last.id, content, note: `Made it ${change}` };
+          const args = {
+            id: last.id,
+            content,
+            note: `Made it ${change}${base ? ', keeping your edit' : ''}`,
+            ...(base && { base }),
+          };
           yield {
             type: 'tool-start',
             toolUseId,

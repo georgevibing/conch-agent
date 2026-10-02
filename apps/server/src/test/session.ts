@@ -192,6 +192,21 @@ export async function useConch(g: Gateway) {
   await writeFile(join(home, 'browser', 'profile', 'Default', 'Cookies'), 'cookies');
   // Something the agent made in its work folder.
   await writeFile(join(await services.settings.workspace(), 'notes.md'), '# Notes\n');
+  // A page that reads live data, and the site you let it read (ADR 0039).
+  const live = await services.artifacts.create({
+    conversationId: convo.id,
+    kind: 'html',
+    title: 'Weather',
+    content:
+      '<p id="t"></p><script type="application/conch-data">{"now":{"url":"https://api.weather.example/now"}}</script>',
+  });
+  await ok(
+    await app.inject({
+      method: 'POST',
+      url: `/api/artifacts/${live.id}/live-data`,
+      payload: { version: 1, host: 'api.weather.example' },
+    }),
+  );
   await services.healed.note('search', 'The search index was rebuilt.');
   await recordGateway(home, { pid: process.pid, host: '127.0.0.1', port: 4382, startedAt: 1 });
   // A bot on (pretend) Telegram, with its key.

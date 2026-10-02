@@ -87,6 +87,7 @@ describe('checkup findings', () => {
       trustedIntegrations: ['GitHub'],
       terminalRemote: true,
       browserLocal: true,
+      pagesLocal: ['localhost:3000'],
       provider: { name: 'Codex', asksFirst: false },
       platform: 'linux',
       channels: [
@@ -113,6 +114,7 @@ describe('checkup findings', () => {
       'trusted-integrations': { kind: 'act', action: 'integrations-ask' },
       'terminal-remote': { kind: 'act', action: 'terminal-remote-off' },
       'browser-local': { kind: 'act', action: 'browser-local-off' },
+      'pages-local': { kind: 'open', place: 'live-data', label: 'Review' },
       'stale-keys': { kind: 'open', place: 'keys', label: 'Review keys' },
       files: { kind: 'act', action: 'secure-files' },
       'channels-full-trust': { kind: 'act', action: 'ask-first', label: 'Ask first' },

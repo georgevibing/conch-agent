@@ -422,7 +422,11 @@ describe('back up, restore on another computer, undo', () => {
  * A backup made by hand, the way anyone can: every file sealed properly, and
  * a header that says whatever it likes about what's inside.
  */
-function forged(files: Record<string, string>, claims: Record<string, unknown>): Buffer {
+function forged(
+  files: Record<string, string>,
+  claims: Record<string, unknown>,
+  groups = ['settings', 'memory', 'commands', 'routines', 'skills', 'integrations'],
+): Buffer {
   const entries: [string, Buffer][] = [];
   const header = {
     format: 'conch-backup',
@@ -430,7 +434,7 @@ function forged(files: Record<string, string>, claims: Record<string, unknown>):
     createdAt: Date.parse('2026-09-01T10:00:00'),
     conchVersion: '0.2.0',
     kind: 'manual',
-    groups: ['settings', 'memory', 'commands', 'routines', 'skills', 'integrations'],
+    groups,
     dirs: [],
     contents: {
       settings: false,
@@ -576,6 +580,31 @@ describe('the preview before a restore', () => {
     expect(preview.signInStays).toBe(false);
   });
 
+  it('names the sites pages may read live data from (ADR 0039)', async () => {
+    const g = await open();
+    const file = forged(
+      {
+        'artifacts/access.json': JSON.stringify({
+          approvals: [
+            { artifactId: 'a_1', host: 'api.weather.example', urls: [], at: 1 },
+            { artifactId: 'a_2', host: 'api.weather.example', urls: [], at: 1 },
+            { artifactId: 'a_2', host: 'localhost:3000', urls: [], at: 1, local: true },
+          ],
+        }),
+      },
+      {},
+      ['chats'],
+    );
+    const uploaded = await upload(g.app, file);
+    expect(uploaded.statusCode).toBe(200);
+    const preview = BackupPreview.parse(
+      json(await g.app.inject(`/api/backups/${String(json(uploaded).id)}/preview`)),
+    );
+    expect(preview.powers).toEqual([
+      { kind: 'page-data-sites', sites: ['api.weather.example', 'localhost:3000'], more: 0 },
+    ]);
+  });
+
   it('refuses a file too big for the preview to read, so nothing hides in it', async () => {
     const g = await open();
     const padded = JSON.stringify({
@@ -603,8 +632,10 @@ describe('the preview before a restore', () => {
       ),
     );
     expect(preview.contents).toEqual(daily?.contents);
-    // The linked WhatsApp and Signal answer their owner: a restore names them.
+    // What `useConch` lets act: the linked WhatsApp and Signal answer their owner,
+    // and a page reads a site you allowed. A restore names them.
     expect(preview.powers).toEqual([
+      { kind: 'page-data-sites', sites: ['api.weather.example'], more: 0 },
       { kind: 'channel-people', name: 'Ada Lovelace on WhatsApp', people: ['Ada'], more: 0 },
       { kind: 'channel-people', name: 'Ada Lovelace on Signal', people: ['Ada'], more: 0 },
     ]);

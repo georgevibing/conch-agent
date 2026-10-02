@@ -190,7 +190,9 @@ export function entriesOf(
           title:
             e.action === 'created'
               ? `Made “${e.title}”`
-              : `Updated “${e.title}” (version ${e.version})${e.note ? `: ${e.note}` : ''}`,
+              : e.action === 'edited'
+                ? `You edited “${e.title}” (version ${e.version})`
+                : `Updated “${e.title}” (version ${e.version})${e.note ? `: ${e.note}` : ''}`,
           status: 'done',
         });
         break;

@@ -211,6 +211,12 @@ export const RULES: readonly BackupRule[] = [
   },
   { match: 'memory/*.md', class: 'kept', group: 'memory', why: 'Your memories, one file each.' },
   {
+    match: 'artifacts/access.json',
+    class: 'kept',
+    group: 'chats',
+    why: 'The sites each page made for you may read live data from, as you allowed (ADR 0039). A restore lists them first.',
+  },
+  {
     match: 'artifacts/**',
     class: 'kept',
     group: 'chats',

@@ -22,6 +22,7 @@ export function previewReads(path: string): boolean {
     path === 'terminal.json' ||
     path === 'channels.json' ||
     path === 'skills.trust.json' ||
+    path === 'artifacts/access.json' ||
     /^routines\/[^/]+(?<!\.runs)\.json$/.test(path)
   );
 }
@@ -130,6 +131,24 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
 
   if (record(json(read, 'terminal.json')?.settings)?.allowRemote === true)
     powers.push({ kind: 'terminal-remote' });
+
+  // Pages that read live data (ADR 0039): an old backup mustn't quietly bring back a
+  // site you took a page's OK from since.
+  const approvals = json(read, 'artifacts/access.json')?.approvals;
+  const pageSites = [
+    ...new Set(
+      (Array.isArray(approvals) ? approvals : [])
+        .map((a) => record(a)?.host)
+        .filter((host): host is string => typeof host === 'string' && host.trim() !== '')
+        .map((host) => text(host, 'a site')),
+    ),
+  ];
+  if (pageSites.length)
+    powers.push({
+      kind: 'page-data-sites',
+      sites: pageSites.slice(0, MAX_LISTED),
+      more: Math.max(0, pageSites.length - MAX_LISTED),
+    });
 
   // A bot and the people it answers: restoring an old file must not quietly let
   // back in someone you removed since, so each one is named.

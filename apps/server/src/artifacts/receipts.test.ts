@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ServerEvent } from '@conch/protocol';
 import type { ConversationManager } from '../conversations/manager';
 
+import { LiveDataAccess } from './live';
 import { ArtifactService } from './service';
 import { artifactOperationId, ArtifactStore } from './store';
 
@@ -18,6 +19,8 @@ describe('artifact completion receipts', () => {
         throw new Error('No IO should start');
       },
       emit: () => undefined,
+      access: new LiveDataAccess(home),
+      gatewayPort: 4317,
     });
     const tool = service
       .tools({ conversationId: 'c_test', append: () => undefined })
@@ -50,6 +53,8 @@ describe('artifact completion receipts', () => {
       store,
       conversations: () => manager,
       emit: () => undefined,
+      access: new LiveDataAccess(home),
+      gatewayPort: 4317,
     });
     await service.onEvent({
       type: 'conversation.event',
@@ -89,6 +94,8 @@ describe('artifact completion receipts', () => {
         throw new Error('Not called during readback');
       },
       emit: () => undefined,
+      access: new LiveDataAccess(home),
+      gatewayPort: 4317,
     });
     const tool = service
       .tools({ conversationId: 'c_test', append: () => undefined })

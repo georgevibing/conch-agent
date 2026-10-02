@@ -64,6 +64,9 @@ describe('a page, sealed off', () => {
     expect(doc).toContain('<base target="_blank">');
     expect(doc).toContain('p({open:a.href})');
     expect(doc).toContain('"http://localhost:4317"');
+    // Live data (ADR 0039): answers are believed only from Conch's own page.
+    expect(doc).toContain('if(e.source!==parent||e.origin!==o)return');
+    expect(doc).toContain('window.conch=Object.freeze({data:d,watch:');
     const whole = frameDocument('<html><head><title>x</title></head><body><p>y</p></body></html>', {
       title: 't',
       theme: 'light',
@@ -78,7 +81,7 @@ describe('a page, sealed off', () => {
 
 describe('what each kind must be', () => {
   it('a chart is a spec that fits; an svg is svg; a table has rows', () => {
-    expect(checkContent('chart', 'not json')).toMatch(/must be JSON/);
+    expect(checkContent('chart', 'not json')).toMatch(/JSON has a mistake.*must be JSON/);
     expect(
       checkContent(
         'chart',
@@ -315,5 +318,206 @@ describe('routes', () => {
       type: 'user.message',
       text: expect.stringContaining('A chart of my site’s visitors this week'),
     });
+  });
+
+  it('saves your edit as a version of yours, and the chat knows', async () => {
+    const { app, services, cookie } = await setup();
+    const convo = await services.conversations.send({ clientMessageId: 'u1', text: 'hello' });
+    const conversationId = convo.id;
+    await vi.waitFor(
+      async () =>
+        expect(
+          (await services.conversations.detail(conversationId)).events.some(
+            (e) => e.type === 'turn.completed',
+          ),
+        ).toBe(true),
+      { timeout: 10_000 },
+    );
+    const spec = {
+      type: 'bar',
+      labels: ['Mon', 'Tue'],
+      series: [{ name: 'Visitors', values: [1, 2] }],
+    };
+    const chart = await services.artifacts.create({
+      conversationId,
+      kind: 'chart',
+      title: 'Visitors',
+      content: JSON.stringify(spec),
+    });
+    const save = (content: string, base: number, force?: boolean) =>
+      app.inject({
+        method: 'POST',
+        url: `/api/artifacts/${chart.id}/versions`,
+        headers: { cookie },
+        payload: { content, base, ...(force && { force }) },
+      });
+    // Wrong for its kind: said in plain words, nothing saved.
+    const bad = await save('{ "type": "bar", }', 1);
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json().message).toMatch(/JSON has a mistake on line 1/);
+    const edited = JSON.stringify({ ...spec, series: [{ name: 'Visitors', values: [1, 99] }] });
+    const ok = await save(edited, 1);
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().versions.at(-1)).toMatchObject({ n: 2, edited: true, note: 'Edited by you' });
+    // Started from an old version: it says so, and keeps nothing over the newer one.
+    const stale = await save(edited, 1);
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json().message).toMatch(/version 2 is newer/);
+    expect((await save(edited, 1, true)).statusCode).toBe(200);
+
+    const detail = await services.conversations.detail(conversationId);
+    expect(detail.events.at(-1)).toMatchObject({ type: 'artifact', action: 'edited', version: 3 });
+    // The next turn there knows the newest version is yours, and what it says.
+    const section = await services.artifacts.editedSection(conversationId);
+    expect(section).toContain(`version 3 was edited by the user, by hand`);
+    expect(section).toContain('"values":[1,99]');
+    expect(await services.artifacts.editedSection('c_other')).toBe('');
+    // And the assistant can't write over it without saying it started from it.
+    const update = services.artifacts
+      .tools({ conversationId, append: () => undefined })
+      .find((t) => t.name === 'artifact_update');
+    if (!update) throw new Error('No artifact_update');
+    expect(await update.run({ id: chart.id, content: JSON.stringify(spec) })).toMatchObject({
+      isError: true,
+      text: expect.stringMatching(/edited “Visitors” by hand: version 3 is theirs.*base: 3/),
+    });
+    expect(
+      await update.run({
+        id: chart.id,
+        content: JSON.stringify({ ...spec, type: 'line' }),
+        base: 3,
+      }),
+    ).toMatch(/Updated “Visitors”.*version 4/);
+    expect(await services.artifacts.editedSection(conversationId)).toBe('');
+  });
+
+  it('serves the page you’re editing sealed exactly like a saved one', async () => {
+    const { app, services, cookie } = await setup();
+    const page = await services.artifacts.create({
+      conversationId: 'c_1',
+      kind: 'html',
+      title: 'Tip',
+      content: '<h1>Tip</h1>',
+    });
+    const draft = await app.inject({
+      method: 'PUT',
+      url: `/api/artifacts/${page.id}/draft`,
+      headers: { cookie },
+      payload: { content: '<h1>Tip v2</h1><a href="https://evil.example/?d=x">x</a>' },
+    });
+    expect(draft.json()).toEqual({ rev: 1, navigates: true });
+    const frame = await app.inject({
+      method: 'GET',
+      url: `/api/artifacts/${page.id}/versions/draft/frame?rev=1`,
+      headers: { cookie },
+    });
+    expect(frame.statusCode).toBe(200);
+    expect(frame.body).toContain('<h1>Tip v2</h1>');
+    // A draft that could send you elsewhere runs no code either, until you say.
+    expect(frame.headers['content-security-policy']).toBe(
+      frameHeaders(false)['content-security-policy'],
+    );
+    const on = await app.inject({
+      method: 'GET',
+      url: `/api/artifacts/${page.id}/versions/draft/frame?rev=1&scripts=1`,
+      headers: { cookie },
+    });
+    expect(on.headers['content-security-policy']).toBe(
+      frameHeaders(true)['content-security-policy'],
+    );
+    expect(on.headers['x-frame-options']).toBe('SAMEORIGIN');
+    // Only pages have one; nobody else's browser gets one.
+    const doc = await services.artifacts.create({
+      conversationId: 'c_1',
+      kind: 'markdown',
+      title: 'Doc',
+      content: '# Doc',
+    });
+    expect(
+      (
+        await app.inject({
+          method: 'PUT',
+          url: `/api/artifacts/${doc.id}/draft`,
+          headers: { cookie },
+          payload: { content: '<script>1</script>' },
+        })
+      ).statusCode,
+    ).toBe(400);
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: `/api/artifacts/${page.id}/versions/draft/frame`,
+        })
+      ).statusCode,
+    ).toBe(401);
+  });
+
+  it('live data: only Conch’s own page may ask, never the page itself or another site', async () => {
+    const { app, services, cookie } = await setup();
+    const page = await services.artifacts.create({
+      conversationId: 'c_1',
+      kind: 'html',
+      title: 'Weather',
+      content:
+        '<script type="application/conch-data">{"weather":{"url":"https://api.example.com/now"}}</script><p id="t"></p>',
+    });
+    const url = `/api/artifacts/${page.id}/versions/1/live-data`;
+    const ask = (headers: Record<string, string>) =>
+      app.inject({ method: 'POST', url, headers, payload: { source: 'weather' } });
+    // Signed out; from the sealed frame (an opaque origin says "null"); from another site.
+    expect((await ask({})).statusCode).toBe(401);
+    expect((await ask({ cookie, origin: 'null' })).statusCode).toBe(403);
+    expect((await ask({ cookie, origin: 'https://evil.example' })).statusCode).toBe(403);
+    expect((await ask({ cookie, 'sec-fetch-site': 'cross-site' })).statusCode).toBe(403);
+    // Conch's page: it asks you first.
+    const first = await ask({ cookie });
+    expect(first.json()).toMatchObject({
+      ok: false,
+      reason: 'needs-approval',
+      host: 'api.example.com',
+    });
+    const info = await app.inject({ method: 'GET', url, headers: { cookie } });
+    expect(info.json()).toMatchObject({ sources: [{ host: 'api.example.com', allowed: false }] });
+    // A request that isn't one is refused before anything is looked at.
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url,
+          headers: { cookie },
+          payload: { source: 'weather', params: { q: 'x'.repeat(500) } },
+        })
+      ).statusCode,
+    ).toBe(400);
+    // Allowed, listed, taken back.
+    const approve = await app.inject({
+      method: 'POST',
+      url: `/api/artifacts/${page.id}/live-data`,
+      headers: { cookie },
+      payload: { version: 1, host: 'api.example.com' },
+    });
+    expect(approve.json()).toMatchObject({ sources: [{ allowed: true }] });
+    const listed = await app.inject({ method: 'GET', url: '/api/live-data', headers: { cookie } });
+    expect(listed.json()).toMatchObject({
+      approvals: [{ artifactId: page.id, host: 'api.example.com', title: 'Weather' }],
+    });
+    await app.inject({
+      method: 'DELETE',
+      url: `/api/artifacts/${page.id}/live-data/api.example.com`,
+      headers: { cookie },
+    });
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/live-data', headers: { cookie } })).json(),
+    ).toEqual({ approvals: [] });
+    // Deleting the page takes its OKs with it.
+    await app.inject({
+      method: 'POST',
+      url: `/api/artifacts/${page.id}/live-data`,
+      headers: { cookie },
+      payload: { version: 1, host: 'api.example.com' },
+    });
+    await app.inject({ method: 'DELETE', url: `/api/artifacts/${page.id}`, headers: { cookie } });
+    expect(await services.artifacts.live.access.list()).toEqual([]);
   });
 });
