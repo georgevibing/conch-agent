@@ -1,0 +1,11 @@
+@layer nacre.components {
+  .mark {
+    display: inline-block;
+    flex: none;
+    inline-size: 1em;
+    block-size: 1em;
+    /* Sits on the line like a capital letter. */
+    vertical-align: -0.125em;
+    fill: currentColor;
+  }
+}

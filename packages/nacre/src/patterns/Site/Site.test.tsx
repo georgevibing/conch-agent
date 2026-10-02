@@ -10,6 +10,7 @@ import { Reveal } from './Reveal';
 import { Scene } from './Scene';
 import { Stage } from './Stage';
 import { Statement } from './Statement';
+import { Steady } from './Steady';
 import { TextLink } from './TextLink';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -258,5 +259,49 @@ describe('TextLink', () => {
     const link = screen.getByRole('link', { name: 'GitHub' });
     expect(link).toHaveAttribute('data-router');
     expect(link.querySelector('svg')).not.toBeNull();
+  });
+});
+
+describe('Steady', () => {
+  it('holds room for its tallest moments, unseen and out of reach', async () => {
+    const { container } = renderNacre(
+      <Steady
+        align="end"
+        holds={[
+          <div key="all">
+            <button type="button">Turn on</button>
+            <p>Every line the script will ever show</p>
+          </div>,
+        ]}
+      >
+        <p>The first line</p>
+      </Steady>,
+    );
+    // What's showing is there to read; what holds the room is not.
+    expect(screen.getByText('The first line')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Turn on' })).not.toBeInTheDocument();
+    const hold = screen.getByText('Every line the script will ever show').closest('[inert]');
+    expect(hold).toHaveAttribute('aria-hidden', 'true');
+    expect(hold?.parentElement).toHaveAttribute('data-align', 'end');
+    await expectAccessible(container);
+  });
+});
+
+describe('Bento.Tile live', () => {
+  it('leaves the real thing in reach instead of making a picture of it', async () => {
+    const { container } = renderNacre(
+      <Bento>
+        <Bento.Tile title="Show me" text="A chart you can turn into a table." live>
+          <button type="button">Table</button>
+        </Bento.Tile>
+        <Bento.Tile title="Undo" picture="Three files put back with one press">
+          <button type="button">Undo</button>
+        </Bento.Tile>
+      </Bento>,
+    );
+    expect(screen.getByRole('button', { name: 'Table' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('figure')).toHaveLength(1);
+    await expectAccessible(container);
   });
 });

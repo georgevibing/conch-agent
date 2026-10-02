@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
 
 import { Badge } from '../../components/Badge';
+import { Button } from '../../components/Button';
 import { Pearl } from '../../components/Pearl';
 import { Text } from '../../components/Text';
 import { IntegrationLogo } from '../Integrations/IntegrationLogo';
@@ -13,6 +15,7 @@ import { Reveal } from './Reveal';
 import { Scene } from './Scene';
 import { Stage } from './Stage';
 import { Statement } from './Statement';
+import { Steady } from './Steady';
 import { TextLink } from './TextLink';
 
 const meta = {
@@ -245,4 +248,37 @@ export const Links: Story = {
       </TextLink>
     </div>
   ),
+};
+
+function SteadyExample() {
+  const [lines, setLines] = useState(1);
+  const all = ['Read the failing test', 'Found the off-by-one', 'Ran the suite: 46 pass'];
+  const list = (count: number) => (
+    <ol style={{ margin: 0, paddingInlineStart: 20 }}>
+      {all.slice(0, count).map((line) => (
+        <li key={line}>{line}</li>
+      ))}
+    </ol>
+  );
+  return (
+    <div style={{ display: 'grid', gap: 12, maxInlineSize: 360 }}>
+      <Button size="sm" variant="surface" onClick={() => setLines((n) => (n % 3) + 1)}>
+        Next moment
+      </Button>
+      <Steady
+        holds={[list(3)]}
+        style={{ padding: 12, boxShadow: 'inset 0 0 0 1px var(--nc-border-subtle)' }}
+      >
+        {list(lines)}
+      </Steady>
+      <Text size="sm" tone="muted">
+        This line never moves: the box above is as tall as its last moment from the start.
+      </Text>
+    </div>
+  );
+}
+
+export const ASteady: Story = {
+  name: 'Steady',
+  render: () => <SteadyExample />,
 };

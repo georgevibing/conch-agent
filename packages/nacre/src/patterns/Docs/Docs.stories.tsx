@@ -17,6 +17,7 @@ import { DocsNav } from './DocsNav';
 import { DocsPager } from './DocsPager';
 import { DocsToc } from './DocsToc';
 import { LinkCard } from './LinkCard';
+import { OsMark } from './OsMark';
 import { Steps } from './Steps';
 import { Tick } from './Tick';
 
@@ -305,6 +306,24 @@ export const Hero: Story = {
           </Surface>
         }
       />
+    </div>
+  ),
+};
+
+export const OsMarks: Story = {
+  name: 'OsMark',
+  render: () => (
+    <div style={{ display: 'grid', gap: 16 }}>
+      <Text size="lg">
+        <OsMark os="macos" /> macOS and <OsMark os="linux" /> Linux
+      </Text>
+      <Text size="lg">
+        <OsMark os="windows" /> Windows
+      </Text>
+      <Text size="sm" tone="muted">
+        Works on <OsMark os="macos" label="macOS" /> <OsMark os="linux" label="Linux" />{' '}
+        <OsMark os="windows" label="Windows" />
+      </Text>
     </div>
   ),
 };

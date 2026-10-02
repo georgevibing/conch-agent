@@ -12,6 +12,8 @@ export { DocsToc } from './DocsToc';
 export type { DocsTocItem, DocsTocProps } from './DocsToc';
 export { LinkCard } from './LinkCard';
 export type { LinkCardProps } from './LinkCard';
+export { OsMark } from './OsMark';
+export type { OsMarkProps, OsName } from './OsMark';
 export { Steps } from './Steps';
 export type { StepProps, StepsProps } from './Steps';
 export { Tick } from './Tick';

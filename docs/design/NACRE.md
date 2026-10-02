@@ -213,13 +213,20 @@ the app: the pictures are the components themselves, playing a short script.
 
 - **The picture** (`Stage`). A porcelain window holding real components, `inert` and
   named by one sentence, so it reads as a figure and nothing in it can be pressed. The
-  hero's stage carries the pearl tide behind it; no other does.
+  hero's stage carries the pearl tide behind it; no other does. The tide fades out on
+  its own and is only cut where the window ends, so it never shows an edge.
 - **The claim** (`Scene`). One sentence in the display serif, the turn of it in italic
   accent, beside the picture that proves it. Words first in the page's order, always;
   the picture changes sides down the page.
 - **The rest** (`Bento`). Smaller claims as tiles of uneven width, each with a small
-  picture. `Facts` is a row of numbers in the serif; `Marquee` drifts a long list of
-  logos (`LogoChip`) past, slowly, and stops under the pointer.
+  picture. A tile can be `live` instead: the real component, left in reach, where using
+  it says more than watching it. `Facts` is a row of numbers in the serif; `Marquee`
+  drifts a long list of logos (`LogoChip`) past, slowly, and stops under the pointer.
+- **Holding still** (`Steady`). A picture that plays is the same size from its first
+  moment to its last, at every width: the tallest moments lie under the one showing,
+  unseen, and hold the room. Nothing on the page moves because a picture did.
+- **The computer** (`OsMark`). Apple's, Linux's and Windows' marks at the size and
+  colour of the text beside them, for a tab or a chip that says which computer.
 - **The last word** (`Statement`). One centred sentence, large, with room around it.
 - **Arriving** (`Reveal`). Things surface once as they scroll into view: a short rise
   out of a slight blur on `--nc-spring-soft`, staggered by `index`. With reduced motion

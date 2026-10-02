@@ -11,6 +11,7 @@ import { DocsNav } from './DocsNav';
 import { DocsPager } from './DocsPager';
 import { DocsToc } from './DocsToc';
 import { LinkCard } from './LinkCard';
+import { OsMark } from './OsMark';
 import { Steps } from './Steps';
 import { Tick } from './Tick';
 
@@ -209,6 +210,24 @@ describe('DocsHero', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Get started' })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Conch answering a question' })).toBeInTheDocument();
+    await expectAccessible(container);
+  });
+});
+
+describe('OsMark', () => {
+  it('decorates the system’s name, and is only read out when it stands alone', async () => {
+    const { container } = renderNacre(
+      <p>
+        <OsMark os="macos" /> macOS and <OsMark os="linux" /> Linux, or{' '}
+        <OsMark os="windows" label="Windows" />
+      </p>,
+    );
+    const marks = container.querySelectorAll('svg');
+    expect(marks).toHaveLength(3);
+    expect(marks[0]).toHaveAttribute('aria-hidden', 'true');
+    expect(marks[1]).toHaveAttribute('data-os', 'linux');
+    for (const mark of marks) expect(mark.querySelector('path')?.getAttribute('d')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Windows' })).toBe(marks[2]);
     await expectAccessible(container);
   });
 });

@@ -1,0 +1,32 @@
+@layer nacre.components {
+  /* Every layer shares one cell, so the cell is as tall as the tallest. */
+  .steady {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-inline-size: 0;
+  }
+
+  .hold,
+  .now {
+    grid-area: 1 / 1;
+    min-inline-size: 0;
+  }
+
+  .hold {
+    visibility: hidden;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .steady[data-align='start'] .now {
+    align-self: start;
+  }
+
+  .steady[data-align='center'] .now {
+    align-self: center;
+  }
+
+  .steady[data-align='end'] .now {
+    align-self: end;
+  }
+}

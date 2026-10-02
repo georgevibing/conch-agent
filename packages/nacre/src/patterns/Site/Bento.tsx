@@ -32,6 +32,11 @@ export interface BentoTileProps extends Omit<ComponentProps<'article'>, 'title'>
    * can't be focused and isn't read out.
    */
   picture?: string;
+  /**
+   * The children are the real thing, to be used: they can be focused and
+   * pressed, and name themselves. Leave `picture` out.
+   */
+  live?: boolean;
 }
 
 function BentoTile({
@@ -40,6 +45,7 @@ function BentoTile({
   span = 2,
   index = 0,
   picture,
+  live,
   className,
   children,
   ...props
@@ -60,7 +66,12 @@ function BentoTile({
           </h3>
           {text != null && <p className={styles.text}>{text}</p>}
         </div>
-        {children != null && (
+        {children != null && live && (
+          <div className={styles.picture}>
+            <div className={styles.inner}>{children}</div>
+          </div>
+        )}
+        {children != null && !live && (
           <figure className={styles.picture} aria-label={picture}>
             <div className={styles.inner} inert aria-hidden>
               {children}

@@ -14,5 +14,7 @@ export { Stage } from './Stage';
 export type { StageProps } from './Stage';
 export { Statement } from './Statement';
 export type { StatementProps } from './Statement';
+export { Steady } from './Steady';
+export type { SteadyProps } from './Steady';
 export { TextLink } from './TextLink';
 export type { TextLinkProps } from './TextLink';
