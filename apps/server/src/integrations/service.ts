@@ -988,6 +988,32 @@ export class IntegrationService {
     return { servers, disallowedTools, issues };
   }
 
+  /**
+   * The apps you connected that a message is about (ADR 0050): cued the way an
+   * offer is (`cues.ts`), or a custom one named. A chat-only model can't use
+   * them, so the chat offers one that can. Google accounts count too.
+   */
+  async about(text: string): Promise<{ name: string; catalogId?: string }[]> {
+    if (!text.trim()) return [];
+    const cued = new Set(cuedApps(text, [...CATALOG.values()]).map((item) => item.id));
+    const found = new Map<string, { name: string; catalogId?: string }>();
+    for (const item of await this.store.all()) {
+      if (!item.enabled) continue;
+      const id =
+        item.catalogId ??
+        matchCatalog(item.name, item.transport.type === 'http' ? item.transport.url : undefined);
+      // A catalog app only by its cues (a false offer is worse than none); your own by its name.
+      if (id ? cued.has(id) : mentions(text, item))
+        found.set(id ?? item.id, { name: item.name, ...(id && { catalogId: id }) });
+    }
+    for (const id of (await this.deps.googleConnected?.().catch(() => [])) ?? []) {
+      const entry = CATALOG.get(id);
+      if (entry && cued.has(id) && !found.has(id))
+        found.set(id, { name: entry.name, catalogId: id });
+    }
+    return [...found.values()].slice(0, MAX_SUGGESTIONS);
+  }
+
   // ── Connect from the chat ───────────────────────────────────────────────
 
   /**

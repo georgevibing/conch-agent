@@ -881,12 +881,12 @@ export async function buildApp(services: Services) {
     await services.conversations.remove(request.params.id);
     return { ok: true };
   });
-  /** A message waiting for the internet goes now (with another provider, if named). */
+  /** A waiting message goes now: with another provider, or switched to a model that can use its apps. */
   app.post<{ Params: { id: string } }>('/api/conversations/:id/release', async (request, reply) => {
     const body = parse(ReleaseTurnBody, request.body ?? {}, reply);
     if (!body) return;
     try {
-      const sent = await services.conversations.release(request.params.id, body.engine);
+      const sent = await services.conversations.release(request.params.id, body.engine, body.model);
       return sent
         ? { ok: true }
         : reply

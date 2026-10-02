@@ -152,6 +152,11 @@ export type TurnRoute =
   | {
       kind: 'use';
       engine: Engine;
+      /**
+       * The model it answers with, when it isn't the one it would pick: one of
+       * its models that can use the apps the chat's could (ADR 0050).
+       */
+      model?: string;
       /** Set when it isn't the chat's own provider: why, in one sentence. */
       routed?: { reason: 'offline' | 'limit'; message: string };
     }
@@ -163,6 +168,11 @@ interface Held {
   engine?: EngineId;
   prompt: string;
   attachments: readonly Attachment[];
+  /**
+   * It waits for a model that can use the apps it needs (ADR 0050), not for
+   * the internet: it goes when you choose, never by itself.
+   */
+  forApps?: boolean;
 }
 
 /** A second message sent while the first waits joins it, like two texts in a row. */
@@ -396,7 +406,24 @@ export class ConversationManager {
        * Who answers: the chat's provider, another, or nobody yet (offline). Asked
        * before a turn, and again after one fails for a limit or an outage.
        */
-      route?: (engine: Engine, context: { failed?: TurnProblem }) => Promise<TurnRoute>;
+      route?: (
+        engine: Engine,
+        context: { failed?: TurnProblem; model?: string },
+      ) => Promise<TurnRoute>;
+      /**
+       * What a message needs that a chat-only model can't use (ADR 0050): the
+       * connected apps it's about, and a skill's tools — with the model that
+       * can't and the best one already set up that can. Nothing when the
+       * model can use them, or the message needs none.
+       */
+      appsNeeded?: (input: {
+        text: string;
+        engine: Engine;
+        model?: string;
+        skill?: { title: string; permissions: SkillPermissions };
+      }) => Promise<
+        Omit<Extract<ConversationEventInput, { type: 'turn.needs-apps' }>, 'type'> | undefined
+      >;
       expand?: MessageExpander;
       /** Money spent outside a turn (naming a chat), for the usage ledger. */
       onSpend?: (usage: Usage) => void;
@@ -504,7 +531,13 @@ export class ConversationManager {
     // Whichever provider the conversation (or this message) chose answers —
     // unless it's offline or at its limit, and something else can (ADR 0023).
     const chosen = this.deps.engine(input.options?.engine ?? existing?.record.options.engine);
-    const route = (await this.deps.route?.(chosen, {}).catch(() => undefined)) ?? {
+    const asked = await this.#modelFor(
+      clean({ ...existing?.record.options, ...input.options }),
+      chosen.id,
+    );
+    const route = (await this.deps
+      .route?.(chosen, { ...(asked && { model: asked }) })
+      .catch(() => undefined)) ?? {
       kind: 'use' as const,
       engine: chosen,
     };
@@ -591,14 +624,71 @@ export class ConversationManager {
       if (autoTitle) void this.#autoTitle(live, engine, titleSource(input.text, attachments));
       return summary(live.record);
     }
+    // The chat's model can't use what this needs (ADR 0050): it waits for your choice.
+    const model = route.model ?? (await this.#modelFor(live.record.options, engine.id));
+    const needs =
+      !waiting && !input.untrusted && !live.record.origin && input.text.trim()
+        ? await this.#appsNeeded(live, engine, model, input.text, expanded?.skill)
+        : undefined;
+    if (needs) {
+      this.#held.set(live.record.id, {
+        engine: chosen.id,
+        prompt,
+        attachments: sending,
+        forApps: true,
+      });
+      this.#append(live, { type: 'turn.needs-apps', ...needs });
+      await this.#persist(live);
+      if (autoTitle) void this.#autoTitle(live, engine, titleSource(input.text, attachments));
+      return summary(live.record);
+    }
     if (route.routed)
       this.#append(live, { type: 'turn.routed', from: chosen.id, to: engine.id, ...route.routed });
     this.#claim(live);
     this.#setStatus(live, 'running');
     await this.#persist(live);
-    void this.#answer(live, engine, prompt, sending);
+    void this.#answer(live, engine, prompt, sending, route.model);
     if (autoTitle) void this.#autoTitle(live, engine, titleSource(input.text, attachments));
     return summary(live.record);
+  }
+
+  /** The model `engine` answers this chat with: its own choice, else your default. */
+  async #modelFor(options: TurnOptions, engine: EngineId): Promise<string | undefined> {
+    const { preferences } = await this.deps.settings.get();
+    const defaults = { ...preferences, engine: this.deps.engine().id };
+    return resolveOptions(options, defaults, engine).model;
+  }
+
+  /**
+   * What this message needs that the chat's model can't use (ADR 0050), asked
+   * once per model in a chat: sending again without switching is the answer,
+   * so it's answered without.
+   */
+  async #appsNeeded(
+    live: Live,
+    engine: Engine,
+    model: string | undefined,
+    text: string,
+    skill: { title: string; permissions?: SkillPermissions } | undefined,
+  ) {
+    const found = await this.deps
+      .appsNeeded?.({
+        text,
+        engine,
+        ...(model && { model }),
+        ...(skill?.permissions && {
+          skill: { title: skill.title, permissions: skill.permissions },
+        }),
+      })
+      .catch(() => undefined);
+    if (!found) return undefined;
+    const asked = live.events.some(
+      (e) =>
+        e.type === 'turn.needs-apps' &&
+        e.model.engine === found.model.engine &&
+        e.model.id === found.model.id,
+    );
+    return asked ? undefined : found;
   }
 
   /**
@@ -754,25 +844,30 @@ export class ConversationManager {
   /** Messages that were waiting for the internet go now, in the order they were sent. */
   async releaseHeld(): Promise<number> {
     let released = 0;
-    for (const id of [...this.#held.keys()])
-      if (await this.release(id).catch(() => false)) released++;
+    for (const [id, held] of [...this.#held.entries()])
+      if (!held.forApps && (await this.release(id).catch(() => false))) released++;
     return released;
   }
 
   /**
    * Send a waiting message now: when the internet's back, or with another
    * provider (the model on this computer) if you'd rather not wait. A message
-   * held before Conch restarted is picked up from the chat itself.
+   * held before Conch restarted is picked up from the chat itself. With a
+   * `model`, the chat switches to it first and keeps it — the one-tap switch
+   * for a message its own model couldn't use the apps for (ADR 0050).
    */
-  async release(id: string, engineId?: EngineId): Promise<boolean> {
+  async release(id: string, engineId?: EngineId, model?: string): Promise<boolean> {
     const live = await this.#get(id);
     if (live.abort) return false;
     const held = this.#held.get(id) ?? heldFromLog(live.events);
     if (!held) return false;
     const chosen = this.deps.engine(engineId ?? held.engine);
+    const asked = model ?? (await this.#modelFor(live.record.options, chosen.id));
     const route = engineId
-      ? { kind: 'use' as const, engine: chosen }
-      : ((await this.deps.route?.(chosen, {}).catch(() => undefined)) ?? {
+      ? { kind: 'use' as const, engine: chosen, ...(model && { model }) }
+      : ((await this.deps
+          .route?.(chosen, { ...(asked && { model: asked }) })
+          .catch(() => undefined)) ?? {
           kind: 'use' as const,
           engine: chosen,
         });
@@ -784,7 +879,9 @@ export class ConversationManager {
     if (live.abort || !(this.#held.get(id) ?? heldFromLog(live.events))) return false;
     this.#held.delete(id);
     const from = this.deps.engine(held.engine);
-    if (route.engine.id !== from.id)
+    // You chose another model: the chat keeps it, and the picker shows it.
+    if (model) this.#applyOptions(live, { engine: chosen.id, model });
+    else if (route.engine.id !== from.id)
       this.#append(live, {
         type: 'turn.routed',
         from: from.id,
@@ -799,7 +896,7 @@ export class ConversationManager {
     this.#claim(live);
     this.#setStatus(live, 'running');
     await this.#persist(live);
-    void this.#answer(live, route.engine, held.prompt, held.attachments);
+    void this.#answer(live, route.engine, held.prompt, held.attachments, route.model);
     return true;
   }
 
@@ -813,6 +910,8 @@ export class ConversationManager {
     engine: Engine,
     prompt: string,
     attachments: readonly Attachment[],
+    /** A model routing chose, instead of the chat's (ADR 0050). */
+    model?: string,
   ): Promise<TurnResult> {
     const route = this.deps.route;
     const result = await this.#runTurn(
@@ -820,12 +919,14 @@ export class ConversationManager {
       engine,
       prompt,
       attachments,
-      route && ((failed) => route(engine, { failed })),
+      route && ((failed, asked) => route(engine, { failed, ...(asked && { model: asked }) })),
+      model,
     );
     // Held: it waits (set as the turn ended). Handed on: one second chance only —
     // the next provider's own failure stands.
     const { next } = result;
-    if (next?.kind === 'use') return this.#runTurn(live, next.engine, prompt, attachments);
+    if (next?.kind === 'use')
+      return this.#runTurn(live, next.engine, prompt, attachments, undefined, next.model);
     return result;
   }
 
@@ -835,7 +936,9 @@ export class ConversationManager {
     said: string,
     attachments: readonly Attachment[] = [],
     /** Asked when the turn fails for a limit or an outage: who answers instead, if anyone. */
-    retry?: (failed: TurnProblem) => Promise<TurnRoute>,
+    retry?: (failed: TurnProblem, model?: string) => Promise<TurnRoute>,
+    /** A model routing chose, instead of the chat's (ADR 0050). */
+    model?: string,
   ): Promise<TurnResult> {
     const abort = live.abort ?? new AbortController();
     const conversationId = live.record.id;
@@ -858,6 +961,7 @@ export class ConversationManager {
     // The default provider is the pinned one when there's a pin, whatever the preference says.
     const defaults = { ...settings.preferences, engine: this.deps.engine().id };
     const resolved = resolveOptions(live.record.options, defaults, engine.id);
+    if (model) resolved.model = model;
     if (extras?.permissionMode) resolved.permissionMode = extras.permissionMode;
     // The mode the chat shows for this provider is the one it runs in.
     resolved.permissionMode = honouredMode(resolved.permissionMode, await honouredModes(engine));
@@ -1393,7 +1497,7 @@ export class ConversationManager {
       // hears the turn ended — so it never shows a failure it's about to fix (ADR 0023).
       const after =
         retry && (problem === 'limit' || problem === 'unavailable') && !abort.signal.aborted
-          ? await retry(problem).catch(() => undefined)
+          ? await retry(problem, resolved.model).catch(() => undefined)
           : undefined;
       if (after?.kind === 'hold') {
         this.#held.set(live.record.id, { engine: engine.id, prompt: said, attachments });
@@ -1737,8 +1841,9 @@ function titleSource(text: string, attachments: readonly Attachment[]): string {
  * you sent, when nothing has answered it since (held before a restart).
  */
 function heldFromLog(events: readonly ConversationEvent[]): Held | undefined {
-  const last = events.findLastIndex((e) => e.type === 'turn.held');
+  const last = events.findLastIndex((e) => e.type === 'turn.held' || e.type === 'turn.needs-apps');
   if (last === -1) return undefined;
+  const forApps = events[last]?.type === 'turn.needs-apps';
   if (
     events.slice(last + 1).some((e) => e.type === 'assistant.delta' || e.type === 'turn.completed')
   )
@@ -1758,12 +1863,14 @@ function heldFromLog(events: readonly ConversationEvent[]): Held | undefined {
       .filter(Boolean)
       .join('\n\n'),
     attachments: said.flatMap((m) => m.attachments ?? []),
+    ...(forApps && { forApps }),
   };
 }
 
 /** What can sit between messages that waited for the internet together. */
 const BETWEEN_WAITING = new Set<ConversationEvent['type']>([
   'turn.held',
+  'turn.needs-apps',
   'skill.used',
   'skill.hold.ended',
   'options',

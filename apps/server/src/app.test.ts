@@ -531,6 +531,69 @@ describe('gateway WebSocket', () => {
     expect((await services.settings.get()).preferences.limitFallback).toBeUndefined();
   });
 
+  it('never routes a turn that needs tools to a chat-only model (ADR 0050)', async () => {
+    const { app, services } = await setup();
+    close = () => app.close();
+    const mock = services.engine();
+    const base = await mock.capabilities();
+    const listing = (tools: boolean[]) => ({
+      ...base,
+      models: tools.map((t, i) => ({
+        id: `m${i}`,
+        label: `M${i}`,
+        description: '',
+        efforts: [],
+        supportsFastMode: false,
+        supportsAutoMode: false,
+        tools: t,
+      })),
+    });
+    const local = {
+      ...mock,
+      id: 'ollama' as const,
+      label: 'Ollama',
+      local: true,
+      capabilities: vi.fn(async () => listing([false, true])),
+    };
+    vi.spyOn(services, 'localReady').mockResolvedValue(local);
+    services.network.simulate(false);
+    // Offline: the model on this computer answers with one of its models that can use apps.
+    expect(await services.route(mock, { model: 'opus' })).toMatchObject({
+      kind: 'use',
+      engine: { id: 'ollama' },
+      model: 'm1',
+    });
+    // With none that can, the message waits rather than lose its apps…
+    local.capabilities.mockResolvedValue(listing([false]));
+    expect(await services.route(mock, { model: 'opus' })).toEqual({ kind: 'hold' });
+    // …unless the chat's own model could only chat anyway.
+    expect(await services.route(mock, { model: 'chat-lite' })).toMatchObject({
+      engine: { id: 'ollama' },
+    });
+    services.network.simulate(true);
+
+    // At a limit, your pick answers with its own model: never a pricier one it chose for you.
+    const other = {
+      ...mock,
+      id: 'openrouter' as const,
+      label: 'OpenRouter',
+      capabilities: async () => listing([false, true]),
+      detect: async () => ({
+        ...(await mock.detect()),
+        engine: 'openrouter' as const,
+        state: 'ready' as const,
+      }),
+    };
+    vi.spyOn(services.providers, 'engineFor').mockImplementation((id) =>
+      id === 'openrouter' ? other : mock,
+    );
+    await services.settings.update({ preferences: { limitFallback: 'openrouter' } });
+    expect(await services.route(mock, { failed: 'limit', model: 'opus' })).toEqual({
+      kind: 'use',
+      engine: mock,
+    });
+  });
+
   it('only pretends to be offline in mock mode', async () => {
     const { app } = await setup({ CONCH_ENGINE: 'claude-code' });
     close = () => app.close();

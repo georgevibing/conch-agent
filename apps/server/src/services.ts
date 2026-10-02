@@ -68,7 +68,8 @@ import { ConversationManager, type TurnRoute } from './conversations/manager';
 import { ConversationStore } from './conversations/store';
 import { anthropicApiVariant, ApiEngine, ollamaVariant, openrouterVariant } from './engines/api';
 import { ClaudeCodeEngine } from './engines/claude-code/engine';
-import { canCarryTools } from './providers/capabilities';
+import { appsNeeded } from './providers/apps';
+import { carryTools } from './providers/capabilities';
 import { CodexEngine } from './engines/codex/engine';
 import { MockEngine } from './engines/mock/engine';
 import { MOCK_MEANING_SPEC, mockMeaningFetch, mockMeaningLoad } from './engines/mock/meaning';
@@ -521,6 +522,22 @@ export class Services {
           .filter(Boolean)
           .join('\n\n'),
       expand: (text) => this.skills.expand(text),
+      // A chat-only model and a message that needs an app: offer one that can (ADR 0050).
+      appsNeeded: (input) =>
+        appsNeeded(
+          {
+            about: (text) => this.integrations.about(text),
+            catalog: () => this.providers.models(),
+            defaults: async () => {
+              const { preferences } = await this.settings.get();
+              return {
+                engine: this.engine().id,
+                ...(preferences.model && { model: preferences.model }),
+              };
+            },
+          },
+          input,
+        ),
       integrations: this.integrations,
       attachments: this.attachments,
       redact: this.vault.redactor(),
@@ -1272,8 +1289,20 @@ export class Services {
    * (if you let it) or the message waits for the internet; at a usage limit,
    * your pick carries on until it resets. Otherwise, the chat's own provider.
    */
-  async route(engine: Engine, context: { failed?: TurnProblem }): Promise<TurnRoute> {
+  async route(
+    engine: Engine,
+    context: { failed?: TurnProblem; model?: string },
+  ): Promise<TurnRoute> {
     const { preferences } = await this.settings.get();
+    // The model another provider answers with: your default, if it's your default provider.
+    const modelFor = (other: Engine) =>
+      other.id === this.engine().id ? preferences.model : undefined;
+    const carry = (other: Engine, choose: boolean) =>
+      carryTools(engine, other, {
+        ...(context.model && { fromModel: context.model }),
+        ...(modelFor(other) && { toModel: modelFor(other) }),
+        choose,
+      }).catch(() => false as const);
     if (!engine.local) {
       // A provider that stopped answering is the moment to look again.
       const online =
@@ -1281,15 +1310,15 @@ export class Services {
           ? (await this.network.check()).online
           : this.network.online;
       if (!online) {
-        const candidate = preferences.offlineFallback ? await this.localReady() : undefined;
-        const local =
-          candidate && (await canCarryTools(engine, candidate).catch(() => false))
-            ? candidate
-            : undefined;
-        return local
+        const local = preferences.offlineFallback ? await this.localReady() : undefined;
+        // Free, and it stays on this computer: another of its models may carry the
+        // apps the chat's model could use, when the one it would pick can't (ADR 0050).
+        const carried = local ? await carry(local, true) : false;
+        return local && carried
           ? {
               kind: 'use',
               engine: local,
+              ...(carried.model && { model: carried.model }),
               routed: {
                 reason: 'offline',
                 message: `You’re offline, so ${local.label} answered from this computer.`,
@@ -1307,15 +1336,15 @@ export class Services {
       if (context.failed === 'limit' || usage?.blocked) {
         const other = this.providers.engineFor(fallback);
         const ready = other.id !== engine.id && (await other.detect().catch(() => undefined));
-        if (
-          ready &&
-          ready.state === 'ready' &&
-          (await canCarryTools(engine, other).catch(() => false))
-        ) {
+        // Your pick answers with the model it would anyway: choosing a pricier one
+        // would be a spending choice you didn't make.
+        const carried = ready && ready.state === 'ready' ? await carry(other, false) : false;
+        if (carried) {
           const until = usage?.blocked?.until;
           return {
             kind: 'use',
             engine: other,
+            ...(carried.model && { model: carried.model }),
             routed: {
               reason: 'limit',
               message: `${engine.label} reached its limit${until ? ` until ${clock(until)}` : ' for now'}, so ${other.label} answered.`,
