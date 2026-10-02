@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, open, realpath, readdir } from 'node:fs/promises';
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import { z } from 'zod';
 
@@ -16,6 +16,30 @@ const within = (root: string, path: string) => {
   const rel = relative(root, path);
   return !rel || (!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`));
 };
+
+/**
+ * A path as the file system really names it, even when it does not exist yet: the deepest
+ * existing ancestor is resolved and the rest re-attached. Paths compared with a realpath'd
+ * workspace must be canonical too, or a symlinked prefix (macOS's /var → /private/var, a
+ * linked home folder) lets a protected file slip past the check.
+ */
+async function canonical(path: string): Promise<string> {
+  const absolute = resolve(path);
+  try {
+    return await realpath(absolute);
+  } catch {
+    const parent = dirname(absolute);
+    return parent === absolute ? absolute : join(await canonical(parent), basename(absolute));
+  }
+}
+
+/** Every protected place, in both the form it was given and its canonical form. */
+async function forbiddenPlaces(input: TurnInput): Promise<string[]> {
+  const given = [...(input.protectedPaths ?? []), ...secretPlaces().map((p) => p.path)].map((p) =>
+    resolve(p),
+  );
+  return [...new Set([...given, ...(await Promise.all(given.map(canonical)))])];
+}
 
 /** Only ambient process plumbing, never provider credentials or arbitrary inherited variables. */
 export function hostEnvironment(): Record<string, string> {
@@ -36,12 +60,12 @@ export async function hostPath(input: TurnInput, raw: string, writing = false): 
   ];
   if (!roots.some((root) => within(root, path)))
     throw new Error('Use a file inside this conversation’s work folder.');
-  const forbidden = [...(input.protectedPaths ?? []), ...secretPlaces().map((p) => p.path)];
+  const forbidden = await forbiddenPlaces(input);
   const parent = await realpath(dirname(path));
   if (!roots.some((root) => within(root, parent)))
     throw new Error('That link leaves the work folder.');
   const actual = resolve(parent, relative(dirname(path), path));
-  if (forbidden.some((p) => within(resolve(p), actual))) throw new Error(PROTECTED_MESSAGE);
+  if (forbidden.some((p) => within(p, actual))) throw new Error(PROTECTED_MESSAGE);
   const stat = await lstat(actual).catch((error: NodeJS.ErrnoException) => {
     if (error.code === 'ENOENT' && writing) return undefined;
     throw error;
@@ -192,11 +216,7 @@ export function hostComputerTools(input: TurnInput): HostTool[] {
         const root = await realpath(input.cwd);
         const actual = await realpath(path);
         if (!within(root, actual)) throw new Error('That directory is outside the work folder.');
-        if (
-          [...(input.protectedPaths ?? []), ...secretPlaces().map((p) => p.path)].some((p) =>
-            within(resolve(p), actual),
-          )
-        )
+        if ((await forbiddenPlaces(input)).some((p) => within(p, actual)))
           throw new Error(PROTECTED_MESSAGE);
         return (await readdir(actual, { withFileTypes: true }))
           .slice(0, 500)
