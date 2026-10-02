@@ -53,6 +53,11 @@ const skillScopeHome = (process.env.CONCH_E2E_SKILL_SCOPE_HOME ??= mkdtempSync(
   join(tmpdir(), 'conch-e2e-skill-scope-'),
 ));
 
+/** The `releases` journey's pretend upstream: a bare origin with signed release tags (ADR 0048). */
+const releasesWorld = (process.env.CONCH_E2E_RELEASES_WORLD ??= mkdtempSync(
+  join(tmpdir(), 'conch-e2e-releases-'),
+));
+
 const scenarios = {
   ready: { port: 4391, env: { CONCH_MOCK_STATE: 'ready' } },
   models: { port: 4394, env: { CONCH_MOCK_STATE: 'ready' } },
@@ -115,6 +120,12 @@ const scenarios = {
     port: 4380,
     env: { CONCH_MOCK_STATE: 'ready', CONCH_SUPERVISE: '1' },
     entry: 'start',
+  },
+  // Releases (ADR 0048): signed tags from a pretend upstream, a staged swap, and the restart.
+  releases: {
+    port: 4367,
+    env: { CONCH_MOCK_STATE: 'ready', CONCH_E2E_RELEASES_WORLD: releasesWorld },
+    command: 'node --import tsx ../../e2e/releases-gateway.ts',
   },
   // The menu bar and a little computer (ADR 0029): a pretend helper, lingering and keep-awake.
   'little-computer': {

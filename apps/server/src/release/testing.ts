@@ -84,7 +84,7 @@ export function conchFiles(version: string, signers: string): Record<string, str
   return {
     'package.json': `${JSON.stringify({ name: 'conch', version, private: true }, null, 2)}\n`,
     'pnpm-workspace.yaml': 'packages: []\n',
-    'apps/server/package.json': '{}\n',
+    'apps/server/package.json': '{ "type": "module" }\n',
     'apps/server/src/start.ts': '// A pretend Conch.\n',
     'release/allowed_signers': signers,
   };
