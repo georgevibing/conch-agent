@@ -10,9 +10,7 @@
     border-radius: var(--nc-radius-lg);
     corner-shape: var(--nc-corner-shape);
     background: var(--nc-surface);
-    box-shadow:
-      inset 3px 0 0 0 var(--issue),
-      inset 0 0 0 1px color-mix(in oklch, var(--issue) 30%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--issue) 45%, transparent);
     animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
   }
 

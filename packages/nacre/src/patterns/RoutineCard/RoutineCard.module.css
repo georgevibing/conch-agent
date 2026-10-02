@@ -96,8 +96,7 @@
 
     .card[data-attention]:hover {
       box-shadow:
-        inset 3px 0 0 0 var(--attention),
-        inset 0 0 0 1px color-mix(in oklch, var(--attention) 35%, transparent),
+        inset 0 0 0 1px color-mix(in oklch, var(--attention) 45%, transparent),
         var(--nc-glaze-edge),
         var(--nc-elevation-3);
     }
@@ -113,15 +112,14 @@
     outline-offset: 2px;
   }
 
-  /* A run that needs you gets a warm edge on the leading side (Lustre owns the pseudo-elements). */
+  /* A run that needs you gets a warm hairline all the way round (Lustre owns the pseudo-elements). */
   .card[data-attention] {
     --attention: light-dark(
       oklch(0.72 0.15 var(--nc-warning-h)),
       oklch(0.78 0.14 var(--nc-warning-h))
     );
     box-shadow:
-      inset 3px 0 0 0 var(--attention),
-      inset 0 0 0 1px color-mix(in oklch, var(--attention) 35%, transparent),
+      inset 0 0 0 1px color-mix(in oklch, var(--attention) 45%, transparent),
       var(--nc-glaze-edge),
       var(--nc-elevation-1);
   }
