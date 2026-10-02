@@ -499,6 +499,13 @@ describe('Palette search', () => {
       await user.type(screen.getByRole('combobox'), words);
       expect(await screen.findByRole('option', { name: /Tidy up memories/ })).toBeInTheDocument();
     }
+    for (const words of ['meaning', 'synonyms', 'semantic search']) {
+      await user.clear(screen.getByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /Search memories by meaning/ }),
+      ).toBeInTheDocument();
+    }
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'export memories');
     expect(

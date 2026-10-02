@@ -20,11 +20,19 @@ export const memoryApi = {
     request(Memory, `/api/memories/${encodeURIComponent(id)}/keep`, { method: 'POST', body: {} }),
   exportUrl: (format: 'md' | 'json') =>
     `/api/memories/export${format === 'json' ? '?format=json' : ''}`,
-  index: () => request(MemoryIndexStatus, '/api/memory/index'),
+  index: (languages: readonly string[] = []) =>
+    request(
+      MemoryIndexStatus,
+      `/api/memory/index${languages.length ? `?lang=${encodeURIComponent(languages.join(','))}` : ''}`,
+    ),
   rebuild: () =>
     request(MemoryIndexStatus, '/api/memory/index/rebuild', { method: 'POST', body: {} }),
-  getModel: () =>
-    request(MemoryIndexStatus, '/api/memory/index/model', { method: 'POST', body: {} }),
+  /** Get it (ADR 0041): the browser's languages choose the model. */
+  getModel: (languages: readonly string[] = []) =>
+    request(MemoryIndexStatus, '/api/memory/index/model', {
+      method: 'POST',
+      body: { languages: [...languages].slice(0, 20) },
+    }),
   tidy: () => request(TidyStatus, '/api/memory/tidy'),
   tidyNow: () => request(TidyStatus, '/api/memory/tidy', { method: 'POST', body: {} }),
   answer: (runId: string, changeId: string, answer: 'keep' | 'undo' | 'dismiss') =>

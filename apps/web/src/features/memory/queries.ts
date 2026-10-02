@@ -20,12 +20,22 @@ export function useMemorySearch(q: string) {
   });
 }
 
-/** How memory is searched; checked often while a model is being fetched. */
+/** The languages this browser speaks, which choose the model on offer (ADR 0041). */
+export const browserLanguages = (): readonly string[] =>
+  typeof navigator === 'undefined' ? [] : (navigator.languages ?? [navigator.language]);
+
+/** How memory is searched; checked often while a model is fetched or memories are indexed. */
 export function useMemoryIndex() {
   return useQuery({
     queryKey: memoryKeys.index,
-    queryFn: memoryApi.index,
-    refetchInterval: (query) => (query.state.data?.getting !== undefined ? 1500 : false),
+    queryFn: () => memoryApi.index(browserLanguages()),
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data) return false;
+      const busy =
+        data.getting !== undefined || (data.mode === 'meaning' && data.indexed < data.total);
+      return busy ? 1500 : false;
+    },
   });
 }
 

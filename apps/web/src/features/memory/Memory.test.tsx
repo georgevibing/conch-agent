@@ -38,7 +38,7 @@ const words: MemoryIndexStatus = {
   mode: 'words',
   indexed: 0,
   total: 2,
-  offer: { model: 'nomic-embed-text', bytes: 274_000_000 },
+  offer: { model: 'all-MiniLM-L6-v2', bytes: 23_685_172 },
 };
 
 const tidy = (patch: Partial<TidyStatus> = {}): TidyStatus => ({
@@ -130,8 +130,65 @@ describe('What Conch knows about you', () => {
     ).toHaveLength(1);
 
     // Search is offered meaning, never given it without asking.
-    expect(screen.getByText(/A small model on this computer \(261 MB\)/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Get it' })).toBeInTheDocument();
+    const offer = screen.getByRole('region', { name: 'Let search understand what you mean' });
+    expect(offer).toHaveTextContent('(23 MB, downloaded once)');
+    expect(within(offer).getByRole('button', { name: 'Get it' })).toBeInTheDocument();
+    expect(calls.some((c) => c.path === '/api/memory/index/model')).toBe(false);
+  });
+
+  it('gets the model for meaning on one press, shows progress, then says it understands', async () => {
+    let status: MemoryIndexStatus = words;
+    const calls = mockFetch(
+      routes({
+        'GET /api/memory/index': () => status,
+        'POST /api/memory/index/model': () => {
+          status = { ...words, offer: undefined, getting: 0 };
+          return status;
+        },
+      }),
+    );
+    renderApp(<MemoryView />, { route: '/memory' });
+    const offer = await screen.findByRole('region', {
+      name: 'Let search understand what you mean',
+    });
+    await userEvent.click(within(offer).getByRole('button', { name: 'Get it' }));
+    expect(await screen.findByRole('progressbar', { name: /Downloaded/ })).toBeInTheDocument();
+    // The browser's languages choose the model: English here.
+    expect(calls.find((c) => c.path === '/api/memory/index/model')?.body).toEqual({
+      languages: ['en-US', 'en'],
+    });
+    expect(calls.some((c) => c.path === '/api/memory/index?lang=en-US%2Cen')).toBe(true);
+    status = {
+      mode: 'meaning',
+      model: 'all-MiniLM-L6-v2',
+      source: 'built-in',
+      indexed: 1,
+      total: 2,
+    };
+    expect(
+      await screen.findByRole('progressbar', { name: /Memories ready/ }, { timeout: 4000 }),
+    ).toBeInTheDocument();
+    status = { ...status, indexed: 2 };
+    expect(
+      await screen.findByText(/Search understands meaning, with all-MiniLM-L6-v2/, undefined, {
+        timeout: 4000,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('says why a download didn’t work, with Try again; words still work meanwhile', async () => {
+    mockFetch(
+      routes({
+        'GET /api/memory/index': () => ({
+          ...words,
+          problem: 'Couldn’t download it: the internet seems to be unreachable.',
+        }),
+      }),
+    );
+    renderApp(<MemoryView />, { route: '/memory' });
+    const card = await screen.findByRole('region', { name: 'Couldn’t get the model for meaning' });
+    expect(card).toHaveTextContent('the internet seems to be unreachable');
+    expect(within(card).getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 
   it('searches with the gateway’s ranking, and tidies on request', async () => {

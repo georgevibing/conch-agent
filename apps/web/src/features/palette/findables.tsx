@@ -605,6 +605,14 @@ export function useFindables(query: string, conversationId: string | undefined):
       run: () => void navigate('/memory', { state: { tidy: true } }),
     },
     {
+      id: 'meaning-search',
+      label: 'Search memories by meaning',
+      keywords:
+        'meaning understand synonyms smarter search memories model download embedding semantic offline',
+      icon: <Brain />,
+      run: () => void navigate('/memory', { state: { meaning: true } }),
+    },
+    {
       id: 'export-memories',
       label: 'Export what Conch knows',
       keywords: 'export download save memories markdown json',

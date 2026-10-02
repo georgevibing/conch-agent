@@ -80,9 +80,3 @@
   outline: 2px solid var(--nc-ring);
   outline-offset: 2px;
 }
-
-.mode {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nc-space-2);
-}

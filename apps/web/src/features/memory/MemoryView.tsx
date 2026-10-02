@@ -6,8 +6,8 @@ import {
   EmptyState,
   Heading,
   Input,
+  MeaningSearch,
   MemoryList,
-  Progress,
   SegmentedControl,
   Skeleton,
   Stack,
@@ -29,7 +29,7 @@ import { relativeTime } from '../../lib/time';
 import { downloadMemories, memoryApi } from './api';
 import styles from './Memory.module.css';
 import { MemoryRow } from './MemoryRow';
-import { memoryKeys, useMemoryIndex, useMemorySearch, useTidy } from './queries';
+import { browserLanguages, memoryKeys, useMemoryIndex, useMemorySearch, useTidy } from './queries';
 
 const KINDS: { value: MemoryKind | 'all'; label: string }[] = [
   { value: 'all', label: 'Everything' },
@@ -187,48 +187,55 @@ function Learnings({ autoMemory }: { autoMemory: boolean }) {
   );
 }
 
-/** How search works now, and the one thing that would make it better. */
+/** How search works now, and the one thing that would make it better (ADR 0041). */
 function SearchMode() {
   const index = useMemoryIndex();
   const client = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const button = useRef<HTMLButtonElement>(null);
   const status = index.data;
+  // ⌘K → Search memories by meaning: the offer, ready to press.
+  const asked = (location.state as { meaning?: boolean } | null)?.meaning;
+  useEffect(() => {
+    if (!asked || !status) return;
+    void navigate('/memory', { replace: true, state: null });
+    button.current?.scrollIntoView({ block: 'center' });
+    button.current?.focus();
+  }, [asked, status, navigate]);
   if (!status) return null;
   const get = async () => {
     try {
-      client.setQueryData(memoryKeys.index, await memoryApi.getModel());
+      client.setQueryData(memoryKeys.index, await memoryApi.getModel(browserLanguages()));
     } catch (e) {
       toast.error((e as Error).message);
     }
   };
-  if (status.getting !== undefined)
-    return (
-      <div className={styles.mode}>
-        <Progress
-          size="sm"
-          value={status.getting}
-          label="Getting the model that lets search understand meaning…"
-          showValue
-        />
-      </div>
-    );
-  return (
-    <div className={styles.mode}>
-      <Text size="sm" tone="muted">
-        {status.mode === 'meaning'
-          ? `Search understands meaning, with ${status.model ?? 'a model'} on this computer — nothing leaves it.`
-          : status.offer
-            ? `Search matches words and spellings. A small model on this computer (${formatBytes(status.offer.bytes)}) would let it understand meaning too: “anniversary” would find your wedding.`
-            : 'Search matches words and spellings, typos forgiven. With Ollama on this computer, it can understand meaning too.'}
-      </Text>
-      {status.mode === 'words' && status.offer && (
-        <div>
-          <Button size="sm" variant="surface" onClick={() => void get()}>
-            Get it
-          </Button>
-        </div>
-      )}
-    </div>
+  const press = (label: string) => (
+    <Button ref={button} size="sm" variant="surface" onClick={() => void get()}>
+      {label}
+    </Button>
   );
+  if (status.getting !== undefined)
+    return <MeaningSearch state="getting" progress={status.getting} />;
+  if (status.mode === 'meaning')
+    return status.indexed < status.total ? (
+      <MeaningSearch state="indexing" indexed={status.indexed} total={status.total} />
+    ) : (
+      <MeaningSearch state="meaning" model={status.model} source={status.source} />
+    );
+  if (status.problem && status.offer)
+    return <MeaningSearch state="problem" problem={status.problem} action={press('Try again')} />;
+  if (status.offer)
+    return (
+      <MeaningSearch
+        state="offer"
+        size={formatBytes(status.offer.bytes)}
+        multilingual={status.offer.multilingual}
+        action={press('Get it')}
+      />
+    );
+  return <MeaningSearch state="words" problem={status.problem} />;
 }
 
 /**
