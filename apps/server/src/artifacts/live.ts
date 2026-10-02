@@ -548,6 +548,7 @@ export class LiveData {
         'invalid',
         'That address is on this computer. Say it may read from this computer too.',
       );
+    this.#forgetReads(id);
     await this.deps.access.allow({
       artifactId: id,
       host: host.toLowerCase(),
@@ -614,9 +615,21 @@ export class LiveData {
     return result;
   }
 
+  /** Answers kept for a moment are from before this change: read afresh. */
+  #forgetReads(id: string) {
+    for (const key of this.#recent.keys()) if (key.startsWith(`${id}\n`)) this.#recent.delete(key);
+  }
+
+  /** You took it back: the page asks again, and nothing read before is reused. */
+  revoke(id: string, host: string) {
+    this.#forgetReads(id);
+    return this.deps.access.revoke(id, host.toLowerCase());
+  }
+
   /** A deleted page takes what it was allowed with it. */
   forget(id: string) {
     this.#reads.delete(id);
+    this.#forgetReads(id);
     return this.deps.access.revoke(id);
   }
 }

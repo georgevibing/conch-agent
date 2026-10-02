@@ -26,13 +26,7 @@ import { describeTaint } from '../conversations/taint';
 import type { DoctorCheck } from '../doctor/service';
 import type { HostTool } from '../engines/types';
 import { navigates } from './frame';
-import {
-  LiveData,
-  LiveDataError,
-  readSources,
-  type fetchLive,
-  type LiveDataAccess,
-} from './live';
+import { LiveData, LiveDataError, readSources, type fetchLive, type LiveDataAccess } from './live';
 import { artifactOperationId, ArtifactError, type ArtifactStore } from './store';
 
 /** The words a model reads to know when and how to make one. */

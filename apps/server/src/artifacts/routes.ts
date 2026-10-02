@@ -242,7 +242,7 @@ export function registerArtifactRoutes(app: FastifyInstance, artifacts: Artifact
   app.delete<{ Params: { id: string; host: string } }>(
     '/api/artifacts/:id/live-data/:host',
     async (request) => {
-      await artifacts.live.access.revoke(request.params.id, request.params.host.toLowerCase());
+      await artifacts.live.revoke(request.params.id, request.params.host);
       return { ok: true };
     },
   );

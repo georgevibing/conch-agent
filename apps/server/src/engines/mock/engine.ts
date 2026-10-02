@@ -744,7 +744,7 @@ export class MockEngine implements Engine {
                   every: 60,
                 },
               },
-            )}</script><script>conch.watch("weather",{city:"berlin"},function(r){var t=document.getElementById("t");if(!r.ok){t.textContent=r.message;return}var d=r.json();t.textContent=d.city+": "+d.temp+"°"});</script>`,
+            )}</script><script>conch.watch("weather",{city:"berlin"},function(r){var t=document.getElementById("t");if(!r.ok){if(!t.dataset.had)t.textContent=r.message;return}var d=r.json();t.dataset.had="1";t.textContent=d.city+": "+d.temp+"°"});</script>`,
           },
           linked: {
             kind: 'html',
