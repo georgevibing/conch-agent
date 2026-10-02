@@ -16,6 +16,8 @@ import {
   readSources,
   type Reach,
 } from './live';
+import { ArtifactService } from './service';
+import { ArtifactStore } from './store';
 
 const page = (sources: unknown) =>
   `<h1>Live</h1><script type="application/conch-data">${JSON.stringify(sources)}</script>`;
@@ -418,5 +420,53 @@ describe('a page’s live data, with your OK', () => {
     await writeFile(join(home, 'artifacts', 'access.json'), '{ damaged');
     expect(await access.list()).toEqual([]);
     expect((await live.info('a_1', 1)).sources[0]?.allowed).toBe(false);
+  });
+});
+
+describe('Repair everything: live data in pages', () => {
+  it('says what pages read, warns about this computer, and tidies OKs nobody uses', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-live-doctor-'));
+    const service = new ArtifactService({
+      store: new ArtifactStore(home),
+      conversations: () => {
+        throw new Error('not needed');
+      },
+      emit: () => undefined,
+      access: new LiveDataAccess(home),
+      gatewayPort: 4317,
+    });
+    const check = service.liveDataCheck();
+    const run = (repair: boolean) => check.run({ repair, signal: new AbortController().signal });
+    expect(await run(false)).toMatchObject([{ state: 'off', message: 'No page reads live data.' }]);
+
+    const made = await service.create({
+      conversationId: '',
+      kind: 'html',
+      title: 'Status',
+      content: page({
+        api: { url: 'https://api.example.com/now' },
+        dev: { url: 'http://localhost:3000/status' },
+      }),
+    });
+    await service.live.approve(made.id, 1, 'api.example.com');
+    await service.live.approve(made.id, 1, 'localhost:3000', true);
+    expect(await run(false)).toMatchObject([
+      {
+        state: 'warning',
+        message: 'One page reads live data from 2 sites, one of them on this computer.',
+        action: { kind: 'open', place: 'security', focus: 'live-data' },
+      },
+    ]);
+
+    // A new version stops reading this computer: the OK it had is tidied away.
+    await service.update(made.id, {
+      content: page({ api: { url: 'https://api.example.com/now' } }),
+    });
+    expect(await run(true)).toMatchObject([
+      { state: 'fixed', message: 'Took back an OK for pages that no longer read from there.' },
+    ]);
+    expect(await run(false)).toMatchObject([
+      { state: 'ok', message: 'One page reads live data from one site.' },
+    ]);
   });
 });
