@@ -16,7 +16,6 @@ import { browserKeys } from '../features/browser/queries';
 import { terminalKeys } from '../features/terminal/queries';
 import { applyChannelEvent } from '../features/channels/queries';
 import { applyIntegrationEvent } from '../features/integrations/queries';
-import { slackKeys } from '../features/integrations/slackApi';
 import { healthKeys } from '../features/health/api';
 import { backupKeys } from '../features/health/backups';
 import { useImportProgress } from '../features/import/api';
@@ -242,9 +241,6 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         case 'integration.changed':
         case 'integration.deleted':
           applyIntegrationEvent(client, event);
-          break;
-        case 'slack.changed':
-          void client.invalidateQueries({ queryKey: slackKeys.status });
           break;
         case 'artifact.changed':
         case 'artifact.deleted':

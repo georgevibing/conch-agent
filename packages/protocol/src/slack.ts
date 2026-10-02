@@ -11,8 +11,6 @@
  */
 import { z } from 'zod';
 
-import { IntegrationHealth, IntegrationTool, ToolPolicy } from './integrations';
-
 /**
  * What the token must be allowed to do (the `user` scopes in the app's
  * settings). One list for the Slack app's settings and for the check that
@@ -36,14 +34,6 @@ export const SlackToolName = z.enum([
 ]);
 export type SlackToolName = z.infer<typeof SlackToolName>;
 
-/** A Slack tool as the person sees it, with their choice (Allow · Ask · Off). */
-export const SlackTool = IntegrationTool.extend({
-  name: SlackToolName,
-  /** Sending always asks: the person can turn it off, never let it go by itself. */
-  alwaysAsks: z.boolean().default(false),
-});
-export type SlackTool = z.infer<typeof SlackTool>;
-
 /** A Slack app Conch already knows (the Slack channel's), offered for this too. */
 export const SlackChannelApp = z.object({
   /** The app's name in Slack, as the channel shows it. */
@@ -57,36 +47,15 @@ export const SlackChannelApp = z.object({
 });
 export type SlackChannelApp = z.infer<typeof SlackChannelApp>;
 
-export const SlackStatus = z.object({
-  connected: z.boolean(),
-  /** Off: the assistant doesn't see Slack; the token is kept. */
-  enabled: z.boolean().default(true),
-  /** The workspace's name. */
-  workspace: z.string().optional(),
-  /** Its address, e.g. https://acme.slack.com/ */
-  url: z.string().optional(),
-  /** Who the token reads and sends as. */
-  user: z.string().optional(),
-  health: IntegrationHealth,
-  /** Scopes from `SLACK_USER_SCOPES` the token doesn't have. */
-  missing: z.array(z.string()).default([]),
-  tools: z.array(SlackTool).default([]),
-  lastUsedAt: z.number().optional(),
-  connectedAt: z.number().optional(),
+/** What the connect dialog can offer (`GET /api/slack/setup`). */
+export const SlackSetup = z.object({
   /** Set when a Slack channel is connected and its app could be used for this too. */
   channelApp: SlackChannelApp.optional(),
 });
-export type SlackStatus = z.infer<typeof SlackStatus>;
+export type SlackSetup = z.infer<typeof SlackSetup>;
 
 /** A Slack user token: `xoxp-` and the digits and letters Slack gives it. */
 export const SLACK_USER_TOKEN = /^xoxp-[A-Za-z0-9-]{20,250}$/;
 
 export const SlackConnectBody = z.object({ token: z.string().trim().min(1).max(400) });
 export type SlackConnectBody = z.infer<typeof SlackConnectBody>;
-
-export const SlackUpdateBody = z.object({
-  enabled: z.boolean().optional(),
-  /** `null` goes back to the default (reads allowed, sending asks). */
-  tools: z.partialRecord(SlackToolName, ToolPolicy.nullable()).optional(),
-});
-export type SlackUpdateBody = z.infer<typeof SlackUpdateBody>;

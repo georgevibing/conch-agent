@@ -2,7 +2,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { Capabilities, ConversationEvent, EngineStatus } from '@conch/protocol';
+import type { Capabilities, ConversationEvent, EngineStatus, Integration } from '@conch/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ConversationManager, notConnectedPrompt } from '../conversations/manager';
@@ -17,7 +17,7 @@ import type {
 } from '../engines/types';
 import { MemoryStore } from '../memory/store';
 import { SettingsStore } from '../settings/store';
-import { IntegrationService } from './service';
+import { type HostedApps, IntegrationService } from './service';
 import type { StoredIntegration } from './store';
 
 /** A provider that answers at once and remembers what it was told. */
@@ -63,7 +63,7 @@ class FakeEngine implements Engine {
   }
 }
 
-async function service(engine: Engine, extra: { slackConnected?: () => Promise<boolean> } = {}) {
+async function service(engine: Engine, extra: { hosted?: HostedApps } = {}) {
   const home = await mkdtemp(join(tmpdir(), 'conch-suggest-'));
   const integrations = new IntegrationService({
     ...extra,
@@ -194,7 +194,11 @@ describe('what gets suggested', () => {
     expect(ids(await before.integrations.suggest('catch me up on Slack', engine))).toEqual([
       'slack',
     ]);
-    const after = await service(engine, { slackConnected: async () => true });
+    // Slack connected to Conch is one of its own apps, listed like any other (ADR 0052).
+    const slack = { id: 'slack', catalogId: 'slack' } as Integration;
+    const after = await service(engine, {
+      hosted: { owns: (id) => id === 'slack', list: async () => [slack] } as HostedApps,
+    });
     expect(await after.integrations.suggest('catch me up on Slack', engine)).toEqual(nothing);
   });
 

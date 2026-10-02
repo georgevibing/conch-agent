@@ -119,20 +119,6 @@ describe('connecting Slack', () => {
     expect(mock.userTokens.has(MockSlack.USER_TOKEN)).toBe(false);
     expect((await service.status()).connected).toBe(false);
   });
-
-  it('offers the Slack channel’s app, by name only', async () => {
-    const withChannel = new SlackService({
-      store: new SlackStore(home),
-      base: () => mock.api,
-      manualChecks: true,
-      channelApp: async () => ({ name: 'Conch', workspace: 'Mock Workspace', appId: 'A0MOCKAPP' }),
-    });
-    expect((await withChannel.status()).channelApp).toEqual({
-      name: 'Conch',
-      workspace: 'Mock Workspace',
-      appId: 'A0MOCKAPP',
-    });
-  });
 });
 
 describe('health', () => {

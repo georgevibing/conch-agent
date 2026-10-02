@@ -16,9 +16,10 @@ export function useFix() {
     fix(integration: Integration) {
       switch (integration.health.action) {
         case 'reconnect':
-          // Gmail, Calendar, Drive: their page has the fix (a new app password, or Google's sign-in).
+          // Gmail, Calendar, Drive, Slack: their page has the fix (a new app password,
+          // Google's sign-in, Slack's dialog).
           if (integration.transport.type === 'host')
-            return void navigate(`/integrations/${integration.id}`);
+            return void navigate(`/integrations/${integration.id}`, { state: { focus: 'token' } });
           if (integration.auth === 'oauth')
             return void signIn((display) => integrationsApi.connect(integration.id, display));
           return void navigate(`/integrations/${integration.id}`, { state: { focus: 'token' } });

@@ -15,7 +15,6 @@ import type { TranscriptItem } from '../../live/reducer';
 import styles from './ChatBits.module.css';
 import { ConnectDialog } from './ConnectDialog';
 import { useAssistantName, useIntegrations } from './queries';
-import { slackWorks, useSlack } from './slackApi';
 import { useFix } from './useFix';
 
 type Issue = Extract<TranscriptItem, { kind: 'integration-issue' }>;
@@ -72,7 +71,6 @@ export function IntegrationSuggestion({
   onGone?: () => void;
 }) {
   const { data } = useIntegrations();
-  const { data: slack } = useSlack(item.catalogId === 'slack');
   const { data: app } = useAppState();
   const update = useUpdateSettings();
   const assistant = useAssistantName();
@@ -92,10 +90,7 @@ export function IntegrationSuggestion({
   if (!data || gone || (item.dismissed && !leaving) || (isMuted && mutedHere === undefined))
     return null;
 
-  const connected =
-    target?.auth === 'slack'
-      ? slackWorks(slack)
-      : integration?.health.state === 'ok' || integration?.health.state === 'warning';
+  const connected = integration?.health.state === 'ok' || integration?.health.state === 'warning';
   const state: IntegrationSuggestionState = leaving
     ? 'dismissed'
     : isMuted

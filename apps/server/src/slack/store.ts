@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 
-import { IntegrationHealth, SlackToolName, ToolPolicy } from '@conch/protocol';
+import { IntegrationHealth, IntegrationPolicy, SlackToolName, ToolPolicy } from '@conch/protocol';
 import { z } from 'zod';
 
 import { Mutex, writeJson } from '../lib/fs';
@@ -23,7 +23,13 @@ export type SlackConnection = z.infer<typeof Connection>;
 const Data = z.object({
   connection: Connection.optional(),
   enabled: z.boolean().default(true),
-  /** The person's choices, per tool. Unset: reads allowed, sending asks. */
+  /**
+   * When the assistant may read without asking, like every other app's
+   * (ADR 0052). Older files have none: reads go by themselves, as before.
+   * Sending asks whatever this says.
+   */
+  policy: IntegrationPolicy.default('ask-writes'),
+  /** The person's choices, per tool. Unset: the policy decides, and sending asks. */
   tools: z.partialRecord(SlackToolName, ToolPolicy).default({}),
   health: IntegrationHealth.default({ state: 'checking' }),
   lastUsedAt: z.number().optional(),

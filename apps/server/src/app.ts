@@ -534,7 +534,7 @@ export async function buildApp(services: Services) {
     apps: services.googleApps,
     gmailLogin: () => services.channels.gmailLogin(),
   });
-  slackRoutes(app, services.slack);
+  slackRoutes(app, services.slack, services.slackApps, () => services.channels.slackApp());
 
   // ── Integrations ───────────────────────────────────────────────────────
   // Running a program of your choosing, or letting an integration act without

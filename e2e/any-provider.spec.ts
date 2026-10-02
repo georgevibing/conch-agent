@@ -16,7 +16,7 @@ test.beforeEach(async ({ request }) => {
   await request.patch('/api/settings', { data: { onboarded: true, profile: { name: 'Ada' } } });
   const mocks = (await (await request.get('/api/channels/mock')).json()) as Record<string, string>;
   SLACK = mocks.slack ?? '';
-  await request.delete('/api/slack');
+  await request.delete('/api/integrations/slack');
   await request.post(`${SLACK}/__control/reset-user`);
 });
 

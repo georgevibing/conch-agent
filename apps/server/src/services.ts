@@ -100,12 +100,14 @@ import { registerGoogleDoctor } from './google/doctor';
 import { GoogleApps } from './google/apps';
 import { GMAIL_IMAP, GmailImap } from './google/imap';
 import { SLACK_WEB_API } from './slack/api';
+import { SlackApps } from './slack/apps';
 import { registerSlackDoctor } from './slack/doctor';
 import { SlackService } from './slack/service';
 import { SlackStore } from './slack/store';
 import { offeredSlackTools } from './slack/tools';
 import { type Blueprint, CATALOG } from './integrations/catalog';
 import { MockVendor } from './integrations/mock/vendor';
+import { hostedApps } from './integrations/hosted';
 import { IntegrationService } from './integrations/service';
 import { MemoryIndex } from './memory/index';
 import { OnDeviceModel } from './memory/ondevice';
@@ -226,6 +228,8 @@ export class Services {
   readonly googleApps: GoogleApps;
   /** Slack connected to Conch itself, so it works with every model (ADR 0049). */
   readonly slack: SlackService;
+  /** Slack as an app on the Apps page, like Gmail (ADR 0052). */
+  readonly slackApps: SlackApps;
   /** Everything the assistant did, in one place (ADR 0028). */
   readonly activity: Activity;
   /** Putting back what the assistant changed (ADR 0030). */
@@ -287,11 +291,11 @@ export class Services {
       store: new SlackStore(config.CONCH_HOME, heal),
       // With the mock engine, the pretend Slack the channels use answers for Slack too.
       base: () => (this.mockSlack ? this.mockSlack.api : SLACK_WEB_API),
-      // The Slack channel's app, offered for this too (ADR 0049); never its keys.
-      channelApp: () => this.channels.slackApp(),
-      emit: () => this.broadcast.emit({ type: 'slack.changed' }),
+      // Slack is an app like any other on the Apps page (ADR 0052).
+      emit: () => void this.slackApps.changed().catch(() => undefined),
       onHeal: (message) => void this.healed.note('integrations', message),
     });
+    this.slackApps = new SlackApps(this.slack, { emit: (event) => this.broadcast.emit(event) });
     registerSlackDoctor(this.doctor, this.slack);
     this.settings = new SettingsStore(config.CONCH_HOME, heal);
     this.access = new AccessStore(config.CONCH_HOME, heal);
@@ -375,10 +379,8 @@ export class Services {
     // With the mock engine, integrations talk to a pretend vendor on this machine too.
     this.mockVendor = config.CONCH_ENGINE === 'mock' ? new MockVendor() : undefined;
     this.integrations = new IntegrationService({
-      // Connected (in any state) means not offered again: like every other app.
-      googleConnected: async () => (await this.googleApps.list()).map((app) => app.id),
-      hosted: this.googleApps,
-      slackConnected: async () => (await this.slack.status()).connected,
+      // Conch's own apps, kept by their own services and shown like every other (ADR 0052).
+      hosted: hostedApps(this.googleApps, this.slackApps),
       home: config.CONCH_HOME,
       heal,
       emit: (event) => this.broadcast.emit(event),

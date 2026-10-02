@@ -19,8 +19,6 @@ import { CustomDialog } from './CustomDialog';
 import { categoryLabel, fixLabel, needsAttention, quietMeta } from './describe';
 import styles from './Integrations.module.css';
 import { useAssistantName, useIntegrations, useUpdateIntegration } from './queries';
-import { SlackCard } from './SlackDetail';
-import { useSlack } from './slackApi';
 import { useFix } from './useFix';
 
 const results: Record<string, { tone: 'success' | 'error' | 'info'; text: string }> = {
@@ -60,7 +58,6 @@ export function IntegrationsView() {
   useSignInResult();
   const { data, isPending } = useIntegrations();
   const assistant = useAssistantName();
-  const { data: slack } = useSlack();
   const update = useUpdateIntegration();
   const { fix, pending } = useFix();
   const navigate = useNavigate();
@@ -71,8 +68,6 @@ export function IntegrationsView() {
 
   const integrations = useMemo(() => [...(data?.integrations ?? [])].sort(order), [data]);
   const catalog = useMemo(() => data?.catalog ?? [], [data]);
-  /** Apps connected another way than an MCP server (Slack): their own card above. */
-  const connectedApp = (id: string) => id === 'slack' && Boolean(slack?.connected);
   const categories = useMemo(
     () => ['all', ...new Set(catalog.map((c) => c.category))] as Category[],
     [catalog],
@@ -80,7 +75,7 @@ export function IntegrationsView() {
   const needle = query.trim().toLowerCase();
   const shown = catalog
     // Ones you've connected here live in "Connected" above.
-    .filter((c) => !integrations.some((i) => i.catalogId === c.id) && !connectedApp(c.id))
+    .filter((c) => !integrations.some((i) => i.catalogId === c.id))
     .filter((c) => category === 'all' || c.category === category)
     .filter(
       (c) =>
@@ -94,7 +89,6 @@ export function IntegrationsView() {
   const openEntry = (entry: CatalogEntry) => {
     const mine = integrations.find((i) => i.catalogId === entry.id);
     if (mine) void navigate(`/integrations/${mine.id}`);
-    else if (connectedApp(entry.id)) void navigate(`/integrations/${entry.id}`);
     else setConnecting(entry);
   };
 
@@ -102,12 +96,7 @@ export function IntegrationsView() {
   const [params, setParams] = useSearchParams();
   const connectId = params.get('connect');
   const linked = connectId
-    ? catalog.find(
-        (c) =>
-          c.id === connectId &&
-          !integrations.some((i) => i.catalogId === c.id) &&
-          !connectedApp(c.id),
-      )
+    ? catalog.find((c) => c.id === connectId && !integrations.some((i) => i.catalogId === c.id))
     : undefined;
   // `?setup=<id>` (a card's “Finish setup”): finish the one you already added.
   const unfinished = integrations.find((i) => i.id === params.get('setup'));
@@ -117,11 +106,8 @@ export function IntegrationsView() {
     if (!connectId) return;
     const mine = integrations.find((i) => i.catalogId === connectId);
     if (mine) void navigate(`/integrations/${mine.id}`, { replace: true });
-    else if (connectId === 'slack' && slack?.connected)
-      void navigate('/integrations/slack', { replace: true });
-  }, [connectId, integrations, navigate, slack?.connected]);
-  const slackEntry = catalog.find((c) => c.id === 'slack');
-  const anyConnected = integrations.length > 0 || Boolean(slack?.connected);
+  }, [connectId, integrations, navigate]);
+  const anyConnected = integrations.length > 0;
 
   return (
     <div className={styles.page}>
@@ -150,11 +136,6 @@ export function IntegrationsView() {
               Connected
             </Heading>
             <ul className={styles.cards}>
-              {slack?.connected && slackEntry && (
-                <li>
-                  <SlackCard status={slack} entry={slackEntry} />
-                </li>
-              )}
               {integrations.map((integration, index) => {
                 const entry = catalog.find((c) => c.id === integration.catalogId);
                 const label = fixLabel(integration);

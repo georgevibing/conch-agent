@@ -229,15 +229,12 @@ export interface IntegrationServiceDeps {
   retryAfterMs?: number[];
   /** How long a turn waits to learn what the provider reaches by itself; tests shorten it. */
   providerWaitMs?: number;
-  googleConnected?: () => Promise<string[]>;
   /**
    * Apps Conch runs itself as its own tools (Gmail, Google Calendar, Google
-   * Drive: ADR 0048). They're listed, opened, switched and checked like any
-   * other integration, but kept by their own service.
+   * Drive: ADR 0048; Slack: ADR 0049, 0052). They're listed, opened, switched
+   * and checked like any other integration, but kept by their own service.
    */
   hosted?: HostedApps;
-  /** Slack is connected to Conch itself (ADR 0049). */
-  slackConnected?: () => Promise<boolean>;
 }
 
 /** Integrations whose tools are Conch's own host tools, kept somewhere other than `integrations.json`. */
@@ -718,8 +715,8 @@ export class IntegrationService {
           'invalid',
           entry
             ? entry.auth === 'google'
-              ? 'Connect Google from Integrations to use this app with every model.'
-              : 'Connect Slack from its card in Integrations.'
+              ? 'Connect Google from Apps to use this app with every model.'
+              : 'Connect Slack from its card in Apps.'
             : 'Unknown integration.',
         );
       const { values, secrets } = this.#splitValues(entry, body.values, true);
@@ -912,7 +909,7 @@ export class IntegrationService {
 
   async connect(id: string, signIn: SignIn): Promise<IntegrationResult> {
     if (this.deps.hosted?.owns(id))
-      throw new IntegrationError('invalid', 'Sign in to it again from its page in Integrations.');
+      throw new IntegrationError('invalid', 'Sign in to it again from its page in Apps.');
     const item = await this.#require(id);
     if (item.transport.type !== 'http' || item.auth !== 'oauth')
       throw new IntegrationError('invalid', 'This integration doesn’t use a sign-in page.');
@@ -1250,12 +1247,18 @@ export class IntegrationService {
       if (id ? cued.has(id) : mentions(text, item))
         found.set(id ?? item.id, { name: item.name, ...(id && { catalogId: id }) });
     }
-    for (const id of (await this.deps.googleConnected?.().catch(() => [])) ?? []) {
+    for (const id of await this.#hostedIds()) {
       const entry = CATALOG.get(id);
       if (entry && cued.has(id) && !found.has(id))
         found.set(id, { name: entry.name, catalogId: id });
     }
     return [...found.values()].slice(0, MAX_SUGGESTIONS);
+  }
+
+  /** Conch's own apps that are connected, in any state (Gmail, Slack…). */
+  async #hostedIds(): Promise<string[]> {
+    const items = (await this.deps.hosted?.list().catch(() => [])) ?? [];
+    return items.map((item) => item.catalogId ?? item.id);
   }
 
   // ── Connect from the chat ───────────────────────────────────────────────
@@ -1288,8 +1291,8 @@ export class IntegrationService {
         return id ? [id] : [];
       }),
     );
-    for (const id of (await this.deps.googleConnected?.()) ?? []) mine.add(id);
-    if (await this.deps.slackConnected?.().catch(() => false)) mine.add('slack');
+    // Connected (in any state) means not offered again, like every other app.
+    for (const id of await this.#hostedIds()) mine.add(id);
     const open = cued.filter((item) => !mine.has(item.id));
     if (!open.length) return none;
     // Not knowing what the provider has would risk telling it it can't see an app it can.

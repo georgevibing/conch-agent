@@ -43,7 +43,7 @@ import {
   useRemoveIntegration,
   useUpdateIntegration,
 } from './queries';
-import { SlackDetailView } from './SlackDetail';
+import { SlackConnection } from './SlackConnect';
 import { useFix } from './useFix';
 
 const policyHelp: Record<IntegrationPolicy, (name: string, assistant: string) => string> = {
@@ -55,12 +55,6 @@ const policyHelp: Record<IntegrationPolicy, (name: string, assistant: string) =>
 };
 
 export function IntegrationDetailView({ integrationId }: { integrationId: string }) {
-  // Slack is Conch's own (ADR 0049), not an MCP server: its page is its own.
-  if (integrationId === 'slack') return <SlackDetailView />;
-  return <McpDetailView integrationId={integrationId} />;
-}
-
-function McpDetailView({ integrationId }: { integrationId: string }) {
   useSignInResult();
   const { integration, entry, isPending } = useIntegration(integrationId);
   const navigate = useNavigate();
@@ -107,6 +101,12 @@ function Detail({
   const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
   const assistant = useAssistantName();
   const [confirm, setConfirm] = useState(false);
+  const location = useLocation();
+  const slack = integration.id === 'slack';
+  // Slack connects again in its own dialog: opened from a card's "Sign in again" too.
+  const [reconnect, setReconnect] = useState(
+    slack && (location.state as { focus?: string } | null)?.focus === 'token',
+  );
   const { health } = integration;
   const attention = needsAttention(integration);
   const label = fixLabel(integration);
@@ -176,7 +176,13 @@ function Detail({
           action={
             label &&
             !health.need && (
-              <Button size="sm" onClick={() => fix(integration)} loading={check.isPending}>
+              <Button
+                size="sm"
+                onClick={() =>
+                  slack && health.action === 'reconnect' ? setReconnect(true) : fix(integration)
+                }
+                loading={check.isPending}
+              >
                 {label}
               </Button>
             )
@@ -232,7 +238,9 @@ function Detail({
         >
           {policyHelp[integration.policy](integration.name, assistant)}
           {integration.tools.some((t) => t.alwaysAsks) &&
-            ` Saving a draft always asks, whatever you choose here, and nothing is ever sent.`}
+            (slack
+              ? ' Sending a message always asks, whatever you choose here.'
+              : ' Saving a draft always asks, whatever you choose here, and nothing is ever sent.')}
         </Text>
       </section>
 
@@ -271,7 +279,16 @@ function Detail({
         </section>
       )}
 
-      {integration.transport.type === 'host' ? (
+      {slack && entry ? (
+        <SlackConnection
+          integration={integration}
+          entry={entry}
+          onCheck={() => check.mutate(integration.id)}
+          checking={check.isPending}
+          reconnect={reconnect}
+          onReconnect={setReconnect}
+        />
+      ) : integration.transport.type === 'host' ? (
         <GoogleAppConnection
           integration={integration}
           onCheck={() => check.mutate(integration.id)}
@@ -301,7 +318,12 @@ function Detail({
           <AlertDialog.Header>
             <AlertDialog.Title>Disconnect {integration.name}?</AlertDialog.Title>
             <AlertDialog.Description>
-              {integration.transport.type === 'host' ? (
+              {slack ? (
+                <>
+                  {assistant} won’t be able to use Slack any more. Conch forgets the sign-in and
+                  asks Slack to forget it too. Your Slack app stays in your workspace.
+                </>
+              ) : integration.transport.type === 'host' ? (
                 <>
                   {assistant} won’t be able to use it any more. A Google account that no other
                   Google app uses is disconnected too

@@ -1,14 +1,22 @@
-import { SlackConnectBody, SlackUpdateBody } from '@conch/protocol';
+import { SlackConnectBody, type SlackSetup } from '@conch/protocol';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 
+import type { SlackApps } from './apps';
 import { SlackError, type SlackService } from './service';
 
 /**
- * Slack, connected to Conch (ADR 0049). The gateway's Host/Origin/session
- * guards cover `/api`; the token comes in once, in a body, and never goes
- * back out.
+ * Connecting Slack to Conch (ADR 0049). Once connected it's an app like any
+ * other (`/api/integrations/slack`, ADR 0052); only what setting it up needs
+ * is here. The gateway's Host/Origin/session guards cover `/api`; the token
+ * comes in once, in a body, and never goes back out.
  */
-export function slackRoutes(app: FastifyInstance, slack: SlackService) {
+export function slackRoutes(
+  app: FastifyInstance,
+  slack: SlackService,
+  apps: SlackApps,
+  /** The Slack channel's app, offered for this too (never its keys). */
+  channelApp: () => Promise<SlackSetup['channelApp']>,
+) {
   const guarded = async (reply: FastifyReply, run: () => Promise<unknown>) => {
     try {
       return await run();
@@ -22,26 +30,20 @@ export function slackRoutes(app: FastifyInstance, slack: SlackService) {
   app.addHook('onRequest', async (request, reply) => {
     if (request.url.startsWith('/api/slack')) reply.header('Cache-Control', 'no-store');
   });
-  app.get('/api/slack', () => slack.status());
+  // What the connect dialog can offer: the Slack app a channel already uses, by name only.
+  app.get('/api/slack/setup', async (): Promise<SlackSetup> => {
+    const known = await channelApp().catch(() => undefined);
+    return known ? { channelApp: known } : {};
+  });
   app.post('/api/slack/connect', { bodyLimit: 4_000 }, async (request, reply) => {
     const body = SlackConnectBody.safeParse(request.body);
     if (!body.success)
       return reply
         .code(400)
         .send({ error: 'invalid', message: 'Paste the User OAuth Token from your Slack app.' });
-    return guarded(reply, () => slack.connect(body.data.token));
+    return guarded(reply, async () => {
+      await slack.connect(body.data.token);
+      return apps.get('slack');
+    });
   });
-  app.post('/api/slack/check', (_request, reply) => guarded(reply, () => slack.check()));
-  app.patch('/api/slack', async (request, reply) => {
-    const body = SlackUpdateBody.safeParse(request.body);
-    if (!body.success)
-      return reply.code(400).send({ error: 'invalid', message: body.error.issues[0]?.message });
-    return guarded(reply, () => slack.update(body.data));
-  });
-  app.delete('/api/slack', (_request, reply) =>
-    guarded(reply, async () => {
-      await slack.disconnect();
-      return { ok: true };
-    }),
-  );
 }

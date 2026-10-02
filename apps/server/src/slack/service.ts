@@ -2,14 +2,13 @@ import { randomBytes } from 'node:crypto';
 
 import {
   type IntegrationHealth,
+  type IntegrationPolicy,
+  type IntegrationTool,
   SLACK_USER_SCOPES,
   SLACK_USER_TOKEN,
-  type SlackChannelApp,
-  type SlackStatus,
-  type SlackTool,
   type SlackToolName,
-  type SlackUpdateBody,
   type ToolPolicy,
+  type UpdateIntegrationBody,
 } from '@conch/protocol';
 
 import { SLACK_WEB_API, SlackApiError, slackCall } from './api';
@@ -24,7 +23,7 @@ export class SlackError extends Error {
   }
 }
 
-/** Every Slack tool, in the words the Integrations page shows. */
+/** Every Slack tool, in the words its page in Apps shows. */
 export const SLACK_TOOLS: Record<
   SlackToolName,
   { title: string; description: string; access: 'read' | 'write' }
@@ -100,13 +99,33 @@ function checkToken(token: string) {
   );
 }
 
+/** A Slack tool as its page shows it, with the person's choice. */
+export interface SlackTool extends IntegrationTool {
+  name: SlackToolName;
+}
+
+/** Slack as Conch has it now: who it's connected as, how it's doing, the choices made. */
+export interface SlackStatus {
+  connected: boolean;
+  /** Off: the assistant doesn't see Slack; the token is kept. */
+  enabled: boolean;
+  policy: IntegrationPolicy;
+  workspace?: string;
+  url?: string;
+  user?: string;
+  health: IntegrationHealth;
+  /** Scopes from `SLACK_USER_SCOPES` the token doesn't have. */
+  missing: string[];
+  tools: SlackTool[];
+  lastUsedAt?: number;
+  connectedAt?: number;
+}
+
 export interface SlackServiceDeps {
   store: SlackStore;
   /** Where Slack's Web API is. The real one unless the pretend Slack stands in. */
   base?: () => string;
   fetch?: typeof fetch;
-  /** The Slack channel's app, when there is one, to offer for this too (never its keys). */
-  channelApp?: () => Promise<SlackChannelApp | undefined>;
   /** Something about Slack changed: tell every open page. */
   emit?: () => void;
   /** Leave a “fixed on its own” note. */
@@ -148,10 +167,10 @@ export class SlackService {
   async status(): Promise<SlackStatus> {
     const data = await this.deps.store.read();
     const connection = data.connection;
-    const channelApp = await this.deps.channelApp?.().catch(() => undefined);
     return {
       connected: Boolean(connection),
       enabled: data.enabled,
+      policy: data.policy,
       ...(connection?.team && { workspace: connection.team }),
       ...(connection?.url && { url: connection.url }),
       ...(connection?.user && { user: connection.user }),
@@ -170,7 +189,6 @@ export class SlackService {
       })),
       ...(data.lastUsedAt && { lastUsedAt: data.lastUsedAt }),
       ...(connection && { connectedAt: connection.connectedAt }),
-      ...(channelApp && { channelApp }),
     };
   }
 
@@ -184,12 +202,16 @@ export class SlackService {
     return data.tools[name] !== 'off';
   }
 
-  /** What a tool may do without asking: the person's choice, else reads go and sending asks. */
+  /**
+   * What a tool may do without asking: the person's choice for it, else the
+   * app's policy (reads go by themselves unless it's Ask every time).
+   * Sending always asks.
+   */
   async decide(name: SlackToolName): Promise<ToolPolicy> {
     const data = await this.deps.store.read();
     const chosen = data.tools[name];
     if (SLACK_TOOLS[name].access === 'write') return chosen === 'off' ? 'off' : 'ask';
-    return chosen ?? 'allow';
+    return chosen ?? (data.policy === 'ask' ? 'ask' : 'allow');
   }
 
   /** Check a pasted user token with Slack and keep it. Nothing is saved unless it's right. */
@@ -259,6 +281,7 @@ export class SlackService {
       await this.#call(data.connection.token, 'auth.revoke').catch(() => undefined);
     await this.deps.store.update(() => ({
       enabled: true,
+      policy: 'ask-writes',
       tools: {},
       health: { state: 'checking' },
     }));
@@ -266,16 +289,30 @@ export class SlackService {
     this.deps.emit?.();
   }
 
-  async update(patch: SlackUpdateBody): Promise<SlackStatus> {
-    for (const [name, policy] of Object.entries(patch.tools ?? {}))
-      if (policy === 'allow' && SLACK_TOOLS[name as SlackToolName].access === 'write')
+  /** The switch, the policy and the tools, as on every app's page. Sending never goes without asking. */
+  async update(
+    patch: Pick<UpdateIntegrationBody, 'enabled' | 'policy' | 'tools'>,
+  ): Promise<SlackStatus> {
+    for (const [name, policy] of Object.entries(patch.tools ?? {})) {
+      const tool = SLACK_TOOLS[name as SlackToolName] as
+        (typeof SLACK_TOOLS)[SlackToolName] | undefined;
+      if (!tool) throw new SlackError('invalid', 'That isn’t one of Slack’s tools.');
+      if (policy === 'allow' && tool.access === 'write')
         throw new SlackError('invalid', 'Sending always asks first. You can turn it off instead.');
+    }
+    if (!(await this.deps.store.read()).connection)
+      throw new SlackError('not-connected', 'Slack isn’t connected to Conch.');
     await this.deps.store.update((current) => {
       const changes = patch.tools ?? {};
       const tools = Object.fromEntries(
         Object.entries({ ...current.tools, ...changes }).filter(([, policy]) => policy),
       ) as Partial<Record<SlackToolName, ToolPolicy>>;
-      return { ...current, enabled: patch.enabled ?? current.enabled, tools };
+      return {
+        ...current,
+        enabled: patch.enabled ?? current.enabled,
+        policy: patch.policy ?? current.policy,
+        tools,
+      };
     });
     this.deps.emit?.();
     if (patch.enabled === true) void this.check().catch(() => undefined);
@@ -380,8 +417,7 @@ export class SlackService {
   async connection(): Promise<SlackConnection> {
     const data = await this.deps.store.read();
     if (!data.connection) throw new SlackError('not-connected', 'Slack isn’t connected to Conch.');
-    if (!data.enabled)
-      throw new SlackError('not-connected', 'Slack is turned off in Integrations.');
+    if (!data.enabled) throw new SlackError('not-connected', 'Slack is turned off in Apps.');
     return data.connection;
   }
 
@@ -444,7 +480,7 @@ export class SlackService {
     const lines = ['## Slack'];
     if (data.health.state === 'needs-auth')
       lines.push(
-        `The user connected Slack${where}, but it needs them to connect it again in Integrations. If they ask for something in Slack, say so plainly.`,
+        `The user connected Slack${where}, but it needs them to connect it again in Apps. If they ask for something in Slack, say so plainly.`,
       );
     else
       lines.push(

@@ -1,4 +1,4 @@
-import { SLACK_USER_TOKEN, type CatalogEntry } from '@conch/protocol';
+import { SLACK_USER_TOKEN, type CatalogEntry, type Integration } from '@conch/protocol';
 import {
   Button,
   Callout,
@@ -6,21 +6,23 @@ import {
   Collapsible,
   Dialog,
   Field,
+  Heading,
   IntegrationHandshake,
   PasswordInput,
   Stack,
   Text,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowUpRight, CornerDownLeft, KeyRound } from 'lucide-react';
+import { ArrowUpRight, CornerDownLeft, KeyRound, RotateCw } from 'lucide-react';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
+import { relativeTime } from '../../lib/time';
 import { slackAppUrl, slackCreateUrl, slackManifest } from '../channels/guides';
 import { AccessList, TryIt } from './ConnectDialog';
 import styles from './Integrations.module.css';
-import { errorText, useAssistantName } from './queries';
-import { slackApi, slackKeys, slackWorks, useSlack } from './slackApi';
+import { errorText, putIntegration, useAssistantName, useIntegration } from './queries';
+import { slackApi, useSlackSetup, works } from './slackApi';
 
 function Steps({ steps }: { steps: ReactNode[] }) {
   return (
@@ -70,7 +72,8 @@ export function SlackConnect({
   const client = useQueryClient();
   const navigate = useNavigate();
   const assistant = useAssistantName();
-  const { data: status } = useSlack();
+  const { integration } = useIntegration('slack');
+  const { data: setup, isPending: asking } = useSlackSetup(!again);
   const [choice, setChoice] = useState<'reuse' | 'new'>();
   const [token, setToken] = useState('');
   const [busy, setBusy] = useState(false);
@@ -78,8 +81,10 @@ export function SlackConnect({
   const [showManifest, setShowManifest] = useState(false);
   const [done, setDone] = useState(false);
 
-  const connected = again ? done : slackWorks(status);
-  const app = status?.channelApp;
+  const connected = again ? done : works(integration);
+  const app = again ? undefined : setup?.channelApp;
+  // Until Conch knows whether there's an app to offer, neither path shows (no flicker).
+  const known = again || !asking;
   // Asked, never assumed: the channel's app is only used once the person says so.
   const reuse = choice === 'reuse' && app;
   const manifest = JSON.stringify(slackManifest(assistant), null, 2);
@@ -90,7 +95,7 @@ export function SlackConnect({
     setBusy(true);
     setError(undefined);
     try {
-      client.setQueryData(slackKeys.status, await slackApi.connect(value));
+      putIntegration(client, await slackApi.connect(value));
       setToken('');
       setDone(true);
     } catch (e) {
@@ -154,7 +159,7 @@ export function SlackConnect({
                   you too: it then needs one more key, the one that acts as you.
                 </Callout>
               )}
-              {(!app || choice) && (
+              {known && (!app || choice) && (
                 <form
                   id="connect-slack"
                   className={styles.tokenForm}
@@ -302,6 +307,7 @@ export function SlackConnect({
             <Button onClick={onClose}>Done</Button>
           </>
         ) : (
+          known &&
           (!app || choice) && (
             <Button
               size="lg"
@@ -318,5 +324,77 @@ export function SlackConnect({
         )}
       </Dialog.Footer>
     </>
+  );
+}
+
+/**
+ * The Connection section of Slack's page: how it's connected, as whom, when
+ * it was last checked — and, when Slack stopped taking the token or an older
+ * app is missing a permission, the dialog that connects it again.
+ */
+export function SlackConnection({
+  integration,
+  entry,
+  onCheck,
+  checking,
+  reconnect,
+  onReconnect,
+}: {
+  integration: Integration;
+  entry: CatalogEntry;
+  onCheck: () => void;
+  checking: boolean;
+  reconnect: boolean;
+  onReconnect: (open: boolean) => void;
+}) {
+  const { health } = integration;
+  return (
+    <section className={styles.section} aria-labelledby="int-connection">
+      <Heading level={2} id="int-connection" size="md">
+        Connection
+      </Heading>
+      <dl className={styles.facts}>
+        <div>
+          <dt>How</dt>
+          <dd>{integration.transport.type === 'host' ? integration.transport.how : ''}</dd>
+        </div>
+        {integration.account && (
+          <div>
+            <dt>Account</dt>
+            <dd>{integration.account}</dd>
+          </div>
+        )}
+        <div>
+          <dt>Checked</dt>
+          <dd>
+            {health.checkedAt ? relativeTime(health.checkedAt) : 'Not yet'}
+            <Button
+              size="sm"
+              variant="ghost"
+              leadingIcon={<RotateCw />}
+              onClick={onCheck}
+              loading={checking}
+            >
+              Check now
+            </Button>
+          </dd>
+        </div>
+      </dl>
+      <div>
+        <Button
+          variant="surface"
+          size="sm"
+          leadingIcon={<KeyRound />}
+          onClick={() => onReconnect(true)}
+        >
+          Connect again
+        </Button>
+      </div>
+      <Dialog.Root open={reconnect} onOpenChange={onReconnect}>
+        <Dialog.Content size="md" aria-describedby={undefined}>
+          {reconnect && <SlackConnect entry={entry} again onClose={() => onReconnect(false)} />}
+        </Dialog.Content>
+      </Dialog.Root>
+    </section>
   );
 }

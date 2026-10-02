@@ -562,7 +562,7 @@ describe('Conch-owned apps and provider servers', () => {
   it('directs Slack to Conch’s own Slack connection, not an MCP server', async () => {
     const { service } = await setup();
     await expect(service.create({ catalogId: 'slack', values: {} }, REDIRECT)).rejects.toThrow(
-      'Connect Slack from its card in Integrations.',
+      'Connect Slack from its card in Apps.',
     );
   });
 
@@ -571,7 +571,7 @@ describe('Conch-owned apps and provider servers', () => {
     async (catalogId) => {
       const { service } = await setup();
       await expect(service.create({ catalogId, values: {} }, REDIRECT)).rejects.toThrow(
-        'Connect Google from Integrations to use this app with every model.',
+        'Connect Google from Apps to use this app with every model.',
       );
     },
   );

@@ -1,4 +1,4 @@
-import type { CatalogEntry, ExternalList, Integration, SlackStatus } from '@conch/protocol';
+import type { CatalogEntry, ExternalList, Integration } from '@conch/protocol';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -448,37 +448,41 @@ describe('Integrations page', () => {
   });
 });
 
-const slackStatus = (patch: Partial<SlackStatus> = {}): SlackStatus => ({
-  connected: false,
-  enabled: true,
-  health: { state: 'needs-auth' },
-  missing: [],
-  tools: [
-    {
-      name: 'slack_search',
-      title: 'Search messages',
-      description: '',
-      access: 'read',
-      destructive: false,
-      alwaysAsks: false,
-    },
-    {
-      name: 'slack_send_message',
-      title: 'Send a message',
-      description: '',
-      access: 'write',
-      destructive: false,
-      alwaysAsks: true,
-    },
-  ],
-  ...patch,
-});
+/** Slack connected to Conch, as `/api/integrations` lists it (ADR 0052). */
+const slackApp = (patch: Partial<Integration> = {}): Integration =>
+  integration({
+    id: 'slack',
+    catalogId: 'slack',
+    name: 'Slack',
+    server: 'slack',
+    transport: { type: 'host', how: 'With your own Slack app, connected to Conch itself' },
+    auth: 'token',
+    account: 'Acme · as ada',
+    tools: [
+      {
+        name: 'slack_search',
+        title: 'Search messages',
+        description: '',
+        access: 'read',
+        destructive: false,
+      },
+      {
+        name: 'slack_send_message',
+        title: 'Send a message',
+        description: '',
+        access: 'write',
+        destructive: false,
+        alwaysAsks: true,
+      },
+    ],
+    ...patch,
+  });
 
 describe('Integrations belong to Conch, not to a provider', () => {
   it('every tile is an app Conch connects itself, with nothing that only one provider reaches', async () => {
     mockFetch({
       'GET /api/integrations': () => ({ catalog, providers: [provider], integrations: [] }),
-      'GET /api/slack': () => slackStatus(),
+      'GET /api/slack/setup': () => ({}),
     });
     renderApp(<IntegrationsView />, { route: '/integrations' });
     expect(await screen.findByText(/with every model you pick/)).toBeInTheDocument();
@@ -488,28 +492,19 @@ describe('Integrations belong to Conch, not to a provider', () => {
   });
 
   it('connects Slack with the one token Slack shows, for every model', async () => {
-    let status = slackStatus();
     const calls = mockFetch({
       'GET /api/integrations': () => ({ catalog, providers: [provider], integrations: [] }),
-      'GET /api/slack': () => status,
-      'POST /api/slack/connect': () => {
-        status = slackStatus({
-          connected: true,
-          workspace: 'Acme',
-          user: 'ada',
-          health: { state: 'ok', checkedAt: 1, okAt: 1 },
-        });
-        return status;
-      },
+      'GET /api/slack/setup': () => ({}),
+      'POST /api/slack/connect': () => slackApp(),
     });
     renderApp(<IntegrationsView />, { route: '/integrations' });
     await userEvent.click(await screen.findByRole('button', { name: 'Slack' }));
     const dialog = await screen.findByRole('dialog', { name: 'Connect Slack' });
-    const make = within(dialog).getByRole('link', { name: 'Make the app in Slack' });
+    const make = await within(dialog).findByRole('link', { name: 'Make the app in Slack' });
     expect(make.getAttribute('href')).toMatch(/^https:\/\/api\.slack\.com\/apps\?new_app=1/);
     expect(decodeURIComponent(make.getAttribute('href') ?? '')).toContain('search:read');
     await userEvent.type(
-      within(dialog).getByLabelText(/User OAuth Token/),
+      await within(dialog).findByLabelText(/User OAuth Token/),
       'xoxp-' + '1111111111-2222222222-3333333333-abcdef',
     );
     await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
@@ -522,15 +517,14 @@ describe('Integrations belong to Conch, not to a provider', () => {
   it('asks before using the Slack channel’s app, and says which key to copy from it', async () => {
     mockFetch({
       'GET /api/integrations': () => ({ catalog, providers: [provider], integrations: [] }),
-      'GET /api/slack': () =>
-        slackStatus({
-          channelApp: { name: 'Ada’s helper', workspace: 'Acme', appId: 'A0MOCKAPP' },
-        }),
+      'GET /api/slack/setup': () => ({
+        channelApp: { name: 'Ada’s helper', workspace: 'Acme', appId: 'A0MOCKAPP' },
+      }),
     });
     renderApp(<IntegrationsView />, { route: '/integrations?connect=slack' });
     const dialog = await screen.findByRole('dialog', { name: 'Connect Slack' });
     expect(within(dialog).queryByLabelText(/User OAuth Token/)).toBeNull();
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Use it' }));
+    await userEvent.click(await within(dialog).findByRole('button', { name: 'Use it' }));
     expect(
       within(dialog).getByRole('link', { name: 'Open your app’s Install App page' }),
     ).toHaveAttribute('href', 'https://api.slack.com/apps/A0MOCKAPP/install-on-team');
@@ -540,7 +534,7 @@ describe('Integrations belong to Conch, not to a provider', () => {
   it('a wrong key says which one to copy instead', async () => {
     mockFetch({
       'GET /api/integrations': () => ({ catalog, providers: [provider], integrations: [] }),
-      'GET /api/slack': () => slackStatus(),
+      'GET /api/slack/setup': () => ({}),
       'POST /api/slack/connect': () =>
         new Response(
           JSON.stringify({
@@ -553,7 +547,10 @@ describe('Integrations belong to Conch, not to a provider', () => {
     });
     renderApp(<IntegrationsView />, { route: '/integrations?connect=slack' });
     const dialog = await screen.findByRole('dialog', { name: 'Connect Slack' });
-    await userEvent.type(within(dialog).getByLabelText(/User OAuth Token/), 'xoxp-' + '0000000000-x');
+    await userEvent.type(
+      await within(dialog).findByLabelText(/User OAuth Token/),
+      'xoxp-' + '0000000000-x',
+    );
     await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
     expect(await within(dialog).findByText(/can’t search yet/)).toBeInTheDocument();
     // The settings that fix it are right there.
@@ -561,18 +558,16 @@ describe('Integrations belong to Conch, not to a provider', () => {
   });
 
   it('a connected Slack is a card like any other, and sending can be Ask or Off only', async () => {
-    let status = slackStatus({
-      connected: true,
-      workspace: 'Acme',
-      user: 'ada',
-      health: { state: 'ok', checkedAt: 1, okAt: 1 },
-    });
+    let slack = slackApp();
     const calls = mockFetch({
-      'GET /api/integrations': () => ({ catalog, providers: [provider], integrations: [] }),
-      'GET /api/slack': () => status,
-      'PATCH /api/slack': () => {
-        status = { ...status, tools: status.tools.map((t) => ({ ...t, policy: 'off' as const })) };
-        return status;
+      'GET /api/integrations': () => ({
+        catalog,
+        providers: [provider],
+        integrations: [slack],
+      }),
+      'PATCH /api/integrations/slack': () => {
+        slack = { ...slack, tools: slack.tools.map((t) => ({ ...t, policy: 'off' as const })) };
+        return slack;
       },
     });
     renderApp(<IntegrationsView />, { route: '/integrations' });
@@ -587,6 +582,8 @@ describe('Integrations belong to Conch, not to a provider', () => {
     renderApp(<IntegrationDetailView integrationId="slack" />, { route: '/integrations/slack' });
     const send = await screen.findByRole('radiogroup', { name: 'Send a message' });
     expect(within(send).queryByRole('radio', { name: 'Allow' })).toBeNull();
+    expect(screen.getByText(/Sending a message always asks/)).toBeInTheDocument();
+    expect(screen.getByText('Acme · as ada')).toBeInTheDocument();
     await userEvent.click(within(send).getByRole('radio', { name: 'Off' }));
     await waitFor(() =>
       expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({
