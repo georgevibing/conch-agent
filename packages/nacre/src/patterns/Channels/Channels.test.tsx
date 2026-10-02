@@ -355,3 +355,24 @@ describe('PortalSketch', () => {
     await expectAccessible(container);
   });
 });
+
+describe('PortalSketch.Toggle', () => {
+  it('says which switch to turn on, and whether it is', async () => {
+    const { container } = renderNacre(
+      <PortalSketch label="System Settings" address="System Settings" title="Full Disk Access">
+        <PortalSketch.Toggle label="Backup app" on />
+        <PortalSketch.Toggle label="Terminal" press />
+      </PortalSketch>,
+    );
+    expect(screen.getByText('Terminal').parentElement).toHaveTextContent(
+      'Terminal (off) (turn this on)',
+    );
+    expect(screen.getByText('Backup app').parentElement).toHaveTextContent('Backup app (on)');
+    await expectAccessible(container);
+  });
+
+  it('draws email as an envelope, since it isn’t one company', () => {
+    renderNacre(<IntegrationLogo brand="email" name="Email" color="#5B6B7F" />);
+    expect(screen.getByRole('img', { name: 'Email' }).querySelector('svg')).not.toBeNull();
+  });
+});

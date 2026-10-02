@@ -19,9 +19,10 @@ export interface PortalSketchProps extends Omit<ComponentProps<'figure'>, 'title
 }
 
 /**
- * A sketch of a web page Conch sends you to (the Discord Developer Portal,
- * Slack's app settings): its menu with the right item marked, and the button
- * to press lit up. Not a screenshot — just enough to recognise the place.
+ * A sketch of a web page or settings window Conch sends you to (the Discord
+ * Developer Portal, Slack's app settings, macOS System Settings): its menu
+ * with the right item marked, and the button or switch to press lit up. Not
+ * a screenshot — just enough to recognise the place.
  */
 function PortalSketchRoot({
   label,
@@ -102,10 +103,28 @@ function PortalRow({ children }: { children: ReactNode }) {
   return <span className={styles.row}>{children}</span>;
 }
 
+/**
+ * A switch in a settings list (System Settings → Full Disk Access): the
+ * app's name and its switch. `press` lights up the one to turn on.
+ */
+function PortalToggle({ label, on, press }: { label: string; on?: boolean; press?: boolean }) {
+  return (
+    <span className={styles.toggle} data-press={press || undefined}>
+      <span>{label}</span>
+      <span className={styles.switch} data-on={on || undefined} aria-hidden />
+      <span className="nc-visually-hidden">
+        {on ? ' (on)' : ' (off)'}
+        {press ? ' (turn this on)' : ''}
+      </span>
+    </span>
+  );
+}
+
 export const PortalSketch = Object.assign(PortalSketchRoot, {
   Root: PortalSketchRoot,
   Button: PortalButton,
   Bar: PortalBar,
   Field: PortalField,
   Row: PortalRow,
+  Toggle: PortalToggle,
 });

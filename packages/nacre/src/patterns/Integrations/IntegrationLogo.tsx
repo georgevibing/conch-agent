@@ -1,4 +1,4 @@
-import { Globe, Laptop, Plug } from 'lucide-react';
+import { Globe, Laptop, Mail, Plug } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 
 import { cx } from '../../utils/cx';
@@ -29,6 +29,8 @@ const glyphs: Record<string, ReactNode> = {
   browser: <Globe />,
   // A model on this computer: the computer is the point, not the program running it.
   ollama: <Laptop />,
+  // Email isn't one company: an envelope says what it is.
+  email: <Mail />,
 };
 
 /** A stable hue per name, so a custom integration always gets the same tile. */

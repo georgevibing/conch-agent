@@ -67,10 +67,23 @@ const catalog = [
     minutes: 2,
     tagline: 'Your own Signal. Scan a code, then use Note to Self.',
   },
+  {
+    brand: 'imessage',
+    name: 'iMessage',
+    color: '#34DA50',
+    minutes: 1,
+    tagline: 'Text yourself from your iPhone. Nothing to make.',
+  },
+  {
+    brand: 'email',
+    name: 'Email',
+    color: '#5B6B7F',
+    minutes: 3,
+    tagline: 'Write to yourself+conch, from any mail app.',
+  },
 ];
 
 const soon = [
-  { brand: 'imessage', name: 'iMessage', color: '#34DA50' },
   { brand: 'microsoftteams', name: 'Microsoft Teams', color: '#6264A7' },
   { brand: 'matrix', name: 'Matrix', color: '#0DBD8B' },
 ];
@@ -560,6 +573,61 @@ export const PortalSketches: Story = {
         </PortalSketch.Row>
         <PortalSketch.Bar width={70} />
       </PortalSketch>
+    </Stack>
+  ),
+};
+
+/** iMessage and email (ADR 0044): the switch macOS needs, and the chats as you'll see them. */
+export const MacAndMail: Story = {
+  render: () => (
+    <Stack direction="row" gap={5} wrap>
+      <PortalSketch
+        label="System Settings, on Full Disk Access"
+        address="System Settings"
+        nav={['Wi-Fi', 'General', 'Privacy & Security', 'Notifications']}
+        active="Privacy & Security"
+        title="Full Disk Access"
+        color="#34DA50"
+      >
+        <PortalSketch.Bar width={70} />
+        <PortalSketch.Toggle label="Backup app" on />
+        <PortalSketch.Toggle label="Terminal" press />
+        <PortalSketch.Bar width={45} />
+      </PortalSketch>
+      <Handset
+        label="Texting yourself in Messages"
+        brand="imessage"
+        color="#34DA50"
+        title="Ada Lovelace"
+        subtitle="iMessage · you"
+        messages={[
+          { id: '1', from: 'you', text: 'what’s on today?' },
+          { id: '2', from: 'them', text: 'Dentist at 3, then dinner with Grace at 8.' },
+          {
+            id: '3',
+            from: 'them',
+            text: 'I’d like to delete 3 old log files. Reply yes to allow it, or no.',
+          },
+          { id: '4', from: 'you', text: 'yes' },
+        ]}
+        footer={<Handset.Composer placeholder="iMessage" />}
+      />
+      <Handset
+        label="Writing to your assistant by email"
+        brand="email"
+        color="#5B6B7F"
+        title="ada+conch@gmail.com"
+        subtitle="Re: Plans for Friday"
+        messages={[
+          { id: '1', from: 'you', text: 'Can you find a table for four on Friday?' },
+          {
+            id: '2',
+            from: 'them',
+            text: 'Two places have room at 8: Ottolenghi and Dishoom. Want me to book one?',
+          },
+        ]}
+        footer={<Handset.Composer placeholder="Reply" />}
+      />
     </Stack>
   ),
 };

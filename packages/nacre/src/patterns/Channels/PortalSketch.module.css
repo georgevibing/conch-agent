@@ -137,6 +137,53 @@
   }
 
   /* The one thing to press: the brand's colour, and a slow ring calling for it. */
+  .toggle {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-3);
+    inline-size: 100%;
+    padding: 0.35rem var(--nc-space-2);
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-surface-sunken);
+  }
+
+  .toggle[data-press] {
+    font-weight: var(--nc-weight-semibold);
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--ps-brand) 60%, transparent);
+  }
+
+  .switch {
+    position: relative;
+    flex: none;
+    inline-size: 1.9rem;
+    block-size: 1.1rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-gray-6);
+  }
+
+  .switch::after {
+    content: '';
+    position: absolute;
+    inset-block-start: 0.15rem;
+    inset-inline-start: 0.15rem;
+    inline-size: 0.8rem;
+    block-size: 0.8rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface-hi);
+    box-shadow: 0 1px 2px color-mix(in oklab, var(--nc-shadow-color) 30%, transparent);
+    transition: transform var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .switch[data-on] {
+    background: var(--ps-brand);
+  }
+
+  .switch[data-on]::after {
+    transform: translateX(0.8rem);
+  }
+
   .button {
     position: relative;
     padding: 0.3rem var(--nc-space-3);
@@ -180,6 +227,10 @@
   @media (prefers-reduced-motion: reduce) {
     .button::after {
       animation: none;
+    }
+
+    .switch::after {
+      transition: none;
     }
   }
 }
