@@ -24,6 +24,14 @@ Ask about an app that isn't connected ("what's assigned to me in Linear?") and a
 
 **Not now** puts the card away. **Don't suggest Linear** stops the offers for that app. To get them back, open **Settings → Models** and press **Suggest again**.
 
+## When a model can only chat
+
+Some models can't use apps, files or memory. They can only chat. The model picker shows **Chat only — can't use your apps** under them.
+
+Ask one of them about an app you connected, and your message waits with a card: "Chat Lite can't use Linear". Press **Switch to** and the model that can. The chat moves to that model, and your message goes by itself. Conch only offers models you've already set up, the same provider's first.
+
+**Answer without it** sends your message to the model you chose anyway. Conch asks once per model in a chat. If none of your models can use apps, the card offers **Connect a provider**.
+
 ## Decide what it may do
 
 For connected MCP apps, choose how your assistant uses them. Direct Google access instead follows the permissions requested for your job, and saving a draft always asks for your approval:

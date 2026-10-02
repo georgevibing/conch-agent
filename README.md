@@ -85,6 +85,11 @@ and works offline. Keys can live in 1Password instead of a dotfile.
 itself, or the model on this computer answers. At a usage limit, the provider you
 picked takes over. ([ADR 0023](./docs/adr/0023-offline-and-limits.md))
 
+**A model that can only chat says so.** The picker marks the models that can't use
+apps. Ask one about an app you connected, and the chat offers one tap to a model
+you set up that can, and sends your message by itself.
+([ADR 0050](./docs/adr/0050-models-that-cannot-use-apps.md))
+
 **It remembers, in the open.** Memories are small Markdown files you can read, edit
 or delete; every save shows in the chat with Undo. Search finds any line in months
 of chats, typos and all. ([ADR 0003](./docs/adr/0003-memory.md),

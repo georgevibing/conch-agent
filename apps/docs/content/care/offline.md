@@ -41,6 +41,8 @@ A line appears above the message box only when a limit is close or reached. Type
 
 ## Good to know
 
+- A chat that uses apps keeps them when another model answers. Offline, the model on this computer answers with one of its models that can use apps. At a limit, your pick answers only if the model it uses can.
+
 - The meter follows the provider your new chats start with.
 - Spend counts what you've run through Conch, at list prices. It isn't your provider's bill.
 - A chat that already uses the model on this computer carries on as usual offline.
