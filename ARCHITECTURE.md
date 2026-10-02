@@ -106,7 +106,7 @@ src/
   activity/                   everything the assistant did, read from the chats' logs (ADR 0028)
   undo/                       what each change was before: blobs, change sets, the preview diff, putting back (ADR 0030)
   import/                     Come home: OpenClaw and Hermes read-only, a plan, a ledger for Undo (ADR 0035)
-  artifacts/                  things made beside the chat: store, tools, fenced blocks, the sealed frame (ADR 0034)
+  artifacts/                  things made beside the chat: store, tools, fenced blocks, the sealed frame (ADR 0034); edits, drafts, live data (`live.ts`, ADR 0039)
   tasks/                      background tasks and helpers side by side (`delegate`), queue, worktrees (ADR 0033)
   doctor/                     Repair everything: every part's `DoctorCheck`, run at once (`doctor.report`)
   network/watch.ts            online or not (`network.status`); offline routing (ADR 0023)
@@ -287,6 +287,20 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   versions that could navigate run with `script-src 'none'` until allowed. Charts,
   tables, Markdown, SVG and Mermaid are drawn by the web app. Pinned ones are apps at
   `/apps/:id`; a refresh is a chat (origin `artifact`) that may only update that one.
+
+- **Edit by hand and live data** ([ADR 0039](./docs/adr/0039-edit-by-hand-and-live-data.md)).
+  Nacre's `CodeEditor` (CodeMirror 6, a lazy chunk) inside `ArtifactEditor`; edits
+  live in the web's `useEdits` store. `POST …/versions` saves one marked `edited`
+  over `base` only (409 otherwise), notes `action: 'edited'` in the chat, and
+  `ArtifactService.editedSection` puts it in that chat's next prompt
+  (`context(engine, conversationId)`); `artifact_update` refuses without `base`. A
+  page's preview is `PUT …/draft` (memory only) served by `…/versions/draft/frame`
+  with the same `frameHeaders`. Live data: a page declares sources in
+  `<script type="application/conch-data">`; `conch.data`/`conch.watch` post to
+  `SealedFrame`, the web asks `POST …/versions/:n/live-data`, and `LiveData` checks
+  the declaration, your OK (`artifacts/access.json`, `LiveDataAccess`), the page's
+  values and a rate budget, then `fetchLive` reads with every connected address
+  checked in `lookup`.
 
 - **It learns you** ([ADR 0032](./docs/adr/0032-it-learns-you.md),
   [ADR 0041](./docs/adr/0041-meaning-out-of-the-box.md)). `MemoryIndex` ranks

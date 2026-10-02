@@ -339,3 +339,19 @@ A page that has links or code that could take you elsewhere opens with its code
 off until you press **Run it anyway**. Documents, charts, tables and diagrams are
 drawn by Conch itself, and they load no pictures from other sites.
 ([ADR 0034](./adr/0034-show-me.md))
+
+When you edit one by hand, its preview is sealed off in exactly the same way.
+
+A page can show **live data**, but it still can't reach the internet itself. It
+says which addresses it reads, and Conch reads them for it once you allow that
+site for that page:
+
+- Conch reads without your cookies or sign-ins, at most a megabyte, within ten
+  seconds.
+- It never reads your own network, cloud metadata or Conch itself. It reads
+  this computer only when you said so for that page.
+- A page can't spell your things into the address: the site is fixed, and the
+  page can only choose from values it declared.
+- A different address asks again. **Settings → Security → Live data in pages**
+  lists every site, and **Take back** removes one.
+  ([ADR 0039](./adr/0039-edit-by-hand-and-live-data.md))

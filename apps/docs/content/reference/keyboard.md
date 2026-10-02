@@ -20,3 +20,5 @@ order: 5
 | <kbd>mod+shift+`</kbd>     | New terminal                                                   |
 
 In the browser panel, <kbd>shift+esc</kbd> gives the keyboard back to Conch.
+
+While you edit something made for you, <kbd>mod+s</kbd> saves, <kbd>esc</kbd> cancels, <kbd>mod+z</kbd> undoes and <kbd>mod+shift+z</kbd> redoes.

@@ -23,6 +23,30 @@ The panel has three tabs. **View** is the thing itself, called **Use** for a pag
 
 To change it, ask in the chat: "make the bars horizontal", "add a total row". Each change is a new version, and the version picker takes you back to any of them. Conch keeps up to 30 versions, the first one always.
 
+## Change it yourself
+
+Press **Edit**. The code opens beside the thing itself, which changes as you type. On a phone, or when the panel is narrow, switch between **Edit** and **Preview**.
+
+- If something doesn't fit, it says what and where, like "Line 3 has 3 values, but the header has 2." **Save** waits until it's fixed.
+- **Undo** and **Redo** are beside the code. <kbd>mod+s</kbd> saves, <kbd>esc</kbd> cancels.
+- What you save is a new version marked **Edited by you**, with its **Changes**. Your assistant knows the newest version is yours, so its next change starts from it.
+- Close the panel or go to another chat, and your unsaved edit waits for you. **Cancel** asks before throwing it away.
+- If a newer version came in while you were editing, Conch says so. **Save mine as the newest** keeps yours.
+
+A page you're editing runs sealed off too, exactly like a saved one.
+
+## Live data
+
+A page can show live numbers, like the weather, a price or whether a build passed. It says in its own code which sites it reads from. The first time it wants one, Conch asks: **Let "Weather now" read live data from api.open-meteo.com?** You see every address it reads there.
+
+- It reads without your cookies or sign-ins. Where the address has a blank, the page can only pick from values it said in advance. It can't write in anything of its own.
+- You're asked once per page and site. If a new version reads a different address, you're asked again.
+- A site on this computer, like a program you're running, needs a second yes: **Let it read from this computer**.
+- Above the page, the bar says when it last read: **Live · Updated 2 min ago**. **Update now** reads again. If a site doesn't answer, the bar says so and the page keeps what it had.
+- **Reads from** lists the sites, and **Stop** takes one back. All of them are in **Settings → Security → Live data in pages**.
+
+A pinned app keeps showing live data.
+
 At the top of the panel are **Copy**, **Download**, **Pin as an app** and **Full screen**. **Delete…** is under **More**. A chart switches between **Chart** and **Table**, so the numbers are one press away. A table sorts by any heading.
 
 ## Pin it as an app
@@ -45,6 +69,6 @@ A page with links or code that could take you elsewhere opens with its code off,
 
 - <kbd>mod+k</kbd> finds anything made for you by name. See [Find anything](./find.md).
 - **Activity** in the sidebar has a **Made** filter.
-- A page can't fetch live data by itself. Pin it and use **Refresh** instead.
+- A page never reaches the internet by itself. It reads only through Conch, from sites you allowed. **Refresh** still asks your assistant for a new version.
 - Deleting one removes every version. The chat it was made in stays.
 - They are in your [backups](../care/backups.md), with your chats.

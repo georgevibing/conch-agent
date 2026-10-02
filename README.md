@@ -182,6 +182,10 @@ beside the chat: every version kept, with what changed, ready to copy, download 
 full screen. Pages run sealed off, so one made after reading something hostile still
 can't reach your things or the internet. Pin one as an app in the sidebar, and refresh
 it with fresh data whenever you like. ([ADR 0034](./docs/adr/0034-show-me.md))
+Press **Edit** to change it yourself, with the preview following as you type; your
+version is marked as yours, and your assistant builds on it. A page can show live
+data from sites you allow, read by Conch for it, never with your sign-ins.
+([ADR 0039](./docs/adr/0039-edit-by-hand-and-live-data.md))
 
 **Hand it off.** Press ⌘⇧↩ to send something to the background and keep chatting:
 a live card shows what it's doing, **Tasks** shows everything that's working, and

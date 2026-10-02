@@ -169,4 +169,4 @@ first. The new version is marked `refreshed`.
   bigger surface than one well-kept library at its strictest setting.
 - **Not done:** editing an artifact by hand, sharing it outside Conch, and
   pages that need the network. A page that needs live data asks for a refresh
-  instead.
+  instead. (Editing by hand and live data came later: [ADR 0039](./0039-edit-by-hand-and-live-data.md).)
