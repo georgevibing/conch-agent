@@ -13,7 +13,13 @@
  *    bots (checked with the app, then waiting for your hello, ADR 0018) and
  *    keys (into Conch's encrypted key file).
  * 3. **Undo.** Everything it added is recorded, and goes again with one
- *    press; what it replaced (your persona, about you) comes back.
+ *    press; what it replaced (your persona, about you, the model new chats
+ *    start with) comes back.
+ *
+ * ADR 0042 adds the model the other app answered with (matched to what's
+ * connected here, or a sentence saying why not), OpenClaw's other agents
+ * (each one's persona as a skill, with its memories, skills and routines),
+ * and a Slack bot that came with only one of its two keys.
  *
  * The other app's folder is never written to, and secrets never leave this
  * process except into Conch's own key stores.
@@ -22,11 +28,17 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import type {
+  ChannelBot,
+  ChannelCheck,
+  EngineId,
+  FinishSlackImportBody,
   ImportGroup,
   ImportItem,
   ImportOutcome,
   ImportPlan,
   ImportResult,
+  ImportSlackHalf,
+  ImportSlackStatus,
   ImportSource,
   ImportSourceId,
   ImportStatus,
@@ -34,16 +46,28 @@ import type {
   Profile,
   Routine,
 } from '@conch/protocol';
+import { EngineId as EngineIdSchema } from '@conch/protocol';
 import { z } from 'zod';
 
 import { Mutex, readJson, writeJson } from '../lib/fs';
 import { describe } from '../routines/schedule';
 import { scanSkill, scanText, unsmuggle } from '../skills/scan';
-import type { Found, FoundChannel, FoundKey, FoundRoutine } from './found';
+import {
+  type Found,
+  type FoundAgent,
+  type FoundChannel,
+  type FoundKey,
+  type FoundRoutine,
+  slackHalf,
+} from './found';
 import { readHermes } from './hermes';
+import { type CatalogEntry, choiceTitle, mapModel, modelWords } from './model';
 import { readOpenClaw } from './openclaw';
 
 const CHANNEL_NAMES = { telegram: 'Telegram', discord: 'Discord', slack: 'Slack' } as const;
+const KEY_WORDS = { botToken: 'bot token', appToken: 'app-level token' } as const;
+/** The app's id inside an app-level token: `xapp-1-A0123ABCD-…`. */
+const APP_IN_TOKEN = /^xapp-\d+-(A[A-Z0-9]{6,20})-/;
 const KEY_NAMES = { 'anthropic-api': 'Anthropic API', openrouter: 'OpenRouter' } as const;
 
 /** What an import added and replaced, so Undo can put things back. */
@@ -64,6 +88,10 @@ const Ledger = z.object({
         .object({
           persona: z.object({ name: z.string(), instructions: z.string() }).partial().optional(),
           about: z.string().optional(),
+          /** The model new chats started with (`null`: the provider's own choice). */
+          preferences: z
+            .object({ engine: EngineIdSchema, model: z.string().nullable() })
+            .optional(),
         })
         .default({}),
     })
@@ -81,7 +109,11 @@ const UNDO_MS = 7 * 24 * 60 * 60_000;
 /** What Conch already has, to tell duplicates apart. */
 export interface ImportTargets {
   settings: {
-    get(): Promise<{ persona: Persona; profile: Profile }>;
+    get(): Promise<{
+      persona: Persona;
+      profile: Profile;
+      preferences: { engine: EngineId; model?: string };
+    }>;
     update(body: { persona?: Partial<Persona>; profile?: Partial<Profile> }): Promise<unknown>;
   };
   memory: {
@@ -96,6 +128,13 @@ export interface ImportTargets {
   skills: {
     names(): Promise<string[]>;
     adopt(folder: string, base: string): Promise<{ id: string }>;
+    /** A new skill of Conch's own, off (another agent's persona, ADR 0042). */
+    create?(input: {
+      base: string;
+      title: string;
+      description: string;
+      instructions: string;
+    }): Promise<{ id: string }>;
     remove(id: string): Promise<unknown>;
   };
   routines: {
@@ -111,13 +150,23 @@ export interface ImportTargets {
     remove(id: string): Promise<unknown>;
   };
   channels: {
-    connect(channel: FoundChannel): Promise<{ id: string; name: string }>;
+    connect(channel: FoundChannel): Promise<{ id: string; name: string; view?: unknown }>;
+    /** Is this key good, and whose bot is it? Nothing is saved (ADR 0042's Slack step). */
+    check?(parts: { botToken?: string; appToken?: string }): Promise<ChannelCheck>;
     remove(id: string): Promise<unknown>;
   };
   keys: {
     has(provider: FoundKey['provider']): Promise<boolean>;
     set(provider: FoundKey['provider'], value: string): Promise<unknown>;
     clear(provider: FoundKey['provider']): Promise<unknown>;
+  };
+  /**
+   * What each connected provider offers, and choosing the model new chats
+   * start with (ADR 0042). Without it (the terminal), the model stays behind.
+   */
+  models?: {
+    catalog(fresh?: boolean): Promise<CatalogEntry[]>;
+    choose(choice: { engine: EngineId; model: string | null }): Promise<unknown>;
   };
   /** A backup to go back to, made before anything changes. */
   backup?: () => Promise<{ id: string }>;
@@ -162,9 +211,23 @@ function summarize(found: Found): string {
     found.skills.length && plural(found.skills.length, 'skill'),
     found.routines.length && plural(found.routines.length, 'routine'),
     found.channels.length && plural(found.channels.length, 'chat app'),
+    found.agents.length && plural(found.agents.length, 'more agent'),
     (found.persona || found.about) && 'your profile',
   ].filter(Boolean);
   return parts.length ? parts.join(', ') : 'Nothing to bring over yet';
+}
+
+/** Another agent's persona as one of Conch's skills (ADR 0042): picked in a chat, never by itself. */
+function personaSkill(agent: FoundAgent, app: string, instructions: string) {
+  return {
+    base: agent.name,
+    title: `Talk as ${agent.name}`,
+    description: `Answer as ${agent.name}, your “${agent.id}” agent from ${app}.`.slice(0, 160),
+    instructions: [
+      `For this chat, answer as ${agent.name}, the “${agent.id}” agent you had in ${app}. Everything else Conch knows about the person still applies.`,
+      unsmuggle(instructions).slice(0, 4000),
+    ].join('\n\n'),
+  };
 }
 
 export class ImportService {
@@ -239,8 +302,9 @@ export class ImportService {
       );
     this.#looked.set(source, found);
     const t = this.deps.targets;
-    const { persona, profile } = await t.settings.get();
+    const { persona, profile, preferences } = await t.settings.get();
     const known = new Set((await t.memory.list()).map((m) => norm(m.content)));
+    const problems = [...found.problems];
     const skillNames = new Set((await t.skills.names()).map((n) => n.toLowerCase()));
     const items: ImportItem[] = [];
 
@@ -268,6 +332,12 @@ export class ImportService {
         ...odd,
       });
     }
+    if (found.model) {
+      const item = await this.#modelItem(found, preferences);
+      if (typeof item === 'string') problems.push(item);
+      else items.push(item);
+    }
+
     if (found.about) {
       const odd = steering(found.about.text, found.about.from);
       const duplicate = profile.about.includes(found.about.text.slice(0, 80));
@@ -331,15 +401,21 @@ export class ImportService {
       });
     });
 
-    for (const c of found.channels)
+    for (const c of found.channels) {
+      const half = slackHalf(c);
       items.push({
         id: `channel:${c.kind}`,
         group: 'channels',
         title: `Your ${CHANNEL_NAMES[c.kind]} bot`,
-        detail: `Its key, from ${found.label}’s ${c.from}. Conch checks it with ${CHANNEL_NAMES[c.kind]}, then waits for your hello: nobody else gets in.`,
+        detail: half
+          ? `Its ${KEY_WORDS[half]}, from ${found.label}’s ${c.from}. Slack needs one more key: Conch shows you where to get it, then waits for your hello.`
+          : `Its key, from ${found.label}’s ${c.from}. Conch checks it with ${CHANNEL_NAMES[c.kind]}, then waits for your hello: nobody else gets in.`,
         checked: false,
         warning: `A bot answers in one app at a time. Stop ${found.label} first, or both will try to answer.`,
       });
+    }
+
+    for (const agent of found.agents) items.push(...(await this.#agentItems(agent, found, known)));
 
     for (const k of found.keys) {
       const has = await t.keys.has(k.provider).catch(() => false);
@@ -355,7 +431,153 @@ export class ImportService {
       });
     }
 
-    return { source: this.#source(found, await this.#ledger()), items, problems: found.problems };
+    return { source: this.#source(found, await this.#ledger()), items, problems };
+  }
+
+  /**
+   * The model it answered with, matched to what's connected here (ADR
+   * 0042): an item to tick, or a sentence saying why it stays behind.
+   */
+  async #modelItem(
+    found: Found,
+    current: { engine: EngineId; model?: string },
+  ): Promise<ImportItem | string> {
+    const model = found.model;
+    if (!model) return '';
+    const t = this.deps.targets;
+    if (!t.models)
+      return `${found.label}’s model choice comes over in Conch itself: Settings → Memory.`;
+    const catalog = await t.models.catalog().catch(() => undefined);
+    if (!catalog)
+      return `Conch couldn’t ask its providers what they offer, so ${found.label}’s model stays behind for now. Look again in a moment.`;
+    const mapped = mapModel(
+      model,
+      found.label,
+      catalog,
+      found.keys.map((k) => k.provider),
+    );
+    if (!mapped.ok) {
+      if (!mapped.key) return mapped.reason;
+      // It runs here once the app's own key comes over: offered, unticked, saying so.
+      return {
+        id: 'model',
+        group: 'model',
+        title: `Use ${modelWords(model.model)}, as in ${found.label}`,
+        detail: `From ${found.label}’s ${model.from}, for new chats. Chats you’ve started keep theirs.`,
+        checked: false,
+        warning: mapped.reason,
+      };
+    }
+    const { choice } = mapped;
+    const now = catalog.find((c) => c.engine === current.engine);
+    const nowLabel = current.model
+      ? `${now?.models.find((m) => m.id === current.model)?.label ?? current.model} on ${now?.label ?? current.engine}`
+      : `${now?.label ?? 'your default provider'}’s own choice`;
+    const duplicate = current.engine === choice.engine && current.model === choice.model;
+    return {
+      id: 'model',
+      group: 'model',
+      title: `Use ${choiceTitle(model, choice)}, as in ${found.label}`,
+      detail: `New chats start with ${choice.modelLabel} on ${choice.engineLabel}${
+        choice.exact ? '' : `, the nearest here to ${modelWords(model.model)}`
+      }. Now it’s ${nowLabel}. Chats you’ve started keep theirs.`,
+      // Only when you haven't chosen one yourself, like the name.
+      checked: !current.model && !duplicate,
+      ...(duplicate && { duplicate }),
+    };
+  }
+
+  /**
+   * One of OpenClaw's other agents (ADR 0042): its persona as a skill you
+   * pick in a chat, then its about-you, memories, skills and routines, all
+   * read first like the main agent's, and shown together under its name.
+   */
+  async #agentItems(agent: FoundAgent, found: Found, known: Set<string>): Promise<ImportItem[]> {
+    const tag = { agent: { id: agent.id, name: agent.name } };
+    const prefix = `agent:${agent.id}`;
+    const items: ImportItem[] = [];
+    const main = new Set(found.memories.map((m) => norm(m.text)));
+    const skillNames = new Set(
+      (await this.deps.targets.skills.names()).map((n) => n.toLowerCase()),
+    );
+
+    if (agent.persona?.instructions && this.deps.targets.skills.create) {
+      const odd = steering(agent.persona.instructions, agent.persona.from);
+      items.push({
+        id: `${prefix}:persona`,
+        group: 'skills',
+        title: `Talk as ${agent.name}`,
+        detail: `${agent.name}’s ${agent.persona.from}, as a skill: pick it in any chat to talk to ${agent.name}. It comes over off.`,
+        preview: agent.persona.instructions,
+        checked: !odd,
+        ...odd,
+        ...tag,
+      });
+    }
+    if (agent.about && agent.about.text !== found.about?.text) {
+      const odd = steering(agent.about.text, agent.about.from);
+      items.push({
+        id: `${prefix}:about`,
+        group: 'about',
+        title: `What ${agent.name} knows about you`,
+        detail: `From ${agent.name}’s ${agent.about.from}, added to About you.`,
+        preview: agent.about.text,
+        checked: !odd,
+        ...odd,
+        ...tag,
+      });
+    }
+    agent.memories.forEach((m, i) => {
+      // The main agent has it too: it comes over once, from there.
+      if (main.has(norm(m.text))) return;
+      const duplicate = known.has(norm(m.text));
+      const odd = steering(m.text, m.from);
+      items.push({
+        id: `${prefix}:memory:${i}`,
+        group: 'memories',
+        title: m.text.length > 140 ? `${m.text.slice(0, 139)}…` : m.text,
+        ...(m.text.length > 140 && { preview: m.text }),
+        detail: m.daily
+          ? `A note from ${m.from.replace(/^memory\/|\.md$/g, '')}, in ${agent.name}’s workspace`
+          : `From ${agent.name}’s ${m.from}`,
+        checked: !m.daily && !duplicate && !odd,
+        ...(duplicate && { duplicate }),
+        ...odd,
+        ...tag,
+      });
+    });
+    for (const skill of agent.skills) {
+      const review = await scanSkill(skill.path).catch(() => undefined);
+      const duplicate = skillNames.has(skill.name.toLowerCase());
+      items.push({
+        id: `${prefix}:skill:${skill.name}`,
+        group: 'skills',
+        title: words(skill.name),
+        detail: duplicate
+          ? 'Conch already has a skill by this name; this one comes over as a copy.'
+          : 'Comes over off: turn it on in Skills when you’re ready.',
+        ...(review && { review }),
+        checked: review?.verdict !== 'danger',
+        ...(review?.verdict === 'danger' && {
+          warning: 'Left unticked: read what Conch found before bringing it.',
+        }),
+        ...tag,
+      });
+    }
+    agent.routines.forEach((r, i) => {
+      const odd = steering(r.prompt, 'cron/jobs.json');
+      items.push({
+        id: `${prefix}:routine:${i}`,
+        group: 'routines',
+        title: r.title,
+        detail: `${describe(r.schedule, r.timezone)}, as ${agent.name}${r.enabled ? '' : ' (paused there)'}. Comes over as a draft: nothing runs until you turn it on.`,
+        preview: r.prompt,
+        checked: !odd,
+        ...odd,
+        ...tag,
+      });
+    });
+    return items;
   }
 
   /** Bring the ticked things over. A backup is made first; then each item, one at a time. */
@@ -464,12 +686,80 @@ export class ImportService {
           return 'A draft: turn it on in Routines when you’re ready.';
         });
 
-      for (const c of found.channels)
+      // Another agent's things: its persona becomes a skill, the rest come as the main one's do.
+      for (const agent of found.agents) {
+        const prefix = `agent:${agent.id}`;
+        const instructions = agent.persona?.instructions;
+        if (instructions && t.skills.create)
+          await step(`${prefix}:persona`, 'skills', `Talk as ${agent.name}`, async () => {
+            const skill = await t.skills.create?.(personaSkill(agent, found.label, instructions));
+            if (!skill) throw new Error('Skills can’t be made here.');
+            created.skills.push(skill.id);
+            return `Off for now: turn it on in Skills, then pick it in a chat to talk to ${agent.name}.`;
+          });
+        if (agent.about)
+          await step(`${prefix}:about`, 'about', `About you, from ${agent.name}`, async () => {
+            const now = (await t.settings.get()).profile.about;
+            before.about ??= settings.profile.about;
+            const text = unsmuggle(agent.about?.text ?? '');
+            if (now.includes(text.slice(0, 80))) return 'Already in About you.';
+            await t.settings.update({
+              profile: { about: [now.trim(), text].filter(Boolean).join('\n\n').slice(0, 4000) },
+            });
+            return undefined;
+          });
+        for (const [i, m] of agent.memories.entries())
+          await step(`${prefix}:memory:${i}`, 'memories', m.text.slice(0, 80), async () => {
+            const known = new Set((await t.memory.list()).map((x) => norm(x.content)));
+            if (known.has(norm(m.text))) return 'Already remembered.';
+            const memory = await t.memory.add({ content: unsmuggle(m.text), source: 'user' });
+            created.memories.push(memory.id);
+            return undefined;
+          });
+        for (const s of agent.skills)
+          await step(`${prefix}:skill:${s.name}`, 'skills', s.name, async () => {
+            const skill = await t.skills.adopt(s.path, s.name);
+            created.skills.push(skill.id);
+            return 'Off for now: turn it on in Skills.';
+          });
+        for (const [i, r] of agent.routines.entries())
+          await step(`${prefix}:routine:${i}`, 'routines', r.title, async () => {
+            const routine = await t.routines.create({
+              title: r.title,
+              summary: '',
+              prompt: unsmuggle(r.prompt),
+              schedule: r.schedule,
+              timezone: r.timezone,
+              status: 'draft',
+              trust: 'ask',
+            });
+            created.routines.push(routine.id);
+            return 'A draft: turn it on in Routines when you’re ready.';
+          });
+      }
+
+      for (const c of found.channels) {
+        const half = slackHalf(c);
+        if (half) {
+          // Nothing to connect yet: the summary sends the person to Slack for the other key.
+          if (!wanted.has(`channel:${c.kind}`)) continue;
+          outcomes.push({
+            id: `channel:${c.kind}`,
+            group: 'channels',
+            title: 'Slack bot',
+            ok: true,
+            message: `Slack needs one more key, the ${KEY_WORDS[half === 'botToken' ? 'appToken' : 'botToken']}: Conch shows you where to get it.`,
+            finish: 'slack-key',
+          });
+          done += 1;
+          continue;
+        }
         await step(`channel:${c.kind}`, 'channels', `${CHANNEL_NAMES[c.kind]} bot`, async () => {
           const channel = await t.channels.connect(c);
           created.channels.push(channel.id);
           return `Say hello to ${channel.name} in ${CHANNEL_NAMES[c.kind]} to finish: nobody else gets in.`;
         });
+      }
 
       for (const k of found.keys)
         await step(`key:${k.provider}`, 'keys', `${KEY_NAMES[k.provider]} key`, async () => {
@@ -478,6 +768,22 @@ export class ImportService {
           await t.keys.set(k.provider, k.value);
           created.keys.push(k.provider);
           return undefined;
+        });
+
+      // Last, so a key that just came over can bring the provider the model runs on.
+      const model = found.model;
+      if (model)
+        await step('model', 'model', `Model: ${modelWords(model.model)}`, async () => {
+          if (!t.models) throw new Error('Your model choice comes over in Conch itself.');
+          const mapped = mapModel(model, found.label, await t.models.catalog(true));
+          if (!mapped.ok) throw new Error(mapped.reason);
+          const { choice } = mapped;
+          before.preferences = {
+            engine: settings.preferences.engine,
+            model: settings.preferences.model ?? null,
+          };
+          await t.models.choose({ engine: choice.engine, model: choice.model });
+          return `New chats start with ${choice.modelLabel} on ${choice.engineLabel}.`;
         });
 
       const count = outcomes.filter((o) => o.ok).length;
@@ -490,9 +796,18 @@ export class ImportService {
       return {
         source,
         counts: Object.fromEntries(
-          (['persona', 'about', 'memories', 'skills', 'routines', 'channels', 'keys'] as const).map(
-            (g) => [g, counts[g] ?? 0],
-          ),
+          (
+            [
+              'persona',
+              'model',
+              'about',
+              'memories',
+              'skills',
+              'routines',
+              'channels',
+              'keys',
+            ] as const
+          ).map((g) => [g, counts[g] ?? 0]),
         ) as ImportResult['counts'],
         outcomes,
         ...(backup && { backupId: backup.id }),
@@ -532,10 +847,96 @@ export class ImportService {
         await t.settings.update({ profile: { about: last.before.about } });
         restored += 1;
       }
+      if (last.before.preferences && t.models) {
+        try {
+          await t.models.choose(last.before.preferences);
+          restored += 1;
+        } catch {
+          // That provider is gone since: new chats keep what they start with now.
+        }
+      }
       await writeJson(join(this.deps.home, LEDGER), {
         history: ledger.history,
       } satisfies Ledger);
       return { removed, restored };
+    });
+  }
+
+  /**
+   * A Slack bot another app had only one key for (ADR 0042), for the Slack
+   * setup to pick up from: which key, whose bot, and the app's id for a
+   * link straight to the page with the other key. Never the key itself.
+   */
+  async slack(only?: ImportSourceId): Promise<ImportSlackStatus> {
+    for (const source of only ? [only] : (['openclaw', 'hermes'] as const)) {
+      const found = await this.#read(source).catch(() => undefined);
+      const channel = found?.channels.find((c) => slackHalf(c));
+      const has = channel && slackHalf(channel);
+      if (!found || !channel || !has) continue;
+      const half: ImportSlackHalf = { source, label: found.label, has };
+      const inToken = channel.appToken && APP_IN_TOKEN.exec(channel.appToken)?.[1];
+      if (inToken) half.appId = inToken;
+      const check = this.deps.targets.channels.check;
+      if (check) {
+        const result = await check(
+          has === 'botToken' ? { botToken: channel.token } : { appToken: channel.appToken },
+        ).catch(() => undefined);
+        if (result?.ok) {
+          if (has === 'botToken') half.bot = result.bot as ChannelBot;
+          if (result.appId) half.appId ??= result.appId;
+        } else if (result)
+          half.problem = `Slack doesn’t accept the ${KEY_WORDS[has]} ${found.label} had any more, so set this bot up fresh below.`;
+      }
+      return { half };
+    }
+    return {};
+  }
+
+  /**
+   * Connect that Slack bot with the key that was missing (ADR 0042). Like
+   * any import, it's in the ledger, so Undo takes it back.
+   */
+  finishSlack(
+    source: ImportSourceId,
+    body: FinishSlackImportBody,
+  ): Promise<{ id: string; view?: unknown }> {
+    return this.#mutex.run(async () => {
+      const found = await this.#read(source);
+      const channel = found?.channels.find((c) => slackHalf(c));
+      if (!found || !channel)
+        throw new ImportError('not-found', 'There’s no Slack bot waiting for its other key.');
+      const token = channel.token ?? body.botToken;
+      const appToken = channel.appToken ?? body.appToken;
+      if (!token || !appToken)
+        throw new ImportError(
+          'nothing',
+          `Paste the ${KEY_WORDS[channel.token ? 'appToken' : 'botToken']} first.`,
+        );
+      const made = await this.deps.targets.channels.connect({ ...channel, token, appToken });
+      const ledger = await this.#ledger();
+      const last =
+        ledger.last && ledger.last.source === source && this.#now - ledger.last.at < UNDO_MS
+          ? ledger.last
+          : undefined;
+      await writeJson(join(this.deps.home, LEDGER), {
+        last: last
+          ? {
+              ...last,
+              count: last.count + 1,
+              created: { ...last.created, channels: [...last.created.channels, made.id] },
+            }
+          : {
+              at: this.#now,
+              source,
+              count: 1,
+              created: { memories: [], skills: [], routines: [], channels: [made.id], keys: [] },
+              before: {},
+            },
+        history: last
+          ? ledger.history
+          : [...ledger.history, { source, at: this.#now, count: 1 }].slice(-20),
+      } satisfies Ledger);
+      return made;
     });
   }
 }

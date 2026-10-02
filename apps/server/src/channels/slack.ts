@@ -18,6 +18,8 @@ import {
 } from './types';
 
 export const SLACK_API = 'https://slack.com/api';
+/** A Slack app's id, as its settings pages' addresses use it. */
+const SLACK_APP_ID = /^A[A-Z0-9]{6,20}$/;
 
 /** A section of mrkdwn holds 3000 characters; parts this long stay under it once formatted. */
 const PART = 2800;
@@ -181,6 +183,7 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
     const checked: ('botToken' | 'appToken')[] = [];
     try {
       let bot: { view: ChannelBot; appId?: string } | undefined;
+      let socketApp: string | undefined;
       if (parts.botToken) {
         checkBotToken(this.botToken);
         bot = await this.#bot(AbortSignal.timeout(20_000));
@@ -188,7 +191,7 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
       }
       if (parts.appToken) {
         checkAppToken(this.appToken);
-        const socketApp = await this.#socketApp(AbortSignal.timeout(20_000));
+        socketApp = await this.#socketApp(AbortSignal.timeout(20_000));
         if (bot?.appId && socketApp && bot.appId !== socketApp)
           throw new ChannelError(
             'auth',
@@ -197,8 +200,14 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
           );
         checked.push('appToken');
       }
-      if (!bot) return { ok: true, bot: { id: '', name: 'Slack app' }, checked };
-      return { ok: true, bot: bot.view, checked };
+      // The app's id, for links straight to its settings pages (never a secret).
+      const appId = [bot?.appId, socketApp].find((id) => id && SLACK_APP_ID.test(id));
+      return {
+        ok: true,
+        bot: bot?.view ?? { id: '', name: 'Slack app' },
+        checked,
+        ...(appId && { appId }),
+      };
     } catch (error) {
       const failure = error instanceof ChannelError ? error : undefined;
       return {

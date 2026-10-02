@@ -855,6 +855,13 @@ export class Services {
               .filter((s) => s.source === 'conch')
               .map((s) => s.name),
           adopt: (folder, base) => this.skills.store.adopt(folder, base),
+          // Another agent's persona (ADR 0042): one of Conch's own skills, off until you turn it on.
+          create: async (input) =>
+            this.skills.store.create({
+              ...input,
+              name: await this.skills.store.freeName(input.base),
+              mode: 'off',
+            }),
           remove: (id) => this.skills.remove(id),
         },
         routines: {
@@ -865,12 +872,27 @@ export class Services {
           connect: async (c) => {
             const channel = await this.channels.create(
               c.kind === 'slack'
-                ? { kind: 'slack', botToken: c.token, appToken: c.appToken ?? '' }
-                : { kind: c.kind, token: c.token },
+                ? { kind: 'slack', botToken: c.token ?? '', appToken: c.appToken ?? '' }
+                : { kind: c.kind, token: c.token ?? '' },
             );
-            return { id: channel.id, name: channel.bot.name };
+            return { id: channel.id, name: channel.bot.name, view: channel };
           },
+          check: (parts) => this.channels.check({ kind: 'slack', ...parts }),
           remove: (id) => this.channels.remove(id),
+        },
+        models: {
+          catalog: async (fresh) =>
+            (await this.providers.models({ force: fresh })).providers.map((p) => ({
+              engine: p.engine,
+              label: p.label,
+              local: p.local,
+              models: p.models.map((m) => ({ id: m.id, label: m.label })),
+            })),
+          // A default model belongs to a default provider, as the model picker sets them.
+          choose: async ({ engine, model }) => {
+            await this.providers.use(engine);
+            await this.settings.update({ preferences: { model } });
+          },
         },
         keys: {
           has: async (provider) => Boolean(await this.keys.describe(provider)),

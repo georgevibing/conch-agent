@@ -7,6 +7,13 @@ import { dirname, join } from 'node:path';
 
 /** Made-up keys in the shape each app keeps them (built up, so no scanner mistakes them for real). */
 const ANTHROPIC = (tag: string) => ['sk', 'ant', 'api03', 'test', tag].join('-');
+/** The pretend Slack's bot token (channels/mock/slack.ts), so e2e can finish connecting it. */
+export const FIXTURE_SLACK_BOT = [
+  'xoxb',
+  '1111111111',
+  '2222222222',
+  'mockmockmockmockmockmock',
+].join('-');
 
 const write = (path: string, text: string) => {
   mkdirSync(dirname(path), { recursive: true });
@@ -119,8 +126,131 @@ export function hermesHome(home: string): string {
   );
   write(
     join(root, '.env'),
-    `# Hermes\nANTHROPIC_API_KEY="${ANTHROPIC('from-hermes')}"\nDISCORD_BOT_TOKEN=x.y.z # the bot\n`,
+    [
+      '# Hermes',
+      `ANTHROPIC_API_KEY="${ANTHROPIC('from-hermes')}"`,
+      'OPENROUTER_API_KEY=sk-or-v1-hermes-not-real',
+      'DISCORD_BOT_TOKEN=x.y.z # the bot',
+      // Only the bot token: the app-level one was never made (ADR 0042).
+      `SLACK_BOT_TOKEN=${FIXTURE_SLACK_BOT}`,
+      '',
+    ].join('\n'),
   );
-  write(join(root, 'config.yaml'), 'model:\n  default: anthropic/claude-sonnet\n');
+  // As `hermes setup` writes it: the model, and much else Conch doesn't need.
+  write(
+    join(root, 'config.yaml'),
+    `# Hermes Agent configuration
+model:
+  default: "anthropic/claude-sonnet-4.5"
+  provider: openrouter
+  base_url: https://openrouter.ai/api/v1
+
+toolsets:
+  - hermes-cli
+  - web
+
+agent:
+  max_turns: 60
+  reasoning_effort: medium
+
+terminal:
+  backend: local
+  timeout: 180
+
+custom_providers:
+  - name: lab
+    base_url: http://localhost:8000/v1
+    api_key: lab-key-not-real
+
+display:
+  skin: default
+  personality: |
+    precise and dry
+`,
+  );
+  return root;
+}
+
+/**
+ * OpenClaw with more than one agent (ADR 0042): Pearl is the main one;
+ * Atlas does work in its own workspace, with its own memories, a skill and
+ * a cron job; "family" has a folder the config forgot. Its Slack app
+ * answered over HTTP, so there's a bot token and a signing secret but no
+ * app token. The model is Opus.
+ */
+export function openClawTeamHome(home: string): string {
+  const root = openClawHome(home);
+  write(
+    join(root, 'openclaw.json'),
+    `// OpenClaw's config, JSON5
+{
+  agents: {
+    defaults: {
+      workspace: '~/.openclaw/workspace',
+      model: { primary: 'anthropic/claude-opus-4-6', fallbacks: ['openai/gpt-5'] },
+    },
+    list: [
+      { id: 'main', default: true, workspace: '~/.openclaw/workspace' },
+      { id: 'work', name: 'Work', workspace: '~/.openclaw/workspace-work', model: 'openai/gpt-5' },
+      { id: '../escape', workspace: '~/elsewhere' },
+    ],
+  },
+  bindings: [{ agentId: 'work', match: { channel: 'slack' } }],
+  channels: {
+    telegram: { enabled: true, botToken: '123:test-telegram-token-not-real' },
+    slack: { enabled: true, mode: 'http', botToken: '${FIXTURE_SLACK_BOT}', signingSecret: 'signing-not-real' },
+  },
+  env: { OPENROUTER_API_KEY: 'sk-or-v1-test-not-real', },
+}
+`,
+  );
+  const work = join(root, 'workspace-work');
+  write(join(work, 'IDENTITY.md'), '# Identity\n\n- **Name:** Atlas\n- **Emoji:** 📊\n');
+  write(
+    join(work, 'SOUL.md'),
+    '# Soul\n\nYou are Atlas, a crisp work assistant. Lead with the answer, then the numbers.\n',
+  );
+  write(join(work, 'USER.md'), '# User\n\nAda runs the engine team at Babbage & Co.\n');
+  write(
+    join(work, 'MEMORY.md'),
+    '# Memory\n\n- The build runs on Fridays.\n- Quarterly planning is in the second week of March.\n- Charles reviews every pull request.\n',
+  );
+  write(join(work, 'memory', '2026-09-29.md'), '- Drafted the Q4 roadmap.\n');
+  skill(
+    join(work, 'skills'),
+    'standup-digest',
+    'Summarise yesterday’s merged work for the stand-up.',
+  );
+  // The config forgot this one; its folder still says it's there.
+  write(
+    join(root, 'workspace-family', 'SOUL.md'),
+    '# Soul\n\nYou are Nana: gentle, patient, never in a hurry.\n',
+  );
+  write(join(root, 'workspace-family', 'MEMORY.md'), '- Grace’s birthday is on 9 December.\n');
+  write(
+    join(root, 'cron', 'jobs.json'),
+    JSON.stringify({
+      jobs: [
+        {
+          id: 'j1',
+          name: 'Morning briefing',
+          enabled: true,
+          schedule: { kind: 'cron', expr: '0 8 * * 1-5', tz: 'Europe/London' },
+          payload: { kind: 'agentTurn', message: 'Summarise my calendar and the weather.' },
+        },
+        {
+          id: 'j3',
+          agentId: 'work',
+          name: 'Friday numbers',
+          enabled: true,
+          schedule: { kind: 'cron', expr: '0 16 * * 5', tz: 'Europe/London' },
+          payload: {
+            kind: 'agentTurn',
+            message: 'Pull this week’s build numbers into a short table.',
+          },
+        },
+      ],
+    }),
+  );
   return root;
 }

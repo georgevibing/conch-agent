@@ -1,6 +1,7 @@
-import { ImportSourceId, RunImportBody } from '@conch/protocol';
+import { FinishSlackImportBody, ImportSourceId, RunImportBody } from '@conch/protocol';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
+import { ChannelServiceError } from '../channels/service';
 import type { Gatekeeper } from '../security';
 import { ImportError, type ImportService } from './service';
 
@@ -21,6 +22,13 @@ export function registerImportRoutes(
       return reply
         .code(STATUS[error.code])
         .send({ error: `import-${error.code}`, message: error.message });
+    // Slack said no to a key (ADR 0042): which one, in its words.
+    if (error instanceof ChannelServiceError)
+      return reply.code(error.code === 'not-found' ? 404 : 400).send({
+        error: error.code,
+        message: error.message,
+        ...(error.field && { field: error.field }),
+      });
     throw error;
   };
   const verify = (request: FastifyRequest, reply: FastifyReply) => {
@@ -32,6 +40,22 @@ export function registerImportRoutes(
   };
 
   app.get('/api/import', () => imports.status());
+
+  // A Slack bot another app had one key for (ADR 0042): what the Slack setup picks up from.
+  app.get('/api/import/slack', () => imports.slack());
+
+  app.post<{ Params: { source: string } }>('/api/import/:source/slack', async (request, reply) => {
+    const source = ImportSourceId.safeParse(request.params.source);
+    const body = FinishSlackImportBody.safeParse(request.body ?? {});
+    if (!source.success || !body.success)
+      return reply.code(400).send({ error: 'bad-request', message: 'That isn’t a Slack key.' });
+    if (!verify(request, reply)) return;
+    try {
+      return (await imports.finishSlack(source.data, body.data)).view;
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
 
   app.get<{ Params: { source: string } }>('/api/import/:source', async (request, reply) => {
     const source = ImportSourceId.safeParse(request.params.source);

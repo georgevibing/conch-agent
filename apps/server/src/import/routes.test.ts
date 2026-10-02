@@ -3,13 +3,20 @@ import { mkdtemp, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { ImportPlan, ImportResult, ImportStatus } from '@conch/protocol';
+import {
+  Channel,
+  ImportPlan,
+  ImportResult,
+  ImportSlackStatus,
+  ImportStatus,
+} from '@conch/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
 import { loadConfig } from '../config';
 import { Services } from '../services';
-import { openClawHome } from './fixtures';
+import { MockSlack } from '../channels/mock/slack';
+import { hermesHome, openClawHome } from './fixtures';
 
 const PASSWORD = 'a long enough sentence for conch';
 
@@ -19,13 +26,13 @@ afterEach(async () => {
   close = undefined;
 });
 
-async function setup() {
+async function setup(fixture: (home: string) => string = openClawHome) {
   const root = await mkdtemp(join(tmpdir(), 'conch-import-app-'));
   const home = join(root, 'conch');
   const source = join(root, 'home');
   const { mkdirSync } = await import('node:fs');
   mkdirSync(source);
-  openClawHome(source);
+  fixture(source);
   const services = new Services(
     loadConfig({
       CONCH_HOME: home,
@@ -37,7 +44,9 @@ async function setup() {
   );
   const app = await buildApp(services);
   await app.ready();
-  await vi.waitUntil(() => Boolean(services.mockVendor?.base), { timeout: 5000 });
+  await vi.waitUntil(() => Boolean(services.mockVendor?.base && services.mockSlack?.base), {
+    timeout: 5000,
+  });
   close = async () => {
     services.integrations.stop();
     await services.mockVendor?.stop();
@@ -139,5 +148,36 @@ describe('Come home over HTTP', () => {
       payload: {},
     });
     expect(none.json()).toMatchObject({ error: 'import-nothing' });
+  });
+
+  it('finishes a Slack bot Hermes had one key for, and Undo takes it back (ADR 0042)', async () => {
+    const { app, services, cookie, home } = await setup(hermesHome);
+    const status = ImportSlackStatus.parse(
+      (await app.inject({ url: '/api/import/slack', headers: { cookie } })).json(),
+    );
+    expect(status.half).toMatchObject({ source: 'hermes', has: 'botToken', appId: 'A0MOCKAPP' });
+    const wrong = await app.inject({
+      method: 'POST',
+      url: '/api/import/hermes/slack',
+      headers: { cookie },
+      payload: { appToken: MockSlack.OTHER_APP_TOKEN },
+    });
+    expect(wrong.statusCode).toBe(400);
+    expect(wrong.json()).toMatchObject({
+      field: 'appToken',
+      message: expect.stringMatching(/different Slack apps/),
+    });
+    const done = await app.inject({
+      method: 'POST',
+      url: '/api/import/hermes/slack',
+      headers: { cookie },
+      payload: { appToken: MockSlack.APP_TOKEN },
+    });
+    expect(done.statusCode).toBe(200);
+    const channel = Channel.parse(done.json());
+    expect(channel.kind).toBe('slack');
+    expect(readFileSync(join(home, 'import.json'), 'utf8')).not.toMatch(/xoxb-|xapp-/);
+    await app.inject({ method: 'POST', url: '/api/import/undo', headers: { cookie }, payload: {} });
+    expect((await services.channels.list()).channels).toEqual([]);
   });
 });

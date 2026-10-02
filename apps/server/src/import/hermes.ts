@@ -8,11 +8,15 @@
  *   a cron line, a time).
  * - `~/.hermes/.env`: `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`,
  *   `TELEGRAM_BOT_TOKEN`, `DISCORD_BOT_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`.
+ * - `~/.hermes/config.yaml` (ADR 0042): `model.default` and `model.provider`
+ *   (or, in older files, `model: <name>`). Only the model is read; keys a
+ *   custom provider keeps there stay where they are.
  */
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { empty, type Found } from './found';
+import { hermesModel } from './model';
 import {
   entries,
   get,
@@ -20,6 +24,7 @@ import {
   memoryEntries,
   parseEnv,
   parseJson5,
+  parseYaml,
   prose,
   readText,
   str,
@@ -97,17 +102,34 @@ export async function readHermes(home = homedir()): Promise<Found | undefined> {
     found.channels.push({ kind: 'telegram', token: env.TELEGRAM_BOT_TOKEN, from: '.env' });
   if (env.DISCORD_BOT_TOKEN)
     found.channels.push({ kind: 'discord', token: env.DISCORD_BOT_TOKEN, from: '.env' });
-  if (env.SLACK_BOT_TOKEN && env.SLACK_APP_TOKEN)
+  // One Slack key without the other is offered anyway, with a step to get the other (ADR 0042).
+  if (env.SLACK_BOT_TOKEN || env.SLACK_APP_TOKEN)
     found.channels.push({
       kind: 'slack',
-      token: env.SLACK_BOT_TOKEN,
-      appToken: env.SLACK_APP_TOKEN,
+      ...(env.SLACK_BOT_TOKEN && { token: env.SLACK_BOT_TOKEN }),
+      ...(env.SLACK_APP_TOKEN && { appToken: env.SLACK_APP_TOKEN }),
       from: '.env',
     });
   if (env.ANTHROPIC_API_KEY)
     found.keys.push({ provider: 'anthropic-api', value: env.ANTHROPIC_API_KEY, from: 'Hermes' });
   if (env.OPENROUTER_API_KEY)
     found.keys.push({ provider: 'openrouter', value: env.OPENROUTER_API_KEY, from: 'Hermes' });
+
+  // The model it answers with.
+  const config = await readText(join(path, 'config.yaml'));
+  if (config !== undefined) {
+    try {
+      const parsed = parseYaml(config);
+      const model = hermesModel(parsed);
+      if (model) found.model = model;
+      else if (parsed.model !== undefined && parsed.model !== '')
+        found.problems.push(
+          'Its model choice in config.yaml couldn’t be read, so it stays behind.',
+        );
+    } catch {
+      found.problems.push('Its config.yaml couldn’t be read, so its model choice stays behind.');
+    }
+  }
 
   return found;
 }

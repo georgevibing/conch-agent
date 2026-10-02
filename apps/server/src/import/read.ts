@@ -89,6 +89,93 @@ export function parseJson5(text: string): unknown {
   return JSON.parse(json);
 }
 
+/**
+ * YAML as Hermes writes its `config.yaml`: nested `key: value` maps, lists,
+ * comments, quotes and block text. Enough of it to read a setting, never to
+ * run one: no anchors, tags or types, and every value is a string. A file
+ * that isn't YAML at all (tabs for indentation, a quote left open, a line
+ * that's neither a key nor a list item) throws, so the plan can say so.
+ */
+export function parseYaml(text: string): Record<string, unknown> {
+  const root: Record<string, unknown> = {};
+  /** Open maps, innermost last, with the indentation of their keys. */
+  const stack: { indent: number; map: Record<string, unknown> }[] = [{ indent: 0, map: root }];
+  /** The key whose value is the block under it (`model:` then indented keys). */
+  let pending: { indent: number; map: Record<string, unknown>; key: string } | undefined;
+  /** The list being read, and how far its items are indented. */
+  let list: { indent: number; items: string[] } | undefined;
+  /** Inside block text (`|` or `>`) deeper than this. */
+  let block: number | undefined;
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/);
+  for (const [n, raw] of lines.entries()) {
+    const indent = /^ */.exec(raw)?.[0].length ?? 0;
+    const line = raw.slice(indent);
+    if (block !== undefined) {
+      if (!line.trim() || indent > block) continue;
+      block = undefined;
+    }
+    if (!line.trim() || line.startsWith('#')) continue;
+    if (line.startsWith('\t')) throw new Error(`Line ${n + 1} is indented with a tab.`);
+    if (indent === 0 && (line === '---' || line === '...')) continue;
+    const item = line === '-' || line.startsWith('- ');
+    if (pending) {
+      if (item && indent >= pending.indent) {
+        list = { indent, items: [] };
+        pending.map[pending.key] = list.items;
+      } else if (!item && indent > pending.indent) {
+        const map: Record<string, unknown> = {};
+        pending.map[pending.key] = map;
+        stack.push({ indent, map });
+      }
+      pending = undefined;
+    }
+    if (item) {
+      // Words are kept; a list of maps is passed over (nothing here needs one).
+      const value = line.slice(1).trim();
+      if (list && indent === list.indent && value && !/^[^\s'"][^:]*:(\s|$)/.test(value))
+        list.items.push(scalar(value, n));
+      continue;
+    }
+    if (list && indent <= list.indent) list = undefined;
+    while (stack.length > 1 && (stack.at(-1)?.indent ?? 0) > indent) stack.pop();
+    const top = stack.at(-1) ?? { indent: 0, map: root };
+    // Deeper than any open map: inside a list's maps, or a value wrapped onto the next line.
+    if (indent > top.indent) continue;
+    const match = /^("[^"]*"|'[^']*'|[^\s:#'"][^:#]*?)\s*:(?:\s+(.*))?$/.exec(line);
+    if (!match?.[1]) throw new Error(`Line ${n + 1} isn’t a setting.`);
+    const key = match[1].replace(/^(['"])(.*)\1$/, '$2');
+    const rest = match[2]?.trim() ?? '';
+    if (!rest || rest.startsWith('#')) {
+      top.map[key] = '';
+      pending = { indent, map: top.map, key };
+      continue;
+    }
+    if (/^[|>][+-]?\d*\s*(#.*)?$/.test(rest)) {
+      top.map[key] = '';
+      block = indent;
+      continue;
+    }
+    top.map[key] = scalar(rest, n);
+  }
+  return root;
+}
+
+/** One YAML value as words: quotes taken off, a trailing comment dropped. */
+function scalar(text: string, n: number): string {
+  const quote = text[0];
+  if (quote === '"' || quote === "'") {
+    const end = text.indexOf(quote, 1);
+    if (end < 0) throw new Error(`Line ${n + 1} leaves a quote open.`);
+    return text.slice(1, end);
+  }
+  if (/^[[{]/.test(text)) {
+    const open = (text.match(/[[{]/g) ?? []).length;
+    const shut = (text.match(/[\]}]/g) ?? []).length;
+    if (open !== shut) throw new Error(`Line ${n + 1} leaves a bracket open.`);
+  }
+  return text.replace(/\s+#.*$/, '').trim();
+}
+
 /** A `.env` file: `KEY=value` lines, quotes and `export ` allowed. */
 export function parseEnv(text: string): Record<string, string> {
   const out: Record<string, string> = {};
