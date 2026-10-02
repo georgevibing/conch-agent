@@ -107,6 +107,12 @@
     animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) 650ms both;
   }
 
+  /* Steps already reach half-way into the gap below them: after steps, the
+     wait keeps its own half, so it never sits right against the last one. */
+  .arrival:has(> .tools:last-child) + .between {
+    margin-block-start: 0;
+  }
+
   .thoughtWrap {
     animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) both;
   }
