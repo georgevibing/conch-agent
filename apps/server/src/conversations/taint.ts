@@ -48,6 +48,8 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
     )
   )
     return { kind: 'app', label: 'Google account content' };
+  if (/^(?:mcp__conch__)?slack_(?:channels|search|read_channel)$/.test(toolName))
+    return { kind: 'app', label: 'Slack messages' };
   if (WEB_READERS.has(toolName))
     return {
       kind: 'web',
@@ -102,6 +104,7 @@ export function sinkReason(
 ): string | undefined {
   const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
   if (/^(?:mcp__conch__)?google_mail_create_draft$/.test(toolName)) return 'save a Gmail draft';
+  if (/^(?:mcp__conch__)?slack_send_message$/.test(toolName)) return 'send a Slack message';
   if (toolName === 'Bash' || toolName === 'BashOutput' || toolName === 'KillShell')
     return toolName === 'Bash' ? 'run a command' : undefined;
   if (['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(toolName)) {

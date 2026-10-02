@@ -356,6 +356,12 @@ export const RULES: readonly BackupRule[] = [
     why: 'Google app credentials and account sign-ins.',
   },
   {
+    match: 'slack.secrets.json',
+    class: 'secret',
+    group: 'secrets',
+    why: 'Your Slack sign-in, for Slack with every model.',
+  },
+  {
     match: 'integrations.secrets.json',
     class: 'secret',
     group: 'secrets',

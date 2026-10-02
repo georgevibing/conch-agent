@@ -99,6 +99,11 @@ import { googleTools } from './google/tools';
 import { registerGoogleDoctor } from './google/doctor';
 import { GoogleApps } from './google/apps';
 import { GMAIL_IMAP, GmailImap } from './google/imap';
+import { SLACK_WEB_API } from './slack/api';
+import { registerSlackDoctor } from './slack/doctor';
+import { SlackService } from './slack/service';
+import { SlackStore } from './slack/store';
+import { offeredSlackTools } from './slack/tools';
 import { type Blueprint, CATALOG } from './integrations/catalog';
 import { MockVendor } from './integrations/mock/vendor';
 import { IntegrationService } from './integrations/service';
@@ -216,6 +221,8 @@ export class Services {
   readonly google: GoogleService;
   /** Gmail, Google Calendar and Google Drive as apps on the Integrations page (ADR 0048). */
   readonly googleApps: GoogleApps;
+  /** Slack connected to Conch itself, so it works with every model (ADR 0049). */
+  readonly slack: SlackService;
   /** Everything the assistant did, in one place (ADR 0028). */
   readonly activity: Activity;
   /** Putting back what the assistant changed (ADR 0030). */
@@ -273,6 +280,16 @@ export class Services {
     });
     this.google.onConnected = (capabilities) => this.googleApps.showFor(capabilities);
     registerGoogleDoctor(this.doctor, this.google, this.googleApps);
+    this.slack = new SlackService({
+      store: new SlackStore(config.CONCH_HOME, heal),
+      // With the mock engine, the pretend Slack the channels use answers for Slack too.
+      base: () => (this.mockSlack ? this.mockSlack.api : SLACK_WEB_API),
+      // The Slack channel's app, offered for this too (ADR 0049); never its keys.
+      channelApp: () => this.channels.slackApp(),
+      emit: () => this.broadcast.emit({ type: 'slack.changed' }),
+      onHeal: (message) => void this.healed.note('integrations', message),
+    });
+    registerSlackDoctor(this.doctor, this.slack);
     this.settings = new SettingsStore(config.CONCH_HOME, heal);
     this.access = new AccessStore(config.CONCH_HOME, heal);
     this.gate = new Gatekeeper(config, this.access);
@@ -358,6 +375,7 @@ export class Services {
       // Connected (in any state) means not offered again: like every other app.
       googleConnected: async () => (await this.googleApps.list()).map((app) => app.id),
       hosted: this.googleApps,
+      slackConnected: async () => (await this.slack.status()).connected,
       home: config.CONCH_HOME,
       heal,
       emit: (event) => this.broadcast.emit(event),
@@ -522,6 +540,7 @@ export class Services {
                 ),
                 ctx,
               ),
+              ...offeredSlackTools(this.slack, ctx),
             ],
       context: async (engine, conversationId) =>
         [
@@ -529,6 +548,7 @@ export class Services {
           await this.skills.promptSection(engine).catch(() => ''),
           await this.browser.promptSection(engine).catch(() => ''),
           await this.integrations.promptSection(),
+          engine.hostTools === false ? '' : await this.slack.promptSection().catch(() => ''),
           engine.hostTools === false ? '' : this.vault.promptSection(),
           this.artifacts.promptSection(engine.hostTools !== false),
           await this.artifacts.editedSection(conversationId).catch(() => ''),
@@ -1177,6 +1197,16 @@ export class Services {
           ),
       });
     }
+    const slack = await this.slack.connection().catch(() => undefined);
+    if (slack)
+      out.push({
+        id: id('slack', 'user'),
+        title: slack.team ? `Slack · ${slack.team}` : 'Slack',
+        usedBy: 'Slack integration',
+        hint: tail(slack.token),
+        manage: { label: 'Open Integrations', place: 'integrations' },
+        reveal: async () => slack.token,
+      });
     for (const item of await this.integrations.store.all().catch(() => [])) {
       const secrets = await this.integrations.store.secrets(item.id).catch(() => undefined);
       for (const [key, value] of Object.entries(secrets?.values ?? {})) {
@@ -1292,12 +1322,14 @@ export class Services {
     );
     this.#sweeper.unref();
     this.updates.start();
+    this.slack.start();
     void this.tasks.start().catch((error: unknown) => console.error('[tasks]', error));
     this.backups.start();
   }
 
   stop() {
     this.googleApps.stop();
+    this.slack.stop();
     this.channels.stop();
     this.channelLinking.stop();
     this.linked.stop();

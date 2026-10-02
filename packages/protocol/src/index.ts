@@ -572,11 +572,6 @@ export const ConversationEvent = z.discriminatedUnion('type', [
       .string()
       .regex(/^#[0-9a-fA-F]{6}$/)
       .optional(),
-    /**
-     * Connected through another catalog entry (`zapier`), because the provider
-     * answering can't reach this app by itself.
-     */
-    via: CatalogId.optional(),
   }),
   /** “Not now”: the offer is put away for the rest of this conversation. */
   z.object({
@@ -661,6 +656,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('routine.run'), run: RoutineRun }),
   z.object({ type: z.literal('integration.changed'), integration: Integration }),
   z.object({ type: z.literal('integration.deleted'), integrationId: z.string() }),
+  /** Slack, connected to Conch itself, changed (connected, its health, a tool): refetch it. */
+  z.object({ type: z.literal('slack.changed') }),
   /** A skill was added, changed or removed (here, or in one of the folders Conch reads). */
   z.object({ type: z.literal('skills.changed') }),
   /** Passwords changed (an item, a source unlocked or locked): refetch them. */
@@ -729,3 +726,4 @@ export type ConversationEventInput = DistributiveOmit<
 >;
 
 export * from './google';
+export * from './slack';

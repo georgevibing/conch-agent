@@ -199,6 +199,8 @@ export class ChannelService {
   #gathering = new Map<string, { messages: ChannelMessage[]; timer: NodeJS.Timeout }>();
   #notified = new Map<string, string>();
   #started = false;
+  /** The Slack app id behind each Slack channel, once asked ('' when Slack wouldn't say). */
+  #slackApps = new Map<string, string>();
 
   constructor(
     private readonly deps: {
@@ -279,6 +281,36 @@ export class ChannelService {
         return { address: secrets.address, password: secrets.password };
     }
     return undefined;
+  }
+
+  /**
+   * The Slack app a connected Slack channel uses, so Slack with every model
+   * can offer to use the same app (ADR 0049). Only its name, workspace and
+   * id: its keys stay with the channel.
+   */
+  async slackApp(): Promise<{ name: string; workspace?: string; appId?: string } | undefined> {
+    const stored = (await this.deps.store.all()).find((c) => c.kind === 'slack' && c.enabled);
+    if (!stored || !this.deps.slack) return undefined;
+    const known = this.#slackApps.get(stored.id);
+    let appId = known;
+    if (known === undefined) {
+      const secrets = await this.deps.store.secrets(stored.id).catch(() => undefined);
+      const check =
+        secrets?.kind === 'slack'
+          ? await this.deps
+              .slack({ botToken: secrets.botToken })
+              .checkSlack({ botToken: secrets.botToken })
+              .catch(() => undefined)
+          : undefined;
+      appId = check?.ok ? check.appId : undefined;
+      // Asked once per channel: the app behind a bot doesn't change.
+      if (check?.ok) this.#slackApps.set(stored.id, appId ?? '');
+    }
+    return {
+      name: stored.bot.name,
+      ...(stored.bot.workspace && { workspace: stored.bot.workspace }),
+      ...(appId && { appId }),
+    };
   }
 
   /** What connecting iMessage would use here (read from Messages), or why it can't yet. */

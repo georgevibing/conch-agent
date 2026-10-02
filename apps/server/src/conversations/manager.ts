@@ -200,7 +200,6 @@ export interface IntegrationSuggestionInput {
   name: string;
   description: string;
   color?: string;
-  via?: string;
 }
 
 /**
@@ -1158,10 +1157,14 @@ export class ConversationManager {
     }): Promise<string | undefined> => {
       if (leavesSandbox(request.toolName, request.input))
         return 'This command wants to run outside the sealed box, where it could reach anything on this computer.';
-      // Google draft creation always asks inside its trusted tool, after it has
-      // resolved the real account/thread and full draft. That one card also
-      // carries taint and skill restrictions; a generic preflight would ask twice.
-      if (/^(?:mcp__conch__)?google_mail_create_draft$/.test(request.toolName)) return undefined;
+      // Google draft creation and Slack sending always ask inside their trusted
+      // tool, after it has resolved the real account/channel and the full words.
+      // That one card also carries taint and skill restrictions; a generic
+      // preflight would ask twice.
+      if (
+        /^(?:mcp__conch__)?(?:google_mail_create_draft|slack_send_message)$/.test(request.toolName)
+      )
+        return undefined;
       const server = /^mcp__([a-z0-9_-]+?)__/.exec(request.toolName)?.[1];
       const limited = await skillLimit(
         needs(request.toolName, request.input, { workspace, server }),

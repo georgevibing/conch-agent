@@ -25,6 +25,7 @@ export const SEALED_FILES = new Set([
   'codex.secrets.json',
   'integrations.secrets.json',
   'google.secrets.json',
+  'slack.secrets.json',
   'channels.secrets.json',
   'whatsapp.secrets.json',
   'push.secrets.json',

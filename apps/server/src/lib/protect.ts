@@ -15,6 +15,7 @@ export function protectedPaths(home: string): string[] {
     join(home, 'secrets.json'),
     join(home, 'integrations.secrets.json'),
     join(home, 'google.secrets.json'),
+    join(home, 'slack.secrets.json'),
     join(home, 'channels.secrets.json'),
     // A linked WhatsApp or Signal: whoever has these reads and sends your messages (ADR 0043).
     join(home, 'whatsapp.secrets.json'),

@@ -26,13 +26,12 @@ export const IntegrationAuth = z.enum([
 export type IntegrationAuth = z.infer<typeof IntegrationAuth>;
 
 /**
- * How a catalog entry connects. `google` uses Conch’s native Google account flow.
- * `account` services (such as Slack) only let
- * pre-approved apps sign in, so they connect through the AI provider's own
- * account connectors (e.g. your Claude account) and the engine loads them by
- * itself. Engines without account connectors don't offer them.
+ * How a catalog entry connects. Every one is Conch's own, so it works with
+ * every model whichever provider answers (ADR 0049): an MCP server Conch
+ * connects to (`oauth`, `token`, `none`), or a family of Conch's own tools
+ * with its own sign-in — `google` (Gmail, Calendar, Drive) and `slack`.
  */
-export const CatalogAuth = z.enum([...IntegrationAuth.options, 'account', 'google']);
+export const CatalogAuth = z.enum([...IntegrationAuth.options, 'google', 'slack']);
 export type CatalogAuth = z.infer<typeof CatalogAuth>;
 
 export const IntegrationCategory = z.enum([
@@ -262,19 +261,12 @@ export const IntegrationProvider = z.object({
   mode: z.enum(['native', 'bridge']),
   /** Lists servers configured in the engine itself. */
   hasOwnServers: z.boolean().default(false),
-  /** The provider account's own connectors, when it has them. */
-  account: z
-    .object({
-      /** "your Claude account" */
-      label: z.string(),
-      /** Where you connect them. */
-      url: z.string(),
-      /** Usable with the current sign-in. */
-      ready: z.boolean(),
-      /** Why not, in plain words. */
-      hint: z.string().optional(),
-    })
-    .optional(),
+  /**
+   * Where the provider account's own connectors are managed, when it has them
+   * ("your Claude account"). Only for saying where one of its servers came
+   * from: nothing in Conch's gallery depends on them (ADR 0049).
+   */
+  account: z.object({ label: z.string(), url: z.string() }).optional(),
 });
 export type IntegrationProvider = z.infer<typeof IntegrationProvider>;
 
