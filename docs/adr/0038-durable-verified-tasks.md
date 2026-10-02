@@ -87,3 +87,13 @@ can declare an inbox empty. Scoped tasks expose only approved common tools
 and never silently fall back to a different provider after a quota failure.
 Same-account reconsent allows fresh reads or fresh approval for a proven
 unattempted write; old writes retain their operation ID and reconcile read-only.
+
+Foreground prepared drafts hand off to one bounded background task. A trusted
+argument hash fixes the exact parsed payload (ignoring undefined optional fields),
+and a request key binds parent conversation, user turn and payload. Repeated tool
+calls within that turn return the same task, while a new user turn can deliberately
+request another draft. The task inherits its source conversation/provider, forces
+normal approvals, and cannot change accounts, recipients or content. The queued
+handoff is not evidence that a draft was saved. Oversized handoffs fail before
+persistence. Scoped workflows skip MCP initialization as well as filtering tools:
+untrusted source notes cannot start unrelated integration processes.

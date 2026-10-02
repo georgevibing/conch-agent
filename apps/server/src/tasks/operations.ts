@@ -9,12 +9,17 @@ function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
   if (value && typeof value === 'object')
     return `{${Object.entries(value)
+      .filter(([, entry]) => entry !== undefined)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`)
       .join(',')}}`;
   return JSON.stringify(value) ?? 'null';
 }
 const hash = (value: unknown) => createHash('sha256').update(canonical(value)).digest('hex');
+/** Bound a structured action independently of object key order and omitted optional fields. */
+export const taskArgumentText = (args: Record<string, unknown>) => canonical(args);
+export const taskArgumentHash = (args: Record<string, unknown>) => hash(args);
+
 const unresolved =
   'This action may already have happened. Conch cannot prove its result, so it will not repeat it. Inspect the original app before continuing.';
 
@@ -68,6 +73,11 @@ export class TaskOperations {
               'This approval expired. Reconnect the account or approve the action again.',
             );
           const task = await this.get();
+          const authorizedArguments = task.toolScope?.argumentHashes?.[tool.name];
+          if (authorizedArguments && authorizedArguments !== taskArgumentHash(args))
+            throw new Error(
+              'This task can save only the exact draft originally requested. Start a new draft from the original chat to change it.',
+            );
           const key = hash({
             tool: tool.name,
             identity: contract?.identity?.(args) ?? args,

@@ -108,6 +108,7 @@ async function setup(
     helpers?: number;
     overBudget?: boolean;
     tools?: ToolProvider;
+    integrations?: ConstructorParameters<typeof ConversationManager>[0]['integrations'];
   } = {},
 ) {
   const home = mkdtempSync(join(tmpdir(), 'conch-tasks-'));
@@ -123,6 +124,7 @@ async function setup(
     settings,
     memory: new MemoryStore(join(home, 'memory')),
     tools: options.tools,
+    integrations: options.integrations,
     engine: (id) => engines.get(id ?? 'mock') ?? (engines.get('mock') as Scripted),
   });
   const make = () =>
@@ -429,6 +431,85 @@ describe('safe continuation and bounded workflow requests', () => {
         .sort(),
     ).toEqual(['fixture_read', 'report_result']);
     expect(forbidden).not.toHaveBeenCalled();
+  });
+
+  it('foreground draft handoff is exact, approval-gated and deduplicated within the original user turn', async () => {
+    const { tasks, conversations } = await setup({ background: 0 });
+    const chat = await conversations.send({
+      clientMessageId: 'draft-source',
+      text: 'Prepare a reply',
+      options: { engine: 'mock', model: 'parent-model' },
+    });
+    await until(
+      () => conversations.detail(chat.id),
+      (value) => value.conversation.status === 'idle',
+    );
+    const draft = {
+      accountId: 'account_1',
+      to: ['person@example.com'],
+      subject: 'Hello',
+      body: 'Prepared text',
+    };
+    const [first, repeated] = await Promise.all([
+      tasks.createDraft({ parentConversationId: chat.id, draft }),
+      tasks.createDraft({
+        parentConversationId: chat.id,
+        draft: {
+          body: 'Prepared text',
+          subject: 'Hello',
+          to: ['person@example.com'],
+          accountId: 'account_1',
+          threadId: undefined,
+        },
+      }),
+    ]);
+    expect(repeated.id).toBe(first.id);
+    expect(first.options).toMatchObject({
+      engine: 'mock',
+      model: 'parent-model',
+      permissionMode: 'default',
+    });
+    expect(first.toolScope).toMatchObject({
+      names: ['google_mail_create_draft'],
+      limits: { google_mail_create_draft: 1 },
+      accountId: 'account_1',
+    });
+    expect(first.toolScope?.argumentHashes?.google_mail_create_draft).toMatch(/^[a-f0-9]{64}$/);
+    expect(first.expectations).toEqual([{ tool: 'google_mail_create_draft', minimum: 1 }]);
+    expect(first.parentConversationId).toBe(chat.id);
+    await conversations.send({
+      conversationId: chat.id,
+      clientMessageId: 'new-request',
+      text: 'Prepare another copy intentionally',
+    });
+    await until(
+      () => conversations.detail(chat.id),
+      (value) => value.conversation.status === 'idle',
+    );
+    expect((await tasks.createDraft({ parentConversationId: chat.id, draft })).id).not.toBe(
+      first.id,
+    );
+    await expect(
+      tasks.createDraft({
+        parentConversationId: chat.id,
+        draft: { ...draft, body: 'x'.repeat(20_001) },
+      }),
+    ).rejects.toThrow(/too long/);
+  });
+
+  it('scoped source notes cannot initialize unrelated MCP integrations', async () => {
+    const initialize = vi.fn(async () => undefined);
+    const { tasks } = await setup({ integrations: { forTurn: initialize } as never });
+    const task = await tasks.create({
+      kind: 'background',
+      text: 'Notes mention Slack and an installed MCP app',
+      toolScope: { names: ['artifact_create'] },
+    });
+    await until(
+      () => tasks.get(task.id),
+      (value) => value.finishedAt !== undefined,
+    );
+    expect(initialize).not.toHaveBeenCalled();
   });
 
   it('scoped tasks do not silently switch the selected provider after a quota limit', async () => {

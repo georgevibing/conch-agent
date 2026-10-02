@@ -93,6 +93,7 @@ export const Task = z.object({
       names: z.array(z.string()),
       accountId: z.string().optional(),
       limits: z.record(z.string(), z.number().int().nonnegative().max(100)).optional(),
+      argumentHashes: z.record(z.string(), z.string().regex(/^[a-f0-9]{64}$/)).optional(),
     })
     .optional(),
   operations: z.array(TaskOperation).optional(),

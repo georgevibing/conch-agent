@@ -1152,7 +1152,9 @@ export class ConversationManager {
     try {
       // Only the person's words count as asking for an app, not what they pasted.
       const [loaded, apps] = await Promise.all([
-        integrations?.forTurn(said).catch(() => undefined),
+        // Scoped workflows use Conch host tools only. Even MCP initialization
+        // can start a program; source notes must not trigger unrelated apps.
+        extras?.toolAllowed ? undefined : integrations?.forTurn(said).catch(() => undefined),
         this.#offers(live, engine, settings.preferences.mutedSuggestions),
       ]);
       for (const offer of apps.offers)

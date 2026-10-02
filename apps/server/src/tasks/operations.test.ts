@@ -6,7 +6,7 @@ import type { Task } from '@conch/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { HostTool } from '../engines/types';
-import { TaskOperations, verifiedOutcome } from './operations';
+import { taskArgumentHash, TaskOperations, verifiedOutcome } from './operations';
 import { mergeTaskLedgers, TaskStore } from './store';
 
 function required<T>(value: T | undefined): T {
@@ -268,6 +268,37 @@ describe('durable task operations', () => {
     expect(attempts.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
     expect(f.tool.run).toHaveBeenCalledTimes(1);
     await wrapped.run({ body: 'one' });
+    expect(f.tool.run).toHaveBeenCalledTimes(1);
+  });
+
+  it('fixed draft arguments accept reordered optional fields but reject any content or recipient change', async () => {
+    const f = await setup();
+    const args = {
+      accountId: 'account_1',
+      to: ['person@example.com'],
+      subject: 'Hello',
+      body: 'Prepared text',
+      threadId: undefined,
+    };
+    await f.update({
+      toolScope: { names: ['draft'], argumentHashes: { draft: taskArgumentHash(args) } },
+    });
+    expect(
+      taskArgumentHash({
+        body: 'Prepared text',
+        subject: 'Hello',
+        to: ['person@example.com'],
+        accountId: 'account_1',
+      }),
+    ).toBe(taskArgumentHash(args));
+    await expect(
+      f
+        .ledger()
+        .wrap(f.tool)
+        .run({ ...args, body: 'Changed' }),
+    ).rejects.toThrow(/exact draft/);
+    expect(f.tool.run).not.toHaveBeenCalled();
+    await f.ledger().wrap(f.tool).run(args);
     expect(f.tool.run).toHaveBeenCalledTimes(1);
   });
 
