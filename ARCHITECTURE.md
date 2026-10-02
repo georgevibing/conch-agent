@@ -87,7 +87,7 @@ src/
   attachments/                uploads: sniffing, storage + sweep, per-engine prompt, sandboxed serving (ADR 0017)
   vault/                      Passwords: encrypted vault, keychain, other managers, import, fills (ADR 0025)
   backup/                     what's in a backup (manifest), the .conchbackup format, daily backups, restore (ADR 0020)
-  channels/                   Telegram, Discord and Slack bots, your linked WhatsApp and Signal, iMessage and email; pairing, relay, healing (ADR 0018, 0043, 0044)
+  channels/                   Telegram, Discord, Slack, Teams, Matrix and WeChat bots, your linked WhatsApp and Signal, iMessage and email; pairing, relay, healing; the public door (ADR 0018, 0043, 0044, 0045)
   engines/
     types.ts                  Engine / HostTool / EngineEvent contracts
     claude-code/              detect, login, env scrub, SDK → EngineEvent translator
@@ -465,6 +465,11 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
     - `telegram.ts`: long polling (`getUpdates`);
     - `discord.ts`: the Gateway over Node's own WebSocket, DM intents only;
     - `slack.ts`: Socket Mode;
+    - `matrix.ts`: long-polled `/sync`, end-to-end encrypted with Matrix's own
+      Rust crypto (`matrix-crypto.ts`: its IndexedDB store in memory,
+      snapshotted with the sync position to `channels/matrix-<id>.json`);
+    - `wechat.ts` (`WeComBotAdapter`): WeCom's AI-bot long connection.
+
     - `imessage.ts` (Mac only, [ADR 0044](./docs/adr/0044-imessage-and-email.md)):
       `~/Library/Messages/chat.db` read-only through `node:sqlite` (Full Disk
       Access), `attributedBody` decoded by `typedstream.ts`, and a fixed
@@ -474,11 +479,22 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
       `Authentication-Results` or your Sent mail (`mail-read.ts`), answers in
       the thread.
 
+    Two apps only deliver to a web address, so they come in through the
+    **public door** (`door.ts`, ADR 0045). It is a second loopback listener
+    (`CONCH_DOOR_PORT`, 4319) that serves only `/hooks/<random id>`, reached
+    through Tailscale Funnel or an address of your own, and checked from
+    outside with an HMAC nonce:
+    - `teams.ts`: Bot Framework activities, each JWT checked in
+      `teams-auth.ts`;
+    - `wechat.ts` (`WeChatOfficialAdapter`): an Official Account, with
+      `wechat-crypto.ts` checking signatures and doing the AES.
+
     WhatsApp, Signal, iMessage and email are the person's own accounts
     (`linked.ts` `ownAccount`): groups never hear from them, other people are
     read only with `settings.others: 'ask'`, the owner is let in without a
     hello (a scanned code, or the adapter's `owner()`), and questions are
-    answered with a number (`TextChoices`). iMessage and email also report a
+    answered with a number (`TextChoices`, which Matrix and WeChat use too,
+    beside their reactions and cards). iMessage and email also report a
     `cursor` the store keeps, so a restart answers nothing twice.
 
     Keys live in `channels.secrets.json`. `store.ts` keeps who may talk and
@@ -529,12 +545,17 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
     `POST /api/channels/link`, `GET|DELETE /api/channels/link/:id` (WhatsApp,
     Signal); `GET /api/channels/imessage` (what Messages has, and whether
     Conch may read it), `POST /api/channels/imessage/open` (System Settings,
-    from this Mac only). `channel.changed` / `channel.deleted` /
-    `channel.link` go out on the socket.
+    from this Mac only); `GET /api/channels/:id/hook` (WeChat's Token and
+    key) and `GET /api/channels/:id/teams-app` (the app package); the door:
+    `GET|PUT|DELETE /api/channels/door`, `POST /api/channels/door/tailscale|check`.
+    `channel.changed` / `channel.deleted` / `channel.link` / `channel.door` go
+    out on the socket.
   - **Mocks.** With the mock engine, a pretend Telegram, Discord and Slack
     start too (`channels/mock/`), a pretend WhatsApp (at the Baileys seam)
     and signal-cli (at the process seam), Messages (a real `chat.db`) and a
-    mail service (IMAP and SMTP). `CONCH_MOCK_*_PORT` asks for a port, and a
+    mail service (IMAP and SMTP), Teams (a signing Bot Framework), Matrix (with
+    a pretend Element running the same crypto) and WeChat, with the door on a
+    free port behind a pretend Funnel. `CONCH_MOCK_*_PORT` asks for a port, and a
     taken one falls back to any free port. `GET /api/channels/mock` (mock mode
     only) says where they are.
 - **Search.** `search/` keeps a SQLite FTS5 (trigram) index of every message in
@@ -555,7 +576,8 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   off), `browser.json` (browser settings, sites you always allow) + `browser/profile/` +
   `browser/shots/`, `terminal.json` (terminal settings; terminals themselves are never
   written to disk), `channels.json` + `channels.secrets.json` (bots, who may talk to
-  them, their keys), `gateway.json` (where it's listening, while it runs), `workspace/`
+  them, their keys) + `channels/` (a Matrix session's encryption store, where
+  Teams chats live) + `door.json` (the public door: Funnel or your own address), `gateway.json` (where it's listening, while it runs), `workspace/`
   (default cwd), `backups.json` (daily backups on or off) + `backups/` (the backups
   themselves, and a restore being readied). What each of these is to a backup is
   decided in `backup/manifest.ts`.

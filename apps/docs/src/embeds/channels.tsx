@@ -117,6 +117,24 @@ const PERSONAL: Record<string, string[]> = {
     'Checks who really sent it',
     'Others’ chats never read',
   ],
+  microsoftteams: [
+    'A bot of your own',
+    'A public address, just for its messages',
+    'Private chats only',
+    'Nobody gets in unless you let them',
+  ],
+  matrix: [
+    'An account of its own',
+    'No public address',
+    'End-to-end encrypted',
+    'Nobody gets in unless you let them',
+  ],
+  wechat: [
+    'Tencent’s own ways in',
+    'No public address with a WeCom bot',
+    'Private chats only',
+    'Nobody gets in unless you let them',
+  ],
 };
 
 const BOT = 'Conch';
@@ -364,6 +382,122 @@ const SCENES: Record<string, Record<string, () => ReactNode>> = {
           },
         ]}
         footer={<Handset.Composer placeholder="Reply" />}
+      />
+    ),
+  },
+  microsoftteams: {
+    key: () => (
+      <PortalSketch
+        label="Your bot in the Teams Developer Portal, on Client secrets"
+        address="dev.teams.microsoft.com/bots"
+        nav={['Basic information', 'Configure', 'Client secrets']}
+        active="Client secrets"
+        title={BOT}
+        color={colorOf('microsoftteams')}
+      >
+        <PortalSketch.Field label="Bot ID">1a2b3c4d-5e6f-…</PortalSketch.Field>
+        <PortalSketch.Row>
+          <PortalSketch.Button>Add a client secret for your bot</PortalSketch.Button>
+        </PortalSketch.Row>
+        <PortalSketch.Bar width={70} />
+      </PortalSketch>
+    ),
+    endpoint: () => (
+      <PortalSketch
+        label="Your bot’s Configure page, with the address Conch gives it"
+        address="dev.teams.microsoft.com/bots"
+        nav={['Basic information', 'Configure', 'Client secrets']}
+        active="Configure"
+        title="Configure"
+        color={colorOf('microsoftteams')}
+      >
+        <PortalSketch.Field label="Endpoint address">
+          https://mac.tail1234.ts.net/conch/hooks/…
+        </PortalSketch.Field>
+        <PortalSketch.Row>
+          <PortalSketch.Button>Save</PortalSketch.Button>
+        </PortalSketch.Row>
+      </PortalSketch>
+    ),
+    hello: () => (
+      <Handset
+        label="Your bot in Teams, once Conch knows it’s you"
+        brand="microsoftteams"
+        color={colorOf('microsoftteams')}
+        title={BOT}
+        subtitle="Bot"
+        messages={[
+          { id: '1', from: 'you', text: 'hi' },
+          { id: '2', from: 'them', text: WELCOME },
+        ]}
+        footer={<Handset.Composer placeholder="Type a message" />}
+      />
+    ),
+  },
+  matrix: {
+    key: () => (
+      <PortalSketch
+        label="Element, making an account for your assistant"
+        address="app.element.io/#/register"
+        title="Create account"
+        color={colorOf('matrix')}
+      >
+        <PortalSketch.Field label="Homeserver">matrix.org</PortalSketch.Field>
+        <PortalSketch.Field label="Username">ada-conch-1234</PortalSketch.Field>
+        <PortalSketch.Field label="Password">••••••••••••</PortalSketch.Field>
+        <PortalSketch.Row>
+          <PortalSketch.Button>Register</PortalSketch.Button>
+        </PortalSketch.Row>
+      </PortalSketch>
+    ),
+    hello: () => (
+      <Handset
+        label="Your assistant in Element, in an encrypted direct message"
+        brand="matrix"
+        color={colorOf('matrix')}
+        title={BOT}
+        subtitle="@ada-conch-1234:matrix.org"
+        messages={[
+          { id: '1', from: 'you', text: 'hi' },
+          { id: '2', from: 'them', text: WELCOME },
+        ]}
+        footer={<Handset.Composer placeholder="Send an encrypted message…" />}
+      />
+    ),
+  },
+  wechat: {
+    key: () => (
+      <PortalSketch
+        label="WeChat’s server settings (服务器配置), with what Conch gives you to paste"
+        address="mp.weixin.qq.com"
+        nav={['设置与开发', '基本配置', '服务器配置']}
+        active="服务器配置"
+        title="服务器配置"
+        color={colorOf('wechat')}
+      >
+        <PortalSketch.Field label="URL">
+          https://mac.tail1234.ts.net/conch/hooks/…
+        </PortalSketch.Field>
+        <PortalSketch.Field label="Token">••••••••</PortalSketch.Field>
+        <PortalSketch.Field label="EncodingAESKey">••••••••</PortalSketch.Field>
+        <PortalSketch.Field label="消息加解密方式">安全模式</PortalSketch.Field>
+        <PortalSketch.Row>
+          <PortalSketch.Button>提交</PortalSketch.Button>
+        </PortalSketch.Row>
+      </PortalSketch>
+    ),
+    hello: () => (
+      <Handset
+        label="Your bot in WeCom, once Conch knows it’s you"
+        brand="wechat"
+        color={colorOf('wechat')}
+        title={BOT}
+        subtitle="智能机器人"
+        messages={[
+          { id: '1', from: 'you', text: '你好' },
+          { id: '2', from: 'them', text: WELCOME },
+        ]}
+        footer={<Handset.Composer placeholder="发消息" />}
       />
     ),
   },

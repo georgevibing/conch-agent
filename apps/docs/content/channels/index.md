@@ -13,6 +13,8 @@ A channel is a bot you make in the chat app, connected to the Conch on your comp
 
 Conch connects **outward** to the app. Nothing on your computer is opened to the internet, and you need no public address and no tunnel.
 
+Two apps only deliver to a web address: **Microsoft Teams**, and a WeChat **Official Account**. For them, Conch can open one public address with one press (through Tailscale Funnel), or use an address of your own. It leads to a small door of its own, not to Conch: the door lets in only messages the app signed, for the channels you connected. A WeChat **WeCom bot** and **Matrix** connect outward like the others.
+
 Setting one up is a short numbered path in Conch, at **Channels**, beside a picture of exactly what you'll see in the other app. Keys are checked the moment you paste them, anywhere on the page.
 
 ## Your own WhatsApp or Signal
@@ -41,4 +43,4 @@ WhatsApp and Signal have no bots to make. Instead Conch joins **your own account
 
 A dropped connection is retried, lightly at first and then every minute. An outage of more than a minute leaves a note under **Fixed on its own**. One channel failing never touches another.
 
-Only one thing needs you: if the app stops accepting the key, that channel says so and asks you to **Paste the new key**. A WhatsApp or Signal unlinked on your phone asks you to **Link again** instead.
+Only one thing needs you: if the app stops accepting the key, that channel says so and asks you to **Paste the new key** (on Matrix, to **Sign in again**). A WhatsApp or Signal unlinked on your phone asks you to **Link again** instead. The public address Teams and WeChat use is checked from the outside now and then; if Tailscale forgot it, Conch turns it back on.

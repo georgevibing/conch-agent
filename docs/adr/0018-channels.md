@@ -137,7 +137,9 @@ when the bot arrives there (`GUILD_CREATE`).
 **Other apps later.** The catalog shows WhatsApp, Signal, iMessage, Teams
 and Matrix as coming (WhatsApp and Signal came as linked devices of your own
 account: ADR 0043; iMessage and email through accounts already yours: ADR 0044). Most channels that need a public webhook (LINE, Teams,
-Messenger) wait for a way that doesn't. A hosted Telegram "manager bot" for
+Messenger) wait for a way that doesn't. (Since amended by
+[ADR 0045](./0045-teams-matrix-wechat.md): Teams, Matrix and WeChat are here, and
+the apps that only deliver to a web address come in through one public door.) A hosted Telegram "manager bot" for
 one-tap bot creation was rejected for now: it would put a Conch-run service
 between you and your bot, with standing power over its token.
 

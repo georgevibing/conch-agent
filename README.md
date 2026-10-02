@@ -138,6 +138,10 @@ On a Mac, text yourself on iMessage; anywhere, write to `you+conch@` from any ma
 app and get the answer in the thread. Conch reads only that chat and that address,
 and believes an email's sender only when your mail service vouches for it.
 ([ADR 0044](./docs/adr/0044-imessage-and-email.md))
+Matrix (encrypted chats too), Microsoft Teams and WeChat connect the same guided
+way. Teams and WeChat's Official Accounts need a public address: Conch opens one
+with one press, and it lets in only their signed messages.
+([ADR 0045](./docs/adr/0045-teams-matrix-wechat.md))
 
 **In your pocket.** On your phone Conch is an app, with no app store needed.
 Notifications tell you when it needs your OK, with Deny right there; when an answer

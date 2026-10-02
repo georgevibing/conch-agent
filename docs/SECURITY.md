@@ -206,6 +206,28 @@ copy.
 - **Use an app password, never your account's own.** You can take it back in your
   mail service at any time; Conch keeps it locked on this computer.
 
+## Chat apps that need a public address (Teams, WeChat)
+
+Most channels connect outward, so nothing on your computer is opened to the
+internet. Microsoft Teams and a WeChat Official Account only deliver to a web
+address, so for them Conch can open one ([ADR 0045](./adr/0045-teams-matrix-wechat.md)):
+
+- **It leads to a small door, not to Conch.** It's a separate listener on this
+  computer that knows only the addresses of the channels you connected, each a
+  long random name. There is no sign-in page, no app and no API behind it.
+- **Only signed messages get through.** Every delivery must carry the app's own
+  signature: a Bot Framework token from Microsoft, or WeChat's signature and
+  encryption. Conch checks it before reading a word, and refuses old or repeated
+  ones.
+- **You open it, with one press**: through Tailscale Funnel, or an address of your
+  own. From another device, Conch asks you to confirm it's you first. Turning it off
+  never asks.
+- **It checks itself.** Conch makes sure the address really reaches this door, and
+  the security checkup says while it's open. A backup restored on another computer
+  never opens it there by itself.
+- **On Matrix**, chats stay end-to-end encrypted, and your assistant only reads
+  messages from your sessions that your account has verified.
+
 ## Backups
 
 - **Conch backs itself up every day, on this computer** (Settings → Health). Those
