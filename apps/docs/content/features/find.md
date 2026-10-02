@@ -12,7 +12,7 @@ Results arrive in groups as you type:
 
 - **Chats**, by title. A few letters will do: "pmw" finds "Plan my week".
 - **Messages**, from any chat: what you wrote, what your assistant answered, and the commands and files it worked with.
-- **Skills**, **Models**, **Integrations**, **Channels**, **Routines**, **Passwords**, **Tasks**, and the things your assistant made for you, each by name.
+- **Skills**, **Models**, **Apps** (it finds them by "integrations" too), **Talk to me here** (and by "channels"), **Routines**, **Passwords**, **Tasks**, and the things your assistant made for you, each by name.
 - **Go to**: every page, every place in Settings, and things to do, such as **Back up now** or **Repair everything**.
 
 Before you type, the box shows your recent chats and a few common actions.

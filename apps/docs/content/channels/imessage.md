@@ -6,7 +6,7 @@ channel: imessage
 
 iMessage works on a Mac, through the Messages app that's already there. There's nothing to make: you text yourself from your iPhone, and your assistant answers in the same chat.
 
-In Conch, open **Channels** and choose **iMessage**.
+In Conch, open **Apps**, choose **Talk to me here**, then **iMessage**.
 
 1. **Let Conch read Messages.** macOS keeps your messages private, so it asks you first. Press **Open System Settings**, then turn on Conch's app under **Privacy & Security** → **Full Disk Access**. Conch names the app to turn on (Terminal, iTerm, or `node` when Conch runs in the background). The step ticks itself off when it's on.
 2. **Choose how you'll text.** **I text myself** is for a Mac signed in with your own Apple ID. **This Mac has its own Apple ID** is for a Mac that people text at its own address. Conch shows the address Messages uses; nothing to type.

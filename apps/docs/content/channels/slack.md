@@ -4,7 +4,7 @@ channel: slack
 
 ## Connect it
 
-In Conch, open **Channels** and choose **Slack**. Slack makes the app from settings Conch fills in; you press a few buttons and copy two keys.
+In Conch, open **Apps**, choose **Talk to me here**, then **Slack**. Slack makes the app from settings Conch fills in; you press a few buttons and copy two keys.
 
 1. **Make the Slack app.** Conch opens Slack with everything filled in. Pick your workspace, press **Next**, then **Create**.
 2. **Install it, and copy its key.** In the app's settings, open **Install App** and press **Install to Workspace**, then **Allow**. Copy the **Bot User OAuth Token**. It starts with `xoxb-`.
@@ -27,4 +27,5 @@ Once Conch knows it's you, the app greets you by name.
 - **Slack showed an empty form?** Conch has the settings ready to paste: on the first step, open **Slack showed an empty form?**
 - **While it works** your message gets 👀. Slack has no "typing…" for apps.
 - **It answers direct messages only.**
-- **The same app reads Slack for you too.** To let your assistant search and catch up on your channels with any model, choose **Slack** in **Integrations** and press **Use it**: it needs one more key from the same app, the **User OAuth Token**. See [Apps](../features/apps.md#connect-slack).
+- **The same app reads Slack for you too.** Slack is one app in Conch, with one page. To let your assistant search and catch up on your channels with any model, press **Set it up** on the channel's page, or **Set up** beside **Read & search** on Slack's: it needs one more key from the same app, the **User OAuth Token**. See [Apps](../features/apps.md#connect-slack).
+- **Already let it read Slack?** Turn on **Talk to me here** on Slack's page in Apps. The first step is done already: the app is made. You copy its bot token from the same **Install App** page, and make the app-level token.

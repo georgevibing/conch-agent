@@ -1,11 +1,13 @@
 ---
-title: Channels
+title: Talk to me here
 description: Message your assistant from the chat apps on your phone, and approve what it asks right there.
 nav: Overview
 order: 1
 ---
 
 <!-- conch:channels -->
+
+In Conch, these are in **Apps**, under **Talk to me here**. An app you also let your assistant use, like Slack or Gmail, is one card with a switch for each: **Talk to me here** is one of them. See [Apps](../features/apps.md#one-app-one-card).
 
 ## A bot of your own
 
@@ -15,7 +17,7 @@ Conch connects **outward** to the app. Nothing on your computer is opened to the
 
 Two apps only deliver to a web address: **Microsoft Teams**, and a WeChat **Official Account**. For them, Conch can open one public address with one press (through Tailscale Funnel), or use an address of your own. It leads to a small door of its own, not to Conch: the door lets in only messages the app signed, for the channels you connected. A WeChat **WeCom bot** and **Matrix** connect outward like the others.
 
-Setting one up is a short numbered path in Conch, at **Channels**, beside a picture of exactly what you'll see in the other app. Keys are checked the moment you paste them, anywhere on the page.
+Setting one up is a short numbered path in Conch, from **Apps → Talk to me here**, beside a picture of exactly what you'll see in the other app. Keys are checked the moment you paste them, anywhere on the page.
 
 ## Your own WhatsApp or Signal
 

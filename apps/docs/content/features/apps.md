@@ -1,22 +1,38 @@
 ---
 title: Apps
-description: Connect Notion, GitHub, Gmail and more from a gallery, and decide what your assistant may do in each.
+description: Connect Notion, Gmail, Slack and more from one gallery, talk to your assistant from the apps you chat in, and decide what it may do in each.
 order: 4
 ---
 
-Connect the apps you already use, and your assistant can look things up and act in them: find a page in Notion, open an issue in GitHub, catch up on Slack. Every app in the gallery belongs to Conch, so it works with every provider and every model that can use tools. There is no file to edit.
+Connect the apps you already use, and your assistant can look things up and act in them: find a page in Notion, open an issue in GitHub, catch up on Slack. Connect the ones you chat in, and you can talk to it from there too. Every app in the gallery belongs to Conch, so it works with every provider and every model that can use tools. There is no file to edit.
 
-In Conch, the page is called **Integrations**.
+Everything is on one page, **Apps**, in the sidebar. It used to be two, Integrations and Channels; old links still lead here.
+
+## One app, one card
+
+Each app is one card, whatever it does for you. Slack is one card whether your assistant reads it for you, you message your assistant in it, or both. The same goes for Gmail and the email address you write to, and for 1Password, which fills sign-ins and manages Environments. The card's switch turns the whole app on or off.
+
+A card that needs you comes first, with its one button, such as **Sign in again** or **Say hello**. The sidebar shows how many need you.
+
+## What it does
+
+An app's page starts with **What it does**: a plain switch for each thing, such as **Read & search**, **Draft**, **Send (asks first)** and **Talk to me here**. Turn off what you don't want. A part that isn't set up yet has a **Set up** button instead of a switch, so nothing looks on when it isn't.
+
+Setting up one part offers the other when it can. After you connect Slack, the dialog asks **Talk to Conch in Slack too?**. After you connect Gmail with an app password, it asks **Talk to Conch by email too?**, and one press uses the same password. Nothing is shared until you press it.
+
+## Talk to me here
+
+**Talk to me here**, above the gallery, shows the apps you can message your assistant from: Slack, Gmail and email, Telegram, Discord, WhatsApp, Signal, iMessage, Microsoft Teams, Matrix and WeChat. Each has its own steps, beside a picture of what you'll see. See [Talk to me here](../channels/index.md).
 
 ## Connect one
 
-1. Open **Integrations** in the sidebar and pick an app.
+1. Open **Apps** in the sidebar and pick an app.
 2. Press its one button. Most apps open their own sign-in page (**Continue with Notion**). A few take a token instead, with the steps and a link to the right page beside the field.
 3. When it says connected, press **Done**, or **Choose what it can do**.
 
 You sign in on the app's own page, so Conch never sees your password. What it keeps stays on this computer, readable by you alone, and is never shown again.
 
-Gmail, Google Calendar and Google Drive are apps like the others: press their tile. Gmail connects with an app password; Calendar and Drive need your own Google Cloud app, once. Both are described below. Slack connects with your own Slack app, also described below.
+Gmail, Google Calendar, Google Drive and Slack are apps like the others: press their tile. Gmail connects with an app password; Calendar and Drive need your own Google Cloud app, once. Slack connects with your own Slack app. All are described below.
 
 ## Or connect from a chat
 
@@ -40,7 +56,7 @@ Choose how your assistant uses each app. Saving a Gmail draft always asks, whate
 - **Ask before changes.** It looks things up on its own, and asks before it creates, sends, changes or deletes anything. Apps from the gallery start here.
 - **Don't ask.** It acts without asking. Something it reads could try to trick it, so Conch asks you to confirm it's you first.
 
-Under **What it can do**, every tool the app offers has its own **Allow**, **Ask** or **Off**. Turn off what you don't need: your assistant stays more focused with fewer tools.
+Under **Each tool**, every tool the app offers has its own **Allow**, **Ask** or **Off**, for when the switches under **What it does** aren't fine enough. Turn off what you don't need: your assistant stays more focused with fewer tools. Sending a Slack message, like saving a Gmail draft, only offers **Ask** or **Off**.
 
 If an app later changes what one of its tools does, Conch stops allowing that tool by itself and tells you.
 
@@ -53,6 +69,13 @@ Conch checks your apps and keeps their sign-ins fresh. One that needs you moves 
 ## The gallery
 
 <!-- conch:apps -->
+
+## 1Password
+
+1Password is one app with two parts, each with its own switch on its page:
+
+- **Fill sign-ins from 1Password.** Your 1Password logins show in **Passwords**, read where they are, and your assistant fills one in the browser when you say OK. Nothing is copied. It needs 1Password's command line on this computer; **Set up** shows how.
+- **Manage Environments.** For developers: your assistant sees the names of your 1Password Environments and their variables, and adds to them when you say yes. It never reads the secret values. **Set up** walks you through turning it on in 1Password.
 
 ## Something that isn't listed
 
@@ -71,7 +94,7 @@ What Conch can't connect (a program in the provider's settings, a plugin) only w
 
 Slack belongs to Conch too, so every model can read and send in it. You make a small Slack app in your own workspace, once, and paste one key.
 
-1. In **Integrations**, choose **Slack**. If you already connected the Slack channel, Conch offers to use the same app: press **Use it**.
+1. In **Apps**, choose **Slack**. If you already talk to your assistant in Slack, Conch offers to use the same app: press **Use it**.
 2. Otherwise press **Make the app in Slack**. Slack opens with everything filled in: pick your workspace, press **Next**, then **Create**.
 3. Open **Install App**, press **Install to Workspace** (or **Reinstall**), then **Allow**.
 4. Copy the **User OAuth Token**. It starts with `xoxp-`. Paste it in Conch, and it's connected.
@@ -80,15 +103,17 @@ Your assistant can then see the channels you're in, search, and catch up on a ch
 
 An app made before Slack worked this way can't read for you yet. The dialog says so, and **No User OAuth Token there?** has the settings to paste on the app's **App Manifest** page. **Disconnect** makes Conch forget the key and asks Slack to forget it too.
 
+To message your assistant in Slack as well, turn on **Talk to me here** on Slack's page and press **Set up**. It uses the same Slack app, but needs two more keys from it, the bot token and an app-level token: they're separate from the one that reads as you, so Conch asks for them on purpose. See [Slack](../channels/slack.md).
+
 ## Connect Gmail with an app password
 
 The simple way, for Gmail only. It takes about two minutes.
 
-1. In **Integrations**, press **Gmail**. Type your Gmail address and press **Next**.
+1. In **Apps**, press **Gmail**. Type your Gmail address and press **Next**.
 2. Press **Open Google’s app passwords page**. Google only offers app passwords once [2-Step Verification](https://myaccount.google.com/signinoptions/two-step-verification) is on; its page says how. Name the password “Conch” and press **Create**.
 3. Paste the 16 letters into **App password**. Conch checks them by signing in to Gmail as they land, and says so if Google refuses them.
 
-If your email channel already signs in to Gmail, Conch asks whether Gmail may use the same app password: press **Use it for Gmail**. It's never shared without asking.
+If you already talk to your assistant by email from Gmail, Conch asks whether Gmail may use the same app password: press **Use it for Gmail**. The other way round, turning on **Talk to me here** on Gmail's page uses Gmail's app password for writing to `you+conch@gmail.com`. It's never shared without asking.
 
 With an app password, your assistant can search Gmail, read emails and save drafts in your **Drafts** folder. It can't send: Conch only reads mail and adds drafts (IMAP), and asks you before every draft. Google Calendar and Google Drive can't use an app password; they need the Google Cloud way below.
 

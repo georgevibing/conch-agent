@@ -4,7 +4,7 @@ channel: matrix
 
 ## Connect it
 
-In Conch, open **Channels** and choose **Matrix**. Your assistant gets a Matrix account of its own, and you message it from yours.
+In Conch, open **Apps**, choose **Talk to me here**, then **Matrix**. Your assistant gets a Matrix account of its own, and you message it from yours.
 
 1. **Make an account for your assistant.** Conch suggests a username and a display name. Make the account in Element (it's free), on the same homeserver as yours if you can, and give it a strong password of its own.
 2. **Sign Conch in to it.** Type the homeserver (leave `matrix.org` for matrix.org), the username and the password, and press **Sign in**. Conch signs in once, as a new session called "Conch", and keeps only that session. It never keeps the password.

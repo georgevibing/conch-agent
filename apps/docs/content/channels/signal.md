@@ -6,7 +6,7 @@ channel: signal
 
 Signal has no bots you can make, so Conch joins **your own Signal** as a linked device, the way Signal Desktop does. It talks to Signal through signal-cli, which Conch installs for you when it isn't there yet (on a Mac or Linux, with Homebrew; on Windows, Conch links to its download and installs Java for it).
 
-In Conch, open **Channels** and choose **Signal**. A code is on the page at once.
+In Conch, open **Apps**, choose **Talk to me here**, then **Signal**. A code is on the page at once.
 
 1. **Open Signal** on your phone.
 2. Tap your picture, then **Linked devices**.

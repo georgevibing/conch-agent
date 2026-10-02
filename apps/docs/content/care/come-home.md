@@ -26,7 +26,7 @@ The section only shows when Conch has found one of the two apps.
 - **Memories.** Ticked, except the ones Conch already has and OpenClaw's daily notes. See [memory](../features/memory.md).
 - **Skills.** Conch reads every one first. They come over off, for you to turn on in [Skills](../features/skills.md).
 - **Routines.** Scheduled jobs come over as drafts. Nothing runs until you turn it on in [Routines](../features/routines.md).
-- **Chat apps.** Your Telegram, Discord or Slack bot. Conch checks it with its app, then it waits for your hello, so nobody else gets in. See [Channels](../channels/index.md).
+- **Chat apps.** Your Telegram, Discord or Slack bot. Conch checks it with its app, then it waits for your hello, so nobody else gets in. See [Talk to me here](../channels/index.md).
 - **Keys.** Your Anthropic API or OpenRouter key, if Conch has none yet. It goes into Conch's encrypted key file and is never shown.
 - **Other agents.** OpenClaw can run more than one agent. Each one is listed under its name, with one tick for all of it. Its personality becomes a skill, **Talk as Atlas**, that you pick in a chat; it comes over off. Its memories, skills and routines come over like the main agent's.
 

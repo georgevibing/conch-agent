@@ -24,6 +24,8 @@ These are the password managers Conch reads beside its own vault:
 
 Turn one on in **More → Password managers…**. Conch reads it through that manager's own program and its own unlock, and changes nothing there. If the program is missing, Conch offers to get it.
 
+1Password is an app in **Apps** too, with this as one of its switches: **Fill sign-ins from 1Password**. The other, **Manage Environments**, is for developers. See [Apps](./apps.md#1password).
+
 **Copy into Conch** makes a manager's items Conch's own, so they are in your vault and your backups. It can keep them up to date, one way, every 30 minutes. No export file is made.
 
 Apple Passwords, Chrome and other browsers don't let other apps read them. Import from those instead.

@@ -4,7 +4,7 @@ channel: discord
 
 ## Connect it
 
-In Conch, open **Channels** and choose **Discord**. The page walks you through these.
+In Conch, open **Apps**, choose **Talk to me here**, then **Discord**. The page walks you through these.
 
 1. **Make a Discord app.** Open the [Developer Portal](https://discord.com/developers/applications), press **New Application**, name it after your assistant, tick the box and press **Create**.
 2. **Copy its token.** In your app, open **Bot**, press **Reset Token**, confirm, then **Copy**. Paste it anywhere on Conch's page. Discord shows a token once: if you lose it, press **Reset Token** again.

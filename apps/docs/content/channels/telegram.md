@@ -4,7 +4,7 @@ channel: telegram
 
 ## Connect it
 
-In Conch, open **Channels** and choose **Telegram**. The page walks you through these, and works out the answers for you.
+In Conch, open **Apps**, choose **Talk to me here**, then **Telegram**. The page walks you through these, and works out the answers for you.
 
 1. **Make your bot.** In Telegram, open **BotFather** and send `/newbot`. It asks for a name and a username; Conch suggests both. If the username is taken, change the number. It has to end in "bot".
 2. **Paste its key.** BotFather replies with a key. Copy it, or the whole message, and paste it anywhere on Conch's page. Conch checks it with Telegram and connects. There is no Save button.

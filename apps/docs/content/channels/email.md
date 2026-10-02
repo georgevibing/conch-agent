@@ -6,7 +6,7 @@ channel: email
 
 Email reaches your assistant from any mail app, on any device. You write to your own address with `+conch` added (`you+conch@gmail.com`), and the answer comes back in the same thread, from your own account.
 
-In Conch, open **Channels** and choose **Email**.
+In Conch, open **Apps**, choose **Talk to me here**, then **Email**.
 
 1. **Your email address.** Type it, and Conch picks your mail service: Gmail, iCloud or Fastmail. For another service, choose **Other** and say where its mail lives.
 2. **Make an app password.** An app password lets Conch into your mail without your real password, and you can take it back any time. Press **Make one in Gmail** (or iCloud, or Fastmail), name it "Conch", and paste the password into Conch. It's checked with your mail service as it lands.
@@ -20,6 +20,7 @@ In Conch, open **Channels** and choose **Email**.
 
 ## Good to know
 
+- **With Gmail, it's part of Gmail.** An email channel on Gmail is Gmail's **Talk to me here** in Apps: one card. If Gmail is connected with an app password already, turning on **Talk to me here** on its page uses the same one, in one press. The other way round, the channel's page offers **Use it for Gmail**.
 - **Only mail for Conch is read.** Conch reads mail sent to your `+conch` address, from the last day, and files it in a **Conch** folder once it's handled. The rest of your inbox is never looked at.
 - **iCloud has no `+` addresses.** With iCloud, write to yourself with "Conch" at the start of the subject.
 - **Outlook needs Microsoft's own sign-in.** Since September 2024 Outlook.com takes no app passwords, and Conch can't do Microsoft's sign-in yet. Forward your Outlook mail to Gmail, iCloud or Fastmail and connect that.

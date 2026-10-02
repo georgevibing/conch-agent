@@ -22,7 +22,7 @@ export interface Section {
 export const SECTIONS: readonly Section[] = [
   { id: 'start', title: 'Get started', about: 'Install it, say hello, take it with you.' },
   { id: 'providers', title: 'Providers', about: 'The assistants and models Conch drives.' },
-  { id: 'channels', title: 'Channels', about: 'Reach it from the chat apps on your phone.' },
+  { id: 'channels', title: 'Talk to me here', about: 'Reach it from the chat apps on your phone.' },
   { id: 'features', title: 'What it does', about: 'Memory, skills, the web, your files.' },
   { id: 'care', title: 'It looks after itself', about: 'Repair, backups, updates, undo.' },
   { id: 'security', title: 'Security', about: 'Who gets in, and what the assistant may do.' },

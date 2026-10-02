@@ -7,7 +7,7 @@ equally drives another agent on that machine, or a model you hold a key for — 
 of them at once. Every connected provider's models are in one picker, and a
 conversation can move between them without losing its thread
 ([ADR 0010](./docs/adr/0010-providers.md), [ADR 0012](./docs/adr/0012-every-provider-at-once.md)).
-Integrations and skills belong to Conch. Tool-capable models receive the shared
+Apps and skills belong to Conch. Tool-capable models receive the shared
 capabilities; chat-only models are identified before a job starts. ChatGPT
 subscription access uses Codex app-server device sign-in with Conch-isolated
 credentials. See ADRs [0036](./docs/adr/0036-provider-consistency.md),
@@ -178,7 +178,10 @@ src/
   `integrations.json` `removed`); the rest are listed per provider
   (`ExternalIntegration.provider`) and only work with it (ADR 0049). Slack is
   Conch's own too: `slack/` keeps the person's user token in sealed
-  `slack.secrets.json` and gives every engine the `slack_*` host tools.
+  `slack.secrets.json` and gives every engine the `slack_*` host tools. Conch's
+  own apps (Gmail, Calendar, Drive: `google/apps.ts`; Slack: `slack/apps.ts`) are
+  `HostedApps`, joined by `integrations/hosted.ts`, so the service lists, opens,
+  switches, checks and removes them like any other (ADR 0052).
   OAuth callback: `GET /oauth/callback`.
   Google accounts use native `google/` host tools shared by every engine, not
   provider account connectors. Google Auth Library handles PKCE/token verification;
@@ -699,26 +702,34 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   of Settings — and it covers every path, including a key field that also takes a
   1Password reference. First run asks which provider to start with instead of
   assuming Claude Code (there, the same content is a dialog).
-- **Integrations.** `/integrations` shows what's connected in Conch (broken first,
-  each with its one fix) and a catalog with bundled logos, every one of them Conch's
-  own (ADR 0049). What a provider set up and Conch can't connect is in Settings →
-  Providers → Set up inside a provider (`ProviderServers`), folded;
-  `/integrations?connect=<id>` opens a connect dialog; `/integrations/slack` is
-  Slack's own page;
-  `/integrations/:id` has the policy, per-tool Allow · Ask · Off and the connection.
+- **Apps** (ADR 0052). `/apps` is every app, one card each: `joinApps`
+  (`features/integrations/apps.ts`) joins an integration, the chat apps that are its
+  "Talk to me here" (`Channel.app`) and 1Password's Passwords source, and a chat app of
+  no other app is a card of its own. Broken first, each with its one fix; a hello or a
+  person waiting is a calm `notice`. The gallery is both catalogs, one tile each
+  (bundled logos, every app Conch's own: ADR 0049), filtered by category or **Talk to
+  me here** (`?show=talk`, where `/channels` leads). What a provider set up and Conch
+  can't connect is in Settings → Providers → Set up inside a provider
+  (`ProviderServers`), folded; `/apps?connect=<id>` opens a connect dialog;
+  `/apps/:id` (`AppDetailView`) starts with **What it does** (Nacre `AppAbilities`:
+  tool groups, Talk to me here, Fill sign-ins from 1Password), then the policy,
+  per-tool Allow · Ask · Off and the connection; an app with only one half has the
+  same switches with **Set up** for the other. `/integrations…` and `/channels`
+  redirect (`paths.ts` `newHome`); `/apps/a_…` is a pinned artifact.
   Connecting opens a dialog whose handshake animates through waiting → connected /
   failed; OAuth runs in a popup that lands on `/integrations/done`. Apps that run on
   this computer show a `SetupChecklist` of what they need, with the next step as the
-  main button (Install → Open → Connect); `/integrations?setup=<id>` (a card's
+  main button (Install → Open → Connect); `/apps?setup=<id>` (a card's
   “Finish setup”) reopens it for one already added. Settings → Providers offers
   "Use with every model" to bring back one you disconnected
   (`POST /api/integrations/adopt`; the address stays on the gateway). A failed
   turn's callout offers the fix for its `problem` and resends by itself after a
   sign-in; Settings → Security lists what was "Fixed on its own". Broken
   integrations show inline in chats (`integration.issue`) and as a sidebar count.
-- **Channels.** `/channels` lists your bots (what needs you first, each with its
-  one button: Say hello, Paste the new key, Repair, Review) and the apps you
-  can add. `/channels/new/<app>` is a numbered `GuideSteps` path beside a
+- **Talk to me here** (chat apps, ADR 0018, 0052). Your bots are cards on Apps
+  (what needs you first, each with its one button: Say hello, Paste the new key,
+  Repair, Review), and the apps you can add are tiles under **Talk to me here**.
+  `/channels/new/<app>` is a numbered `GuideSteps` path beside a
   `Handset` (the chat app as you'll see it) or a `PortalSketch` (the web page,
   with the button to press lit up).
   - Keys are checked as they're pasted, anywhere on the page, and connect

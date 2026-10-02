@@ -19,7 +19,7 @@ From anywhere, press <kbd>mod+k</kbd> and choose **Repair everything**.
 When all is well, it's one calm line. **Show details** opens the whole list, in groups:
 
 - **Providers**: each one you use is installed, signed in and answering.
-- **Integrations** and **Channels**: every app and bot you connected still works.
+- **Apps** and **Talk to me here**: every app and chat app you connected still works.
 - **This computer**: the browser, search, the internet, disk space, and whether Conch's files are private to you.
 - **Your data**: [backups](./backups.md), passwords, memory and [undo](./undo.md).
 - **Updates**: Conch and the programs it uses. See [Updates](./updates.md).

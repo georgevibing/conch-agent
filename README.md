@@ -118,10 +118,16 @@ account shared between them. Gmail connects with an app password in two steps
 (reads, searches and saves drafts, never sends); Calendar and Drive use your own
 Google Cloud app, which the setup guides you through, locally or on a server,
 without a hosted Conch connection service.
+Everything is on one page, **Apps**, one card per app: Slack that reads for you and
+the Slack you message your assistant in are one card, as are Gmail and the email
+address you write to, and 1Password's sign-ins and Environments. Each app's page
+has plain switches for what it does (Read & search, Draft, Send (asks first), Talk
+to me here), and setting up one half offers the other.
 ([ADR 0009](./docs/adr/0009-integrations.md), [0013](./docs/adr/0013-skills.md),
 [0006](./docs/adr/0006-routines.md), [0021](./docs/adr/0021-connect-from-chat.md),
 [0040](./docs/adr/0040-google-setup-without-a-broker.md),
-[0048](./docs/adr/0048-google-apps-and-gmail-app-password.md))
+[0048](./docs/adr/0048-google-apps-and-gmail-app-password.md),
+[0052](./docs/adr/0052-one-app-one-card.md))
 
 **It can use the web for you.** Conch has a browser of its own, with nothing to
 install. You watch it work live beside the chat and can take the wheel at any time.
@@ -137,9 +143,9 @@ in for you to check. Other devices can't open one unless you allow it. See
 pastes fold into a card, and each provider gets them in the way it can use.
 ([ADR 0017](./docs/adr/0017-attachments.md))
 
-**Reach it from your chat apps.** Connect Telegram, Discord or Slack in a few guided
-steps — no public address or tunnel — and approve what the assistant asks right
-there. Nobody gets in unless you let them. ([ADR 0018](./docs/adr/0018-channels.md))
+**Reach it from your chat apps.** Under **Apps → Talk to me here**, connect Telegram,
+Discord or Slack in a few guided steps — no public address or tunnel — and approve
+what the assistant asks right there. Nobody gets in unless you let them. ([ADR 0018](./docs/adr/0018-channels.md))
 Or link your own WhatsApp or Signal by scanning a code, and talk to your assistant
 in the chat with yourself; your friends' chats are never read.
 ([ADR 0043](./docs/adr/0043-whatsapp-and-signal.md))

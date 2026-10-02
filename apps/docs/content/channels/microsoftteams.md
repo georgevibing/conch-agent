@@ -4,7 +4,7 @@ channel: microsoftteams
 
 ## Connect it
 
-In Conch, open **Channels** and choose **Microsoft Teams**. You make a Teams bot of your own, Conch gives it an address Teams can deliver to, and you add it to Teams.
+In Conch, open **Apps**, choose **Talk to me here**, then **Microsoft Teams**. You make a Teams bot of your own, Conch gives it an address Teams can deliver to, and you add it to Teams.
 
 1. **Make the bot.** Open the Teams Developer Portal and sign in with your work or school account. Press **New Bot**, name it after your assistant and press **Add**. If your organisation makes bots in Azure instead, an Azure Bot works the same.
 2. **Copy its ID and a secret.** On the bot's page, copy the **Bot ID**. Open **Client secrets**, press **Add a client secret for your bot** and copy the secret it shows. Conch checks both with Microsoft. If your bot only works in your organisation, Conch asks for its **Directory (tenant) ID** too.

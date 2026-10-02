@@ -29,7 +29,7 @@ Dictate into any message, have answers read aloud, or talk hands free. Your voic
 
 ## Or skip the browser
 
-Reach your assistant from Telegram, Discord, Slack, WhatsApp, Signal, iMessage, email, Microsoft Teams, Matrix or WeChat, and approve what it asks from there. See [Channels](../channels/index.md).
+Reach your assistant from Telegram, Discord, Slack, WhatsApp, Signal, iMessage, email, Microsoft Teams, Matrix or WeChat, and approve what it asks from there. It's in **Apps → Talk to me here**. See [Talk to me here](../channels/index.md).
 
 > [!NOTE]
 > Other ways in, a second lock for new devices, and what to do about a lost phone are in [Signing in and staying safe](../security/signing-in.md).

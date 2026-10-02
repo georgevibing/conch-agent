@@ -4,7 +4,7 @@ channel: whatsapp
 
 ## Connect it
 
-WhatsApp has no bots you can make, so Conch joins **your own WhatsApp** as a linked device, the way WhatsApp Web does. In Conch, open **Channels** and choose **WhatsApp**. A code is on the page at once.
+WhatsApp has no bots you can make, so Conch joins **your own WhatsApp** as a linked device, the way WhatsApp Web does. In Conch, open **Apps**, choose **Talk to me here**, then **WhatsApp**. A code is on the page at once.
 
 1. **Open WhatsApp** on your phone.
 2. Tap **Settings** (on Android, **⋮**), then **Linked devices**.
