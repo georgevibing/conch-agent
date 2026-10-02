@@ -2,6 +2,7 @@ import {
   Check,
   ChevronRight,
   CircleAlert,
+  Info,
   Minus,
   Sparkles,
   TriangleAlert,
@@ -15,7 +16,8 @@ import { cx } from '../../utils/cx';
 import { ago } from '../Healed/HealedNotes';
 import styles from './RepairPanel.module.css';
 
-export type RepairState = 'checking' | 'ok' | 'fixed' | 'warning' | 'needs-you' | 'off';
+/** `info` is news, not a problem (a new release): it never counts as worth a look. */
+export type RepairState = 'checking' | 'ok' | 'fixed' | 'info' | 'warning' | 'needs-you' | 'off';
 
 export interface RepairItem {
   id: string;
@@ -50,16 +52,18 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 const rank: Record<RepairState, number> = {
   'needs-you': 0,
   warning: 1,
-  fixed: 2,
-  checking: 3,
-  ok: 4,
-  off: 5,
+  info: 2,
+  fixed: 3,
+  checking: 4,
+  ok: 5,
+  off: 6,
 };
 
 const icon: Record<RepairState, ReactNode> = {
   checking: <Spinner size="xs" label={null} />,
   ok: <Check />,
   fixed: <Sparkles />,
+  info: <Info />,
   warning: <TriangleAlert />,
   'needs-you': <CircleAlert />,
   off: <Minus />,
@@ -69,6 +73,7 @@ const spoken: Record<RepairState, string> = {
   checking: 'Checking',
   ok: 'Working',
   fixed: 'Fixed',
+  info: 'News',
   warning: 'Worth a look',
   'needs-you': 'Needs you',
   off: 'Off',
@@ -95,6 +100,7 @@ export function RepairPanel({
   const needsYou = items.filter((i) => i.state === 'needs-you').length;
   const worth = items.filter((i) => i.state === 'warning').length;
   const fixed = items.filter((i) => i.state === 'fixed').length;
+  const news = items.filter((i) => i.state === 'info').length;
   const tone = running ? 'running' : needsYou ? 'attention' : worth ? 'warning' : 'good';
   const [open, setOpen] = useState(false);
   // Something needs you: the list is open, whatever it was.
@@ -114,7 +120,7 @@ export function RepairPanel({
   const subtitle = running
     ? 'This takes a few seconds.'
     : checkedAt
-      ? `Checked ${formatTime(checkedAt)} · ${plural(items.length, 'part')}`
+      ? `Checked ${formatTime(checkedAt)} · ${plural(items.length, 'part')}${news ? ` · ${plural(news, 'piece', 'pieces')} of news` : ''}`
       : 'Not checked yet.';
 
   const groups = [...new Set(items.map((i) => i.group))];

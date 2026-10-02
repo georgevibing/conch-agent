@@ -1,0 +1,147 @@
+@layer nacre.components {
+  /* ── A release's notes ──────────────────────────────────────────────── */
+  .notes {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+  }
+
+  .trigger {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 var(--nc-space-2);
+  }
+
+  .version {
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .date {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-2) 0 var(--nc-space-2) var(--nc-space-6);
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+  }
+
+  .groupTitle {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: 0.02em;
+    color: var(--nc-text-muted);
+  }
+
+  .lines {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    margin: 0;
+    padding-inline-start: var(--nc-space-5);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+    text-wrap: pretty;
+  }
+
+  .lines li::marker {
+    color: var(--nc-text-subtle);
+  }
+
+  /* What you must do: words and an icon, with a quiet edge — never colour alone. */
+  .headsUp {
+    display: flex;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-2-5) var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow: inset 3px 0 0 0
+      light-dark(oklch(0.62 0.14 var(--nc-warning-h)), oklch(0.82 0.14 var(--nc-warning-h)));
+  }
+
+  .headsIcon {
+    flex-shrink: 0;
+    inline-size: 1rem;
+    block-size: 1rem;
+    margin-block-start: 0.0625rem;
+    color: light-dark(oklch(0.52 0.13 var(--nc-warning-h)), oklch(0.82 0.14 var(--nc-warning-h)));
+  }
+
+  .quiet {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  /* ── The new-release banner ─────────────────────────────────────────── */
+  .banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-1) var(--nc-space-2);
+    padding: var(--nc-space-1-5) var(--nc-space-2) var(--nc-space-1-5) var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    container-type: inline-size;
+  }
+
+  .bannerIcon {
+    flex-shrink: 0;
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: var(--nc-accent-10);
+  }
+
+  .bannerTitle {
+    flex: 1 1 10rem;
+    min-inline-size: 0;
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .bannerActions {
+    display: flex;
+    gap: var(--nc-space-1);
+  }
+
+  .bannerDismiss {
+    flex-shrink: 0;
+  }
+
+  /* ── Choosing a channel ─────────────────────────────────────────────── */
+  .channels {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+  }
+
+  .channelGroup {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  }
+
+  .channelNote {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+}

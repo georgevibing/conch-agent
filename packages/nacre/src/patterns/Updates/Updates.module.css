@@ -118,6 +118,10 @@
     margin-inline-start: calc(2.5rem + var(--nc-space-3) - var(--nc-space-1-5));
   }
 
+  .notesSlot {
+    padding-block: var(--nc-space-1);
+  }
+
   .changes {
     display: flex;
     flex-direction: column;

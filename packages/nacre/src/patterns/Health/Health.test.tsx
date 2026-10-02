@@ -80,4 +80,30 @@ describe('RepairPanel', () => {
     );
     expect(screen.getByRole('status')).toHaveTextContent('Fixed 1 thing — everything’s working');
   });
+
+  it('tells news without calling it a problem', async () => {
+    const { container } = panel({
+      items: [
+        ok,
+        {
+          id: 'u',
+          group: 'Updates',
+          title: 'Conch',
+          state: 'info',
+          message: 'Conch 0.3 is ready.',
+          action: <Button size="sm">See what’s new</Button>,
+        },
+      ],
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Everything’s working');
+    expect(screen.getByRole('status')).toHaveTextContent('1 piece of news');
+    await userEvent.click(screen.getByRole('button', { name: 'Show details' }));
+    const list = screen.getAllByRole('list').find((l) => l.textContent?.includes('News'));
+    if (!list) throw new Error('no news');
+    expect(list).toHaveTextContent('News: ConchConch 0.3 is ready.');
+    // News comes before what's simply working.
+    expect(within(list).getAllByRole('listitem')[0]).toHaveTextContent('News: Conch');
+    expect(within(list).getByRole('button', { name: 'See what’s new' })).toBeInTheDocument();
+    await expectAccessible(container);
+  });
 });

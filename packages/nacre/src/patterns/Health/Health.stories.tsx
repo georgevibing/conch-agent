@@ -146,3 +146,20 @@ export const Fixed: Story = {
     checkedAt: now,
   },
 };
+
+/** A new release is news, not a problem: everything stays “working”, and the line says so. */
+export const News: Story = {
+  args: {
+    items: [
+      ...healthy,
+      {
+        id: 'updates:release',
+        group: 'Updates',
+        title: 'Conch',
+        state: 'info',
+        message: 'Conch 0.3 is ready.',
+        action: sign('See what’s new'),
+      },
+    ],
+  },
+};

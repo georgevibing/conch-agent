@@ -186,7 +186,8 @@
     stroke-width: 2.25;
   }
 
-  .row[data-state='fixed'] .icon {
+  .row[data-state='fixed'] .icon,
+  .row[data-state='info'] .icon {
     color: var(--nc-accent-10);
   }
 

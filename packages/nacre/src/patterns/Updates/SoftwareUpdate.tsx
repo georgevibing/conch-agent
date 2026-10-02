@@ -36,6 +36,11 @@ export interface SoftwareUpdateProps extends Omit<ComponentProps<'section'>, 'ti
   detail?: ReactNode;
   /** What the update brings, newest first, in plain words. */
   whatsNew?: string[];
+  /**
+   * A release's own notes (`ReleaseNotes`), shown behind the same
+   * disclosure instead of `whatsNew`.
+   */
+  notes?: ReactNode;
   /** The disclosure's label. */
   whatsNewLabel?: string;
   /** Changes beyond the ones listed: "and 7 more". */
@@ -74,6 +79,7 @@ export function SoftwareUpdate({
   title,
   detail,
   whatsNew = [],
+  notes,
   whatsNewLabel = 'What’s new',
   more = 0,
   defaultOpen = false,
@@ -132,18 +138,25 @@ export function SoftwareUpdate({
         </div>
       )}
 
-      {whatsNew.length > 0 && (
+      {notes ? (
         <Collapsible defaultOpen={defaultOpen} className={styles.whatsNew}>
           <Collapsible.Trigger>{whatsNewLabel}</Collapsible.Trigger>
-          <Collapsible.Content>
-            <ul className={styles.changes}>
-              {whatsNew.map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-              {more > 0 && <li className={styles.more}>and {more} more</li>}
-            </ul>
-          </Collapsible.Content>
+          <Collapsible.Content className={styles.notesSlot}>{notes}</Collapsible.Content>
         </Collapsible>
+      ) : (
+        whatsNew.length > 0 && (
+          <Collapsible defaultOpen={defaultOpen} className={styles.whatsNew}>
+            <Collapsible.Trigger>{whatsNewLabel}</Collapsible.Trigger>
+            <Collapsible.Content>
+              <ul className={styles.changes}>
+                {whatsNew.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+                {more > 0 && <li className={styles.more}>and {more} more</li>}
+              </ul>
+            </Collapsible.Content>
+          </Collapsible>
+        )
       )}
 
       {footnote && !updating && <p className={styles.footnote}>{footnote}</p>}
