@@ -38,7 +38,7 @@ export interface CatalogCardProps extends Base {
   connected?: boolean;
   /** Runs on this computer. */
   local?: boolean;
-  /** A short note, e.g. "Through your Claude account". */
+  /** A short note, e.g. "Needs your Home Assistant address". */
   note?: string;
 }
 

@@ -183,11 +183,7 @@ export const CatalogTiles: Story = {
           index={i}
           connected={b.id === 'notion'}
           local={b.id === 'browser'}
-          note={
-            ['gmail', 'google-calendar', 'google-drive', 'slack'].includes(b.id)
-              ? 'Via your Claude account'
-              : undefined
-          }
+          note={b.id === 'home-assistant' ? 'Needs your Home Assistant address' : undefined}
           onOpen={() => {}}
         />
       ))}
