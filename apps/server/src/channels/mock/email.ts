@@ -124,6 +124,8 @@ export class MockMail {
       if (request.params.action === 'deliver') return { messageId: this.deliver(body) };
       if (request.params.action === 'sent') return this.sent;
       if (request.params.action === 'revoke') this.revoke();
+      // The person made a new app password: the usual one works again.
+      if (request.params.action === 'reset') this.password = MockMail.PASSWORD.replaceAll(' ', '');
       return { ok: true };
     });
     const control = ports.control ?? 0;
