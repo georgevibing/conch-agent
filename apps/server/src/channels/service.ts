@@ -10,6 +10,8 @@ import {
   type ChannelState,
   type CheckChannelBody,
   type ConversationEvent,
+  type ImessageSetup,
+  type OpenImessageBody,
   type RoutineRun,
   type ServerEvent,
   type UpdateChannelBody,
@@ -24,17 +26,19 @@ import { ConversationError, type ConversationManager } from '../conversations/ma
 import type { PermissionDecision } from '../engines/types';
 import { newId } from '../lib/ids';
 import type { SettingsStore } from '../settings/store';
-import { CHANNEL_CATALOG, CHANNEL_NAMES } from './catalog';
+import { CHANNEL_NAMES, catalogFor } from './catalog';
 import { isLinked } from './linked';
 import type { ChannelStore, StoredChannel } from './store';
 import {
   type ChannelAdapter,
   type ChannelConnection,
   ChannelError,
+  type ChannelField,
   type ChannelMessage,
   type ChannelPress,
   type ChannelUser,
   type SentRef,
+  type StateDetail,
 } from './types';
 
 /** A hello link works this long. */
@@ -59,7 +63,7 @@ export class ChannelServiceError extends Error {
   constructor(
     readonly code: 'not-found' | 'invalid' | 'unavailable',
     message: string,
-    readonly field?: 'token' | 'botToken' | 'appToken',
+    readonly field?: ChannelField,
   ) {
     super(message);
   }
@@ -76,6 +80,8 @@ interface LiveChannel {
   health: ChannelHealth;
   /** When it went from online to not, for the "reconnected on its own" note. */
   downSince?: number;
+  /** How far it has read, waiting to be kept. */
+  cursor?: string;
 }
 
 /** One turn Conch is relaying back to a chat. */
@@ -93,7 +99,7 @@ interface Relay {
   /** Streaming the answer as a draft (Telegram): which draft, what it says, when it last went. */
   draft?: { id: number; text: string; sentAt: number; timer?: NodeJS.Timeout };
   /** Messages sent while it was busy: they go next, together. */
-  queued: { text: string; attachments: string[] }[];
+  queued: { text: string; attachments: string[]; outside?: string }[];
   /** Said "I'll get to that" already this turn. */
   toldQueued?: boolean;
   /** Sends go one after another, in order. */
@@ -121,6 +127,13 @@ export function normalizeSecrets(secrets: ChannelSecrets): ChannelSecrets {
     return { kind: 'telegram', token: pick(secrets.token, TELEGRAM_TOKEN) };
   if (secrets.kind === 'discord')
     return { kind: 'discord', token: pick(secrets.token, DISCORD_TOKEN) };
+  if (secrets.kind === 'imessage') return { ...secrets, handle: secrets.handle.trim() };
+  if (secrets.kind === 'email')
+    return {
+      ...secrets,
+      address: secrets.address.trim().toLowerCase(),
+      password: secrets.password.trim(),
+    };
   // Linked devices carry no key to find (ADR 0043).
   if (secrets.kind !== 'slack') return secrets;
   // Pasted into each other's boxes? Put them right.
@@ -179,6 +192,13 @@ export class ChannelService {
       onHeal: (message: string) => void;
       /** A routine's name, for its results. */
       routineTitle?: (routineId: string) => Promise<string | undefined>;
+      /** iMessage on this Mac: what connecting would use, and opening System Settings to allow it. */
+      imessage?: {
+        setup(): Promise<ImessageSetup>;
+        open(place: OpenImessageBody['place']): Promise<void>;
+      };
+      /** The system the catalog is offered for (iMessage is Mac only). */
+      platform?: NodeJS.Platform;
       now?: () => number;
       log?: (message: string) => void;
     },
@@ -219,7 +239,28 @@ export class ChannelService {
 
   async list(): Promise<ChannelList> {
     const channels = await this.deps.store.all();
-    return { channels: channels.map((c) => this.#view(c)), catalog: CHANNEL_CATALOG };
+    return {
+      channels: channels.map((c) => this.#view(c)),
+      catalog: catalogFor(this.deps.platform ?? process.platform),
+    };
+  }
+
+  /** What connecting iMessage would use here (read from Messages), or why it can't yet. */
+  async imessageSetup(): Promise<ImessageSetup> {
+    if ((this.deps.platform ?? process.platform) !== 'darwin' || !this.deps.imessage)
+      return { access: 'not-mac', handles: [] };
+    return this.deps.imessage.setup();
+  }
+
+  /** Open the System Settings page that lets Conch read or use Messages. */
+  async openImessage(place: OpenImessageBody['place']): Promise<void> {
+    if (!this.deps.imessage)
+      throw new ChannelServiceError('unavailable', 'iMessage only works on a Mac.');
+    try {
+      await this.deps.imessage.open(place);
+    } catch (error) {
+      throw new ChannelServiceError('unavailable', explain(error));
+    }
   }
 
   async get(id: string): Promise<Channel> {
@@ -308,9 +349,18 @@ export class ChannelService {
     const secrets = normalizeSecrets(body);
     try {
       const bot = await this.deps.adapter(secrets).identify(AbortSignal.timeout(20_000));
-      return { ok: true, bot, checked: ['token'] };
+      return {
+        ok: true,
+        bot,
+        checked: [secrets.kind === 'email' ? 'password' : 'token'],
+      };
     } catch (error) {
-      return { ok: false, field: 'token', message: explain(error) };
+      const field = error instanceof ChannelError ? error.detail?.field : undefined;
+      return {
+        ok: false,
+        field: field ?? (secrets.kind === 'email' ? 'password' : 'token'),
+        message: explain(error),
+      };
     }
   }
 
@@ -358,7 +408,13 @@ export class ChannelService {
     }
     this.#connect(stored, secrets);
     this.#quietly(this.#prepare(adapter, stored.id), 'profile');
-    if (!stored.people.length) this.#openPairing(stored);
+    // Your own account (your email, iMessage to yourself): you're in already, no hello needed.
+    const owner = adapter.owner?.();
+    if (owner && !stored.people.length) {
+      const name = (await this.deps.settings.get()).profile.name?.trim();
+      await this.#admit(stored.id, { ...owner, ...(name && { name }) });
+      stored = (await this.deps.store.get(stored.id)) ?? stored;
+    } else if (!stored.people.length) this.#openPairing(stored);
     const view = this.#view(stored);
     this.deps.emit({ type: 'channel.changed', channel: view });
     return view;
@@ -524,7 +580,7 @@ export class ChannelService {
       throw new ChannelServiceError(
         'invalid',
         `That key belongs to another bot${bot.username ? ` (@${bot.username})` : ''}. To use it, connect it as a new channel.`,
-        secrets.kind === 'slack' ? 'botToken' : 'token',
+        secrets.kind === 'slack' ? 'botToken' : secrets.kind === 'email' ? 'address' : 'token',
       );
     await this.deps.store.setSecrets(id, secrets);
     const stored =
@@ -627,20 +683,38 @@ export class ChannelService {
       connection: undefined as unknown as ChannelConnection,
     };
     this.#live.set(id, live);
-    live.connection = adapter.connect({
-      message: (message) =>
-        void this.#onMessage(id, message).catch((error: unknown) =>
-          this.#log(`message on ${stored.kind}: ${explain(error)}`),
-        ),
-      press: (press) =>
-        void this.#onPress(id, press).catch((error: unknown) =>
-          this.#log(`button on ${stored.kind}: ${explain(error)}`),
-        ),
-      state: (state, detail) => this.#setHealth(id, state, detail),
-      stop: (chatId) => this.#quietly(this.#stopFromApp(id, chatId), 'stop'),
-      healed: (message) => this.deps.onHeal(message),
-      joined: () => this.#quietly(this.#refreshBot(id), 'refresh'),
-    });
+    let cursor: NodeJS.Timeout | undefined;
+    live.connection = adapter.connect(
+      {
+        message: (message) =>
+          void this.#onMessage(id, message).catch((error: unknown) =>
+            this.#log(`message on ${stored.kind}: ${explain(error)}`),
+          ),
+        press: (press) =>
+          void this.#onPress(id, press).catch((error: unknown) =>
+            this.#log(`button on ${stored.kind}: ${explain(error)}`),
+          ),
+        state: (state, detail) => this.#setHealth(id, state, detail),
+        stop: (chatId) => this.#quietly(this.#stopFromApp(id, chatId), 'stop'),
+        healed: (message) => this.deps.onHeal(message),
+        joined: () => this.#quietly(this.#refreshBot(id), 'refresh'),
+        // Kept a moment later, so a busy minute is one write, not hundreds.
+        cursor: (value) => {
+          live.cursor = value;
+          if (cursor) return;
+          cursor = setTimeout(() => {
+            cursor = undefined;
+            if (this.#live.get(id) !== live) return;
+            this.#quietly(
+              this.deps.store.update(id, (c) => ({ ...c, cursor: live.cursor })),
+              'cursor',
+            );
+          }, 500);
+          cursor.unref?.();
+        },
+      },
+      { ...(stored.cursor && { cursor: stored.cursor }) },
+    );
   }
 
   #disconnect(id: string) {
@@ -661,11 +735,7 @@ export class ChannelService {
     await this.#emit(id);
   }
 
-  #setHealth(
-    id: string,
-    state: ChannelState,
-    detail?: { message?: string; retryAt?: number; need?: string },
-  ) {
+  #setHealth(id: string, state: ChannelState, detail?: StateDetail) {
     const live = this.#live.get(id);
     if (!live) return;
     const was = live.health;
@@ -690,9 +760,16 @@ export class ChannelService {
       ...(detail?.message && { message: detail.message }),
       ...(detail?.retryAt && { retryAt: detail.retryAt }),
       ...(detail?.need && { need: detail.need }),
+      ...(detail?.access && { access: detail.access }),
       since: was.state === state ? (was.since ?? now) : now,
     };
-    if (was.state === state && was.message === detail?.message && was.need === detail?.need) return;
+    if (
+      was.state === state &&
+      was.message === detail?.message &&
+      was.need === detail?.need &&
+      was.access === detail?.access
+    )
+      return;
     void this.#emit(id);
   }
 
@@ -857,8 +934,8 @@ export class ChannelService {
     // Private chats only: in a group, anyone could speak for you. Rather than
     // seem broken, say so there (at most every half hour per group).
     if (!message.direct) {
-      // Your own WhatsApp or Signal: your groups never hear from Conch (ADR 0043).
-      if (isLinked(stored.kind)) return;
+      // Your own account would be the one answering in your groups (ADR 0043, 0044): say nothing.
+      if (isLinked(stored.kind) || live.adapter.quiet) return;
       const key = `${id}:group:${message.chatId}`;
       if (!this.#mayAnswer(key)) return;
       const where = stored.bot.username ? ` Message @${stored.bot.username} directly.` : '';
@@ -900,6 +977,14 @@ export class ChannelService {
       await this.#command(stored, live, message, command);
       return;
     }
+    // A new email thread is a new conversation, as /new would start.
+    if (message.fresh && !this.#inflight.has(`${id}:${person.id}`)) {
+      this.#fresh(id, person.id);
+      await this.deps.store.update(id, (c) => {
+        const { [person.id]: _, ...chats } = c.chats;
+        return { ...c, chats };
+      });
+    }
     this.#gather(id, message);
   }
 
@@ -933,6 +1018,7 @@ export class ChannelService {
         .filter(Boolean)
         .join('\n\n'),
       files: messages.flatMap((m) => m.files),
+      ...(messages.find((m) => m.outside) && { outside: messages.find((m) => m.outside)?.outside }),
     });
   }
 
@@ -1028,6 +1114,8 @@ export class ChannelService {
       return { ...c, requests: [...others, request].slice(-MAX_REQUESTS) };
     });
     await this.#emit(stored.id);
+    // Your own account doesn't answer people you don't know: they're only listed for you.
+    if (live.adapter.quiet) return;
     const key = `${stored.id}:${message.user.id}`;
     if (!this.#mayAnswer(key)) return;
     const hello = firstName(message.user.name);
@@ -1063,12 +1151,27 @@ export class ChannelService {
     if (!text && !attachments.length) return;
 
     // Decided now, after the downloads: a turn that started meanwhile takes this as its next message.
-    if (this.#queueBehind(stored.id, message.user.id, message.chatId, text, attachments, live))
+    if (
+      this.#queueBehind(
+        stored.id,
+        message.user.id,
+        message.chatId,
+        text,
+        attachments,
+        live,
+        message.outside,
+      )
+    )
       return;
-    await this.#send(stored, message.chatId, message.user.id, text, attachments, {
-      chatId: message.chatId,
-      messageId: message.messageId,
-    });
+    await this.#send(
+      stored,
+      message.chatId,
+      message.user.id,
+      text,
+      attachments,
+      { chatId: message.chatId, messageId: message.messageId },
+      message.outside,
+    );
   }
 
   /** If the person has a turn in progress, add this to what goes next. */
@@ -1079,10 +1182,11 @@ export class ChannelService {
     text: string,
     attachments: string[],
     live: LiveChannel,
+    outside?: string,
   ): boolean {
     const running = this.#inflight.get(`${channelId}:${personId}`);
     if (!running) return false;
-    running.queued.push({ text, attachments });
+    running.queued.push({ text, attachments, ...(outside && { outside }) });
     if (!running.toldQueued) {
       running.toldQueued = true;
       void live.connection
@@ -1108,11 +1212,13 @@ export class ChannelService {
     text: string,
     attachments: string[],
     source?: SentRef,
+    /** Someone else's words, even from the owner (a forwarded email). */
+    outside?: string,
   ) {
     const live = this.#live.get(stored.id);
     if (!live) return;
     // Claimed before the first await, so nothing sent meanwhile can start a second turn.
-    if (this.#queueBehind(stored.id, personId, chatId, text, attachments, live)) return;
+    if (this.#queueBehind(stored.id, personId, chatId, text, attachments, live, outside)) return;
     const relay: Relay = {
       channelId: stored.id,
       chatId,
@@ -1152,6 +1258,13 @@ export class ChannelService {
               label: `${person?.name ?? 'someone'} on ${CHANNEL_NAMES[stored.kind]}`,
             },
           }),
+          ...(fromOwner &&
+            outside && {
+              untrusted: {
+                kind: 'person' as const,
+                label: `${outside} on ${CHANNEL_NAMES[stored.kind]}`.slice(0, 120),
+              },
+            }),
           ...(!conversationId && {
             origin: { kind: 'channel' as const, channelId: stored.id, channel: stored.kind },
           }),
@@ -1376,6 +1489,8 @@ export class ChannelService {
         .filter(Boolean)
         .join('\n\n'),
       queued.flatMap((q) => q.attachments),
+      undefined,
+      queued.find((q) => q.outside)?.outside,
     );
   }
 

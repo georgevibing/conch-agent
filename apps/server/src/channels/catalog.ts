@@ -47,7 +47,22 @@ export const CHANNEL_CATALOG: ChannelCatalogEntry[] = [
     minutes: 2,
     available: true,
   },
-  { id: 'imessage', name: 'iMessage', tagline: 'Coming soon.', color: '#34DA50', available: false },
+  {
+    id: 'imessage',
+    name: 'iMessage',
+    tagline: 'Text yourself from your iPhone. Nothing to make.',
+    color: '#34DA50',
+    minutes: 1,
+    available: true,
+  },
+  {
+    id: 'email',
+    name: 'Email',
+    tagline: 'Write to yourself+conch, from any mail app.',
+    color: '#5B6B7F',
+    minutes: 3,
+    available: true,
+  },
   {
     id: 'microsoftteams',
     name: 'Microsoft Teams',
@@ -64,4 +79,21 @@ export const CHANNEL_NAMES: Record<ChannelKind, string> = {
   slack: 'Slack',
   whatsapp: 'WhatsApp',
   signal: 'Signal',
+  imessage: 'iMessage',
+  email: 'Email',
 };
+
+/** Channels that only work on some systems: elsewhere the tile says so and can't be chosen. */
+const ONLY_ON: Partial<Record<string, { platforms: NodeJS.Platform[]; tagline: string }>> = {
+  imessage: { platforms: ['darwin'], tagline: 'Only on a Mac.' },
+};
+
+/** The catalog as this computer can offer it. */
+export function catalogFor(platform: NodeJS.Platform): ChannelCatalogEntry[] {
+  return CHANNEL_CATALOG.map((entry) => {
+    const only = ONLY_ON[entry.id];
+    return only && !only.platforms.includes(platform)
+      ? { ...entry, tagline: only.tagline, available: false }
+      : entry;
+  });
+}

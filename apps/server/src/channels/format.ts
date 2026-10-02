@@ -237,6 +237,45 @@ export function toDiscordMarkdown(markdown: string): string {
     .trim();
 }
 
+/**
+ * Simple HTML for an email (ADR 0044): what every mail app shows the same
+ * way, inline styles only, nothing loaded from anywhere. The plain-text part
+ * beside it is `plain()`.
+ */
+export function toEmailHtml(markdown: string): string {
+  const style = {
+    escape: (s: string) => escapeHtml(s).replaceAll('"', '&quot;'),
+    code: (s: string) =>
+      `<code style="font-family:ui-monospace,Menlo,monospace;background:#f3f3f3;padding:0 3px">${escapeHtml(s)}</code>`,
+    bold: (s: string) => `<b>${s}</b>`,
+    italic: (s: string) => `<i>${s}</i>`,
+    strike: (s: string) => `<s>${s}</s>`,
+    link: (label: string, url: string) =>
+      `<a href="${escapeHtml(url).replaceAll('"', '&quot;')}">${escapeHtml(label)}</a>`,
+  };
+  const pre = (text: string) =>
+    `<pre style="font-family:ui-monospace,Menlo,monospace;background:#f6f6f6;padding:8px;border-radius:6px;white-space:pre-wrap">${escapeHtml(text)}</pre>`;
+  const body = blocks(markdown)
+    .map((block) =>
+      block.kind === 'code'
+        ? pre(block.text)
+        : prose(block.text, {
+            line: (s) => inline(s, style),
+            heading: (s) => `<b style="font-size:1.1em">${s}</b>`,
+            quote: (lines) =>
+              `<blockquote style="margin:0;padding-left:10px;border-left:3px solid #ccc;color:#555">${lines.join('<br>')}</blockquote>`,
+            // A table's own line breaks stay as they are inside its <pre>.
+            table: (rows) => pre(rows).replaceAll('\n', '\u0001'),
+            bullet: '•',
+          })
+            .replaceAll('\n', '<br>\n')
+            .replaceAll('\u0001', '\n'),
+    )
+    .join('\n')
+    .trim();
+  return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5">${body}</div>`;
+}
+
 /** Markdown with the markup taken out, for when an app refuses the formatted version. */
 export function plain(markdown: string): string {
   const style = {

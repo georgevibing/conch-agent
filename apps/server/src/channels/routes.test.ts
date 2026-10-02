@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app';
 import { loadConfig } from '../config';
 import { Services } from '../services';
+import { MockMail } from './mock/email';
 import { MockTelegram } from './mock/telegram';
 
 const PASSWORD = 'purple otters juggle at dawn';
@@ -214,5 +215,63 @@ describe('channel routes', () => {
     });
     expect(smuggled.statusCode).toBe(400);
     expect(smuggled.json().message).toMatch(/links with a code/);
+  });
+
+  it('keep an email’s app password sealed, and say which box is wrong', async () => {
+    const { app, home, services } = await setup();
+    await services.start();
+    const bad = await app.inject({
+      method: 'POST',
+      url: '/api/channels',
+      payload: { kind: 'email', provider: 'gmail', address: MockMail.ADDRESS, password: 'not it' },
+    });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json()).toMatchObject({ error: 'invalid', field: 'password' });
+    const bogus = await app.inject({
+      method: 'POST',
+      url: '/api/channels/check',
+      payload: { kind: 'email', provider: 'other', address: 'not an address', password: 'x' },
+    });
+    expect(bogus.statusCode).toBe(400);
+    const made = await app.inject({
+      method: 'POST',
+      url: '/api/channels',
+      payload: {
+        kind: 'email',
+        provider: 'gmail',
+        address: MockMail.ADDRESS,
+        password: MockMail.PASSWORD,
+      },
+    });
+    expect(made.statusCode).toBe(200);
+    expect(made.body).not.toContain('efgh');
+    const sealed = await readFile(join(home, 'channels.secrets.json'), 'utf8');
+    expect(sealed).toMatch(/^\{"conch-sealed":1/);
+    expect(sealed).not.toContain('efgh');
+    services.stop();
+  });
+
+  it('open System Settings for iMessage only for someone at this Mac', async () => {
+    const { app } = await setup();
+    const here = await app.inject({
+      method: 'POST',
+      url: '/api/channels/imessage/open',
+      payload: { place: 'full-disk-access' },
+    });
+    expect(here.statusCode).toBe(200);
+    const odd = await app.inject({
+      method: 'POST',
+      url: '/api/channels/imessage/open',
+      payload: { place: 'x-apple.systempreferences:anything' },
+    });
+    expect(odd.statusCode).toBe(400);
+    expect((await app.inject('/api/channels/imessage')).json()).toMatchObject({ access: 'ready' });
+    const cookie = await phone(app);
+    const there = await remote(app, '/api/channels/imessage/open', {
+      method: 'POST',
+      cookie,
+      payload: { place: 'full-disk-access' },
+    });
+    expect(there.statusCode).toBe(403);
   });
 });

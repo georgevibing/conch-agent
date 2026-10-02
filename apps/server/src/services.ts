@@ -45,7 +45,10 @@ import { backupCheck } from './backup/doctor';
 import { BackupService } from './backup/service';
 import { BrowserService } from './browser/service';
 import { adapterFor, type ChannelEndpoints, slackCheckFor } from './channels/adapters';
+import { ChatDb, imessageSetup, MESSAGES_DB, openForImessage } from './channels/imessage';
 import { MockDiscord } from './channels/mock/discord';
+import { MockMail } from './channels/mock/email';
+import { MockMessages } from './channels/mock/imessage';
 import { MockSlack } from './channels/mock/slack';
 import { MockTelegram } from './channels/mock/telegram';
 import { linkedChannels, type LinkedChannels } from './channels/linked-setup';
@@ -216,6 +219,8 @@ export class Services {
   readonly linked: LinkedChannels;
   /** Linking WhatsApp or Signal by QR code. */
   readonly channelLinking: ChannelLinking;
+  readonly mockMail?: MockMail;
+  readonly mockMessages?: MockMessages;
   #login?: { handle: LoginHandle; state: LoginState };
   #channelStore?: ChannelStore;
   #sweeper?: NodeJS.Timeout;
@@ -622,6 +627,8 @@ export class Services {
     this.mockTelegram = config.CONCH_ENGINE === 'mock' ? new MockTelegram() : undefined;
     this.mockDiscord = config.CONCH_ENGINE === 'mock' ? new MockDiscord() : undefined;
     this.mockSlack = config.CONCH_ENGINE === 'mock' ? new MockSlack() : undefined;
+    this.mockMail = config.CONCH_ENGINE === 'mock' ? new MockMail() : undefined;
+    this.mockMessages = config.CONCH_ENGINE === 'mock' ? new MockMessages() : undefined;
     this.linked = linkedChannels({
       home: config.CONCH_HOME,
       mock: config.CONCH_ENGINE === 'mock',
@@ -630,7 +637,9 @@ export class Services {
     const endpoints: ChannelEndpoints = {
       whatsapp: this.linked.whatsapp,
       signal: this.linked.signal,
+      ...(this.mockMessages && { imessage: this.mockMessages.endpoints }),
     };
+    const messages = this.mockMessages;
     this.#channelStore = new ChannelStore(config.CONCH_HOME, heal);
     this.channels = new ChannelService({
       store: this.#channelStore,
@@ -643,6 +652,16 @@ export class Services {
       onHeal: (message) => void this.healed.note('channels', message),
       routineTitle: async (id) =>
         (await this.routines.detail(id).catch(() => undefined))?.routine.title,
+      // The pretend Messages works anywhere; the real one only on a Mac.
+      platform: messages ? 'darwin' : process.platform,
+      imessage: {
+        setup: () => imessageSetup(new ChatDb(messages?.db ?? MESSAGES_DB)),
+        open: (place) =>
+          openForImessage(
+            place,
+            messages ? async () => ({ stdout: '', stderr: '', code: 0 }) : undefined,
+          ),
+      },
     });
     this.channelLinking = new ChannelLinking({
       linker: (kind) => this.linked.linker(kind),
@@ -703,6 +722,16 @@ export class Services {
         endpoints.slack = this.mockSlack.api;
       }
       await linked.start();
+      if (this.mockMail) {
+        await this.mockMail.start({
+          imap: Number(process.env.CONCH_MOCK_IMAP_PORT ?? 0),
+          smtp: Number(process.env.CONCH_MOCK_SMTP_PORT ?? 0),
+          control: Number(process.env.CONCH_MOCK_MAIL_PORT ?? 0),
+        });
+        endpoints.email = this.mockMail.endpoints;
+      }
+      if (this.mockMessages)
+        await this.mockMessages.start(Number(process.env.CONCH_MOCK_MESSAGES_PORT ?? 0));
     })();
   }
 
@@ -1090,7 +1119,11 @@ export class Services {
               ['bot token', secrets.botToken],
               ['app token', secrets.appToken],
             ]
-          : [['bot token', secrets.token]];
+          : secrets.kind === 'email'
+            ? [['app password', secrets.password]]
+            : secrets.kind === 'imessage'
+              ? []
+              : [['bot token', secrets.token]];
       for (const [label, value] of tokens)
         out.push({
           id: id('channel', channel.id, label),
@@ -1171,6 +1204,8 @@ export class Services {
     void this.mockTelegram?.stop();
     void this.mockDiscord?.stop();
     void this.mockSlack?.stop();
+    void this.mockMail?.stop();
+    void this.mockMessages?.stop();
     clearInterval(this.#sweeper);
     this.#sweeper = undefined;
     this.network.stop();

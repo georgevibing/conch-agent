@@ -37,6 +37,8 @@ const APP_NAMES: Record<string, string> = {
   slack: 'Slack',
   whatsapp: 'WhatsApp',
   signal: 'Signal',
+  imessage: 'iMessage',
+  email: 'Email',
 };
 
 const text = (value: unknown, fallback: string) => {

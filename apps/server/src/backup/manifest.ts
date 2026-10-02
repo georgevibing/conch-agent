@@ -275,7 +275,7 @@ export const RULES: readonly BackupRule[] = [
     match: 'channels.json',
     class: 'kept',
     group: 'integrations',
-    why: 'Your channels (bots on Telegram, Discord and Slack, your linked WhatsApp and Signal) and who may talk to them (not their keys).',
+    why: 'Your channels (bots on Telegram, Discord and Slack; your linked WhatsApp and Signal; iMessage; your email account) and who may talk to them, not their keys.',
   },
   {
     match: 'conversations/index.json',
@@ -348,7 +348,7 @@ export const RULES: readonly BackupRule[] = [
     match: 'channels.secrets.json',
     class: 'secret',
     group: 'secrets',
-    why: 'Your bots’ keys.',
+    why: 'Your bots’ keys, and your email’s app password.',
   },
   {
     match: 'whatsapp.secrets.json',

@@ -3,6 +3,8 @@ import type { ChannelSecrets } from '@conch/protocol';
 import { DISCORD_API, DiscordAdapter } from './discord';
 import { SignalAdapter } from './signal';
 import type { SignalDaemon } from './signal-cli';
+import { EmailAdapter, type MailEndpoints } from './email';
+import { ImessageAdapter, type ImessageOptions } from './imessage';
 import { SLACK_API, SlackAdapter } from './slack';
 import { TELEGRAM_API, TelegramAdapter } from './telegram';
 import type { ChannelAdapter } from './types';
@@ -18,6 +20,10 @@ export interface ChannelEndpoints {
   /** Linked devices (ADR 0043): where WhatsApp's keys live and how it connects; the signal-cli Conch runs. */
   whatsapp?: { sessions: WhatsAppSessions; connect: WaConnect };
   signal?: SignalDaemon;
+  /** The pretend mail server (IMAP and SMTP on this computer). */
+  email?: MailEndpoints;
+  /** The pretend Messages: its database, its attachments and how it sends. */
+  imessage?: Omit<ImessageOptions, 'mode' | 'handle'>;
 }
 
 /** The adapter for a bot's keys. */
@@ -38,6 +44,14 @@ export function adapterFor(
     case 'signal':
       if (!endpoints.signal) throw new Error('Signal isn’t set up in this Conch.');
       return new SignalAdapter(secrets.account, endpoints.signal);
+    case 'imessage':
+      return new ImessageAdapter({
+        ...endpoints.imessage,
+        mode: secrets.mode,
+        handle: secrets.handle,
+      });
+    case 'email':
+      return new EmailAdapter(secrets, endpoints.email);
   }
 }
 

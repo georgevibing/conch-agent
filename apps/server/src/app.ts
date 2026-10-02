@@ -208,6 +208,8 @@ export async function buildApp(services: Services) {
         slack: services.mockSlack?.base,
         whatsapp: services.linked.mockWhatsApp?.base,
         signal: services.linked.mockSignal?.base,
+        email: services.mockMail?.base,
+        imessage: services.mockMessages?.base,
       })),
   );
   registerChannelLinkRoutes(app, services.channelLinking, gate);

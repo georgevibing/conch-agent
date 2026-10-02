@@ -551,6 +551,25 @@ list.push(
     },
   },
   {
+    // iMessage (ADR 0044): Messages comes with every Mac; it only needs signing in.
+    id: 'messages-app',
+    name: 'Messages',
+    short: 'Messages',
+    platforms: ['darwin'],
+    find: async (platform) =>
+      platform === 'darwin'
+        ? ['/System/Applications/Messages.app', '/Applications/Messages.app'].find(presentSync)
+        : undefined,
+    // Only a Mac has it; the other systems get the same page, which says so.
+    download: {
+      darwin: 'https://support.apple.com/guide/messages/welcome/mac',
+      win32: 'https://support.apple.com/guide/messages/welcome/mac',
+      linux: 'https://support.apple.com/guide/messages/welcome/mac',
+    },
+    opens: 'messages-app',
+    hint: () => 'Comes with macOS. Open Messages and sign in with your Apple ID.',
+  },
+  {
     id: 'docker',
     name: 'Docker',
     short: 'Docker',

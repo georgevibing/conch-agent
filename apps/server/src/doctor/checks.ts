@@ -8,6 +8,7 @@ import { statfs } from 'node:fs/promises';
 
 import type { DoctorItem, Provider } from '@conch/protocol';
 
+import { CHANNEL_NAMES } from '../channels/catalog';
 import { sandboxSupport } from '../conversations/sandbox';
 import { secureHome } from '../auth/checkup';
 import type { Services } from '../services';
@@ -20,14 +21,6 @@ const PROVIDERS = 'Providers';
 const INTEGRATIONS = 'Integrations';
 const COMPUTER = 'This computer';
 const CHANNELS = 'Channels';
-
-const APP: Record<string, string> = {
-  telegram: 'Telegram',
-  discord: 'Discord',
-  slack: 'Slack',
-  whatsapp: 'WhatsApp',
-  signal: 'Signal',
-};
 
 function providerItem(provider: Provider, fixed: boolean): DoctorItem {
   const { status } = provider;
@@ -166,7 +159,7 @@ export function channelsCheck(services: Services): DoctorCheck {
         const base = {
           id: `channels:${now.id}`,
           group: CHANNELS,
-          title: `${now.bot.name} on ${APP[now.kind] ?? now.kind}`,
+          title: `${now.bot.name} on ${CHANNEL_NAMES[now.kind]}`,
         };
         const { state, message } = now.health;
         if (state === 'off') results.push({ ...base, state: 'off', message: 'Turned off.' });
@@ -198,11 +191,17 @@ export function channelsCheck(services: Services): DoctorCheck {
               : {
                   kind: 'open',
                   label:
-                    state === 'needs-token'
-                      ? now.kind === 'whatsapp' || now.kind === 'signal'
-                        ? 'Link again'
-                        : 'Paste a new key'
-                      : 'Open',
+                    now.health.access === 'full-disk-access'
+                      ? 'Turn on Full Disk Access'
+                      : now.health.access === 'automation'
+                        ? 'Let Conch use Messages'
+                        : state === 'needs-token'
+                          ? now.kind === 'whatsapp' || now.kind === 'signal'
+                            ? 'Link again'
+                            : now.kind === 'email'
+                              ? 'Paste a new app password'
+                              : 'Paste a new key'
+                          : 'Open',
                   place: 'channels',
                   focus: now.id,
                 },

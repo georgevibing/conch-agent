@@ -31,6 +31,13 @@ export interface ChannelMessage {
   files: ChannelFile[];
   /** A private chat with the bot. Only these are answered: groups are ignored. */
   direct: boolean;
+  /**
+   * What's in it came from someone else, even when the owner sent it (a
+   * forwarded email): it's read like a web page (ADR 0028), named like this.
+   */
+  outside?: string;
+  /** It starts something new (an email in a new thread): a fresh conversation, as `/new` would. */
+  fresh?: boolean;
 }
 
 /** Someone pressed one of Conch's buttons. */
@@ -59,13 +66,33 @@ export interface SendOptions {
 export interface ChannelEvents {
   message(message: ChannelMessage): void;
   press(press: ChannelPress): void;
-  state(state: ChannelState, detail?: { message?: string; retryAt?: number; need?: string }): void;
+  state(state: ChannelState, detail?: StateDetail): void;
   /** The person pressed the app's own Stop button (Telegram drafts). */
   stop?(chatId: string): void;
   /** A repair the connection made by itself, for "Fixed on its own". */
   healed(message: string): void;
   /** Discord: the bot joined a server (so people there can now message it). */
   joined?(): void;
+  /**
+   * How far it has read (iMessage's last row, email's last UID), kept with the
+   * channel so a restart carries on from there instead of answering twice.
+   */
+  cursor?(value: string): void;
+}
+
+export interface StateDetail {
+  message?: string;
+  retryAt?: number;
+  /** What has to be installed for it to work (a need id, ADR 0016): Signal needs signal-cli. */
+  need?: string;
+  /** A macOS switch only a person can turn on (iMessage). */
+  access?: 'full-disk-access' | 'automation';
+}
+
+/** Where a connection picks up from. */
+export interface ConnectOptions {
+  /** The last `cursor` it reported, if any. */
+  cursor?: string;
 }
 
 /** A live connection to one bot. It reconnects by itself until closed. */
@@ -104,10 +131,24 @@ export interface ChannelAdapter {
   identify(signal?: AbortSignal): Promise<ChannelBot>;
   /** Best effort: set the bot's commands and description so it explains itself. */
   prepare?(profile: ChannelProfile): Promise<void>;
-  connect(events: ChannelEvents): ChannelConnection;
+  connect(events: ChannelEvents, options?: ConnectOptions): ChannelConnection;
   /** Disconnecting for good: delete what it keeps on this computer besides the key (a linked device's keys). */
   forget?(): Promise<void>;
+  /**
+   * Who the owner already is, when the account is theirs (an email address's
+   * own mail, iMessage to yourself): they're let in on connecting, with no hello.
+   */
+  owner?(): ChannelUser | undefined;
+  /**
+   * The account is the person's own (their Apple ID, their email): an answer
+   * would come from them, so people it doesn't know, and groups, never hear
+   * back. Requests are still listed, quietly.
+   */
+  readonly quiet?: boolean;
 }
+
+/** Which box on the connect page was wrong. */
+export type ChannelField = 'token' | 'botToken' | 'appToken' | 'password' | 'address' | 'server';
 
 export type AdapterFactory = (secrets: ChannelSecrets) => ChannelAdapter;
 
@@ -125,7 +166,7 @@ export class ChannelError extends Error {
   constructor(
     readonly code: 'auth' | 'conflict' | 'network' | 'rate-limit' | 'refused' | 'setup',
     message: string,
-    readonly detail?: { retryAfterMs?: number; field?: 'token' | 'botToken' | 'appToken' },
+    readonly detail?: { retryAfterMs?: number; field?: ChannelField },
   ) {
     super(message);
   }

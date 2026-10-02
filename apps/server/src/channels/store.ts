@@ -28,6 +28,8 @@ export const StoredChannel = z.object({
   /** Each person's current conversation (`/new` starts another). */
   chats: z.record(z.string(), z.string()).default({}),
   lastMessageAt: z.number().optional(),
+  /** How far the connection has read (iMessage, email), so a restart carries on from there. */
+  cursor: z.string().max(200).optional(),
 });
 export type StoredChannel = z.infer<typeof StoredChannel>;
 

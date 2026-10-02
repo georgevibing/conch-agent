@@ -3,6 +3,7 @@ import {
   CheckChannelBody,
   CreateChannelBody,
   Id,
+  OpenImessageBody,
   ReplaceChannelTokenBody,
   UpdateChannelBody,
 } from '@conch/protocol';
@@ -67,6 +68,25 @@ export function registerChannelRoutes(
   app.get('/api/channels', () => channels.list());
 
   if (mocks) app.get('/api/channels/mock', () => mocks());
+
+  // iMessage on this Mac: what Messages has, and whether macOS lets Conch read it yet.
+  app.get('/api/channels/imessage', () => channels.imessageSetup());
+
+  app.post('/api/channels/imessage/open', async (request, reply) => {
+    const body = parse(OpenImessageBody, request.body, reply);
+    if (!body) return reply;
+    // It opens a window on this Mac: only for someone sitting at it.
+    if (!gate.isLocal(request))
+      return reply
+        .code(403)
+        .send({ error: 'local-only', message: 'Do this on the Mac Conch runs on.' });
+    try {
+      await channels.openImessage(body.place);
+      return { ok: true };
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
 
   app.post('/api/channels/check', async (request, reply) => {
     const body = parse(CheckChannelBody, request.body, reply);
