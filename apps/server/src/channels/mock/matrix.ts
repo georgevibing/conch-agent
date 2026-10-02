@@ -847,8 +847,20 @@ export class MockMatrix {
     const join: Record<string, { timeline: { events: Event[] }; state: { events: Event[] } }> = {};
     const invite: Record<string, { invite_state: { events: unknown[] } }> = {};
     const changed = new Set<string>();
+    // A room just joined comes with what was said there before, as a homeserver sends it.
+    const joinedNow = new Set(
+      this.#items.flatMap((item) =>
+        item.kind === 'event' &&
+        item.at > since &&
+        item.event.type === 'm.room.member' &&
+        item.event.state_key === user &&
+        item.event.content.membership === 'join'
+          ? [item.room]
+          : [],
+      ),
+    );
     for (const item of this.#items) {
-      if (item.at <= since) continue;
+      if (item.at <= since && !(item.kind === 'event' && joinedNow.has(item.room))) continue;
       if (item.kind === 'keys') {
         if (item.user !== user) changed.add(item.user);
         continue;
