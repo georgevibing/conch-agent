@@ -1,10 +1,10 @@
 /** Isolated Codex state. Only the active child sees a plaintext credential file. */
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { z } from 'zod';
 
-import { Mutex, writeJson } from '../../lib/fs';
+import { Mutex, removeTree, writeJson } from '../../lib/fs';
 import { readStore } from '../../lib/recover';
 import { sealerFor } from '../../lib/sealed';
 import { hostEnvironment } from '../host';
@@ -12,7 +12,24 @@ import { CodexRpc } from './rpc';
 
 const Credentials = z.object({ auth: z.record(z.string(), z.unknown()).optional() });
 
-/** A crash leaves no reusable plaintext cache: remove only dead owners' copies. */
+/**
+ * Take a run folder away: the credential first, so it never waits in the clear,
+ * then the rest. Codex keeps databases open in there, and Windows holds a
+ * program's files for a moment after it has exited. A folder that's still held
+ * after waiting is left for the next run to sweep. It's never a reason to fail
+ * the run that used it: by now its answer is in hand and its sign-in is saved.
+ */
+async function discard(dir: string): Promise<void> {
+  await removeTree(join(dir, 'auth.json')).catch(() => undefined);
+  await removeTree(dir).catch(() => undefined);
+}
+
+/**
+ * A crash leaves no reusable plaintext cache: remove every run folder nothing
+ * is using. Runs take turns (the mutex), so a folder of this process found here
+ * was left by a run that couldn't remove it; another process's stays while that
+ * process is alive.
+ */
 export async function cleanCodexRuntime(root: string): Promise<void> {
   for (const entry of await readdir(root, { withFileTypes: true }).catch(() => [])) {
     if (!entry.isDirectory() || !/^run-[A-Za-z0-9]+$/.test(entry.name)) continue;
@@ -24,14 +41,18 @@ export async function cleanCodexRuntime(root: string): Promise<void> {
       /* Creation may have been interrupted. */
     }
     if (typeof owner === 'number' && Number.isSafeInteger(owner) && owner > 0) {
-      try {
-        process.kill(owner, 0);
-        continue;
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ESRCH') continue;
-      }
-    } else if (Date.now() - (await stat(dir)).mtimeMs < 60_000) continue;
-    await rm(dir, { recursive: true, force: true });
+      if (owner !== process.pid)
+        try {
+          process.kill(owner, 0);
+          continue;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ESRCH') continue;
+        }
+    } else {
+      const made = await stat(dir).catch(() => undefined);
+      if (made && Date.now() - made.mtimeMs < 60_000) continue;
+    }
+    await discard(dir);
   }
 }
 
@@ -92,7 +113,7 @@ export class CodexHome {
         try {
           if (rpc) await saveCredentials(path, dir);
         } finally {
-          await rm(dir, { recursive: true, force: true });
+          await discard(dir);
         }
       }
     });

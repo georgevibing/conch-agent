@@ -271,13 +271,19 @@ export class CodexEngine implements Engine {
           message: 'ChatGPT connected. Your plan’s available models and limits apply.',
         });
       })()
-        .catch((error: unknown) =>
+        .catch((error: unknown) => {
+          // Conch's own sentences are shown. What the system or a parser said
+          // (`EBUSY: … unlink 'C:\…'`) means nothing to the person signing in.
+          const plain =
+            error instanceof Error && !(error instanceof z.ZodError) && !('code' in error);
+          if (!plain && !abort.signal.aborted) console.error('[codex] sign-in', error);
           emit({
             phase: abort.signal.aborted ? 'cancelled' : 'failed',
-            message:
-              error instanceof Error ? error.message : 'Sign-in did not finish. Please try again.',
-          }),
-        )
+            message: plain
+              ? error.message
+              : 'Conch couldn’t set up the sign-in on this computer. Please try again.',
+          });
+        })
         .finally(() => clearTimeout(timer));
     });
     return {

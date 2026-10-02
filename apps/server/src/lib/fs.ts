@@ -51,6 +51,17 @@ async function replace(from: string, to: string): Promise<void> {
   }
 }
 
+/**
+ * Remove a file or a whole folder, waiting out Windows' brief sharing refusals.
+ * A program that has just exited still holds its open files for a moment there
+ * (a database, a log), and removing them in that moment fails with `EBUSY`.
+ * Nothing at `path` is fine.
+ */
+export async function removeTree(path: string): Promise<void> {
+  // Node waits `retryDelay` longer before each new try: about a second in all.
+  await rm(path, { recursive: true, force: true, maxRetries: 8, retryDelay: 25 });
+}
+
 export async function readJson<T>(path: string): Promise<T | undefined> {
   try {
     return JSON.parse(await readFile(path, 'utf8')) as T;
