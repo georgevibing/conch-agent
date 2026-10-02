@@ -375,11 +375,15 @@ export class TaskService {
   async waitFor(ids: string[], signal?: AbortSignal): Promise<Task[]> {
     const one = (id: string) =>
       new Promise<Task>((resolve) => {
+        // Listening before looking, so a finish between the two is never missed.
+        const set = this.#waiters.get(id) ?? new Set();
+        set.add(resolve);
+        this.#waiters.set(id, set);
         void this.deps.store.get(id).then((now) => {
-          if (now && (FINISHED.includes(now.status) || now.status === 'done')) return resolve(now);
-          const set = this.#waiters.get(id) ?? new Set();
-          set.add(resolve);
-          this.#waiters.set(id, set);
+          if (!now || (!FINISHED.includes(now.status) && now.status !== 'done')) return;
+          set.delete(resolve);
+          if (!set.size && this.#waiters.get(id) === set) this.#waiters.delete(id);
+          resolve(now);
         });
       });
     const onAbort = () => void Promise.all(ids.map((id) => this.stop(id).catch(() => undefined)));
@@ -425,7 +429,12 @@ export class TaskService {
 
   async #run(id: string, fallback?: { engine: EngineId; from: string }): Promise<void> {
     let task = await this.get(id);
-    if (this.#stopping.has(id) || task.status !== 'running') return;
+    if (task.status !== 'running') return;
+    // Stopped between being claimed and starting: it ends stopped, never left "running".
+    if (this.#stopping.has(id)) {
+      await this.#finish(task, { status: 'stopped' });
+      return;
+    }
     const options = fallback ? { ...task.options, engine: fallback.engine } : task.options;
     const engine = this.deps.engine(options.engine);
     const ready = await engine.detect().catch(() => undefined);
