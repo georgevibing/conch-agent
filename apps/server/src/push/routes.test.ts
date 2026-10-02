@@ -2,6 +2,7 @@ import { createECDH } from 'node:crypto';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setImmediate } from 'node:timers/promises';
 
 import { PhoneAddress, PushStatus } from '@conch/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -9,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app';
 import { loadConfig } from '../config';
 import { Services } from '../services';
+import { PushStore } from './store';
 
 const PASSWORD = 'a long enough sentence for conch';
 
@@ -43,7 +45,7 @@ async function setup() {
     payload: { username: 'ada', password: PASSWORD },
   });
   const cookie = String([signedIn.headers['set-cookie']].flat()[0]).split(';')[0] ?? '';
-  return { app, services, cookie };
+  return { app, services, cookie, home };
 }
 
 const subscription = (endpoint = 'https://fcm.googleapis.com/fcm/send/abc') => {
@@ -59,6 +61,43 @@ const subscription = (endpoint = 'https://fcm.googleapis.com/fcm/send/abc') => {
 };
 
 describe('notification routes', () => {
+  it('finishes signed-out device cleanup before shutdown releases its files', async () => {
+    const { services, home } = await setup();
+    await services.push.subscribe('session:retired', 'Old phone', subscription());
+    const remove = PushStore.prototype.remove;
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => (release = resolve));
+    vi.spyOn(PushStore.prototype, 'remove').mockImplementationOnce(async function (
+      this: PushStore,
+      predicate,
+    ) {
+      await pending;
+      return remove.call(this, predicate);
+    });
+
+    services.gate.disconnect(['retired']);
+    let stopped = false;
+    const closing = Promise.resolve(services.stop()).then(() => (stopped = true));
+    try {
+      await setImmediate();
+      expect(stopped).toBe(false);
+    } finally {
+      release();
+      await closing;
+    }
+    expect(await new PushStore(home).list()).toEqual([]);
+  });
+
+  it('reports failed sign-out cleanup without an unhandled background rejection', async () => {
+    const { services } = await setup();
+    const error = new Error('Notification storage unavailable');
+    vi.spyOn(services.push, 'forget').mockRejectedValueOnce(error);
+    const report = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    services.gate.disconnect(['retired']);
+    await services.stop();
+    expect(report).toHaveBeenCalledWith('[push] Could not forget signed-out devices', error);
+  });
+
   it('turns a device’s notifications on, names it, and lets it change and remove them', async () => {
     const { app, cookie } = await setup();
     const headers = {

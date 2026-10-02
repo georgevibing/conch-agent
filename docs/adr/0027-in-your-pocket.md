@@ -99,8 +99,10 @@ service carries ciphertext it can't read.
 off. Access keys can't subscribe. A device is only told anything while it's
 still allowed in: not removed, approved when approval is on, and signed in on
 a live session (`AccessStore.deviceActive`). Signing out and removal end its
-notifications; a lapsed one is deleted on the next send. Each device chooses
-its topics and whether previews show:
+notifications; a lapsed one is deleted on the next send. Shutdown waits for
+pending sign-out subscription cleanup before releasing the data directory.
+Cleanup failures are logged; delivery still checks that the owner is allowed in.
+Each device chooses its topics and whether previews show:
 
 | Topic     | When                                                                                                      | Tap opens                              |
 | --------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------- |

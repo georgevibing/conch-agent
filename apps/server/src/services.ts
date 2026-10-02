@@ -218,6 +218,8 @@ export class Services {
   readonly tailscale: Tailscale;
   /** Notifications on your devices (ADR 0027). */
   readonly push: PushService;
+  /** Revoked devices must be forgotten before shutdown releases their storage. */
+  readonly #pushRevocations = new Set<Promise<void>>();
   /** Private dictation: whisper.cpp on this computer (ADR 0027). */
   readonly voice: VoiceService;
   /** Work that runs in the background, and helpers side by side (ADR 0033). */
@@ -766,7 +768,15 @@ export class Services {
     this.background = this.#background(config);
     this.push = this.#push(config);
     this.broadcast.on((event) => void this.push.onEvent(event).catch(() => undefined));
-    this.gate.signedOut.on((ids) => void this.push.forget(ids.map((id) => `session:${id}`)));
+    this.gate.signedOut.on((ids) => {
+      const pending = this.push
+        .forget(ids.map((id) => `session:${id}`))
+        .catch((error: unknown) =>
+          console.error('[push] Could not forget signed-out devices', error),
+        )
+        .finally(() => this.#pushRevocations.delete(pending));
+      this.#pushRevocations.add(pending);
+    });
     this.tailscale = new Tailscale({
       port: () => config.CONCH_PORT,
       onName: (name, serving) => this.gate.hosts.setTailscale(name, serving),
@@ -1368,7 +1378,7 @@ export class Services {
     this.backups.start();
   }
 
-  stop() {
+  async stop() {
     this.googleApps.stop();
     this.slack.stop();
     this.channels.stop();
@@ -1394,6 +1404,7 @@ export class Services {
     this.backups.stop();
     // Let go of the index file, so a restore (or a test) can replace it.
     this.search.close();
+    await Promise.all(this.#pushRevocations);
   }
 
   /** A provider on this computer that's ready to answer, for when the internet isn't there. */
