@@ -108,7 +108,15 @@ const DAY = 24 * 60 * 60 * 1000;
 const SYNC_EVERY_MS = 30 * 60_000;
 
 /** Item ids from each manager start with its prefix. */
-/** Managers that ask you something when read (Touch ID, the keychain's dialog): synced only while you look. */
+/**
+ * Managers that ask you something when read (1Password's approval, Touch ID,
+ * the keychain's dialog): read and synced only while you look at Passwords.
+ * Anything else that wants the list — the sidebar's count, Apps, ⌘K — gets
+ * what was last read, so a prompt from another app only ever appears when you
+ * opened Passwords yourself. It matters most where the approval doesn't last:
+ * 1Password on Windows ties it to the process that asked, so it's asked again
+ * after every restart of Conch, and after ten minutes without a read.
+ */
 const PROMPTS = new Set<VaultSourceId>(['1password', 'keychain']);
 
 const PREFIXES: [string, Exclude<VaultSourceId, 'conch' | 'system'>][] = [
@@ -251,6 +259,8 @@ export class VaultService {
 
   readonly transfers: Transfers;
   #syncTimer?: NodeJS.Timeout;
+  /** What each manager in `PROMPTS` listed when last looked at: names only, in memory only. */
+  #listed = new Map<VaultSourceId, ExternalItem[]>();
 
   #deviceKey?: Promise<Buffer>;
 
@@ -532,7 +542,12 @@ export class VaultService {
     };
   }
 
-  async list(): Promise<VaultList> {
+  /**
+   * Everything in Passwords. `looking`: the person has Passwords open, so a
+   * manager that asks them something (`PROMPTS`) may be read; without it such
+   * a manager shows what it showed last time, and is asked nothing.
+   */
+  async list(options: { looking?: boolean } = {}): Promise<VaultList> {
     // Locked, Conch's own items stay hidden; other managers and Conch's keys still show.
     const locked = (await this.store.lockState()).locked;
     const records = locked ? [] : await this.#records();
@@ -544,19 +559,33 @@ export class VaultService {
     for (const source of this.sources) {
       const state = status.sources.find((s) => s.id === source.id);
       if (state?.state !== 'ready') continue;
+      if (!options.looking && PROMPTS.has(source.id)) {
+        // Not looking: what it showed last, if anything, and no question asked.
+        const last = this.#listed.get(source.id);
+        if (last) {
+          items.push(...last.map((item) => this.#external(source, item)));
+          state.count = last.length;
+        }
+        continue;
+      }
       try {
         const external = await source.list();
+        this.#listed.set(source.id, external);
         items.push(...external.map((item) => this.#external(source, item)));
         state.count = external.length;
         state.syncedAt = Date.now();
       } catch (error) {
+        this.#listed.delete(source.id);
         state.state = 'error';
         state.message = (error as Error).message;
       }
     }
     items.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
     // You're looking at Passwords: a good moment to bring copies up to date.
-    if (!locked) void this.syncDue(undefined, { interactive: true }).catch(() => undefined);
+    if (!locked)
+      void this.syncDue(undefined, { interactive: Boolean(options.looking) }).catch(
+        () => undefined,
+      );
     return { items, status };
   }
 

@@ -480,11 +480,11 @@ describe('other password managers', () => {
     const { service } = await vault({ exec: fakeExec(calls) });
     await service.setSource('1password', { enabled: true });
     await service.setSource('bitwarden', { enabled: true });
-    let list = await service.list();
+    let list = await service.list({ looking: true });
     expect(list.status.sources.find((s) => s.id === 'bitwarden')?.state).toBe('locked');
     await expect(service.unlockSource('bitwarden', 'wrong')).rejects.toThrow(/master password/);
     await service.unlockSource('bitwarden', 'master');
-    list = await service.list();
+    list = await service.list({ looking: true });
     expect(list.items.map((i) => [i.title, i.source, i.readOnly])).toEqual([
       ['Bank', '1password', true],
       ['Mail', 'bitwarden', true],
@@ -503,13 +503,38 @@ describe('other password managers', () => {
     );
     // Locked again: its items leave the list.
     service.lockSource('bitwarden');
-    expect((await service.list()).items.map((i) => i.title)).toEqual(['Bank']);
+    expect((await service.list({ looking: true })).items.map((i) => i.title)).toEqual(['Bank']);
+  });
+
+  it('asks 1Password for its list only while you look at Passwords; elsewhere it shows what it showed last', async () => {
+    const calls: { args: string[] }[] = [];
+    const { service } = await vault({ exec: fakeExec(calls) });
+    await service.setSource('1password', { enabled: true });
+    const listings = () => calls.filter((c) => c.args.join(' ').startsWith('item list')).length;
+
+    // The sidebar's count, Apps, ⌘K: nothing that could raise 1Password's approval window.
+    const quiet = await service.list();
+    expect(listings()).toBe(0);
+    expect(quiet.items).toEqual([]);
+    expect(quiet.status.sources.find((s) => s.id === '1password')).toMatchObject({
+      state: 'ready',
+    });
+
+    // Passwords is open: now it's asked, once.
+    expect((await service.list({ looking: true })).items.map((i) => i.title)).toEqual(['Bank']);
+    expect(listings()).toBe(1);
+
+    // Back elsewhere: what it showed last, and still no question.
+    const after = await service.list();
+    expect(after.items.map((i) => [i.title, i.source])).toEqual([['Bank', '1password']]);
+    expect(after.status.sources.find((s) => s.id === '1password')?.count).toBe(1);
+    expect(listings()).toBe(1);
   });
 
   it('fills an external item only on its own site', async () => {
     const { service } = await vault({ exec: fakeExec([]) });
     await service.setSource('1password', { enabled: true });
-    const bank = (await service.list()).items[0];
+    const bank = (await service.list({ looking: true })).items[0];
     expect(
       await service.fillValue({ itemId: bank?.id ?? '', host: 'bank.example', want: 'password' }),
     ).toBe('op-secret-value');

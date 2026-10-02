@@ -108,8 +108,13 @@ export function registerVaultRoutes(
     }
   };
 
-  app.get('/api/vault', (_request, reply) =>
-    guarded(reply, async () => VaultList.parse(await vault.list())),
+  // `?look=1`: the Passwords page itself. Only then may a manager that asks the
+  // person something (1Password's approval) be read; the sidebar, Apps and ⌘K
+  // ask without it, and never raise a prompt in another app.
+  app.get<{ Querystring: { look?: string } }>('/api/vault', (request, reply) =>
+    guarded(reply, async () =>
+      VaultList.parse(await vault.list({ looking: request.query.look === '1' })),
+    ),
   );
 
   app.get<{ Params: { id: string } }>('/api/vault/items/:id', (request, reply) =>

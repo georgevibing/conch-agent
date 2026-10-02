@@ -5,6 +5,7 @@ import { Route, Routes, useLocation, useParams } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { mockFetch, renderApp } from '../../test/harness';
+import { PasswordsLink } from './PasswordsLink';
 import { PasswordsView } from './PasswordsView';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -298,5 +299,20 @@ describe('getting an item ready before it’s chosen', () => {
     await user.hover(await screen.findByRole('button', { name: /^Site 0002,/ }));
     await new Promise((resolve) => setTimeout(resolve, 400));
     expect(asked('op_v_2')).toBe(0);
+  });
+});
+
+describe('another password manager’s own approval window', () => {
+  it('can only come up from Passwords itself: the sidebar asks without looking', async () => {
+    const { calls } = open(many(2));
+    await screen.findByRole('button', { name: /^Site 0001,/ });
+    expect(calls.filter((c) => c.path.startsWith('/api/vault')).map((c) => c.path)).toEqual([
+      '/api/vault?look=1',
+    ]);
+    vi.unstubAllGlobals();
+
+    const elsewhere = mockFetch({ 'GET /api/vault': () => list(many(2)) });
+    renderApp(<PasswordsLink />, { route: '/' });
+    await waitFor(() => expect(elsewhere.map((c) => c.path)).toEqual(['/api/vault']));
   });
 });

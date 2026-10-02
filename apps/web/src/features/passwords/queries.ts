@@ -4,12 +4,27 @@ import { useEffect, useState } from 'react';
 import { vaultApi } from './api';
 
 export const vaultKeys = {
+  /** Everything about Passwords: invalidating it refreshes the lists and every item. */
   all: ['vault'] as const,
+  /** The list as the Passwords page asks for it. */
+  looking: ['vault', 'looking'] as const,
   item: (id: string) => ['vault', 'item', id] as const,
 };
 
-export function useVault() {
-  return useQuery({ queryKey: vaultKeys.all, queryFn: vaultApi.list, staleTime: 30_000 });
+/**
+ * What's in Passwords. Only the Passwords page is `looking`: that's the one
+ * place another password manager may be asked for its list, which can raise
+ * its own approval window (1Password's). The sidebar, Apps and ⌘K read
+ * without it and get what was last shown, so nothing pops up while you're
+ * somewhere else.
+ */
+export function useVault(options: { looking?: boolean } = {}) {
+  const looking = Boolean(options.looking);
+  return useQuery({
+    queryKey: looking ? vaultKeys.looking : vaultKeys.all,
+    queryFn: () => vaultApi.list(looking),
+    staleTime: 30_000,
+  });
 }
 
 /** One item's fields. Shared, so getting it ready early and opening it are one request. */
