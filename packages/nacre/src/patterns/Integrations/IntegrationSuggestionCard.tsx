@@ -24,8 +24,6 @@ export interface IntegrationSuggestionCardProps extends Omit<ComponentProps<'div
   description: string;
   /** What the assistant is called. */
   assistant?: string;
-  /** Connected through another app (“Zapier”) because this provider can't reach it by itself. */
-  via?: string;
   state: IntegrationSuggestionState;
   onConnect?: () => void;
   onNotNow?: () => void;
@@ -58,7 +56,6 @@ export function IntegrationSuggestionCard({
   color,
   description,
   assistant = 'Conch',
-  via,
   state,
   onConnect,
   onNotNow,
@@ -113,25 +110,20 @@ export function IntegrationSuggestionCard({
     );
   }
 
-  const app = via ?? name;
   const title =
     state === 'connected'
-      ? `${app} is connected`
+      ? `${name} is connected`
       : state === 'connecting'
-        ? `Connecting ${app}…`
+        ? `Connecting ${name}…`
         : `${name} isn’t connected yet`;
   const message =
     state === 'connected'
-      ? via
-        ? `Turn on the ${name} actions you want in ${via}, then ask again.`
-        : onAskAgain
-          ? `Ask again and ${assistant} will use it.`
-          : `${assistant} can use it from now on.`
+      ? onAskAgain
+        ? `Ask again and ${assistant} will use it.`
+        : `${assistant} can use it from now on.`
       : state === 'connecting'
         ? 'Finish signing in, and it’s ready to use here.'
-        : via
-          ? `${assistant} can reach ${name} through ${via}, with any model.`
-          : `Connect it and ${assistant} can ${lowerFirst(description)}`;
+        : `Connect it and ${assistant} can ${lowerFirst(description)}`;
   const leaving = state === 'dismissed';
 
   return (
@@ -164,7 +156,7 @@ export function IntegrationSuggestionCard({
             <div className={styles.actions}>
               {onConnect && (
                 <Button size="sm" variant="soft" onClick={onConnect} data-primary>
-                  Connect {app}
+                  Connect {name}
                 </Button>
               )}
               {onNotNow && (

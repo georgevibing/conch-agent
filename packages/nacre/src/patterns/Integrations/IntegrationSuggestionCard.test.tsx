@@ -73,23 +73,6 @@ describe('IntegrationSuggestionCard', () => {
     expect(screen.getByRole('group')).toHaveTextContent('Ada’s helper can use it from now on.');
   });
 
-  it('goes through Zapier when the provider can’t reach the app itself', () => {
-    renderNacre(
-      <IntegrationSuggestionCard
-        {...linear}
-        name="Gmail"
-        brand="gmail"
-        via="Zapier"
-        state="suggested"
-        onConnect={() => {}}
-      />,
-    );
-    expect(screen.getByRole('group', { name: 'Gmail isn’t connected yet' })).toHaveTextContent(
-      'Ada’s helper can reach Gmail through Zapier, with any model.',
-    );
-    expect(screen.getByRole('button', { name: 'Connect Zapier' })).toBeInTheDocument();
-  });
-
   it('muted is one quiet line whose Undo takes focus', async () => {
     function Card() {
       const [state, setState] = useState<IntegrationSuggestionState>('suggested');

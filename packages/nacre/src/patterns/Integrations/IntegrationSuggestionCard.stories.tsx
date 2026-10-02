@@ -72,23 +72,6 @@ export const ConnectedSettled: Story = { args: { state: 'connected', onAskAgain:
 /** “Don’t suggest Linear”: one quiet line, with Undo. */
 export const Muted: Story = { args: { state: 'muted' } };
 
-/** The provider can’t connect Gmail itself, so Zapier is the way in, for every model. */
-export const ThroughZapier: Story = {
-  args: {
-    name: 'Gmail',
-    brand: 'gmail',
-    color: '#EA4335',
-    description: 'Search your inbox, read threads and draft replies.',
-    via: 'Zapier',
-  },
-  render: (args) => (
-    <Stack gap={4}>
-      <IntegrationSuggestionCard {...args} state="suggested" />
-      <IntegrationSuggestionCard {...args} state="connected" />
-    </Stack>
-  ),
-};
-
 function DismissDemo(args: Story['args']) {
   const [state, setState] = useState<IntegrationSuggestionState>('suggested');
   const [gone, setGone] = useState(false);
