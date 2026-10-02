@@ -1,8 +1,10 @@
 /**
  * Channels — reaching your assistant from the chat apps on your phone (ADR 0018).
  *
- * A channel is a bot you own on Telegram, Discord or Slack. Conch connects to
- * it from this computer (no public address needed), and whatever you send it
+ * A channel is a bot you own on Telegram, Discord, Slack, Microsoft Teams,
+ * Matrix or WeChat. Conch connects to it from this computer (no public
+ * address needed), except for Teams and WeChat, which only deliver to a web
+ * address: those come in through the public door (ADR 0045). Whatever you send it
  * becomes a Conch chat: it answers with everything it can do here, and asks
  * before it acts, with buttons, right in the app.
  *
@@ -21,6 +23,7 @@ import { Id } from './common';
  * The apps Conch can talk through today. WhatsApp and Signal aren't bots:
  * Conch joins your own account as a linked device (ADR 0043). iMessage and
  * email answer through accounts that are already yours, too (ADR 0044).
+ * Microsoft Teams, Matrix and WeChat are bots again (ADR 0045).
  */
 export const ChannelKind = z.enum([
   'telegram',
@@ -30,6 +33,9 @@ export const ChannelKind = z.enum([
   'signal',
   'imessage',
   'email',
+  'microsoftteams',
+  'matrix',
+  'wechat',
 ]);
 export type ChannelKind = z.infer<typeof ChannelKind>;
 
@@ -96,6 +102,8 @@ export const ChannelBot = z.object({
   phone: z.string().max(32).optional(),
   /** iMessage and email: the address you write to (`you+conch@gmail.com`, your own Apple ID). */
   address: z.string().max(320).optional(),
+  /** WeChat: which kind of account it is (an Official Account, or a WeCom bot). */
+  account: z.enum(['official', 'wecom']).optional(),
 });
 export type ChannelBot = z.infer<typeof ChannelBot>;
 
@@ -132,6 +140,21 @@ export const ChannelPairing = z.object({
 });
 export type ChannelPairing = z.infer<typeof ChannelPairing>;
 
+/**
+ * Teams and WeChat only deliver messages to a public web address (ADR 0045).
+ * Conch serves one for each such channel through its public door; this says
+ * what to paste in the app's settings, and whether the app has been heard
+ * from there yet. The WeChat token and key are not here: they're read once,
+ * with `GET /api/channels/:id/hook`.
+ */
+export const ChannelHook = z.object({
+  /** The full address to paste (unset while the door has no public address). */
+  url: z.string().max(2000).optional(),
+  /** When the app last delivered something here that checked out. */
+  heardAt: z.number().optional(),
+});
+export type ChannelHook = z.infer<typeof ChannelHook>;
+
 export const ChannelSettings = z.object({
   /** Send routine results (and their questions) to the people here. */
   notifyRoutines: z.boolean().default(true),
@@ -159,6 +182,8 @@ export const Channel = z.object({
   health: ChannelHealth,
   /** Set while a hello link is waiting to be used. */
   pairing: ChannelPairing.optional(),
+  /** Teams and WeChat: the web address their servers deliver messages to (ADR 0045). */
+  hook: ChannelHook.optional(),
   lastMessageAt: z.number().optional(),
 });
 export type Channel = z.infer<typeof Channel>;
@@ -194,6 +219,81 @@ export const DISCORD_TOKEN =
   /\b([A-Za-z0-9_-]{20,40}\.[A-Za-z0-9_-]{4,10}\.[A-Za-z0-9_-]{20,80})\b/;
 
 const secret = z.string().trim().min(1).max(4000);
+const short = z.string().trim().max(300);
+/** Made by Conch (never sent by the page): the unguessable part of a channel's web address. */
+const hookId = z.string().regex(/^[A-Za-z0-9_-]{16,64}$/);
+
+/** Which box a problem is about, when a channel has several. */
+export const ChannelField = z.enum([
+  'token',
+  'botToken',
+  'appToken',
+  'appId',
+  'appPassword',
+  'tenantId',
+  'homeserver',
+  'user',
+  'password',
+  'address',
+  'server',
+  'accessToken',
+  'secret',
+]);
+export type ChannelField = z.infer<typeof ChannelField>;
+
+// A Teams bot's id is a GUID; an Official Account's AppID is `wx` and 16 hex digits.
+export const TEAMS_APP_ID = /\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/i;
+export const WECHAT_APP_ID = /\b(wx[0-9a-f]{16})\b/;
+
+const teams = {
+  kind: z.literal('microsoftteams'),
+  /** The bot's Microsoft App ID. */
+  appId: secret,
+  /** A client secret of the bot's app registration. */
+  appPassword: secret,
+  /** The directory (tenant) id, for a single-tenant bot. */
+  tenantId: short.optional(),
+  hookId: hookId.optional(),
+};
+
+/**
+ * A Matrix account for the assistant. The person gives a password or an
+ * access token; Conch keeps only an access token of its own session (a
+ * password is used once, to sign in, and never stored).
+ */
+const matrix = {
+  kind: z.literal('matrix'),
+  /** The homeserver (`matrix.org`), or empty when the user id names it. */
+  homeserver: short,
+  /** `@assistant:matrix.org`, or just `assistant`. */
+  user: short.optional(),
+  password: secret.optional(),
+  accessToken: secret.optional(),
+  /** Kept by Conch: its own session, and the key to its encryption store. */
+  deviceId: short.optional(),
+  storeKey: short.optional(),
+};
+
+/**
+ * WeChat, two official ways (ADR 0045):
+ *
+ * - `wecom`: a WeCom (企业微信) AI bot, over its long connection: Conch
+ *   dials out, so no public address is needed. `appId` is its Bot ID.
+ * - `official`: an Official Account (公众号, or its free test account 测试号)
+ *   through the public door. `token` and `aesKey` are what WeChat signs and
+ *   encrypts messages with; Conch makes them, and the person pastes them in.
+ */
+const wechat = {
+  kind: z.literal('wechat'),
+  mode: z.enum(['wecom', 'official']),
+  /** The Bot ID (WeCom), or the AppID (`wx…`). */
+  appId: secret,
+  /** The bot's Secret, or the account's AppSecret. */
+  secret,
+  token: short.optional(),
+  aesKey: short.optional(),
+  hookId: hookId.optional(),
+};
 
 /**
  * Mail services Conch knows the settings of (ADR 0044). `other` takes the
@@ -247,6 +347,9 @@ export const ChannelSecrets = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('signal'), account: z.string().regex(/^\+\d{6,15}$/) }),
   ImessageSecrets,
   EmailSecrets,
+  z.object(teams),
+  z.object(matrix),
+  z.object(wechat),
 ]);
 export type ChannelSecrets = z.infer<typeof ChannelSecrets>;
 
@@ -262,6 +365,10 @@ export const CheckChannelBody = z.discriminatedUnion('kind', [
   }),
   ImessageSecrets,
   EmailSecrets,
+  // The others are checked as far as what's there so far allows.
+  z.object({ ...teams, appId: secret.optional(), appPassword: secret.optional() }),
+  z.object(matrix),
+  z.object({ ...wechat, appId: secret.optional(), secret: secret.optional() }),
 ]);
 export type CheckChannelBody = z.infer<typeof CheckChannelBody>;
 
@@ -270,7 +377,7 @@ export const ChannelCheck = z.discriminatedUnion('ok', [
     ok: z.literal(true),
     bot: ChannelBot,
     /** Slack: which of the two keys were checked and good. */
-    checked: z.array(z.enum(['token', 'botToken', 'appToken', 'password'])).default([]),
+    checked: z.array(ChannelField).default([]),
     /** Slack: the app's id, for links straight to its settings pages. */
     appId: z
       .string()
@@ -279,8 +386,8 @@ export const ChannelCheck = z.discriminatedUnion('ok', [
   }),
   z.object({
     ok: z.literal(false),
-    /** Which key is wrong, when there are two. */
-    field: z.enum(['token', 'botToken', 'appToken', 'password', 'address', 'server']).optional(),
+    /** Which key is wrong, when there are several. */
+    field: ChannelField.optional(),
     /** Plain words: what's wrong and what to do. */
     message: z.string(),
   }),
@@ -339,3 +446,51 @@ export const OpenImessageBody = z.object({
   place: z.enum(['full-disk-access', 'automation', 'messages', 'show-app']),
 });
 export type OpenImessageBody = z.infer<typeof OpenImessageBody>;
+
+/**
+ * The public door (ADR 0045): the one way in from the internet, for the apps
+ * that only deliver messages to a web address (Teams, WeChat). It serves those
+ * channels' addresses and nothing else, on its own port, and every delivery
+ * must carry the app's own signature.
+ *
+ * - `off`: no public address (nothing from the internet reaches Conch);
+ * - `starting`: turning on (Tailscale may be waiting for an OK on its page);
+ * - `ready`: `url` reaches the door from the internet;
+ * - `needs-you`: one step only a person can take (`problem`);
+ * - `error`: it was on and stopped working (Repair tries again).
+ */
+export const ChannelDoor = z.object({
+  state: z.enum(['off', 'starting', 'ready', 'needs-you', 'error']),
+  /** How the internet reaches it: Tailscale Funnel, or an address of your own (a proxy you run). */
+  via: z.enum(['tailscale', 'own']).optional(),
+  /** The public base address, `https://mac.tail1234.ts.net:8443/conch`. */
+  url: z.string().max(2000).optional(),
+  /** Which channels use it. */
+  apps: z.array(ChannelKind).default([]),
+  /** When it last answered a check from the outside. */
+  checkedAt: z.number().optional(),
+  message: z.string().optional(),
+  problem: z
+    .object({
+      kind: z.enum(['need', 'open', 'command', 'other']),
+      message: z.string(),
+      /** `need`: what to install (ADR 0016). */
+      need: z.string().optional(),
+      url: z.string().optional(),
+      command: z.string().optional(),
+    })
+    .optional(),
+});
+export type ChannelDoor = z.infer<typeof ChannelDoor>;
+
+/** `PUT /api/channels/door`: use an address of your own, which forwards to the door's port. */
+export const SetChannelDoorBody = z.object({ url: z.string().trim().min(1).max(500) });
+export type SetChannelDoorBody = z.infer<typeof SetChannelDoorBody>;
+
+/** `GET /api/channels/:id/hook`: what to paste in WeChat's server settings (read once, while setting up). */
+export const ChannelHookSecrets = z.object({
+  url: z.string().optional(),
+  token: z.string().optional(),
+  aesKey: z.string().optional(),
+});
+export type ChannelHookSecrets = z.infer<typeof ChannelHookSecrets>;

@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { Artifact, ArtifactKind } from './artifacts';
 import { ATTACHMENT_LIMITS, Attachment } from './attachments';
 import { BrowserHandoff, BrowserPermission, BrowserStatus, BrowserStep } from './browser';
-import { Channel, ChannelOrigin } from './channels';
+import { Channel, ChannelDoor, ChannelOrigin } from './channels';
 import { ChannelLink } from './linking';
 import {
   EffortChoice,
@@ -658,6 +658,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('channel.deleted'), channelId: z.string() }),
   /** Linking WhatsApp or Signal by QR code: a new code, scanned, linked (ADR 0043). */
   z.object({ type: z.literal('channel.link'), link: ChannelLink }),
+  /** The public door (Teams, WeChat) turned on or off, or stopped working (ADR 0045). */
+  z.object({ type: z.literal('channel.door'), door: ChannelDoor }),
   /** Conch fixed something on its own: a quiet note, never an alert. */
   z.object({ type: z.literal('healed'), note: HealNote }),
   /** A backup was made, kept or let go, or a restore got ready: refetch the list. */
