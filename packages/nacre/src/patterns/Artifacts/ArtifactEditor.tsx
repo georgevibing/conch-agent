@@ -81,6 +81,27 @@ export function ArtifactEditor({
   const save = () => {
     if (!problem && dirty && !saving) onSave();
   };
+  // ⌘S and Esc from anywhere in it, not only the code (which handles its own first).
+  const keys = useRef({ save, onCancel });
+  useEffect(() => {
+    keys.current = { save, onCancel };
+  });
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        keys.current.save();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        keys.current.onCancel();
+      }
+    };
+    el.addEventListener('keydown', onKey);
+    return () => el.removeEventListener('keydown', onKey);
+  }, []);
 
   return (
     <div
