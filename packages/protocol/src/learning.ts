@@ -10,22 +10,40 @@ import { Memory } from './memory';
 /** How memory is searched right now. */
 export const MemoryIndexStatus = z.object({
   /**
-   * `meaning`: a local embedding model (Ollama) — finds “my partner's
-   * birthday” from “anniversary”. `words`: words and spellings, typos
-   * forgiven; what Conch does by itself.
+   * `meaning`: an embedding model on this computer (Conch's own, or
+   * Ollama's) — finds “got married” from “anniversary”. `words`: words,
+   * spellings and a few everyday concepts, typos forgiven; what Conch does
+   * before anything is downloaded.
    */
   mode: z.enum(['meaning', 'words']),
   /** The embedding model, when there is one. */
   model: z.string().optional(),
+  /** Whose it is: Conch's own (ADR 0041), or one in Ollama (ADR 0022). */
+  source: z.enum(['built-in', 'ollama']).optional(),
   /** Memories indexed, of all of them. */
   indexed: z.number().int().nonnegative(),
   total: z.number().int().nonnegative(),
-  /** A local model could give meaning search: the one Conch would get. */
-  offer: z.object({ model: z.string(), bytes: z.number() }).optional(),
+  /** Conch's own model could give meaning search: the one it would get. */
+  offer: z
+    .object({
+      model: z.string(),
+      bytes: z.number(),
+      /** It matches across many languages, not just English. */
+      multilingual: z.boolean().optional(),
+    })
+    .optional(),
   /** Getting it now: how far, 0–100. */
   getting: z.number().min(0).max(100).optional(),
+  /** Why getting it didn't work, or why it can't run here, in a sentence. */
+  problem: z.string().max(300).optional(),
 });
 export type MemoryIndexStatus = z.infer<typeof MemoryIndexStatus>;
+
+/** Get it: the browser's languages, so the model fits who's asking. */
+export const GetMeaningBody = z.object({
+  languages: z.array(z.string().max(35)).max(20).default([]),
+});
+export type GetMeaningBody = z.infer<typeof GetMeaningBody>;
 
 export const TidyChange = z.object({
   id: z.string(),
