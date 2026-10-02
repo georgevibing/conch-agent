@@ -145,9 +145,9 @@ function SignInProgram({ provider }: { provider: Provider }) {
         )}
         {login.phase === 'waiting-for-browser' && (
           <Stack gap={3}>
-            <Text weight="medium">A sign-in page opened in your browser.</Text>
+            <Text weight="medium">Open the sign-in page to continue.</Text>
             <Text tone="muted" size="sm">
-              Finish there and come back — this updates on its own.
+              {login.message ?? 'Finish there and come back — this updates on its own.'}
             </Text>
             {login.url && (
               <div>
@@ -210,12 +210,12 @@ function SignInProgram({ provider }: { provider: Provider }) {
         </Callout>
       )}
       <Text tone="muted">
-        {provider.name} is installed. Sign in once and you’re ready — Conch uses the sign-in that’s
-        already on this computer.
+        {provider.signInHelp ??
+          `${provider.name} is installed. Sign in once and you’re ready — Conch uses the sign-in that’s already on this computer.`}
       </Text>
       <div>
         <Button size="lg" loading={starting} onClick={() => void start()}>
-          Sign in to {provider.name}
+          {provider.signInLabel ?? `Sign in to ${provider.name}`}
         </Button>
       </div>
     </Stack>
@@ -280,7 +280,7 @@ function KeyForm({
       {form.canSignIn && (
         <Stack gap={2}>
           <Button size="lg" onClick={() => void signIn(provider)}>
-            Sign in to {provider.name}
+            {provider.signInLabel ?? `Sign in to ${provider.name}`}
           </Button>
           <Text size="sm" tone="subtle">
             {provider.name} makes a key for Conch, so there’s nothing to copy.
@@ -401,10 +401,11 @@ function useProviderWatch(provider: Provider | undefined) {
   const client = useQueryClient();
   const setLogin = useLiveStore((s) => s.setLogin);
 
-  // Forget a previous attempt's outcome when a different provider opens.
+  // Polling refreshes the provider object; it must not erase an active device code.
+  const providerId = provider?.id;
   useEffect(() => {
-    if (provider) setLogin(undefined);
-  }, [provider?.id, provider, setLogin]);
+    if (providerId) setLogin(undefined);
+  }, [providerId, setLogin]);
 
   // Coming back from another window (a sign-in, a terminal): look again.
   useEffect(() => {

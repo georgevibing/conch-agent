@@ -16,11 +16,23 @@ type Coverage = SafetyStatus['providers'][number];
  * computer can't seal (Windows, Linux without bubblewrap), it says so.
  */
 export function coverage(
-  providers: { id: string; label: string; version?: string }[],
+  providers: { id: string; label: string; version?: string; commandSandbox?: 'conch' }[],
   options: { available: boolean; on: boolean },
 ): Coverage[] {
-  return providers.map(({ id, label, version }): Coverage => {
+  return providers.map(({ id, label, version, commandSandbox }): Coverage => {
     const base = { id, label };
+    if (commandSandbox === 'conch')
+      return options.available
+        ? {
+            ...base,
+            state: 'sealed',
+            note: 'Conch commands always run sealed: writes stay in the work folder, secrets and network are blocked. There is no unrestricted fallback.',
+          }
+        : {
+            ...base,
+            state: 'no-commands',
+            note: 'Commands are unavailable until this computer’s sandbox is set up. Files and connected apps still work.',
+          };
     if (id !== 'claude-code' && id !== 'codex-cli')
       return {
         ...base,
@@ -71,6 +83,7 @@ export async function providerCoverage(deps: CoverageDeps, available = sandboxSu
     engines.map(async (engine) => ({
       id: engine.id,
       label: engine.label,
+      commandSandbox: engine.commandSandbox,
       version: (await engine.detect().catch(() => undefined))?.version,
     })),
   );

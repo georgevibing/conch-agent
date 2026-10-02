@@ -224,14 +224,20 @@ describe('detecting an API provider', () => {
 // ── Capabilities ────────────────────────────────────────────────────────────
 
 describe('what an API provider can do', () => {
-  it('offers the provider’s models, no commands, and only "ask first"', async () => {
+  it('offers provider models and Conch’s consistent permission modes', async () => {
     const { engine } = await engineFor(stubWire());
 
     const capabilities = await engine.capabilities();
     expect(capabilities.models.map((m) => m.id)).toEqual(['stub/model']);
     expect(capabilities.commands).toEqual([]);
     // There are no file or shell tools here, so there's no wider mode to offer.
-    expect(capabilities.permissionModes).toEqual(['default']);
+    expect(capabilities.permissionModes).toEqual([
+      'default',
+      'plan',
+      'acceptEdits',
+      'bypassPermissions',
+    ]);
+    expect(capabilities.tools).toMatchObject({ host: true, files: true, approvals: true });
   });
 
   it('caches the list and shares one probe', async () => {
@@ -357,7 +363,13 @@ describe('a turn against the real OpenRouter wire', () => {
 
     // Tools go on the second request too, with the result appended.
     const second = fetch.calls.at(-1)?.body as Record<string, unknown>;
-    expect(second['tools']).toHaveLength(1);
+    expect(second['tools']).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          function: expect.objectContaining({ name: 'mcp__conch__remember' }),
+        }),
+      ]),
+    );
     expect((second['messages'] as unknown[]).at(-1)).toEqual({
       role: 'tool',
       tool_call_id: 'call_1',
@@ -528,7 +540,8 @@ describe('the tool loop', () => {
       }),
     );
 
-    expect([...tools.keys()]).toEqual(['mcp__notion__search']);
+    expect([...tools.keys()]).toContain('mcp__notion__search');
+    expect([...tools.keys()]).not.toContain('mcp__conch__remember');
   });
 });
 

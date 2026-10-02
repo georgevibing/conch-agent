@@ -18,6 +18,6 @@ Conch runs the conversation itself: it keeps the thread, holds the connections t
 
 ## Good to know
 
-- **It only talks to a model.** It can't read your files or run commands. For that, use [Claude Code](./claude-code.md) or [Codex](./codex-cli.md).
+- **Conch supplies the tools.** Tool-capable models can use memory, connected apps and files in this conversation’s work folder, with the same permission checks and Undo tracking. Commands require the OS sandbox, cannot access the network and have no unrestricted fallback. Chat-only models are labelled before answering and cannot perform actions.
 - **Spend is tracked.** Conch records what each turn cost, and you can set a budget. See [Offline and at a limit](../care/offline.md).
 - **Pictures work** with models that can see. A file card warns you when the chosen model can't use it.

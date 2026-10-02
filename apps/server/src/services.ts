@@ -54,6 +54,7 @@ import { ConversationManager, type TurnRoute } from './conversations/manager';
 import { ConversationStore } from './conversations/store';
 import { anthropicApiVariant, ApiEngine, ollamaVariant, openrouterVariant } from './engines/api';
 import { ClaudeCodeEngine } from './engines/claude-code/engine';
+import { canCarryTools } from './providers/capabilities';
 import { CodexEngine } from './engines/codex/engine';
 import { MockEngine } from './engines/mock/engine';
 import type { Engine, LoginHandle } from './engines/types';
@@ -896,7 +897,24 @@ export class Services {
     for (const [engineId, engine] of this.engines) {
       if (engineId === 'mock') continue;
       const described = await this.keys.describe(engineId).catch(() => undefined);
-      if (!described) continue;
+      if (!described) {
+        if (engine.disconnect) {
+          const status = await engine.detect().catch(() => undefined);
+          if (status?.auth?.method === 'subscription')
+            out.push({
+              id: id('provider', engineId, 'subscription'),
+              title: `${engine.label} sign-in`,
+              usedBy: engine.label,
+              hint: 'Connected',
+              manage: { label: 'Open Providers', place: 'providers', focus: engineId },
+              reveal: () =>
+                Promise.reject(
+                  new Error('Conch renews this sign-in itself; there is no key to copy.'),
+                ),
+            });
+        }
+        continue;
+      }
       out.push({
         id: id('provider', engineId),
         title: `${engine.label} key`,
@@ -1068,7 +1086,11 @@ export class Services {
           ? (await this.network.check()).online
           : this.network.online;
       if (!online) {
-        const local = preferences.offlineFallback ? await this.localReady() : undefined;
+        const candidate = preferences.offlineFallback ? await this.localReady() : undefined;
+        const local =
+          candidate && (await canCarryTools(engine, candidate).catch(() => false))
+            ? candidate
+            : undefined;
         return local
           ? {
               kind: 'use',
@@ -1090,7 +1112,11 @@ export class Services {
       if (context.failed === 'limit' || usage?.blocked) {
         const other = this.providers.engineFor(fallback);
         const ready = other.id !== engine.id && (await other.detect().catch(() => undefined));
-        if (ready && ready.state === 'ready') {
+        if (
+          ready &&
+          ready.state === 'ready' &&
+          (await canCarryTools(engine, other).catch(() => false))
+        ) {
           const until = usage?.blocked?.until;
           return {
             kind: 'use',

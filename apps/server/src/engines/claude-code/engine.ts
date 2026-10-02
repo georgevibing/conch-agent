@@ -203,6 +203,7 @@ export class ClaudeCodeEngine implements Engine {
       engine: this.id,
       label: this.label,
       models: [],
+      tools: { host: true, files: true, shell: true, approvals: true },
       commands: [],
       permissionModes: ['default', 'acceptEdits', 'plan', 'bypassPermissions'],
     };
@@ -218,6 +219,7 @@ export class ClaudeCodeEngine implements Engine {
         ...empty,
         models: models.map((m) => ({
           id: m.value,
+          tools: true,
           label: m.displayName,
           description: m.description,
           efforts: m.supportsEffort ? (m.supportedEffortLevels ?? []) : [],

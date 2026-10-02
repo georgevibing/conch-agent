@@ -67,6 +67,9 @@ export type KeyForm = z.infer<typeof KeyForm>;
  * connecting it would take.
  */
 export const Provider = z.object({
+  signInLabel: z.string().optional(),
+  signInHelp: z.string().optional(),
+  disconnectable: z.boolean().optional(),
   id: EngineId,
   /** "Claude Code", "OpenRouter". */
   name: z.string(),

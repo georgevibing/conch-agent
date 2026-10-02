@@ -1,8 +1,15 @@
-import { screen, within } from '@testing-library/react';
+import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { appState, baseProviders, mockFetch, provider, renderApp } from '../../test/harness';
+import {
+  appState,
+  baseProviders,
+  FakeSocket,
+  mockFetch,
+  provider,
+  renderApp,
+} from '../../test/harness';
 import { ProvidersTab } from './ProvidersTab';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -272,5 +279,79 @@ describe('Providers settings', () => {
     expect(calls.find((call) => call.method === 'DELETE')?.path).toBe(
       '/api/providers/claude-code/key',
     );
+  });
+});
+
+describe('ChatGPT subscription connection', () => {
+  it('offers subscription sign-in without an API key and shows the remote device code', async () => {
+    const codex = provider({
+      id: 'codex-cli',
+      name: 'Codex',
+      active: false,
+      connect: 'program',
+      signInLabel: 'Sign in with your ChatGPT subscription',
+      signInHelp: 'No API key needed. Conch keeps a separate encrypted connection.',
+      status: { ...provider().status, engine: 'codex-cli', label: 'Codex', state: 'signed-out' },
+    });
+    const calls = mockFetch(
+      routes({
+        'GET /api/providers': () => ({ ...baseProviders, providers: [codex] }),
+        'POST /api/providers/codex-cli/login': () => ({ ok: true }),
+      }),
+    );
+    render();
+    await userEvent.click(
+      within(await screen.findByRole('article', { name: 'Codex' })).getByRole('button', {
+        name: 'Connect',
+      }),
+    );
+    expect(await screen.findByText(/No API key needed/)).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Sign in with your ChatGPT subscription' }),
+    );
+    expect(calls.some((c) => c.path === '/api/providers/codex-cli/login')).toBe(true);
+    act(() =>
+      FakeSocket.last?.push({
+        type: 'engine.login',
+        login: {
+          loginId: 'device',
+          phase: 'waiting-for-browser',
+          url: 'https://auth.openai.com/codex/device',
+          message: 'Enter TEST-1234 on the sign-in page.',
+        },
+      }),
+    );
+    expect(await screen.findByText(/Enter TEST-1234/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Open the sign-in page/ })).toHaveAttribute(
+      'href',
+      'https://auth.openai.com/codex/device',
+    );
+  });
+  it('disconnects only the Conch-managed account', async () => {
+    const codex = provider({
+      id: 'codex-cli',
+      name: 'Codex',
+      active: false,
+      disconnectable: true,
+      status: { ...provider().status, engine: 'codex-cli', label: 'Codex' },
+    });
+    const calls = mockFetch(
+      routes({
+        'GET /api/providers': () => ({ ...baseProviders, providers: [codex] }),
+        'DELETE /api/providers/codex-cli/key': () => baseProviders,
+      }),
+    );
+    render();
+    await userEvent.click(
+      within(await screen.findByRole('article', { name: 'Codex' })).getByRole('button', {
+        name: 'Disconnect',
+      }),
+    );
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('Your sign-ins in other apps are not changed.');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Disconnect' }));
+    expect(
+      calls.some((c) => c.method === 'DELETE' && c.path === '/api/providers/codex-cli/key'),
+    ).toBe(true);
   });
 });

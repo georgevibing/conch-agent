@@ -8,6 +8,7 @@ import { statfs } from 'node:fs/promises';
 
 import type { DoctorItem, Provider } from '@conch/protocol';
 
+import { sandboxSupport } from '../conversations/sandbox';
 import { secureHome } from '../auth/checkup';
 import type { Services } from '../services';
 import type { DoctorCheck } from './service';
@@ -389,6 +390,35 @@ export function routinesCheck(services: Services): DoctorCheck {
 /** Everything built in, in the order the report shows it. */
 export function registerCoreChecks(services: Services) {
   for (const check of [
+    {
+      id: 'command-sandbox',
+      group: COMPUTER,
+      title: 'Safe commands',
+      async run() {
+        const support = sandboxSupport();
+        return [
+          {
+            id: 'command-sandbox:host',
+            group: COMPUTER,
+            title: 'Safe commands',
+            state: support.available ? ('ok' as const) : ('needs-you' as const),
+            message: support.available
+              ? 'API and Codex commands run in an OS sandbox without network access.'
+              : support.reason,
+            ...(!support.available && process.platform !== 'win32'
+              ? {
+                  action: {
+                    kind: 'need' as const,
+                    label: 'Set up safe commands',
+                    need: 'command-sandbox',
+                    mode: 'install' as const,
+                  },
+                }
+              : {}),
+          },
+        ];
+      },
+    },
     providersCheck(services),
     integrationsCheck(services),
     browserCheck(services),

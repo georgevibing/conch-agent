@@ -18,6 +18,7 @@ import { basename, dirname, resolve } from 'node:path';
 /** The files that hold keys Conch itself uses. */
 export const SEALED_FILES = new Set([
   'secrets.json',
+  'codex.secrets.json',
   'integrations.secrets.json',
   'google.secrets.json',
   'channels.secrets.json',

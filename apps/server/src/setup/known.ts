@@ -1,6 +1,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
+import { sandboxSupport } from '../conversations/sandbox';
 import { bundledClaude } from '../engines/claude-code/bundled';
 import { findClaude } from '../engines/claude-code/detect';
 import { findCodex } from '../engines/codex/detect';
@@ -135,6 +136,28 @@ const CLAUDE_SELF = {
  * on macOS both live in the app bundle, which isn't on `PATH`.
  */
 const list: NeedSpec[] = [
+  {
+    id: 'command-sandbox',
+    name: 'The command sandbox',
+    short: 'Command sandbox',
+    platforms: ['linux', 'darwin'],
+    find: async (platform) =>
+      !sandboxSupport(undefined, platform).available
+        ? undefined
+        : platform === 'darwin'
+          ? '/usr/bin/sandbox-exec'
+          : (await findExecutable('bwrap')) &&
+              (await findExecutable('socat')) &&
+              (await findExecutable('rg'))
+            ? await findExecutable('bwrap')
+            : undefined,
+    download: {
+      linux: 'https://github.com/anthropics/sandbox-runtime#prerequisites',
+      darwin: 'https://github.com/anthropics/sandbox-runtime#prerequisites',
+    },
+    hint: () =>
+      'Linux needs bubblewrap, socat and ripgrep, plus kernel/container permission to create their sandbox. Commands stay unavailable until the sandbox is ready; files and connected apps still work.',
+  },
   {
     id: '1password-app',
     name: 'The 1Password app',

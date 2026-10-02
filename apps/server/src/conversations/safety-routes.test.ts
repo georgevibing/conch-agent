@@ -88,3 +88,11 @@ describe('Repair everything, on trust (ADR 0031)', () => {
     ]);
   });
 });
+
+describe('Conch-owned commands', () => {
+  it('are always sealed or absent, even when the native-provider sealing toggle is off', () => {
+    const provider = [{ id: 'openrouter', label: 'OpenRouter', commandSandbox: 'conch' as const }];
+    expect(coverage(provider, { available: true, on: false })[0]?.state).toBe('sealed');
+    expect(coverage(provider, { available: false, on: false })[0]?.state).toBe('no-commands');
+  });
+});

@@ -254,8 +254,8 @@ src/
   `taint` event; from then on `sinkReason` calls (commands, files outside the work
   folder, data-carrying URLs, integration writes) ask with a `taint` sentence and no
   "always". `TurnInput.guard` is consulted before every tool call (Claude Code's
-  PreToolUse hook, so it holds in Full trust), Codex runs `workspace-write` when
-  tainted, and channel guard questions go to the owner. `TurnInput.sandbox` seals
+  PreToolUse hook, so it holds in Full trust; API and Codex shared host execution),
+  and channel guard questions go to the owner. `TurnInput.sandbox` seals
   Claude Code's commands (`conversations/sandbox.ts`: writable caches, denied secret
   places). `Activity` serves `/api/activity` from the logs. `skills/scan.ts` reviews
   every skill; `danger` ones stay off until acknowledged by hash, and other apps'
@@ -320,9 +320,11 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   the name and the folder hash); `skills/trust.ts` keeps trusted keys
   (`skills.trust.json`) and your own (`skills.signing.json`), both protected paths.
   An invalid signature turns a skill off; a trusted publisher's signed update keeps
-  it on. Codex follows Seal commands (`sealFor`: writable roots, network, a
-  permission profile denying key folders from 0.159), and `/api/safety` says per
-  provider what's sealed.
+  it on. API and Codex commands always use Conch’s OS sandbox (workspace writes,
+  no network, protected secrets); if unavailable they expose no command tool.
+  Codex uses isolated ChatGPT device-code sign-in and app-server dynamic tools
+  ([ADR 0036](./docs/adr/0036-provider-consistency.md)). `/api/safety` reports actual
+  confinement per provider, independently of the native-provider sealing toggle.
 - **Healing** (`lib/healed.ts`): every self-repair leaves one plain note —
   integrations that came back, a renewed sign-in, Claude Code's fallback, a held
   routine that ran once its provider was back. Integrations retry failures that
@@ -388,8 +390,8 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
     as the panel.
   - **Agent tools.** `browser_*` host tools (`tools.ts`) reach every engine with
     host tools, the same way memory does. Claude Code gets them in-process, API
-    engines and the mock as function tools; Codex has no host tools yet, so it
-    doesn't browse.
+    engines and the mock as function tools, and Codex through app-server dynamic
+    tools. Chat-only API models get an explicit capability notice instead.
     - Pages are read as Playwright's AI accessibility snapshot with refs, with
       secret fields masked, framed as untrusted.
     - Each action logs a `browser.step` (running, then done, with a thumbnail in

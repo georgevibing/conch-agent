@@ -54,7 +54,7 @@ export interface HostTool<Shape extends z.ZodRawShape = z.ZodRawShape> {
     ): Promise<
       | {
           state: 'confirmed';
-          receipt: { provider: string; id: string; label: string; url?: string };
+          receipt: { provider: string; id: string; label: string; url?: string; empty?: boolean };
         }
       | { state: 'absent' }
       | { state: 'unknown' }
@@ -310,6 +310,8 @@ export interface Engine {
   readonly hostTools?: boolean;
   /** Commands are always sealed by Conch, independent of the native-provider toggle. */
   readonly commandSandbox?: 'conch';
+  /** Each turn uses Conch’s complete handoff, not a provider-native resume ID. */
+  readonly conversationHistory?: boolean;
   /**
    * Skill folders the engine reads by itself (Claude Code reads
    * `~/.claude/skills`). Conch doesn't list those skills to it a second time.

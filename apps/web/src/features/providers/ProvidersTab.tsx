@@ -138,8 +138,11 @@ export function ProvidersTab() {
                   }
                   secondary={
                     ready
-                      ? provider.key
-                        ? { label: 'Remove key', onClick: () => setRemoving(provider) }
+                      ? provider.key || provider.disconnectable
+                        ? {
+                            label: provider.disconnectable ? 'Disconnect' : 'Remove key',
+                            onClick: () => setRemoving(provider),
+                          }
                         : { label: 'Details', onClick: () => setConnecting(provider.id) }
                       : undefined
                   }
@@ -159,11 +162,17 @@ export function ProvidersTab() {
         onOpenChange={(next) => !next && setRemoving(undefined)}
       >
         <AlertDialog.Content tone="danger">
-          <AlertDialog.Title>Remove the {removing?.name} key?</AlertDialog.Title>
+          <AlertDialog.Title>
+            {removing?.disconnectable
+              ? `Disconnect ${removing.name}?`
+              : `Remove the ${removing?.name} key?`}
+          </AlertDialog.Title>
           <AlertDialog.Description>
-            {removing?.key?.source === '1password'
-              ? 'Conch forgets where to find it. The key itself stays in 1Password.'
-              : 'Conch forgets it. You can paste it again any time.'}
+            {removing?.disconnectable
+              ? 'Conch disconnects its own account. Your sign-ins in other apps are not changed. You can reconnect any time.'
+              : removing?.key?.source === '1password'
+                ? 'Conch forgets where to find it. The key itself stays in 1Password.'
+                : 'Conch forgets it. You can paste it again any time.'}
           </AlertDialog.Description>
           <AlertDialog.Footer>
             <AlertDialog.Cancel asChild>
@@ -178,7 +187,7 @@ export function ProvidersTab() {
                   setRemoving(undefined);
                 }}
               >
-                Remove key
+                {removing?.disconnectable ? 'Disconnect' : 'Remove key'}
               </Button>
             </AlertDialog.Action>
           </AlertDialog.Footer>

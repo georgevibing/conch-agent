@@ -281,6 +281,9 @@ export class ProviderService {
       // A stand-in is named by whatever it's standing in for.
       name: (copy?.internal ? status.label : copy?.name) ?? engine.label,
       tagline: copy?.tagline ?? '',
+      signInLabel: copy?.signInLabel,
+      signInHelp: copy?.signInHelp,
+      disconnectable: Boolean(engine.disconnect),
       description: copy?.description ?? '',
       connect: copy?.connect ?? 'program',
       local: Boolean(engine.local),
@@ -405,6 +408,7 @@ export class ProviderService {
 
   async clearKey(id: EngineId): Promise<ProvidersList> {
     const engine = this.#engineOrThrow(id);
+    await engine.disconnect?.();
     await this.deps.keys.clear(id);
     await engine.setApiKey?.(undefined);
     // You removed it: it's no longer something Health should miss.

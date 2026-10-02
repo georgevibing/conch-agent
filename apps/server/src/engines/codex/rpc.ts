@@ -1,0 +1,160 @@
+/** Bounded, stdio-only Codex app-server transport. Never exposes a listening port. */
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { StringDecoder } from 'node:string_decoder';
+
+import { z } from 'zod';
+
+import { launch } from '../../lib/proc';
+
+const Message = z.object({
+  id: z.union([z.number(), z.string()]).optional(),
+  method: z.string().optional(),
+  params: z.unknown().optional(),
+  result: z.unknown().optional(),
+  error: z.unknown().optional(),
+});
+export type RpcMessage = z.infer<typeof Message>;
+const MAX_LINE = 2_000_000;
+
+export class CodexRpc {
+  readonly child: ChildProcessWithoutNullStreams;
+  #id = 0;
+  #closed = false;
+  #exited = false;
+  #pending = new Map<
+    number,
+    {
+      resolve: (value: unknown) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
+  #listeners = new Set<(message: RpcMessage) => void>();
+  #failures = new Set<(error: Error) => void>();
+
+  constructor(
+    executable: string,
+    options: { cwd: string; env: Record<string, string>; config?: string[] },
+  ) {
+    const { command, prefix } = launch(executable);
+    this.child = spawn(
+      command,
+      [
+        ...prefix,
+        'app-server',
+        '--listen',
+        'stdio://',
+        ...(options.config ?? []).flatMap((v) => ['-c', v]),
+      ],
+      { cwd: options.cwd, env: options.env, stdio: ['pipe', 'pipe', 'pipe'] },
+    );
+    const decoder = new StringDecoder('utf8');
+    let pending = '';
+    this.child.stdout.on('data', (chunk: Buffer) => {
+      pending += decoder.write(chunk);
+      if (Buffer.byteLength(pending) > MAX_LINE) {
+        this.#fail(new Error('Codex sent an oversized response.'));
+        return;
+      }
+      let at: number;
+      while ((at = pending.indexOf('\n')) >= 0) {
+        const line = pending.slice(0, at);
+        pending = pending.slice(at + 1);
+        if (!line.trim()) continue;
+        let parsed;
+        try {
+          parsed = Message.safeParse(JSON.parse(line));
+        } catch {
+          this.#fail(new Error('Codex sent an unreadable response. Update Codex in Settings.'));
+          return;
+        }
+        if (!parsed.success) {
+          this.#fail(new Error('Codex sent an unsupported response. Update Codex in Settings.'));
+          return;
+        }
+        const message = parsed.data;
+        if (!message.method && typeof message.id === 'number') {
+          const waiting = this.#pending.get(message.id);
+          if (waiting) {
+            this.#pending.delete(message.id);
+            clearTimeout(waiting.timer);
+            // Raw provider errors may contain request headers or credential material.
+            if (message.error)
+              waiting.reject(
+                new Error(
+                  typeof message.error === 'object' &&
+                    message.error !== null &&
+                    'message' in message.error &&
+                    typeof message.error.message === 'string' &&
+                    /bwrap:|sandbox helper failed|sandbox-exec:/i.test(message.error.message)
+                    ? 'Codex could not start its OS sandbox. Check the host sandbox prerequisites in Settings → Health; Conch will not run unrestricted.'
+                    : 'Codex could not complete this request. Check your sign-in or update Codex in Settings.',
+                ),
+              );
+            else waiting.resolve(message.result);
+          }
+        } else for (const listener of this.#listeners) listener(message);
+      }
+    });
+    // Drain diagnostics but never retain or surface raw provider output (tokens, paths, auth URLs).
+    this.child.stderr.resume();
+    this.child.stdin.on('error', () => this.#fail(new Error('The Codex connection closed.')));
+    this.child.once('error', () =>
+      this.#fail(new Error('Codex could not start. Open Settings → Providers.')),
+    );
+    this.child.once('close', () => {
+      this.#exited = true;
+      this.#fail(new Error('Codex stopped before the request finished.'));
+    });
+  }
+
+  listen(listener: (message: RpcMessage) => void): () => void {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
+  }
+  onFailure(listener: (error: Error) => void): () => void {
+    this.#failures.add(listener);
+    return () => this.#failures.delete(listener);
+  }
+  send(message: unknown): void {
+    if (this.#closed) throw new Error('The Codex connection is closed.');
+    this.child.stdin.write(`${JSON.stringify(message)}\n`);
+  }
+  request(method: string, params: unknown, timeoutMs = 30_000): Promise<unknown> {
+    if (this.#closed) return Promise.reject(new Error('The Codex connection is closed.'));
+    const id = ++this.#id;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.#pending.delete(id);
+        reject(new Error('Codex took too long to answer.'));
+      }, timeoutMs).unref();
+      this.#pending.set(id, { resolve, reject, timer });
+      this.send({ id, method, params });
+    });
+  }
+  async initialize(): Promise<void> {
+    await this.request('initialize', {
+      clientInfo: { name: 'conch', title: 'Conch', version: '0.1.0' },
+      capabilities: { experimentalApi: true },
+    });
+    this.send({ method: 'initialized' });
+  }
+  #fail(error: Error): void {
+    if (this.#closed) return;
+    this.#closed = true;
+    for (const pending of this.#pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(error);
+    }
+    this.#pending.clear();
+    for (const listener of this.#failures) listener(error);
+    this.child.kill('SIGTERM');
+  }
+  async close(): Promise<void> {
+    this.#fail(new Error('The Codex connection was closed.'));
+    if (this.#exited || this.child.exitCode !== null || this.child.signalCode !== null) return;
+    const timer = setTimeout(() => this.child.kill('SIGKILL'), 2_000).unref();
+    await new Promise<void>((done) => this.child.once('close', () => done()));
+    clearTimeout(timer);
+  }
+}

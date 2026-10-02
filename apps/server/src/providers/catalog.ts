@@ -16,6 +16,8 @@ export interface ProviderCopy {
   /** One sentence: what you get. */
   description: string;
   connect: ProviderConnect;
+  signInLabel?: string;
+  signInHelp?: string;
   /** Two or three short phrases for the card. */
   highlights: string[];
   /** What it can't do, one plain sentence each. Said before you connect, not after. */
@@ -51,18 +53,18 @@ const PROVIDERS: ProviderCopy[] = [
   {
     id: 'codex-cli',
     name: 'Codex',
-    tagline: 'OpenAI’s coding agent',
+    tagline: 'Your ChatGPT subscription, connected',
+    signInLabel: 'Sign in with your ChatGPT subscription',
+    signInHelp:
+      'No API key needed. Conch keeps a separate, encrypted connection. Existing Codex and other apps stay signed in as they are. Your plan’s models and limits apply.',
     description:
-      'OpenAI’s agent for your machine, signed in with your ChatGPT plan or an OpenAI key. It reads and writes files and runs commands in its own sandbox.',
+      'OpenAI’s agent for your machine, signed in with your ChatGPT plan or an OpenAI key. Conch supplies files, safe commands, memory and connected apps, with the same approvals as its other providers.',
     connect: 'program',
     highlights: ['Works with your files', 'Runs commands', 'Your ChatGPT plan or an OpenAI key'],
-    // `codex exec` decides inside its own sandbox: there's no channel to ask us.
-    asksFirst: false,
+    asksFirst: true,
     limits: [
-      'Codex decides inside its own sandbox, so Conch can’t ask you before each step — it can only choose how much Codex may touch.',
-      'Codex can read what Conch remembers about you, but it can’t save a new memory itself.',
+      'Available models and usage limits depend on your ChatGPT plan. Commands need this computer’s OS sandbox and run without network access.',
     ],
-    experimental: true,
     color: '#0D0D0D',
     homepage: 'https://developers.openai.com/codex/cli',
   },
@@ -77,7 +79,7 @@ const PROVIDERS: ProviderCopy[] = [
     highlights: ['Private', 'Free', 'Works offline'],
     limits: [
       'Slower and less capable than the big cloud models: best for everyday questions, drafts and quick jobs.',
-      'No files and no commands: this provider only talks to a model.',
+      'Tool-capable models can use Conch’s files and connected apps. Commands need the OS sandbox and run without network access; chat-only models cannot take actions.',
     ],
     asksFirst: true,
     color: '#2F6B5E',
@@ -91,7 +93,9 @@ const PROVIDERS: ProviderCopy[] = [
       'One key for models from every lab — Claude, GPT, Gemini, Llama and more — with the price shown next to each. Conch runs the conversation and lends it your integrations.',
     connect: 'key',
     highlights: ['Every model in one list', 'Pay as you go', 'Uses your integrations'],
-    limits: ['No files and no commands: this provider only talks to a model.'],
+    limits: [
+      'Tool-capable models can use Conch’s files and connected apps. Commands need the OS sandbox and run without network access; chat-only models cannot take actions.',
+    ],
     asksFirst: true,
     keyForm: {
       label: 'OpenRouter key',
@@ -113,7 +117,9 @@ const PROVIDERS: ProviderCopy[] = [
       'Claude straight from Anthropic with a Console key — no subscription and nothing else installed. Conch runs the conversation and lends it your integrations.',
     connect: 'key',
     highlights: ['Every Claude model', 'Pay as you go', 'Uses your integrations'],
-    limits: ['No files and no commands: this provider only talks to a model.'],
+    limits: [
+      'Tool-capable models can use Conch’s files and connected apps. Commands need the OS sandbox and run without network access; chat-only models cannot take actions.',
+    ],
     asksFirst: true,
     keyForm: {
       label: 'Anthropic API key',

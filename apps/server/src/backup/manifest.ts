@@ -50,6 +50,22 @@ const base = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 
 /** First match wins, so what's never backed up comes first. */
 export const RULES: readonly BackupRule[] = [
+  {
+    match: 'codex.secrets.json',
+    class: 'secret',
+    group: 'secrets',
+    why: 'Conch’s isolated ChatGPT sign-in; only in encrypted backups.',
+  },
+  {
+    match: 'codex-runtime/**',
+    class: 'outside',
+    why: 'Transient active Codex credential copies: never backed up.',
+  },
+  {
+    match: 'codex-sessions/**',
+    class: 'derived',
+    why: 'Provider-native sessions; Conch’s conversation transcript is the durable record.',
+  },
   // ── Outside: not Conch's to back up ────────────────────────────────────
   {
     match: 'backups/**',

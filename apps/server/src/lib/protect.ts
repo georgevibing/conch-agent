@@ -9,6 +9,9 @@ import { join } from 'node:path';
 export function protectedPaths(home: string): string[] {
   return [
     join(home, 'vault'),
+    join(home, 'codex.secrets.json'),
+    join(home, 'codex-runtime'),
+    join(home, 'codex-sessions'),
     join(home, 'secrets.json'),
     join(home, 'integrations.secrets.json'),
     join(home, 'google.secrets.json'),

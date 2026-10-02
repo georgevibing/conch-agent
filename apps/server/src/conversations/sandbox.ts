@@ -9,6 +9,7 @@
  * or `~/.npm` — while reading and the network stay open. So the lists add
  * the places installs and builds need, and take away where keys live.
  */
+import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { homedir, platform, tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
@@ -40,6 +41,9 @@ export function writableCaches(): string[] {
 export function secretPlaces(): { path: string; what: string }[] {
   const mac = platform() === 'darwin';
   return [
+    { path: join(home, '.openclaw'), what: 'other assistant credentials' },
+    { path: join(home, '.codex'), what: 'Codex credentials' },
+    { path: join(home, '.claude'), what: 'Claude Code credentials' },
     { path: join(home, '.ssh'), what: 'SSH keys' },
     { path: join(home, '.gnupg'), what: 'GPG keys' },
     { path: join(home, '.aws'), what: 'AWS sign-ins' },
@@ -94,24 +98,64 @@ export function onPath(program: string): boolean {
   return dirs.some((dir) => dir && existsSync(join(dir, program)));
 }
 
+let probeCache: { until: number; available: boolean } | undefined;
+/** A harmless real sandbox probe: installed binaries alone do not prove kernel permission. */
+export function sandboxRuntimeReady(os: NodeJS.Platform = platform()): boolean {
+  if (probeCache && probeCache.until > Date.now()) return probeCache.available;
+  const probe =
+    os === 'linux'
+      ? spawnSync(
+          'bwrap',
+          [
+            '--unshare-user',
+            '--unshare-pid',
+            '--unshare-net',
+            '--ro-bind',
+            '/',
+            '/',
+            '--',
+            '/bin/true',
+          ],
+          { timeout: 1500, stdio: 'ignore', env: { PATH: process.env.PATH ?? '/usr/bin:/bin' } },
+        )
+      : os === 'darwin'
+        ? spawnSync(
+            '/usr/bin/sandbox-exec',
+            ['-p', '(version 1)(allow default)(deny network*)', '/usr/bin/true'],
+            { timeout: 1500, stdio: 'ignore', env: { PATH: '/usr/bin:/bin' } },
+          )
+        : undefined;
+  const available = probe?.status === 0;
+  probeCache = { until: Date.now() + 30_000, available };
+  return available;
+}
+
 /**
  * Whether this computer can seal commands, and what's missing when it can't:
- * a Mac always can; Linux needs bubblewrap (and socat); Windows can't yet.
+ * macOS needs Seatbelt; Linux needs bubblewrap, socat and ripgrep; Windows cannot yet.
  */
 export function sandboxSupport(
   has: (program: string) => boolean = onPath,
   os: NodeJS.Platform = platform(),
+  ready: (os: NodeJS.Platform) => boolean = sandboxRuntimeReady,
 ): { available: true } | { available: false; reason: string; command?: string } {
-  if (os === 'darwin') return { available: true };
+  const blocked = {
+    available: false as const,
+    reason:
+      'This host does not permit the OS command sandbox. Check container/kernel permissions; files and connected apps still work.',
+  };
+  if (os === 'darwin') return ready(os) ? { available: true } : blocked;
   if (os === 'linux') {
-    const missing = ['bwrap', 'socat'].filter((p) => !has(p));
+    const missing = ['bwrap', 'socat', 'rg'].filter((p) => !has(p));
     return missing.length
       ? {
           available: false,
-          reason: 'Sealing commands on Linux needs bubblewrap and socat.',
-          command: 'sudo apt install bubblewrap socat   # or your system’s package manager',
+          reason: 'Sealing commands on Linux needs bubblewrap, socat and ripgrep.',
+          command: 'sudo apt install bubblewrap socat ripgrep   # or your system’s package manager',
         }
-      : { available: true };
+      : ready(os)
+        ? { available: true }
+        : blocked;
   }
   return {
     available: false,
