@@ -217,6 +217,20 @@ copy.
 - Use a password manager.
 - Sign out devices you don't use.
 
+## The model for meaning
+
+Memory search can understand meaning with a small model that runs on this
+computer (ADR 0041). It's only downloaded when you press **Get it**, and:
+
+- **It's exactly the file Conch expects.** Every file is pinned in Conch's code
+  by revision, size and fingerprint (SHA-256). Anything else that arrives is
+  thrown away, never used.
+- **It never goes online.** Once it's here, it runs with downloading turned off;
+  your memories and requests never leave this computer.
+- **It runs on its own.** The model runs in a separate program that sees none of
+  Conch's keys or settings and can only answer "which memories are close to
+  this". If it crashes, Conch carries on with word search.
+
 ## Reporting a vulnerability
 
 Please report privately to the maintainers rather than opening a public issue.

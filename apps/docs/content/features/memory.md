@@ -25,11 +25,13 @@ Open **What Conch knows about you** with <kbd>mod+k</kbd>, by typing `/memory`, 
 
 Click a memory to change it. **Forget** removes it, and **Undo** brings it back. To add one by hand, write it in the box and press **Add**.
 
-## Search that forgives
+## Search that understands
 
-Search finds a memory by its words. Typos and other forms of a word still match.
+Search finds a memory by its words. Typos and other forms of a word still match, and so do a few everyday ideas: "my car" finds "Drives a red vehicle".
 
-With a [model on this computer](../providers/ollama.md), search understands meaning too: "anniversary" finds your wedding. If Ollama is running without the small model this needs, the page offers it with **Get it**. Nothing leaves your computer.
+To have search understand meaning, press **Get it** on the page, or choose **Search memories by meaning** with <kbd>mod+k</kbd>. Conch downloads a small model once (23 MB, or 136 MB if you use a language other than English) and runs it on this computer, even offline. Then "anniversary" finds your wedding, and "which city is home" finds where you live. Nothing you've told Conch leaves your computer.
+
+If the download stops, Conch tries again by itself; if it still can't, the page says why, with **Try again**. Already have an embedding model in [Ollama](../providers/ollama.md)? Search uses that one instead, and there's nothing to download.
 
 Your assistant uses the same search. While your memories are few, it has all of them in mind. Once there are many, it starts each reply with the ones that fit what you said, and looks up the rest when it needs them.
 
@@ -52,5 +54,6 @@ With **Remember things automatically** off, anything new a tidy-up learns waits 
 ## Good to know
 
 - Memories are Markdown files in `~/.conch/memory`, one each. Open, edit or delete them with any editor. They are part of every [backup](../care/backups.md).
+- The model for meaning isn't in backups: on a new computer, press **Get it** again. **Repair everything** notices if any of it goes missing and gets it back.
 - Memory belongs to Conch, so every provider you connect knows the same things. [Codex](../providers/codex-cli.md) reads your memories but can't save new ones itself.
 - Only your own words teach it. Routine runs, and messages from other people on a chat app, are left out.

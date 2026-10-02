@@ -46,7 +46,7 @@ To sign skills you share, see `pnpm conch skills sign` in the [command line refe
 
 ## Skills Conch suggests
 
-When you've asked for the same thing in three different chats, the Skills page offers to save it as a skill, with a first draft written from what you said.
+When you've asked for the same thing in three different chats, the Skills page offers to save it as a skill, with a first draft written from what you said. Once search [understands meaning](./memory.md#search-that-understands), the words don't have to match: "Write my weekly summary", "Recap this week's meetings" and "What happened at work this week?" count as one thing. A skill you already have is recognised in other words too.
 
 - **Look at the draft** opens it for you to read and change.
 - **Not now** hides the offer for a month.

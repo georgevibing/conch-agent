@@ -146,9 +146,16 @@ Nothing is saved or turned on by Conch.
 - A poisoned page can no longer plant a lasting instruction: whatever it got the
   assistant to remember waits for a person.
 - **Known limits:**
-  - Built-in vectors know spelling, not meaning. "Anniversary" finds "wedding"
-    only with an embedding model.
+  - ~~Built-in vectors know spelling, not meaning. "Anniversary" finds "wedding"
+    only with an embedding model.~~ Closed by [ADR 0041](./0041-meaning-out-of-the-box.md):
+    Conch's own small model, downloaded once when you press **Get it**, gives
+    meaning without Ollama, and a few everyday concepts match before that. The
+    Ollama offer of `nomic-embed-text` in § 1 is gone; an Ollama embedding model
+    you already have is still used first.
   - The tidy-up is only as good as the cheapest model, which is why every change
     can be undone.
-  - Habits are found by wording. The same need phrased three different ways isn't
-    noticed.
+  - ~~Habits are found by wording. The same need phrased three different ways isn't
+    noticed.~~ Closed by ADR 0041: with a model for meaning, requests cluster by
+    meaning across chats (average linkage, at least three chats), and existing
+    skills and turned-down suggestions are recognised in other words too. Without
+    one, it's still by wording.
