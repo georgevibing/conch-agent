@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button } from '../../components/Button';
 import { Stack } from '../../components/Stack';
 import { SkillReview } from '../Skills/SkillReview';
-import { openClawItems, openClawTicked } from './fixtures';
+import { openClawItems, openClawTeamItems, openClawTeamTicked, openClawTicked } from './fixtures';
 import { ImportPreview } from './ImportPreview';
 import { ImportOffer, ImportProgress, ImportSummary } from './ImportSummary';
 
@@ -57,6 +57,18 @@ export const Playground: Story = {
     );
   },
   args: { items: withReview },
+};
+
+/** The model it used, another agent's things under its name, a Slack bot with one key (ADR 0042). */
+export const OtherAgentsAndModel: Story = {
+  ...Playground,
+  args: {
+    items: openClawTeamItems,
+    selected: openClawTeamTicked,
+    problems: [
+      'Hermes’s model, Kimi K2 through Kimi, stays behind: Conch can’t connect to Kimi yet, so new chats keep Conch’s own choice.',
+    ],
+  },
 };
 
 export const WithProblems: Story = {
@@ -115,7 +127,15 @@ export const Summary: Story = {
     <div style={{ maxInlineSize: 620 }}>
       <ImportSummary
         from="OpenClaw"
-        counts={{ persona: 2, about: 1, memories: 2, skills: 1, routines: 1, channels: 1 }}
+        counts={{
+          persona: 2,
+          model: 1,
+          about: 1,
+          memories: 2,
+          skills: 1,
+          routines: 1,
+          channels: 1,
+        }}
         next={[
           'Say hello to @pearl_bot in Telegram to finish: nobody else gets in.',
           'Turn on Morning briefing in Routines when you’re ready.',

@@ -1,10 +1,10 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { expectAccessible, renderNacre } from '../../test/render';
-import { openClawItems, openClawTicked } from './fixtures';
+import { openClawItems, openClawTeamItems, openClawTeamTicked, openClawTicked } from './fixtures';
 import { ImportPreview } from './ImportPreview';
 import { ImportOffer, ImportProgress, ImportSummary } from './ImportSummary';
 
@@ -63,6 +63,44 @@ describe('ImportPreview', () => {
     if (!show) throw new Error('no preview');
     await user.click(show);
     expect(screen.getByText(/British spelling/)).toBeVisible();
+  });
+
+  it('shows the model, and another agent’s things together under its name with one tick', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    function Team() {
+      const [selected, setSelected] = useState(openClawTeamTicked);
+      return (
+        <ImportPreview
+          items={openClawTeamItems}
+          selected={selected}
+          onSelectedChange={(ids) => {
+            setSelected(ids);
+            onChange(ids);
+          }}
+        />
+      );
+    }
+    const { container } = renderNacre(<Team />);
+    expect(screen.getByRole('region', { name: 'Model' })).toHaveTextContent(
+      'Chats you’ve already started keep theirs',
+    );
+    const atlas = screen.getByRole('region', { name: 'Atlas' });
+    expect(atlas).toHaveTextContent('Another of your agents');
+    expect(atlas).toHaveTextContent('4 of 4');
+    // Its things aren't mixed in with the main agent's.
+    expect(screen.getByRole('region', { name: 'Memories' })).not.toHaveTextContent('Charles');
+    // In the order they came: its personality first.
+    const rows = within(atlas).getAllByRole('checkbox').slice(1);
+    expect(rows[0]).toHaveAccessibleName(/Talk as Atlas/);
+    expect(rows.at(-1)).toHaveAccessibleName(/Friday numbers/);
+    await user.click(within(atlas).getByRole('checkbox', { name: 'All of Atlas' }));
+    expect(onChange.mock.lastCall?.[0]).not.toContain('agent:work:memory:1');
+    expect(onChange.mock.lastCall?.[0]).toContain('memory:1');
+    expect(screen.getByRole('region', { name: 'Chat apps' })).toHaveTextContent(
+      'Slack needs one more key',
+    );
+    await expectAccessible(container);
   });
 
   it('folds a long group', async () => {

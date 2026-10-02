@@ -1,6 +1,8 @@
 import {
+  Bot,
   Brain,
   CalendarClock,
+  Cpu,
   KeyRound,
   MessageCircle,
   Puzzle,
@@ -18,7 +20,7 @@ import { cx } from '../../utils/cx';
 import styles from './ComeHome.module.css';
 
 export type ImportGroupId =
-  'persona' | 'about' | 'memories' | 'skills' | 'routines' | 'channels' | 'keys';
+  'persona' | 'model' | 'about' | 'memories' | 'skills' | 'routines' | 'channels' | 'keys';
 
 export interface ImportPreviewItem {
   id: string;
@@ -34,6 +36,11 @@ export interface ImportPreviewItem {
   duplicate?: boolean;
   /** What Conch saw reading it (a SkillReview). */
   review?: ReactNode;
+  /**
+   * Another of the person's agents it belongs to (ADR 0042): its things are
+   * shown together under its name, after everything else, with one tick.
+   */
+  agent?: { id: string; name: string };
 }
 
 export const importGroups: Record<
@@ -41,6 +48,11 @@ export const importGroups: Record<
   { label: string; note?: string; icon: ReactNode }
 > = {
   persona: { label: 'Personality', icon: <Sparkles /> },
+  model: {
+    label: 'Model',
+    note: 'For new chats. Chats you’ve already started keep theirs.',
+    icon: <Cpu />,
+  },
   about: { label: 'About you', icon: <User /> },
   memories: { label: 'Memories', icon: <Brain /> },
   skills: {
@@ -67,6 +79,7 @@ export const importGroups: Record<
 
 const ORDER: ImportGroupId[] = [
   'persona',
+  'model',
   'about',
   'memories',
   'skills',
@@ -146,13 +159,16 @@ function Row({
 
 function Group({
   id,
+  head,
   items,
   selected,
   toggle,
   setMany,
   disabled,
 }: {
-  id: ImportGroupId;
+  /** What the section is: a kind of thing, or an agent. */
+  id: string;
+  head: { label: string; note?: string; icon: ReactNode; all: string };
   items: ImportPreviewItem[];
   selected: Set<string>;
   toggle: (id: string, on: boolean) => void;
@@ -161,7 +177,6 @@ function Group({
 }) {
   const headId = useId();
   const [all, setAll] = useState(false);
-  const group = importGroups[id];
   const ticked = items.filter((i) => selected.has(i.id)).length;
   const state = ticked === 0 ? false : ticked === items.length ? true : 'indeterminate';
   const shown = all ? items : items.slice(0, FOLD);
@@ -169,10 +184,10 @@ function Group({
     <section className={styles.group} aria-labelledby={headId} data-group={id}>
       <header className={styles.groupHead}>
         <span className={styles.groupIcon} aria-hidden>
-          {group.icon}
+          {head.icon}
         </span>
         <h3 className={styles.groupTitle} id={headId}>
-          {group.label}
+          {head.label}
         </h3>
         <span className={styles.groupCount}>
           {ticked} of {items.length}
@@ -181,7 +196,7 @@ function Group({
           <Checkbox
             size="sm"
             className={styles.groupAll}
-            aria-label={`All ${group.label.toLowerCase()}`}
+            aria-label={head.all}
             checked={state}
             disabled={disabled}
             onCheckedChange={(c) =>
@@ -193,7 +208,7 @@ function Group({
           />
         )}
       </header>
-      {group.note && <p className={styles.groupNote}>{group.note}</p>}
+      {head.note && <p className={styles.groupNote}>{head.note}</p>}
       <ul className={styles.items}>
         {shown.map((item) => (
           <Row
@@ -216,7 +231,8 @@ function Group({
 
 /**
  * Exactly what would come over from another agent (ADR 0035), grouped, each
- * with a tick and its words. What could surprise — a worrying skill, a bot,
+ * with a tick and its words. The other agents it ran (ADR 0042) follow, one
+ * section each. What could surprise — a worrying skill, a bot,
  * a key — says why it starts unticked, right beside it.
  */
 export function ImportPreview({
@@ -238,14 +254,20 @@ export function ImportPreview({
     }
     onSelectedChange(items.filter((i) => next.has(i.id)).map((i) => i.id));
   };
+  // Another agent's things, together under its name, in the order they came.
+  const agents = [
+    ...new Map(items.flatMap((i) => (i.agent ? [[i.agent.id, i.agent] as const] : []))).values(),
+  ];
   return (
     <div className={cx(styles.preview, className)} {...props}>
       {ORDER.map((g) => {
-        const inGroup = items.filter((i) => i.group === g);
+        const inGroup = items.filter((i) => i.group === g && !i.agent);
+        const group = importGroups[g];
         return inGroup.length ? (
           <Group
             key={g}
             id={g}
+            head={{ ...group, all: `All ${group.label.toLowerCase()}` }}
             items={inGroup}
             selected={set}
             toggle={toggle}
@@ -254,6 +276,23 @@ export function ImportPreview({
           />
         ) : null;
       })}
+      {agents.map((agent) => (
+        <Group
+          key={`agent:${agent.id}`}
+          id="agent"
+          head={{
+            label: agent.name,
+            note: 'Another of your agents. Its personality comes over as a skill you pick in a chat; what it knew and did comes too.',
+            icon: <Bot />,
+            all: `All of ${agent.name}`,
+          }}
+          items={items.filter((i) => i.agent?.id === agent.id)}
+          selected={set}
+          toggle={toggle}
+          setMany={setMany}
+          disabled={disabled}
+        />
+      ))}
       {problems.length > 0 && (
         <section className={styles.problems} aria-label="What stays behind">
           {problems.map((p) => (
