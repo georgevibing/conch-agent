@@ -176,7 +176,8 @@ test('pinned as an app: in the sidebar, opens on its own page, refreshes with fr
   await panel.getByRole('button', { name: 'Pin as an app' }).click();
   await expect(page.getByText('“Visitors this week” is in your sidebar')).toBeVisible();
 
-  const apps = page.getByRole('region', { name: 'Apps' });
+  // The sidebar's pinned group (Apps is the page of apps you connect, ADR 0052).
+  const apps = page.getByRole('region', { name: 'Pinned' });
   await apps.getByRole('button', { name: 'Visitors this week' }).click();
   await expect(page).toHaveURL(/\/apps\/a_/);
   const app = page.getByRole('region', { name: 'Visitors this week' });
