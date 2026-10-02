@@ -88,14 +88,22 @@ describe('a page', () => {
     for (const limit of codex?.limits ?? []) expect(facts).toHaveTextContent(limit);
   });
 
-  it('renders direct Google catalog entries with their operator setup requirement', () => {
+  it('renders direct Google catalog entries with guided user-owned setup and no hosted broker', () => {
     open('/features/apps');
     const google = reference.integrations.filter((app) => app.auth === 'google');
     expect(google.map((app) => app.id)).toEqual(
       expect.arrayContaining(['gmail', 'google-calendar', 'google-drive']),
     );
     expect(screen.getAllByText('Google sign-in · setup required')).toHaveLength(google.length);
-    expect(screen.getByText(/must register a Google Cloud/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: /One-time setup, with no hosted connection service/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/You need your own Google Cloud project/)).toHaveTextContent(
+      'Desktop app',
+    );
+    expect(
+      screen.getByText(/The same credential file works for a local Conch and a self-hosted server/),
+    ).toBeInTheDocument();
   });
 
   it('about a channel leads with what the code says about it', () => {
