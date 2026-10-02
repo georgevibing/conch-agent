@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 test('guides installation and notices when the provider appears', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Get started' }).click();
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
   // The card says what's missing; the dialog says what to type.
   const card = page.getByRole('article', { name: 'Claude Code' });

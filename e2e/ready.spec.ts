@@ -11,12 +11,28 @@ test('first run to first conversation', async ({ page, request }) => {
   // Welcome
   await expect(page.getByRole('heading', { name: 'Hello.' })).toBeVisible();
   await page.getByRole('button', { name: 'Get started' }).click();
+  await expect(page.getByRole('heading', { name: 'What would you like help with?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
   // Connect: the provider is already connected, so this advances by itself.
   await expect(page.getByText(/Claude Max/)).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Give me a personality' })).toBeVisible({
+  await expect(page.getByRole('textbox', { name: 'Your notes or document' })).toBeVisible({
     timeout: 8000,
   });
+  await page
+    .getByRole('textbox', { name: 'Your notes or document' })
+    .fill('Maya owns the launch checklist. Deadline Friday.');
+  await page.getByRole('button', { name: 'Make a useful brief', exact: true }).click();
+  await expect(page.getByText('Ready to review', { exact: true })).toBeVisible();
+  expect((await (await request.get('/api/state')).json()).onboarded).toBe(false);
+  await page.reload();
+  await expect(page.getByText('Ready to review', { exact: true })).toBeVisible();
+  const job = (await (await request.get('/api/first-job')).json()).task;
+  expect(job.verification).toBe('verified');
+  expect(
+    job.operations.filter((op: { tool: string }) => op.tool === 'artifact_create'),
+  ).toHaveLength(1);
+  await page.getByRole('button', { name: 'Make Conch yours' }).click();
 
   // Personality
   const name = page.getByRole('textbox', { name: 'What should I be called?' });
@@ -29,8 +45,8 @@ test('first run to first conversation', async ({ page, request }) => {
   await page.getByRole('textbox', { name: /Anything I should know/ }).fill('I build compilers.');
   await page.getByRole('button', { name: 'Continue' }).click();
 
-  await expect(page.getByRole('heading', { name: 'All set, Ada.' })).toBeVisible();
-  await page.getByRole('button', { name: 'Start chatting' }).click();
+  await expect(page.getByRole('heading', { name: 'Make yourself at home, Ada.' })).toBeVisible();
+  await page.getByRole('button', { name: 'Open Conch', exact: true }).click();
 
   // Settings were saved on the server.
   // (The last save is on its way as the button is pressed: wait for it, don't race it.)
@@ -42,6 +58,8 @@ test('first run to first conversation', async ({ page, request }) => {
       profile: { name: 'Ada', about: 'I build compilers.' },
     });
 
+  // Start an ordinary chat after reviewing the saved first job.
+  await page.goto('/');
   // Empty chat greets by name.
   await expect(page.getByText(/Ada\./).first()).toBeVisible();
 

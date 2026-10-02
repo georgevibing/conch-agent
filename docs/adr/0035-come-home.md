@@ -132,7 +132,8 @@ yours.
 
 ### Where it shows
 
-- **Onboarding.** After Connect, if another assistant is here, one screen
+- **Onboarding.** After the first useful result, if the user chooses personalization
+  and another assistant is here, one screen
   asks "Bring your things from OpenClaw?", with Take a look and Not now. It
   never appears for people who have nothing to bring.
 - **Settings → Memory → "Bring your things from another assistant"**: an

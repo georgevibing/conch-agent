@@ -27,6 +27,13 @@ test('the first run offers to bring your things, and Not now carries on', async 
   await request.patch('/api/settings', { data: { onboarded: false } });
   await page.goto('/');
   await page.getByRole('button', { name: 'Get started' }).click();
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page
+    .getByRole('textbox', { name: 'Your notes or document' })
+    .fill('Maya owns the launch checklist. Deadline Friday.');
+  await page.getByRole('button', { name: 'Make a useful brief', exact: true }).click();
+  await expect(page.getByText('Ready to review', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Make Conch yours' }).click();
   await expect(page.getByRole('heading', { name: 'Bring your things from OpenClaw?' })).toBeVisible(
     { timeout: 10_000 },
   );

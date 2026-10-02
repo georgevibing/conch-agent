@@ -38,7 +38,7 @@ irm https://raw.githubusercontent.com/giotiskl/conch-agent/main/scripts/install.
 It gets Node.js and Git if you don't have them, builds Conch, keeps it running in the
 background, adds **Conch** to your apps and opens it. Then Conch looks for what you
 already have, helps you connect a provider (and sign in, or install what's missing),
-and asks a couple of optional questions so it can be _yours_. Run the line again to
+and guides you through a useful first job before optional personalization. Run the line again to
 update; add `--uninstall` to remove it. For a computer that stays on (a Mac mini, a
 Raspberry Pi), add `--server`: no browser, it keeps running after you log out, and it
 prints your phone's secure address and a QR code to sign the phone in.
@@ -67,6 +67,11 @@ password, until you run `pnpm conch devices approve` on your computer. Or skip t
 browser entirely and reach your assistant from Telegram, Discord or Slack.
 
 ## What it does
+
+**Something useful first.** Turn notes into a saved brief, prepare for today from
+Google email and calendar, or review follow-up drafts. Each job shows its access,
+keeps progress through interruptions and links verified saved results. Personality
+and import questions come afterwards. ([ADR 0039](./docs/adr/0039-first-useful-result.md))
 
 **Every provider at once.** Claude Code (through the Claude Agent SDK, with your
 existing `~/.claude`, `CLAUDE.md`, MCP servers and hooks), the Codex CLI, OpenRouter,

@@ -41,6 +41,7 @@ export * from './backups';
 export * from './browser';
 export * from './channels';
 export * from './engine';
+export * from './first-job';
 export * from './healed';
 export * from './import';
 export * from './integrations';

@@ -238,6 +238,7 @@ export class MockEngine implements Engine {
         { name: 'init', description: 'Create a CLAUDE.md for this project', argumentHint: '' },
       ],
       permissionModes: ['default', 'auto', 'acceptEdits', 'plan', 'bypassPermissions'],
+      tools: { host: true, files: true, shell: true, approvals: true },
     };
   }
 
@@ -510,6 +511,23 @@ export class MockEngine implements Engine {
         return;
       }
       const reportResult = input.tools.find((t) => t.name === 'report_result');
+      if (
+        reportResult &&
+        input.prompt.startsWith('Turn the supplied source notes into a concise')
+      ) {
+        // Real artifact storage and task receipt verification, with no model bill.
+        yield* hostTool('artifact_create', {
+          kind: 'markdown',
+          title: 'Your first brief',
+          content:
+            '# Your first brief\n\n## Key facts\n\nMaya owns the launch checklist. The deadline is Friday.\n\n## Next action\n\nReview the checklist before Friday.\n\nSource: your supplied notes.',
+        });
+        await reportResult.run({
+          summary: 'Saved your first brief in Conch. Your source notes are unchanged.',
+        } as never);
+        yield* speak('Your brief is ready to review.');
+        return;
+      }
       if (reportResult) {
         // Three real seconds whatever the speed, so a test that looks while it's
         // working isn't racing the end of it on a slow machine.

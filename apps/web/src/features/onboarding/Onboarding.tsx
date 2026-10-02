@@ -1,4 +1,10 @@
-import type { ImportSourceId, ImportStatus, Persona, Profile } from '@conch/protocol';
+import {
+  FirstJobKind,
+  type ImportSourceId,
+  type ImportStatus,
+  type Persona,
+  type Profile,
+} from '@conch/protocol';
 import {
   Button,
   Collapsible,
@@ -15,6 +21,8 @@ import {
 } from '@conch/nacre';
 import { ArrowRight } from 'lucide-react';
 import { useState, type FormEvent, type ReactNode } from 'react';
+import { useNavigate } from 'react-router';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { useAppState, useUpdateSettings } from '../../api/queries';
 import { useAutoFocus } from '../../lib/useAutoFocus';
@@ -25,8 +33,19 @@ import { ComeHomeDialog } from '../import/ComeHomeDialog';
 import { ProviderSetup } from '../providers/ProviderSetup';
 import styles from './Onboarding.module.css';
 import { toneOptions } from './tones';
+import { ChooseFirstJob, FirstJob, JOBS, newFirstJobDraft } from './FirstJob';
+import { firstJobKey, useFirstJob } from './first-job';
 
-const allSteps = ['welcome', 'connect', 'home', 'persona', 'about', 'done'] as const;
+const allSteps = [
+  'welcome',
+  'goal',
+  'connect',
+  'outcome',
+  'home',
+  'persona',
+  'about',
+  'done',
+] as const;
 type Step = (typeof allSteps)[number];
 
 function Progress({ step, steps }: { step: Step; steps: readonly Step[] }) {
@@ -85,13 +104,14 @@ function Welcome({ onNext }: { onNext: () => void }) {
         Hello.
       </Heading>
       <Text size="lg" tone="muted" align="center" className={styles.welcomeLead}>
-        I’m Conch — a calm place to think and build, right here on your computer.
+        I’m Conch, a calm place to think and build, right here on your computer.
       </Text>
       <Button ref={ref} size="lg" trailingIcon={<ArrowRight />} onClick={onNext}>
         Get started
       </Button>
       <Text size="xs" tone="subtle" align="center">
-        Everything stays on this machine.
+        Your history is saved on this computer. Cloud providers receive the content needed to
+        answer.
       </Text>
     </div>
   );
@@ -205,7 +225,7 @@ function AboutStep({
       <StepFrame
         eyebrow="A little about you"
         title="Tell me about yourself"
-        lead="Optional — but it helps me be genuinely useful from the first message."
+        lead="Optional. It helps me make future work more useful to you."
         footer={
           <>
             <Button type="button" variant="ghost" onClick={onSkip}>
@@ -238,7 +258,8 @@ function AboutStep({
               onChange={(e) => setProfile({ ...profile, about: e.target.value })}
             />
             <Field.Description>
-              This stays on your computer. Change or delete it any time in Settings.
+              Saved on this computer and shared with your selected provider when it helps answer.
+              Change or delete it in Settings.
             </Field.Description>
           </Field>
         </Stack>
@@ -261,11 +282,11 @@ function Done({
     <div className={styles.welcome}>
       <Pearl size="lg" state="streaming" label={null} />
       <Heading level={1} display size="5xl" align="center">
-        All set{name ? `, ${name}` : ''}.
+        Make yourself at home{name ? `, ${name}` : ''}.
       </Heading>
       <Text size="lg" tone="muted" align="center" className={styles.welcomeLead}>
-        Ask me anything — or ask me to remember something. I’ll always ask before touching your
-        files.
+        Your work is saved. You can adjust how Conch talks and what it knows about you at any time
+        in Settings.
       </Text>
       <Button
         ref={ref}
@@ -274,7 +295,7 @@ function Done({
         onClick={onFinish}
         loading={finishing}
       >
-        Start chatting
+        Open Conch
       </Button>
     </div>
   );
@@ -348,19 +369,49 @@ function HomeStep({
   );
 }
 
-/** First-run flow. Every step after "connect" is skippable. */
+/** Choose a job, connect its needs, inspect its result. Personalisation comes afterwards. */
 export function Onboarding() {
   const state = useAppState();
   const update = useUpdateSettings();
-  const [step, setStep] = useState<Step>('welcome');
+  const navigate = useNavigate();
+  const client = useQueryClient();
+  const firstJob = useFirstJob();
+  const [requestedStep, setStep] = useState<Step>('welcome');
+  const [draft, setDraft] = useState(newFirstJobDraft);
+  const [kind, setKind] = useState<FirstJobKind>(() => {
+    try {
+      return FirstJobKind.parse(sessionStorage.getItem('conch:first-job-kind'));
+    } catch {
+      return 'document';
+    }
+  });
+  const step = requestedStep === 'welcome' && firstJob.data?.task ? 'outcome' : requestedStep;
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
   const imports = useImportStatus();
   // Offered only when there's something to bring.
   const home = imports.data?.sources.length ? imports.data : undefined;
   const steps = allSteps.filter((s) => s !== 'home' || home);
+  const progressSteps: readonly Step[] = ['goal', 'connect', 'outcome'].includes(step)
+    ? ['welcome', 'goal', 'connect', 'outcome']
+    : ['welcome', ...steps.filter((s) => ['home', 'persona', 'about'].includes(s))];
 
   if (!state.data) return null;
   const { persona, profile } = state.data;
+  const task = firstJob.data?.task;
+  const jobKind = task?.workflow ?? kind;
+  const finish = async (conversationId?: string) => {
+    try {
+      await update.mutateAsync({ onboarded: true });
+      try {
+        sessionStorage.removeItem('conch:first-job-kind');
+      } catch {
+        /* Not required to finish. */
+      }
+      if (conversationId) await navigate(`/c/${conversationId}`);
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  };
 
   const go = (next: Step) => {
     setDirection(steps.indexOf(next) >= steps.indexOf(step) ? 'forward' : 'back');
@@ -378,17 +429,54 @@ export function Onboarding() {
   return (
     <main className={styles.root}>
       <div className={styles.glow} aria-hidden />
-      {step !== 'welcome' && step !== 'done' && <Progress step={step} steps={steps} />}
+      {step !== 'welcome' && step !== 'done' && <Progress step={step} steps={progressSteps} />}
       <div key={step} className={styles.stage} data-direction={direction}>
-        {step === 'welcome' && <Welcome onNext={() => go('connect')} />}
+        {step === 'welcome' && <Welcome onNext={() => go('goal')} />}
+        {step === 'goal' && (
+          <StepFrame
+            eyebrow="Something useful first"
+            title="What would you like help with?"
+            lead="Pick one job. Connect only what it needs, then see a real result."
+          >
+            <ChooseFirstJob
+              value={kind}
+              onChange={(next) => {
+                setKind(next);
+                try {
+                  sessionStorage.setItem('conch:first-job-kind', next);
+                } catch {
+                  /* Optional convenience only. */
+                }
+              }}
+              onNext={() => go('connect')}
+              onSkip={() => void finish()}
+            />
+          </StepFrame>
+        )}
         {step === 'connect' && (
           <StepFrame
             eyebrow="Connect"
-            title="Choose what powers me"
-            lead="An agent already on this computer, or a model you hold a key for. You can switch later, or set up more than one."
+            title="Connect what powers your assistant"
+            lead="Use a subscription you already have, a model API, or a model on this computer. Your job stays the same."
           >
-            <ProviderSetup
-              onReady={() => setStep((s) => (s === 'connect' ? (home ? 'home' : 'persona') : s))}
+            <ProviderSetup onReady={() => setStep((s) => (s === 'connect' ? 'outcome' : s))} />
+          </StepFrame>
+        )}
+        {step === 'outcome' && (
+          <StepFrame
+            eyebrow={task ? 'Your first result' : 'Just what this job needs'}
+            title={JOBS.find((job) => job.id === jobKind)?.title ?? 'Your first result'}
+          >
+            <FirstJob
+              kind={jobKind}
+              task={task}
+              draft={draft}
+              onDraft={setDraft}
+              onSaved={(task) => client.setQueryData(firstJobKey, { task })}
+              onFinished={(id) => void finish(id)}
+              onPersonalize={() => go(home ? 'home' : 'persona')}
+              onBack={() => go('goal')}
+              onProvider={() => go('connect')}
             />
           </StepFrame>
         )}
@@ -413,11 +501,7 @@ export function Onboarding() {
           <Done
             name={profile.name}
             finishing={update.isPending}
-            onFinish={() =>
-              void update
-                .mutateAsync({ onboarded: true })
-                .catch((e: Error) => toast.error(e.message))
-            }
+            onFinish={() => void finish(task?.conversationId)}
           />
         )}
       </div>

@@ -7,37 +7,30 @@ equally drives another agent on that machine, or a model you hold a key for — 
 of them at once. Every connected provider's models are in one picker, and a
 conversation can move between them without losing its thread
 ([ADR 0010](./docs/adr/0010-providers.md), [ADR 0012](./docs/adr/0012-every-provider-at-once.md)).
-Integrations and skills belong to Conch, so every provider gets them.
+Integrations and skills belong to Conch. Tool-capable models receive the shared
+capabilities; chat-only models are identified before a job starts. ChatGPT
+subscription access uses Codex app-server device sign-in with Conch-isolated
+credentials. See ADRs [0036](./docs/adr/0036-provider-consistency.md),
+[0037](./docs/adr/0037-direct-google-accounts.md),
+[0038](./docs/adr/0038-durable-verified-tasks.md) and
+[0039](./docs/adr/0039-first-useful-result.md).
 
-```
-┌────────────────────────── Browser ──────────────────────────┐
-│  apps/web  (React 19, Vite, Nacre)                          │
-│   ├─ routes: /  /s/:sessionId  /settings                    │
-│   ├─ server state: TanStack Query (REST)                    │
-│   └─ live state: session store fed by the WebSocket stream  │
-└───────────────▲──────────────────────────────┬──────────────┘
-                │ WS: ServerEvent (JSON)       │ WS: ClientCommand (JSON)
-                │ HTTP: REST (sessions, fs)    │
-┌───────────────┴──────────────────────────────▼──────────────┐
-│  apps/server  (Node ≥ 24, Fastify + @fastify/websocket)     │
-│   ├─ guards: Host/Origin checks · token for remote access   │
-│   ├─ SessionManager: one AgentRun per active session        │
-│   ├─ AgentRun: wraps query() from the Claude Agent SDK      │
-│   │    streaming input · partial messages · canUseTool      │
-│   └─ PermissionBroker: parks tool-approval promises until   │
-│        the browser answers (or they time out → deny)        │
-└───────────────┬─────────────────────────────────────────────┘
-                │ in-process (spawns Claude Code runtime)
-┌───────────────▼─────────────────────────────────────────────┐
-│  Claude Code on the host: ~/.claude, project CLAUDE.md,     │
-│  MCP servers, hooks, the working directory's files          │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+  UI["React / Nacre: onboarding, chat, jobs, approvals"] --> Gateway["Fastify: authenticated REST + replayable WebSocket events"]
+  Gateway --> Conversations["Conversation manager: permissions, scope, history"]
+  Conversations --> Tasks["Tasks: durable operations + verified receipts"]
+  Conversations --> Engines["Provider adapters: Claude / Codex / API / local"]
+  Engines --> Tools["Conch tools: files, artifacts, Google, integrations"]
+  Tools --> Guard["Conch guard + exact approvals + task ledger"]
+  Guard --> Effects["Bounded effects and independent readback"]
 ```
 
 ## Principles
 
-1. **Claude Code is the engine; Conch is the shell around it.** We add presentation,
-   not agent logic. Behaviour (tools, permissions, memory, compaction) is Claude Code's.
+1. **Providers supply reasoning; Conch owns the experience.** Adapters expose explicit
+   capabilities. Conch owns shared tools, account connections, permissions, task
+   state and verified results. Native provider facilities cannot bypass that scope.
 2. **Every byte on the wire is typed and validated.** `@conch/protocol` owns Zod
    schemas; both ends parse, neither trusts.
 3. **The server is the source of truth for sessions.** The browser can reload,

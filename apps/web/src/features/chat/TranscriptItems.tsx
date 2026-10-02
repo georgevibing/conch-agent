@@ -4,6 +4,7 @@ import {
   Collapsible,
   CopyButton,
   Diff,
+  DraftReview,
   GuardNote,
   InlineCode,
   Message,
@@ -240,10 +241,13 @@ export function PermissionCard({
   item,
   name,
   onRespond,
+  allowAlways = true,
 }: {
   item: Of<'permission'>;
   name: string;
   onRespond: (decision: 'allow' | 'allow-always' | 'deny') => void;
+  /** Bounded workflows approve this action only, never a lasting permission. */
+  allowAlways?: boolean;
 }) {
   const [sent, setSent] = useState<string>();
   const allowRef = useAutoFocus<HTMLButtonElement>();
@@ -274,6 +278,22 @@ export function PermissionCard({
     item.toolName === 'Bash' && typeof (item.input as { command?: unknown })?.command === 'string'
       ? (item.input as { command: string }).command
       : undefined;
+  const draftInput =
+    item.input && typeof item.input === 'object' ? (item.input as Record<string, unknown>) : {};
+  const draft =
+    item.toolName.replace(/^mcp__conch__/, '') === 'google_mail_create_draft' &&
+    typeof draftInput.body === 'string' &&
+    typeof draftInput.subject === 'string' &&
+    Array.isArray(draftInput.to) &&
+    draftInput.to.every((to) => typeof to === 'string')
+      ? {
+          to: draftInput.to as string[],
+          subject: draftInput.subject,
+          body: draftInput.body,
+          account:
+            typeof draftInput.accountEmail === 'string' ? draftInput.accountEmail : undefined,
+        }
+      : undefined;
   return (
     <Surface
       lustre
@@ -299,12 +319,13 @@ export function PermissionCard({
       </div>
       {item.taint && <GuardNote>{item.taint}</GuardNote>}
       {command && <pre className={styles.permissionCommand}>{command}</pre>}
+      {draft && <DraftReview {...draft} />}
       <div className={styles.permissionActions}>
         <Button variant="ghost" onClick={() => respond('deny')} disabled={Boolean(sent)}>
-          Deny
+          {draft ? 'Don’t save' : 'Deny'}
         </Button>
         {/* Asked because of what it read: this once, never always (ADR 0028). */}
-        {!item.taint && (
+        {!item.taint && allowAlways && !draft && (
           <Button
             variant="surface"
             onClick={() => respond('allow-always')}
@@ -320,7 +341,7 @@ export function PermissionCard({
           disabled={Boolean(sent)}
           loading={sent === 'allow'}
         >
-          Allow
+          {draft ? 'Save draft' : 'Allow'}
         </Button>
       </div>
     </Surface>

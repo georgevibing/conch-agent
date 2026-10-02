@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 test('signs in to the provider from the browser', async ({ page, request }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Get started' }).click();
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
   await page
     .getByRole('article', { name: 'Claude Code' })
@@ -18,7 +19,7 @@ test('signs in to the provider from the browser', async ({ page, request }) => {
   );
   // The dialog says it worked, then gets out of the way and the flow moves on.
   await expect(dialog.getByText(/Claude Max/)).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByRole('heading', { name: 'Give me a personality' })).toBeVisible({
+  await expect(page.getByRole('textbox', { name: 'Your notes or document' })).toBeVisible({
     timeout: 10_000,
   });
 

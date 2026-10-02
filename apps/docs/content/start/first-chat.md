@@ -1,16 +1,36 @@
 ---
-title: Your first chat
-description: Connect one provider, say hello, and learn the three controls you'll use every day.
+title: Your first useful result
+description: Choose a job, connect only what it needs, and review a result you can keep.
 order: 2
 ---
 
-## Connect a provider
+## Start with a job
+
+Choose what would help now:
+
+- **Make a useful brief:** paste notes or choose a text, Markdown or CSV document.
+- **Prepare me for today:** connect Google email and calendar for a sourced briefing.
+- **Draft my follow-ups:** review up to three reply drafts before saving them in Gmail. Nothing is sent.
+
+You can also choose **Explore on my own** and start with a chat.
+
+## Connect what it needs
 
 A provider is what answers: an assistant already on your computer, a model you hold a key for, or a model that runs right here. Conch finds what you have and offers it.
 
-1. On the welcome screen, pick a provider. Not sure? [Compare them](../providers/index.md).
+1. After choosing a job, pick a provider. Not sure? [Compare them](../providers/index.md).
 2. Press its one button: **Connect**, **Sign in** or **Install**. Conch shows the exact command it runs, and carries on by itself when it's done.
-3. Answer the two optional questions (how it should talk, and a little about you), or skip them.
+3. Add the source notes or connect the Google account for the job. Choose a connected model that supports tools; Conch checks before starting and never silently moves your work to a different provider.
+
+Google access requires the person running Conch to configure a Google OAuth application first. The connection screen explains what is needed and the access each job requests.
+
+## Review something useful
+
+Your job runs with saved progress. You can reload or come back later. When a decision needs you, Conch shows it in the same page. For a draft, read the exact account, recipients, subject and message before approving.
+
+**Ready to review** means Conch verified the saved result. Read the document and its source links before using it. A model's summary alone does not prove a job finished. Interrupted or unverified work stays available with its receipts; reconnect the same account if needed and continue from saved progress.
+
+Keep the result and open Conch, or choose **Make Conch yours** to bring things from another assistant and answer the optional personality questions afterwards.
 
 You can connect more at any time in **Settings → Providers**. Every connected one is in the model picker at once.
 

@@ -74,3 +74,4 @@ export * from './components/QRCode';
 
 // Chat patterns
 export * from './patterns';
+export * from './patterns/DraftReview';

@@ -21,7 +21,8 @@ describe('artifact completion receipts', () => {
     });
     const tool = service
       .tools({ conversationId: 'c_test', append: () => undefined })
-      .find((tool) => tool.name === 'artifact_create')!;
+      .find((tool) => tool.name === 'artifact_create');
+    if (!tool) throw new Error('Artifact tool missing');
     expect(
       await tool.run(
         { title: 'Bad chart', kind: 'chart', content: 'not JSON' },
@@ -91,7 +92,8 @@ describe('artifact completion receipts', () => {
     });
     const tool = service
       .tools({ conversationId: 'c_test', append: () => undefined })
-      .find((tool) => tool.name === 'artifact_create')!;
+      .find((tool) => tool.name === 'artifact_create');
+    if (!tool) throw new Error('Artifact tool missing');
     const args = { title: 'Brief', kind: 'markdown', content: '# Fact checked' };
     expect(await tool.verification?.reconcile(args, 'op_test')).toEqual({ state: 'absent' });
     await store.create({
