@@ -14,3 +14,7 @@ export { channelNeedsYou, channelStateMeta } from './status';
 export type { ChannelStateValue } from './status';
 export { PortalSketch } from './PortalSketch';
 export type { PortalSketchProps } from './PortalSketch';
+export { DeviceLinkCard } from './DeviceLinkCard';
+export type { DeviceLinkCardProps, DeviceLinkState } from './DeviceLinkCard';
+export { LinkedDevicesSketch } from './LinkedDevicesSketch';
+export type { LinkedDevicesSketchProps } from './LinkedDevicesSketch';

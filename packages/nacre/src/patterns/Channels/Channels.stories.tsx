@@ -53,11 +53,23 @@ const catalog = [
     minutes: 4,
     tagline: 'A private DM with your assistant, in your workspace.',
   },
+  {
+    brand: 'whatsapp',
+    name: 'WhatsApp',
+    color: '#25D366',
+    minutes: 1,
+    tagline: 'Your own WhatsApp. Scan a code, then message yourself.',
+  },
+  {
+    brand: 'signal',
+    name: 'Signal',
+    color: '#3A76F0',
+    minutes: 2,
+    tagline: 'Your own Signal. Scan a code, then use Note to Self.',
+  },
 ];
 
 const soon = [
-  { brand: 'whatsapp', name: 'WhatsApp', color: '#25D366' },
-  { brand: 'signal', name: 'Signal', color: '#3A76F0' },
   { brand: 'imessage', name: 'iMessage', color: '#34DA50' },
   { brand: 'microsoftteams', name: 'Microsoft Teams', color: '#6264A7' },
   { brand: 'matrix', name: 'Matrix', color: '#0DBD8B' },

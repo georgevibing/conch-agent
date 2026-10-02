@@ -1,0 +1,192 @@
+@layer nacre.components {
+  .phone {
+    --nc-rim-rest: 0.35;
+    --nc-rim-hover: 0.7;
+    --nc-sheen-hover: 0.08;
+    --ld-brand: var(--nc-accent-9);
+    --ld-screen: color-mix(in oklab, var(--ld-brand) 5%, var(--nc-surface-sunken));
+
+    position: relative;
+    inline-size: min(100%, 18.5rem);
+    margin: 0;
+    padding: 0.625rem;
+    border-radius: 2.25rem;
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(165deg, var(--nc-surface-hi), var(--nc-surface) 60%);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-3);
+  }
+
+  .screen {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    min-block-size: 25rem;
+    padding-block-end: var(--nc-space-4);
+    overflow: hidden;
+    border-radius: 1.75rem;
+    corner-shape: var(--nc-corner-shape);
+    background: var(--ld-screen);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    padding: var(--nc-space-4) var(--nc-space-3) var(--nc-space-2-5);
+    color: var(--nc-text-muted);
+    background: var(--nc-surface);
+    box-shadow: 0 1px 0 var(--nc-border-subtle);
+  }
+
+  .title {
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .hero {
+    display: grid;
+    place-items: center;
+    padding-block-start: var(--nc-space-3);
+  }
+
+  .device {
+    display: grid;
+    place-items: center;
+    inline-size: 4.5rem;
+    block-size: 4.5rem;
+    border-radius: var(--nc-radius-full);
+    color: var(--ld-brand);
+    background: color-mix(in oklab, var(--ld-brand) 12%, var(--nc-surface));
+  }
+
+  .actionRow {
+    display: grid;
+    place-items: center;
+    padding-inline: var(--nc-space-4);
+  }
+
+  .action {
+    position: relative;
+    inline-size: 100%;
+    padding: var(--nc-space-2) var(--nc-space-4);
+    border-radius: var(--nc-radius-full);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    text-align: center;
+    color: var(--nc-text-inverse);
+    background: color-mix(in oklab, var(--ld-brand) 82%, var(--nc-gray-12));
+  }
+
+  /* A slow ring asks to be pressed; it's the one moving thing on the phone. */
+  .action[data-alive]::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: inherit;
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--ld-brand) 55%, transparent);
+    animation: ld-call 2.2s var(--nc-ease-out) infinite;
+  }
+
+  @keyframes ld-call {
+    0% {
+      opacity: 0.9;
+      transform: scale(0.98);
+    }
+    70%,
+    100% {
+      opacity: 0;
+      transform: scale(1.08);
+    }
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    margin-inline: var(--nc-space-3);
+  }
+
+  .listTitle {
+    font-size: var(--nc-text-2xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .devices {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border-radius: var(--nc-radius-lg);
+    list-style: none;
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-2) var(--nc-space-3);
+  }
+
+  .row + .row {
+    box-shadow: 0 -1px 0 var(--nc-border-subtle);
+  }
+
+  .row[data-new] {
+    background: color-mix(in oklab, var(--ld-brand) 9%, var(--nc-surface));
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  .rowIcon {
+    display: grid;
+    place-items: center;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    border-radius: var(--nc-radius-full);
+    color: var(--nc-text-muted);
+    background: var(--nc-surface-sunken);
+  }
+
+  .rowText {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    line-height: 1.25;
+  }
+
+  .rowName {
+    overflow: hidden;
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .rowMeta {
+    font-size: var(--nc-text-2xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .note {
+    margin: auto var(--nc-space-4) 0;
+    font-size: var(--nc-text-2xs);
+    line-height: var(--nc-leading-normal);
+    text-align: center;
+    color: var(--nc-text-subtle);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .action[data-alive]::after,
+    .row[data-new] {
+      animation: none;
+    }
+  }
+}
