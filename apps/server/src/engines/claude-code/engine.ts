@@ -95,23 +95,14 @@ export class ClaudeCodeEngine implements Engine {
   /** It loads `~/.claude/skills` by itself, whatever Conch says. */
   readonly skillSources = ['claude'] as const;
   /**
-   * Claude Code runs MCP servers itself, and brings the connectors from your
-   * Claude account (Gmail, Calendar, Drive, Slack…) when you sign in with it.
+   * Claude Code runs MCP servers itself, and loads the connectors from your
+   * Claude account by itself. Conch brings the ones it can connect into
+   * Conch, so they work with every model (ADR 0049).
    */
   readonly integrations: EngineIntegrations = {
     mode: 'native',
     signInHint: 'In a terminal, run claude, then /mcp, to sign it in.',
-    account: {
-      label: 'your Claude account',
-      url: 'https://claude.ai/settings/connectors',
-      ready: (status) =>
-        status.auth?.method === 'subscription'
-          ? { ready: true }
-          : {
-              ready: false,
-              hint: 'These connect through a Claude subscription. Sign Claude Code in with your Claude account to use them.',
-            },
-    },
+    account: { label: 'your Claude account', url: 'https://claude.ai/settings/connectors' },
   };
   /** Claude sees images, and Claude Code opens files (PDFs, spreadsheets…) with its own tools. */
   readonly attachments = { images: true, files: true };

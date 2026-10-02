@@ -19,6 +19,12 @@ const IntegrationsFile = z.object({
   version: z.literal(1).default(1),
   /** An entry that no longer reads (hand-edited, older) is dropped on its own; the rest carry on. */
   integrations: z.array(StoredIntegration).default([]),
+  /**
+   * What you disconnected, so a provider that still has it set up doesn't
+   * bring it back by itself (ADR 0049): `catalog:<id>`, or `url:<sha-256 of
+   * the address>` (never the address itself).
+   */
+  removed: z.array(z.string().max(80)).max(500).default([]),
 });
 
 /** OAuth state for one integration. Shapes come from the MCP SDK and are opaque here. */
@@ -53,6 +59,7 @@ const SecretsFile = z.record(z.string(), IntegrationSecrets);
 export class IntegrationStore {
   #mutex = new Mutex();
   #items?: Promise<Map<string, StoredIntegration>>;
+  #removed = new Set<string>();
   #secrets?: Promise<Record<string, IntegrationSecrets>>;
 
   constructor(
@@ -121,6 +128,31 @@ export class IntegrationStore {
     });
   }
 
+  /** What you disconnected, so it isn't brought back by itself. */
+  async removed(): Promise<ReadonlySet<string>> {
+    await this.#load();
+    return new Set(this.#removed);
+  }
+
+  /** Remember (or forget) that these were disconnected on purpose. */
+  setRemoved(keys: readonly string[], removed: boolean): Promise<void> {
+    return this.#mutex.run(async () => {
+      const items = await this.#load();
+      const before = this.#removed.size;
+      for (const key of keys) {
+        if (removed) this.#removed.add(key);
+        else this.#removed.delete(key);
+      }
+      // Oldest go first: the list stays small.
+      while (this.#removed.size > 500) {
+        const first = this.#removed.values().next().value;
+        if (first === undefined) break;
+        this.#removed.delete(first);
+      }
+      if (this.#removed.size !== before || removed) await this.#write(items);
+    });
+  }
+
   /** Names of enabled integrations set to "Don't ask" (for the security checkup). */
   async trusted(): Promise<string[]> {
     return (await this.all()).filter((i) => i.enabled && i.policy === 'trust').map((i) => i.name);
@@ -144,7 +176,11 @@ export class IntegrationStore {
   }
 
   async #write(items: Map<string, StoredIntegration>) {
-    await writeJson(this.#path, { version: 1, integrations: [...items.values()] });
+    await writeJson(this.#path, {
+      version: 1,
+      integrations: [...items.values()],
+      removed: [...this.#removed],
+    });
   }
 
   #load(): Promise<Map<string, StoredIntegration>> {
@@ -157,7 +193,10 @@ export class IntegrationStore {
             : 'Your list of integrations couldn’t be read, so Conch kept a copy and started a new one.',
         ),
     }).then(
-      (read) => new Map(read.value.integrations.map((item) => [item.id, item])),
+      (read) => {
+        this.#removed = new Set(read.value.removed);
+        return new Map(read.value.integrations.map((item) => [item.id, item]));
+      },
       (error: unknown) => {
         this.#items = undefined;
         throw error;

@@ -34,11 +34,27 @@ export interface CatalogItem extends z.input<typeof CatalogEntry> {
 }
 
 /**
- * Integrations Conch sets up for you. Every remote one was checked against its
- * vendor's live server (Sept 2026): `oauth` entries support dynamic client
- * registration, so "Connect" is one click with no app to register. Services
- * such as Slack may connect through provider-owned accounts. Google connects
- * directly through Conch’s registered Web OAuth client; GitHub takes a token.
+ * Conch's own families of tools, each with its own sign-in: they need no MCP
+ * blueprint, and still work with every provider (ADR 0037, ADR 0049).
+ */
+export const HOST_FAMILIES: ReadonlySet<CatalogEntry['auth']> = new Set(['google', 'slack']);
+
+/**
+ * Whether Conch connects an entry itself, so it never depends on the model
+ * provider's own setup (ADR 0049): an MCP server it reaches, or a family of
+ * its own tools. `catalog.test.ts` holds every entry to it.
+ */
+export function connectsItself(entry: Pick<CatalogItem, 'auth' | 'blueprint'>): boolean {
+  return Boolean(entry.blueprint) || HOST_FAMILIES.has(entry.auth);
+}
+
+/**
+ * Integrations Conch sets up for you. Every one belongs to Conch, so it works
+ * with every model whichever provider answers (ADR 0049). Every remote one was
+ * checked against its vendor's live server (Sept 2026): `oauth` entries
+ * support dynamic client registration, so "Connect" is one click with no app
+ * to register. Google connects through your own Google OAuth client, Slack
+ * through your own Slack app; GitHub takes a token.
  */
 const raw: CatalogItem[] = [
   {
@@ -159,13 +175,19 @@ const raw: CatalogItem[] = [
     id: 'slack',
     name: 'Slack',
     tagline: 'Team chat',
-    description: 'Search conversations, catch you up and draft messages.',
+    description: 'Search conversations, catch you up and write messages for you to send.',
     category: 'productivity',
-    auth: 'account',
+    // Conch's own Slack tools, with a token from your own Slack app (ADR 0049).
+    auth: 'slack',
     color: '#4A154B',
     homepage: 'https://slack.com',
-    examples: ['Catch me up on #general since yesterday'],
-    access: ['Read channels you’re in', 'Send messages (asks first)'],
+    featured: true,
+    examples: ['Catch me up on #general since yesterday', 'What did Sam say about the launch?'],
+    access: [
+      'See and read the channels you’re in',
+      'Search your messages',
+      'Send messages as you (shows you the words and asks every time)',
+    ],
     cues: {
       match: [
         named('Slack'),

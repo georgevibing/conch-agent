@@ -99,13 +99,13 @@ export interface EngineIntegrations {
    * Anthropic API) that gets `TurnInput.bridgedTools` for its tool calling.
    */
   mode: 'native' | 'bridge';
-  /** The provider account's own connectors (e.g. claude.ai), if there are any. */
-  account?: {
-    label: string;
-    url: string;
-    /** Whether the current sign-in can use them. */
-    ready(status: EngineStatus): { ready: boolean; hint?: string };
-  };
+  /**
+   * Where the provider account's own connectors (e.g. claude.ai) are managed,
+   * if it has any. Only to say where a server it brings came from: the
+   * gallery never depends on them, and the portable ones are brought into
+   * Conch (ADR 0049).
+   */
+  account?: { label: string; url: string };
   /** How to sign in to a server the engine configured itself, in plain words. */
   signInHint?: string;
 }

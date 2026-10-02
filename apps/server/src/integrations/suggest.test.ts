@@ -63,9 +63,10 @@ class FakeEngine implements Engine {
   }
 }
 
-async function service(engine: Engine) {
+async function service(engine: Engine, extra: { slackConnected?: () => Promise<boolean> } = {}) {
   const home = await mkdtemp(join(tmpdir(), 'conch-suggest-'));
   const integrations = new IntegrationService({
+    ...extra,
     home,
     emit: () => {},
     engines: async () => [engine],
@@ -102,8 +103,7 @@ async function connected(
   );
 }
 
-const ids = (found: { offers: { catalogId: string; via?: string }[] }) =>
-  found.offers.map((s) => (s.via ? `${s.catalogId} via ${s.via}` : s.catalogId));
+const ids = (found: { offers: { catalogId: string }[] }) => found.offers.map((s) => s.catalogId);
 const nothing = { offers: [], unseen: [] };
 
 describe('what gets suggested', () => {
@@ -188,13 +188,24 @@ describe('what gets suggested', () => {
     expect(ids(await integrations.suggest('check my Gmail inbox', engine))).toEqual(['gmail']);
   });
 
+  it('offers Slack to every provider, and not once Slack is connected to Conch', async () => {
+    const engine = new FakeEngine();
+    const before = await service(engine);
+    expect(ids(await before.integrations.suggest('catch me up on Slack', engine))).toEqual([
+      'slack',
+    ]);
+    const after = await service(engine, { slackConnected: async () => true });
+    expect(await after.integrations.suggest('catch me up on Slack', engine)).toEqual(nothing);
+  });
+
   it('leaves out what was offered already or muted, and never more than two', async () => {
     const engine = new FakeEngine();
     const { integrations } = await service(engine);
     const text = 'move the Jira tickets into Linear, then post a summary to Slack and Notion';
     expect(ids(await integrations.suggest(text, engine))).toEqual(['atlassian', 'linear']);
     const later = await integrations.suggest(text, engine, new Set(['atlassian', 'linear']));
-    expect(ids(later)).toEqual(['slack via zapier', 'notion']);
+    // Slack is Conch's own (ADR 0049): offered for every provider, never through Zapier.
+    expect(ids(later)).toEqual(['slack', 'notion']);
     // What isn't offered again is still named as unseen: the assistant must not pretend.
     expect(later.unseen).toEqual(['Jira & Confluence', 'Linear', 'Slack', 'Notion']);
   });

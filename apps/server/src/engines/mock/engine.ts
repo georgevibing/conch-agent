@@ -94,11 +94,7 @@ export class MockEngine implements Engine {
    */
   readonly integrations: EngineIntegrations = {
     mode: 'bridge',
-    account: {
-      label: 'your Claude account',
-      url: 'https://claude.ai/settings/connectors',
-      ready: () => ({ ready: true }),
-    },
+    account: { label: 'your Claude account', url: 'https://claude.ai/settings/connectors' },
   };
   /** Sees images, can't open files: the degraded file path gets exercised too. */
   readonly attachments = { images: true, files: false };

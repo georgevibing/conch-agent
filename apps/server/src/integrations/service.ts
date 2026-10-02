@@ -16,6 +16,8 @@ import {
   type UpdateIntegrationBody,
 } from '@conch/protocol';
 
+import { createHash } from 'node:crypto';
+
 import type { Engine, EngineMcpServer, EngineMcpStatus } from '../engines/types';
 import { newId } from '../lib/ids';
 import type { Heal } from '../lib/recover';
@@ -68,8 +70,6 @@ export interface IntegrationSuggestion {
   /** What it would let the assistant do. */
   description: string;
   color?: string;
-  /** Connected through this catalog entry instead (Zapier), when the provider can't reach it. */
-  via?: string;
 }
 
 /** What a message is about that isn't connected: what to offer, and what the assistant can't see. */
@@ -121,6 +121,41 @@ function sameAddress(url: string): string {
     return url;
   }
 }
+
+/** “You disconnected this”, for an app from the catalog. */
+const catalogKey = (id: string) => `catalog:${id}`;
+/** “You disconnected this”, for an address: a hash, so the address itself isn't kept. */
+const urlKey = (url: string) =>
+  `url:${createHash('sha256').update(sameAddress(url)).digest('hex').slice(0, 40)}`;
+
+/**
+ * A catalog app Conch connects by itself with nothing for you to type: a web
+ * server you sign in to (or that needs no sign-in). Programs that run on this
+ * computer and apps that take a token aren't: they need you first.
+ */
+export function portableEntry(catalogId: string | undefined): ResolvedCatalogItem | undefined {
+  const entry = catalogId ? CATALOG.get(catalogId) : undefined;
+  if (!entry || entry.retired || entry.blueprint?.type !== 'http') return undefined;
+  if (entry.auth !== 'oauth' && entry.auth !== 'none') return undefined;
+  if (entry.fields.some((f) => !f.optional)) return undefined;
+  return entry;
+}
+
+/** A server a provider set up by itself, and whether Conch can bring it in. */
+interface FoundServer {
+  view: Omit<ExternalIntegration, 'adoptable'>;
+  status: EngineMcpStatus;
+  engine: Engine;
+  /** `catalog`: the same app from Conch's catalog; `url`: the same address. */
+  portable?: { kind: 'catalog'; entry: ResolvedCatalogItem } | { kind: 'url'; url: string };
+}
+
+const keyOf = (found: FoundServer) =>
+  found.portable?.kind === 'catalog'
+    ? catalogKey(found.portable.entry.id)
+    : found.portable?.kind === 'url'
+      ? urlKey(found.portable.url)
+      : undefined;
 
 function slug(name: string): string {
   const s = name
@@ -201,6 +236,8 @@ export interface IntegrationServiceDeps {
    * other integration, but kept by their own service.
    */
   hosted?: HostedApps;
+  /** Slack is connected to Conch itself (ADR 0049). */
+  slackConnected?: () => Promise<boolean>;
 }
 
 /** Integrations whose tools are Conch's own host tools, kept somewhere other than `integrations.json`. */
@@ -232,6 +269,7 @@ export class IntegrationService {
   #retries = new Map<string, { attempt: number; timer: NodeJS.Timeout }>();
   #timer?: NodeJS.Timeout;
   #external?: ExternalList;
+  #adopting?: Promise<void>;
   readonly setup: Setup;
 
   constructor(private readonly deps: IntegrationServiceDeps) {
@@ -242,9 +280,16 @@ export class IntegrationService {
 
   start() {
     if (this.deps.manualChecks) return;
-    const startup = setTimeout(() => void this.#checkStale(0), STARTUP_DELAY_MS);
+    const startup = setTimeout(() => {
+      void this.#checkStale(0);
+      // What a provider set up that Conch can connect itself comes in on its own (ADR 0049).
+      void this.external(true).catch(() => undefined);
+    }, STARTUP_DELAY_MS);
     startup.unref();
-    this.#timer = setInterval(() => void this.#checkStale(STALE_MS), CHECK_EVERY_MS);
+    this.#timer = setInterval(() => {
+      void this.#checkStale(STALE_MS);
+      void this.external(true).catch(() => undefined);
+    }, CHECK_EVERY_MS);
     this.#timer.unref();
   }
 
@@ -259,28 +304,19 @@ export class IntegrationService {
     const engines = await this.deps.engines().catch(() => []);
     const providers = await Promise.all(
       engines.map(async (engine) => {
-        const status = await engine.detect().catch(() => undefined);
         const account = engine.integrations.account;
-        const accountReady = account && status ? account.ready(status) : undefined;
         return {
           id: engine.id,
           engine: engine.label,
           mode: engine.integrations.mode,
           hasOwnServers: Boolean(engine.mcpStatus),
-          account: account && {
-            label: account.label,
-            url: account.url,
-            ready: accountReady?.ready ?? false,
-            hint: accountReady?.hint,
-          },
+          ...(account && { account: { label: account.label, url: account.url } }),
         };
       }),
     );
     return {
-      // Services only a provider's own account can reach are shown when one of them has it.
-      catalog: publicCatalog().filter(
-        (c) => c.auth !== 'account' || providers.some((p) => p.account),
-      ),
+      // Every app in it is Conch's own, so it works with every provider (ADR 0049).
+      catalog: publicCatalog(),
       integrations: [
         ...items.map((item) => publicView(this.#live(item))),
         ...((await this.deps.hosted?.list().catch(() => [])) ?? []),
@@ -310,34 +346,48 @@ export class IntegrationService {
 
   // ── External (servers a provider brings by itself) ──────────────────────
 
+  /**
+   * What the providers set up by themselves that isn't in Conch. Anything
+   * Conch can connect itself is brought in first, by itself (ADR 0049): it
+   * then works with every model, as an ordinary card (asking you to sign in
+   * when it needs to). What's left only works with its own provider; what you
+   * disconnected stays out, with a way to bring it back (`adoptable`).
+   */
   async external(force = false): Promise<ExternalList> {
     if (!force && this.#external && Date.now() - this.#external.checkedAt < 60_000)
       return this.#external;
     const engines = (await this.deps.engines().catch(() => [])).filter((e) => e.mcpStatus);
-    const mine = new Set(
-      (await this.store.all()).flatMap((i) =>
-        i.transport.type === 'http' ? [sameAddress(i.transport.url)] : [],
-      ),
+    const lists = await Promise.all(engines.map((engine) => this.#externalOf(engine)));
+    const found = lists.flatMap((l) => l.found);
+    await this.#adoptFound(found);
+    const items = await this.store.all();
+    const removed = await this.store.removed();
+    const addresses = new Set(
+      items.flatMap((i) => (i.transport.type === 'http' ? [sameAddress(i.transport.url)] : [])),
     );
-    const lists = await Promise.all(engines.map((engine) => this.#externalOf(engine, mine)));
+    const inConch = ({ status, portable }: FoundServer) =>
+      (status.url !== undefined && addresses.has(sameAddress(status.url))) ||
+      (portable?.kind === 'catalog' && items.some((i) => i.catalogId === portable.entry.id));
     this.#external = {
-      servers: lists.flatMap((l) => l.servers),
+      servers: found
+        .filter((f) => !inConch(f))
+        .map((f) => {
+          const key = keyOf(f);
+          return { ...f.view, adoptable: Boolean(key && removed.has(key)) };
+        }),
       message: lists.flatMap((l) => (l.message ? [l.message] : [])).join(' ') || undefined,
       checkedAt: Date.now(),
     };
     return this.#external;
   }
 
-  async #externalOf(
-    engine: Engine,
-    mine: Set<string>,
-  ): Promise<{ servers: ExternalIntegration[]; message?: string }> {
+  async #externalOf(engine: Engine): Promise<{ found: FoundServer[]; message?: string }> {
     let statuses: EngineMcpStatus[];
     try {
       statuses = (await engine.mcpStatus?.()) ?? [];
     } catch (error) {
       return {
-        servers: [],
+        found: [],
         message: `Couldn’t ask ${engine.label} what else it has: ${(error as Error).message}`,
       };
     }
@@ -348,7 +398,7 @@ export class IntegrationService {
       seen.add(key);
       return true;
     });
-    const servers = unique.map((s): ExternalIntegration => {
+    const found = unique.map((s): FoundServer => {
       const { source, name } = s;
       const state =
         s.status === 'connected'
@@ -364,52 +414,186 @@ export class IntegrationService {
         source === 'account' && engine.integrations.account
           ? `Reconnect it in ${engine.integrations.account.label}.`
           : (engine.integrations.signInHint ?? `Sign in to it from ${engine.label}.`);
+      const catalogId = matchCatalog(name, s.url);
+      const entry = portableEntry(catalogId);
       return {
-        name,
-        provider: engine.id,
-        providerName: engine.label,
-        source,
-        state,
-        message:
-          state === 'needs-auth'
-            ? where
-            : state === 'error'
-              ? scrub(s.error ?? 'It failed to start.').slice(0, 200)
-              : undefined,
-        toolCount: s.toolCount,
-        plugin: s.plugin,
-        catalogId: matchCatalog(name, s.url),
-        adoptable:
-          source !== 'account' && adoptableUrl(s.url) && !mine.has(sameAddress(s.url ?? '')),
+        view: {
+          name,
+          provider: engine.id,
+          providerName: engine.label,
+          source,
+          state,
+          message:
+            state === 'needs-auth'
+              ? where
+              : state === 'error'
+                ? scrub(s.error ?? 'It failed to start.').slice(0, 200)
+                : undefined,
+          toolCount: s.toolCount,
+          plugin: s.plugin,
+          catalogId,
+        },
+        status: s,
+        engine,
+        // A provider account's own connectors come in as the catalog app only: their
+        // addresses belong to the provider, and may carry its sign-in.
+        portable: entry
+          ? { kind: 'catalog', entry }
+          : source !== 'account' && s.url && adoptableUrl(s.url)
+            ? { kind: 'url', url: s.url }
+            : undefined,
       };
     });
-    return { servers };
+    return { found };
+  }
+
+  /** Bring in what Conch can connect itself, once each, never what you disconnected. */
+  #adoptFound(found: FoundServer[]): Promise<void> {
+    this.#adopting ??= (async () => {
+      for (const f of found) {
+        const key = keyOf(f);
+        if (!key || !f.portable) continue;
+        if ((await this.store.removed()).has(key)) continue;
+        const items = await this.store.all();
+        const portable = f.portable;
+        const already =
+          portable.kind === 'catalog'
+            ? items.some((i) => i.catalogId === portable.entry.id)
+            : items.some(
+                (i) =>
+                  i.transport.type === 'http' &&
+                  sameAddress(i.transport.url) === sameAddress(portable.url),
+              );
+        if (already) continue;
+        try {
+          const item =
+            portable.kind === 'catalog'
+              ? await this.#adoptEntry(portable.entry)
+              : await this.#adoptAddress(f.status.name, portable.url);
+          const later = item.health.state === 'needs-auth';
+          this.deps.onHeal?.(
+            `${item.name} was set up in ${f.engine.label} only. Conch connected it itself, so it works with every model${later ? ' once you sign in to it' : ''}.`,
+          );
+        } catch {
+          // An address Conch would never call (the SSRF guard), or one that's gone: left where it is.
+        }
+      }
+    })().finally(() => (this.#adopting = undefined));
+    return this.#adopting;
+  }
+
+  /** The catalog's own app, as a card: signing in is yours to do, when you're ready. */
+  async #adoptEntry(entry: ResolvedCatalogItem): Promise<StoredIntegration> {
+    const now = Date.now();
+    const transport = { type: 'http' as const, url: this.#urlFor(entry, {}) };
+    await this.#checkUrl(transport.url);
+    const item: StoredIntegration = {
+      id: newId('int'),
+      catalogId: entry.id,
+      name: entry.name,
+      server: await this.#uniqueServer(entry.id),
+      transport,
+      auth: entry.auth === 'oauth' ? 'oauth' : 'none',
+      enabled: true,
+      policy: 'ask-writes',
+      health:
+        entry.auth === 'oauth'
+          ? {
+              state: 'needs-auth',
+              message: 'Sign in to use it with every model.',
+              action: 'reconnect',
+              checkedAt: now,
+            }
+          : { state: 'checking' },
+      tools: [],
+      values: {},
+      secrets: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    await this.store.add(item, { values: {} });
+    this.#emit(item);
+    if (item.auth === 'oauth') return item;
+    return (await this.check(item.id)) ?? item;
+  }
+
+  /** The same address, from Conch: asking before everything, as for anything added by address. */
+  async #adoptAddress(name: string, raw: string): Promise<StoredIntegration> {
+    const url = IntegrationUrl.parse(raw);
+    await this.#checkUrl(url);
+    const now = Date.now();
+    const item: StoredIntegration = {
+      id: newId('int'),
+      name: name.slice(0, 40) || 'Integration',
+      server: await this.#uniqueServer(name),
+      transport: { type: 'http', url },
+      auth: 'none',
+      enabled: true,
+      policy: 'ask',
+      health: { state: 'checking' },
+      tools: [],
+      values: {},
+      secrets: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    await this.store.add(item, { values: {} });
+    this.#emit(item);
+    const checked = (await this.check(item.id)) ?? item;
+    if (checked.health.state !== 'needs-auth') return checked;
+    // It wants a sign-in: Conch's own OAuth, started when you press Sign in.
+    const updated = await this.store.update(item.id, (i) => ({
+      ...i,
+      auth: 'oauth',
+      health: {
+        state: 'needs-auth',
+        message: 'Sign in to use it with every model.',
+        action: 'reconnect',
+        checkedAt: Date.now(),
+      },
+    }));
+    if (updated) this.#emit(updated);
+    return updated ?? checked;
+  }
+
+  async #uniqueServer(base: string): Promise<string> {
+    const taken = new Set((await this.store.all()).map((i) => i.server));
+    const root = slug(base).slice(0, 28);
+    let name = root;
+    for (let n = 2; taken.has(name) || name === 'conch'; n++) name = `${root}-${n}`;
+    return ServerName.parse(name);
   }
 
   /**
-   * Bring a server a provider set up by itself into Conch, so every model can
-   * use it: Conch connects to the same address itself (signing in with its own
-   * OAuth when the server asks). Looked up by name on the gateway, so the
-   * address — which may say more than it should — never goes to the browser.
+   * Bring back a server a provider set up that you'd disconnected from
+   * Conch, so every model can use it again: the catalog's own app, or the
+   * same address (signing in with Conch's own OAuth when it asks). Looked up
+   * by name on the gateway, so the address — which may say more than it
+   * should — never goes to the browser.
    */
   async adopt(body: AdoptIntegrationBody, signIn: SignIn): Promise<IntegrationResult> {
     const engine = (await this.deps.engines().catch(() => [])).find((e) => e.id === body.provider);
-    const statuses = (await engine?.mcpStatus?.().catch(() => [])) ?? [];
-    const server = statuses.find((s) => s.name === body.name && s.source !== 'account');
-    if (!engine || !server)
+    const found = engine
+      ? (await this.#externalOf(engine)).found.find((f) => f.status.name === body.name)
+      : undefined;
+    if (!found || (found.status.source === 'account' && !found.portable))
       throw new IntegrationError(
         'not-found',
         `${body.name} isn’t set up in that provider any more.`,
       );
-    if (!adoptableUrl(server.url))
+    const portable = found.portable;
+    if (!portable)
       throw new IntegrationError(
         'invalid',
-        `${server.name} isn’t a web address Conch can connect to. Add it yourself from “Add your own”.`,
+        `${found.status.name} isn’t a web address Conch can connect to. Add it yourself from “Add your own”.`,
       );
-    const result = await this.create(
-      { custom: { type: 'http', name: server.name.slice(0, 40), url: server.url ?? '' } },
-      signIn,
-    );
+    const result =
+      portable.kind === 'catalog'
+        ? await this.create({ catalogId: portable.entry.id, values: {} }, signIn)
+        : await this.create(
+            { custom: { type: 'http', name: found.status.name.slice(0, 40), url: portable.url } },
+            signIn,
+          );
     this.#external = undefined;
     return result;
   }
@@ -535,7 +719,7 @@ export class IntegrationService {
           entry
             ? entry.auth === 'google'
               ? 'Connect Google from Integrations to use this app with every model.'
-              : `${entry.name} connects through your AI provider’s account, not here.`
+              : 'Connect Slack from its card in Integrations.'
             : 'Unknown integration.',
         );
       const { values, secrets } = this.#splitValues(entry, body.values, true);
@@ -544,13 +728,18 @@ export class IntegrationService {
           ? { type: 'http' as const, url: this.#urlFor(entry, values) }
           : { type: 'stdio' as const, command: blueprint.command, args: blueprint.args };
       if (transport.type === 'http') await this.#checkUrl(transport.url);
+      // Connecting it again yourself undoes “disconnected on purpose”.
+      await this.store.setRemoved([catalogKey(entry.id)], false);
       const item: StoredIntegration = {
         id: newId('int'),
         catalogId: entry.id,
         name: entry.name,
         server: uniqueServer(entry.id),
         transport,
-        auth: entry.auth === 'account' || entry.auth === 'google' ? 'none' : entry.auth,
+        auth:
+          entry.auth === 'oauth' || entry.auth === 'token' || entry.auth === 'none'
+            ? entry.auth
+            : 'none',
         enabled: true,
         policy: 'ask-writes',
         health: { state: entry.auth === 'oauth' ? 'connecting' : 'checking' },
@@ -568,6 +757,7 @@ export class IntegrationService {
     if (custom.type === 'http') {
       const url = IntegrationUrl.parse(custom.url);
       await this.#checkUrl(url);
+      await this.store.setRemoved([urlKey(url)], false);
       const item: StoredIntegration = {
         id: newId('int'),
         name: custom.name,
@@ -703,9 +893,18 @@ export class IntegrationService {
     const retrying = this.#retries.get(id);
     if (retrying) clearTimeout(retrying.timer);
     this.#retries.delete(id);
-    await this.#require(id);
+    const item = await this.#require(id);
     this.oauth.cancel(id);
+    // Disconnected on purpose: a provider that still has it doesn't bring it back (ADR 0049).
+    await this.store.setRemoved(
+      [
+        ...(item.catalogId ? [catalogKey(item.catalogId)] : []),
+        ...(item.transport.type === 'http' ? [urlKey(item.transport.url)] : []),
+      ],
+      true,
+    );
     await this.store.remove(id);
+    this.#external = undefined;
     this.deps.emit({ type: 'integration.deleted', integrationId: id });
   }
 
@@ -1066,8 +1265,8 @@ export class IntegrationService {
    * could connect now. Never one that's connected in Conch (in any state),
    * that the provider answering reaches by itself (its account's connectors or
    * its own servers), that's retired, or that's in `skip` (offered already in
-   * this conversation, or muted). A service only a provider's account can
-   * reach goes through Zapier when this provider has no account connectors.
+   * this conversation, or muted). Every app in the catalog is Conch's own,
+   * so whichever provider answers can use it once connected (ADR 0049).
    * `unseen` names them all, skipped or not, so the assistant never pretends.
    */
   async suggest(
@@ -1090,27 +1289,20 @@ export class IntegrationService {
       }),
     );
     for (const id of (await this.deps.googleConnected?.()) ?? []) mine.add(id);
+    if (await this.deps.slackConnected?.().catch(() => false)) mine.add('slack');
     const open = cued.filter((item) => !mine.has(item.id));
     if (!open.length) return none;
     // Not knowing what the provider has would risk telling it it can't see an app it can.
     const reached = await this.#reachedBy(engine);
     if (!reached) return none;
-    const account = await this.#accountReady(engine);
-    const zapier = CATALOG.get('zapier');
-    const suggestions: IntegrationSuggestion[] = [];
-    for (const item of open) {
-      if (reached.has(item.id)) continue;
-      const offer: IntegrationSuggestion = {
+    const suggestions: IntegrationSuggestion[] = open
+      .filter((item) => !reached.has(item.id))
+      .map((item) => ({
         catalogId: item.id,
         name: item.name,
         description: item.description,
         ...(item.color && { color: item.color }),
-      };
-      if (item.auth !== 'account' || account) suggestions.push(offer);
-      // Zapier might reach it already, with whatever actions were picked there.
-      else if (zapier && !zapier.retired && !mine.has(zapier.id))
-        suggestions.push({ ...offer, via: zapier.id });
-    }
+      }));
     return {
       offers: suggestions.filter((s) => !skip.has(s.catalogId)).slice(0, MAX_SUGGESTIONS),
       unseen: suggestions.map((s) => s.name),
@@ -1129,22 +1321,16 @@ export class IntegrationService {
       timer.unref();
     });
     try {
-      const found = await Promise.race([this.#externalOf(engine, new Set()), late]);
+      const found = await Promise.race([this.#externalOf(engine), late]);
       if (!found || found.message) return undefined;
       return new Set(
-        found.servers.flatMap((s) => (s.state === 'ok' && s.catalogId ? [s.catalogId] : [])),
+        found.found.flatMap(({ view }) =>
+          view.state === 'ok' && view.catalogId ? [view.catalogId] : [],
+        ),
       );
     } finally {
       clearTimeout(timer);
     }
-  }
-
-  /** Whether this provider's own account connectors work with how it's signed in. */
-  async #accountReady(engine: Engine): Promise<boolean> {
-    const account = engine.integrations.account;
-    if (!account) return false;
-    const status = await engine.detect().catch(() => undefined);
-    return status ? account.ready(status).ready : false;
   }
 
   /**

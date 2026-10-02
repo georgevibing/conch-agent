@@ -558,11 +558,11 @@ describe('SSRF guard', () => {
   });
 });
 
-describe('Conch-owned apps, provider-account connectors and provider servers', () => {
-  it('won’t create a connector that only works through your AI provider’s account', async () => {
+describe('Conch-owned apps and provider servers', () => {
+  it('directs Slack to Conch’s own Slack connection, not an MCP server', async () => {
     const { service } = await setup();
     await expect(service.create({ catalogId: 'slack', values: {} }, REDIRECT)).rejects.toThrow(
-      /through your AI provider’s account/,
+      'Connect Slack from its card in Integrations.',
     );
   });
 
@@ -576,8 +576,9 @@ describe('Conch-owned apps, provider-account connectors and provider servers', (
     },
   );
 
-  it('brings a provider’s own web server into Conch, keeping its address on the gateway', async () => {
-    const engine = Object.assign(new MockEngine(), {
+  /** A provider with a bit of everything set up by itself. */
+  const provider = (extra: EngineMcpStatus[] = []) =>
+    Object.assign(new MockEngine(), {
       mcpStatus: async (): Promise<EngineMcpStatus[]> => [
         {
           name: 'Team wiki',
@@ -600,28 +601,119 @@ describe('Conch-owned apps, provider-account connectors and provider servers', (
           toolCount: 4,
           url: 'https://x.example/mcp',
         },
+        // The provider account's own connector for an app in Conch's catalog.
+        { name: 'Notion', status: 'connected', source: 'account', toolCount: 6 },
+        // Where nothing should ever be called: the cloud's metadata address.
+        {
+          name: 'Metadata',
+          status: 'connected',
+          source: 'engine',
+          toolCount: 1,
+          url: 'http://169.254.169.254/mcp',
+        },
         { name: 'files', status: 'connected', source: 'engine', toolCount: 9 },
+        ...extra,
       ],
     });
-    const { service: withEngine } = await setup({ engines: async () => [engine] });
-    const list = await withEngine.external(true);
-    const adoptable = Object.fromEntries(list.servers.map((s) => [s.name, s.adoptable]));
-    expect(adoptable).toEqual({ 'Team wiki': true, Keyed: false, Drive: false, files: false });
+
+  it('brings in what a provider set up that Conch can connect itself, once, as ordinary cards', async () => {
+    const notes: string[] = [];
+    const { service } = await setup({
+      engines: async () => [provider()],
+      onHeal: (message) => notes.push(message),
+    });
+    const list = await service.external(true);
+    // What's left only works with its provider; nothing was removed, so nothing to bring back.
+    expect(list.servers.map((s) => [s.name, s.adoptable])).toEqual([
+      ['Keyed', false],
+      ['Drive', false],
+      ['Metadata', false],
+      ['files', false],
+    ]);
     expect(JSON.stringify(list)).not.toContain('api_key');
 
-    const adopted = await withEngine.adopt({ provider: 'mock', name: 'Team wiki' }, REDIRECT);
-    expect(adopted.integration).toMatchObject({ name: 'Team wiki', transport: { type: 'http' } });
-    // It wanted a sign-in: Conch's own OAuth starts, and the server is Conch's now.
-    expect(adopted.authorizeUrl).toContain('/authorize');
-    expect(
-      (await withEngine.external(true)).servers.find((s) => s.name === 'Team wiki')?.adoptable,
-    ).toBe(false);
-    await expect(withEngine.adopt({ provider: 'mock', name: 'Keyed' }, REDIRECT)).rejects.toThrow(
-      /Add it yourself/,
-    );
-    await expect(withEngine.adopt({ provider: 'mock', name: 'Drive' }, REDIRECT)).rejects.toThrow(
+    const items = await service.store.all();
+    expect(items.map((i) => [i.name, i.catalogId, i.auth, i.health.state])).toEqual([
+      ['Team wiki', undefined, 'oauth', 'needs-auth'],
+      ['Notion', 'notion', 'oauth', 'needs-auth'],
+    ]);
+    // Signing in is the person's to do: no sign-in page was opened by itself.
+    expect(service.oauth.isPending(items[1]?.id ?? '')).toBe(false);
+    expect(items[1]?.health).toMatchObject({
+      message: 'Sign in to use it with every model.',
+      action: 'reconnect',
+    });
+    // The SSRF guard holds for what a provider set up too.
+    expect(items.some((i) => JSON.stringify(i).includes('169.254'))).toBe(false);
+    expect(notes).toEqual([
+      'Team wiki was set up in Claude Code only. Conch connected it itself, so it works with every model once you sign in to it.',
+      'Notion was set up in Claude Code only. Conch connected it itself, so it works with every model once you sign in to it.',
+    ]);
+
+    // Looking again brings in nothing twice.
+    await service.external(true);
+    expect(await service.store.all()).toHaveLength(2);
+  });
+
+  it('never doubles one you connected already', async () => {
+    const { service } = await setup({ engines: async () => [provider()] });
+    const notion = await connectNotion(service);
+    await service.external(true);
+    expect((await service.store.all()).filter((i) => i.catalogId === 'notion')).toEqual([
+      expect.objectContaining({ id: notion.id }),
+    ]);
+  });
+
+  it('what you disconnect stays out, after a restart too, until you bring it back', async () => {
+    const { service, home } = await setup({ engines: async () => [provider()] });
+    await service.external(true);
+    for (const item of await service.store.all()) await service.remove(item.id);
+    const after = await service.external(true);
+    expect(await service.store.all()).toEqual([]);
+    expect(after.servers.filter((s) => s.adoptable).map((s) => s.name)).toEqual([
+      'Team wiki',
+      'Notion',
+    ]);
+    // The list of what you disconnected keeps hashes, never the addresses.
+    expect(await readFile(join(home, 'integrations.json'), 'utf8')).not.toContain('/wiki');
+
+    const again = new IntegrationService({
+      home,
+      emit: () => {},
+      engines: async () => [provider()],
+      cwd: async () => home,
+      manualChecks: true,
+      blueprints: (id) =>
+        CATALOG.get(id)?.blueprint ? { type: 'http', url: vendor.url(id) } : undefined,
+    });
+    await again.external(true);
+    expect(await again.store.all()).toEqual([]);
+
+    // “Use with every model” brings it back, with Conch's own sign-in.
+    const back = await again.adopt({ provider: 'mock', name: 'Notion' }, REDIRECT);
+    expect(back.integration).toMatchObject({ catalogId: 'notion' });
+    expect(back.authorizeUrl).toContain('/authorize');
+    expect((await again.store.removed()).has('catalog:notion')).toBe(false);
+  });
+
+  it('a forged “use with every model” brings in nothing', async () => {
+    const { service } = await setup({ engines: async () => [provider()] });
+    await expect(service.adopt({ provider: 'mock', name: 'Not there' }, REDIRECT)).rejects.toThrow(
       /isn’t set up/,
     );
+    await expect(
+      service.adopt({ provider: 'codex-cli', name: 'Team wiki' }, REDIRECT),
+    ).rejects.toThrow(/isn’t set up/);
+    await expect(service.adopt({ provider: 'mock', name: 'Keyed' }, REDIRECT)).rejects.toThrow(
+      /Add it yourself/,
+    );
+    await expect(service.adopt({ provider: 'mock', name: 'Drive' }, REDIRECT)).rejects.toThrow(
+      /isn’t set up/,
+    );
+    await expect(service.adopt({ provider: 'mock', name: 'Metadata' }, REDIRECT)).rejects.toThrow(
+      /never connects/,
+    );
+    expect(await service.store.all()).toEqual([]);
   });
 
   it('lists what Claude Code has by itself, with plain states', async () => {
