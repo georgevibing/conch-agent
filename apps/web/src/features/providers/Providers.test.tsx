@@ -317,15 +317,56 @@ describe('ChatGPT subscription connection', () => {
           loginId: 'device',
           phase: 'waiting-for-browser',
           url: 'https://auth.openai.com/codex/device',
-          message: 'Enter TEST-1234 on the sign-in page.',
+          code: 'TEST-1234',
         },
       }),
     );
-    expect(await screen.findByText(/Enter TEST-1234/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Open the sign-in page/ })).toHaveAttribute(
-      'href',
-      'https://auth.openai.com/codex/device',
+    // The code is there to read, and one button copies it and opens the page it goes on.
+    expect(
+      await screen.findByRole('group', { name: 'Sign-in code T E S T - 1 2 3 4' }),
+    ).toBeInTheDocument();
+    const user = userEvent.setup();
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+    const open = screen.getByRole('link', { name: 'Copy code and open sign-in page' });
+    expect(open).toHaveAttribute('href', 'https://auth.openai.com/codex/device');
+    await user.click(open);
+    expect(writeText).toHaveBeenCalledWith('TEST-1234');
+    expect(await screen.findByText(/Code copied/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+  });
+  it('still offers the sign-in page alone when a provider has no code to enter', async () => {
+    const claude = provider({
+      connect: 'program',
+      status: { ...provider().status, state: 'signed-out' },
+    });
+    mockFetch(
+      routes({
+        'GET /api/providers': () => ({ ...baseProviders, providers: [claude] }),
+        'POST /api/providers/claude-code/login': () => ({ ok: true }),
+      }),
     );
+    render();
+    await userEvent.click(
+      within(await screen.findByRole('article', { name: 'Claude Code' })).getByRole('button', {
+        name: 'Connect',
+      }),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: /Sign in to Claude Code/ }));
+    act(() =>
+      FakeSocket.last?.push({
+        type: 'engine.login',
+        login: {
+          loginId: 'browser',
+          phase: 'waiting-for-browser',
+          url: 'https://claude.ai/oauth/authorize',
+        },
+      }),
+    );
+    expect(await screen.findByRole('link', { name: /Open the sign-in page/ })).toHaveAttribute(
+      'href',
+      'https://claude.ai/oauth/authorize',
+    );
+    expect(screen.queryByRole('group', { name: /Sign-in code/ })).toBeNull();
   });
   it('disconnects only the Conch-managed account', async () => {
     const codex = provider({

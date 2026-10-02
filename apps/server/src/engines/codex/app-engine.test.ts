@@ -74,7 +74,7 @@ describe('Codex app-server parity', () => {
     const states = await login(engine);
     expect(states.find((s) => s.phase === 'waiting-for-browser')).toMatchObject({
       url: 'https://auth.openai.com/codex/device',
-      message: expect.stringContaining('TEST-1234'),
+      code: 'TEST-1234',
     });
     expect(states.at(-1)?.phase).toBe('done');
     const disk = await readFile(join(home, 'codex.secrets.json'), 'utf8');

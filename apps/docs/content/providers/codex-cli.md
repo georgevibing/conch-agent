@@ -6,8 +6,8 @@ provider: codex-cli
 
 1. Open **Settings → Providers → Codex**. If needed, choose **Install** or **Update**.
 2. Choose **Sign in with your ChatGPT subscription**. You do not need an API key.
-3. Open the sign-in page and enter the short code Conch shows. This works when Conch runs on a remote computer, too.
-4. Sign in to your own ChatGPT account and approve the connection. Conch verifies the account before reporting it connected.
+3. Conch shows a short code. Choose **Copy code and open sign-in page**: the code is copied, and the page opens in a new tab. This works when Conch runs on a remote computer, too.
+4. Paste the code there, sign in to your own ChatGPT account and approve the connection. Conch notices by itself and verifies the account before reporting it connected.
 
 Your plan and workspace determine available models and usage limits. A model appearing in the list is not a guarantee that a particular request is included in your plan; OpenAI confirms that when it handles the request. Conch does not make a paid test request during setup.
 

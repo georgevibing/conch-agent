@@ -1,0 +1,99 @@
+@layer nacre.components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--nc-space-3);
+    min-inline-size: 0;
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  /* ── The code: pearl tiles, the same language as approving a device ─── */
+  .well {
+    --nc-rim-rest: 0.55;
+    --nc-rim-hover: 0.9;
+
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    max-inline-size: 100%;
+    padding: var(--nc-space-3);
+    border-radius: var(--nc-radius-xl);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-2);
+  }
+
+  /* A long code, or a narrow phone, wraps between groups before it wraps inside one. */
+  .code {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-2) var(--nc-space-4);
+    min-inline-size: 0;
+  }
+
+  .group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1-5);
+  }
+
+  .tile {
+    display: grid;
+    place-items: center;
+    inline-size: 2.25rem;
+    block-size: 2.75rem;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 1px 0 color-mix(in oklch, var(--nc-text) 6%, transparent);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xl);
+    font-weight: var(--nc-weight-semibold);
+    font-variant-numeric: tabular-nums slashed-zero;
+    color: var(--nc-text);
+    /* Dragging across tiles would copy one character a line: the buttons copy it whole. */
+    user-select: none;
+  }
+
+  /* ── What happens next ──────────────────────────────────────────────── */
+  .hint,
+  .status {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  .status {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .dot {
+    flex-shrink: 0;
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-9);
+    animation: nc-breathe 2.4s var(--nc-ease-in-out) infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dot {
+      animation: none;
+    }
+  }
+}

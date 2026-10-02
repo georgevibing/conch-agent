@@ -249,11 +249,7 @@ export class CodexEngine implements Engine {
               throw new Error(
                 'Codex returned an unexpected sign-in address. Update Codex and try again.',
               );
-            emit({
-              phase: 'waiting-for-browser',
-              url: url.href,
-              message: `Enter ${result.userCode} on the sign-in page. This works even when Conch runs on another computer.`,
-            });
+            emit({ phase: 'waiting-for-browser', url: url.href, code: result.userCode });
             await completion;
             emit({ phase: 'verifying' });
             const account = Account.parse(

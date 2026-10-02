@@ -13,3 +13,5 @@ export type {
 } from './ProviderCard';
 export { SecretField } from './SecretField';
 export type { SecretFieldProps, SecretSourceValue } from './SecretField';
+export { SignInCode } from './SignInCode';
+export type { SignInCodeProps } from './SignInCode';

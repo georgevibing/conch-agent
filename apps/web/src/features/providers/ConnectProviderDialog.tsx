@@ -11,6 +11,7 @@ import {
   IntegrationHandshake,
   ProviderCaution,
   SecretField,
+  SignInCode,
   Spinner,
   Stack,
   Text,
@@ -143,7 +144,10 @@ function SignInProgram({ provider }: { provider: Provider }) {
             </Text>
           </div>
         )}
-        {login.phase === 'waiting-for-browser' && (
+        {login.phase === 'waiting-for-browser' && login.code && login.url && (
+          <SignInCode code={login.code} url={login.url} />
+        )}
+        {login.phase === 'waiting-for-browser' && !(login.code && login.url) && (
           <Stack gap={3}>
             <Text weight="medium">Open the sign-in page to continue.</Text>
             <Text tone="muted" size="sm">

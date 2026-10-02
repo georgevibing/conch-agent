@@ -86,6 +86,11 @@ export const LoginState = z.object({
   ]),
   /** Sign-in page to open if the browser didn't open automatically. */
   url: z.string().optional(),
+  /**
+   * A short code the provider's sign-in page asks for ("AXC7-NV0ME"), for
+   * providers that sign in that way. Shown to the person, who enters it on `url`.
+   */
+  code: z.string().max(64).optional(),
   message: z.string().optional(),
 });
 export type LoginState = z.infer<typeof LoginState>;

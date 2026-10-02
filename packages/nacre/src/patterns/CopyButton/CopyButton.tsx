@@ -1,6 +1,7 @@
 import { Check, Copy } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
+import { copyText } from '../../utils/clipboard';
 import { cx } from '../../utils/cx';
 import { IconButton, type IconButtonProps } from '../../components/IconButton';
 import styles from './CopyButton.module.css';
@@ -18,23 +19,6 @@ export interface CopyButtonProps extends Omit<
   /** How long the confirmation is shown, in ms. */
   resetAfter?: number;
   onCopied?: (text: string) => void;
-}
-
-async function writeClipboard(text: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-  // Fallback for insecure contexts (e.g. http://<lan-ip> during development).
-  const el = document.createElement('textarea');
-  el.value = text;
-  el.setAttribute('readonly', '');
-  el.style.position = 'fixed';
-  el.style.opacity = '0';
-  document.body.append(el);
-  el.select();
-  document.execCommand('copy');
-  el.remove();
 }
 
 /** Icon button that copies text and confirms with an animated check. */
@@ -56,7 +40,7 @@ export function CopyButton({
   const handleCopy = async () => {
     const text = typeof value === 'function' ? value() : value;
     try {
-      await writeClipboard(text);
+      await copyText(text);
     } catch {
       return;
     }

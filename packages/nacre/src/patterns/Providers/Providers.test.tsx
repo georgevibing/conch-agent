@@ -6,6 +6,7 @@ import { expectAccessible, renderNacre } from '../../test/render';
 import { providers } from './fixtures';
 import { ProviderCard, providerStateMeta, ProviderStatusBadge } from './ProviderCard';
 import { SecretField } from './SecretField';
+import { SignInCode } from './SignInCode';
 
 describe('ProviderCard', () => {
   it('says which provider is the default, and what each one needs', async () => {
@@ -169,5 +170,52 @@ describe('SecretField', () => {
   it('describes a saved secret without revealing it', () => {
     renderNacre(<SecretField {...base} saved={{ source: 'conch', hint: '…4f2c' }} />);
     expect(screen.getByText('Saved on this computer, ending 4f2c')).toBeInTheDocument();
+  });
+});
+
+describe('SignInCode', () => {
+  const base = { code: 'AXC7-NV0ME', url: 'https://auth.openai.com/codex/device' };
+
+  it('shows the code large, reads it out, and links to the page it goes on', async () => {
+    const { container } = renderNacre(<SignInCode {...base} />);
+    // One character a tile, in the code's own groups; read aloud as one code.
+    expect(
+      screen.getByRole('group', { name: 'Sign-in code A X C 7 - N V 0 M E' }),
+    ).toHaveTextContent('AXC7NV0ME');
+    const open = screen.getByRole('link', { name: 'Copy code and open sign-in page' });
+    expect(open).toHaveAttribute('href', base.url);
+    expect(open).toHaveAttribute('target', '_blank');
+    expect(open).toHaveAttribute('rel', 'noreferrer');
+    expect(screen.getByText(/Waiting for you to sign in/)).toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
+  it('copies the code on the way to the sign-in page, and says so', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+    renderNacre(<SignInCode {...base} />);
+    expect(screen.getByText(/The page opens in a new tab/)).toBeInTheDocument();
+    await user.click(screen.getByRole('link', { name: 'Copy code and open sign-in page' }));
+    expect(writeText).toHaveBeenCalledWith('AXC7-NV0ME');
+    expect(
+      await screen.findByText(/Code copied. Paste it on the sign-in page/),
+    ).toBeInTheDocument();
+  });
+
+  it('copies the code alone, for a page that is already open', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+    renderNacre(<SignInCode {...base} />);
+    await user.click(screen.getByRole('button', { name: 'Copy code' }));
+    expect(writeText).toHaveBeenCalledWith('AXC7-NV0ME');
+    expect(await screen.findByText(/Code copied/)).toBeInTheDocument();
+  });
+
+  it('says to type the code when the browser won’t copy it', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('Not allowed'));
+    renderNacre(<SignInCode {...base} />);
+    await user.click(screen.getByRole('link', { name: 'Copy code and open sign-in page' }));
+    expect(await screen.findByText(/couldn’t be copied. Type it/)).toBeInTheDocument();
   });
 });

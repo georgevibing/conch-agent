@@ -7,6 +7,7 @@ import { providers } from './fixtures';
 import { ProviderCard, ProviderCaution, ProviderStatusBadge } from './ProviderCard';
 import type { ProviderStateValue } from './ProviderCard';
 import { SecretField, type SecretSourceValue } from './SecretField';
+import { SignInCode } from './SignInCode';
 
 const meta = {
   title: 'Patterns/Providers',
@@ -147,6 +148,27 @@ export const OnThisComputer: Story = {
       </Stack>
     );
   },
+};
+
+/**
+ * A provider that signs in with a code (a ChatGPT plan): the code reads at a
+ * glance, and one button copies it and opens the page it goes on. Press it and
+ * the line underneath says the code is on your clipboard.
+ */
+export const SignInWithACode: Story = {
+  render: () => (
+    <Stack gap={8} style={{ maxInlineSize: '40rem' }}>
+      <SignInCode code="AXC7-NV0ME" url="https://auth.openai.com/codex/device" />
+      <Stack gap={2}>
+        <Text size="sm" tone="muted">
+          A longer code, in a narrow place: it wraps between its groups
+        </Text>
+        <div style={{ maxInlineSize: '19rem' }}>
+          <SignInCode code="WDJB-MJHT-K7Q2" url="https://example.com/device" />
+        </div>
+      </Stack>
+    </Stack>
+  ),
 };
 
 function KeyForm({
