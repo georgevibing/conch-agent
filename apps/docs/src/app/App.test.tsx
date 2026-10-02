@@ -71,7 +71,7 @@ describe('a page', () => {
       'href',
       '#from-a-checkout',
     );
-    expect(screen.getByRole('link', { name: /Next:\s*Your first chat/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Next:\s*Your first useful result/ })).toHaveAttribute(
       'href',
       '/start/first-chat',
     );
@@ -122,9 +122,9 @@ describe('a page', () => {
   it('moves to the next page from the contents', async () => {
     open('/start/install');
     const contents = screen.getByRole('navigation', { name: 'Documentation' });
-    await userEvent.click(within(contents).getByRole('link', { name: 'Your first chat' }));
+    await userEvent.click(within(contents).getByRole('link', { name: 'Your first useful result' }));
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Your first chat' }),
+      await screen.findByRole('heading', { level: 1, name: 'Your first useful result' }),
     ).toBeInTheDocument();
   });
 
