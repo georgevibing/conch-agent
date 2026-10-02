@@ -147,18 +147,20 @@ export function ArtifactEditor({
         <span className={styles.editorState} aria-live="polite">
           {problem ? 'Can’t save yet' : dirty ? 'Unsaved changes' : 'No changes yet'}
         </span>
-        <Button size="sm" variant="ghost" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button
-          size="sm"
-          variant="solid"
-          loading={saving}
-          disabled={!dirty || Boolean(problem)}
-          onClick={save}
-        >
-          Save
-        </Button>
+        <span className={styles.editorActions}>
+          <Button size="sm" variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            variant="solid"
+            loading={saving}
+            disabled={!dirty || Boolean(problem)}
+            onClick={save}
+          >
+            Save
+          </Button>
+        </span>
       </div>
       {notice}
       {problem && (

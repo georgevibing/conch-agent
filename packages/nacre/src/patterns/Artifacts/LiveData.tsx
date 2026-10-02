@@ -189,7 +189,8 @@ export function LiveDataAsk({
       </div>
       <p className={styles.askText}>
         It reads only {urls.length === 1 ? 'this address' : 'these addresses'}, without your cookies
-        or sign-ins, and nothing else on the page can be sent there:
+        or sign-ins. Where it says {'{…}'}, the page picks from values it declared; it can’t write
+        in anything of its own.
       </p>
       <ul className={styles.askUrls}>
         {urls.map((u) => (

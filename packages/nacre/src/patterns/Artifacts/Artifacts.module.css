@@ -530,6 +530,19 @@
     font-size: var(--nc-text-xs);
   }
 
+  .editorActions {
+    display: flex;
+    gap: var(--nc-space-1);
+    margin-inline-start: auto;
+  }
+
+  /* No room: the actions stay on the first line, what it says goes under. */
+  .editor[data-layout='switch'] .editorState {
+    flex-basis: 100%;
+    order: 1;
+    padding-inline: var(--nc-space-1);
+  }
+
   .editorProblem {
     flex: none;
   }
