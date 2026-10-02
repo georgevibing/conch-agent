@@ -36,6 +36,11 @@ interface GoogleConnectProps {
   capabilities: GoogleCapability[];
   onReady: (accountId: string) => void;
   accountId?: string;
+  /**
+   * Its own heading and the sentence about Google under it. Off inside an
+   * app's connect dialog, which already says what's being connected.
+   */
+  intro?: boolean;
 }
 export function GoogleConnect(props: GoogleConnectProps) {
   return (
@@ -45,7 +50,7 @@ export function GoogleConnect(props: GoogleConnectProps) {
     />
   );
 }
-function GoogleConnection({ capabilities, onReady, accountId }: GoogleConnectProps) {
+function GoogleConnection({ capabilities, onReady, accountId, intro = true }: GoogleConnectProps) {
   const auth = useAuth();
   const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
   const capabilityKey = [...capabilities].sort().join(',');
@@ -206,11 +211,15 @@ function GoogleConnection({ capabilities, onReady, accountId }: GoogleConnectPro
   return (
     <Stack gap={3}>
       {dialog}
-      <Heading level={2}>Google, connected to Conch</Heading>
-      <Text tone="muted">
-        Use your personal or work account with every model. Google content stays in the account you
-        choose; Conch shares requested results with the model answering your job.
-      </Text>
+      {intro && (
+        <>
+          <Heading level={2}>Google, connected to Conch</Heading>
+          <Text tone="muted">
+            Use your personal or work account with every model. Google content stays in the account
+            you choose; Conch shares requested results with the model answering your job.
+          </Text>
+        </>
+      )}
       <ul>
         {capabilities.map((c) => (
           <li key={c}>{GOOGLE_ACCESS[c]}</li>

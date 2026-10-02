@@ -168,6 +168,10 @@ describe('Google apps on the Integrations page', () => {
     await userEvent.click(
       await within(dialog).findByRole('button', { name: 'I already have a credential file' }),
     );
+    // Said once: the dialog's own words, not a second heading about Google under them.
+    expect(
+      within(dialog).queryByRole('heading', { name: 'Google, connected to Conch' }),
+    ).toBeNull();
     expect(within(dialog).getByLabelText('Google credential JSON')).toBeInTheDocument();
     expect(within(dialog).queryByLabelText('App password')).toBeNull();
   });
