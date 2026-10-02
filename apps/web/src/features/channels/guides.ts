@@ -130,18 +130,19 @@ export const MAIL_SERVICES = [
   {
     id: 'icloud',
     name: 'iCloud',
-    passwords: 'https://account.apple.com/account/manage/section/security',
+    passwords: 'https://account.apple.com',
     steps:
       'Sign in, open App-Specific Passwords, press +, name it “Conch”, and copy the password Apple shows.',
-    note: 'iCloud doesn’t take +conch addresses, so you write to yourself with “Conch” at the start of the subject.',
+    note: 'Your Apple Account needs two-factor authentication for this. iCloud doesn’t take +conch addresses, so you write to yourself with “Conch” at the start of the subject.',
     plus: false,
   },
   {
     id: 'fastmail',
     name: 'Fastmail',
-    passwords: 'https://app.fastmail.com/settings/security/apps/new',
+    passwords: 'https://app.fastmail.com/settings/',
     steps:
-      'Fastmail opens New app password. Name it “Conch”, choose Mail (IMAP/POP/SMTP), press Generate, and copy it.',
+      'In Settings → Privacy & Security, find Connected apps & API tokens and press Manage app passwords and access, then New app password. Name it “Conch”, keep Mail, Contacts & Calendars, press Generate password, and copy it.',
+    note: 'Fastmail’s Basic plan doesn’t include app passwords.',
     plus: true,
   },
   {

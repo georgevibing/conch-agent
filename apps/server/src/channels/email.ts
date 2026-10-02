@@ -73,7 +73,7 @@ export const MAIL_PRESETS: Record<Exclude<MailProvider, 'other'>, MailPreset> = 
     imap: { host: 'imap.mail.me.com', port: 993 },
     smtp: { host: 'smtp.mail.me.com', port: 587 },
     plus: false,
-    passwords: 'https://account.apple.com/account/manage/section/security',
+    passwords: 'https://account.apple.com',
     authserv: endsWith('icloud.com', 'me.com', 'apple.com'),
   },
   fastmail: {
@@ -81,7 +81,7 @@ export const MAIL_PRESETS: Record<Exclude<MailProvider, 'other'>, MailPreset> = 
     imap: { host: 'imap.fastmail.com', port: 993 },
     smtp: { host: 'smtp.fastmail.com', port: 465 },
     plus: true,
-    passwords: 'https://app.fastmail.com/settings/security/apps/new',
+    passwords: 'https://app.fastmail.com/settings/',
     authserv: endsWith('messagingengine.com', 'fastmail.com'),
   },
   outlook: {

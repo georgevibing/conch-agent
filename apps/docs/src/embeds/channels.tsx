@@ -75,23 +75,49 @@ export function ChannelFacts({ id }: { id: string }) {
           <Badge tone="accent">About {channel.minutes} minutes</Badge>
         </li>
       )}
-      <li>
-        <Badge tone="neutral">
-          {id === 'whatsapp' || id === 'signal' ? 'Your own account, linked' : 'A bot of your own'}
-        </Badge>
-      </li>
-      <li>
-        <Badge tone="neutral">No public address</Badge>
-      </li>
-      <li>
-        <Badge tone="neutral">Private chats only</Badge>
-      </li>
-      <li>
-        <Badge tone="neutral">Nobody gets in unless you let them</Badge>
-      </li>
+      {(
+        PERSONAL[channel.id] ?? [
+          'A bot of your own',
+          'No public address',
+          'Private chats only',
+          'Nobody gets in unless you let them',
+        ]
+      ).map((fact) => (
+        <li key={fact}>
+          <Badge tone="neutral">{fact}</Badge>
+        </li>
+      ))}
     </ul>
   );
 }
+
+/** Channels through an account that's already yours (ADR 0044): no bot, and strangers never hear back. */
+const PERSONAL: Record<string, string[]> = {
+  whatsapp: [
+    'Your own account, linked',
+    'No public address',
+    'Only the chat with yourself',
+    'Nobody gets in unless you let them',
+  ],
+  signal: [
+    'Your own account, linked',
+    'No public address',
+    'Only Note to Self',
+    'Nobody gets in unless you let them',
+  ],
+  imessage: [
+    'Only on a Mac',
+    'Nothing to make',
+    'Reads only the chat with yourself',
+    'Others’ chats never read',
+  ],
+  email: [
+    'Your own address',
+    'Reads only mail to you+conch',
+    'Checks who really sent it',
+    'Others’ chats never read',
+  ],
+};
 
 const BOT = 'Conch';
 const KEY = '7312945602:AAHf3kX9…';
@@ -268,6 +294,76 @@ const SCENES: Record<string, Record<string, () => ReactNode>> = {
           { id: '2', from: 'you', text: 'Did the build pass?' },
         ]}
         footer={<Handset.Composer />}
+      />
+    ),
+  },
+  imessage: {
+    key: () => (
+      <PortalSketch
+        label="System Settings on your Mac, on Full Disk Access"
+        address="System Settings"
+        nav={['General', 'Privacy & Security', 'Notifications']}
+        active="Privacy & Security"
+        title="Full Disk Access"
+        color={colorOf('imessage')}
+      >
+        <PortalSketch.Bar width={70} />
+        <PortalSketch.Toggle label="Terminal" press />
+        <PortalSketch.Bar width={45} />
+      </PortalSketch>
+    ),
+    hello: () => (
+      <Handset
+        label="Messages on your iPhone: the chat with yourself"
+        brand="imessage"
+        color={colorOf('imessage')}
+        title="Ada Lovelace"
+        subtitle="iMessage · you"
+        messages={[
+          { id: '1', from: 'them', text: WELCOME },
+          { id: '2', from: 'you', text: 'what’s on today?' },
+          {
+            id: '3',
+            from: 'them',
+            text: 'I’d like to look at your calendar. Reply yes to allow it, or no.',
+          },
+          { id: '4', from: 'you', text: 'yes' },
+        ]}
+        footer={<Handset.Composer placeholder="iMessage" />}
+      />
+    ),
+  },
+  email: {
+    key: () => (
+      <PortalSketch
+        label="Google’s App passwords page"
+        address="myaccount.google.com/apppasswords"
+        title="App passwords"
+        color={colorOf('email')}
+      >
+        <PortalSketch.Field label="App name">Conch</PortalSketch.Field>
+        <PortalSketch.Row>
+          <PortalSketch.Button>Create</PortalSketch.Button>
+        </PortalSketch.Row>
+        <PortalSketch.Field label="Your app password">abcd efgh ijkl mnop</PortalSketch.Field>
+      </PortalSketch>
+    ),
+    hello: () => (
+      <Handset
+        label="Mail on your phone: writing to your assistant"
+        brand="email"
+        color={colorOf('email')}
+        title="ada+conch@gmail.com"
+        subtitle="Re: Friday"
+        messages={[
+          { id: '1', from: 'you', text: 'Can you find a table for four on Friday?' },
+          {
+            id: '2',
+            from: 'them',
+            text: 'Two places have room at 8: Ottolenghi and Dishoom. Want me to book one?',
+          },
+        ]}
+        footer={<Handset.Composer placeholder="Reply" />}
       />
     ),
   },

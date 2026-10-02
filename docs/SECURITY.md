@@ -187,6 +187,25 @@ copy.
 - **Disconnecting** takes Conch off WhatsApp's Linked devices and deletes its keys. For
   Signal, also remove it under Linked devices on your phone.
 
+## iMessage and email
+
+- **Conch reads only what's for it.** On iMessage, only the chat with yourself (or,
+  on a Mac with its own Apple ID, people's one-to-one texts). On email, only mail to
+  your `+conch` address. The rest of your messages and inbox are never looked at.
+- **Messages needs Full Disk Access**, which macOS asks you for. Conch opens the
+  database read-only, and sends through Messages itself: what it sends is never
+  turned into a command.
+- **A From line is easy to fake.** Conch believes an email's sender only when your
+  mail service says the sender checked out (DMARC, or DKIM or SPF for the same
+  domain), or the email is in your own Sent mail. Anything else is left unread.
+- **Other people's messages are never read,** since the answer would come from your
+  own account, unless you say the address is just for your assistant. Then they wait
+  for you to let them in.
+- **A forwarded email is someone else's words.** Your assistant reads it as it would
+  a web page, and asks you before doing anything it suggests.
+- **Use an app password, never your account's own.** You can take it back in your
+  mail service at any time; Conch keeps it locked on this computer.
+
 ## Backups
 
 - **Conch backs itself up every day, on this computer** (Settings → Health). Those

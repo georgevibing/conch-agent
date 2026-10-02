@@ -249,7 +249,11 @@ function EmailPreview({
         <PortalSketch.Field label="Name">Conch</PortalSketch.Field>
         <PortalSketch.Row>
           <PortalSketch.Button>
-            {service.id === 'fastmail' ? 'Generate' : 'Create'}
+            {service.id === 'fastmail'
+              ? 'Generate password'
+              : service.id === 'icloud'
+                ? 'Generate'
+                : 'Create'}
           </PortalSketch.Button>
         </PortalSketch.Row>
         <PortalSketch.Field label="Your app password">abcd efgh ijkl mnop</PortalSketch.Field>

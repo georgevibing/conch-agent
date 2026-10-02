@@ -87,7 +87,7 @@ src/
   attachments/                uploads: sniffing, storage + sweep, per-engine prompt, sandboxed serving (ADR 0017)
   vault/                      Passwords: encrypted vault, keychain, other managers, import, fills (ADR 0025)
   backup/                     what's in a backup (manifest), the .conchbackup format, daily backups, restore (ADR 0020)
-  channels/                   Telegram, Discord and Slack bots, your linked WhatsApp and Signal; pairing, relay, healing (ADR 0018, 0043)
+  channels/                   Telegram, Discord and Slack bots, your linked WhatsApp and Signal, iMessage and email; pairing, relay, healing (ADR 0018, 0043, 0044)
   engines/
     types.ts                  Engine / HostTool / EngineEvent contracts
     claude-code/              detect, login, env scrub, SDK → EngineEvent translator
@@ -464,7 +464,20 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
     app behind `ChannelAdapter`:
     - `telegram.ts`: long polling (`getUpdates`);
     - `discord.ts`: the Gateway over Node's own WebSocket, DM intents only;
-    - `slack.ts`: Socket Mode.
+    - `slack.ts`: Socket Mode;
+    - `imessage.ts` (Mac only, [ADR 0044](./docs/adr/0044-imessage-and-email.md)):
+      `~/Library/Messages/chat.db` read-only through `node:sqlite` (Full Disk
+      Access), `attributedBody` decoded by `typedstream.ts`, and a fixed
+      AppleScript file that takes the words only as arguments;
+    - `email.ts`: IMAP IDLE (`imapflow`) and SMTP (`nodemailer`) with an app
+      password; only mail to `you+conch@`, sender proven by the provider's
+      `Authentication-Results` or your Sent mail (`mail-read.ts`), answers in
+      the thread.
+
+    iMessage and email are the person's own accounts: the adapter declares
+    `owner()` (let in on connecting), `quiet` (strangers never hear back) and
+    reports a `cursor` the store keeps. Questions there are answered with a
+    word (`answers.ts`).
 
     Keys live in `channels.secrets.json`. `store.ts` keeps who may talk and
     each person's current conversation.
@@ -500,7 +513,8 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
     Slack the owner sends a message and confirms "That's me" in Conch. Anyone
     else becomes a request, answered from the page. Private chats only.
   - **Health** (`ChannelHealth`): `connecting`, `online`, `reconnecting` (with
-    `retryAt`), `needs-token`, `conflict`, `error`, `off`. Each adapter
+    `retryAt`), `needs-token`, `conflict`, `error`, `off`, and `access` when a
+    macOS switch is off (Full Disk Access, Automation). Each adapter
     reconnects by itself: backoff, Discord resume and zombie detection,
     Telegram webhook removal and 409 handling, Slack's routine refreshes.
     `POST /api/channels/:id/repair` tries again at once.
@@ -511,11 +525,14 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
     `POST /api/channels/:id/requests/:personId`,
     `DELETE /api/channels/:id/people/:personId`.
     `POST /api/channels/link`, `GET|DELETE /api/channels/link/:id` (WhatsApp,
-    Signal). `channel.changed` / `channel.deleted` / `channel.link` go out on
-    the socket.
+    Signal); `GET /api/channels/imessage` (what Messages has, and whether
+    Conch may read it), `POST /api/channels/imessage/open` (System Settings,
+    from this Mac only). `channel.changed` / `channel.deleted` /
+    `channel.link` go out on the socket.
   - **Mocks.** With the mock engine, a pretend Telegram, Discord and Slack
-    start too (`channels/mock/`), and a pretend WhatsApp (at the Baileys seam)
-    and signal-cli (at the process seam). `CONCH_MOCK_*_PORT` asks for a port, and a
+    start too (`channels/mock/`), a pretend WhatsApp (at the Baileys seam)
+    and signal-cli (at the process seam), Messages (a real `chat.db`) and a
+    mail service (IMAP and SMTP). `CONCH_MOCK_*_PORT` asks for a port, and a
     taken one falls back to any free port. `GET /api/channels/mock` (mock mode
     only) says where they are.
 - **Search.** `search/` keeps a SQLite FTS5 (trigram) index of every message in
