@@ -16,6 +16,9 @@ export function protectedPaths(home: string): string[] {
     join(home, 'integrations.secrets.json'),
     join(home, 'google.secrets.json'),
     join(home, 'channels.secrets.json'),
+    // A linked WhatsApp or Signal: whoever has these reads and sends your messages (ADR 0043).
+    join(home, 'whatsapp.secrets.json'),
+    join(home, 'signal'),
     join(home, 'access.json'),
     // Task evidence is authority: the model must never forge completion or erase dedupe.
     join(home, 'tasks.json'),

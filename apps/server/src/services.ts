@@ -47,6 +47,8 @@ import { adapterFor, type ChannelEndpoints, slackCheckFor } from './channels/ada
 import { MockDiscord } from './channels/mock/discord';
 import { MockSlack } from './channels/mock/slack';
 import { MockTelegram } from './channels/mock/telegram';
+import { linkedChannels, type LinkedChannels } from './channels/linked-setup';
+import { ChannelLinking } from './channels/linking';
 import { CHANNEL_NAMES, ChannelService } from './channels/service';
 import { ChannelStore } from './channels/store';
 import { TerminalService } from './terminal/service';
@@ -209,6 +211,10 @@ export class Services {
   readonly mockTelegram?: MockTelegram;
   readonly mockDiscord?: MockDiscord;
   readonly mockSlack?: MockSlack;
+  /** WhatsApp and Signal (ADR 0043): their keys, signal-cli, and the pretend ones with the mock engine. */
+  readonly linked: LinkedChannels;
+  /** Linking WhatsApp or Signal by QR code. */
+  readonly channelLinking: ChannelLinking;
   #login?: { handle: LoginHandle; state: LoginState };
   #channelStore?: ChannelStore;
   #sweeper?: NodeJS.Timeout;
@@ -612,7 +618,15 @@ export class Services {
     this.mockTelegram = config.CONCH_ENGINE === 'mock' ? new MockTelegram() : undefined;
     this.mockDiscord = config.CONCH_ENGINE === 'mock' ? new MockDiscord() : undefined;
     this.mockSlack = config.CONCH_ENGINE === 'mock' ? new MockSlack() : undefined;
-    const endpoints: ChannelEndpoints = {};
+    this.linked = linkedChannels({
+      home: config.CONCH_HOME,
+      mock: config.CONCH_ENGINE === 'mock',
+      heal,
+    });
+    const endpoints: ChannelEndpoints = {
+      whatsapp: this.linked.whatsapp,
+      signal: this.linked.signal,
+    };
     this.#channelStore = new ChannelStore(config.CONCH_HOME, heal);
     this.channels = new ChannelService({
       store: this.#channelStore,
@@ -625,6 +639,11 @@ export class Services {
       onHeal: (message) => void this.healed.note('channels', message),
       routineTitle: async (id) =>
         (await this.routines.detail(id).catch(() => undefined))?.routine.title,
+    });
+    this.channelLinking = new ChannelLinking({
+      linker: (kind) => this.linked.linker(kind),
+      finish: (_kind, found, channelId) => this.channels.linked(found, channelId),
+      emit: (event) => this.broadcast.emit(event),
     });
     // Conversations and routine runs reach the channels through the same stream as the web app.
     this.broadcast.on((event) => this.channels.onEvent(event));
@@ -664,6 +683,7 @@ export class Services {
     this.doctor.register(trayCheck(this.tray));
     this.imports = this.#imports(config);
     this.doctor.register(importCheck(this.imports));
+    const linked = this.linked;
     this.#channelsReady = (async () => {
       if (this.mockTelegram) {
         const port = Number(process.env.CONCH_MOCK_TELEGRAM_PORT ?? 0);
@@ -677,6 +697,7 @@ export class Services {
         await this.mockSlack.start(Number(process.env.CONCH_MOCK_SLACK_PORT ?? 0));
         endpoints.slack = this.mockSlack.api;
       }
+      await linked.start();
     })();
   }
 
@@ -1041,6 +1062,23 @@ export class Services {
       const secrets = await this.#channelStore?.secrets(channel.id).catch(() => undefined);
       if (!secrets) continue;
       const name = channel.bot.name ? `${channel.bot.name} (${channel.kind})` : channel.kind;
+      // A linked device's keys (ADR 0043): listed so you know they're here, never shown.
+      if (secrets.kind === 'whatsapp' || secrets.kind === 'signal') {
+        out.push({
+          id: id('channel', channel.id, 'link'),
+          title: `${name} link`,
+          usedBy: `${name} channel`,
+          hint: channel.bot.phone ?? 'Linked',
+          manage: { label: 'Open Channels', place: 'channels', focus: channel.id },
+          reveal: () =>
+            Promise.reject(
+              new Error(
+                'These are this computer’s keys as a linked device; there’s nothing to copy. On another computer, link it again.',
+              ),
+            ),
+        });
+        continue;
+      }
       const tokens: [string, string][] =
         secrets.kind === 'slack'
           ? [
@@ -1119,6 +1157,8 @@ export class Services {
 
   stop() {
     this.channels.stop();
+    this.channelLinking.stop();
+    this.linked.stop();
     this.tailscale.stop();
     this.tidy.stop();
     this.memoryIndex.close();
@@ -1229,6 +1269,7 @@ export class Services {
       EngineId | undefined;
     if (engine) await this.engines.get(engine)?.detect({ force: true });
     await this.integrations.recheckNeeding(id);
+    await this.channels.recheckNeeding(id);
   }
 
   async engineStatus(force = false) {

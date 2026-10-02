@@ -107,6 +107,47 @@ describe('Repair everything, on a real Conch', () => {
       action: { kind: 'open', place: 'channels', focus: 'ch_2', label: 'Paste a new key' },
     });
   });
+
+  it('asks to link WhatsApp again, and offers to install what Signal needs', async () => {
+    const s = await setup();
+    const linked = (kind: string, id: string, health: Record<string, string>) =>
+      ({
+        id,
+        kind,
+        enabled: true,
+        createdAt: 1,
+        bot: { id: '15550001111', name: 'Ada', phone: '+15550001111' },
+        people: [],
+        requests: [],
+        blocked: 0,
+        settings: { notifyRoutines: true, others: 'ignore' },
+        health,
+      }) as never;
+    vi.spyOn(s.channels, 'list').mockResolvedValue({
+      channels: [
+        linked('whatsapp', 'ch_wa', { state: 'needs-token', message: 'WhatsApp unlinked Conch.' }),
+        linked('signal', 'ch_sg', {
+          state: 'error',
+          message: 'Signal needs Java, which isn’t on this computer yet.',
+          need: 'java',
+        }),
+      ],
+      catalog: [],
+    });
+    vi.spyOn(s.channels, 'repair').mockImplementation(
+      async (id) => (await s.channels.list()).channels.find((c) => c.id === id) as never,
+    );
+    const report = await s.doctor.run({ repair: true });
+    expect(report.items.find((i) => i.id === 'channels:ch_wa')).toMatchObject({
+      title: 'Ada on WhatsApp',
+      state: 'needs-you',
+      action: { kind: 'open', label: 'Link again', focus: 'ch_wa' },
+    });
+    expect(report.items.find((i) => i.id === 'channels:ch_sg')).toMatchObject({
+      state: 'needs-you',
+      action: { kind: 'need', need: 'java', mode: 'install' },
+    });
+  });
 });
 
 describe('Your providers', () => {

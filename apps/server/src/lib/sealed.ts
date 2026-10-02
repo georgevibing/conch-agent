@@ -26,6 +26,7 @@ export const SEALED_FILES = new Set([
   'integrations.secrets.json',
   'google.secrets.json',
   'channels.secrets.json',
+  'whatsapp.secrets.json',
   'push.secrets.json',
   'skills.signing.json',
 ]);

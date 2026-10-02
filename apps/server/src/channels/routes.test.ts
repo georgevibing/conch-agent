@@ -168,4 +168,51 @@ describe('channel routes', () => {
     expect(bad.statusCode).toBe(400);
     expect(bad.json()).toMatchObject({ error: 'invalid', field: 'token' });
   });
+
+  it('linking WhatsApp or Signal: a fresh sign-in from elsewhere, and no keys smuggled in', async () => {
+    const { app, services } = await setup();
+    await services.start();
+    const cookie = await phone(app);
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 11 * 60_000);
+    // Showing a code is a new way in: whoever scans it talks to your assistant as you.
+    const shown = await remote(app, '/api/channels/link', {
+      method: 'POST',
+      cookie,
+      payload: { kind: 'whatsapp' },
+    });
+    expect(shown.statusCode).toBe(403);
+    expect(shown.json().error).toBe('verify-required');
+    vi.restoreAllMocks();
+    const here = await remote(app, '/api/channels/link', {
+      method: 'POST',
+      cookie,
+      payload: { kind: 'whatsapp' },
+    });
+    expect(here.statusCode).toBe(200);
+    expect(here.json()).toMatchObject({ kind: 'whatsapp', state: 'starting' });
+    const id = here.json().id as string;
+    expect((await remote(app, `/api/channels/link/${id}`, { cookie })).statusCode).toBe(200);
+    const stop = await remote(app, `/api/channels/link/${id}`, { method: 'DELETE', cookie });
+    expect(stop.statusCode).toBe(204);
+    expect((await remote(app, `/api/channels/link/${id}`, { cookie })).json()).toMatchObject({
+      state: 'failed',
+    });
+    // Not an app that links, an id that could be a path, or a "session" posted as if it were a key.
+    const telegram = await remote(app, '/api/channels/link', {
+      method: 'POST',
+      cookie,
+      payload: { kind: 'telegram' },
+    });
+    expect(telegram.statusCode).toBe(400);
+    expect((await remote(app, '/api/channels/link/..%2F..%2Fsecrets', { cookie })).statusCode).toBe(
+      404,
+    );
+    const smuggled = await remote(app, '/api/channels', {
+      method: 'POST',
+      cookie,
+      payload: { kind: 'whatsapp', session: 'wa_someone_elses' },
+    });
+    expect(smuggled.statusCode).toBe(400);
+    expect(smuggled.json().message).toMatch(/links with a code/);
+  });
 });

@@ -2,7 +2,8 @@
  * A Conch that's been used for a while, in a temp home: settings, a memory
  * (searchable by meaning, with its model), a command, a routine that ran, a skill, an integration with its token, a
  * chat with an attachment, a model API's transcript, the browser's and
- * terminal's settings, a note the assistant wrote (and Undo's copy), a budget, a password, a provider key, and a backup.
+ * terminal's settings, a note the assistant wrote (and Undo's copy), a budget, a password, a provider key,
+ * a linked WhatsApp and Signal, and a backup.
  * Everything is written by the real services, the way using Conch writes it.
  * The backup tests use it to check nothing Conch writes is left unclassified.
  */
@@ -201,6 +202,26 @@ export async function useConch(g: Gateway) {
       payload: { kind: 'telegram', token: MockTelegram.TOKEN },
     }),
   );
+  // WhatsApp and Signal, linked by scanning (pretend) codes: their keys are files too.
+  for (const kind of ['whatsapp', 'signal'] as const) {
+    const link = await ok(
+      await app.inject({ method: 'POST', url: '/api/channels/link', payload: { kind } }),
+    );
+    const state = async () =>
+      (await ok(await app.inject({ method: 'GET', url: `/api/channels/link/${String(link.id)}` })))
+        .state;
+    for (let i = 0; (await state()) !== 'showing'; i++) {
+      if (i > 400) throw new Error(`no ${kind} code`);
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    if (kind === 'whatsapp') services.linked.mockWhatsApp?.scan();
+    else services.linked.mockSignal?.scan();
+    for (let i = 0; (await state()) !== 'linked'; i++) {
+      if (i > 400) throw new Error(`${kind} didn’t link`);
+      await new Promise((r) => setTimeout(r, 10));
+    }
+  }
+  await services.linked.whatsapp.sessions.flush();
   await services.backups.backupNow();
   // Sign-in last: from here on, requests need the cookie.
   const signedIn = await app.inject({

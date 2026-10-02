@@ -3,6 +3,9 @@ packages:
   - 'packages/*'
 
 allowBuilds:
+  # WhatsApp (ADR 0043): its preinstall only checks the Node version, and
+  # protobufjs's postinstall only prints a notice. Neither is needed.
+  '@whiskeysockets/baileys': false
   esbuild: true
   # Optional: picks a prebuilt binary (or compiles on Linux). If it fails,
   # installation still succeeds and terminals use Python/basic mode.

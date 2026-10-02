@@ -67,6 +67,7 @@ import { registerImportRoutes } from './import/routes';
 import { registerLearningRoutes } from './memory/routes';
 import { registerBackupRoutes } from './backup/routes';
 import { registerBrowserRoutes } from './browser/routes';
+import { registerChannelLinkRoutes } from './channels/link-routes';
 import { registerChannelRoutes } from './channels/routes';
 import { registerTerminalRoutes } from './terminal/routes';
 import { registerLocalRoutes } from './local/routes';
@@ -205,8 +206,11 @@ export async function buildApp(services: Services) {
         telegram: services.mockTelegram?.base,
         discord: services.mockDiscord?.base,
         slack: services.mockSlack?.base,
+        whatsapp: services.linked.mockWhatsApp?.base,
+        signal: services.linked.mockSignal?.base,
       })),
   );
+  registerChannelLinkRoutes(app, services.channelLinking, gate);
   app.addHook('onClose', () => services.browser.stop());
   app.addHook('onClose', async () => services.stop());
   app.addHook('onClose', async () => services.terminal.stop());

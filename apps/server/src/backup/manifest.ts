@@ -244,6 +244,16 @@ export const RULES: readonly BackupRule[] = [
     why: 'Your own key for signing skills: only in a passphrase-locked backup, so skills you signed keep your name.',
   },
   {
+    match: 'signal/attachments/**',
+    class: 'derived',
+    why: 'Files people sent you on Signal, as signal-cli keeps them; the ones your assistant read are in the chat’s attachments.',
+  },
+  {
+    match: (path) => /^signal\/(avatars|stickers)\//.test(path),
+    class: 'derived',
+    why: 'Pictures signal-cli fetched for Signal profiles and stickers: fetched again when needed.',
+  },
+  {
     match: 'skills.json',
     class: 'kept',
     group: 'skills',
@@ -259,7 +269,7 @@ export const RULES: readonly BackupRule[] = [
     match: 'channels.json',
     class: 'kept',
     group: 'integrations',
-    why: 'Your bots on Telegram, Discord and Slack, and who may talk to them (not their keys).',
+    why: 'Your channels (bots on Telegram, Discord and Slack, your linked WhatsApp and Signal) and who may talk to them (not their keys).',
   },
   {
     match: 'conversations/index.json',
@@ -333,6 +343,18 @@ export const RULES: readonly BackupRule[] = [
     class: 'secret',
     group: 'secrets',
     why: 'Your bots’ keys.',
+  },
+  {
+    match: 'whatsapp.secrets.json',
+    class: 'secret',
+    group: 'secrets',
+    why: 'Your WhatsApp link: this computer’s keys as a linked device. Whoever has them can read and send your messages.',
+  },
+  {
+    match: 'signal/**',
+    class: 'secret',
+    group: 'secrets',
+    why: 'Your Signal link: signal-cli’s keys as a linked device and its database. Whoever has them can read and send your messages.',
   },
   {
     match: 'vault/vault.json',

@@ -31,7 +31,7 @@ export function registerChannelRoutes(
   channels: ChannelService,
   gate: Gatekeeper,
   /** With the mock engine only: where the pretend apps are, for tests and demos. */
-  mocks?: () => Record<'telegram' | 'discord' | 'slack', string | undefined>,
+  mocks?: () => Record<string, string | undefined>,
 ) {
   const parse = <T extends z.ZodType>(schema: T, value: unknown, reply: FastifyReply) => {
     const result = schema.safeParse(value);

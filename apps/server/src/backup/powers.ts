@@ -34,6 +34,8 @@ const APP_NAMES: Record<string, string> = {
   telegram: 'Telegram',
   discord: 'Discord',
   slack: 'Slack',
+  whatsapp: 'WhatsApp',
+  signal: 'Signal',
 };
 
 const text = (value: unknown, fallback: string) => {

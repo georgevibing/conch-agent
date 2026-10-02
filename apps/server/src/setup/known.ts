@@ -1,5 +1,6 @@
+import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { sandboxSupport } from '../conversations/sandbox';
 import { bundledClaude } from '../engines/claude-code/bundled';
@@ -508,6 +509,48 @@ list.push(
     hint: () => 'On Debian or Ubuntu: sudo apt install python3-gi gir1.2-ayatanaappindicator3-0.1',
   },
   {
+    // Signal (ADR 0043) runs through signal-cli, which needs Java 25 or later.
+    // Homebrew brings both on a Mac and on Linux; on Windows it's a download
+    // from its releases (Conch then starts it with Java, not its batch file).
+    id: 'signal-cli',
+    name: 'signal-cli (for Signal)',
+    short: 'signal-cli',
+    find: (platform) => findSignalCli(platform),
+    install: {
+      darwin: { manager: 'brew', args: ['install', 'signal-cli'] },
+      linux: { manager: 'brew', args: ['install', 'signal-cli'] },
+    },
+    ...updatable({ brew: 'signal-cli' }),
+    download: {
+      win32: 'https://github.com/AsamK/signal-cli/releases/latest',
+      darwin: 'https://github.com/AsamK/signal-cli#installation',
+      linux: 'https://github.com/AsamK/signal-cli/releases/latest',
+    },
+    hint: (has) =>
+      has('java')
+        ? undefined
+        : 'It needs Java 25 or later too. Homebrew brings it; on Windows, install Java first.',
+  },
+  {
+    // What signal-cli runs on. A Mac's /usr/bin/java is only a stub until a
+    // Java is installed, so a Java counts only when it says it's 25 or later.
+    id: 'java',
+    name: 'Java 25 or later (for Signal)',
+    short: 'Java',
+    find: () => findJava(),
+    install: {
+      win32: winget('EclipseAdoptium.Temurin.25.JRE'),
+      darwin: { manager: 'brew', args: ['install', 'openjdk'] },
+      linux: { manager: 'brew', args: ['install', 'openjdk'] },
+    },
+    ...updatable({ winget: 'EclipseAdoptium.Temurin.25.JRE', brew: 'openjdk' }),
+    download: {
+      win32: 'https://adoptium.net/temurin/releases/?version=25',
+      darwin: 'https://adoptium.net/temurin/releases/?version=25',
+      linux: 'https://adoptium.net/temurin/releases/?version=25',
+    },
+  },
+  {
     id: 'docker',
     name: 'Docker',
     short: 'Docker',
@@ -520,6 +563,59 @@ list.push(
     },
   },
 );
+
+/** Java's own folder for Homebrew's `openjdk`, which isn't linked onto `PATH`. */
+const BREW_JAVA = ['/opt/homebrew/opt/openjdk/bin', '/usr/local/opt/openjdk/bin'];
+
+/** The major version a `java -version` reports (it writes to stderr). */
+export function javaMajor(text: string): number | undefined {
+  const match = /version "(\d+)(?:\.(\d+))?/.exec(text) ?? /\b(?:openjdk|java) (\d+)/i.exec(text);
+  if (!match?.[1]) return undefined;
+  const major = Number(match[1]);
+  // Java 8 and older call themselves 1.8.
+  return major === 1 && match[2] ? Number(match[2]) : major;
+}
+
+/** A Java new enough for signal-cli: `JAVA_HOME`'s, then Homebrew's, then the one on `PATH`. */
+export async function findJava(): Promise<string | undefined> {
+  const name = process.platform === 'win32' ? 'java.exe' : 'java';
+  const candidates = [
+    ...(process.env.JAVA_HOME ? [join(process.env.JAVA_HOME, 'bin', name)] : []),
+    ...BREW_JAVA.map((dir) => join(dir, name)),
+  ].filter(presentSync);
+  const onPath = await findExecutable('java');
+  if (onPath) candidates.push(onPath);
+  for (const path of candidates) {
+    const result = await run(path, ['-version'], { timeout: 15_000 });
+    const major = javaMajor(`${result.stderr}\n${result.stdout}`);
+    if (result.code === 0 && major !== undefined && major >= 25) return path;
+  }
+  return undefined;
+}
+
+/** The folder a Java lives in (what `JAVA_HOME` names), from its program. */
+export function javaHomeOf(java: string): string {
+  let real = java;
+  try {
+    real = realpathSync(java);
+  } catch {
+    // A path that can't be resolved is used as it is.
+  }
+  return dirname(dirname(real));
+}
+
+/**
+ * signal-cli: on `PATH` or where Homebrew puts it; on Windows the release's
+ * `bin\signal-cli.bat`, which Conch reads rather than runs (`signal-cli.ts`).
+ */
+export async function findSignalCli(platform: Platform): Promise<string | undefined> {
+  if (platform !== 'win32') return findExecutable('signal-cli');
+  for (const dir of (process.env.PATH ?? '').split(';').filter(Boolean)) {
+    const bat = join(dir, 'signal-cli.bat');
+    if (presentSync(bat)) return bat;
+  }
+  return undefined;
+}
 
 /** Where Ollama puts its program on each system, when it isn't on `PATH`. */
 export function ollamaDirs(platform: Platform): string[] {

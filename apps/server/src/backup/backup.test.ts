@@ -603,7 +603,11 @@ describe('the preview before a restore', () => {
       ),
     );
     expect(preview.contents).toEqual(daily?.contents);
-    expect(preview.powers).toEqual([]);
+    // The linked WhatsApp and Signal answer their owner: a restore names them.
+    expect(preview.powers).toEqual([
+      { kind: 'channel-people', name: 'Ada Lovelace on WhatsApp', people: ['Ada'], more: 0 },
+      { kind: 'channel-people', name: 'Ada Lovelace on Signal', people: ['Ada'], more: 0 },
+    ]);
   });
 });
 

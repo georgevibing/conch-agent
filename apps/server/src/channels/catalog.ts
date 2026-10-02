@@ -31,8 +31,22 @@ export const CHANNEL_CATALOG: ChannelCatalogEntry[] = [
     minutes: 4,
     available: true,
   },
-  { id: 'whatsapp', name: 'WhatsApp', tagline: 'Coming soon.', color: '#25D366', available: false },
-  { id: 'signal', name: 'Signal', tagline: 'Coming soon.', color: '#3A76F0', available: false },
+  {
+    id: 'whatsapp',
+    name: 'WhatsApp',
+    tagline: 'Your own WhatsApp. Scan a code, then message yourself.',
+    color: '#25D366',
+    minutes: 1,
+    available: true,
+  },
+  {
+    id: 'signal',
+    name: 'Signal',
+    tagline: 'Your own Signal. Scan a code, then use Note to Self.',
+    color: '#3A76F0',
+    minutes: 2,
+    available: true,
+  },
   { id: 'imessage', name: 'iMessage', tagline: 'Coming soon.', color: '#34DA50', available: false },
   {
     id: 'microsoftteams',
@@ -48,4 +62,6 @@ export const CHANNEL_NAMES: Record<ChannelKind, string> = {
   telegram: 'Telegram',
   discord: 'Discord',
   slack: 'Slack',
+  whatsapp: 'WhatsApp',
+  signal: 'Signal',
 };

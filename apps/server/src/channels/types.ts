@@ -59,7 +59,7 @@ export interface SendOptions {
 export interface ChannelEvents {
   message(message: ChannelMessage): void;
   press(press: ChannelPress): void;
-  state(state: ChannelState, detail?: { message?: string; retryAt?: number }): void;
+  state(state: ChannelState, detail?: { message?: string; retryAt?: number; need?: string }): void;
   /** The person pressed the app's own Stop button (Telegram drafts). */
   stop?(chatId: string): void;
   /** A repair the connection made by itself, for "Fixed on its own". */
@@ -86,6 +86,8 @@ export interface ChannelConnection {
   download(file: ChannelFile): Promise<{ name: string; bytes: Buffer; mimeType?: string }>;
   /** The private chat with someone, opening it if needed (for messages Conch starts). */
   directChat(userId: string): Promise<string>;
+  /** Disconnecting for good: take this computer off the account's linked devices (WhatsApp). */
+  unlink?(): Promise<void>;
   close(): void;
 }
 
@@ -103,6 +105,8 @@ export interface ChannelAdapter {
   /** Best effort: set the bot's commands and description so it explains itself. */
   prepare?(profile: ChannelProfile): Promise<void>;
   connect(events: ChannelEvents): ChannelConnection;
+  /** Disconnecting for good: delete what it keeps on this computer besides the key (a linked device's keys). */
+  forget?(): Promise<void>;
 }
 
 export type AdapterFactory = (secrets: ChannelSecrets) => ChannelAdapter;

@@ -8,12 +8,12 @@
  */
 
 /** A piece of an answer: prose, or a fenced code block. */
-type Block = { kind: 'text'; text: string } | { kind: 'code'; lang: string; text: string };
+export type Block = { kind: 'text'; text: string } | { kind: 'code'; lang: string; text: string };
 
 const FENCE = /^\s{0,3}(`{3,}|~{3,})\s*([\w+#.-]*)\s*$/;
 
 /** Split Markdown into prose and fenced code, keeping an unclosed fence as code. */
-function blocks(markdown: string): Block[] {
+export function blocks(markdown: string): Block[] {
   const out: Block[] = [];
   const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
   let prose: string[] = [];
@@ -49,7 +49,7 @@ const TABLE_RULE = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
  * Inline Markdown → markup, with code spans kept verbatim. `wrap` says how
  * each style is written in the target dialect; `escape` makes plain text safe.
  */
-function inline(
+export function inline(
   text: string,
   style: {
     escape: (s: string) => string;
@@ -86,7 +86,7 @@ function inline(
 }
 
 /** Prose line by line: headings, quotes, lists and tables in the target's terms. */
-function prose(
+export function prose(
   text: string,
   render: {
     line: (s: string) => string;

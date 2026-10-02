@@ -2,6 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 import {
   type Channel,
+  type ChannelBot,
   type ChannelCheck,
   type ChannelHealth,
   type ChannelList,
@@ -24,6 +25,7 @@ import type { PermissionDecision } from '../engines/types';
 import { newId } from '../lib/ids';
 import type { SettingsStore } from '../settings/store';
 import { CHANNEL_CATALOG, CHANNEL_NAMES } from './catalog';
+import { isLinked } from './linked';
 import type { ChannelStore, StoredChannel } from './store';
 import {
   type ChannelAdapter,
@@ -119,6 +121,8 @@ export function normalizeSecrets(secrets: ChannelSecrets): ChannelSecrets {
     return { kind: 'telegram', token: pick(secrets.token, TELEGRAM_TOKEN) };
   if (secrets.kind === 'discord')
     return { kind: 'discord', token: pick(secrets.token, DISCORD_TOKEN) };
+  // Linked devices carry no key to find (ADR 0043).
+  if (secrets.kind !== 'slack') return secrets;
   // Pasted into each other's boxes? Put them right.
   const both = `${secrets.botToken} ${secrets.appToken}`;
   const bot = SLACK_BOT_TOKEN.exec(both)?.[1];
@@ -230,7 +234,9 @@ export class ChannelService {
       ? { state: 'off' }
       : (live?.health ?? {
           state: 'needs-token',
-          message: 'Conch lost this bot’s key. Paste it again to reconnect.',
+          message: isLinked(stored.kind)
+            ? `Conch lost its ${CHANNEL_NAMES[stored.kind]} link. Link it again to reconnect.`
+            : 'Conch lost this bot’s key. Paste it again to reconnect.',
         });
     return {
       id: stored.id,
@@ -310,6 +316,11 @@ export class ChannelService {
 
   /** Connect a bot: check the key, keep it, connect, tidy its profile, and open a hello link. */
   async create(input: ChannelSecrets): Promise<Channel> {
+    if (isLinked(input.kind))
+      throw new ChannelServiceError(
+        'invalid',
+        `${CHANNEL_NAMES[input.kind]} links with a code: open Channels and choose ${CHANNEL_NAMES[input.kind]}.`,
+      );
     const secrets = normalizeSecrets(input);
     const adapter = this.deps.adapter(secrets);
     let bot;
@@ -353,6 +364,116 @@ export class ChannelService {
     return view;
   }
 
+  /**
+   * A WhatsApp or Signal account the phone just linked (ADR 0043): a new
+   * channel whose owner is the account itself — scanning the code from that
+   * phone was the hello — or, with `channelId`, the same channel linked
+   * again. A different number never replaces another channel's.
+   */
+  async linked(
+    found: { secrets: ChannelSecrets; bot: ChannelBot },
+    channelId?: string,
+  ): Promise<Channel> {
+    const { secrets, bot } = found;
+    const discard = () =>
+      this.deps
+        .adapter(secrets)
+        .forget?.()
+        .catch(() => undefined);
+    const relink = channelId
+      ? await this.deps.store.get(channelId)
+      : (await this.deps.store.all()).find((c) => c.kind === secrets.kind && c.bot.id === bot.id);
+    if (channelId && !relink) {
+      await discard();
+      throw new ChannelServiceError('not-found', 'That channel isn’t connected any more.');
+    }
+    if (relink) {
+      if (relink.kind !== secrets.kind || relink.bot.id !== bot.id) {
+        await discard();
+        throw new ChannelServiceError(
+          'invalid',
+          `That’s another number (${bot.phone ?? bot.name}). To use it, connect it as a new channel.`,
+        );
+      }
+      const old = await this.deps.store.secrets(relink.id);
+      await this.deps.store.setSecrets(relink.id, secrets);
+      if (old && JSON.stringify(old) !== JSON.stringify(secrets))
+        await this.deps
+          .adapter(old)
+          .forget?.()
+          .catch(() => undefined);
+      const stored =
+        (await this.deps.store.update(relink.id, (c) => ({
+          ...c,
+          bot: { ...bot, ...(!bot.avatar && c.bot.avatar && { avatar: c.bot.avatar }) },
+          enabled: true,
+        }))) ?? relink;
+      this.#connect(stored, secrets);
+      this.deps.onHeal(`${CHANNEL_NAMES[stored.kind]} is linked again.`);
+      await this.#emit(stored.id);
+      return this.#view(stored);
+    }
+    const stored = await this.deps.store.add(
+      {
+        id: newId('ch'),
+        kind: secrets.kind,
+        enabled: true,
+        createdAt: this.#now,
+        bot,
+        people: [],
+        requests: [],
+        blocked: [],
+        // Your own number: other people's chats with you stay yours.
+        settings: { notifyRoutines: true, others: 'ignore' },
+        chats: {},
+      },
+      secrets,
+    );
+    this.#connect(stored, secrets);
+    const settings = await this.deps.settings.get().catch(() => undefined);
+    const owner = {
+      id: bot.id,
+      name: settings?.profile.name || (bot.name === bot.phone ? 'You' : bot.name),
+    };
+    // The welcome waits for the connection, so it lands in the chat with yourself.
+    this.#quietly(
+      this.#whenOnline(stored.id, 60_000).then(() => this.#admit(stored.id, owner)),
+      'welcome',
+    );
+    await this.#admitQuietly(stored.id, owner);
+    const view = this.#view((await this.deps.store.get(stored.id)) ?? stored);
+    this.deps.emit({ type: 'channel.changed', channel: view });
+    return view;
+  }
+
+  /** Let the owner in without a welcome yet (it follows once the channel is online). */
+  async #admitQuietly(id: string, user: ChannelUser) {
+    await this.deps.store.update(id, (c) =>
+      c.people.some((p) => p.id === user.id)
+        ? c
+        : {
+            ...c,
+            people: [
+              ...c.people,
+              { id: user.id, name: user.name, since: this.#now, lastSeenAt: this.#now },
+            ],
+          },
+    );
+  }
+
+  /** Resolves once the channel is online, or after `ms` regardless. */
+  #whenOnline(id: string, ms: number): Promise<void> {
+    const end = Date.now() + ms;
+    return new Promise((resolve) => {
+      const look = () => {
+        const state = this.#live.get(id)?.health.state;
+        if (state === 'online' || Date.now() > end || state === undefined) return resolve();
+        setTimeout(look, 250).unref?.();
+      };
+      look();
+    });
+  }
+
   async #prepare(adapter: ChannelAdapter, id: string) {
     const settings = await this.deps.settings.get();
     await adapter
@@ -384,6 +505,11 @@ export class ChannelService {
   /** A new key for the same bot, after the old one was reset. */
   async replaceToken(id: string, input: ChannelSecrets): Promise<Channel> {
     const current = await this.#require(id);
+    if (isLinked(current.kind) || isLinked(input.kind))
+      throw new ChannelServiceError(
+        'invalid',
+        `${CHANNEL_NAMES[current.kind]} has no key to paste: link it again with the code on its page.`,
+      );
     const secrets = normalizeSecrets(input);
     if (secrets.kind !== current.kind)
       throw new ChannelServiceError('invalid', `That’s a key for ${CHANNEL_NAMES[secrets.kind]}.`);
@@ -411,6 +537,19 @@ export class ChannelService {
 
   async remove(id: string): Promise<void> {
     await this.#require(id);
+    // A linked device leaves the account's list on the phone, and its keys go (ADR 0043).
+    const live = this.#live.get(id);
+    if (live?.health.state === 'online')
+      await Promise.race([
+        live.connection.unlink?.().catch(() => undefined),
+        new Promise((resolve) => setTimeout(resolve, 10_000).unref?.()),
+      ]);
+    const secrets = await this.deps.store.secrets(id).catch(() => undefined);
+    if (secrets)
+      await this.deps
+        .adapter(secrets)
+        .forget?.()
+        .catch(() => undefined);
     this.#disconnect(id);
     this.#pairings.delete(id);
     for (const [key, relay] of this.#relays) {
@@ -452,6 +591,12 @@ export class ChannelService {
     this.#connect(current, secrets);
     await this.#emit(id);
     return this.#view(current);
+  }
+
+  /** Something a channel was waiting for was just installed (signal-cli, Java): try it again now. */
+  async recheckNeeding(need: string): Promise<void> {
+    for (const [id, live] of this.#live)
+      if (live.health.need === need) await this.repair(id).catch(() => undefined);
   }
 
   /** A live entry for a channel whose key was refused: nothing runs until a new key comes. */
@@ -516,7 +661,11 @@ export class ChannelService {
     await this.#emit(id);
   }
 
-  #setHealth(id: string, state: ChannelState, detail?: { message?: string; retryAt?: number }) {
+  #setHealth(
+    id: string,
+    state: ChannelState,
+    detail?: { message?: string; retryAt?: number; need?: string },
+  ) {
     const live = this.#live.get(id);
     if (!live) return;
     const was = live.health;
@@ -540,9 +689,10 @@ export class ChannelService {
       state,
       ...(detail?.message && { message: detail.message }),
       ...(detail?.retryAt && { retryAt: detail.retryAt }),
+      ...(detail?.need && { need: detail.need }),
       since: was.state === state ? (was.since ?? now) : now,
     };
-    if (was.state === state && was.message === detail?.message) return;
+    if (was.state === state && was.message === detail?.message && was.need === detail?.need) return;
     void this.#emit(id);
   }
 
@@ -551,6 +701,8 @@ export class ChannelService {
   /** A new hello link (Telegram) or a new window to say hello in (Discord, Slack). */
   async pair(id: string): Promise<Channel> {
     const stored = await this.#require(id);
+    // Linking was the hello: there's no code to make.
+    if (isLinked(stored.kind)) return this.#view(stored);
     this.#openPairing(stored);
     await this.#emit(id);
     return this.#view(stored);
@@ -586,7 +738,7 @@ export class ChannelService {
   async #admit(id: string, user: ChannelUser, chatId?: string) {
     let owner = false;
     const stored = await this.deps.store.update(id, (c) => {
-      owner = c.people.length === 0;
+      owner = c.people.length === 0 || c.people[0]?.id === user.id;
       return {
         ...c,
         requests: c.requests.filter((r) => r.id !== user.id),
@@ -620,6 +772,9 @@ export class ChannelService {
         chat,
         owner
           ? `Hi ${firstName(user.name)}! 👋 I’m **${assistant}**, and I’m connected to Conch on your computer.\n\n` +
+              (isLinked(stored.kind)
+                ? 'Write to me here, in the chat with yourself. Nobody else’s chats reach me. '
+                : '') +
               'Ask me anything — I can work with your files, the web and your apps, just like in Conch. ' +
               'Before I do anything important, I’ll ask you here.\n\n' +
               '/new starts a fresh conversation · /stop stops me'
@@ -702,6 +857,8 @@ export class ChannelService {
     // Private chats only: in a group, anyone could speak for you. Rather than
     // seem broken, say so there (at most every half hour per group).
     if (!message.direct) {
+      // Your own WhatsApp or Signal: your groups never hear from Conch (ADR 0043).
+      if (isLinked(stored.kind)) return;
       const key = `${id}:group:${message.chatId}`;
       if (!this.#mayAnswer(key)) return;
       const where = stored.bot.username ? ` Message @${stored.bot.username} directly.` : '';
@@ -724,6 +881,8 @@ export class ChannelService {
 
     const person = stored.people.find((p) => p.id === message.user.id);
     if (!person) {
+      // Someone writing to your own number is writing to you: never read, never answered.
+      if (isLinked(stored.kind) && stored.settings.others !== 'ask') return;
       await this.#request(stored, live, message);
       return;
     }

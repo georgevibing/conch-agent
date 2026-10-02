@@ -21,7 +21,13 @@ const INTEGRATIONS = 'Integrations';
 const COMPUTER = 'This computer';
 const CHANNELS = 'Channels';
 
-const APP: Record<string, string> = { telegram: 'Telegram', discord: 'Discord', slack: 'Slack' };
+const APP: Record<string, string> = {
+  telegram: 'Telegram',
+  discord: 'Discord',
+  slack: 'Slack',
+  whatsapp: 'WhatsApp',
+  signal: 'Signal',
+};
 
 function providerItem(provider: Provider, fixed: boolean): DoctorItem {
   const { status } = provider;
@@ -187,12 +193,19 @@ export function channelsCheck(services: Services): DoctorCheck {
                 : state === 'conflict'
                   ? 'Another program is reading this bot’s messages.'
                   : 'Not working.'),
-            action: {
-              kind: 'open',
-              label: state === 'needs-token' ? 'Paste a new key' : 'Open',
-              place: 'channels',
-              focus: now.id,
-            },
+            action: now.health.need
+              ? { kind: 'need', label: 'Install', need: now.health.need, mode: 'install' }
+              : {
+                  kind: 'open',
+                  label:
+                    state === 'needs-token'
+                      ? now.kind === 'whatsapp' || now.kind === 'signal'
+                        ? 'Link again'
+                        : 'Paste a new key'
+                      : 'Open',
+                  place: 'channels',
+                  focus: now.id,
+                },
           });
       }
       return results;
