@@ -1,7 +1,8 @@
-import { CircleHelp, Lightbulb, ShieldAlert, Sparkles } from 'lucide-react';
+import { CircleAlert, CircleHelp, Download, Lightbulb, ShieldAlert, Sparkles } from 'lucide-react';
 import { useId, type ComponentProps, type ReactNode } from 'react';
 
 import { Badge } from '../../components/Badge';
+import { Progress } from '../../components/Progress';
 import { cx } from '../../utils/cx';
 import styles from './Memory.module.css';
 
@@ -257,6 +258,131 @@ export function SkillSuggestionCard({
         </ul>
       )}
       {actions && <div className={styles.suggestionActions}>{actions}</div>}
+    </section>
+  );
+}
+
+export type MeaningSearchState = 'offer' | 'getting' | 'indexing' | 'meaning' | 'words' | 'problem';
+
+export interface MeaningSearchProps extends Omit<ComponentProps<'section'>, 'title'> {
+  state: MeaningSearchState;
+  /** The model that gives meaning: “all-MiniLM-L6-v2”. */
+  model?: string;
+  /** Whose it is: Conch's own, or one in Ollama. */
+  source?: 'built-in' | 'ollama';
+  /** How big the download is, in words: “23 MB”. */
+  size?: string;
+  /** It matches across many languages. */
+  multilingual?: boolean;
+  /** Getting it: how far, 0–100. */
+  progress?: number;
+  /** Indexing: how many memories are done, of how many. */
+  indexed?: number;
+  total?: number;
+  /** What went wrong, in a sentence (with `words`: why there's no meaning here). */
+  problem?: ReactNode;
+  /** Get it, or Try again. */
+  action?: ReactNode;
+}
+
+const count = new Intl.NumberFormat();
+
+/**
+ * How memory search works, and the one thing that would make it better
+ * (ADR 0041). Before anything is downloaded, search matches words,
+ * spellings and a few everyday ideas; Conch's own small model, fetched once
+ * when you say so, lets it understand meaning. The offer says how big it is
+ * and that it stays on this computer; then progress, then a quiet line.
+ */
+export function MeaningSearch({
+  state,
+  model,
+  source,
+  size,
+  multilingual,
+  progress,
+  indexed = 0,
+  total = 0,
+  problem,
+  action,
+  className,
+  ...props
+}: MeaningSearchProps) {
+  const titleId = useId();
+  if (state === 'meaning' || state === 'words')
+    return (
+      <section
+        aria-labelledby={titleId}
+        className={cx(styles.meaningLine, className)}
+        data-state={state}
+        {...props}
+      >
+        <p id={titleId}>
+          {state === 'meaning'
+            ? `Search understands meaning, with ${model ?? 'a model'} ${source === 'ollama' ? 'in Ollama on' : 'on'} this computer — nothing leaves it.`
+            : 'Search matches words, spellings and a few everyday ideas, typos forgiven.'}
+        </p>
+        {state === 'words' && problem && <p>{problem}</p>}
+      </section>
+    );
+  const Icon = state === 'problem' ? CircleAlert : state === 'offer' ? Sparkles : Download;
+  const title = {
+    offer: 'Let search understand what you mean',
+    getting: 'Getting the model for meaning…',
+    indexing: 'Making your memories searchable by meaning…',
+    problem: 'Couldn’t get the model for meaning',
+  }[state];
+  return (
+    <section
+      aria-labelledby={titleId}
+      className={cx(styles.meaning, className)}
+      data-state={state}
+      {...props}
+    >
+      <div className={styles.meaningHead}>
+        <Icon aria-hidden className={styles.meaningIcon} />
+        <div className={styles.meaningBody}>
+          <p className={styles.meaningTitle} id={titleId} aria-live="polite">
+            {title}
+          </p>
+          {state === 'offer' && (
+            <p className={styles.meaningText}>
+              Search matches words and spellings now. A small model
+              {size ? ` (${size}, downloaded once)` : ''} would let it understand meaning:
+              “anniversary” would find your wedding
+              {multilingual ? ', in any of 50 languages' : ''}. It runs on this computer, even
+              offline, and nothing you’ve told Conch leaves it.
+            </p>
+          )}
+          {state === 'getting' && (
+            <Progress
+              size="sm"
+              value={progress ?? null}
+              label="Downloaded"
+              showValue={progress !== undefined}
+            />
+          )}
+          {state === 'getting' && (
+            <p className={styles.meaningText}>You can keep using Conch while it downloads.</p>
+          )}
+          {state === 'indexing' && (
+            <Progress
+              size="sm"
+              value={indexed}
+              max={Math.max(total, 1)}
+              label="Memories ready"
+              showValue={() => `${count.format(indexed)} of ${count.format(total)}`}
+            />
+          )}
+          {state === 'problem' && problem && <p className={styles.meaningText}>{problem}</p>}
+          {state === 'problem' && (
+            <p className={styles.meaningText}>
+              Search still matches words and spellings in the meantime.
+            </p>
+          )}
+        </div>
+      </div>
+      {action && <div className={styles.meaningActions}>{action}</div>}
     </section>
   );
 }

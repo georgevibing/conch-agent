@@ -4,7 +4,14 @@ import { Pencil, Trash2 } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { IconButton } from '../../components/IconButton';
 import { Stack } from '../../components/Stack';
-import { MemoryItem, MemoryList, SkillSuggestionCard, TidyChangeItem, TidyReport } from './Memory';
+import {
+  MeaningSearch,
+  MemoryItem,
+  MemoryList,
+  SkillSuggestionCard,
+  TidyChangeItem,
+  TidyReport,
+} from './Memory';
 
 const meta = {
   title: 'Patterns/Memory',
@@ -14,7 +21,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'What Conch knows about you (ADR 0032). Memories say who wrote them; one learned in a chat that read something from outside waits for an OK. A tidy-up shows every change as a small diff with Keep and Undo. Something you keep asking for is offered as a skill, never saved by itself.',
+          'What Conch knows about you (ADR 0032). Memories say who wrote them; one learned in a chat that read something from outside waits for an OK. A tidy-up shows every change as a small diff with Keep and Undo. Something you keep asking for — however you word it — is offered as a skill, never saved by itself. Search says how it works, and offers the one small download that lets it understand meaning (ADR 0041).',
       },
     },
   },
@@ -166,6 +173,69 @@ export const SkillSuggestion: Story = {
           </>
         }
       />
+    </Stack>
+  ),
+};
+
+const getIt = (
+  <Button size="sm" variant="surface">
+    Get it
+  </Button>
+);
+
+/** The offer: what it is, how big, that it stays here. One press. */
+export const MeaningOffer: Story = {
+  render: () => (
+    <MeaningSearch state="offer" size="23 MB" action={getIt} style={{ maxInlineSize: 560 }} />
+  ),
+};
+
+/** For someone whose browser speaks more than English: the model that knows 50 languages. */
+export const MeaningOfferMultilingual: Story = {
+  render: () => (
+    <MeaningSearch
+      state="offer"
+      size="136 MB"
+      multilingual
+      action={getIt}
+      style={{ maxInlineSize: 560 }}
+    />
+  ),
+};
+
+/** Downloading, then making every memory searchable by meaning. */
+export const MeaningGetting: Story = {
+  render: () => (
+    <Stack gap={3} style={{ maxInlineSize: 560 }}>
+      <MeaningSearch state="getting" progress={42} />
+      <MeaningSearch state="indexing" indexed={420} total={1000} />
+    </Stack>
+  ),
+};
+
+/** It didn't work: one sentence, one button; words still work meanwhile. */
+export const MeaningProblem: Story = {
+  render: () => (
+    <MeaningSearch
+      state="problem"
+      problem="Couldn’t download it: the internet seems to be unreachable."
+      action={
+        <Button size="sm" variant="surface">
+          Try again
+        </Button>
+      }
+      style={{ maxInlineSize: 560 }}
+    />
+  ),
+};
+
+/** Settled: a quiet line that says how search works. */
+export const MeaningReady: Story = {
+  render: () => (
+    <Stack gap={3} style={{ maxInlineSize: 560 }}>
+      <MeaningSearch state="meaning" model="all-MiniLM-L6-v2" />
+      <MeaningSearch state="meaning" model="nomic-embed-text" source="ollama" />
+      <MeaningSearch state="words" />
     </Stack>
   ),
 };

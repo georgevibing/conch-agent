@@ -1,4 +1,5 @@
 export {
+  MeaningSearch,
   MemoryItem,
   MemoryList,
   SkillSuggestionCard,
@@ -6,6 +7,8 @@ export {
   TidyReport,
   memoryKindLabels,
   memorySourceLabels,
+  type MeaningSearchProps,
+  type MeaningSearchState,
   type MemoryItemProps,
   type MemoryKindName,
   type MemorySourceName,
