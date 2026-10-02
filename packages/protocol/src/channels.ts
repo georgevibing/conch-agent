@@ -202,6 +202,8 @@ export const ChannelCatalogEntry = z.object({
   name: z.string(),
   /** One plain line: "The easiest: about two minutes." */
   tagline: z.string(),
+  /** Four or five words, for its tile among the other apps in Apps (ADR 0052). */
+  short: z.string().optional(),
   /** Brand colour (hex), for the tile. */
   color: z.string(),
   /** Roughly how long setting it up takes, in minutes. */

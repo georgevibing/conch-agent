@@ -166,7 +166,7 @@ export function AppsView() {
       void guard(async () =>
         putChannel(client, await channelsApi.update(channel.id, { enabled })),
       ).catch((error: unknown) => toast.error(channelError(error)));
-    if (item.source && (item.source.state === 'off') === enabled)
+    if (item.source && item.source.state !== 'missing' && (item.source.state === 'off') === enabled)
       void vaultApi
         .setSource(item.source.id, { enabled })
         .then(() => client.invalidateQueries({ queryKey: vaultKeys.all }))
@@ -215,7 +215,7 @@ export function AppsView() {
         mine.length > 0 && (
           <section aria-labelledby="apps-connected" className={styles.section}>
             <Heading level={2} id="apps-connected" size="sm" tone="muted">
-              {talking ? 'Talking to you' : 'Connected'}
+              Connected
             </Heading>
             <ul className={styles.cards}>
               {mine.map((item, index) => {
@@ -247,11 +247,20 @@ export function AppsView() {
                           : undefined
                       }
                       notice={
-                        card.notice && {
-                          message: card.notice.message,
-                          label: card.notice.label,
-                          onClick: () => void navigate(`/channels/${card.notice?.channel.id}`),
-                        }
+                        card.notice
+                          ? {
+                              message: card.notice.message,
+                              label: card.notice.label,
+                              onClick: () => void navigate(`/channels/${card.notice?.channel.id}`),
+                            }
+                          : talking && !item.channels.length
+                            ? {
+                                // It could talk to you too: its page has the switch.
+                                message: `You can talk to ${assistant} here too.`,
+                                label: 'Set up',
+                                onClick: () => void navigate(item.to),
+                              }
+                            : undefined
                       }
                       onToggle={(enabled) => toggle(item, enabled)}
                       onOpen={() => void navigate(item.to)}

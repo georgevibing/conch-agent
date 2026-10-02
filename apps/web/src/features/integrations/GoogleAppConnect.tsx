@@ -154,6 +154,7 @@ export function GoogleAppConnect({
                 </SegmentedControl>
               )}
               <GoogleConnect
+                intro={false}
                 capabilities={[job]}
                 onReady={() => {
                   // An account already connected for another app is used for this one too.
@@ -527,6 +528,7 @@ export function GoogleAppConnection({
                   />
                 ) : (
                   <GoogleConnect
+                    intro={false}
                     capabilities={account.capabilities.filter((c) => NEEDS[app]?.includes(c))}
                     accountId={account.id}
                     onReady={fixed}

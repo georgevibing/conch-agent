@@ -51,6 +51,7 @@ export function AppDetailView({ appId }: { appId: string }) {
     items.find((i) => i.key === appId) ??
     items.find((i) => i.integration?.catalogId === appId);
   const entry = data?.catalog.find((c) => c.id === appId);
+  const onePassword = vault?.status.sources.find((source) => source.id === '1password');
 
   if (isPending || channelsPending || (vaultPending && appId === '1password'))
     return (
@@ -90,6 +91,7 @@ export function AppDetailView({ appId }: { appId: string }) {
           ...(entry.color && { color: entry.color }),
           entry,
           channels: [],
+          ...(onePassword && { source: onePassword }),
           to: '',
           talks: false,
         }}

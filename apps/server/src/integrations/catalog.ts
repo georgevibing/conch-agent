@@ -322,7 +322,8 @@ const raw: CatalogItem[] = [
     auth: 'oauth',
     color: '#FF4F00',
     homepage: 'https://zapier.com/mcp',
-    examples: ['Add a row to my expenses sheet', 'Send the summary to my team in Teams'],
+    // Not Teams or Slack: those are apps in Conch already (ADR 0052).
+    examples: ['Add a row to my expenses sheet', 'Make a Trello card for this'],
     access: ['Only the actions you enable in Zapier'],
     blueprint: { type: 'http', url: 'https://mcp.zapier.com/api/mcp/mcp' },
     cues: {
@@ -381,7 +382,8 @@ const raw: CatalogItem[] = [
   {
     id: '1password',
     name: '1Password',
-    tagline: 'Environments and variables',
+    // One app with two halves (ADR 0052): sign-ins in Passwords, and Environments here.
+    tagline: 'Sign-ins and Environments',
     description: 'Manage your 1Password Environments by name. Secret values never leave 1Password.',
     category: 'developer',
     auth: 'none',

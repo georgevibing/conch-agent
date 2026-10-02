@@ -60,7 +60,7 @@ export interface AppItem {
 }
 
 /** A password manager that's in use here: on, and its program is on this computer. */
-const inUse = (source: VaultSource | undefined) =>
+export const inUse = (source: VaultSource | undefined) =>
   Boolean(source && source.state !== 'off' && source.state !== 'missing');
 
 /**
@@ -170,16 +170,14 @@ const broken = (channel: Channel) => {
 
 export function describeApp(item: AppItem, now = Date.now()): AppCard {
   const { integration, channels, source } = item;
-  const enabled =
-    Boolean(integration?.enabled) ||
-    channels.some((c) => c.enabled) ||
-    Boolean(source && source.state !== 'off');
+  const filling = inUse(source);
+  const enabled = Boolean(integration?.enabled) || channels.some((c) => c.enabled) || filling;
   const facts: string[] = [];
   if (integration) facts.push(quietMeta(integration, now));
   const talking = channels.find((c) => c.enabled);
   if (talking) facts.push(integration || source ? 'talks to you here' : whoOf(talking));
-  if (source && source.state !== 'off')
-    facts.push(source.state === 'locked' ? 'fills sign-ins once unlocked' : 'fills sign-ins');
+  if (filling)
+    facts.push(source?.state === 'locked' ? 'fills sign-ins once unlocked' : 'fills sign-ins');
   const meta = facts.join(' · ') || undefined;
 
   if (!enabled) return { state: 'off', enabled, ...(meta && { meta }) };
@@ -204,7 +202,7 @@ export function describeApp(item: AppItem, now = Date.now()): AppCard {
       ...(label && { fix: { label, channel: hurt } }),
     };
   }
-  if (source?.state === 'error')
+  if (filling && source?.state === 'error')
     return { state: 'error', message: source.message, enabled, ...(meta && { meta }) };
   const waiting = channels.find((c) => c.enabled && needsYou(c));
   const notice = waiting && {
@@ -381,11 +379,11 @@ export function galleryTiles({
     .map((c) => ({
       id: c.id,
       name: c.name,
-      tagline: c.tagline,
+      tagline: c.short ?? c.tagline,
       color: c.color,
       categories: [TALK],
       kind: 'chat',
-      words: `${c.name} ${c.tagline}`.toLowerCase(),
+      words: `${c.name} ${c.short ?? ''} ${c.tagline}`.toLowerCase(),
     }));
   return [...apps, ...chats];
 }
