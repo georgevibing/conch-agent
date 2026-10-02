@@ -1,4 +1,4 @@
-import type { UpdatesStatus } from '@conch/protocol';
+import type { ReleaseChannel, UpdatesStatus } from '@conch/protocol';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
@@ -111,6 +111,17 @@ export function useUpdateActions() {
     updateAll: () => run('all', updatesApi.updateAll),
     updateProgram: (id: string) => run(`program:${id}`, () => updatesApi.updateProgram(id)),
     setAuto: (auto: boolean) => run('auto', () => updatesApi.setAuto(auto)),
+    /** Beta and alpha ask you to confirm it's you; back to stable doesn't. */
+    setChannel: (channel: ReleaseChannel) =>
+      run('channel', () => updatesApi.setSettings({ channel })),
+    setEveryChange: (everyChange: boolean) =>
+      run('every-change', () => updatesApi.setSettings({ everyChange })),
+    /** "Conch 0.3 is ready" put away: not shown again for that version. */
+    dismiss: (version: string) =>
+      run('dismiss', () => updatesApi.setSettings({ dismiss: version })),
+    dismissNotice: (id: string) =>
+      run('notice', () => updatesApi.setSettings({ dismissNotice: id })),
+    goBack: () => run('back', updatesApi.goBack),
     pending,
     error,
     dialog,

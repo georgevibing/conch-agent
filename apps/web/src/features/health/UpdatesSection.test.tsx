@@ -29,6 +29,12 @@ function status(patch: Partial<UpdatesStatus> = {}, conch: Partial<UpdatesStatus
       whatsNew: [],
       checkedAt: Date.now() - 2 * HOUR,
       restartNeeded: false,
+      source: 'branch',
+      channel: 'stable',
+      everyChange: false,
+      releases: [],
+      announce: false,
+      failed: [],
       ...conch,
     },
     programs: [
@@ -186,6 +192,7 @@ describe('Settings → Health → Updates', () => {
                 'The update didn’t install (the new version wouldn’t build), so Conch went back to the version you had.',
               at: Date.now(),
               whatsNew: [],
+              releases: [],
             },
           },
         ),
@@ -332,6 +339,7 @@ describe('Settings → Health → Updates', () => {
               message: 'Conch was updated.',
               at: Date.now() - 60_000,
               whatsNew: ['A calmer restart screen'],
+              releases: [],
             },
           },
         ),
@@ -510,5 +518,183 @@ describe('quiet signals when updates wait', () => {
       ).toHaveLength(1),
     );
     expect(useUi.getState().settingsFocus).toBeUndefined();
+  });
+});
+
+/** Conch following its releases (ADR 0048). */
+const notes = (version: string, line: string, extra = {}) => ({
+  version,
+  channel: 'stable' as const,
+  headsUp: [],
+  new: [line],
+  better: [],
+  fixed: [],
+  ...extra,
+});
+const onReleases = (conch: Partial<UpdatesStatus['conch']> = {}) =>
+  status(
+    {},
+    {
+      source: 'releases',
+      branch: undefined,
+      commit: undefined,
+      ...conch,
+    },
+  );
+
+describe('Settings → Health → Updates, following releases', () => {
+  it('names the release, shows each version’s notes newest first, and updates with one press', async () => {
+    const user = userEvent.setup();
+    let current = onReleases({
+      behind: 2,
+      latest: { version: '0.4.0', channel: 'stable' },
+      releases: [
+        notes('0.4.0', 'Edit pages by hand, with a live preview', {
+          headsUp: ['Sign in again on your phone'],
+        }),
+        notes('0.3.0', 'Connect iMessage and email'),
+      ],
+      announce: true,
+    });
+    const calls = mockFetch({
+      'GET /api/updates': () => current,
+      'POST /api/updates/conch': () => {
+        current = onReleases({
+          ...current.conch,
+          running: { phase: 'install', label: 'Installing', step: 2, steps: 4, percent: 0 },
+        });
+        return current;
+      },
+    });
+    renderApp(<UpdatesSection />);
+    const card = await screen.findByRole('region', { name: 'Conch 0.4 is ready' });
+    expect(card).toHaveTextContent('You have 0.2.0 · Checked 2 hours ago');
+    await user.click(within(card).getByRole('button', { name: 'What’s new' }));
+    expect(within(card).getByText('Edit pages by hand, with a live preview')).toBeVisible();
+    expect(within(card).getByRole('note')).toHaveTextContent('Heads upSign in again on your phone');
+    // The older release is folded away until asked for.
+    expect(within(card).queryByText('Connect iMessage and email')).toBeNull();
+    await user.click(within(card).getByRole('button', { name: /^Conch 0\.3/ }));
+    expect(within(card).getByText('Connect iMessage and email')).toBeVisible();
+    // No developer's switch for someone on releases.
+    expect(screen.queryByRole('switch', { name: /Every change on main/ })).toBeNull();
+    await user.click(within(card).getByRole('button', { name: 'Update Conch' }));
+    expect(calls.some((c) => c.method === 'POST' && c.path === '/api/updates/conch')).toBe(true);
+    expect(
+      await screen.findByRole('progressbar', { name: 'Installing · 2 of 4' }),
+    ).toBeInTheDocument();
+  });
+
+  it('chooses a channel, and says when going back to stable waits', async () => {
+    const user = userEvent.setup();
+    let current = onReleases({ version: '0.4.0-beta.2', channel: 'beta' });
+    const calls = mockFetch({
+      'GET /api/updates': () => current,
+      'PATCH /api/updates/settings': () => {
+        current = onReleases({
+          version: '0.4.0-beta.2',
+          channel: 'stable',
+          waiting:
+            'You’re on 0.4.0-beta.2. Conch moves to stable releases with the next one after it (0.4.0 or later): it never goes back a version by itself.',
+        });
+        return current;
+      },
+    });
+    renderApp(<UpdatesSection />);
+    const group = await screen.findByRole('radiogroup', { name: 'Which releases Conch gets' });
+    expect(within(group).getByRole('radio', { name: 'Beta' })).toBeChecked();
+    await user.click(within(group).getByRole('radio', { name: 'Stable' }));
+    expect(
+      calls.some(
+        (c) =>
+          c.method === 'PATCH' &&
+          c.path === '/api/updates/settings' &&
+          (c.body as Record<string, unknown> | undefined)?.channel === 'stable',
+      ),
+    ).toBe(true);
+    expect(await screen.findByText(/never goes back a version by itself/)).toBeVisible();
+  });
+
+  it('refuses a release that isn’t signed, in plain words', async () => {
+    mockFetch({
+      'GET /api/updates': () =>
+        onReleases({ refused: 'Conch 0.4.0 isn’t signed, so Conch won’t install it.' }),
+    });
+    renderApp(<UpdatesSection />);
+    expect(
+      await screen.findByText(/0\.4\.0 isn’t signed, so Conch won’t install it/),
+    ).toBeVisible();
+    expect(await screen.findByRole('region', { name: 'Conch is up to date' })).toBeInTheDocument();
+  });
+
+  it('says once that Conch now follows releases, and offers going back to the version before', async () => {
+    const user = userEvent.setup();
+    let current = onReleases({
+      version: '0.4.0',
+      previous: '0.3.0',
+      notice: {
+        id: 'releases',
+        message: 'Conch now follows its releases instead of every change.',
+      },
+    });
+    const calls = mockFetch({
+      'GET /api/updates': () => current,
+      'PATCH /api/updates/settings': () => {
+        current = onReleases({ version: '0.4.0', previous: '0.3.0' });
+        return current;
+      },
+      'POST /api/updates/conch/back': () => current,
+    });
+    renderApp(<UpdatesSection />);
+    expect(await screen.findByText(/now follows its releases/)).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Got it' }));
+    await waitFor(() => expect(screen.queryByText(/now follows its releases/)).toBeNull());
+    expect(
+      calls.some(
+        (c) => (c.body as Record<string, unknown> | undefined)?.dismissNotice === 'releases',
+      ),
+    ).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Go back to 0.3.0' }));
+    expect(calls.some((c) => c.method === 'POST' && c.path === '/api/updates/conch/back')).toBe(
+      true,
+    );
+  });
+
+  it('shows what the update brought, from its notes', async () => {
+    mockFetch({
+      'GET /api/updates': () =>
+        onReleases({
+          version: '0.4.0',
+          outcome: {
+            kind: 'updated',
+            message: 'Conch was updated to 0.4.0.',
+            at: Date.now() - 60_000,
+            whatsNew: [],
+            releases: [notes('0.4.0', 'Edit pages by hand, with a live preview')],
+          },
+        }),
+    });
+    const user = userEvent.setup();
+    renderApp(<UpdatesSection />);
+    const card = await screen.findByRole('region', { name: 'Conch is up to date' });
+    expect(card).toHaveTextContent('0.4.0 · Updated 1 minute ago');
+    await user.click(within(card).getByRole('button', { name: 'What’s new in this update' }));
+    expect(within(card).getByText('Edit pages by hand, with a live preview')).toBeVisible();
+  });
+
+  it('keeps the developer’s switch for a copy that follows its branch', async () => {
+    mockFetch({
+      'GET /api/updates': () =>
+        status(
+          {},
+          {
+            branch: 'my-idea',
+            sourceWhy: 'This copy is on the branch “my-idea”, so it follows that branch.',
+          },
+        ),
+    });
+    renderApp(<UpdatesSection />);
+    expect(await screen.findByText(/follows that branch/)).toBeVisible();
+    expect(screen.getByRole('switch', { name: /Every change on main/ })).toBeInTheDocument();
   });
 });

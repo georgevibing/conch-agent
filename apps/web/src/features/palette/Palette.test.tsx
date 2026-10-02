@@ -911,6 +911,40 @@ describe('Palette search', () => {
     ).toBeInTheDocument();
   });
 
+  it('names the release in “Update Conch”, and finds the release channel', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'GET /api/updates': () => ({
+        conch: {
+          checkable: true,
+          version: '0.2.0',
+          behind: 1,
+          improvements: 2,
+          whatsNew: [],
+          restartNeeded: false,
+          source: 'releases',
+          latest: { version: '0.3.0', channel: 'stable' },
+        },
+        programs: [],
+        checking: false,
+        auto: false,
+        restartable: true,
+      }),
+    });
+    renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'update conch');
+    expect(await screen.findByRole('option', { name: /Update Conch to 0\.3/ })).toBeInTheDocument();
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'beta');
+    await user.click(await screen.findByRole('option', { name: /Release channel/ }));
+    expect(useUi.getState()).toMatchObject({ settings: 'health', settingsFocus: 'updates' });
+    useUi.setState({ settings: null, settingsFocus: undefined });
+  });
+
   it('finds WhatsApp by what linking it means: a code to scan', async () => {
     const user = userEvent.setup();
     mockFetch({

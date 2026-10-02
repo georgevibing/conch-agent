@@ -1,19 +1,22 @@
-import type { ConchUpdate, ProgramUpdate } from '@conch/protocol';
+import type { ConchUpdate, ProgramUpdate, ReleaseNotes as Notes } from '@conch/protocol';
 import {
   Badge,
   Button,
   Callout,
   Heading,
   ProgramUpdates,
+  ReleaseChannelPicker,
+  ReleaseNotes,
   SoftwareUpdate,
   Stack,
   Switch,
   Text,
   useNow,
   type ProgramUpdateItemProps,
+  type ReleaseNoteItem,
   type SoftwareUpdateProps,
 } from '@conch/nacre';
-import { ArrowUpRight, RefreshCw, RotateCcw } from 'lucide-react';
+import { ArrowUpRight, RefreshCw, RotateCcw, Undo2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { useUi } from '../../app/ui';
@@ -37,11 +40,31 @@ function changes(conch: ConchUpdate): string {
     : plural(conch.behind, 'small change');
 }
 
+/** A release's notes as Nacre draws them, with its date in words. */
+export function noteItems(releases: Notes[]): ReleaseNoteItem[] {
+  return releases.map((r) => ({
+    version: r.version,
+    ...(r.date && {
+      date: new Date(r.date).toLocaleDateString(undefined, { day: 'numeric', month: 'long' }),
+    }),
+    headsUp: r.headsUp,
+    new: r.new,
+    better: r.better,
+    fixed: r.fixed,
+  }));
+}
+
+export type ConchCard = Omit<SoftwareUpdateProps, 'action' | 'notes'> & {
+  offer?: 'update' | 'retry' | 'restart';
+  /** A release's notes, drawn with `ReleaseNotes` behind "What's new". */
+  releases?: Notes[];
+};
+
 /** Where Conch itself stands, as the card says it. */
 export function conchCard(
   conch: ConchUpdate,
   options: { restartable: boolean; now?: number },
-): Omit<SoftwareUpdateProps, 'action'> & { offer?: 'update' | 'retry' | 'restart' } {
+): ConchCard {
   const now = options.now ?? Date.now();
   const checked = conch.checkedAt ? `Checked ${relativeTime(conch.checkedAt, now)}` : undefined;
   const outcome = conch.outcome;
@@ -78,6 +101,7 @@ export function conchCard(
   }
   if (!conch.checkable)
     return { state: 'unavailable', title: `Conch ${conch.version}`, detail: conch.problem };
+  if (conch.source === 'releases') return releaseCard(conch, { ...options, now, checked, notice });
   if (conch.behind > 0) {
     const listed = conch.whatsNew.slice(0, LINES);
     return {
@@ -124,6 +148,54 @@ export function conchCard(
       ? [conch.problem, checked && `${checked}.`].filter(Boolean).join(' ')
       : [conch.version, when ?? 'Not checked yet'].join(' · '),
     whatsNew: justUpdated ? outcome.whatsNew.slice(0, LINES) : undefined,
+    whatsNewLabel: 'What’s new in this update',
+    notice,
+  };
+}
+
+/** Conch following its releases (ADR 0048): the release waiting, and its own notes. */
+function releaseCard(
+  conch: ConchUpdate,
+  {
+    restartable,
+    now,
+    checked,
+    notice,
+  }: { restartable: boolean; now: number; checked?: string; notice: SoftwareUpdateProps['notice'] },
+): ConchCard {
+  const outcome = conch.outcome;
+  if (conch.latest)
+    return {
+      state: 'available',
+      title: `Conch ${short(conch.latest.version)} is ready`,
+      detail: [`You have ${conch.version}`, checked].filter(Boolean).join(' · '),
+      releases: conch.releases,
+      notice,
+      footnote: restartable
+        ? 'Conch gets it ready while you keep working, then restarts in a few seconds. Your chats are safe.'
+        : 'Conch gets it ready while you keep working; then you restart it. Your chats are safe.',
+      offer: notice?.tone === 'danger' ? 'retry' : 'update',
+    };
+  if (conch.restartNeeded)
+    return {
+      state: 'current',
+      title: 'Restart Conch to finish',
+      detail: restartable
+        ? 'The new version is ready. Conch starts on it when it restarts.'
+        : 'The new version is ready. Stop Conch and run pnpm start, and it starts on it.',
+      releases: outcome?.releases,
+      whatsNewLabel: 'What’s new in this update',
+      offer: restartable ? 'restart' : undefined,
+    };
+  const justUpdated = outcome?.kind === 'updated' && now - outcome.at < DAY;
+  const when = justUpdated ? `Updated ${relativeTime(outcome.at, now)}` : checked;
+  return {
+    state: 'current',
+    title: 'Conch is up to date',
+    detail: conch.problem
+      ? [conch.problem, checked && `${checked}.`].filter(Boolean).join(' ')
+      : [conch.version, when ?? 'Not checked yet'].join(' · '),
+    releases: justUpdated ? outcome.releases : undefined,
     whatsNewLabel: 'What’s new in this update',
     notice,
   };
@@ -193,17 +265,29 @@ export function UpdatesSection() {
 
   // ⌘K "Check for updates" / "Update Conch" land here, and do what they say once.
   useEffect(() => {
-    if (!status || (focus !== 'check-updates' && focus !== 'update-conch')) return;
+    if (!status || (focus !== 'check-updates' && focus !== 'update-conch' && focus !== 'updates'))
+      return;
     useUi.setState({ settingsFocus: undefined });
     ref.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
-    if (started.current) return;
+    if (focus === 'updates' || started.current) return;
     started.current = true;
     if (focus === 'check-updates') void actions.check();
     else if (status.conch.behind > 0) void actions.updateConch();
   }, [focus, status, actions]);
 
   if (!status) return null;
-  const card = conchCard(status.conch, { restartable: status.restartable, now });
+  const { conch } = status;
+  const { releases: cardNotes, ...card } = conchCard(conch, {
+    restartable: status.restartable,
+    now,
+  });
+  const notes = cardNotes?.length ? <ReleaseNotes releases={noteItems(cardNotes)} /> : undefined;
+  const releases = conch.source === 'releases';
+  // A contributor's switch: only where it could matter, out of everyone else's sight.
+  const developer =
+    conch.everyChange ||
+    (conch.checkable && conch.source === 'branch') ||
+    Boolean(conch.branch && conch.branch !== 'main');
   const conchBusy = Boolean(status.conch.running) || actions.pending === 'conch';
   const cardAction =
     card.offer === 'restart' ? (
@@ -244,7 +328,60 @@ export function UpdatesSection() {
       }
     >
       <Stack gap={5}>
-        <SoftwareUpdate {...card} action={cardAction} />
+        <SoftwareUpdate {...card} notes={notes} action={cardAction} />
+        {!releases && conch.sourceWhy && (
+          <Text size="sm" tone="muted">
+            {conch.sourceWhy}
+          </Text>
+        )}
+        {conch.refused && (
+          <Callout tone="warning" live="polite">
+            {conch.refused} Conch only installs releases signed by Conch’s makers.
+          </Callout>
+        )}
+        {conch.notice && (
+          <Callout tone="neutral" live="polite">
+            <Stack gap={2} align="start">
+              <span>{conch.notice.message}</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => conch.notice && void actions.dismissNotice(conch.notice.id)}
+              >
+                Got it
+              </Button>
+            </Stack>
+          </Callout>
+        )}
+        {releases && conch.previous && !conch.running && (
+          <Stack direction="row" align="center" justify="between" gap={3} wrap>
+            <Text size="sm" tone="muted">
+              Conch keeps {conch.previous} beside this version, so going back is instant.
+            </Text>
+            <Button
+              size="sm"
+              variant="ghost"
+              leadingIcon={<Undo2 />}
+              loading={actions.pending === 'back'}
+              onClick={() => void actions.goBack()}
+            >
+              Go back to {conch.previous}
+            </Button>
+          </Stack>
+        )}
+        {releases && !conch.everyChange && (
+          <Stack gap={2}>
+            <Heading level={4} size="sm" weight="medium">
+              Release channel
+            </Heading>
+            <ReleaseChannelPicker
+              value={conch.channel}
+              disabled={actions.pending === 'channel' || Boolean(conch.running)}
+              onValueChange={(channel) => void actions.setChannel(channel)}
+              note={conch.waiting}
+            />
+          </Stack>
+        )}
         {restartNote && (
           <Callout tone="neutral" live="polite">
             {restartNote}
@@ -308,6 +445,15 @@ export function UpdatesSection() {
           label="Keep the programs Conch uses up to date"
           description="Updates install by themselves overnight, when nothing is running. Conch itself always asks first, since it restarts."
         />
+        {developer && (
+          <Switch
+            checked={conch.everyChange}
+            disabled={actions.pending === 'every-change'}
+            onCheckedChange={(on) => void actions.setEveryChange(on)}
+            label="Every change on main"
+            description="For people working on Conch: every change as it lands, not only signed releases."
+          />
+        )}
       </Stack>
       {actions.dialog}
     </Section>

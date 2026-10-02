@@ -1,4 +1,4 @@
-import { UpdatesStatus } from '@conch/protocol';
+import { UpdatesStatus, type UpdatesSettingsBody } from '@conch/protocol';
 
 import { request } from '../../api/client';
 
@@ -15,6 +15,11 @@ export const updatesApi = {
     }),
   setAuto: (auto: boolean) =>
     request(UpdatesStatus, '/api/updates/settings', { method: 'PATCH', body: { auto } }),
+  /** The channel, every change on main, and what's been put away (ADR 0048). */
+  setSettings: (body: UpdatesSettingsBody) =>
+    request(UpdatesStatus, '/api/updates/settings', { method: 'PATCH', body }),
+  /** Back to the version before, at once. */
+  goBack: () => request(UpdatesStatus, '/api/updates/conch/back', { method: 'POST', body: {} }),
 };
 
 export const updateKeys = { status: ['updates'] as const };

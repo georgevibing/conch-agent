@@ -62,7 +62,10 @@ export function RepairSection() {
   const items = (data?.items ?? []).map((item: DoctorItem) => ({
     ...item,
     action:
-      item.action && item.state === 'needs-you' ? <ActionButton action={item.action} /> : undefined,
+      // What needs you, and news (a new release), each get their one button.
+      item.action && (item.state === 'needs-you' || item.state === 'info') ? (
+        <ActionButton action={item.action} />
+      ) : undefined,
   }));
   return (
     <RepairPanel

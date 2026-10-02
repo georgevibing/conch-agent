@@ -12,6 +12,7 @@ import { MemoryView } from '../features/memory/MemoryView';
 import { RestartWatch } from '../features/health/RestartWatch';
 import { PushKeeper } from '../features/notifications/PushKeeper';
 import { UndoHost } from '../features/undo/UndoHost';
+import { UpdateNotice } from '../features/updates/UpdateNotice';
 import { OpenFromLink } from '../features/pwa/OpenFromLink';
 import { RestoredNotice } from '../features/health/RestoredNotice';
 import { ChannelDetailView } from '../features/channels/ChannelDetailView';
@@ -197,6 +198,7 @@ export function Shell() {
           <EnginePill />
         </header>
         <Reconnecting />
+        <UpdateNotice className={styles.notice} />
         {/* The page; it steps aside while the terminal fills the screen. */}
         <div className={styles.area} data-covered={terminalMax || undefined}>
           {appsArea && artifactId ? (

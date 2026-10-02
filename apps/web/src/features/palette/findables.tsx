@@ -780,13 +780,23 @@ export function useFindables(query: string, conversationId: string | undefined):
       ? [
           {
             id: 'update-conch',
-            label: 'Update Conch',
+            label: updates.conch.latest
+              ? `Update Conch to ${updates.conch.latest.version.replace(/^(\d+\.\d+)\.0$/, '$1')}`
+              : 'Update Conch',
             keywords: 'update upgrade install new version latest restart',
             icon: <CircleArrowUp />,
             run: () => openSettings('health', 'update-conch'),
           },
         ]
       : []),
+    {
+      // Stable, beta or alpha (ADR 0048): Settings → Health → Updates.
+      id: 'release-channel',
+      label: 'Release channel: stable, beta or alpha',
+      keywords: 'release channel stable beta alpha preview early versions updates choose',
+      icon: <CircleArrowUp />,
+      run: () => openSettings('health', 'updates'),
+    },
     ...settingsPlaces.map((p) => ({
       id: `settings-${p.tab}${p.focus ? `-${p.focus}` : ''}`,
       label: `Settings: ${p.label}`,

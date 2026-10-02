@@ -7,6 +7,7 @@ const PLACES = {
   devices: ['security', 'devices'],
   notifications: ['notifications', undefined],
   background: ['health', 'background'],
+  updates: ['health', 'updates'],
 } as const;
 
 /**

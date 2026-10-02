@@ -98,6 +98,7 @@ const device = (patch: Partial<PushStatus['devices'][number]> = {}) => ({
     replies: true,
     routines: true,
     tasks: true,
+    updates: false,
     devices: true,
     previews: true,
   },

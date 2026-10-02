@@ -75,4 +75,9 @@
     border-block: 1px solid var(--nc-border-subtle);
     animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
   }
+
+  /* A new release, said once above the page (ADR 0048). */
+  .notice {
+    padding: var(--nc-space-2) var(--nc-space-3) 0;
+  }
 }

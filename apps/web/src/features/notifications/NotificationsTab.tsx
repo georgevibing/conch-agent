@@ -56,6 +56,11 @@ const TOPICS: { key: keyof PushPrefs; label: string; description?: string }[] = 
   },
   { key: 'devices', label: 'When a new device wants to sign in' },
   {
+    key: 'updates',
+    label: 'New versions of Conch',
+    description: 'Once for each release, with what’s new. Off unless you turn it on.',
+  },
+  {
     key: 'previews',
     label: 'Say what it’s about',
     description: 'Off: only “Open Conch to see what it’s asking.”',
