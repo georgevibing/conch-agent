@@ -1,6 +1,16 @@
 /* Layout only: the order and the room between the parts of the front page. */
 
+/*
+ * The whole width of the window. Light behind the first picture spills past
+ * the column and fades on its own; it's only cut where the window ends, so it
+ * never makes the page scroll sideways and never shows an edge.
+ */
 .landing {
+  inline-size: 100%;
+  overflow-x: clip;
+}
+
+.page {
   display: flex;
   flex-direction: column;
   gap: clamp(4.5rem, 12vw, 9rem);
@@ -8,8 +18,12 @@
   max-inline-size: 76rem;
   margin-inline: auto;
   padding: clamp(var(--nc-space-10), 7vw, 6rem) var(--docs-gutter) var(--nc-space-10);
-  /* A wide row drifting past must never make the page scroll sideways. */
-  overflow-x: clip;
+}
+
+.systems {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nc-space-2);
 }
 
 .buttons {

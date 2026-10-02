@@ -1,4 +1,4 @@
-import { CommandLine, Tabs } from '@conch/nacre';
+import { CommandLine, OsMark, Tabs } from '@conch/nacre';
 import { useState } from 'react';
 
 import { INSTALL } from '../site/config';
@@ -21,8 +21,23 @@ export function InstallCommand({ typed = false }: { typed?: boolean; args?: stri
       className={styles.install}
     >
       <Tabs.List aria-label="Your computer">
-        <Tabs.Trigger value="unix">macOS and Linux</Tabs.Trigger>
-        <Tabs.Trigger value="windows">Windows</Tabs.Trigger>
+        <Tabs.Trigger value="unix">
+          <span className={styles.system}>
+            <OsMark os="macos" />
+            macOS
+          </span>{' '}
+          and{' '}
+          <span className={styles.system}>
+            <OsMark os="linux" />
+            Linux
+          </span>
+        </Tabs.Trigger>
+        <Tabs.Trigger value="windows">
+          <span className={styles.system}>
+            <OsMark os="windows" />
+            Windows
+          </span>
+        </Tabs.Trigger>
       </Tabs.List>
       <Tabs.Content value="unix">
         <CommandLine size="lg" typed={typed} command={INSTALL.unix} />

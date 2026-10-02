@@ -1,5 +1,6 @@
 import { NacreProvider } from '@conch/nacre';
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it } from 'vitest';
@@ -59,12 +60,38 @@ describe('the front page', () => {
     expect(words).toContain(`${reference.integrations.length} apps, for every model`);
   });
 
-  it('says the version, and what a local model can’t do, in the code’s own words', () => {
-    open();
-    const honest = screen.getByRole('heading', { name: 'The honest part' }).closest('section');
-    expect(honest).toHaveTextContent(`This is version ${reference.version}.`);
+  it('says what’s worth knowing before installing, and no more', () => {
+    const { container } = open();
+    const know = screen.getByRole('heading', { name: 'Good to know' }).closest('section');
+    for (const system of ['macOS', 'Linux', 'Windows']) expect(know).toHaveTextContent(system);
+    expect(
+      within(know as HTMLElement).getByRole('link', { name: 'how it’s protected' }),
+    ).toHaveAttribute('href', LANDING_LINKS.security);
+    // What a local model can't do, in the code's own words.
     const local = reference.providers.find((provider) => provider.can.offline);
-    expect(honest).toHaveTextContent(local?.limits[0] ?? '');
+    expect(know).toHaveTextContent(local?.limits[0] ?? '');
+    // True, and not a confession: nothing about who made it or how few use it.
+    const words = (container.textContent ?? '').toLowerCase();
+    for (const apology of ['nobody is counting', 'one person built', 'no company', 'will break'])
+      expect(words, `the front page says “${apology}”`).not.toContain(apology);
+  });
+
+  it('lets you use the one picture that is the real thing: the chart turns into its table', async () => {
+    open();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: 'Table' }));
+    const table = screen.getByRole('table');
+    expect(within(table).getByRole('rowheader', { name: '29 Sep' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: 'Chart' }));
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('names the computer on each install tab, with its mark', () => {
+    open();
+    for (const tab of screen.getAllByRole('tab', { name: 'macOS and Linux' }))
+      expect(tab.querySelectorAll('svg[data-os]')).toHaveLength(2);
+    for (const tab of screen.getAllByRole('tab', { name: 'Windows' }))
+      expect(tab.querySelector('svg[data-os="windows"]')).not.toBeNull();
   });
 
   it('claims nothing about how many people use it', () => {
@@ -88,6 +115,7 @@ describe('the front page', () => {
   });
 
   it('shows the product as pictures: each has a sentence for a name, and nothing in one can be pressed', () => {
+    // (The chart is the exception, and names itself: see the test above.)
     const { container } = open();
     const pictures = screen
       .getAllByRole('figure')

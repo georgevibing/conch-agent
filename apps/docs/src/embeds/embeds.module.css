@@ -30,6 +30,15 @@
   min-inline-size: 0;
 }
 
+/* A system's mark and its name, kept together. */
+.system {
+  white-space: nowrap;
+}
+
+.system > svg {
+  margin-inline-end: 0.4em;
+}
+
 /* ── A provider or a channel at a glance ─────────────────────────────── */
 
 .facts {
