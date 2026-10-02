@@ -558,13 +558,23 @@ describe('SSRF guard', () => {
   });
 });
 
-describe('claude.ai connectors and Claude Code’s own servers', () => {
+describe('Conch-owned apps, provider-account connectors and provider servers', () => {
   it('won’t create a connector that only works through your AI provider’s account', async () => {
     const { service } = await setup();
-    await expect(service.create({ catalogId: 'gmail', values: {} }, REDIRECT)).rejects.toThrow(
+    await expect(service.create({ catalogId: 'slack', values: {} }, REDIRECT)).rejects.toThrow(
       /through your AI provider’s account/,
     );
   });
+
+  it.each(['gmail', 'google-calendar', 'google-drive'])(
+    'directs %s to Conch’s Google connection instead of a provider account',
+    async (catalogId) => {
+      const { service } = await setup();
+      await expect(service.create({ catalogId, values: {} }, REDIRECT)).rejects.toThrow(
+        'Connect Google from Integrations to use this app with every model.',
+      );
+    },
+  );
 
   it('brings a provider’s own web server into Conch, keeping its address on the gateway', async () => {
     const engine = Object.assign(new MockEngine(), {

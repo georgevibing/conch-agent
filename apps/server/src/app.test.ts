@@ -487,10 +487,12 @@ describe('gateway WebSocket', () => {
     const { app, services } = await setup();
     close = () => app.close();
     const mock = services.engine();
+    const capabilities = vi.fn(() => mock.capabilities());
     const other = {
       ...mock,
       id: 'openrouter' as const,
       label: 'OpenRouter',
+      capabilities,
       detect: async () => ({
         ...(await mock.detect()),
         engine: 'openrouter' as const,
@@ -516,6 +518,13 @@ describe('gateway WebSocket', () => {
     });
     // Not at a limit: the chat's own provider answers.
     expect(await services.route(mock, {})).toEqual({ kind: 'use', engine: mock });
+
+    // A ready fallback must also retain the current provider's tools.
+    capabilities.mockResolvedValueOnce({
+      ...(await mock.capabilities()),
+      tools: { host: false, files: false, shell: false, approvals: true },
+    });
+    expect(await services.route(mock, { failed: 'limit' })).toEqual({ kind: 'use', engine: mock });
 
     // Cleared (null), it's off again.
     await services.settings.update({ preferences: { limitFallback: null } });
