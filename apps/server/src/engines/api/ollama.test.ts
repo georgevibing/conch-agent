@@ -414,7 +414,8 @@ describe('the local engine', () => {
         : lines({ message: { role: 'assistant', content: 'Saved it.' }, done: false }, done());
     });
     expect(e.local).toBe(true);
-    const events = await collect(e.runTurn(turn()));
+    const systemAppend = 'You are Pearl.\nThe selected model is Qwen, running locally.';
+    const events = await collect(e.runTurn(turn({ systemAppend })));
 
     expect(events.map((ev) => ev.type)).toEqual([
       'session',
@@ -432,9 +433,14 @@ describe('the local engine', () => {
       tool_call_id: 'call_1',
       content: 'Saved.',
     });
-    // The model is told where it runs.
-    expect(String(second.messages[0]?.['content'])).toMatch(
-      /running on this computer, through Ollama/,
+    // Local inference and guarded computer access are separate facts, both retained.
+    const system = String(second.messages[0]?.['content']);
+    expect(system).toContain(systemAppend);
+    expect(system.match(/running on this computer, through Ollama/g)).toHaveLength(1);
+    expect(system).toContain('Conch’s tools for files in this conversation’s work folder');
+    expect(system).toContain('OS sandbox without network access');
+    expect(system).not.toMatch(
+      /cannot read or write|can’t reach its files|no access to this computer/,
     );
   });
 
@@ -445,6 +451,9 @@ describe('the local engine', () => {
     const body = calls[0]?.body as { tools?: unknown; messages: { content: string }[] };
     expect(body.tools).toBeUndefined();
     expect(body.messages[0]?.content).toMatch(/You have no tools in this conversation/);
+    expect(body.messages[0]?.content).toMatch(/running on this computer, through Ollama/);
+    expect(body.messages[0]?.content).toContain('you cannot read or write them');
+    expect(body.messages[0]?.content).not.toContain('You have Conch’s tools for files');
   });
 
   it('reports usage as free', async () => {
