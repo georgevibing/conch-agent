@@ -1,4 +1,4 @@
-import type { VaultFieldView, VaultItemDetail } from '@conch/protocol';
+import type { VaultFieldView, VaultItemDetail, VaultItemSummary } from '@conch/protocol';
 import { siteOf } from '@conch/protocol';
 import {
   AlertDialog,
@@ -15,6 +15,7 @@ import {
   TotpCode,
   VaultFavoriteButton,
   VaultFieldRow,
+  VaultFieldsSkeleton,
   VaultItemIcon,
   VaultPasskeyRow,
   toast,
@@ -44,14 +45,29 @@ function isLink(field: VaultFieldView) {
   return field.kind === 'url' && field.value && siteOf(field.value);
 }
 
+/** How many fields an item like this usually has, to hold their place while they're fetched. */
+function likelyFields(item: VaultItemSummary): number {
+  if (item.type === 'login') return 2 + Math.min(item.domains.length, 2);
+  return item.type === 'note' ? 1 : 3;
+}
+
 export function ItemDetail({
   id,
+  summary,
+  settle,
   guard,
   onEdit,
   onBack,
   onDeleted,
 }: {
   id: string;
+  /**
+   * What the list already knows about it. Shown at once, so choosing an item
+   * never waits on its fields (another app's vault can take a second).
+   */
+  summary?: VaultItemSummary;
+  /** Reached with the arrow keys: ask for its fields once the selection rests. */
+  settle?: boolean;
   /** Runs a request through "Confirm it's you" when the gateway asks. */
   guard: <T>(task: () => Promise<T>) => Promise<T | undefined>;
   onEdit: () => void;
@@ -61,11 +77,28 @@ export function ItemDetail({
   const client = useQueryClient();
   const navigate = useNavigate();
   const openSettings = useUi((s) => s.openSettings);
-  const { data: item, isLoading, error } = useVaultItem(id);
+  const { data: full, isPending, error } = useVaultItem(id, { settle });
+  // What the list knew stands in until the fields arrive.
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [history, setHistory] = useState<{ value: string; changedAt: number }[]>();
 
-  if (isLoading) return <Skeleton style={{ blockSize: '18rem', margin: 24 }} />;
+  const loading = !full && isPending && !error;
+  const item: VaultItemSummary | undefined = full ?? (loading ? summary : undefined);
+  if (loading && !item)
+    return (
+      <div className={styles.detail} aria-busy="true">
+        <div className={styles.detailHead}>
+          <Skeleton shape="block" width="3.25rem" height="3.25rem" />
+          <div className={styles.detailTitle}>
+            <Skeleton width="40%" />
+            <Skeleton width="60%" />
+          </div>
+        </div>
+        <div className={styles.card}>
+          <VaultFieldsSkeleton />
+        </div>
+      </div>
+    );
   if (error || !item)
     return (
       <div className={styles.detail}>
@@ -110,7 +143,7 @@ export function ItemDetail({
   const problems = item.problems;
   const site = item.domains[0];
   return (
-    <div className={styles.detail}>
+    <div className={styles.detail} aria-busy={loading || undefined}>
       <div className={styles.detailHead}>
         {onBack && (
           <IconButton label="Back to the list" onClick={onBack}>
@@ -130,18 +163,18 @@ export function ItemDetail({
           </Text>
         </div>
         <div className={styles.detailActions}>
-          {!external && !deleted && (
+          {full && !external && !deleted && (
             <VaultFavoriteButton
               favorite={item.favorite}
               onToggle={() => void vaultApi.patch(id, { favorite: !item.favorite }).then(refresh)}
             />
           )}
-          {!external && !deleted && (
+          {full && !external && !deleted && (
             <Button size="sm" variant="surface" leadingIcon={<Pencil />} onClick={onEdit}>
               Edit
             </Button>
           )}
-          {deleted && (
+          {full && deleted && (
             <Button
               size="sm"
               leadingIcon={<RotateCcw />}
@@ -155,7 +188,7 @@ export function ItemDetail({
               Restore
             </Button>
           )}
-          {!external && (
+          {full && !external && (
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>
                 <IconButton label="More">
@@ -163,14 +196,14 @@ export function ItemDetail({
                 </IconButton>
               </DropdownMenu.Trigger>
               <DropdownMenu.Content align="end">
-                {item.history > 0 && (
+                {full.history > 0 && (
                   <DropdownMenu.Item
                     icon={<History />}
                     onSelect={() =>
                       void guard(() => vaultApi.history(id)).then((h) => h && setHistory(h.entries))
                     }
                   >
-                    Earlier passwords ({item.history})
+                    Earlier passwords ({full.history})
                   </DropdownMenu.Item>
                 )}
                 <DropdownMenu.Item
@@ -186,7 +219,7 @@ export function ItemDetail({
         </div>
       </div>
 
-      {item.source === 'system' && item.manage && (
+      {full?.source === 'system' && full.manage && (
         <Callout
           tone="info"
           className={styles.detailNote}
@@ -194,13 +227,13 @@ export function ItemDetail({
             <Button
               size="sm"
               variant="surface"
-              onClick={() => openPlace(item.manage?.place ?? '', item.manage?.focus)}
+              onClick={() => openPlace(full.manage?.place ?? '', full.manage?.focus)}
             >
-              {item.manage.label}
+              {full.manage.label}
             </Button>
           }
         >
-          A key Conch uses for {item.usedBy[0] ?? 'itself'}. It’s sealed with this computer’s key,
+          A key Conch uses for {full.usedBy[0] ?? 'itself'}. It’s sealed with this computer’s key,
           so it works even while Passwords is locked. Change it where it’s used.
         </Callout>
       )}
@@ -211,11 +244,11 @@ export function ItemDetail({
           can fill it in for you.
         </Callout>
       )}
-      {item.origin && (
+      {full?.origin && (
         <Callout tone="info" className={styles.detailNote}>
-          {item.origin.syncing
-            ? `Copied from ${vaultSourceName(item.origin.source)} and kept up to date from it${item.origin.syncedAt ? `, last ${ago(item.origin.syncedAt)}` : ''}. Changing it here makes this copy yours: syncs leave it alone after that.`
-            : `Copied from ${vaultSourceName(item.origin.source)}${item.origin.syncedAt ? ` ${ago(item.origin.syncedAt)}` : ''}. It’s Conch’s own now.`}
+          {full.origin.syncing
+            ? `Copied from ${vaultSourceName(full.origin.source)} and kept up to date from it${full.origin.syncedAt ? `, last ${ago(full.origin.syncedAt)}` : ''}. Changing it here makes this copy yours: syncs leave it alone after that.`
+            : `Copied from ${vaultSourceName(full.origin.source)}${full.origin.syncedAt ? ` ${ago(full.origin.syncedAt)}` : ''}. It’s Conch’s own now.`}
         </Callout>
       )}
       {problems.includes('compromised') && (
@@ -225,7 +258,7 @@ export function ItemDetail({
           className={styles.detailNote}
         >
           Anyone could try it. Change it on {site ?? 'the site'}, then here.
-          {!external && (
+          {full && !external && (
             <Button size="sm" variant="surface" onClick={onEdit} style={{ marginInlineStart: 8 }}>
               Change password
             </Button>
@@ -257,61 +290,69 @@ export function ItemDetail({
       )}
 
       <div className={styles.card}>
-        {item.fields.map((field) =>
-          field.kind === 'totp' ? (
-            <TotpCode
-              key={field.id}
-              label={field.label}
-              period={30}
-              onFetch={async () => {
-                const code = await guard(() => vaultApi.totp(id, external ? undefined : field.id));
-                if (!code) throw new Error('Confirm it’s you to see the code.');
-                return code;
-              }}
-              onCopy={(code) => copySecret(code, 'Code')}
-            />
-          ) : (
-            <VaultFieldRow
-              key={field.id}
-              label={field.label}
-              value={field.value}
-              concealed={field.value === undefined}
-              mono={field.kind === 'secret' || field.kind === 'pin'}
-              multiline={field.kind === 'multiline' || field.kind === 'secretText'}
-              strength={field.strength}
-              href={isLink(field) ? field.value : undefined}
-              onReveal={field.value === undefined ? () => reveal(field) : undefined}
-              onCopy={async (shown) => {
-                if (field.value !== undefined) return copyPlain(field.value, field.label);
-                const value = shown ?? (await reveal(field, true));
-                await copySecret(value, field.label);
-              }}
-            />
-          ),
-        )}
-        {item.urls.map((url) => (
-          <VaultFieldRow
-            key={url}
-            label="Website"
-            value={url}
-            href={/^https?:\/\//i.test(url) ? url : `https://${url}`}
-            onCopy={() => copyPlain(url, 'Address')}
-          />
-        ))}
-        {!item.fields.length && !item.urls.length && (
-          <div className={styles.emptyFields}>
-            <Text tone="subtle">Nothing saved in this item yet.</Text>
-          </div>
+        {!full ? (
+          <VaultFieldsSkeleton rows={likelyFields(item)} />
+        ) : (
+          <>
+            {full.fields.map((field) =>
+              field.kind === 'totp' ? (
+                <TotpCode
+                  key={field.id}
+                  label={field.label}
+                  period={30}
+                  onFetch={async () => {
+                    const code = await guard(() =>
+                      vaultApi.totp(id, external ? undefined : field.id),
+                    );
+                    if (!code) throw new Error('Confirm it’s you to see the code.');
+                    return code;
+                  }}
+                  onCopy={(code) => copySecret(code, 'Code')}
+                />
+              ) : (
+                <VaultFieldRow
+                  key={field.id}
+                  label={field.label}
+                  value={field.value}
+                  concealed={field.value === undefined}
+                  mono={field.kind === 'secret' || field.kind === 'pin'}
+                  multiline={field.kind === 'multiline' || field.kind === 'secretText'}
+                  strength={field.strength}
+                  href={isLink(field) ? field.value : undefined}
+                  onReveal={field.value === undefined ? () => reveal(field) : undefined}
+                  onCopy={async (shown) => {
+                    if (field.value !== undefined) return copyPlain(field.value, field.label);
+                    const value = shown ?? (await reveal(field, true));
+                    await copySecret(value, field.label);
+                  }}
+                />
+              ),
+            )}
+            {full.urls.map((url) => (
+              <VaultFieldRow
+                key={url}
+                label="Website"
+                value={url}
+                href={/^https?:\/\//i.test(url) ? url : `https://${url}`}
+                onCopy={() => copyPlain(url, 'Address')}
+              />
+            ))}
+            {!full.fields.length && !full.urls.length && (
+              <div className={styles.emptyFields}>
+                <Text tone="subtle">Nothing saved in this item yet.</Text>
+              </div>
+            )}
+          </>
         )}
       </div>
 
-      {item.passkeys.length > 0 && (
+      {full && full.passkeys.length > 0 && (
         <section className={styles.section} aria-label="Passkeys">
           <Heading level={3} size="xs" tone="subtle">
             Passkeys
           </Heading>
           <Stack gap={2}>
-            {item.passkeys.map((p) => (
+            {full.passkeys.map((p) => (
               <VaultPasskeyRow
                 key={p.id}
                 site={p.rpId}
@@ -343,18 +384,18 @@ export function ItemDetail({
             ))}
           </Stack>
           <Text size="xs" tone="subtle">
-            Your assistant signs in with a passkey in Conch’s browser, on {item.passkeys[0]?.rpId}{' '}
+            Your assistant signs in with a passkey in Conch’s browser, on {full.passkeys[0]?.rpId}{' '}
             only, after asking you. The key itself never leaves Conch.
           </Text>
         </section>
       )}
 
-      {item.notes && (
+      {full?.notes && (
         <section className={styles.section}>
           <Heading level={3} size="xs" tone="subtle">
             Notes
           </Heading>
-          <Text className={styles.notes}>{item.notes}</Text>
+          <Text className={styles.notes}>{full.notes}</Text>
         </section>
       )}
 
@@ -368,24 +409,24 @@ export function ItemDetail({
         </Stack>
       )}
 
-      {!external && (
+      {full && !external && (
         <section className={styles.section}>
           <Heading level={3} size="xs" tone="subtle">
             Your assistant
           </Heading>
           <Text size="sm">
-            {ACCESS_WORDS[item.agentAccess]}
-            {item.agentAccess !== 'never' &&
-              item.domains.length > 0 &&
-              ` · only on ${[...item.domains, ...item.allowedSites].join(', ')}`}
+            {ACCESS_WORDS[full.agentAccess]}
+            {full.agentAccess !== 'never' &&
+              full.domains.length > 0 &&
+              ` · only on ${[...full.domains, ...full.allowedSites].join(', ')}`}
           </Text>
           <Text size="xs" tone="subtle">
             It never sees the password: Conch types it into the page.
             {item.usedAt ? ` Last used ${ago(item.usedAt)}.` : ''}
           </Text>
-          {item.usedBy.length > 0 && (
+          {full.usedBy.length > 0 && (
             <Text size="xs" tone="subtle">
-              Used by {item.usedBy.join(', ')}.
+              Used by {full.usedBy.join(', ')}.
             </Text>
           )}
         </section>

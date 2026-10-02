@@ -21,4 +21,6 @@ order: 5
 
 In the browser panel, <kbd>shift+esc</kbd> gives the keyboard back to Conch.
 
+In Passwords, <kbd>/</kbd> goes to the search. There, <kbd>↓</kbd> and <kbd>↑</kbd> walk through what was found, <kbd>Enter</kbd> opens the first one, and <kbd>esc</kbd> puts an open item away.
+
 While you edit something made for you, <kbd>mod+s</kbd> saves, <kbd>esc</kbd> cancels, <kbd>mod+z</kbd> undoes and <kbd>mod+shift+z</kbd> redoes.

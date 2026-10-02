@@ -32,7 +32,11 @@ Apple Passwords, Chrome and other browsers don't let other apps read them. Impor
 
 ## Find, check and tidy
 
-One search box finds an item by anything you'd remember: its name, the account, the site, a tag. Press <kbd>/</kbd> to go to it. The filter below it narrows the list to one kind, one manager, one tag, **Favourites** or **One-time codes**.
+One search box finds an item by anything you'd remember: its name, the account, the site, a tag. Press <kbd>/</kbd> to go to it. The best match comes first, with the part that matched marked. <kbd>↓</kbd> and <kbd>↑</kbd> walk through what was found while you keep typing, and <kbd>Enter</kbd> opens the first one.
+
+The filter below it narrows the list to one kind, one manager, one tag, **Favourites** or **One-time codes**. A long list has a heading over each group: **Favourites**, then each letter, or how long ago when you sort by **Recently edited** or **Recently used**.
+
+The list stays quick however many items it holds. An item's name shows the moment you choose it. Its fields follow, which can take a second when they come from another manager.
 
 **More → Check for breaches** looks for your passwords among known data breaches. No password leaves your computer for it, only a short piece of a scrambled copy. What needs attention shows at the top of the list, worst first: **In a data breach**, **Reused**, **Weak**, **Expired**, **Not secure**. Press one to see those items.
 

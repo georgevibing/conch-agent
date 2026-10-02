@@ -1,4 +1,9 @@
-import { VAULT_TEMPLATES, type VaultItemType, type VaultProblem } from '@conch/protocol';
+import {
+  VAULT_TEMPLATES,
+  type VaultItemSummary,
+  type VaultItemType,
+  type VaultProblem,
+} from '@conch/protocol';
 import {
   AlertDialog,
   Button,
@@ -7,7 +12,6 @@ import {
   EmptyState,
   IconButton,
   Input,
-  Skeleton,
   Stack,
   Text,
   toast,
@@ -15,7 +19,11 @@ import {
   VaultConnectedSources,
   VaultHealth,
   VaultKindGlyph,
+  VaultListHeading,
   VaultRow,
+  VaultRowSkeleton,
+  VirtualList,
+  type VirtualListHandle,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -32,7 +40,17 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import {
+  memo,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react';
 import { useLocation, useNavigate } from 'react-router';
 
 import { useAuth } from '../auth/useAuth';
@@ -43,8 +61,12 @@ import {
   ago,
   counts,
   filterName,
+  indexItems,
+  listRows,
+  titleRanges,
   TYPE_NAMES,
   type VaultFilter,
+  type VaultListRow,
   type VaultSort,
   visibleItems,
 } from './filter';
@@ -53,11 +75,81 @@ import { ItemDetail } from './ItemDetail';
 import { ItemEditor } from './ItemEditor';
 import { LockDialog, LockScreen } from './Lock';
 import styles from './Passwords.module.css';
-import { useVault, vaultKeys } from './queries';
+import { useVault, vaultItemQuery, vaultKeys } from './queries';
 import { SourcesDialog } from './SourcesDialog';
 
 type Mode =
   { kind: 'view' } | { kind: 'edit' } | { kind: 'new'; type: VaultItemType } | { kind: 'pick' };
+
+/** A row's height in rem: a `VaultRow` is 3.5, and the rest is the gap to the next one. */
+const ROW_REM = 3.625;
+const HEADING_REM = 2;
+const rowHeight = (row: VaultListRow) => (row.kind === 'header' ? HEADING_REM : ROW_REM);
+const rowKey = (row: VaultListRow) => (row.kind === 'header' ? row.id : row.item.id);
+const isHeading = (row: VaultListRow) => row.kind === 'header';
+
+/** How long the pointer rests on a row before its item is fetched, ahead of the click. */
+const HOVER_MS = 80;
+
+/** One item in the list. Memoised: scrolling redraws the list, not the rows still in view. */
+const PasswordRow = memo(function PasswordRow({
+  item,
+  selected,
+  sort,
+  query,
+  sourceMark,
+  onOpen,
+  onKeyDown,
+  onRest,
+}: {
+  item: VaultItemSummary;
+  selected: boolean;
+  sort: VaultSort;
+  /** What was searched for, to mark it in the title. */
+  query: string;
+  sourceMark: boolean;
+  onOpen: (id: string) => void;
+  onKeyDown: (e: KeyboardEvent<HTMLElement>) => void;
+  /** The pointer came to rest on this row (or left it). */
+  onRest: (item: VaultItemSummary | undefined) => void;
+}) {
+  const ranges = useMemo(() => titleRanges(item.title, query), [item.title, query]);
+  return (
+    <VaultRow
+      data-id={item.id}
+      kind={item.type}
+      title={item.title}
+      titleRanges={ranges}
+      subtitle={item.subtitle}
+      domain={item.domains[0]}
+      source={item.source}
+      sourceMark={sourceMark}
+      favorite={item.favorite}
+      totp={item.totp}
+      passkey={item.passkey}
+      issues={item.problems}
+      selected={selected}
+      note={item.deletedAt ? `Deleted ${ago(item.deletedAt)}` : undefined}
+      meta={
+        item.deletedAt
+          ? undefined
+          : sort === 'recent'
+            ? item.updatedAt
+              ? `Edited ${ago(item.updatedAt)}`
+              : 'No edit date'
+            : sort === 'used'
+              ? item.usedAt
+                ? `Used ${ago(item.usedAt)}`
+                : 'Not used yet'
+              : undefined
+      }
+      onClick={() => onOpen(item.id)}
+      onKeyDown={onKeyDown}
+      onPointerEnter={(e) => e.pointerType !== 'touch' && onRest(item)}
+      onPointerLeave={() => onRest(undefined)}
+    />
+  );
+});
 
 /** The Security check's issues, in the order they matter. */
 const ISSUES: VaultProblem[] = ['compromised', 'reused', 'weak', 'expired', 'insecure'];
@@ -75,6 +167,8 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
   const { guard: verify, dialog } = useVerify(auth.data?.method ?? 'none');
   const narrow = useMediaQuery('(max-width: 900px)');
   const [query, setQuery] = useState('');
+  // The search box answers each key at once; the list follows when there's a moment.
+  const sought = useDeferredValue(query);
   const [filter, setFilter] = useState<VaultFilter>({ kind: 'all' });
   const [sort, setSort] = useState<VaultSort>('name');
   const [mode, setMode] = useState<Mode>({ kind: 'view' });
@@ -84,9 +178,13 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
   const [emptying, setEmptying] = useState(false);
   const [checking, setChecking] = useState(false);
   const [lockOpen, setLockOpen] = useState(false);
+  // Reached with the arrow keys: its fields are asked for once the selection rests.
+  const [settle, setSettle] = useState(false);
   const search = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
+  const list = useRef<VirtualListHandle>(null);
+  const listId = useId();
   const listPane = useRef<HTMLElement>(null);
+  const resting = useRef<ReturnType<typeof setTimeout>>(undefined);
   const location = useLocation();
 
   // ⌘K's "New password", "Import passwords" and "Check my passwords" arrive here, and
@@ -118,16 +216,58 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
   };
 
   const items = useMemo(() => data?.items ?? [], [data]);
+  // Read once when the list arrives, so a key press only compares strings.
+  const index = useMemo(() => indexItems(items), [items]);
   const shown = useMemo(
-    () => visibleItems(items, { query, filter, sort }),
-    [items, query, filter, sort],
+    () => visibleItems(index, { query: sought, filter, sort }),
+    [index, sought, filter, sort],
+  );
+  const rows = useMemo(
+    () => listRows(shown, { query: sought, filter, sort }),
+    [shown, sought, filter, sort],
   );
   const tally = useMemo(() => counts(items), [items]);
+  const chosen = useMemo(() => items.find((i) => i.id === itemId), [items, itemId]);
+  // A manager's mark tells managers apart: with one of them, it'd be the same mark on every row.
+  const sourceMark = useMemo(
+    () =>
+      new Set(items.map((i) => i.source).filter((s) => s !== 'conch' && s !== 'system')).size > 1,
+    [items],
+  );
   const status = data?.status;
-  const open = (id: string | undefined) => {
+  const open = (id: string | undefined, how: { keys?: boolean } = {}) => {
     setMode({ kind: 'view' });
+    setSettle(Boolean(how.keys));
     void navigate(id ? `/passwords/${id}` : '/passwords');
   };
+  const reveal = (id: string) =>
+    list.current?.scrollToIndex(rows.findIndex((r) => r.kind === 'item' && r.item.id === id));
+  const toTop = () => list.current?.scrollToIndex(0);
+
+  // Opened by its address: the list starts where that item is.
+  const placed = useRef(false);
+  useEffect(() => {
+    if (placed.current || !rows.length) return;
+    placed.current = true;
+    if (itemId)
+      list.current?.scrollToIndex(rows.findIndex((r) => r.kind === 'item' && r.item.id === itemId));
+  }, [rows, itemId]);
+
+  // The pointer resting on one of Conch's own items fetches it, so the click finds it
+  // ready. Never another manager's: asking it for an item nobody chose could put up
+  // its own unlock prompt.
+  const onRest = useCallback(
+    (item: VaultItemSummary | undefined) => {
+      clearTimeout(resting.current);
+      if (item?.source !== 'conch') return;
+      resting.current = setTimeout(
+        () => void client.prefetchQuery(vaultItemQuery(item.id)),
+        HOVER_MS,
+      );
+    },
+    [client],
+  );
+  useEffect(() => () => clearTimeout(resting.current), []);
 
   // "/" anywhere on the page goes to the search, like most lists on the web.
   useEffect(() => {
@@ -167,21 +307,53 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
     };
   }, [viewing, navigate]);
 
+  /** The arrow keys: the item before or after the chosen one, brought into view. */
+  const move = (by: 1 | -1) => {
+    // The list may be a key press behind the search box: go by what's typed now.
+    const found = sought === query ? shown : visibleItems(index, { query, filter, sort });
+    const at = found.findIndex((i) => i.id === itemId);
+    const next = found[Math.min(found.length - 1, Math.max(0, at + by))];
+    if (!next) return undefined;
+    open(next.id, { keys: true });
+    reveal(next.id);
+    return next;
+  };
+
   const onListKey = (e: KeyboardEvent<HTMLElement>) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     e.preventDefault();
-    const at = shown.findIndex((i) => i.id === itemId);
-    const next =
-      shown[Math.min(shown.length - 1, Math.max(0, at + (e.key === 'ArrowDown' ? 1 : -1)))];
-    if (next) {
-      open(next.id);
+    const next = move(e.key === 'ArrowDown' ? 1 : -1);
+    if (next)
       requestAnimationFrame(() =>
-        listRef.current
-          ?.querySelector<HTMLButtonElement>(`[data-id="${CSS.escape(next.id)}"]`)
+        [...(listPane.current?.querySelectorAll<HTMLButtonElement>('button[data-id]') ?? [])]
+          .find((row) => row.dataset.id === next.id)
           ?.focus(),
       );
+  };
+
+  // In the search, the arrows walk the results and Enter opens the best one;
+  // the keyboard stays in the box, so you can keep typing.
+  const onSearchKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      move(e.key === 'ArrowDown' ? 1 : -1);
+    } else if (e.key === 'Enter') {
+      const found = sought === query ? shown : visibleItems(index, { query, filter, sort });
+      const best = found[0];
+      if (!best || found.some((i) => i.id === itemId)) return;
+      e.preventDefault();
+      open(best.id);
+      reveal(best.id);
     }
   };
+
+  const rowProps = useCallback(
+    (row: VaultListRow) =>
+      row.kind === 'header'
+        ? { role: 'presentation' }
+        : { role: 'listitem', 'aria-setsize': shown.length, 'aria-posinset': row.position },
+    [shown.length],
+  );
 
   const checkBreaches = async () => {
     setChecking(true);
@@ -277,17 +449,19 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
               leading={<Search />}
               placeholder="Search passwords"
               aria-label="Search passwords"
+              aria-controls={listId}
               value={query}
               clearable
-              onClear={() => setQuery('')}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'ArrowDown') {
-                  e.preventDefault();
-                  if (shown[0]) open(shown[0].id);
-                  listRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
-                }
+              onClear={() => {
+                setQuery('');
+                toTop();
               }}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                // New results start from their best match, not from where the old list was.
+                toTop();
+              }}
+              onKeyDown={onSearchKey}
             />
             {newMenu}
             <DropdownMenu.Root>
@@ -339,7 +513,7 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
                   className={styles.filterButton}
                 >
                   {filterName(filter)}
-                  {filter.kind !== 'deleted' && (
+                  {filter.kind !== 'deleted' && !isLoading && (
                     <Text as="span" size="xs" tone="subtle" className={styles.count}>
                       {shown.length}
                     </Text>
@@ -352,6 +526,7 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
                   onValueChange={(v) => {
                     setFilter(JSON.parse(v) as VaultFilter);
                     open(undefined);
+                    toTop();
                   }}
                 >
                   <DropdownMenu.RadioItem value={JSON.stringify({ kind: 'all' })}>
@@ -438,7 +613,10 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
                 <DropdownMenu.Content align="end">
                   <DropdownMenu.RadioGroup
                     value={sort}
-                    onValueChange={(v) => setSort(v as VaultSort)}
+                    onValueChange={(v) => {
+                      setSort(v as VaultSort);
+                      toTop();
+                    }}
                   >
                     <DropdownMenu.RadioItem value="name">By name</DropdownMenu.RadioItem>
                     <DropdownMenu.RadioItem value="recent">Recently edited</DropdownMenu.RadioItem>
@@ -471,6 +649,7 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
               onSelect={(problem) => {
                 setFilter({ kind: 'problem', problem });
                 open(undefined);
+                toTop();
               }}
               action={
                 <Button
@@ -485,55 +664,57 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
             />
           )}
 
-          <div className={styles.list} ref={listRef} role="list">
-            {isLoading
-              ? Array.from({ length: 6 }, (_, i) => (
-                  <Skeleton key={i} style={{ blockSize: 52, margin: '4px 12px' }} />
-                ))
-              : shown.map((item) => (
-                  <div role="listitem" key={item.id}>
-                    <VaultRow
-                      data-id={item.id}
-                      kind={item.type}
-                      title={item.title}
-                      subtitle={item.subtitle}
-                      domain={item.domains[0]}
-                      source={item.source}
-                      favorite={item.favorite}
-                      totp={item.totp}
-                      passkey={item.passkey}
-                      issues={item.problems}
-                      selected={item.id === itemId}
-                      note={item.deletedAt ? `Deleted ${ago(item.deletedAt)}` : undefined}
-                      meta={
-                        item.deletedAt
-                          ? undefined
-                          : sort === 'recent'
-                            ? item.updatedAt
-                              ? `Edited ${ago(item.updatedAt)}`
-                              : 'No edit date'
-                            : sort === 'used'
-                              ? item.usedAt
-                                ? `Used ${ago(item.usedAt)}`
-                                : 'Not used yet'
-                              : undefined
-                      }
-                      onClick={() => open(item.id)}
-                      onKeyDown={onListKey}
-                    />
-                  </div>
-                ))}
-            {!isLoading && shown.length === 0 && !empty && (
-              <EmptyState
-                size="sm"
-                icon={<Search />}
-                title={
-                  query ? `Nothing matches “${query}”` : `No ${filterName(filter).toLowerCase()}`
-                }
-                description={query ? 'Try a site name or a username.' : undefined}
-              />
-            )}
-          </div>
+          {isLoading ? (
+            <div className={styles.listStill} aria-busy="true">
+              {Array.from({ length: 8 }, (_, i) => (
+                <VaultRowSkeleton key={i} />
+              ))}
+            </div>
+          ) : shown.length === 0 ? (
+            <div className={styles.listStill}>
+              {!empty && (
+                <EmptyState
+                  size="sm"
+                  icon={<Search />}
+                  title={
+                    sought
+                      ? `Nothing matches “${sought}”`
+                      : `No ${filterName(filter).toLowerCase()}`
+                  }
+                  description={sought ? 'Try a site name or a username.' : undefined}
+                />
+              )}
+            </div>
+          ) : (
+            <VirtualList
+              id={listId}
+              role="list"
+              className={styles.list}
+              handle={list}
+              items={rows}
+              rowHeight={rowHeight}
+              getKey={rowKey}
+              sticky={isHeading}
+              rowProps={rowProps}
+            >
+              {(row) =>
+                row.kind === 'header' ? (
+                  <VaultListHeading>{row.label}</VaultListHeading>
+                ) : (
+                  <PasswordRow
+                    item={row.item}
+                    selected={row.item.id === itemId}
+                    sort={sort}
+                    query={sought}
+                    sourceMark={sourceMark}
+                    onOpen={open}
+                    onKeyDown={onListKey}
+                    onRest={onRest}
+                  />
+                )
+              }
+            </VirtualList>
+          )}
           {status?.protectionNote && (
             <Text size="xs" tone="subtle" className={styles.protection}>
               {status.protectionNote}
@@ -596,6 +777,8 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
             <ItemDetail
               key={itemId}
               id={itemId}
+              summary={chosen}
+              settle={settle}
               guard={guard}
               onEdit={() => setMode({ kind: 'edit' })}
               onBack={narrow ? () => open(undefined) : undefined}

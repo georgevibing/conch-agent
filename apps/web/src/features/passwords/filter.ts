@@ -56,15 +56,27 @@ function haystack(item: VaultItemSummary): string {
     .toLowerCase();
 }
 
+function wordsOf(query: string): string[] {
+  return query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+}
+
 /**
  * Every word must appear somewhere ("gmail work" finds the work Gmail);
  * a site matches with or without its dots ("netflix" finds netflix.com).
  */
 export function matches(item: VaultItemSummary, query: string): boolean {
-  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const words = wordsOf(query);
   if (!words.length) return true;
   const hay = haystack(item);
   return words.every((w) => hay.includes(w));
+}
+
+/** An item with its words ready, so a keystroke only compares strings. */
+export interface IndexedItem {
+  item: VaultItemSummary;
+  hay: string;
+  /** The title, lower-cased, for ranking. */
+  title: string;
 }
 
 export function inFilter(item: VaultItemSummary, filter: VaultFilter): boolean {
@@ -90,20 +102,125 @@ export function inFilter(item: VaultItemSummary, filter: VaultFilter): boolean {
 
 const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
 
+/**
+ * The list read once, when it arrives: each item's words lower-cased, in A–Z
+ * order. Every sort after this is stable, so A–Z is the tie-break for free
+ * and typing never sorts by name again.
+ */
+export function indexItems(items: VaultItemSummary[]): IndexedItem[] {
+  return items
+    .map((item) => ({ item, hay: haystack(item), title: item.title.toLowerCase() }))
+    .sort((a, b) => collator.compare(a.item.title, b.item.title));
+}
+
+function startsWord(title: string, word: string): boolean {
+  for (let at = title.indexOf(word); at !== -1; at = title.indexOf(word, at + 1))
+    if (at === 0 || !/[\p{L}\p{N}]/u.test(title[at - 1] ?? '')) return true;
+  return false;
+}
+
+/** How well a title answers what was typed: 0 starts with it … 3 found elsewhere (a site, a tag). */
+function rank(title: string, words: string[]): number {
+  if (title.startsWith(words.join(' '))) return 0;
+  if (words.every((w) => startsWord(title, w))) return 1;
+  if (words.every((w) => title.includes(w))) return 2;
+  return 3;
+}
+
 export function visibleItems(
-  items: VaultItemSummary[],
+  index: IndexedItem[],
   options: { query: string; filter: VaultFilter; sort: VaultSort },
 ): VaultItemSummary[] {
-  const list = items.filter((i) => inFilter(i, options.filter) && matches(i, options.query));
-  const byName = (a: VaultItemSummary, b: VaultItemSummary) => collator.compare(a.title, b.title);
-  if (options.filter.kind === 'deleted')
-    return list.sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0));
-  if (options.sort === 'recent')
-    return list.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0) || byName(a, b));
-  if (options.sort === 'used')
-    return list.sort((a, b) => (b.usedAt ?? 0) - (a.usedAt ?? 0) || byName(a, b));
-  // Favourites first, then A–Z.
-  return list.sort((a, b) => Number(b.favorite) - Number(a.favorite) || byName(a, b));
+  const words = wordsOf(options.query);
+  const found = index.filter(
+    (e) => inFilter(e.item, options.filter) && words.every((w) => e.hay.includes(w)),
+  );
+  const order = (a: VaultItemSummary, b: VaultItemSummary) =>
+    options.filter.kind === 'deleted'
+      ? (b.deletedAt ?? 0) - (a.deletedAt ?? 0)
+      : options.sort === 'recent'
+        ? (b.updatedAt ?? 0) - (a.updatedAt ?? 0)
+        : options.sort === 'used'
+          ? (b.usedAt ?? 0) - (a.usedAt ?? 0)
+          : // Favourites first, then A–Z.
+            Number(b.favorite) - Number(a.favorite);
+  if (!words.length) return found.map((e) => e.item).sort(order);
+  // A search puts the best answer first: the title that starts with what was typed.
+  return found
+    .map((e) => ({ item: e.item, rank: rank(e.title, words) }))
+    .sort((a, b) => a.rank - b.rank || order(a.item, b.item))
+    .map((e) => e.item);
+}
+
+/** The parts of a title that match what was typed, for marking them: `[start, end)`, in order. */
+export function titleRanges(title: string, query: string): [number, number][] {
+  const lower = title.toLowerCase();
+  const found: [number, number][] = [];
+  for (const word of wordsOf(query))
+    for (let at = lower.indexOf(word); at !== -1; at = lower.indexOf(word, at + 1))
+      found.push([at, at + word.length]);
+  found.sort((a, b) => a[0] - b[0]);
+  const ranges: [number, number][] = [];
+  for (const [start, end] of found) {
+    const last = ranges.at(-1);
+    if (last && start <= last[1]) last[1] = Math.max(last[1], end);
+    else ranges.push([start, end]);
+  }
+  return ranges;
+}
+
+/** A row of the list: an item, or the heading over a group of them. */
+export type VaultListRow =
+  | { kind: 'header'; id: string; label: string }
+  /** `position` is its place among the items, from 1: headings don't count. */
+  | { kind: 'item'; item: VaultItemSummary; position: number };
+
+/** A short list reads at a glance; headings only earn their place in a long one. */
+const GROUPS_FROM = 20;
+
+function letter(title: string): string {
+  // "Émile" files under E.
+  const first = title.trim().normalize('NFD')[0] ?? '';
+  return /\p{L}/u.test(first) ? first.toLocaleUpperCase() : '#';
+}
+
+function age(at: number | undefined, none: string, now: number): string {
+  if (!at) return none;
+  if (new Date(at).toDateString() === new Date(now).toDateString() || at > now) return 'Today';
+  const days = (now - at) / 86_400_000;
+  return days < 7 ? 'Previous 7 days' : days < 30 ? 'Previous 30 days' : 'Earlier';
+}
+
+/**
+ * The list with a heading over each group, the way it's sorted: Favourites
+ * and then each letter, or how long ago. A search has none (its order is
+ * "best first"), nor has Recently deleted.
+ */
+export function listRows(
+  shown: VaultItemSummary[],
+  options: { query: string; filter: VaultFilter; sort: VaultSort; now?: number },
+): VaultListRow[] {
+  const items = shown.map((item, i): VaultListRow => ({ kind: 'item', item, position: i + 1 }));
+  if (options.query.trim() || options.filter.kind === 'deleted' || shown.length < GROUPS_FROM)
+    return items;
+  const now = options.now ?? Date.now();
+  const group = (item: VaultItemSummary) =>
+    options.sort === 'recent'
+      ? age(item.updatedAt, 'No edit date', now)
+      : options.sort === 'used'
+        ? age(item.usedAt, 'Not used yet', now)
+        : item.favorite
+          ? 'Favourites'
+          : letter(item.title);
+  const rows: VaultListRow[] = [];
+  let last: string | undefined;
+  for (const [i, item] of shown.entries()) {
+    const label = group(item);
+    if (label !== last) rows.push({ kind: 'header', id: `group:${rows.length}:${label}`, label });
+    last = label;
+    rows.push({ kind: 'item', item, position: i + 1 });
+  }
+  return rows;
 }
 
 /** Counts for the filter menu. */

@@ -25,7 +25,8 @@ const Ok = z.object({ ok: z.boolean() });
 
 export const vaultApi = {
   list: () => request(VaultList, '/api/vault'),
-  item: (id: string) => request(VaultItemDetail, `/api/vault/items/${encodeURIComponent(id)}`),
+  item: (id: string, signal?: AbortSignal) =>
+    request(VaultItemDetail, `/api/vault/items/${encodeURIComponent(id)}`, { signal }),
   create: (body: SaveVaultItemBody) =>
     request(VaultItemDetail, '/api/vault/items', { method: 'POST', body }),
   update: (id: string, body: SaveVaultItemBody) =>
