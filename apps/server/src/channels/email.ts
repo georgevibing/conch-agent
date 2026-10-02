@@ -1,12 +1,13 @@
 import { createHash, randomBytes } from 'node:crypto';
 
 import type { ChannelBot, ChannelSecrets, MailProvider } from '@conch/protocol';
-import { ImapFlow } from 'imapflow';
+import type { ImapFlow } from 'imapflow';
 import nodemailer from 'nodemailer';
-import PostalMime, { type Email } from 'postal-mime';
+import type { Email } from 'postal-mime';
 import { getDomain } from 'tldts';
 
 import { plain, toEmailHtml } from './format';
+import { imapClient, imapFailure, isAuth, parseSource } from './imap';
 import { handleId, normalHandle } from './handles';
 import { TextChoices } from './linked';
 import { automatic, bareSubject, messageIds, newWords, senderVerdict } from './mail-read';
@@ -21,7 +22,6 @@ import {
   type ConnectOptions,
   type SendOptions,
   pause,
-  redact,
 } from './types';
 
 type EmailSecrets = Extract<ChannelSecrets, { kind: 'email' }>;
@@ -178,23 +178,11 @@ export class EmailAdapter implements ChannelAdapter {
   }
 
   #imap(user = this.#address): ImapFlow {
-    const where = this.endpoints?.imap ?? this.#preset.imap;
-    const client = new ImapFlow({
-      host: where.host,
-      port: where.port,
-      secure: !this.endpoints,
-      ...(this.endpoints && { doSTARTTLS: false }),
-      auth: { user, pass: this.#password },
-      logger: false,
-      disableAutoIdle: true,
-      maxIdleTime: IDLE_MS,
-      connectionTimeout: 20_000,
-      greetingTimeout: 15_000,
-      socketTimeout: 10 * 60_000,
-    });
-    // A dropped connection shows up as its close (and a failed command); the error event needs no more.
-    client.on('error', () => undefined);
-    return client;
+    return imapClient(
+      this.endpoints?.imap ?? this.#preset.imap,
+      { user, pass: this.#password },
+      { insecure: Boolean(this.endpoints), idleMs: IDLE_MS },
+    );
   }
 
   #smtp() {
@@ -518,12 +506,7 @@ export class EmailAdapter implements ChannelAdapter {
           { uid: true },
         );
         if (!message || !message.source || (message.size ?? 0) > MAX_MESSAGE) continue;
-        const email = await PostalMime.parse(message.source, {
-          maxNestingDepth: 20,
-          maxHeadersSize: 128_000,
-          maxRfc822NestingDepth: 0,
-          forceRfc822Attachments: true,
-        });
+        const email = await parseSource(message.source);
         const verdict = await this.#forConch(client, email, sent);
         // Not for Conch, or not provably from its sender: left where it is, unread by anyone.
         if (verdict !== 'ok') continue;
@@ -586,41 +569,7 @@ export class EmailAdapter implements ChannelAdapter {
   }
 
   #imapError(error: unknown): ChannelError {
-    if (error instanceof ChannelError) return error;
-    const e = error as {
-      authenticationFailed?: boolean;
-      responseText?: string;
-      code?: string;
-      message?: string;
-    };
-    const said = redact(
-      `${e.responseText ?? ''} ${e.message ?? ''}`,
-      this.#password,
-      this.secrets.password,
-    );
-    if (isAuth(error)) {
-      if (/application-specific|app password|web login required/i.test(said))
-        return new ChannelError(
-          'auth',
-          `${this.#preset.name} wants an app password here, not your account’s own password. Make one and paste it.`,
-          { field: 'password' },
-        );
-      return new ChannelError(
-        'auth',
-        `${this.#preset.name} didn’t take that app password. Make a new one and paste it.`,
-        { field: 'password' },
-      );
-    }
-    if (/IMAP access is disabled|IMAP.*not enabled/i.test(said))
-      return new ChannelError(
-        'setup',
-        `IMAP is turned off for this account. Turn it on in ${this.#preset.name}’s settings.`,
-      );
-    if (e.code === 'ENOTFOUND' || e.code === 'ECONNREFUSED' || e.code === 'EHOSTUNREACH')
-      return new ChannelError('network', `Couldn’t reach ${this.#preset.name}’s mail server.`, {
-        field: 'server',
-      });
-    return new ChannelError('network', `Couldn’t reach ${this.#preset.name} right now.`);
+    return imapFailure(error, this.#preset.name, this.#password, this.secrets.password);
   }
 
   #smtpError(error: unknown): ChannelError {
@@ -646,11 +595,6 @@ interface Cursor {
 function parseCursor(value: string | undefined): Cursor | undefined {
   const match = /^(\d+):(\d+)$/.exec(value ?? '');
   return match?.[1] && match[2] ? { validity: match[1], uid: Number(match[2]) } : undefined;
-}
-
-function isAuth(error: unknown): boolean {
-  const e = error as { authenticationFailed?: boolean; serverResponseCode?: string };
-  return Boolean(e?.authenticationFailed) || e?.serverResponseCode === 'AUTHENTICATIONFAILED';
 }
 
 /** For a server of your own: its checks are signed with its own name (its organisation's domain). */
