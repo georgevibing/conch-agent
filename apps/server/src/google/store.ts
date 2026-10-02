@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { GoogleAccount } from '@conch/protocol';
+import { GoogleAccount, GoogleConfigure } from '@conch/protocol';
 import { z } from 'zod';
 import { Mutex, writeJson } from '../lib/fs';
 import { readStore } from '../lib/recover';
@@ -13,9 +13,7 @@ const Credential = z.object({
 });
 export type Credential = z.infer<typeof Credential>;
 const Data = z.object({
-  config: z
-    .object({ clientId: z.string(), clientSecret: z.string(), redirectUrl: z.string() })
-    .optional(),
+  config: GoogleConfigure.optional(),
   accounts: z
     .record(z.string(), z.object({ profile: GoogleAccount, credential: Credential }))
     .default({}),

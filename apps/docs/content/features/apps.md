@@ -61,23 +61,59 @@ Google accounts belong to **Conch**, not your model provider. In Integrations,
 choose Google, Gmail or Google Calendar. Choose the personal or work account you
 want; Conch shows its email address and the access actually granted. Reading
 mail, saving drafts, reading calendar events and searching Drive have separate
-permissions. Only the permissions needed for your job are requested.
+permissions. New connections request the permissions for your job. Reconnecting
+an account keeps its existing access and requests the additional permissions.
 
-The person running this Conch must register a Google Cloud **Web application**
-OAuth client once. The setup card walks through enabling the relevant APIs,
-configuring Google Auth Platform’s consent screen and test users, and copying
-the exact callback address into Authorized redirect URIs. Paste the client ID
-and secret into that card; do not send them to your assistant. They are encrypted
-on the Conch computer. For a remote Conch, use its reachable HTTPS address, not
-localhost on a different computer.
+### One-time setup, with no hosted connection service
 
-After setup, **Connect Google** opens Google’s own sign-in window. Your current
-job stays open. Choose an account and review the access; when sign-in finishes,
-Conch checks the connection. Allow popups for Conch if your browser blocks it.
+You need your own Google Cloud project and a **Desktop app** OAuth client.
+The same credential file works for a local Conch and a self-hosted server.
+There is no Conch cloud account, public callback address, or extra service to run.
+
+1. Follow the setup guide to create or choose a Google Cloud project. An optional **Project ID** makes subsequent links open the right project.
+2. Open each API linked for your job and press **Enable**. You do not need to enable unrelated Google apps.
+3. Open **Branding** in Google Auth Platform and complete the app details. In **Audience**, add your email under **Test users** while the app is in Testing. Personal Google accounts use **External**; **Internal** is for eligible Workspace organizations.
+4. Open **Clients**, press **Create client**, choose **Desktop app**, and download the JSON. Choose that file under **Google credential JSON**, or paste its contents into **Or paste credential JSON**. Conch checks the file before you save it.
+5. Press **Save and connect Google**. Choose your account on Google’s own sign-in page and review its permissions.
+
+Already have the file? Press **I already have a credential file**. No need to
+copy individual IDs or secrets. Credentials are encrypted on your Conch
+computer, never shared with your assistant or a Conch connection service.
+Keep the downloaded file private.
+
+On a local HTTP loopback address, Google returns to Conch automatically. On a
+remote address, it returns to a local address that your browser may refuse to
+open. That is expected. Copy the **complete address from the address bar**, paste
+it into **Return address from Google** in Conch, and press **Finish connecting**.
+Never paste it into chat. You do not need a terminal, port forwarding, or a public
+Google callback. Keep using the same browser and Conch address throughout sign-in.
+
+An existing **Web application** client still works. Under **Advanced: existing Web
+client**, copy the exact callback into that client's **Authorized redirect URIs**.
+You can import its JSON after registering that address, or enter its ID and
+secret there. Remote Web-client callbacks require HTTPS. Desktop clients do not
+need a registered callback.
+
+Your current job stays open. If a popup is blocked, press **Open Google sign-in**.
+Reloading Conch resumes the pending flow in the same tab. A sign-in expires after
+ten minutes; if Conch restarts, start a new sign-in without repeating app setup.
+Conch checks the account and actual API access before continuing your job.
 Use **Reconnect** to restore revoked access or add permissions for a new job.
 Use **Connect Google · another account** to add work and personal separately.
 Changing accounts during a reconnect is refused so a job cannot silently move
 to another mailbox.
+
+### If Google needs something changed
+
+Open **Sign-in help** for links to the correct project settings:
+
+- **API not enabled:** enable the named API, wait briefly, then press **Check connection**. Conch keeps your sign-in and does not ask you to grant access again unnecessarily.
+- **Test user missing or access blocked:** add the exact Google email under **Audience → Test users**. Workspace administrators may need to allow the app.
+- **Unverified app:** check that it is your own app in your own project before using Google's available personal-testing option. A policy block may need an administrator, not another sign-in attempt.
+- **Access expires every week:** Google Testing mode can expire refresh tokens after seven days. Review **Audience** before leaving Testing; sensitive access or public distribution may require verification. Conch does not publish your app for you.
+- **Wrong file or callback:** import a current Desktop app OAuth JSON, not a service-account key. Web clients must contain the callback displayed by this Conch installation.
+
+### What Google access allows
 
 Gmail supports search, reading and saving **drafts only**. Conch asks before
 saving and verifies the saved content. Replies use the original message’s verified

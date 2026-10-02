@@ -147,7 +147,11 @@ export default defineConfig({
   },
   projects: chosen.map(([name, s]) => ({
     name,
-    testMatch: `${name}.spec.ts`,
+    // Google setup uses the existing integrations gateway, not another server.
+    testMatch:
+      name === 'integrations'
+        ? ['integrations.spec.ts', 'google-setup.spec.ts']
+        : `${name}.spec.ts`,
     use: { baseURL: `http://localhost:${s.port}` },
     // The browser journeys drive a real Chrome, which is heavy enough to make the
     // timing-sensitive specs (password hashing, streaming) flake if they run

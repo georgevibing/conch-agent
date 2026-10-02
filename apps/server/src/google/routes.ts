@@ -5,6 +5,7 @@ import type { Gatekeeper } from '../security';
 import { GoogleError, type GoogleService } from './service';
 
 const Cookie = 'conch_google_flow';
+const FlowParams = z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/) });
 const Params = z.object({
   state: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
   code: z.string().min(1).max(4096).optional(),
@@ -19,6 +20,17 @@ export function googleRoutes(app: FastifyInstance, service: GoogleService, gate:
       request.headers['x-forwarded-proto'] === 'https');
   const origin = (request: FastifyRequest) =>
     `${https(request) ? 'https' : 'http'}://${request.headers.host}`;
+  const nonce = (request: FastifyRequest, flowId: string) =>
+    request.headers.cookie
+      ?.split(';')
+      .map((s) => s.trim())
+      .find((s) => s.startsWith(`${Cookie}_${flowId}=`))
+      ?.slice(Cookie.length + flowId.length + 2) ?? '';
+  const clearCookie = (request: FastifyRequest, reply: FastifyReply, flowId: string) =>
+    reply.header(
+      'Set-Cookie',
+      `${Cookie}_${flowId}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${https(request) ? '; Secure' : ''}`,
+    );
   const guarded = async (reply: FastifyReply, run: () => Promise<unknown>) => {
     try {
       return await run();
@@ -41,6 +53,9 @@ export function googleRoutes(app: FastifyInstance, service: GoogleService, gate:
       .send({ error: 'verify-required', message: 'Confirm it’s you to change Google access.' });
     return false;
   };
+  app.addHook('onRequest', async (request, reply) => {
+    if (request.url.startsWith('/api/google')) reply.header('Cache-Control', 'no-store');
+  });
   app.get('/api/google', () => service.status());
   app.get<{ Params: { id: string } }>('/api/google/flows/:id', (request) =>
     service.flowStatus(request.params.id),
@@ -52,6 +67,13 @@ export function googleRoutes(app: FastifyInstance, service: GoogleService, gate:
       return service.status();
     });
   });
+  app.post('/api/google/import', { bodyLimit: 40_000 }, async (request, reply) => {
+    if (!verified(request, reply)) return;
+    return guarded(reply, async () => {
+      await service.importCredentials(request.body, origin(request));
+      return service.status();
+    });
+  });
   app.post('/api/google/connect', async (request, reply) => {
     if (!verified(request, reply)) return;
     return guarded(reply, async () => {
@@ -60,9 +82,31 @@ export function googleRoutes(app: FastifyInstance, service: GoogleService, gate:
         .header('Cache-Control', 'no-store')
         .header(
           'Set-Cookie',
-          `${Cookie}=${result.nonce}; HttpOnly; SameSite=Lax; Path=/oauth/google/callback; Max-Age=600${https(request) ? '; Secure' : ''}`,
+          `${Cookie}_${result.flowId}=${result.nonce}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600${https(request) ? '; Secure' : ''}`,
         );
-      return { url: result.url, flowId: result.flowId };
+      return { url: result.url, flowId: result.flowId, mode: result.mode };
+    });
+  });
+  app.post<{ Params: { id: string } }>(
+    '/api/google/flows/:id/complete',
+    { bodyLimit: 10_000 },
+    async (request, reply) => {
+      if (!verified(request, reply)) return;
+      return guarded(reply, async () => {
+        const { id } = FlowParams.parse(request.params);
+        await service.complete(id, request.body, nonce(request, id), origin(request));
+        clearCookie(request, reply, id);
+        return service.flowStatus(id);
+      });
+    },
+  );
+  app.delete<{ Params: { id: string } }>('/api/google/flows/:id', async (request, reply) => {
+    if (!verified(request, reply)) return;
+    return guarded(reply, async () => {
+      const { id } = FlowParams.parse(request.params);
+      service.cancel(id, nonce(request, id), origin(request));
+      clearCookie(request, reply, id);
+      return { ok: true };
     });
   });
   app.post<{ Params: { id: string } }>('/api/google/accounts/:id/check', (request, reply) =>
@@ -76,30 +120,19 @@ export function googleRoutes(app: FastifyInstance, service: GoogleService, gate:
     });
   });
   app.get('/oauth/google/callback', async (request, reply) => {
-    reply
-      .header('Cache-Control', 'no-store')
-      .header('Referrer-Policy', 'no-referrer')
-      .header(
-        'Set-Cookie',
-        `${Cookie}=; HttpOnly; SameSite=Lax; Path=/oauth/google/callback; Max-Age=0${https(request) ? '; Secure' : ''}`,
-      );
+    reply.header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer');
     const query = Params.safeParse(request.query);
     let result = 'failed';
     if (query.success) {
       const { state, code, error } = query.data;
+      clearCookie(request, reply, state);
       if (error || !code) {
-        service.cancel(state);
+        service.cancel(state, nonce(request, state), origin(request), error);
         result = error === 'access_denied' ? 'denied' : 'failed';
       } else {
-        const nonce =
-          request.headers.cookie
-            ?.split(';')
-            .map((s) => s.trim())
-            .find((s) => s.startsWith(`${Cookie}=`))
-            ?.slice(Cookie.length + 1) ?? '';
         try {
-          await service.finish(state, code, nonce, origin(request));
-          result = 'connected';
+          await service.finish(state, code, nonce(request, state), origin(request));
+          result = service.flowStatus(state).state === 'ready' ? 'connected' : 'failed';
         } catch {
           result = 'failed';
         }

@@ -2,6 +2,10 @@
 
 ## Decision
 
+**Setup update:** [ADR 0040](./0040-google-setup-without-a-broker.md) adds guided
+Desktop-client import and remote paste-back without a hosted broker. The original
+Web-client-only setup below remains supported, but is no longer the default.
+
 Google Gmail, Calendar and Drive connect directly to Conch, independently of model
 providers or Zapier. Google Auth Library performs OAuth code exchange, PKCE and
 signed ID-token verification. This is a confidential Web application; each

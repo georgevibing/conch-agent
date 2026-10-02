@@ -1,7 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
   GoogleConfigure,
+  GoogleImport,
+  GoogleComplete,
   GoogleConnect,
+  parseGoogleCredentials,
   type GoogleCapability,
   type GoogleStatus,
 } from '@conch/protocol';
@@ -38,6 +41,9 @@ const Profile = z.object({
 type Config = NonNullable<GoogleData['config']>;
 interface Pending {
   config: Config;
+  origin: string;
+  redirectUrl: string;
+  mode: 'automatic' | 'manual';
   accountId?: string;
   generation?: string;
   nonce: string;
@@ -53,11 +59,99 @@ const fail = () =>
     'Google could not be reached. Your connection is kept; try again shortly.',
   );
 
+function oauthErrorCode(error: unknown): string {
+  const parsed = z
+    .object({ response: z.object({ data: z.object({ error: z.string() }) }) })
+    .safeParse(error);
+  return parsed.success ? parsed.data.response.data.error : '';
+}
+/** Never reflect Google's description, which may contain credentials or user-controlled text. */
+function consentMessage(code: string): string {
+  switch (code) {
+    case 'cancelled':
+      return 'Google sign-in cancelled. Your existing accounts are unchanged.';
+    case 'access_denied':
+      return 'Google access was not approved. Sign in again when ready. If Google blocked the app, add your email under Google Auth Platform → Audience → Test users. Work accounts may need administrator approval.';
+    case 'admin_policy_enforced':
+    case 'org_internal':
+      return 'Your Google Workspace organization restricts this app. Ask its administrator to allow it, or use your personal Google account.';
+    case 'invalid_client':
+    case 'deleted_client':
+      return 'Google no longer accepts this app’s credentials. In Google Auth Platform → Clients, download a current OAuth client JSON and import it in Google app setup.';
+    case 'redirect_uri_mismatch':
+      return 'Google rejected the callback address. For a Web client, register the exact address shown in Google app setup, or import a Desktop app client.';
+    case 'invalid_grant':
+      return 'This Google sign-in code expired or was already used. Start a new sign-in from Conch.';
+    default:
+      return 'Google sign-in could not be verified. Start again from Conch. If Google shows an error, open Sign-in help below.';
+  }
+}
+
+async function forbiddenMessage(
+  response: Response,
+  capability: GoogleCapability,
+): Promise<{ kind: 'setup' | 'scope'; message: string }> {
+  const service = capability.startsWith('mail-')
+    ? 'Gmail API'
+    : capability === 'calendar-read'
+      ? 'Google Calendar API'
+      : 'Google Drive API';
+  const reader = response.body?.getReader();
+  let text = '';
+  try {
+    if (reader) {
+      const decoder = new TextDecoder();
+      let bytes = 0;
+      while (true) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        bytes += chunk.value.byteLength;
+        if (bytes > 16_384) {
+          await reader.cancel();
+          break;
+        }
+        text += decoder.decode(chunk.value, { stream: true });
+      }
+    }
+    const data = z
+      .object({
+        error: z.object({
+          errors: z.array(z.object({ reason: z.string().optional() })).optional(),
+          details: z.array(z.object({ reason: z.string().optional() })).optional(),
+        }),
+      })
+      .safeParse(JSON.parse(text));
+    const reasons = data.success
+      ? [...(data.data.error.errors ?? []), ...(data.data.error.details ?? [])].map((e) => e.reason)
+      : [];
+    if (reasons.some((reason) => reason === 'SERVICE_DISABLED' || reason === 'accessNotConfigured'))
+      return {
+        kind: 'setup',
+        message: `Enable ${service} in your Google Cloud project, then press Check connection. Your sign-in is saved; no new consent is needed.`,
+      };
+    if (
+      reasons.some((reason) => reason === 'domainPolicy' || reason === 'ORG_RESTRICTION_VIOLATION')
+    )
+      return {
+        kind: 'setup',
+        message: `Your Google Workspace administrator restricts ${service}. Ask them to allow this app, then press Check connection.`,
+      };
+  } catch {
+    /* Upstream details stay private, including malformed errors. */
+  } finally {
+    reader?.releaseLock();
+  }
+  return {
+    kind: 'scope',
+    message: `Google refused ${service} access. Reconnect and allow the requested permissions; also check that this API is enabled in your Google project.`,
+  };
+}
+
 /** Native Google account connection. Credentials never enter a provider, model, tool result or URL. */
 export class GoogleService {
   #pending = new Map<string, Pending>();
-  #processing = new Set<string>();
-  #finished = new Map<string, { accountId?: string; expiresAt: number }>();
+  #processing = new Map<string, Pending>();
+  #finished = new Map<string, { accountId?: string; message?: string; expiresAt: number }>();
   #refreshing = new Map<string, Promise<Credential>>();
   constructor(
     readonly store: GoogleStore,
@@ -74,21 +168,26 @@ export class GoogleService {
     const data = await this.store.read();
     return {
       configured: !!data.config,
+      clientType: data.config?.clientType,
+      projectId: data.config?.projectId,
       callbackUrl: data.config?.redirectUrl,
       accounts: Object.values(data.accounts).map((a) => a.profile),
     };
   }
   async configure(raw: unknown, origin: string) {
     const config = GoogleConfigure.parse(raw);
-    const url = new URL(config.redirectUrl);
+    if (config.clientType === 'desktop') delete config.redirectUrl;
+    const url = config.redirectUrl ? new URL(config.redirectUrl) : undefined;
     if (
-      url.origin !== origin ||
-      url.pathname !== '/oauth/google/callback' ||
-      url.search ||
-      url.hash ||
-      url.username ||
-      url.password ||
-      (url.protocol !== 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))
+      config.clientType === 'web' &&
+      (!url ||
+        url.origin !== origin ||
+        url.pathname !== '/oauth/google/callback' ||
+        url.search ||
+        url.hash ||
+        url.username ||
+        url.password ||
+        (url.protocol !== 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)))
     )
       throw new GoogleError(
         'invalid',
@@ -103,16 +202,33 @@ export class GoogleService {
       data.config = config;
     });
     this.#pending.clear();
+    this.#processing.clear();
+  }
+  async importCredentials(raw: unknown, origin: string) {
+    const { credentials } = GoogleImport.parse(raw);
+    let config: Config;
+    try {
+      config = parseGoogleCredentials(credentials, `${origin}/oauth/google/callback`);
+    } catch (error) {
+      throw new GoogleError(
+        'setup',
+        error instanceof Error ? error.message : 'Choose the OAuth client JSON from Google.',
+      );
+    }
+    await this.configure(config, origin);
   }
   async start(
     raw: unknown,
     origin: string,
-  ): Promise<{ url: string; nonce: string; flowId: string }> {
+  ): Promise<{ url: string; nonce: string; flowId: string; mode: 'automatic' | 'manual' }> {
     const input = GoogleConnect.parse(raw),
       data = await this.store.read(),
       config = data.config;
     if (!config) throw new GoogleError('setup', 'Finish Google app setup in Integrations first.');
-    if (new URL(config.redirectUrl).origin !== origin)
+    if (
+      config.clientType === 'web' &&
+      (!config.redirectUrl || new URL(config.redirectUrl).origin !== origin)
+    )
       throw new GoogleError(
         'invalid',
         'Open Conch at the registered callback address before connecting Google.',
@@ -123,12 +239,26 @@ export class GoogleService {
     for (const [s, p] of this.#pending) if (p.expiresAt < Date.now()) this.#pending.delete(s);
     if (this.#pending.size >= 20)
       throw new GoogleError('invalid', 'Finish an open Google sign-in before starting another.');
-    const client = this.clientFor(config),
+    const local = new URL(origin);
+    const automatic =
+      config.clientType === 'web' ||
+      (local.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(local.hostname));
+    const mode = automatic ? 'automatic' : 'manual';
+    const redirectUrl =
+      config.clientType === 'web' && config.redirectUrl
+        ? config.redirectUrl
+        : automatic
+          ? `${origin}/oauth/google/callback`
+          : 'http://127.0.0.1:1/';
+    const client = this.clientFor({ ...config, redirectUrl }),
       pkce = await client.generateCodeVerifierAsync();
     const state = randomBytes(32).toString('base64url'),
       nonce = randomBytes(32).toString('base64url');
     this.#pending.set(state, {
       config,
+      origin,
+      redirectUrl,
+      mode,
       accountId: input.accountId,
       generation: account?.credential.generation,
       nonce,
@@ -137,54 +267,115 @@ export class GoogleService {
       capabilities: input.capabilities,
     });
     const scopes = [
-      ...new Set(['openid', 'email', 'profile', ...input.capabilities.flatMap((c) => SCOPES[c])]),
+      ...new Set([
+        'openid',
+        'email',
+        'profile',
+        ...input.capabilities.flatMap((c) => SCOPES[c]),
+        ...(config.clientType === 'desktop' ? (account?.credential.scopes ?? []) : []),
+      ]),
     ];
     const url = client.generateAuthUrl({
       access_type: 'offline',
       prompt: 'select_account consent',
-      include_granted_scopes: true,
+      ...(config.clientType === 'web' ? { include_granted_scopes: true } : {}),
       scope: scopes,
       state,
       code_challenge: pkce.codeChallenge,
       code_challenge_method: CodeChallengeMethod.S256,
       login_hint: account?.profile.email,
     });
-    return { url, nonce, flowId: state };
+    return { url, nonce, flowId: state, mode };
   }
-  cancel(state: string) {
-    if (this.#pending.delete(state)) this.#finished.set(state, { expiresAt: Date.now() + 600_000 });
+  cancel(state: string, nonce: string, origin: string, reason = 'cancelled') {
+    const flow = this.#pending.get(state) ?? this.#processing.get(state);
+    if (!flow || !safeEqual(flow.nonce, nonce) || flow.origin !== origin) return;
+    this.#pending.delete(state);
+    this.#processing.delete(state);
+    this.#finished.set(state, { expiresAt: Date.now() + 600_000, message: consentMessage(reason) });
   }
   flowStatus(state: string) {
     for (const [key, value] of this.#finished)
       if (value.expiresAt < Date.now()) this.#finished.delete(key);
-    if (this.#processing.has(state)) return { state: 'pending' as const };
-    const pending = this.#pending.get(state);
-    if (pending && pending.expiresAt > Date.now()) return { state: 'pending' as const };
+    const pending = this.#pending.get(state) ?? this.#processing.get(state);
+    if (pending && pending.expiresAt > Date.now())
+      return { state: 'pending' as const, mode: pending.mode, expiresAt: pending.expiresAt };
     const finished = this.#finished.get(state);
     return finished?.accountId
       ? { state: 'ready' as const, accountId: finished.accountId }
-      : { state: 'failed' as const };
+      : { state: 'failed' as const, ...(finished?.message ? { message: finished.message } : {}) };
   }
-  async finish(state: string, code: string, nonce: string, origin: string): Promise<void> {
+  async complete(state: string, raw: unknown, nonce: string, origin: string): Promise<void> {
+    const { redirectUrl } = GoogleComplete.parse(raw);
+    const flow = this.#pending.get(state);
+    if (
+      !flow ||
+      flow.mode !== 'manual' ||
+      flow.expiresAt < Date.now() ||
+      !safeEqual(flow.nonce, nonce) ||
+      flow.origin !== origin
+    )
+      throw new GoogleError(
+        'expired',
+        'This sign-in belongs to another browser or has expired. Start again here.',
+      );
+    const url = new URL(redirectUrl),
+      expected = new URL(flow.redirectUrl);
+    if (
+      url.origin !== expected.origin ||
+      url.pathname !== expected.pathname ||
+      url.username ||
+      url.password ||
+      url.hash ||
+      url.searchParams.getAll('state').length !== 1 ||
+      url.searchParams.get('state') !== state ||
+      url.searchParams.getAll('code').length > 1 ||
+      url.searchParams.getAll('error').length > 1
+    )
+      throw new GoogleError(
+        'invalid',
+        'Paste the complete return address from the Google window for this sign-in, including everything after the question mark.',
+      );
+    const error = url.searchParams.get('error');
+    if (error) {
+      this.cancel(state, nonce, origin, error);
+      throw new GoogleError('invalid', consentMessage(error));
+    }
+    const code = url.searchParams.get('code');
+    if (!code || code.length > 4096)
+      throw new GoogleError(
+        'invalid',
+        'The return address has no sign-in code. Finish Google consent, then copy the full address from the address bar.',
+      );
+    await this.finish(state, code, nonce, origin, 'manual');
+  }
+  async finish(
+    state: string,
+    code: string,
+    nonce: string,
+    origin: string,
+    mode: 'automatic' | 'manual' = 'automatic',
+  ): Promise<void> {
     const flow = this.#pending.get(state);
     this.#pending.delete(state);
     if (
       !flow ||
       flow.expiresAt < Date.now() ||
       !safeEqual(flow.nonce, nonce) ||
-      new URL(flow.config.redirectUrl).origin !== origin
+      flow.origin !== origin ||
+      flow.mode !== mode
     )
       throw new GoogleError(
         'expired',
         'This Google sign-in expired or belongs to another browser. Start again.',
       );
-    this.#processing.add(state);
+    this.#processing.set(state, flow);
     try {
-      const client = this.clientFor(flow.config);
+      const client = this.clientFor({ ...flow.config, redirectUrl: flow.redirectUrl });
       const { tokens } = await client.getToken({
         code,
         codeVerifier: flow.verifier,
-        redirect_uri: flow.config.redirectUrl,
+        redirect_uri: flow.redirectUrl,
       });
       if (!tokens.access_token || !tokens.id_token)
         throw new GoogleError('expired', 'Google did not complete sign-in. Try connecting again.');
@@ -212,9 +403,15 @@ export class GoogleService {
         );
       const accessToken = tokens.access_token;
       await this.store.update((data) => {
+        if (this.#processing.get(state) !== flow || flow.expiresAt < Date.now())
+          throw new GoogleError(
+            'expired',
+            'Google sign-in was cancelled or expired. Start again when ready.',
+          );
         if (
           data.config?.clientId !== flow.config.clientId ||
           data.config.clientSecret !== flow.config.clientSecret ||
+          data.config.clientType !== flow.config.clientType ||
           data.config.redirectUrl !== flow.config.redirectUrl
         )
           throw new GoogleError('expired', 'Google setup changed. Start sign-in again.');
@@ -240,16 +437,19 @@ export class GoogleService {
         };
       });
       const checked = await this.check(profile.sub);
+      const result = checked.accounts.find((a) => a.id === profile.sub);
       this.#finished.set(state, {
-        accountId: checked.accounts.find((a) => a.id === profile.sub && a.state === 'ready')?.id,
+        accountId: result?.state === 'ready' ? result.id : undefined,
+        message: result?.state === 'ready' ? undefined : result?.message,
         expiresAt: Date.now() + 600_000,
       });
     } catch (error) {
-      if (error instanceof GoogleError) throw error;
-      throw new GoogleError(
-        'expired',
-        'Google sign-in could not be verified. Start again from Integrations.',
-      );
+      const failure =
+        error instanceof GoogleError
+          ? error
+          : new GoogleError('expired', consentMessage(oauthErrorCode(error)));
+      this.#finished.set(state, { message: failure.message, expiresAt: Date.now() + 600_000 });
+      throw failure;
     } finally {
       this.#processing.delete(state);
     }
@@ -404,11 +604,10 @@ export class GoogleService {
       await this.#needsAuth(id, credential.generation);
       throw new GoogleError('expired', 'Reconnect Google to continue.');
     }
-    if (response.status === 403)
-      throw new GoogleError(
-        'scope',
-        'Google refused this access. Check the requested permissions and enabled API in Integrations.',
-      );
+    if (response.status === 403) {
+      const error = await forbiddenMessage(response, capability);
+      throw new GoogleError(error.kind, error.message);
+    }
     if (!response.ok)
       throw options.method === 'POST'
         ? new GoogleError(

@@ -12,7 +12,15 @@ function setup(verified = true) {
   const service = {
     status: vi.fn(async () => ({ configured: true, accounts: [] })),
     configure: vi.fn(async () => undefined),
-    start: vi.fn(async () => ({ url: 'https://accounts.google.com/auth', nonce: 'nonce' })),
+    importCredentials: vi.fn(async () => undefined),
+    complete: vi.fn(async () => undefined),
+    flowStatus: vi.fn(() => ({ state: 'ready' })),
+    start: vi.fn(async () => ({
+      url: 'https://accounts.google.com/auth',
+      nonce: 'nonce',
+      flowId: 'flow',
+      mode: 'manual',
+    })),
     finish: vi.fn(async () => undefined),
     cancel: vi.fn(),
     check: vi.fn(),
@@ -28,11 +36,83 @@ function setup(verified = true) {
   return { app, service };
 }
 describe('Google HTTP boundary', () => {
+  it('keeps simultaneous sign-ins in separate browser cookies and rejects cookie-name injection', async () => {
+    const { app, service } = setup();
+    for (const [flowId, nonce] of [
+      ['a'.repeat(43), 'first-browser-proof'],
+      ['b'.repeat(43), 'second-browser-proof'],
+    ] as const) {
+      service.start.mockResolvedValueOnce({
+        url: 'https://accounts.google.com/auth',
+        nonce,
+        flowId,
+        mode: 'automatic',
+      });
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/google/connect',
+        payload: {},
+      });
+      expect(response.headers['set-cookie']).toContain(
+        'conch_google_flow_' + flowId + '=' + nonce + ';',
+      );
+      expect(response.body).not.toContain(nonce);
+    }
+    const state = 'a'.repeat(43);
+    await app.inject({
+      url: '/oauth/google/callback?state=' + state + '&code=code',
+      headers: {
+        cookie:
+          'conch_google_flow_' +
+          state +
+          '=first-browser-proof; conch_google_flow_' +
+          'b'.repeat(43) +
+          '=second-browser-proof',
+      },
+    });
+    expect(service.finish).toHaveBeenCalledWith(
+      state,
+      'code',
+      'first-browser-proof',
+      'http://localhost:80',
+    );
+    const invalid = await app.inject({ method: 'DELETE', url: '/api/google/flows/bad%3Bcookie' });
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.headers['set-cookie']).toBeUndefined();
+  });
+  it('sends manual return addresses only through the verified POST with a browser cookie', async () => {
+    const { app, service } = setup();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/google/flows/flow/complete',
+      payload: { redirectUrl: 'http://127.0.0.1:1/?state=flow&code=private-code' },
+      headers: {
+        cookie: 'conch_google_flow_flow=browser-proof',
+        host: 'conch.example',
+        'x-forwarded-proto': 'https',
+      },
+    });
+    expect(service.complete).toHaveBeenCalledWith(
+      'flow',
+      expect.any(Object),
+      'browser-proof',
+      'https://conch.example',
+    );
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.body).not.toContain('private-code');
+    const rejected = await setup(false).app.inject({
+      method: 'DELETE',
+      url: '/api/google/flows/flow',
+    });
+    expect(rejected.statusCode).toBe(403);
+  });
   it('requires recent verification to configure, consent or disconnect', async () => {
     const { app, service } = setup(false);
     for (const url of [
       '/api/google/configure',
       '/api/google/connect',
+      '/api/google/import',
+      '/api/google/flows/test/complete',
       '/api/google/accounts/account1',
     ]) {
       const response = await app.inject({
@@ -73,7 +153,7 @@ describe('Google HTTP boundary', () => {
     const state = 'a'.repeat(43);
     const response = await app.inject({
       url: `/oauth/google/callback?state=${state}&code=private-code&next=https://attacker.example`,
-      headers: { cookie: 'conch_google_flow=browser-proof' },
+      headers: { cookie: `conch_google_flow_${state}=browser-proof` },
     });
     expect(service.finish).toHaveBeenCalledWith(
       state,
@@ -95,7 +175,7 @@ describe('Google HTTP boundary', () => {
     const response = await app.inject({
       url: `/oauth/google/callback?state=${state}&error=access_denied`,
     });
-    expect(service.cancel).toHaveBeenCalledWith(state);
+    expect(service.cancel).toHaveBeenCalledWith(state, '', 'http://localhost:80', 'access_denied');
     expect(response.headers.location).toBe('/integrations?google=denied');
   });
 });

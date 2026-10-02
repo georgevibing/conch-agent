@@ -1,6 +1,8 @@
 import {
   GoogleFlowStatus,
   GoogleConfigure,
+  GoogleImport,
+  GoogleComplete,
   GoogleConnect,
   GoogleConnectResult,
   GoogleStatus,
@@ -10,7 +12,21 @@ import { request } from '../../api/client';
 export const googleApi = {
   flow: (id: string) => request(GoogleFlowStatus, `/api/google/flows/${encodeURIComponent(id)}`),
   status: () => request(GoogleStatus, '/api/google'),
-  configure: (body: z.infer<typeof GoogleConfigure>) =>
+  importCredentials: (credentials: string) =>
+    request(GoogleStatus, '/api/google/import', {
+      method: 'POST',
+      body: GoogleImport.parse({ credentials }),
+    }),
+  complete: (id: string, redirectUrl: string) =>
+    request(GoogleFlowStatus, `/api/google/flows/${encodeURIComponent(id)}/complete`, {
+      method: 'POST',
+      body: GoogleComplete.parse({ redirectUrl }),
+    }),
+  cancel: (id: string) =>
+    request(z.object({ ok: z.boolean() }), `/api/google/flows/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  configure: (body: z.input<typeof GoogleConfigure>) =>
     request(GoogleStatus, '/api/google/configure', {
       method: 'POST',
       body: GoogleConfigure.parse(body),

@@ -170,7 +170,7 @@ export function IntegrationsView() {
       <section aria-label="Google accounts">
         <Stack gap={3}>
           <Text>What would you like to do with Google?</Text>
-          <Stack direction="row" gap={2}>
+          <Stack direction="row" gap={2} wrap>
             {(
               [
                 ['mail-read', 'Summarize inbox'],

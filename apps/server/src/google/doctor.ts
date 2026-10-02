@@ -8,6 +8,21 @@ export function registerGoogleDoctor(doctor: Doctor, google: GoogleService) {
     async run({ repair, signal }) {
       const before = await google.status();
       if (!before.configured) return [];
+      if (!before.accounts.length)
+        return [
+          {
+            id: 'google:setup',
+            group: 'Integrations',
+            title: 'Google accounts',
+            state: 'needs-you' as const,
+            message: 'Your Google app is saved. Sign in to connect an account.',
+            action: {
+              kind: 'open' as const,
+              label: 'Connect Google',
+              place: 'integrations' as const,
+            },
+          },
+        ];
       if (repair)
         for (const account of before.accounts) {
           if (signal.aborted) break;
@@ -29,7 +44,8 @@ export function registerGoogleDoctor(doctor: Doctor, google: GoogleService) {
           ? {
               action: {
                 kind: 'open' as const,
-                label: 'Reconnect Google',
+                label:
+                  account.state === 'needs-auth' ? 'Reconnect Google' : 'Check Google connection',
                 place: 'integrations' as const,
               },
             }

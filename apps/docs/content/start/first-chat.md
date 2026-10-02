@@ -22,7 +22,7 @@ A provider is what answers: an assistant already on your computer, a model you h
 2. Press its one button: **Connect**, **Sign in** or **Install**. Conch shows the exact command it runs, and carries on by itself when it's done.
 3. Add the source notes or connect the Google account for the job. Choose a connected model that supports tools; Conch checks before starting and never silently moves your work to a different provider.
 
-Google access requires the person running Conch to configure a Google OAuth application first. The connection screen explains what is needed and the access each job requests.
+Google access needs a one-time Google app setup. The connection screen guides you through the Google Console steps and imports the downloaded credential file. It works locally and on self-hosted servers without a hosted Conch connection service. See [Connect Google](../features/apps.md#connect-google-directly).
 
 ## Review something useful
 

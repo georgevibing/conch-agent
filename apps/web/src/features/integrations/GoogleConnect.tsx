@@ -1,10 +1,22 @@
 import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
-import { type GoogleCapability, type GoogleStatus } from '@conch/protocol';
-import { Button, Callout, Field, Heading, Input, PasswordInput, Stack, Text } from '@conch/nacre';
+import { type GoogleCapability } from '@conch/protocol';
+import {
+  Accordion,
+  Button,
+  Callout,
+  Field,
+  GOOGLE_APIS,
+  googleConsoleUrl,
+  Heading,
+  PasswordInput,
+  Stack,
+  Text,
+} from '@conch/nacre';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { googleApi } from './googleApi';
+import { GoogleSetup, googleServices } from './GoogleSetup';
 
 export const GOOGLE_ACCESS: Record<GoogleCapability, string> = {
   'mail-read': 'Read and search Gmail',
@@ -12,114 +24,167 @@ export const GOOGLE_ACCESS: Record<GoogleCapability, string> = {
   'calendar-read': 'Read calendar events',
   'drive-read': 'Find Drive files and read their metadata',
 };
-/** Shared by Integrations and the first-job flow. Consent only asks for this job's capabilities. */
-export function GoogleConnect({
-  capabilities,
-  onReady,
-  accountId,
-}: {
+function savedFlow(key: string) {
+  try {
+    return sessionStorage.getItem(key) ?? '';
+  } catch {
+    return '';
+  }
+}
+/** Shared by Integrations and the first-job flow. Credential/code entry never enters chat. */
+interface GoogleConnectProps {
   capabilities: GoogleCapability[];
   onReady: (accountId: string) => void;
   accountId?: string;
-}) {
+}
+export function GoogleConnect(props: GoogleConnectProps) {
+  return (
+    <GoogleConnection
+      key={(props.accountId ?? 'new') + ':' + [...props.capabilities].sort().join(',')}
+      {...props}
+    />
+  );
+}
+function GoogleConnection({ capabilities, onReady, accountId }: GoogleConnectProps) {
   const auth = useAuth();
   const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
-  const [waiting, setWaiting] = useState(false),
-    [flowId, setFlowId] = useState('');
-  const [error, setError] = useState(''),
-    [busy, setBusy] = useState(false);
-  const [clientId, setClientId] = useState(''),
-    [clientSecret, setClientSecret] = useState('');
+  const capabilityKey = [...capabilities].sort().join(',');
+  const flowKey = 'conch-google-flow:' + (accountId ?? 'new') + ':' + capabilityKey;
+  const [flowId, setFlowId] = useState(() => savedFlow(flowKey));
+  const [mode, setMode] = useState<'automatic' | 'manual'>('automatic');
+  const [signInUrl, setSignInUrl] = useState('');
+  const [returnUrl, setReturnUrl] = useState('');
+  const [error, setError] = useState('');
+  const [offline, setOffline] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [editingSetup, setEditingSetup] = useState(false);
   const popup = useRef<Window | null>(null);
+  const notified = useRef('');
+  const stopping = useRef('');
   const status = useQuery({ queryKey: ['google'], queryFn: googleApi.status });
   const refreshStatus = status.refetch;
+  const waiting = !!flowId;
   useEffect(() => {
-    if (!waiting || !flowId) return;
+    try {
+      if (flowId) sessionStorage.setItem(flowKey, flowId);
+      else sessionStorage.removeItem(flowKey);
+    } catch {
+      /* Storage can be disabled; sign-in still works without reload recovery. */
+    }
+  }, [flowId, flowKey]);
+  useEffect(() => {
+    if (!flowId) return;
     let cancelled = false,
       running = false;
-    const timer = window.setInterval(async () => {
+    const poll = async () => {
       if (running || cancelled) return;
-      if (popup.current?.closed) {
-        setWaiting(false);
-        setError('Google sign-in window closed. Start again when ready.');
-        return;
-      }
       running = true;
       try {
         const flow = await googleApi.flow(flowId);
-        if (cancelled) return;
+        if (cancelled || stopping.current === flowId) return;
+        setOffline(false);
+        if (flow.mode) setMode(flow.mode);
         if (flow.state === 'failed') {
-          setWaiting(false);
+          setFlowId('');
+          setReturnUrl('');
+          setSignInUrl('');
           popup.current?.close();
           setError(
-            'Google sign-in did not finish. Check the account and requested access, then try again.',
+            flow.message ??
+              'Google sign-in expired or Conch restarted. Start a new sign-in; your saved setup is kept.',
           );
+          await refreshStatus();
           return;
         }
         if (flow.state === 'ready') {
           const updated = await refreshStatus();
-          if (cancelled) return;
+          if (cancelled || stopping.current === flowId) return;
           const account = updated.data?.accounts.find(
             (a) =>
               a.id === flow.accountId &&
               a.state === 'ready' &&
               (!accountId || a.id === accountId) &&
-              capabilities.every((c) => a.capabilities.includes(c)),
+              capabilityKey.split(',').every((c) => a.capabilities.includes(c as GoogleCapability)),
           );
-          if (account) {
-            setWaiting(false);
+          if (account && notified.current !== flowId) {
+            notified.current = flowId;
+            // onReady may unmount this view before the storage effect can run.
+            try {
+              sessionStorage.removeItem(flowKey);
+            } catch {
+              /* Storage can be disabled. */
+            }
+            setFlowId('');
+            setReturnUrl('');
+            setSignInUrl('');
             popup.current?.close();
             onReady(account.id);
+          } else if (!account && !updated.error) {
+            setFlowId('');
+            setReturnUrl('');
+            setSignInUrl('');
+            setError(
+              'The connected account does not have the access this job needs. Choose the intended account below or reconnect it.',
+            );
           }
         }
+        // A closed popup is not proof of failure: the callback may have completed.
+        // Keep the server-owned flow alive, especially for remote paste-back.
       } catch {
-        if (!cancelled) setError('Waiting for Conch to reconnect. Your Google sign-in stays open.');
+        if (!cancelled) setOffline(true);
       } finally {
         running = false;
       }
-    }, 1500);
-    const timeout = window.setTimeout(() => {
-      setWaiting(false);
-      popup.current?.close();
-      setError('Google sign-in expired. Start again when ready.');
-    }, 600_000);
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 1500);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
-      window.clearTimeout(timeout);
     };
-  }, [waiting, flowId, accountId, capabilities, onReady, refreshStatus]);
-  const callbackUrl = `${window.location.origin}/oauth/google/callback`;
-  const act = async (fn: () => Promise<unknown>) => {
+  }, [flowId, flowKey, accountId, capabilityKey, onReady, refreshStatus]);
+  const act = async (fn: () => Promise<unknown>): Promise<boolean> => {
     setBusy(true);
     setError('');
     try {
-      if (!(await guard(fn))) popup.current?.close();
+      const accepted = await guard(fn);
+      if (!accepted && !waiting) popup.current?.close();
       await status.refetch();
+      return accepted;
     } catch (e) {
-      popup.current?.close();
+      if (!waiting) popup.current?.close();
       setError(e instanceof Error ? e.message : 'Google could not connect. Try again.');
+      return false;
     } finally {
       setBusy(false);
     }
   };
-  const connect = (id?: string) => {
+  const start = async (id?: string) => {
+    stopping.current = '';
+    const result = await googleApi.connect({ capabilities, accountId: id });
+    const url = new URL(result.url);
+    if (url.origin !== 'https://accounts.google.com' || url.username || url.password)
+      throw new Error('Google returned an unexpected sign-in address.');
+    setMode(result.mode);
+    setSignInUrl(url.href);
+    setFlowId(result.flowId);
+    setReturnUrl('');
+    const opened = popup.current;
+    if (opened && !opened.closed) opened.location.href = url.href;
+  };
+  const openPopup = () => {
     popup.current = window.open('about:blank', 'conch-google', 'popup,width=560,height=720');
-    if (!popup.current) {
-      setError('Allow popups for Conch, then press Connect Google again. Your job stays here.');
-      return;
-    }
-    void act(async () => {
-      const result = await googleApi.connect({ capabilities, accountId: id });
-      const url = new URL(result.url);
-      if (url.origin !== 'https://accounts.google.com')
-        throw new Error('Google returned an unexpected sign-in address.');
-      const opened = popup.current;
-      if (!opened) throw new Error('Google sign-in window was closed.');
-      opened.location.href = url.href;
-      setFlowId(result.flowId);
-      setWaiting(true);
+  };
+  const connect = (id?: string) => {
+    openPopup();
+    void act(() => start(id));
+  };
+  const saveAndConnect = (save: () => Promise<unknown>) => {
+    openPopup();
+    return act(async () => {
+      await save();
+      setEditingSetup(false);
+      await start(accountId);
     });
   };
   const choose = (id: string) =>
@@ -133,7 +198,11 @@ export function GoogleConnect({
         throw new Error(account?.message ?? 'Reconnect Google and allow access for this job.');
       onReady(id);
     });
-  const data: GoogleStatus | undefined = status.data;
+  const data = status.data;
+  const local =
+    window.location.protocol === 'http:' &&
+    ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+  const remoteDesktop = data?.clientType === 'desktop' && !local;
   return (
     <Stack gap={3}>
       {dialog}
@@ -154,83 +223,84 @@ export function GoogleConnect({
         </Callout>
       )}
       {(error || status.error) && <Callout tone="danger">{error || status.error?.message}</Callout>}
-      {waiting && <Text>Finish signing in in the Google window. Your job will continue here.</Text>}
+      {offline && (
+        <Callout tone="info">
+          Waiting for Conch to reconnect. Keep the Google window open; your sign-in will resume
+          here.
+        </Callout>
+      )}
       {status.isPending && <Text>Checking your Google connection…</Text>}
-      {data && (!data.configured || editingSetup) && (
+      {waiting && (
         <Stack gap={3}>
-          <Callout tone="info">
-            This Conch needs its own Google app registration once. The person who runs Conch
-            completes this setup; then everyone signs in with Google normally.
-          </Callout>
-          <ol>
-            <li>
-              <a
-                href="https://console.cloud.google.com/apis/library"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Open Google Cloud
+          <Text role="status">
+            {mode === 'manual'
+              ? 'Finish Google sign-in, then bring the return address back here.'
+              : 'Finish signing in in the Google window. Your job will continue here.'}
+          </Text>
+          {signInUrl && (
+            <Button asChild variant="surface">
+              <a href={signInUrl} target="_blank" rel="noopener noreferrer">
+                Open Google sign-in
               </a>
-              , create a project, and enable Gmail API, Google Calendar API and Google Drive API for
-              the jobs you want.
-            </li>
-            <li>
-              In Google Auth Platform, set up Branding, Audience and Data Access. For testing, add
-              your email as a test user. Public use of Gmail or Drive scopes can require Google
-              verification; testing refresh tokens may expire after seven days.
-            </li>
-            <li>
-              In Clients, create a Web application client. Add the exact callback address below as
-              an Authorized redirect URI, then paste its client ID and secret here.
-            </li>
-          </ol>
-          <Field>
-            <Field.Label>Callback address to register</Field.Label>
-            <Input readOnly value={callbackUrl} />
-            <Field.Description>
-              Remote access needs HTTPS and this address must open Conch from the browser where you
-              sign in. A localhost address only works on the same computer.
-            </Field.Description>
-          </Field>
+            </Button>
+          )}
+          {mode === 'manual' && (
+            <>
+              <Callout tone="info">
+                After you approve access, your browser may say it cannot open 127.0.0.1. That is
+                expected for a remote Conch. Copy the full address from that window’s address bar
+                and paste it below. Do not paste it into chat.
+              </Callout>
+              <Field>
+                <Field.Label>Return address from Google</Field.Label>
+                <PasswordInput
+                  value={returnUrl}
+                  onChange={(e) => setReturnUrl(e.target.value.trim())}
+                  autoComplete="off"
+                  spellCheck={false}
+                  disabled={busy}
+                />
+                <Field.Description>
+                  Include the whole address, including the question mark and everything after it.
+                  Conch checks it locally and never opens that address.
+                </Field.Description>
+              </Field>
+              <Button
+                disabled={busy || !returnUrl}
+                loading={busy}
+                onClick={() =>
+                  void act(async () => {
+                    await googleApi.complete(flowId, returnUrl);
+                    setReturnUrl('');
+                  })
+                }
+              >
+                Finish connecting
+              </Button>
+            </>
+          )}
           <Button
-            variant="surface"
-            onClick={() => void act(() => navigator.clipboard.writeText(callbackUrl))}
-          >
-            Copy callback address
-          </Button>
-          <Field>
-            <Field.Label>Google client ID</Field.Label>
-            <Input
-              value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
-              autoComplete="off"
-            />
-          </Field>
-          <Field>
-            <Field.Label>Google client secret</Field.Label>
-            <PasswordInput
-              value={clientSecret}
-              onChange={(e) => setClientSecret(e.target.value)}
-              autoComplete="off"
-            />
-            <Field.Description>
-              Encrypted on the Conch computer. Never shared with your assistant.
-            </Field.Description>
-          </Field>
-          <Button
-            disabled={busy || !clientId || !clientSecret}
-            onClick={() =>
+            variant="ghost"
+            disabled={busy}
+            onClick={() => {
+              stopping.current = flowId;
               void act(async () => {
-                await googleApi.configure({ clientId, clientSecret, redirectUrl: callbackUrl });
-                setClientSecret('');
-                setClientId('');
-                setEditingSetup(false);
-              })
-            }
+                await googleApi.cancel(flowId);
+                popup.current?.close();
+                setFlowId('');
+                setReturnUrl('');
+                setSignInUrl('');
+              }).then((ok) => {
+                if (!ok) stopping.current = '';
+              });
+            }}
           >
-            Save Google app setup
+            Cancel sign-in
           </Button>
         </Stack>
+      )}
+      {data && (!data.configured || editingSetup) && !waiting && (
+        <GoogleSetup capabilities={capabilities} busy={busy} onSave={saveAndConnect} />
       )}
       {data?.configured && (
         <Stack gap={3}>
@@ -256,32 +326,123 @@ export function GoogleConnect({
                 </Text>
                 {account.state === 'ready' &&
                 capabilities.every((c) => account.capabilities.includes(c)) ? (
-                  <Button disabled={busy || waiting} onClick={() => void choose(account.id)}>
-                    Use {account.email}
+                  <Button
+                    aria-label={'Use ' + account.email}
+                    disabled={busy || waiting}
+                    onClick={() => void choose(account.id)}
+                  >
+                    Use this account
                   </Button>
                 ) : (
-                  <Button disabled={busy || waiting} onClick={() => void connect(account.id)}>
-                    Reconnect {account.email} for this job
-                  </Button>
+                  <>
+                    {account.state === 'unavailable' && (
+                      <Button
+                        aria-label={'Check connection for ' + account.email}
+                        disabled={busy || waiting}
+                        onClick={() => void choose(account.id)}
+                      >
+                        Check connection
+                      </Button>
+                    )}
+                    <Button
+                      aria-label={'Reconnect ' + account.email + ' for this job'}
+                      variant={account.state === 'unavailable' ? 'ghost' : 'solid'}
+                      disabled={busy || waiting}
+                      onClick={() => connect(account.id)}
+                    >
+                      Reconnect for this job
+                    </Button>
+                  </>
                 )}
                 <Button
+                  aria-label={'Disconnect ' + account.email}
                   variant="ghost"
                   disabled={busy || waiting}
                   onClick={() => void act(() => googleApi.disconnect(account.id))}
                 >
-                  Disconnect {account.email}
+                  Disconnect
                 </Button>
               </Stack>
             ))}
-          <Button variant="surface" disabled={busy || waiting} onClick={() => void connect()}>
+          {remoteDesktop && !waiting && (
+            <Text tone="muted">
+              This Conch uses a Desktop app client on a remote address. After Google consent, paste
+              the return address here. No public callback or port forwarding is needed.
+            </Text>
+          )}
+          <Button variant="surface" disabled={busy || waiting} onClick={() => connect()}>
             Connect Google{data.accounts.length ? ' · another account' : ''}
           </Button>
           <Text tone="muted">
-            Google will ask which account to use and what to allow. No access to your other
-            accounts.
+            Google will ask which account to use and what to allow. Reconnecting retains existing
+            access and adds the permissions for this job. No access to your other accounts.
           </Text>
         </Stack>
       )}
+      <Accordion type="single" collapsible>
+        <Accordion.Item value="help">
+          <Accordion.Trigger>Sign-in help</Accordion.Trigger>
+          <Accordion.Content>
+            <Stack gap={3}>
+              <Text>
+                <strong>Access blocked or test user missing:</strong> add the exact email you are
+                signing in with under Audience → Test users. Work accounts can also need
+                administrator approval.
+              </Text>
+              <a
+                href={googleConsoleUrl('/auth/audience', data?.projectId)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Open Google Audience settings
+              </a>
+              <Text>
+                <strong>Google hasn’t verified this app:</strong> check that it is the app you
+                created in your own project. Follow Google’s available personal-testing option only
+                if you recognize the app. If Google blocks access, check Audience or ask your
+                Workspace administrator.
+              </Text>
+              <Text>
+                <strong>API not enabled:</strong> enable it below, wait briefly for Google to apply
+                the change, then press Check connection. Your saved sign-in can be reused.
+              </Text>
+              {googleServices([
+                ...capabilities,
+                ...(data?.accounts.flatMap((a) => a.capabilities) ?? []),
+              ]).map((id) => (
+                <a
+                  key={id}
+                  href={googleConsoleUrl(
+                    '/apis/library/' + GOOGLE_APIS[id].service,
+                    data?.projectId,
+                  )}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Enable {GOOGLE_APIS[id].name}
+                </a>
+              ))}
+              <Text>
+                <strong>Signing in every week:</strong> Google’s Testing mode can expire access
+                after seven days. Review Audience when you are ready to leave Testing; publication
+                or restricted access may require verification.
+              </Text>
+              <Text>
+                <strong>Callback or client error:</strong> import a current Desktop app credential
+                JSON, or register this exact Conch address in your Web client. Keep using the same
+                browser and Conch address until sign-in finishes.
+              </Text>
+              <a
+                href={googleConsoleUrl('/auth/clients', data?.projectId)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Open Google Clients settings
+              </a>
+            </Stack>
+          </Accordion.Content>
+        </Accordion.Item>
+      </Accordion>
     </Stack>
   );
 }
