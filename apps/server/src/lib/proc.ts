@@ -39,9 +39,12 @@ const SHIM_TARGET = /"%~?dp0%?\\([^"]+)"\s+%\*/i;
 export function launch(file: string, depth = 0): Launch {
   if (platform() !== 'win32' || !/\.(cmd|bat)$/i.test(file)) return { command: file, prefix: [] };
   const dir = dirname(file);
-  const target = SHIM_TARGET.exec(readFileSync(file, 'utf8'))?.[1];
+  const shim = readFileSync(file, 'utf8');
+  const target = SHIM_TARGET.exec(shim)?.[1];
   const program = target && resolve(dir, target);
-  if (program && /\.[cm]?js$/i.test(program)) {
+  // npm's shim for a script with no extension (`bin/grok`) runs it with node too.
+  const nodeScript = program && !extname(program) && /_prog=[^\r\n]*node/i.test(shim);
+  if (program && (/\.[cm]?js$/i.test(program) || nodeScript)) {
     const node = join(dir, 'node.exe');
     return { command: existsSync(node) ? node : process.execPath, prefix: [program] };
   }
