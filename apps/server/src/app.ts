@@ -49,6 +49,7 @@ import { AttachmentError } from './attachments/store';
 import { isLoopbackAddress } from './auth/network';
 import { ConversationError } from './conversations/manager';
 import { BOOT_ID, restart, restartable } from './lib/lifecycle';
+import { googleRoutes } from './google/routes';
 import { IntegrationError, type SignIn } from './integrations/service';
 import { preview } from './routines/schedule';
 import { RoutineError } from './routines/service';
@@ -514,6 +515,8 @@ export async function buildApp(services: Services) {
       return sendError(reply, error);
     }
   });
+
+  googleRoutes(app, services.google, gate);
 
   // ── Integrations ───────────────────────────────────────────────────────
   // Running a program of your choosing, or letting an integration act without

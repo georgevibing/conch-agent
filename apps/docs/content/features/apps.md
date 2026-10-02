@@ -16,7 +16,7 @@ In Conch, the page is called **Integrations**.
 
 You sign in on the app's own page, so Conch never sees your password. What it keeps stays on this computer, readable by you alone, and is never shown again.
 
-Gmail, Google Calendar, Google Drive and Slack only let approved apps sign in. They connect through your provider's account, and Conch shows the steps. An app connected that way works only with that provider's models. To use it with every model, connect it through Zapier.
+Gmail, Google Calendar and Google Drive connect directly to Conch after one-time Google app setup, described below. Slack may connect through your provider’s account; that connection works only with that provider’s models. Provider-owned connections are shown separately.
 
 ## Or connect from a chat
 
@@ -54,3 +54,48 @@ Conch checks your apps and keeps their sign-ins fresh. One that needs you moves 
 > A program you add runs as you and can do anything you can. Only add programs from people you trust.
 
 Apps a provider set up by itself are listed under **From your providers**, and only work with that provider. Where Conch can connect the same app, **Use with every model** brings it in.
+
+## Connect Google directly
+
+Google accounts belong to **Conch**, not your model provider. In Integrations,
+choose Google, Gmail or Google Calendar. Choose the personal or work account you
+want; Conch shows its email address and the access actually granted. Reading
+mail, saving drafts, reading calendar events and searching Drive have separate
+permissions. Only the permissions needed for your job are requested.
+
+The person running this Conch must register a Google Cloud **Web application**
+OAuth client once. The setup card walks through enabling the relevant APIs,
+configuring Google Auth Platform’s consent screen and test users, and copying
+the exact callback address into Authorized redirect URIs. Paste the client ID
+and secret into that card; do not send them to your assistant. They are encrypted
+on the Conch computer. For a remote Conch, use its reachable HTTPS address, not
+localhost on a different computer.
+
+After setup, **Connect Google** opens Google’s own sign-in window. Your current
+job stays open. Choose an account and review the access; when sign-in finishes,
+Conch checks the connection. Allow popups for Conch if your browser blocks it.
+Use **Reconnect** to restore revoked access or add permissions for a new job.
+Use **Connect Google · another account** to add work and personal separately.
+Changing accounts during a reconnect is refused so a job cannot silently move
+to another mailbox.
+
+Gmail supports search, reading and saving **drafts only**. Conch asks before
+saving and verifies the saved content. Replies use the original message’s verified
+thread, reply address and subject; sent-email followups go to the original recipients.
+Mail is decoded into readable text with a source link that opens the correct account. It never sends messages. Google’s own
+draft scope also includes sending; Conch explains this before consent, but does
+not expose a send action. If Google does not confirm a save, Conch checks for the
+existing draft rather than automatically creating a duplicate. Check the draft
+in Gmail if the result remains uncertain.
+
+Calendar is read-only. Drive currently searches files and reads their metadata
+and description; it does **not** read document bodies or change files. The
+Google APIs must be enabled in the registered project. Google Workspace admins
+can restrict access. Public applications using Gmail or Drive scopes may require
+Google verification; a testing app’s refresh tokens can expire after seven days.
+Conch does not claim that a public OAuth application has been verified for you.
+
+**Disconnect** revokes Google access before removing its local sign-in. If Google
+is offline, Conch keeps the entry so you can retry deliberately; you can also
+remove access in your Google account’s third-party connections. **Repair everything**
+checks connected accounts and refreshes access when it safely can.

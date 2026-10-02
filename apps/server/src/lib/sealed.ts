@@ -19,6 +19,7 @@ import { basename, dirname, resolve } from 'node:path';
 export const SEALED_FILES = new Set([
   'secrets.json',
   'integrations.secrets.json',
+  'google.secrets.json',
   'channels.secrets.json',
   'push.secrets.json',
 ]);

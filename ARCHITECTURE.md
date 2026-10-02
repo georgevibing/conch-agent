@@ -180,6 +180,12 @@ src/
   `bridgedTools` from Conch's own MCP client. Servers a provider configured itself
   are listed per provider (`ExternalIntegration.provider`) and only work with it.
   OAuth callback: `GET /oauth/callback`.
+  Google accounts use native `google/` host tools shared by every engine, not
+  provider account connectors. Google Auth Library handles PKCE/token verification;
+  `/api/google` exposes only account status and `/oauth/google/callback` spends
+  browser-bound consent state. Credentials stay in sealed `google.secrets.json`.
+  Gmail is draft-only, Calendar read-only, Drive metadata-only. See
+  [ADR 0037](./docs/adr/0037-direct-google-accounts.md).
   Outbound requests pass the SSRF guard (`integrations/net.ts`). See
   [ADR 0009](./docs/adr/0009-integrations.md).
 - **Connect from the chat** ([ADR 0021](./docs/adr/0021-connect-from-chat.md)). Before a turn, `IntegrationService.suggest` reads the person's words for catalog `cues` (`integrations/cues.ts`) and appends `integration.suggestion` once per app per conversation — never for what's connected, what the provider reaches itself, retired or muted apps — and the prompt says the app isn't connected.

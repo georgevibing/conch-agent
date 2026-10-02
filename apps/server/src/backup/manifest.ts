@@ -294,6 +294,12 @@ export const RULES: readonly BackupRule[] = [
     why: 'Provider keys (or 1Password references to them).',
   },
   {
+    match: 'google.secrets.json',
+    class: 'secret',
+    group: 'secrets',
+    why: 'Google app credentials and account sign-ins.',
+  },
+  {
     match: 'integrations.secrets.json',
     class: 'secret',
     group: 'secrets',

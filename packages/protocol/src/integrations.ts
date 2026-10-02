@@ -1,7 +1,8 @@
 /**
  * Integrations — the apps and services your assistant can use on your behalf.
  *
- * Every integration is an MCP server. Conch keeps a small catalog of
+ * MCP integrations share this model; native Google accounts have their own
+ * GoogleStatus contract. Conch keeps a small catalog of
  * well-known ones (one click, no config files) and lets you add any other by
  * URL or command. They belong to Conch, so every provider can use them; what a
  * provider has set up on its own is listed separately.
@@ -25,12 +26,13 @@ export const IntegrationAuth = z.enum([
 export type IntegrationAuth = z.infer<typeof IntegrationAuth>;
 
 /**
- * How a catalog entry connects. `account` services (Google, Slack) only let
+ * How a catalog entry connects. `google` uses Conch’s native Google account flow.
+ * `account` services (such as Slack) only let
  * pre-approved apps sign in, so they connect through the AI provider's own
  * account connectors (e.g. your Claude account) and the engine loads them by
  * itself. Engines without account connectors don't offer them.
  */
-export const CatalogAuth = z.enum([...IntegrationAuth.options, 'account']);
+export const CatalogAuth = z.enum([...IntegrationAuth.options, 'account', 'google']);
 export type CatalogAuth = z.infer<typeof CatalogAuth>;
 
 export const IntegrationCategory = z.enum([

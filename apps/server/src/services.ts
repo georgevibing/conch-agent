@@ -76,6 +76,10 @@ import { Setup } from './setup/needs';
 import { ProviderKeys } from './providers/keys';
 import { ProviderService } from './providers/service';
 import { SecretVault } from './secrets/vault';
+import { GoogleService } from './google/service';
+import { GoogleStore } from './google/store';
+import { googleTools } from './google/tools';
+import { registerGoogleDoctor } from './google/doctor';
 import { type Blueprint, CATALOG } from './integrations/catalog';
 import { MockVendor } from './integrations/mock/vendor';
 import { IntegrationService } from './integrations/service';
@@ -186,6 +190,8 @@ export class Services {
   readonly voice: VoiceService;
   /** Work that runs in the background, and helpers side by side (ADR 0033). */
   readonly tasks: TaskService;
+  /** Direct Google account connections, shared by every engine. */
+  readonly google: GoogleService;
   /** Everything the assistant did, in one place (ADR 0028). */
   readonly activity: Activity;
   /** Putting back what the assistant changed (ADR 0030). */
@@ -217,6 +223,8 @@ export class Services {
     });
     /** Every store that repairs itself says so here (AGENTS.md agreement 11). */
     const heal: Heal = (area, message) => void this.healed.note(area, message);
+    this.google = new GoogleService(new GoogleStore(config.CONCH_HOME));
+    registerGoogleDoctor(this.doctor, this.google);
     this.settings = new SettingsStore(config.CONCH_HOME, heal);
     this.access = new AccessStore(config.CONCH_HOME, heal);
     this.gate = new Gatekeeper(config, this.access);
@@ -301,6 +309,16 @@ export class Services {
     // With the mock engine, integrations talk to a pretend vendor on this machine too.
     this.mockVendor = config.CONCH_ENGINE === 'mock' ? new MockVendor() : undefined;
     this.integrations = new IntegrationService({
+      googleConnected: async () => {
+        const accounts = (await this.google.status()).accounts.filter((a) => a.state === 'ready');
+        return [
+          ['gmail', 'mail-read'],
+          ['google-calendar', 'calendar-read'],
+          ['google-drive', 'drive-read'],
+        ]
+          .filter(([, cap]) => accounts.some((a) => a.capabilities.some((c) => c === cap)))
+          .flatMap(([id]) => (id ? [id] : []));
+      },
       home: config.CONCH_HOME,
       heal,
       emit: (event) => this.broadcast.emit(event),
@@ -432,6 +450,7 @@ export class Services {
               ...vaultTools(this.vault, ctx),
               ...this.artifacts.tools(ctx),
               ...this.tasks.tools(ctx),
+              ...googleTools(this.google, ctx),
             ],
       context: async (engine) =>
         [
@@ -886,6 +905,36 @@ export class Services {
         savedAt: described.savedAt || undefined,
         manage: { label: 'Open Providers', place: 'providers', focus: engineId },
         reveal: async () => (await this.keys.value(engineId)) ?? '',
+      });
+    }
+    const googleStatus = await this.google.status();
+    if (googleStatus.configured)
+      out.push({
+        id: id('google', 'app'),
+        title: 'Google app credentials',
+        usedBy: 'Google integration',
+        hint: 'Saved securely',
+        manage: { label: 'Open Integrations', place: 'integrations' },
+        reveal: () =>
+          Promise.reject(
+            new Error(
+              'Google app credentials are managed in Integrations; there is nothing to copy.',
+            ),
+          ),
+      });
+    for (const account of googleStatus.accounts) {
+      out.push({
+        id: id('google', account.id),
+        title: `Google · ${account.email}`,
+        usedBy: 'Google integration',
+        hint: 'Sign-in saved',
+        manage: { label: 'Open Integrations', place: 'integrations' },
+        reveal: () =>
+          Promise.reject(
+            new Error(
+              'This Google sign-in is kept and renewed by Conch; there is nothing to copy.',
+            ),
+          ),
       });
     }
     for (const item of await this.integrations.store.all().catch(() => [])) {

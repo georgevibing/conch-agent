@@ -191,6 +191,7 @@ export interface IntegrationServiceDeps {
   retryAfterMs?: number[];
   /** How long a turn waits to learn what the provider reaches by itself; tests shorten it. */
   providerWaitMs?: number;
+  googleConnected?: () => Promise<string[]>;
 }
 
 /**
@@ -506,7 +507,9 @@ export class IntegrationService {
         throw new IntegrationError(
           'invalid',
           entry
-            ? `${entry.name} connects through your AI provider’s account, not here.`
+            ? entry.auth === 'google'
+              ? 'Connect Google from Integrations to use this app with every model.'
+              : `${entry.name} connects through your AI provider’s account, not here.`
             : 'Unknown integration.',
         );
       const { values, secrets } = this.#splitValues(entry, body.values, true);
@@ -521,7 +524,7 @@ export class IntegrationService {
         name: entry.name,
         server: uniqueServer(entry.id),
         transport,
-        auth: entry.auth === 'account' ? 'none' : entry.auth,
+        auth: entry.auth === 'account' || entry.auth === 'google' ? 'none' : entry.auth,
         enabled: true,
         policy: 'ask-writes',
         health: { state: entry.auth === 'oauth' ? 'connecting' : 'checking' },
@@ -1015,6 +1018,7 @@ export class IntegrationService {
         return id ? [id] : [];
       }),
     );
+    for (const id of (await this.deps.googleConnected?.()) ?? []) mine.add(id);
     const open = cued.filter((item) => !mine.has(item.id));
     if (!open.length) return none;
     // Not knowing what the provider has would risk telling it it can't see an app it can.

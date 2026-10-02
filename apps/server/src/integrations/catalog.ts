@@ -37,8 +37,8 @@ export interface CatalogItem extends z.input<typeof CatalogEntry> {
  * Integrations Conch sets up for you. Every remote one was checked against its
  * vendor's live server (Sept 2026): `oauth` entries support dynamic client
  * registration, so "Connect" is one click with no app to register. Services
- * that only admit pre-approved apps (Google, Slack) connect through your
- * AI provider’s account instead; GitHub takes a token.
+ * such as Slack may connect through provider-owned accounts. Google connects
+ * directly through Conch’s registered Web OAuth client; GitHub takes a token.
  */
 const raw: CatalogItem[] = [
   {
@@ -74,7 +74,7 @@ const raw: CatalogItem[] = [
     tagline: 'Your email',
     description: 'Search your inbox, read threads and draft replies.',
     category: 'productivity',
-    auth: 'account',
+    auth: 'google',
     color: '#EA4335',
     homepage: 'https://mail.google.com',
     featured: true,
@@ -105,12 +105,12 @@ const raw: CatalogItem[] = [
     tagline: 'Your schedule',
     description: 'See what’s coming up and find time for things.',
     category: 'productivity',
-    auth: 'account',
+    auth: 'google',
     color: '#4285F4',
     homepage: 'https://calendar.google.com',
     featured: true,
     examples: ['What’s on my calendar tomorrow?', 'When am I free for an hour this week?'],
-    access: ['See your events', 'Create and change events (asks first)'],
+    access: ['Read your calendar events (no changes)'],
     cues: {
       match: [
         /\bgoogle\s+cal(?:endar)?\b/i,
@@ -132,13 +132,13 @@ const raw: CatalogItem[] = [
     id: 'google-drive',
     name: 'Google Drive',
     tagline: 'Docs, Sheets and files',
-    description: 'Find and read your documents and spreadsheets.',
+    description: 'Find your Drive files and read their metadata.',
     category: 'files',
-    auth: 'account',
+    auth: 'google',
     color: '#0F9D58',
     homepage: 'https://drive.google.com',
-    examples: ['Find the budget spreadsheet and summarise it'],
-    access: ['Search and read your files'],
+    examples: ['Find the budget spreadsheet in Drive'],
+    access: ['Search files and read metadata (not file contents)'],
     cues: {
       match: [
         /\bgoogle\s+drive\b/i,

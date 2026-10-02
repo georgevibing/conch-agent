@@ -135,6 +135,7 @@ export function needs(
   context: { workspace: string; server?: string },
 ): { capability: SkillCapability; detail?: string } | undefined {
   const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  if (/^(?:mcp__conch__)?google_/.test(toolName)) return { capability: 'apps', detail: 'google' };
   if (toolName === 'Bash')
     return { capability: 'commands', detail: typeof args.command === 'string' ? args.command : '' };
   if (['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(toolName)) {

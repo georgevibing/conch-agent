@@ -180,15 +180,12 @@ describe('what gets suggested', () => {
     expect(await two.integrations.suggest('check my Linear inbox', slow)).toEqual(nothing);
   });
 
-  it('offers Zapier for an account-only app when the provider has no account connectors', async () => {
+  it('offers direct Google for every provider, independently of Zapier', async () => {
     const engine = new FakeEngine();
     const { integrations } = await service(engine);
-    expect(ids(await integrations.suggest('check my Gmail inbox', engine))).toEqual([
-      'gmail via zapier',
-    ]);
-    // With Zapier connected, it may reach Gmail already: don't offer anything.
+    expect(ids(await integrations.suggest('check my Gmail inbox', engine))).toEqual(['gmail']);
     await connected(integrations, { name: 'Zapier', catalogId: 'zapier' });
-    expect(await integrations.suggest('check my Gmail inbox', engine)).toEqual(nothing);
+    expect(ids(await integrations.suggest('check my Gmail inbox', engine))).toEqual(['gmail']);
   });
 
   it('leaves out what was offered already or muted, and never more than two', async () => {

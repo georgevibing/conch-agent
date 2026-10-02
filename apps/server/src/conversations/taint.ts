@@ -42,6 +42,12 @@ const hostOf = (value: unknown): string | undefined => {
  */
 export function taintFrom(toolName: string, input: unknown, app?: string): TaintSource | undefined {
   const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  if (
+    /^(?:mcp__conch__)?google_(?:mail_(?:search|read)|calendar_briefing|drive_(?:search|read))$/.test(
+      toolName,
+    )
+  )
+    return { kind: 'app', label: 'Google account content' };
   if (WEB_READERS.has(toolName))
     return {
       kind: 'web',
@@ -95,6 +101,7 @@ export function sinkReason(
   context: SinkContext,
 ): string | undefined {
   const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  if (/^(?:mcp__conch__)?google_mail_create_draft$/.test(toolName)) return 'save a Gmail draft';
   if (toolName === 'Bash' || toolName === 'BashOutput' || toolName === 'KillShell')
     return toolName === 'Bash' ? 'run a command' : undefined;
   if (['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(toolName)) {

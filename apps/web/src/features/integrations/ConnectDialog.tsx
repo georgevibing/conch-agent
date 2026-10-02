@@ -1,3 +1,4 @@
+import { GoogleConnect } from './GoogleConnect';
 import type { CatalogEntry, Integration, IntegrationProvider } from '@conch/protocol';
 import {
   Button,
@@ -108,7 +109,7 @@ export function TryIt({
  * field; things that run on this computer say exactly what will run first.
  * The handshake at the top tells you where you are at a glance.
  */
-export function ConnectDialog({
+function StandardConnectDialog({
   entry,
   existingId,
   onOpenChange,
@@ -603,4 +604,34 @@ function AccountSteps({
       )}
     </Stack>
   );
+}
+
+export function ConnectDialog(props: Parameters<typeof StandardConnectDialog>[0]) {
+  if (props.entry?.auth === 'google')
+    return (
+      <Dialog.Root
+        open
+        onOpenChange={(open) => {
+          if (!open) props.onOpenChange(false);
+        }}
+      >
+        <Dialog.Content>
+          <Dialog.Title>Connect {props.entry.name}</Dialog.Title>
+          <GoogleConnect
+            capabilities={
+              props.entry.id === 'gmail'
+                ? ['mail-read', 'mail-draft']
+                : props.entry.id === 'google-calendar'
+                  ? ['calendar-read']
+                  : ['drive-read']
+            }
+            onReady={() => {
+              props.onOpenChange(false);
+              props.onAskAgain?.();
+            }}
+          />
+        </Dialog.Content>
+      </Dialog.Root>
+    );
+  return <StandardConnectDialog {...props} />;
 }

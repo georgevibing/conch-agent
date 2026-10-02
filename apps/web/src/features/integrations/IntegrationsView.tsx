@@ -1,5 +1,7 @@
+import { GoogleConnect } from './GoogleConnect';
 import type {
   CatalogEntry,
+  GoogleCapability,
   ExternalIntegration,
   Integration,
   IntegrationProvider,
@@ -92,6 +94,7 @@ export function IntegrationsView() {
   const client = useQueryClient();
   const [connecting, setConnecting] = useState<CatalogEntry>();
   const [custom, setCustom] = useState(false);
+  const [googleJob, setGoogleJob] = useState<GoogleCapability>('mail-read');
   const [category, setCategory] = useState<Category>('all');
   const [query, setQuery] = useState('');
 
@@ -164,6 +167,33 @@ export function IntegrationsView() {
           Add your own
         </Button>
       </header>
+      <section aria-label="Google accounts">
+        <Stack gap={3}>
+          <Text>What would you like to do with Google?</Text>
+          <Stack direction="row" gap={2}>
+            {(
+              [
+                ['mail-read', 'Summarize inbox'],
+                ['mail-draft', 'Draft an email'],
+                ['calendar-read', 'Calendar briefing'],
+                ['drive-read', 'Find Drive files'],
+              ] as const
+            ).map(([id, label]) => (
+              <Button
+                key={id}
+                variant={googleJob === id ? 'solid' : 'surface'}
+                onClick={() => setGoogleJob(id)}
+              >
+                {label}
+              </Button>
+            ))}
+          </Stack>
+          <GoogleConnect
+            capabilities={[googleJob]}
+            onReady={() => toast.success('Google account verified')}
+          />
+        </Stack>
+      </section>
 
       {isPending ? (
         <div className={styles.cards}>
