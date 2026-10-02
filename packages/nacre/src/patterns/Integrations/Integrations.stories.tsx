@@ -3,6 +3,7 @@ import { Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '../../components/Button';
+import { SegmentedControl } from '../../components/SegmentedControl';
 import { Heading } from '../../components/Text';
 import { Stack } from '../../components/Stack';
 import { brands, notionTools } from './fixtures';
@@ -377,16 +378,18 @@ export const IssueInChat: Story = {
 };
 
 /** How the pieces compose into the Integrations page. */
+/** The Apps page (ADR 0052): one card per app, chat apps among them, Talk to me here as a filter. */
 export const Page: Story = {
   render: () => (
     <Stack gap={8} style={{ maxWidth: 960 }}>
       <Stack direction="row" justify="between" align="end">
         <Stack gap={1}>
           <Heading level={1} display size="4xl">
-            Integrations
+            Apps
           </Heading>
           <span style={{ color: 'var(--nc-text-muted)' }}>
-            Let Claude work with the apps you use.
+            Connect your apps once — Conch can use them with every model you pick, and you can talk
+            to it from the ones you chat in.
           </span>
         </Stack>
         <Button variant="surface" leadingIcon={<Plus />}>
@@ -411,6 +414,30 @@ export const Page: Story = {
           />
           <IntegrationCard
             variant="connected"
+            name="Slack"
+            brand="slack"
+            color="#4A154B"
+            state="ok"
+            meta="4 tools · used 5 minutes ago · talks to you here"
+            enabled
+            onToggle={() => {}}
+          />
+          <IntegrationCard
+            variant="connected"
+            name="Telegram"
+            brand="telegram"
+            color="#26A5E4"
+            state="ok"
+            notice={{
+              message: 'Connected. Say hello from Telegram to finish.',
+              label: 'Say hello',
+              onClick: () => {},
+            }}
+            enabled
+            onToggle={() => {}}
+          />
+          <IntegrationCard
+            variant="connected"
             name="Notion"
             brand="notion"
             color="#000"
@@ -422,16 +449,34 @@ export const Page: Story = {
         </div>
       </Stack>
       <Stack gap={3}>
-        <Heading level={2} size="sm" tone="muted">
-          Add an app
-        </Heading>
+        <Stack direction="row" justify="between" align="center" wrap>
+          <Heading level={2} size="sm" tone="muted">
+            Add another app
+          </Heading>
+          <SegmentedControl size="sm" defaultValue="all" aria-label="Show">
+            <SegmentedControl.Item value="all">All</SegmentedControl.Item>
+            <SegmentedControl.Item value="talk">Talk to me here</SegmentedControl.Item>
+            <SegmentedControl.Item value="work">Work</SegmentedControl.Item>
+            <SegmentedControl.Item value="developer">Developer</SegmentedControl.Item>
+          </SegmentedControl>
+        </Stack>
         <div
           style={{
             ...grid,
             gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 15rem), 1fr))',
           }}
         >
-          {brands.slice(0, 9).map((b, i) => (
+          {[
+            ...brands.filter((b) => !['github', 'notion', 'slack'].includes(b.id)).slice(0, 6),
+            { id: 'whatsapp', name: 'WhatsApp', color: '#25D366', tagline: 'Message yourself' },
+            {
+              id: 'discord',
+              name: 'Discord',
+              color: '#5865F2',
+              tagline: 'A private bot of your own',
+            },
+            { id: 'imessage', name: 'iMessage', color: '#34DA50', tagline: 'Text yourself' },
+          ].map((b, i) => (
             <IntegrationCard
               key={b.id}
               variant="catalog"
