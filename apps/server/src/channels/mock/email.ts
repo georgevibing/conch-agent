@@ -9,6 +9,11 @@ interface Stored {
   raw: Buffer;
   flags: Set<string>;
   date: Date;
+  /** Gmail's own ids (X-GM-MSGID, X-GM-THRID): the same in every folder a message shows in. */
+  gmId: string;
+  thrId: string;
+  /** Gmail's system labels for it (`\\Inbox`, `\\Sent`, `\\Draft`). */
+  labels: string[];
 }
 
 interface Folder {
@@ -91,6 +96,9 @@ export class MockMail {
     seen: number;
   }>();
   #validity = 1;
+  #gmNext = 1_790_000_000_000_000_001n;
+  /** When set, the next APPEND is stored but the server answers as if the connection dropped. */
+  dropNextAppend = false;
 
   constructor() {
     this.#reset();
@@ -100,6 +108,8 @@ export class MockMail {
     this.#folders.clear();
     for (const [name, special] of [
       ['INBOX', undefined],
+      ['[Gmail]/All Mail', '\\All'],
+      ['[Gmail]/Drafts', '\\Drafts'],
       ['[Gmail]/Sent Mail', '\\Sent'],
       ['[Gmail]/Trash', '\\Trash'],
     ] as const)
@@ -123,6 +133,8 @@ export class MockMail {
       const body = (request.body ?? {}) as MockEmail;
       if (request.params.action === 'deliver') return { messageId: this.deliver(body) };
       if (request.params.action === 'sent') return this.sent;
+      if (request.params.action === 'drafts')
+        return (this.folder('[Gmail]/Drafts')?.messages ?? []).map((m) => m.raw.toString('utf8'));
       if (request.params.action === 'revoke') this.revoke();
       // The person made a new app password: the usual one works again.
       if (request.params.action === 'reset') this.password = MockMail.PASSWORD.replaceAll(' ', '');
@@ -249,11 +261,46 @@ export class MockMail {
 
   // ── Storage ────────────────────────────────────────────────────────────
 
-  #store(folderName: string, raw: Buffer) {
+  #store(folderName: string, raw: Buffer, flags: string[] = []): Stored | undefined {
     const folder = this.#folders.get(folderName);
-    if (!folder) return;
-    folder.messages.push({ uid: folder.uidNext++, raw, flags: new Set(), date: new Date() });
+    if (!folder) return undefined;
+    const gmId = String(this.#gmNext++);
+    const label =
+      folder.special === '\\Sent'
+        ? '\\Sent'
+        : folder.special === '\\Drafts'
+          ? '\\Draft'
+          : folder.name === 'INBOX'
+            ? '\\Inbox'
+            : undefined;
+    const stored: Stored = {
+      uid: folder.uidNext++,
+      raw,
+      flags: new Set(flags),
+      date: new Date(),
+      gmId,
+      thrId: this.#threadOf(raw) ?? gmId,
+      labels: label ? [label] : [],
+    };
+    folder.messages.push(stored);
+    // As Gmail does: mail in the inbox and in Sent is in All Mail too, with the same ids.
+    const all = this.#folders.get('[Gmail]/All Mail');
+    if (all && (folder.name === 'INBOX' || folder.special === '\\Sent'))
+      all.messages.push({ ...stored, uid: all.uidNext++, flags: new Set(stored.flags) });
     for (const idler of this.#idlers) if (idler.folder() === folder) idler.send();
+    return stored;
+  }
+
+  /** The thread a message joins: the one its In-Reply-To or References point at. */
+  #threadOf(raw: Buffer): string | undefined {
+    const ids = `${headerOf(raw, 'In-Reply-To')} ${headerOf(raw, 'References')}`.match(
+      /<[^<>\s]+>/g,
+    );
+    if (!ids) return undefined;
+    for (const folder of this.#folders.values())
+      for (const m of folder.messages)
+        if (ids.includes(headerOf(m.raw, 'Message-ID').trim())) return m.thrId;
+    return undefined;
   }
 
   // ── SMTP ───────────────────────────────────────────────────────────────
@@ -404,7 +451,7 @@ export class MockMail {
     });
     let authenticate: string | undefined;
     send(
-      '* OK [CAPABILITY IMAP4rev1 IDLE MOVE UIDPLUS SPECIAL-USE LITERAL+ AUTH=PLAIN] Mock IMAP ready',
+      '* OK [CAPABILITY IMAP4rev1 IDLE MOVE UIDPLUS SPECIAL-USE LITERAL+ X-GM-EXT-1 AUTH=PLAIN] Mock IMAP ready',
     );
     readImap(
       socket,
@@ -446,7 +493,9 @@ export class MockMail {
           return send(`${tag} BAD Log in first`);
         switch (command) {
           case 'CAPABILITY':
-            send('* CAPABILITY IMAP4rev1 IDLE MOVE UIDPLUS SPECIAL-USE LITERAL+ AUTH=PLAIN');
+            send(
+              '* CAPABILITY IMAP4rev1 IDLE MOVE UIDPLUS SPECIAL-USE LITERAL+ X-GM-EXT-1 AUTH=PLAIN',
+            );
             return ok();
           case 'ID':
             send('* ID ("name" "mock")');
@@ -455,7 +504,7 @@ export class MockMail {
             authed = this.#login(String(args[0] ?? ''), String(args[1] ?? ''));
             return authed
               ? send(
-                  `${tag} OK [CAPABILITY IMAP4rev1 IDLE MOVE UIDPLUS SPECIAL-USE LITERAL+] Logged in`,
+                  `${tag} OK [CAPABILITY IMAP4rev1 IDLE MOVE UIDPLUS SPECIAL-USE LITERAL+ X-GM-EXT-1] Logged in`,
                 )
               : send(`${tag} NO [AUTHENTICATIONFAILED] Invalid credentials (Failure)`);
           case 'AUTHENTICATE': {
@@ -548,6 +597,23 @@ export class MockMail {
             this.#idlers.add(idler);
             send('+ idling');
             return report();
+          case 'APPEND': {
+            // `APPEND <folder> [(<flags>)] [<date>] <literal>`: the literal arrives as the last string.
+            const name = String(args[0] ?? '');
+            const folder = this.#folders.get(name);
+            if (!folder) return no('[TRYCREATE] No such mailbox');
+            const flags = Array.isArray(args[1]) ? flatten(args[1]) : [];
+            const raw = String(args.at(-1) ?? '');
+            const stored = this.#store(name, Buffer.from(raw, 'utf8'), flags);
+            if (this.dropNextAppend) {
+              this.dropNextAppend = false;
+              socket.destroy();
+              return;
+            }
+            return send(
+              `${tag} OK [APPENDUID ${folder.uidValidity} ${stored?.uid ?? 0}] APPEND completed`,
+            );
+          }
           case 'SEARCH': {
             if (!selected) return no('Select a mailbox first');
             const folder = selected;
@@ -570,6 +636,10 @@ export class MockMail {
               if (items.includes('FLAGS')) parts.push(`FLAGS (${[...m.flags].join(' ')})`);
               if (items.includes('RFC822.SIZE')) parts.push(`RFC822.SIZE ${m.raw.length}`);
               if (items.includes('INTERNALDATE')) parts.push(`INTERNALDATE "${imapDate(m.date)}"`);
+              if (items.includes('X-GM-MSGID')) parts.push(`X-GM-MSGID ${m.gmId}`);
+              if (items.includes('X-GM-THRID')) parts.push(`X-GM-THRID ${m.thrId}`);
+              if (items.includes('X-GM-LABELS'))
+                parts.push(`X-GM-LABELS (${m.labels.map((l) => quote(l)).join(' ')})`);
               const body = items.find((it) => /^BODY(\.PEEK)?\[\]$/.test(it) || it === 'RFC822');
               const head = `* ${i + 1} FETCH (${parts.join(' ')}`;
               if (body) {
@@ -808,6 +878,12 @@ function matches(m: Stored, seq: number, folder: Folder, criteria: Token[]): boo
         const name = arg();
         return headerOf(m.raw, name).includes(arg());
       }
+      case 'X-GM-MSGID':
+        return m.gmId === arg();
+      case 'X-GM-THRID':
+        return m.thrId === arg();
+      case 'X-GM-RAW':
+        return gmailSearch(m, arg());
       case 'SEEN':
         return m.flags.has('\\Seen');
       case 'UNSEEN':
@@ -824,6 +900,31 @@ function matches(m: Stored, seq: number, folder: Folder, criteria: Token[]): boo
   let all = true;
   while (criteria.length) if (!next()) all = false;
   return all;
+}
+
+/**
+ * Gmail's search box, roughly: every word must be in the message, and
+ * `from:`, `to:` and `subject:` look in that header only.
+ */
+function gmailSearch(m: Stored, query: string): boolean {
+  const text = m.raw.toString('utf8').toLowerCase();
+  const body = decodedBody(m.raw).toLowerCase();
+  return query
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((word) => {
+      const field = /^(from|to|subject):(.+)$/.exec(word);
+      if (field?.[1] && field[2]) return headerOf(m.raw, field[1]).includes(field[2]);
+      if (/^(in|is|label|newer_than|older_than):/.test(word)) return true;
+      return text.includes(word) || body.includes(word);
+    });
+}
+
+/** The base64 parts of a message, decoded, for searching. */
+function decodedBody(raw: Buffer): string {
+  return [...raw.toString('utf8').matchAll(/base64\r\n\r\n([A-Za-z0-9+/=\r\n]+)/g)]
+    .map((part) => Buffer.from((part[1] ?? '').replace(/\s+/g, ''), 'base64').toString('utf8'))
+    .join('\n');
 }
 
 function imapDate(date: Date): string {
