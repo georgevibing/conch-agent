@@ -28,9 +28,11 @@ import {
 } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 
+import { Highlight, type HighlightRange } from '../../components/Highlight';
 import { IconButton } from '../../components/IconButton';
 import { Progress } from '../../components/Progress';
 import { SegmentedControl } from '../../components/SegmentedControl';
+import { Skeleton } from '../../components/Skeleton';
 import { Slider } from '../../components/Slider';
 import { Switch } from '../../components/Switch';
 import { cx } from '../../utils/cx';
@@ -251,6 +253,13 @@ export interface VaultRowProps extends Omit<ComponentProps<'button'>, 'children'
   note?: string;
   /** What the list is sorted by, after the subtitle: "Used 5 min ago". */
   meta?: string;
+  /** The parts of the title a search matched, marked. */
+  titleRanges?: readonly HighlightRange[];
+  /**
+   * Its password manager's mark at the end. Leave it out when every row in
+   * the list would wear the same one; the row's name still says where it's from.
+   */
+  sourceMark?: boolean;
 }
 
 /** One item in the list: what it is, whose it is, and whether it needs you. */
@@ -267,6 +276,8 @@ export function VaultRow({
   selected,
   note,
   meta,
+  titleRanges,
+  sourceMark = true,
   className,
   ...props
 }: VaultRowProps) {
@@ -296,7 +307,12 @@ export function VaultRow({
       <VaultItemIcon kind={kind} domain={domain} title={title} />
       <span className={styles.rowText}>
         <span className={styles.rowTitle}>
-          {title}
+          {/* Its own box, so a long title ends in "…" and the star stays in view. */}
+          {titleRanges?.length ? (
+            <Highlight className={styles.rowTitleText} text={title} ranges={titleRanges} />
+          ) : (
+            <span className={styles.rowTitleText}>{title}</span>
+          )}
           {favorite && <Star className={styles.star} aria-hidden />}
         </span>
         {(subtitle || note || meta) && (
@@ -317,9 +333,37 @@ export function VaultRow({
         {worst && (
           <span className={styles.issueDot} data-issue={worst} title={ISSUE_WORDS[worst]} />
         )}
-        <VaultSourceMark source={source} />
+        {sourceMark && <VaultSourceMark source={source} />}
       </span>
     </button>
+  );
+}
+
+/** A row's place while the list loads: its tile and its two lines. */
+export function VaultRowSkeleton({ className, ...props }: Omit<ComponentProps<'div'>, 'children'>) {
+  return (
+    <div
+      aria-hidden
+      data-vault-skeleton="row"
+      className={cx(styles.rowSkeleton, className)}
+      {...props}
+    >
+      <Skeleton shape="block" width="2.5rem" height="2.5rem" className={styles.rowSkeletonTile} />
+      <span className={styles.rowText}>
+        <Skeleton width="46%" />
+        <Skeleton width="68%" />
+      </span>
+    </div>
+  );
+}
+
+/** The heading over a group of rows ("Favourites", "A", "Previous 7 days"). */
+export function VaultListHeading({ className, children, ...props }: ComponentProps<'div'>) {
+  // For the eye: each row's own name already says its title, favourite and when.
+  return (
+    <div aria-hidden className={cx(styles.listHeading, className)} {...props}>
+      {children}
+    </div>
   );
 }
 
@@ -482,6 +526,31 @@ export function VaultFieldRow({
           </IconButton>
         )}
       </div>
+    </div>
+  );
+}
+
+export interface VaultFieldsSkeletonProps extends Omit<ComponentProps<'div'>, 'children'> {
+  /** How many fields to hold a place for. */
+  rows?: number;
+}
+
+/**
+ * An item's fields while they're fetched (another app's vault can take a
+ * moment): the same rows, a label and a value each, so nothing moves when
+ * they arrive. It waits a beat before showing, so a quick answer never flashes.
+ */
+export function VaultFieldsSkeleton({ rows = 3, className, ...props }: VaultFieldsSkeletonProps) {
+  return (
+    <div aria-hidden className={cx(styles.fieldsSkeleton, className)} {...props}>
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} data-vault-skeleton="field" className={styles.field}>
+          <div className={styles.fieldMain}>
+            <Skeleton width="4.5rem" className={styles.fieldSkeletonLabel} />
+            <Skeleton width={i % 2 ? '38%' : '56%'} />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

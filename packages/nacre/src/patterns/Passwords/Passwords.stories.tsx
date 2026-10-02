@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { fn } from 'storybook/test';
 
 import { Button } from '../../components/Button';
+import { VirtualList } from '../../components/VirtualList';
 import {
   type GeneratorSettings,
   PasswordGenerator,
@@ -12,9 +13,12 @@ import {
   VaultRequestCard,
   VaultUnlockCard,
   VaultFieldRow,
+  VaultFieldsSkeleton,
   VaultHealth,
+  VaultListHeading,
   VaultPasskeyRow,
   VaultRow,
+  VaultRowSkeleton,
   VaultSourceRow,
   VaultTransferProgress,
 } from './Passwords';
@@ -110,6 +114,113 @@ export const List: Story = {
       </div>
     );
   },
+};
+
+const SITES = ['Amazon', 'Bank of Somewhere', 'Dropbox', 'GitHub', 'Netflix', 'Old forum', 'Zed'];
+type LongRow = { heading: string } | { title: string; favorite: boolean };
+const longRows: LongRow[] = [
+  { heading: 'Favourites' },
+  { title: 'GitHub', favorite: true },
+  { title: 'A very long name for an account that someone kept from years ago', favorite: true },
+  ...SITES.flatMap((site): LongRow[] => [
+    { heading: site.charAt(0) },
+    ...Array.from({ length: 140 }, (_, i) => ({ title: `${site} ${i + 1}`, favorite: false })),
+  ]),
+];
+
+/**
+ * A thousand items: only the rows in view are drawn (`VirtualList`), so the
+ * list scrolls and a search above it answers at once. A heading stays at the
+ * top while its group passes, a long title ends in “…”, and with one password
+ * manager connected its mark is left out (`sourceMark={false}`).
+ */
+export const LongList: Story = {
+  render: () => {
+    const [selected, setSelected] = useState('GitHub');
+    return (
+      <VirtualList
+        role="list"
+        aria-label="Passwords"
+        style={{ blockSize: 480, maxInlineSize: 380 }}
+        items={longRows}
+        rowHeight={(row) => ('heading' in row ? 2 : 3.625)}
+        getKey={(row, i) => ('heading' in row ? `heading-${i}` : row.title)}
+        sticky={(row) => 'heading' in row}
+        rowProps={(row) => ({ role: 'heading' in row ? 'presentation' : 'listitem' })}
+      >
+        {(row) =>
+          'heading' in row ? (
+            <VaultListHeading>{row.heading}</VaultListHeading>
+          ) : (
+            <VaultRow
+              kind="login"
+              title={row.title}
+              subtitle="ada@example.com"
+              domain={`${row.title.toLowerCase().replaceAll(' ', '')}.example`}
+              source="1password"
+              sourceMark={false}
+              favorite={row.favorite}
+              selected={selected === row.title}
+              onClick={() => setSelected(row.title)}
+            />
+          )
+        }
+      </VirtualList>
+    );
+  },
+};
+
+/** A search: the best match first, and the part of each title that matched is marked. */
+export const SearchResults: Story = {
+  render: () => (
+    <div style={{ display: 'grid', gap: 2, maxInlineSize: 380 }}>
+      <VaultRow
+        kind="login"
+        title="Amazon"
+        subtitle="ada@example.com"
+        domain="amazon.com"
+        titleRanges={[[0, 3]]}
+        selected
+      />
+      <VaultRow
+        kind="login"
+        title="My Amazon seller account"
+        subtitle="ada"
+        domain="sell.amazon.com"
+        titleRanges={[[3, 6]]}
+      />
+      <VaultRow kind="note" title="Panama trip" titleRanges={[[3, 6]]} />
+    </div>
+  ),
+};
+
+/**
+ * While things load: rows hold their place in the list, and an item’s fields
+ * hold theirs in the card (its name and icon are already there from the list).
+ * The fields wait a beat before showing, so a quick answer never flashes.
+ */
+export const Loading: Story = {
+  render: () => (
+    <div
+      aria-busy="true"
+      style={{ display: 'flex', gap: 24, alignItems: 'start', flexWrap: 'wrap' }}
+    >
+      <div style={{ inlineSize: 380 }}>
+        {Array.from({ length: 5 }, (_, i) => (
+          <VaultRowSkeleton key={i} />
+        ))}
+      </div>
+      <div
+        style={{
+          inlineSize: 420,
+          borderRadius: 'var(--nc-radius-xl)',
+          boxShadow: 'inset 0 0 0 1px var(--nc-border-subtle)',
+        }}
+      >
+        <VaultFieldsSkeleton rows={3} />
+      </div>
+    </div>
+  ),
 };
 
 const reveal = () =>

@@ -9,10 +9,13 @@ import {
   VaultApproval,
   VaultConnectedSources,
   VaultFieldRow,
+  VaultFieldsSkeleton,
   VaultHealth,
+  VaultListHeading,
   VaultRequestCard,
   VaultPasskeyRow,
   VaultRow,
+  VaultRowSkeleton,
   VaultSourceRow,
   VaultTransferProgress,
   VaultUnlockCard,
@@ -41,6 +44,49 @@ describe('VaultRow', () => {
       }),
     ).toBeInTheDocument();
     await expectAccessible(container);
+  });
+
+  it('marks the part of the title that matched a search, and still reads as the whole title', () => {
+    const { container } = renderNacre(
+      <VaultRow kind="login" title="Amazon Prime" subtitle="ada" titleRanges={[[0, 3]]} />,
+    );
+    expect(container.querySelector('mark')).toHaveTextContent('Ama');
+    expect(screen.getByRole('button', { name: 'Amazon Prime, ada' })).toBeInTheDocument();
+  });
+
+  it('can leave out its manager’s mark when every row would wear the same one', () => {
+    const { container, rerender } = renderNacre(
+      <VaultRow kind="login" title="Bank" source="1password" />,
+    );
+    expect(container.querySelector('[aria-label="1Password"]')).not.toBeNull();
+    rerender(<VaultRow kind="login" title="Bank" source="1password" sourceMark={false} />);
+    expect(container.querySelector('[aria-label="1Password"]')).toBeNull();
+    // Where it's from is still in its name.
+    expect(screen.getByRole('button', { name: 'Bank, from 1Password' })).toBeInTheDocument();
+  });
+});
+
+describe('while Passwords loads', () => {
+  it('holds the place of rows and fields, out of the way of a screen reader', async () => {
+    const { container } = renderNacre(
+      <div aria-busy="true">
+        <VaultRowSkeleton />
+        <VaultRowSkeleton />
+        <VaultFieldsSkeleton rows={3} />
+      </div>,
+    );
+    expect(container.querySelectorAll('[data-vault-skeleton="row"]')).toHaveLength(2);
+    expect(container.querySelectorAll('[data-vault-skeleton="field"]')).toHaveLength(3);
+    for (const part of container.querySelectorAll('[data-vault-skeleton]'))
+      expect(part.closest('[aria-hidden="true"]')).not.toBeNull();
+    await expectAccessible(container);
+  });
+});
+
+describe('VaultListHeading', () => {
+  it('names a group for the eye only: the rows already say it', () => {
+    renderNacre(<VaultListHeading>Favourites</VaultListHeading>);
+    expect(screen.getByText('Favourites')).toHaveAttribute('aria-hidden', 'true');
   });
 });
 

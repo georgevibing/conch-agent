@@ -127,6 +127,16 @@ password as you change it, digits and symbols coloured so it can be read back
 matters most, every tile a filter; with nothing to say, it says the passwords
 look good.
 
+The list never makes anyone wait. Only the rows in view are drawn
+(`VirtualList`), so a vault of a thousand items scrolls, searches and selects
+like one of twenty. A search marks what matched in each title (`titleRanges`).
+A long list has a quiet heading over each group (`VaultListHeading`), held at
+the top while its rows pass. With one password manager connected, its mark is
+left off the rows (`sourceMark`): the same badge a thousand times says nothing.
+What is still on its way holds its exact place (`VaultRowSkeleton`,
+`VaultFieldsSkeleton`), and waits a beat before showing, so a quick answer
+never flashes.
+
 ### Attachments (chat)
 
 A paste, a picture and a PDF each look like what they are before anyone opens
