@@ -61,7 +61,8 @@ describe('connect from chat', () => {
       color: '#5E6AD2',
     };
     expect(ConversationEvent.parse(offer)).toEqual(offer);
-    expect(ConversationEvent.parse({ ...offer, via: 'zapier' })).toMatchObject({ via: 'zapier' });
+    // An offer logged before ADR 0049 still reads; the old Zapier detour is just left out.
+    expect(ConversationEvent.parse({ ...offer, via: 'zapier' })).toEqual(offer);
     for (const catalogId of ['../linear', 'Linear', '', 'linear/1'])
       expect(ConversationEvent.safeParse({ ...offer, catalogId }).success).toBe(false);
     expect(ConversationEvent.safeParse({ ...offer, color: 'red; x' }).success).toBe(false);
