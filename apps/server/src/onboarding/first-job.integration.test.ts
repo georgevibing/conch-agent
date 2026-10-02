@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { FirstJobRequest } from '@conch/protocol';
 import { ArtifactService } from '../artifacts/service';
+import { LiveDataAccess } from '../artifacts/live';
 import { ArtifactStore } from '../artifacts/store';
 import { ConversationManager } from '../conversations/manager';
 import { ConversationStore } from '../conversations/store';
@@ -26,6 +27,8 @@ describe('first job through the real task and artifact services', () => {
       store: new ArtifactStore(home),
       conversations: () => conversations,
       emit: () => undefined,
+      access: new LiveDataAccess(home),
+      gatewayPort: 0,
     });
     const conversations: ConversationManager = new ConversationManager({
       store: new ConversationStore(join(home, 'conversations')),
