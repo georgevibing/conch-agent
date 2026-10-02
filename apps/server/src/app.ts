@@ -216,6 +216,8 @@ export async function buildApp(services: Services) {
         wechat: services.mockWeChat?.base,
       })),
     services.door,
+    // Gmail's app password, offered for talking by email too (ADR 0052).
+    () => services.google.gmailLogin(),
   );
   registerChannelLinkRoutes(app, services.channelLinking, gate);
   app.addHook('onClose', () => services.browser.stop());

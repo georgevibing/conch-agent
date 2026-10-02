@@ -38,6 +38,8 @@ export function registerChannelRoutes(
   mocks?: () => Record<string, string | undefined>,
   /** The public door (Teams, WeChat), ADR 0045. */
   door?: ChannelDoorService,
+  /** Gmail the app's sign-in, if it has an app password (ADR 0052). */
+  gmailLogin?: () => Promise<{ address: string; password: string } | undefined>,
 ) {
   const parse = <T extends z.ZodType>(schema: T, value: unknown, reply: FastifyReply) => {
     const result = schema.safeParse(value);
@@ -112,6 +114,31 @@ export function registerChannelRoutes(
     try {
       await channels.openImessage(body.place);
       return { ok: true };
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
+
+  // ── Gmail, talking to you by email too (ADR 0052) ───────────────────────
+  // The Gmail app's app password, offered in a tap: the browser only ever
+  // learns the address. Using it opens a way in, so it needs a person who
+  // confirmed it's them, like the other way round (ADR 0048).
+  app.get('/api/channels/email/gmail', async () => ({
+    address: (await gmailLogin?.().catch(() => undefined))?.address,
+  }));
+  app.post('/api/channels/email/gmail', async (request, reply) => {
+    if (!gate.verified(request.access))
+      return reply
+        .code(403)
+        .send({ error: 'verify-required', message: 'Confirm it’s you to make this change.' });
+    const login = await gmailLogin?.().catch(() => undefined);
+    if (!login)
+      return reply.code(409).send({
+        error: 'unavailable',
+        message: 'Gmail isn’t connected with an app password any more. Set up Email instead.',
+      });
+    try {
+      return await channels.create({ kind: 'email', provider: 'gmail', ...login });
     } catch (error) {
       return fail(reply, error);
     }

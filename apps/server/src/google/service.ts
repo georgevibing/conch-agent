@@ -195,6 +195,19 @@ export class GoogleService {
     private readonly fetcher: typeof fetch = fetch,
     readonly imap: GmailImap = new GmailImap(),
   ) {}
+  /**
+   * Gmail's app password, so talking to you by email can be offered the same
+   * one in a tap (ADR 0052), the way the email channel's is offered to Gmail
+   * (ADR 0048). Only ever read on the gateway; the browser learns the address.
+   * A password Gmail stopped taking isn't offered.
+   */
+  async gmailLogin(): Promise<{ address: string; password: string } | undefined> {
+    const data = await this.store.read();
+    if (data.apps.gmail?.hidden) return undefined;
+    const login = Object.values(data.passwords).find((p) => p.profile.state === 'ready');
+    return login && { address: login.address, password: login.password };
+  }
+
   async status(): Promise<GoogleStatus> {
     const data = await this.store.read();
     return {

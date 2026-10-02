@@ -173,6 +173,12 @@ export type ChannelSettings = z.infer<typeof ChannelSettings>;
 export const Channel = z.object({
   id: Id,
   kind: ChannelKind,
+  /**
+   * The app in Apps this channel belongs to, when it's one of an app's
+   * halves (ADR 0052): `slack` for a Slack bot, `gmail` for an email channel
+   * on Gmail. Its card is that app's, and the channel is its "Talk to me here".
+   */
+  app: z.string().max(64).optional(),
   enabled: z.boolean(),
   createdAt: z.number(),
   bot: ChannelBot,

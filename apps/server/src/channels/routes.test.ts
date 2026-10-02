@@ -252,6 +252,53 @@ describe('channel routes', () => {
     services.stop();
   });
 
+  it('offer Gmail’s app password for talking by email, only by its address, and use it only when asked', async () => {
+    const { app, services, home } = await setup();
+    await services.start();
+    expect((await app.inject('/api/channels/email/gmail')).json()).toEqual({});
+    const gmail = await app.inject({
+      method: 'POST',
+      url: '/api/google/mail/password',
+      payload: { address: MockMail.ADDRESS, password: MockMail.PASSWORD },
+    });
+    expect(gmail.statusCode).toBe(200);
+    const offer = await app.inject('/api/channels/email/gmail');
+    expect(offer.json()).toEqual({ address: MockMail.ADDRESS });
+    expect(offer.body).not.toContain('efgh');
+    // Nothing happened by itself: there's no email channel until someone says so.
+    expect((await app.inject('/api/channels')).json().channels).toEqual([]);
+
+    const made = await app.inject({ method: 'POST', url: '/api/channels/email/gmail' });
+    expect(made.statusCode).toBe(200);
+    expect(made.body).not.toContain('efgh');
+    expect(made.json()).toMatchObject({
+      kind: 'email',
+      app: 'gmail',
+      bot: { address: 'ada+conch@gmail.com' },
+    });
+    // It's your own address: you're in already, no hello needed.
+    expect(made.json().people).toHaveLength(1);
+    // Gmail the app is still there, and still can't send.
+    const apps = (await app.inject('/api/integrations')).json().integrations as { id: string }[];
+    expect(apps.map((a) => a.id)).toContain('gmail');
+
+    // From another device, only right after confirming it's you.
+    const cookie = await phone(app);
+    const now = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(now + 11 * 60_000);
+    const there = await remote(app, '/api/channels/email/gmail', { method: 'POST', cookie });
+    expect(there.statusCode).toBe(403);
+    expect(there.json().error).toBe('verify-required');
+    vi.restoreAllMocks();
+    services.stop();
+
+    // After a restart, the channel is still Gmail's (nothing new was written to keep it so).
+    const stored = JSON.parse(await readFile(join(home, 'channels.json'), 'utf8')) as {
+      channels: Record<string, unknown>[];
+    };
+    expect(stored.channels[0]).not.toHaveProperty('app');
+  });
+
   it('open System Settings for iMessage only for someone at this Mac', async () => {
     const { app } = await setup();
     const here = await app.inject({

@@ -201,6 +201,8 @@ export class ChannelService {
   #started = false;
   /** The Slack app id behind each Slack channel, once asked ('' when Slack wouldn't say). */
   #slackApps = new Map<string, string>();
+  /** Which mail service each email channel signs in to (from its keys, kept in memory). */
+  #mail = new Map<string, string>();
 
   constructor(
     private readonly deps: {
@@ -262,6 +264,7 @@ export class ChannelService {
 
   async list(): Promise<ChannelList> {
     const channels = await this.deps.store.all();
+    await this.#learnMail(channels);
     return {
       channels: channels.map((c) => this.#view(c)),
       catalog: catalogFor(this.deps.platform ?? process.platform),
@@ -332,7 +335,18 @@ export class ChannelService {
   }
 
   async get(id: string): Promise<Channel> {
-    return this.#view(await this.#require(id));
+    const stored = await this.#require(id);
+    await this.#learnMail([stored]);
+    return this.#view(stored);
+  }
+
+  /** Which mail service an email channel uses, read once from its keys (it never changes). */
+  async #learnMail(channels: StoredChannel[]) {
+    for (const channel of channels) {
+      if (channel.kind !== 'email' || this.#mail.has(channel.id)) continue;
+      const secrets = await this.deps.store.secrets(channel.id).catch(() => undefined);
+      if (secrets?.kind === 'email') this.#mail.set(channel.id, secrets.provider);
+    }
   }
 
   #view(stored: StoredChannel): Channel {
@@ -347,9 +361,11 @@ export class ChannelService {
             ? `Conch lost its ${CHANNEL_NAMES[stored.kind]} link. Link it again to reconnect.`
             : 'Conch lost this bot’s key. Paste it again to reconnect.',
         });
+    const app = this.#appOf(stored);
     return {
       id: stored.id,
       kind: stored.kind,
+      ...(app && { app }),
       enabled: stored.enabled,
       createdAt: stored.createdAt,
       bot: stored.bot,
@@ -367,6 +383,17 @@ export class ChannelService {
         }),
       ...(stored.lastMessageAt && { lastMessageAt: stored.lastMessageAt }),
     };
+  }
+
+  /**
+   * The app in Apps this channel is the "Talk to me here" of (ADR 0052): a
+   * Slack bot is Slack's, an email channel on Gmail is Gmail's. The rest are
+   * apps of their own.
+   */
+  #appOf(stored: StoredChannel): string | undefined {
+    if (stored.kind === 'slack') return 'slack';
+    if (stored.kind === 'email' && this.#mail.get(stored.id) === 'gmail') return 'gmail';
+    return undefined;
   }
 
   async #require(id: string): Promise<StoredChannel> {
@@ -822,6 +849,7 @@ export class ChannelService {
   }
 
   #connect(stored: StoredChannel, secrets: ChannelSecrets) {
+    if (secrets.kind === 'email') this.#mail.set(stored.id, secrets.provider);
     this.#disconnect(stored.id);
     if (!stored.enabled) return;
     const id = stored.id;

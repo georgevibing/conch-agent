@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../config';
 import { Services } from '../services';
+import { MockMail } from './mock/email';
+import { MockSlack } from './mock/slack';
 import { MockTelegram } from './mock/telegram';
 
 let services: Services | undefined;
@@ -494,5 +496,42 @@ describe('ChannelService — healing', () => {
       'online after restart',
     );
     expect((await services.channels.get(channel.id)).people).toHaveLength(1);
+  });
+});
+
+describe('ChannelService — which app a channel belongs to (ADR 0052)', () => {
+  it('a Slack bot is Slack’s, an email channel on Gmail is Gmail’s, and both stay so after a restart', async () => {
+    const { s } = await setup();
+    const slack = await s.channels.create({
+      kind: 'slack',
+      botToken: MockSlack.BOT_TOKEN,
+      appToken: MockSlack.APP_TOKEN,
+    });
+    expect(slack.app).toBe('slack');
+    const mail = await s.channels.create({
+      kind: 'email',
+      provider: 'gmail',
+      address: MockMail.ADDRESS,
+      password: MockMail.PASSWORD,
+    });
+    expect(mail.app).toBe('gmail');
+    const telegram = await s.channels.create({ kind: 'telegram', token: MockTelegram.TOKEN });
+    expect(telegram.app).toBeUndefined();
+    // Turned off, it's still the app's.
+    expect((await s.channels.update(mail.id, { enabled: false })).app).toBe('gmail');
+
+    // What's stored didn't change shape: the next start works it out again.
+    const home = s.config.CONCH_HOME;
+    s.stop();
+    services = new Services(
+      loadConfig({ CONCH_HOME: home, CONCH_ENGINE: 'mock', CONCH_LOG_LEVEL: 'silent' }),
+    );
+    await services.start();
+    const again = (await services.channels.list()).channels;
+    expect(Object.fromEntries(again.map((c) => [c.kind, c.app ?? null]))).toEqual({
+      slack: 'slack',
+      email: 'gmail',
+      telegram: null,
+    });
   });
 });

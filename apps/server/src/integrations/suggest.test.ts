@@ -197,7 +197,10 @@ describe('what gets suggested', () => {
     // Slack connected to Conch is one of its own apps, listed like any other (ADR 0052).
     const slack = { id: 'slack', catalogId: 'slack' } as Integration;
     const after = await service(engine, {
-      hosted: { owns: (id) => id === 'slack', list: async () => [slack] } as HostedApps,
+      hosted: {
+        owns: (id: string) => id === 'slack',
+        list: async () => [slack],
+      } as unknown as HostedApps,
     });
     expect(await after.integrations.suggest('catch me up on Slack', engine)).toEqual(nothing);
   });
