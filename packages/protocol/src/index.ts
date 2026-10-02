@@ -29,6 +29,7 @@ import { Routine, RoutineRun } from './routines';
 import { VaultPermission, VaultRequest } from './vault';
 import { VoiceStatus } from './phone';
 import { ChangedFile } from './undo';
+import { SkillPermissions } from './skills';
 import { Task, TaskKind, TaskStatus } from './tasks';
 import { UpdatesStatus } from './updates';
 import { UsageSnapshot } from './usage';
@@ -57,6 +58,7 @@ export * from './safety';
 export * from './search';
 export * from './setup';
 export * from './skills';
+export * from './holds';
 export * from './tasks';
 export * from './terminal';
 export * from './undo';
@@ -446,15 +448,34 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     model: z.string().optional(),
   }),
   z.object({ ...logged, type: z.literal('title'), title: z.string() }),
-  /** A skill was used in this turn — asked for by name, or picked by the assistant. */
+  /**
+   * A skill was used in this turn — asked for by name, or picked by the
+   * assistant — or came with work from another chat. From here on the chat is
+   * held to its list until you say otherwise (ADR 0040).
+   */
   z.object({
     ...logged,
     type: z.literal('skill.used'),
     skillId: z.string(),
     name: z.string(),
     title: z.string(),
-    /** `user`: you asked for it (`/name`); `assistant`: it matched the request. */
-    by: z.enum(['user', 'assistant']),
+    /**
+     * `user`: you asked for it (`/name`); `assistant`: it matched the request;
+     * `carried`: a task brought it from the chat it came from, or a helper back (ADR 0033).
+     */
+    by: z.enum(['user', 'assistant', 'carried']),
+    /** What it may do, as it was when its instructions came into the chat. */
+    permissions: SkillPermissions.optional(),
+    /** For `carried`: the chat it came from. */
+    from: z.string().optional(),
+  }),
+  /** You stopped holding the chat to a skill's list (ADR 0040). Only a person does this. */
+  z.object({
+    ...logged,
+    type: z.literal('skill.hold.ended'),
+    skillId: z.string(),
+    title: z.string(),
+    reason: z.enum(['you']),
   }),
   z.object({
     ...logged,

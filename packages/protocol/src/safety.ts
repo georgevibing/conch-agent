@@ -53,6 +53,8 @@ export const ActivityKind = z.enum([
   'memory',
   /** Something it made for you to see and use (ADR 0034). */
   'artifact',
+  /** A skill's list the chat was held to, and when you stopped holding it (ADR 0040). */
+  'skill',
 ]);
 export type ActivityKind = z.infer<typeof ActivityKind>;
 
