@@ -190,6 +190,11 @@ export const ChannelCheck = z.discriminatedUnion('ok', [
     bot: ChannelBot,
     /** Slack: which of the two keys were checked and good. */
     checked: z.array(z.enum(['token', 'botToken', 'appToken'])).default([]),
+    /** Slack: the app's id, for links straight to its settings pages. */
+    appId: z
+      .string()
+      .regex(/^A[A-Z0-9]{6,20}$/)
+      .optional(),
   }),
   z.object({
     ok: z.literal(false),

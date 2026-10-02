@@ -243,7 +243,8 @@ export const UpdateSettingsBody = z.object({
       engine: EngineId,
       autoMemory: z.boolean(),
       autoTitle: z.boolean(),
-      model: z.string().max(200),
+      /** `null` goes back to the provider's own default. */
+      model: z.string().max(200).nullable(),
       effort: EffortChoice,
       fastMode: z.boolean(),
       permissionMode: PermissionMode,
