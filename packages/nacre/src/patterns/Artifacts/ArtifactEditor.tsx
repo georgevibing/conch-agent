@@ -81,26 +81,25 @@ export function ArtifactEditor({
   const save = () => {
     if (!problem && dirty && !saving) onSave();
   };
-  // ⌘S and Esc from anywhere in it, not only the code (which handles its own first).
+  // ⌘S and Esc from anywhere in it, not only the code. Caught before anything
+  // else hears them, so Esc cancels the edit rather than closing a sheet it's in,
+  // and ⌘S never saves twice (or the page, as the browser would).
   const keys = useRef({ save, onCancel });
   useEffect(() => {
     keys.current = { save, onCancel };
   });
   useEffect(() => {
-    const el = root.current;
-    if (!el) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
-        event.preventDefault();
-        keys.current.save();
-      } else if (event.key === 'Escape') {
-        event.preventDefault();
-        keys.current.onCancel();
-      }
+      if (!(event.target instanceof Node) || !root.current?.contains(event.target)) return;
+      const saving = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's';
+      if (!saving && event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (saving) keys.current.save();
+      else keys.current.onCancel();
     };
-    el.addEventListener('keydown', onKey);
-    return () => el.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, []);
 
   return (
