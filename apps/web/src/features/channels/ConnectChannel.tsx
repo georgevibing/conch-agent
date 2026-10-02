@@ -797,7 +797,7 @@ function SlackSetup() {
         </GuideSteps.Step>
         <GuideSteps.Step
           number={2}
-          title="Install it, and copy its key"
+          title={fromApp ? 'Copy its bot token' : 'Install it, and copy its key'}
           state={hasBot ? 'done' : stepState(1, at)}
           summary={
             hasBot
