@@ -64,6 +64,7 @@ working agreement 11: _fix it before you ask_.
 | Hand it off: background tasks, helpers side by side (`delegate`), worktrees                                                             | `apps/server/src/tasks/`, web `features/tasks/`, Nacre `TaskCard` + [ADR 0033](./docs/adr/0033-hand-it-off.md) — a task has exactly its chat's powers (mode, guard, budget)                                                                                                                                                                                                                                                          |
 | Conch restarting itself, surviving a crash                                                                                              | `apps/server/src/supervisor.ts`, `lib/lifecycle.ts` (`restart()`), web `features/health/restart.ts`                                                                                                                                                                                                                                                                                                                                  |
 | The documentation (guides, the reference read from the code, `pnpm docs:dev`)                                                           | `apps/docs/` (`content/README.md` for how to write a page), Nacre `Docs` patterns — see working agreement 13                                                                                                                                                                                                                                                                                                                         |
+| The front page (the landing page at `/`: its scenes, its moving pictures, “The honest part”)                                            | `apps/docs/src/landing/` (`Landing.tsx`, `demos.tsx`, `useClock.ts`), Nacre `Site` patterns — see working agreement 13                                                                                                                                                                                                                                                                                                               |
 | A decision that changes architecture or adds a dependency                                                                               | Write an ADR in [`docs/adr/`](./docs/adr/) first                                                                                                                                                                                                                                                                                                                                                                                     |
 | Devices, approving new ones (`pnpm conch devices`)                                                                                      | `apps/server/src/auth/` (`store.ts`, `devicesCli.ts`), `security.ts`, web `features/auth/`, Nacre `DeviceApproval` + [ADR 0024](./docs/adr/0024-approve-new-devices.md) — security-relevant                                                                                                                                                                                                                                          |
 | Security, auth, exposing the gateway beyond localhost                                                                                   | [§ Security engineering](#security-engineering) below → [ARCHITECTURE.md § Security](./ARCHITECTURE.md#security-model) → [ADR 0008](./docs/adr/0008-access-and-hardening.md) — treat as high-risk                                                                                                                                                                                                                                    |
@@ -78,7 +79,7 @@ it. Apps must not contain bespoke styling beyond layout.
 apps/
   web/            React 19 + Vite SPA (the chat UI)
   server/         Node gateway: HTTP + WebSocket, wraps @anthropic-ai/claude-agent-sdk
-  docs/           The documentation site: guides in Markdown, reference read from the code
+  docs/           The site: the front page, guides in Markdown, reference read from the code
 packages/
   nacre/          Design system: tokens, Lustre material, components, patterns, Storybook
   protocol/       Zod schemas + types for every message on the wire
@@ -99,8 +100,8 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
 | `pnpm install`                                                                | Install everything                                                                                                                                             |
 | `pnpm dev`                                                                    | Run all dev servers via Turbo                                                                                                                                  |
 | `pnpm storybook`                                                              | Nacre Storybook on http://localhost:6006                                                                                                                       |
-| `pnpm docs:dev`                                                               | The documentation on http://localhost:4400, redrawn as you write and as the code it reads changes                                                              |
-| `pnpm docs:build`                                                             | The documentation as a static site in `apps/docs/dist` (`pnpm docs:preview` builds and opens it)                                                               |
+| `pnpm docs:dev`                                                               | The site on http://localhost:4400 (the front page at `/`, the documentation at `/docs`), redrawn as you write and as the code it reads changes                 |
+| `pnpm docs:build`                                                             | The site as static files in `apps/docs/dist` (`pnpm docs:preview` builds and opens it)                                                                         |
 | `pnpm check`                                                                  | Format check + lint + typecheck + tests. **Must pass before every commit.**                                                                                    |
 | `pnpm test`                                                                   | All unit tests (Vitest)                                                                                                                                        |
 | `pnpm e2e`                                                                    | Builds the web app and runs Playwright journeys against the gateway + mock engine                                                                              |
@@ -112,8 +113,8 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
 | `pnpm --filter @conch/nacre test -- src/components/Button`                    | Tests for one component                                                                                                                                        |
 | `pnpm a11y [--filter=button]`                                                 | axe (incl. colour contrast) on every story, light + dark, in real Chrome (Storybook must be running)                                                           |
 | `node scripts/snap.mjs <story-id> [--mode=dark] [--hover=css] [--clip=css]`   | Screenshot a story for visual QA (Storybook must be running)                                                                                                   |
-| `node apps/docs/scripts/shot.mjs <page> [--mode=dark] [--width=390] [--full]` | Screenshot a documentation page for visual QA (`pnpm docs:dev` must be running)                                                                                |
-| `node apps/docs/scripts/a11y.mjs [--filter=providers]`                        | axe (incl. colour contrast) on every documentation page, light + dark, in real Chrome (`pnpm docs:dev` must be running)                                        |
+| `node apps/docs/scripts/shot.mjs <page> [--mode=dark] [--width=390] [--full]` | Screenshot a page for visual QA: `home` is the front page, `--still` is reduced motion (`pnpm docs:dev` must be running)                                       |
+| `node apps/docs/scripts/a11y.mjs [--filter=providers]`                        | axe (incl. colour contrast) on the front page and every documentation page, light + dark, in real Chrome (`pnpm docs:dev` must be running)                     |
 
 ## Working agreements
 
@@ -283,6 +284,13 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
       `docs/SECURITY.md`, `BROWSER.md`, `TERMINAL.md`, `REVERSE_PROXY.md`,
       `ARCHITECTURE.md`, `docs/design/NACRE.md` and every ADR are pages too, shown
       from where they are: editing one is editing the documentation.
+    - **The front page says only what’s true.** `/` is the first thing anyone
+      sees of Conch (`apps/docs/src/landing/`). Its pictures are the app’s own
+      Nacre components playing a short script (`demos.tsx`), so a picture can’t
+      show a screen Conch doesn’t have. Its numbers and names come from
+      `virtual:conch-reference`. It claims nothing Conch can’t show: no users,
+      no stars, no comparisons, nothing that’s “coming”. “The honest part” lists
+      what isn’t good yet, and loses a tile the day the code makes it untrue.
 
     | You’re adding or changing…                                                                                            | The documentation, in the same change                                                                                                                                                                                                            |
     | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -294,13 +302,16 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
     | A slash command, a permission mode, a thinking level                                                                  | Its words where it’s defined (`apps/web/src/features/commands/slash.ts`, `features/models/words.ts`).                                                                                                                                            |
     | A keyboard shortcut (`useHotkey`)                                                                                     | A row in `content/reference/keyboard.md`.                                                                                                                                                                                                        |
     | A feature, or anything a person sees or does differently (a button’s name, a default, a limit, a new step)            | Its guide in `content/features/` or `content/care/`, or a new one; and the line about it in README “What it does”.                                                                                                                               |
-    | Something the pages can’t draw yet                                                                                    | A Nacre pattern first (`packages/nacre/src/patterns/Docs/`, with its story and test), then an embed.                                                                                                                                             |
+    | A headline feature (what you’d show a friend first), or a limit worth admitting                                       | A scene or a tile on the front page (`apps/docs/src/landing/Landing.tsx`), its picture made of the app’s own components in `demos.tsx`. A limit goes in “The honest part”.                                                                       |
+    | Something the pages can’t draw yet                                                                                    | A Nacre pattern first (`packages/nacre/src/patterns/Docs/`, or `Site/` for the front page, with its story and test), then an embed.                                                                                                              |
 
     `apps/docs/src/content.test.ts` runs in `pnpm check` and fails with the fix in
     its message when a provider or channel has no guide, a link or a heading it
     points at doesn’t exist, a page asks for a part that isn’t there, a command or
     setting has no words, or the app listens for a key the keyboard page doesn’t
-    list. The rest is on you: read the page you changed (`pnpm docs:dev`), look
+    list. `src/landing/Landing.test.tsx` fails when the front page types a
+    count, leaves out a provider, channel or app, boasts, or links nowhere. The
+    rest is on you: read the page you changed (`pnpm docs:dev`), look
     at it in light and dark with `apps/docs/scripts/shot.mjs`, and run
     `apps/docs/scripts/a11y.mjs` when you changed how pages are drawn.
 

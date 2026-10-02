@@ -14,7 +14,7 @@ pnpm install
 pnpm dev          # the app on :5173 with hot reload, Conch on :4317
 pnpm dev:mock     # the same, with a scripted provider and pretend chat apps
 pnpm storybook    # every Nacre component, on :6006
-pnpm docs:dev     # these pages, on :4400
+pnpm docs:dev     # these pages and the front page, on :4400
 pnpm check        # format, lint, types and tests: before every commit
 pnpm e2e          # whole journeys in a real browser
 ```
@@ -27,7 +27,7 @@ pnpm e2e          # whole journeys in a real browser
 | ------------------- | -------------------------------------------------------------------- |
 | `apps/web`          | The app you chat in                                                  |
 | `apps/server`       | Conch itself: providers, apps, the browser, channels and the rest    |
-| `apps/docs`         | These pages                                                          |
+| `apps/docs`         | These pages, and the front page                                      |
 | `packages/nacre`    | The design system, with its Storybook                                |
 | `packages/protocol` | Every message between the app and Conch, as schemas both sides check |
 | `e2e`               | Journeys run in a real browser                                       |

@@ -65,6 +65,13 @@ Write for someone who has never opened a terminal, in the words Conch itself use
   [the decisions](../../../docs/adr).
 - A page is done when nothing more can be taken out.
 
+## The front page
+
+`/` is the landing page (`src/landing/`), not a guide. Its pictures are the app's own
+components playing a script, and its numbers come from the code. It says what Conch
+does and what it doesn't do well yet, and nothing about who uses it. A feature worth
+showing first gets a scene or a tile there.
+
 ## It can't go stale quietly
 
 `pnpm check` runs `src/content.test.ts`, which fails, with the fix in its message,

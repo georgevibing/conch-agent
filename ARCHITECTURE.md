@@ -770,7 +770,7 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
 ### Documentation (`apps/docs`)
 
 A Vite + React site built from Nacre, started with `pnpm docs:dev` and built to static
-files with `pnpm docs:build`.
+files with `pnpm docs:build`. The front page is at `/`, the documentation at `/docs`.
 
 - **Guides** are Markdown in `apps/docs/content/<section>/`: a file is a page, and the
   sidebar, search and "next page" follow from the files. `docs/*.md`, this file and
@@ -783,9 +783,17 @@ files with `pnpm docs:build`.
   runs it in a process of its own and serves the result as `virtual:conch-reference`,
   again whenever those folders change. Pages place a generated part with
   `<!-- conch:name -->` (`src/embeds/`).
+- **The front page** (`src/landing/`) shows the product with the product: each picture
+  is the app's own Nacre components (`Message`, `BrowserWindow`, `Handset`, `Diff`, …)
+  given a script and a clock (`useClock`) that runs only while the picture is in view,
+  and stands at one chosen moment under reduced motion. Pictures are `inert`, named by
+  a sentence. Counts and names come from `virtual:conch-reference`. The documentation
+  (its guides, search and sidebar) is loaded only when someone goes there, so the front
+  page doesn't carry it.
 - **Checked** by `src/content.test.ts` in `pnpm check`: a provider or channel without a
   guide, a dead link, an unknown part or an unlisted keyboard shortcut fails with the
-  fix in its message (AGENTS.md working agreement 13).
+  fix in its message (AGENTS.md working agreement 13). `src/landing/Landing.test.tsx`
+  holds the front page to the code's counts and names, and to claiming nothing else.
 
 ## Security model
 

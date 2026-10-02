@@ -248,7 +248,7 @@ models, skills, apps, routines, pages and settings by name.
 pnpm dev            # web on :5173 (hot reload) + gateway on :4317
 pnpm dev:mock       # same, with a scripted engine and pretend apps — no model usage
 pnpm storybook      # explore Nacre at http://localhost:6006
-pnpm docs:dev       # the documentation at http://localhost:4400
+pnpm docs:dev       # the site at http://localhost:4400: the front page, and the documentation at /docs
 pnpm check          # format + lint + typecheck + tests — must pass before every commit
 pnpm e2e            # Playwright journeys against the gateway and the mock engine
 pnpm start:network  # reachable from your network (sign-in required)
@@ -266,16 +266,17 @@ documents it. For an authenticated HTTPS reverse proxy, see
 | ------------------- | ------------------------------------------------------------------------ |
 | `apps/web`          | React 19 + Vite web app                                                  |
 | `apps/server`       | Fastify gateway: providers, integrations, browser, terminal, channels, … |
-| `apps/docs`         | The documentation: guides in Markdown, reference read from the code      |
+| `apps/docs`         | The site: front page, guides in Markdown, reference read from the code   |
 | `packages/nacre`    | Design system + Storybook                                                |
 | `packages/protocol` | Zod-validated wire protocol                                              |
 | `e2e`               | Playwright journeys                                                      |
 
 ## Docs
 
-**`pnpm docs:dev` opens the documentation**: getting started, every provider and
-channel, each feature, and the reference for the command line, configuration and API.
-Its lists are read from the code, so they are never behind it
+**`pnpm docs:dev` opens the site**: the front page, and under `/docs` the
+documentation: getting started, every provider and channel, each feature, and the
+reference for the command line, configuration and API. Its lists and numbers are read
+from the code, so they are never behind it
 ([apps/docs](./apps/docs/content/README.md)). The files it is made from:
 
 - [AGENTS.md](./AGENTS.md) — how to work in this repo (humans and AI agents)
