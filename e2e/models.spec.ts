@@ -11,6 +11,9 @@ test.beforeEach(async ({ request }) => {
 test('slash commands and pickers configure the next reply', async ({ page, request }) => {
   await page.goto('/');
   const composer = page.getByRole('textbox', { name: /Message/ });
+  // The composer is ready before the provider's model catalog. Wait for its
+  // loaded default before a command that validates the model's capabilities.
+  await expect(page.getByRole('button', { name: 'Model: Default', exact: true })).toBeVisible();
 
   // "/" opens the command menu; Escape closes it.
   await composer.fill('/');
@@ -22,7 +25,9 @@ test('slash commands and pickers configure the next reply', async ({ page, reque
   // /effort and /mode never reach the model — they configure it.
   await composer.fill('/effort high');
   await composer.press('Enter');
-  await expect(page.getByText('Thinking: High')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Model: Default, High thinking', exact: true }),
+  ).toBeVisible();
   await composer.fill('/mode plan');
   await composer.press('Enter');
   await expect(page.getByRole('button', { name: /Plan only/ })).toBeVisible();
