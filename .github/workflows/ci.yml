@@ -21,6 +21,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:installer
+      # `check` bounds both layers of parallelism: static checks first, then one
+      # test workspace with two Vitest workers. Running every task/pool together
+      # starves axe scans until they time out and leak into the following test.
       - run: pnpm check
       - run: pnpm build-storybook
       - run: pnpm docs:build
