@@ -7,20 +7,25 @@
 # Conch in its own folder, builds it, keeps it running in the background,
 # adds "Conch" to your apps and opens it. System packages ask for permission;
 # Conch itself always runs as you.
-# Run it again any time: it updates Conch and repairs anything that moved.
+# It installs the newest stable release (ADR 0048), checked against the
+# signing keys Conch ships; after that Conch updates itself.
+# Run it again any time: it repairs anything that moved.
 #
 #   sh install.sh [--no-background] [--no-shortcut] [--no-open] [--dir PATH]
 #   sh install.sh --no-system-packages   skip optional system-package setup
 #   sh install.sh --server     a little computer: headless, keeps running, your phone's address
 #   sh install.sh --uninstall [--delete-data]
 #
-# Settings from the environment: CONCH_REPO, CONCH_BRANCH, CONCH_DIR, CONCH_HOME.
+# Settings from the environment: CONCH_REPO, CONCH_DIR, CONCH_HOME,
+#   CONCH_CHANNEL=beta|alpha   also take beta (or alpha) releases
+#   CONCH_BRANCH=main          a developer's copy: follow a branch, every change
 
 set -eu
 
 NODE_MAJOR=24
 REPO=${CONCH_REPO:-https://github.com/giotiskl/conch-agent.git}
 BRANCH=${CONCH_BRANCH:-main}
+CHANNEL=${CONCH_CHANNEL:-stable}
 HOME_DIR=${CONCH_HOME:-$HOME/.conch}
 BACKGROUND=1
 SHORTCUT=1
@@ -50,6 +55,8 @@ while [ $# -gt 0 ]; do
     --delete-data) DELETE_DATA=1 ;;
     -h|--help)
       printf '%s\n' 'Conch installer: --no-background --no-shortcut --no-open --dir PATH' \
+        '  Installs the newest stable release; CONCH_CHANNEL=beta or alpha for earlier ones,' \
+        '  CONCH_BRANCH=main for a developer'"'"'s copy that follows every change.' \
         '  --no-system-packages  Skip optional system packages (Git must already be installed)' \
         '  --server             Headless setup for a computer that stays on' \
         '  --uninstall [--delete-data]'; exit 0 ;;
@@ -57,6 +64,11 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+case "$CHANNEL" in
+  stable|beta|alpha) ;;
+  *) echo "CONCH_CHANNEL can be stable, beta or alpha (not $CHANNEL)." >&2; exit 1 ;;
+esac
 
 # ── Saying things ────────────────────────────────────────────────────────
 
@@ -203,6 +215,72 @@ get_git() {
   fail "Conch needs Git." "Install Git with your system's package manager, then run this again."
 }
 
+# >>> releases (install.test.mjs runs this part on its own)
+# The release to install, from a list of tags on stdin: vX.Y.Z is stable,
+# vX.Y.Z-beta.N and vX.Y.Z-alpha.N are pre-releases. Stable takes only
+# stable, beta also takes betas, alpha everything; the newest wins, in
+# semver's order (0.10.0 after 0.9.0, beta.10 after beta.2, a release after
+# its betas). Anything else that looks like a tag is passed over.
+pick_release() {
+  _channel=${1:-stable}
+  while IFS= read -r _tag; do
+    _v=${_tag#v}
+    [ "v$_v" = "$_tag" ] || continue
+    _num='(0|[1-9][0-9]{0,5})'
+    if printf '%s\n' "$_v" | grep -Eq "^$_num\.$_num\.$_num\$"; then
+      _core=$_v; _rank=3; _n=0
+    elif printf '%s\n' "$_v" | grep -Eq "^$_num\.$_num\.$_num-(alpha|beta)\.[1-9][0-9]{0,4}\$"; then
+      _core=${_v%%-*}; _pre=${_v#*-}; _n=${_pre#*.}
+      case "${_pre%%.*}" in
+        beta) _rank=2; [ "$_channel" = stable ] && continue ;;
+        *) _rank=1; [ "$_channel" = alpha ] || continue ;;
+      esac
+    else
+      continue
+    fi
+    _major=${_core%%.*}; _rest=${_core#*.}
+    printf '%06d %06d %06d %d %05d %s\n' "$_major" "${_rest%%.*}" "${_rest#*.}" "$_rank" "$_n" "$_tag"
+  done | sort | tail -n 1 | sed 's/.* //'
+}
+
+# git 2.34 or newer checks SSH signatures.
+git_checks_ssh() {
+  _gv=$(git --version 2>/dev/null | sed -n 's/^git version \([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2/p')
+  [ -n "$_gv" ] || return 1
+  set -- $_gv
+  [ "$1" -gt 2 ] || { [ "$1" -eq 2 ] && [ "$2" -ge 34 ]; }
+}
+# <<< releases
+
+# The release must be signed by a key Conch's own list names. On a first
+# install the list comes from the same place as the release (GitHub, over
+# HTTPS), so this catches a tag that was never signed or signed by someone
+# else; after that, Conch checks every update against the list it already has.
+verify_release() {
+  SIGNERS="$DIR/release/allowed_signers"
+  if [ ! -f "$SIGNERS" ] || ! grep -Eq '^[^#]*(ssh-ed25519|ssh-rsa|ecdsa-sha2-|sk-ssh-ed25519|sk-ecdsa-sha2-)' "$SIGNERS"; then
+    warn "Conch doesn't name its signing keys yet, so this release's signature can't be checked."
+    return 0
+  fi
+  if ! command -v ssh-keygen >/dev/null 2>&1 || ! git_checks_ssh; then
+    warn "This computer's Git can't check signatures (it needs Git 2.34 and ssh-keygen), so the release isn't checked."
+    return 0
+  fi
+  if ! git -C "$DIR" -c gpg.format=ssh -c gpg.ssh.allowedSignersFile="$SIGNERS" \
+    -c gpg.ssh.program=ssh-keygen verify-tag "$1" >"$LOG" 2>&1; then
+    rm -rf "$DIR"
+    fail "This release of Conch isn't signed by Conch's makers, so the installer stopped." \
+      "Nothing of yours was changed. Try again later, or tell Conch's makers."
+  fi
+}
+
+# Conch's version, as its folder writes it.
+conch_version() {
+  _version=$(sed -n 's/^  "version": "\([^"]*\)".*/\1/p' "$1/package.json" 2>/dev/null | head -n 1)
+  [ -n "$_version" ] || _version=$(sed -n "s/.*SERVER_VERSION = '\([^']*\)'.*/\1/p" "$1/apps/server/src/version.ts" 2>/dev/null | head -n 1)
+  echo "$_version"
+}
+
 # ── pnpm, through Node's own corepack ────────────────────────────────────
 
 pnpm_run() {
@@ -214,7 +292,8 @@ pnpm_run() {
   fi
 }
 
-conch() { (cd "$DIR" && pnpm_run --silent --filter @conch/server conch "$@"); }
+conch() { (cd "$RUN_DIR" && pnpm_run --silent --filter @conch/server conch "$@"); }
+RUN_DIR=$DIR
 
 # ── Uninstall ────────────────────────────────────────────────────────────
 
@@ -230,6 +309,8 @@ if [ -n "$UNINSTALL" ]; then
     ok "Conch has stopped and won't start at login"
   fi
   rm -rf "$DIR"
+  # The versions Conch's updates made ready (ADR 0048) are Conch's code, not your data.
+  rm -rf "$HOME_DIR/versions"
   ok "Removed Conch from $DIR"
   if [ -n "$DELETE_DATA" ]; then
     say "This also deletes your chats, memories, routines, settings and passwords in $HOME_DIR."
@@ -261,33 +342,60 @@ if ! has_git; then get_git; fi
 ok "Git"
 
 if [ -d "$DIR/.git" ]; then
-  step "Updating Conch"
-  if [ -n "$(git -C "$DIR" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
-    warn "Conch's folder has changes of its own, so it stays as it is."
+  # A release swapped in by Conch's own updates is the one that runs (ADR 0048).
+  CURRENT=
+  [ -f "$HOME_DIR/versions/current" ] && CURRENT=$(head -n 1 "$HOME_DIR/versions/current")
+  if [ -n "$CURRENT" ] && [ -f "$CURRENT/apps/server/src/start.ts" ]; then
+    RUN_DIR=$CURRENT
+    say "${DIM}Conch updates itself: Settings → Health → Updates.${RESET}"
+  elif ! git -C "$DIR" symbolic-ref -q HEAD >/dev/null 2>&1; then
+    say "${DIM}Conch updates itself: Settings → Health → Updates.${RESET}"
   else
-    quietly git -C "$DIR" pull --ff-only || warn "Conch couldn't update just now; it carries on with the version it has."
+    step "Updating Conch"
+    if [ -n "$(git -C "$DIR" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+      warn "Conch's folder has changes of its own, so it stays as it is."
+    else
+      quietly git -C "$DIR" pull --ff-only || warn "Conch couldn't update just now; it carries on with the version it has."
+    fi
   fi
+elif [ -n "${CONCH_BRANCH:-}" ]; then
+  # A developer's copy: this branch, every change on it.
+  step "Getting Conch ($BRANCH)"
+  mkdir -p "$(dirname "$DIR")"
+  quietly git clone --branch "$BRANCH" "$REPO" "$DIR" ||
+    fail "Conch couldn't be downloaded." "Check your internet connection, then run this again."
+  git -C "$DIR" config conch.follow branch
 else
   step "Getting Conch"
   mkdir -p "$(dirname "$DIR")"
   quietly git clone --branch "$BRANCH" "$REPO" "$DIR" ||
     fail "Conch couldn't be downloaded." "Check your internet connection, then run this again."
+  TAG=$(git -C "$DIR" tag -l 'v*' | pick_release "$CHANNEL")
+  if [ -n "$TAG" ]; then
+    verify_release "$TAG"
+    quietly git -C "$DIR" -c advice.detachedHead=false checkout --quiet --detach "$TAG" ||
+      fail "Conch couldn't open release $TAG." "Run this again; the lines above say what went wrong."
+    [ "$CHANNEL" = stable ] || git -C "$DIR" config conch.channel "$CHANNEL"
+  else
+    # Before Conch's first release, it follows main, as it always did.
+    say "${DIM}Conch has no releases yet, so it follows every change.${RESET}"
+  fi
 fi
-ok "Conch $(sed -n "s/.*SERVER_VERSION = '\([^']*\)'.*/\1/p" "$DIR/apps/server/src/version.ts" | head -n 1) ${DIM}(in $DIR)${RESET}"
+ok "Conch $(conch_version "$RUN_DIR") ${DIM}(in $RUN_DIR)${RESET}"
 
 # Sourced from the checkout so the one-line installer also works through a pipe.
 # Older branches may not have this optional setup yet.
-if [ -f "$DIR/scripts/install-prerequisites.sh" ]; then
-  . "$DIR/scripts/install-prerequisites.sh"
+if [ -f "$RUN_DIR/scripts/install-prerequisites.sh" ]; then
+  . "$RUN_DIR/scripts/install-prerequisites.sh"
   ensure_terminal_prerequisites
 fi
 
 step "Installing what Conch uses (a minute or two the first time)"
-(cd "$DIR" && quietly pnpm_run install --frozen-lockfile --config.confirmModulesPurge=false) ||
+(cd "$RUN_DIR" && quietly pnpm_run install --frozen-lockfile --config.confirmModulesPurge=false) ||
   fail "Installing didn't finish." "Run this again; the lines above say what went wrong."
 # Check the installed backend, not just whether a compiler was found. Optional
 # native builds can still fail (network, platform, ABI); the fallback is usable.
-if TERMINAL=$(cd "$DIR" && pnpm_run --silent --filter @conch/server exec tsx -e \
+if TERMINAL=$(cd "$RUN_DIR" && pnpm_run --silent --filter @conch/server exec tsx -e \
   "import { loadBackend } from './src/terminal/backend.ts'; console.log(loadBackend(() => {}).kind)" 2>"$LOG"); then
   case "$TERMINAL" in
     pty) ok "Full terminal ready" ;;
@@ -299,7 +407,7 @@ else
   warn "The terminal check couldn't finish; Conch will check again when it starts."
 fi
 step "Building the app"
-(cd "$DIR" && quietly pnpm_run --filter @conch/web build) ||
+(cd "$RUN_DIR" && quietly pnpm_run --filter @conch/web build) ||
   fail "Building Conch didn't finish." "Run this again; the lines above say what went wrong."
 ok "Installed"
 

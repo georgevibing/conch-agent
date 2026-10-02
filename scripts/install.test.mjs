@@ -281,3 +281,283 @@ test('terminal prerequisites', { skip: process.platform === 'win32' }, async (t)
     assert.match(output, /basic mode/);
   });
 });
+
+// ── Releases (ADR 0048) ──────────────────────────────────────────────────
+
+const installerText = readFileSync(new URL('./install.sh', import.meta.url), 'utf8');
+/** Just the part that picks a release, run on its own. */
+const releasePart = installerText.slice(
+  installerText.indexOf('# >>> releases'),
+  installerText.indexOf('# <<< releases'),
+);
+const pick = (tags, channel = 'stable') =>
+  execFileSync('/bin/sh', ['-c', `${releasePart}\npick_release "$1"`, 'sh', channel], {
+    input: tags.join('\n') + '\n',
+    encoding: 'utf8',
+  }).trim();
+
+test('picking the release to install', { skip: process.platform === 'win32' }, async (t) => {
+  const tags = [
+    'v0.2.0',
+    'v0.3.0-beta.1',
+    'v0.3.0-alpha.4',
+    'v0.1.0',
+    'nightly',
+    'v1.0',
+    'v0.2.0-rc.1',
+  ];
+  await t.test('the newest stable release by default, over a newer beta', () => {
+    assert.equal(pick(tags), 'v0.2.0');
+  });
+  await t.test('beta takes betas and stable releases; alpha takes everything', () => {
+    assert.equal(pick(tags, 'beta'), 'v0.3.0-beta.1');
+    assert.equal(pick(tags, 'alpha'), 'v0.3.0-beta.1');
+    assert.equal(pick(['v0.3.0-alpha.4', 'v0.2.0'], 'alpha'), 'v0.3.0-alpha.4');
+    assert.equal(pick(['v0.3.0-alpha.4', 'v0.2.0'], 'beta'), 'v0.2.0');
+  });
+  await t.test('in semver’s order', () => {
+    assert.equal(pick(['v0.9.0', 'v0.10.0', 'v0.2.11']), 'v0.10.0');
+    assert.equal(pick(['v0.4.0-beta.2', 'v0.4.0-beta.10', 'v0.3.9'], 'beta'), 'v0.4.0-beta.10');
+    assert.equal(pick(['v0.4.0-beta.10', 'v0.4.0'], 'beta'), 'v0.4.0');
+  });
+  await t.test('nothing when there are no releases', () => {
+    assert.equal(pick(['nightly', 'v01.2.3', 'v1.2.3-beta.0']), '');
+    assert.equal(pick([]), '');
+  });
+});
+
+/** Real git with signed tags, and everything else Conch's installer runs pretended. */
+function releaseWorld({ tags = [], sign = 'maker' } = {}) {
+  const root = mkdtempSync(join(tmpdir(), 'conch-install-release-'));
+  const env = {
+    ...process.env,
+    GIT_AUTHOR_NAME: 'Ada',
+    GIT_AUTHOR_EMAIL: 'ada@example.com',
+    GIT_COMMITTER_NAME: 'Ada',
+    GIT_COMMITTER_EMAIL: 'ada@example.com',
+    GIT_CONFIG_GLOBAL: '/dev/null',
+    GIT_CONFIG_NOSYSTEM: '1',
+  };
+  const git = (cwd, ...args) => execFileSync('git', args, { cwd, env, encoding: 'utf8' }).trim();
+  const key = (name) => {
+    execFileSync('ssh-keygen', [
+      '-q',
+      '-t',
+      'ed25519',
+      '-N',
+      '',
+      '-C',
+      name,
+      '-f',
+      join(root, name),
+    ]);
+    return { file: join(root, name), pub: readFileSync(join(root, `${name}.pub`), 'utf8') };
+  };
+  const maker = key('maker');
+  const stranger = key('stranger');
+  const origin = join(root, 'origin.git');
+  const work = join(root, 'work');
+  git(root, 'init', '--quiet', '--bare', '-b', 'main', origin);
+  git(root, 'clone', '--quiet', origin, work);
+  git(work, 'checkout', '--quiet', '-b', 'main');
+  const signers = `ada@example.com namespaces="git" ${maker.pub.split(' ').slice(0, 2).join(' ')}\n`;
+  const commit = (version) => {
+    mkdirSync(join(work, 'release'), { recursive: true });
+    writeFileSync(join(work, 'release/allowed_signers'), signers);
+    writeFileSync(
+      join(work, 'package.json'),
+      `{\n  "name": "conch",\n  "version": "${version}"\n}\n`,
+    );
+    git(work, 'add', '-A');
+    git(work, 'commit', '--quiet', '-m', `release: v${version}`);
+  };
+  for (const name of tags) {
+    commit(name.slice(1));
+    const by = sign === 'stranger' ? stranger : sign === 'none' ? undefined : maker;
+    if (by)
+      git(
+        work,
+        '-c',
+        'gpg.format=ssh',
+        '-c',
+        `user.signingkey=${by.file}`,
+        'tag',
+        '-s',
+        '-m',
+        `Conch ${name}`,
+        name,
+      );
+    else git(work, 'tag', '-a', '-m', `Conch ${name}`, name);
+  }
+  commit('0.9.9-main');
+  git(work, 'push', '--quiet', 'origin', 'main', '--tags');
+
+  const bin = join(root, 'bin');
+  mkdirSync(bin);
+  for (const name of [
+    'git',
+    'ssh-keygen',
+    'mktemp',
+    'rm',
+    'sed',
+    'dirname',
+    'head',
+    'tail',
+    'sort',
+    'grep',
+    'mkdir',
+    'cat',
+  ]) {
+    const path = execFileSync('/bin/sh', ['-c', 'command -v "$1"', 'sh', name], {
+      encoding: 'utf8',
+    }).trim();
+    symlinkSync(path, join(bin, name));
+  }
+  const stub = `#!${process.execPath}
+const name = require('node:path').basename(process.argv[1]);
+const args = process.argv.slice(2);
+if (name === 'uname') console.log('Linux');
+if (name === 'id') console.log('1000');
+if (name === 'node' && args[0] === '-v') console.log('v24.0.0');
+if (name === 'corepack' && args.includes('tsx')) console.log('python');
+`;
+  for (const name of ['uname', 'id', 'node', 'corepack'])
+    writeFileSync(join(bin, name), stub, { mode: 0o755 });
+  const dir = join(root, 'app');
+  const install = (extra = {}) => {
+    try {
+      const output = execFileSync(
+        '/bin/sh',
+        [
+          '-s',
+          '--',
+          '--dir',
+          dir,
+          '--no-background',
+          '--no-shortcut',
+          '--no-open',
+          '--no-system-packages',
+        ],
+        {
+          input: installerText,
+          encoding: 'utf8',
+          timeout: 20_000,
+          env: {
+            HOME: root,
+            PATH: bin,
+            TMPDIR: root,
+            CONCH_HOME: join(root, 'data'),
+            CONCH_REPO: origin,
+            GIT_CONFIG_GLOBAL: '/dev/null',
+            ...extra,
+          },
+        },
+      );
+      return { ok: true, output };
+    } catch (error) {
+      return { ok: false, output: `${error.stdout}${error.stderr}` };
+    }
+  };
+  const at = () => git(dir, 'describe', '--tags', '--exact-match', 'HEAD');
+  return {
+    root,
+    dir,
+    git,
+    install,
+    at,
+    cleanup: () => rmSync(root, { recursive: true, force: true }),
+  };
+}
+
+test('installing a release', { skip: process.platform === 'win32' }, async (t) => {
+  await t.test('the newest stable release, checked, detached at its tag', () => {
+    const w = releaseWorld({ tags: ['v0.1.0', 'v0.2.0', 'v0.3.0-beta.1'] });
+    try {
+      const { ok, output } = w.install();
+      assert.ok(ok, output);
+      assert.equal(w.at(), 'v0.2.0');
+      assert.match(output, /Conch 0\.2\.0/);
+      assert.doesNotMatch(output, /can't be checked/);
+      assert.throws(() => w.git(w.dir, 'symbolic-ref', '-q', 'HEAD'));
+      // Run again: it doesn't pull; Conch updates itself.
+      const again = w.install();
+      assert.match(again.output, /Conch updates itself: Settings → Health → Updates/);
+      assert.equal(w.at(), 'v0.2.0');
+    } finally {
+      w.cleanup();
+    }
+  });
+  await t.test('CONCH_CHANNEL=beta takes the beta, and says so to Conch', () => {
+    const w = releaseWorld({ tags: ['v0.2.0', 'v0.3.0-beta.1'] });
+    try {
+      assert.ok(w.install({ CONCH_CHANNEL: 'beta' }).ok);
+      assert.equal(w.at(), 'v0.3.0-beta.1');
+      assert.equal(w.git(w.dir, 'config', 'conch.channel'), 'beta');
+      assert.equal(w.install({ CONCH_CHANNEL: 'nightly' }).ok, false);
+    } finally {
+      w.cleanup();
+    }
+  });
+  await t.test(
+    'a release signed by someone else stops the installer, leaving nothing behind',
+    () => {
+      const w = releaseWorld({ tags: ['v0.2.0'], sign: 'stranger' });
+      try {
+        const { ok, output } = w.install();
+        assert.equal(ok, false);
+        assert.match(
+          output,
+          /This release of Conch isn't signed by Conch's makers, so the installer stopped/,
+        );
+        assert.throws(() => readFileSync(join(w.dir, 'package.json')));
+      } finally {
+        w.cleanup();
+      }
+    },
+  );
+  await t.test('before the first release, main, as before', () => {
+    const w = releaseWorld();
+    try {
+      const { ok, output } = w.install();
+      assert.ok(ok, output);
+      assert.match(output, /no releases yet/);
+      assert.equal(w.git(w.dir, 'symbolic-ref', '--short', 'HEAD'), 'main');
+    } finally {
+      w.cleanup();
+    }
+  });
+  await t.test('CONCH_BRANCH: a developer’s copy that follows its branch', () => {
+    const w = releaseWorld({ tags: ['v0.2.0'] });
+    try {
+      assert.ok(w.install({ CONCH_BRANCH: 'main' }).ok);
+      assert.equal(w.git(w.dir, 'symbolic-ref', '--short', 'HEAD'), 'main');
+      assert.equal(w.git(w.dir, 'config', 'conch.follow'), 'branch');
+    } finally {
+      w.cleanup();
+    }
+  });
+});
+
+test('the Windows installer follows the same releases', () => {
+  const ps = readFileSync(new URL('./install.ps1', import.meta.url), 'utf8');
+  // Its tag pattern, read as .NET reads it (the same syntax JavaScript has here).
+  const pattern = /\[regex\]::Match\("\$tag"\.Trim\(\), "(.+?)"\)/.exec(ps)?.[1];
+  assert.ok(pattern);
+  const tagRe = new RegExp(
+    pattern.replaceAll('$num', '(0|[1-9][0-9]{0,5})').replace(/\?\$$/, '?$'),
+  );
+  const kind = (tag) => tagRe.exec(tag)?.[4] ?? (tagRe.test(tag) ? 'stable' : undefined);
+  assert.equal(kind('v0.3.0'), 'stable');
+  assert.equal(kind('v0.3.0-beta.2'), 'beta');
+  assert.equal(tagRe.exec('v0.3.0-beta.12')?.[5], '12');
+  assert.equal(kind('v01.2.3'), undefined);
+  assert.equal(kind('v1.2.3-rc.1'), undefined);
+  for (const piece of [
+    'conch.follow branch',
+    'conch.channel',
+    "'versions\\current'",
+    'verify-tag',
+    'CONCH_CHANNEL',
+  ])
+    assert.ok(ps.includes(piece), piece);
+});

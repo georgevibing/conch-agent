@@ -4,11 +4,15 @@
 #
 # It gets what Conch needs (Node.js and Git, when they're missing) into your
 # own folders, builds Conch, keeps it running in the background, adds it to
-# the Start menu and opens it. Nothing needs an administrator. Run it again
-# any time: it updates Conch and repairs anything that moved.
+# the Start menu and opens it. Nothing needs an administrator. It installs
+# the newest stable release (ADR 0048), checked against the signing keys
+# Conch ships; after that Conch updates itself. Run it again any time: it
+# repairs anything that moved.
 #
 # Options (set before running): $env:CONCH_NO_BACKGROUND, $env:CONCH_NO_SHORTCUT,
-# $env:CONCH_NO_OPEN, $env:CONCH_UNINSTALL, $env:CONCH_DIR, $env:CONCH_REPO, $env:CONCH_BRANCH,
+# $env:CONCH_NO_OPEN, $env:CONCH_UNINSTALL, $env:CONCH_DIR, $env:CONCH_REPO,
+# $env:CONCH_CHANNEL (beta or alpha: also take those releases),
+# $env:CONCH_BRANCH (a developer's copy: follow a branch, every change),
 # $env:CONCH_SERVER (a little computer: no browser, your phone's secure address and code).
 
 $ErrorActionPreference = 'Stop'
@@ -18,6 +22,8 @@ $ProgressPreference = 'SilentlyContinue'
 $NodeMajor = 24
 $Repo = if ($env:CONCH_REPO) { $env:CONCH_REPO } else { 'https://github.com/giotiskl/conch-agent.git' }
 $Branch = if ($env:CONCH_BRANCH) { $env:CONCH_BRANCH } else { 'main' }
+$Channel = if ($env:CONCH_CHANNEL) { $env:CONCH_CHANNEL } else { 'stable' }
+if ($Channel -notin @('stable', 'beta', 'alpha')) { throw "CONCH_CHANNEL can be stable, beta or alpha (not $Channel)." }
 $ConchHome = if ($env:CONCH_HOME) { $env:CONCH_HOME } else { Join-Path $HOME '.conch' }
 $Dir = if ($env:CONCH_DIR) { $env:CONCH_DIR } else { Join-Path $env:LOCALAPPDATA 'Conch\app' }
 $Runtime = Join-Path $ConchHome 'runtime'
@@ -127,6 +133,56 @@ function Get-Git {
   Remove-Item $zip
 }
 
+# ── Releases (ADR 0048) ──────────────────────────────────────────────────
+
+# The release to install from a list of tags: vX.Y.Z is stable, vX.Y.Z-beta.N
+# and vX.Y.Z-alpha.N are pre-releases. Stable takes only stable, beta also
+# betas, alpha everything; the newest wins, in semver's order.
+function Select-Release([string[]]$tags, [string]$channel) {
+  $num = '(0|[1-9][0-9]{0,5})'
+  $best = $null; $bestKey = $null
+  foreach ($tag in $tags) {
+    $m = [regex]::Match("$tag".Trim(), "^v$num\.$num\.$num(?:-(alpha|beta)\.([1-9][0-9]{0,4}))?$")
+    if (-not $m.Success) { continue }
+    $kind = $m.Groups[4].Value
+    if ($kind -eq 'beta' -and $channel -eq 'stable') { continue }
+    if ($kind -eq 'alpha' -and $channel -ne 'alpha') { continue }
+    $rank = if ($kind -eq 'beta') { 2 } elseif ($kind -eq 'alpha') { 1 } else { 3 }
+    $n = if ($kind) { [int]$m.Groups[5].Value } else { 0 }
+    $key = '{0:D6} {1:D6} {2:D6} {3} {4:D5}' -f [int]$m.Groups[1].Value, [int]$m.Groups[2].Value, [int]$m.Groups[3].Value, $rank, $n
+    if (-not $bestKey -or [string]::CompareOrdinal($key, $bestKey) -gt 0) { $best = "$tag".Trim(); $bestKey = $key }
+  }
+  return $best
+}
+
+# The release must be signed by a key Conch's own list names. On a first
+# install that list comes from the same place as the release (GitHub, over
+# HTTPS), so this catches a tag never signed, or signed by someone else;
+# after that, Conch checks every update against the list it already has.
+function Confirm-Release([string]$tag) {
+  $signers = Join-Path $Dir 'release\allowed_signers'
+  $keys = if (Test-Path $signers) { Get-Content $signers | Where-Object { $_ -match '^[^#]*(ssh-ed25519|ssh-rsa|ecdsa-sha2-|sk-ssh-ed25519|sk-ecdsa-sha2-)' } }
+  if (-not $keys) { Warn "Conch doesn't name its signing keys yet, so this release's signature can't be checked."; return }
+  $keygen = Get-Command ssh-keygen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source
+  if (-not $keygen) {
+    $bundled = Join-Path (Split-Path (Split-Path $git)) 'usr\bin\ssh-keygen.exe'
+    if (Test-Path $bundled) { $keygen = $bundled }
+  }
+  $version = [regex]::Match((& $git --version), '(\d+)\.(\d+)')
+  $recent = $version.Success -and ([int]$version.Groups[1].Value -gt 2 -or ([int]$version.Groups[1].Value -eq 2 -and [int]$version.Groups[2].Value -ge 34))
+  if (-not $keygen -or -not $recent) { Warn "This computer's Git can't check signatures (it needs Git 2.34 and ssh-keygen), so the release isn't checked."; return }
+  $ok = Quietly $git @('-C', "`"$Dir`"", '-c', 'gpg.format=ssh', '-c', "`"gpg.ssh.allowedSignersFile=$signers`"", '-c', "`"gpg.ssh.program=$keygen`"", 'verify-tag', $tag)
+  if (-not $ok) {
+    Remove-Item $Dir -Recurse -Force -ErrorAction SilentlyContinue
+    Fail "This release of Conch isn't signed by Conch's makers, so the installer stopped." "Nothing of yours was changed. Try again later, or tell Conch's makers."
+  }
+}
+
+# Conch's version, as its folder writes it.
+function Get-ConchVersion([string]$folder) {
+  try { return (Get-Content (Join-Path $folder 'package.json') -Raw | ConvertFrom-Json).version } catch { return '' }
+}
+
 function Invoke-Pnpm([string[]]$arguments) {
   $env:COREPACK_ENABLE_DOWNLOAD_PROMPT = '0'
   $corepack = Join-Path (Split-Path $script:Node) 'corepack.cmd'
@@ -136,7 +192,7 @@ function Invoke-Pnpm([string[]]$arguments) {
 }
 
 function Invoke-Conch([string[]]$arguments) {
-  Push-Location $Dir
+  Push-Location $RunDir
   try {
     $env:COREPACK_ENABLE_DOWNLOAD_PROMPT = '0'
     $corepack = Join-Path (Split-Path $script:Node) 'corepack.cmd'
@@ -147,6 +203,7 @@ function Invoke-Conch([string[]]$arguments) {
 
 # ── Uninstall ────────────────────────────────────────────────────────────
 
+$RunDir = $Dir
 $script:Node = Find-Node
 if ($env:CONCH_UNINSTALL) {
   if ($script:Node -and (Test-Path (Join-Path $Dir 'package.json'))) {
@@ -158,6 +215,9 @@ if ($env:CONCH_UNINSTALL) {
     Ok "Conch has stopped and won't start when you sign in"
   }
   if (Test-Path $Dir) { Remove-Item $Dir -Recurse -Force }
+  # The versions Conch's updates made ready (ADR 0048) are Conch's code, not your data.
+  $versions = Join-Path $ConchHome 'versions'
+  if (Test-Path $versions) { Remove-Item $versions -Recurse -Force }
   Ok "Removed Conch from $Dir"
   Say "Your chats and settings are still in $ConchHome, for when you come back."
   Write-Host ''
@@ -186,23 +246,51 @@ $env:PATH = "$(Split-Path $git);$env:PATH"
 Ok 'Git'
 
 if (Test-Path (Join-Path $Dir '.git')) {
-  Step 'Updating Conch'
-  $changes = & $git -C $Dir status --porcelain --untracked-files=no
-  if ($changes) { Warn "Conch's folder has changes of its own, so it stays as it is." }
-  elseif (-not (Quietly $git @('-C', "`"$Dir`"", 'pull', '--ff-only'))) {
-    Warn "Conch couldn't update just now; it carries on with the version it has."
+  # A release swapped in by Conch's own updates is the one that runs (ADR 0048).
+  $pointer = Join-Path $ConchHome 'versions\current'
+  $current = if (Test-Path $pointer) { (Get-Content $pointer -TotalCount 1).Trim() } else { '' }
+  & $git -C $Dir symbolic-ref -q HEAD *> $null
+  $onBranch = $LASTEXITCODE -eq 0
+  if ($current -and (Test-Path (Join-Path $current 'apps\server\src\start.ts'))) {
+    $RunDir = $current
+    Say 'Conch updates itself: Settings > Health > Updates.'
+  } elseif (-not $onBranch) {
+    Say 'Conch updates itself: Settings > Health > Updates.'
+  } else {
+    Step 'Updating Conch'
+    $changes = & $git -C $Dir status --porcelain --untracked-files=no
+    if ($changes) { Warn "Conch's folder has changes of its own, so it stays as it is." }
+    elseif (-not (Quietly $git @('-C', "`"$Dir`"", 'pull', '--ff-only'))) {
+      Warn "Conch couldn't update just now; it carries on with the version it has."
+    }
   }
 } else {
-  Step 'Getting Conch'
+  Step $(if ($env:CONCH_BRANCH) { "Getting Conch ($Branch)" } else { 'Getting Conch' })
   New-Item -ItemType Directory -Force (Split-Path $Dir) | Out-Null
   if (-not (Quietly $git @('clone', '--branch', $Branch, $Repo, "`"$Dir`""))) {
     Fail "Conch couldn't be downloaded." 'Check your internet connection, then run this again.'
   }
+  if ($env:CONCH_BRANCH) {
+    # A developer's copy: this branch, every change on it.
+    & $git -C $Dir config conch.follow branch
+  } else {
+    $tag = Select-Release @(& $git -C $Dir tag -l 'v*') $Channel
+    if ($tag) {
+      Confirm-Release $tag
+      if (-not (Quietly $git @('-C', "`"$Dir`"", '-c', 'advice.detachedHead=false', 'checkout', '--quiet', '--detach', $tag))) {
+        Fail "Conch couldn't open release $tag." 'Run this again; the lines above say what went wrong.'
+      }
+      if ($Channel -ne 'stable') { & $git -C $Dir config conch.channel $Channel }
+    } else {
+      # Before Conch's first release, it follows main, as it always did.
+      Say 'Conch has no releases yet, so it follows every change.'
+    }
+  }
 }
-Ok "Conch (in $Dir)"
+Ok "Conch $(Get-ConchVersion $RunDir) (in $RunDir)"
 
 Step 'Installing what Conch uses (a minute or two the first time)'
-Push-Location $Dir
+Push-Location $RunDir
 try {
   if (-not (Invoke-Pnpm @('install', '--frozen-lockfile'))) { Fail "Installing didn't finish." 'Run this again; the lines above say what went wrong.' }
   Step 'Building the app'
