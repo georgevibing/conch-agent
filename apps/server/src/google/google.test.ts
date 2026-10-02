@@ -244,6 +244,23 @@ describe('Google Desktop and remote setup', () => {
     expect((await service.status()).accounts).toHaveLength(0);
     expect(fetcher).not.toHaveBeenCalled();
   });
+  it('cannot narrow an existing connection by picking it through the add-another-account path', async () => {
+    await service.importCredentials({ credentials: downloaded }, origin);
+    const first = await service.start({ capabilities: ['mail-read', 'calendar-read'] }, local);
+    await service.finish(first.flowId, 'code', first.nonce, local);
+    const original = (await store.read()).accounts.account1;
+    client.getTokenInfo.mockResolvedValue({
+      aud: config.clientId,
+      sub: 'account1',
+      scopes: SCOPES['calendar-read'],
+      expiry_date: Date.now() + 3_600_000,
+    });
+    const next = await service.start({ capabilities: ['calendar-read'] }, origin);
+    await expect(
+      service.complete(next.flowId, { redirectUrl: returned(next.flowId) }, next.nonce, origin),
+    ).rejects.toThrow('already connected with more access');
+    expect((await store.read()).accounts.account1).toEqual(original);
+  });
   it('returns curated consent failures, never raw Google errors', async () => {
     const flow = await service.start({ capabilities: ['mail-read'] }, origin);
     client.getToken.mockRejectedValue({

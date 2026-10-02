@@ -418,6 +418,15 @@ export class GoogleService {
         const previous = data.accounts[profile.sub];
         if (flow.accountId && previous?.credential.generation !== flow.generation)
           throw new GoogleError('expired', 'This account changed while signing in. Start again.');
+        if (
+          previous &&
+          !flow.accountId &&
+          previous.profile.capabilities.some((c) => !granted.includes(c))
+        )
+          throw new GoogleError(
+            'scope',
+            'That account is already connected with more access. Choose its existing entry below, or reconnect from that entry to add permissions without replacing the saved connection.',
+          );
         data.accounts[profile.sub] = {
           profile: {
             id: profile.sub,
