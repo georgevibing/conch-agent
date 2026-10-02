@@ -228,32 +228,35 @@ export function SourcesDialog({
         <Dialog.Body>
           <Stack gap={4}>
             <div>
-              {sources.map((s) => (
-                <div key={s.id}>
-                  <VaultSourceRow
-                    source={s.id}
-                    state={s.state}
-                    message={s.message}
-                    count={s.count}
-                    keptUnlocked={s.keptUnlocked}
-                    action={action(s)}
-                    sync={
-                      s.sync && {
-                        enabled: s.sync.enabled,
-                        copies: s.sync.copies,
-                        ...(s.sync.at && { when: `up to date ${ago(s.sync.at)}` }),
-                        ...(s.sync.problem && { problem: s.sync.problem }),
+              {/* One this computer can't have (the macOS Keychain off a Mac) isn't offered. */}
+              {sources
+                .filter((s) => s.available !== false)
+                .map((s) => (
+                  <div key={s.id}>
+                    <VaultSourceRow
+                      source={s.id}
+                      state={s.state}
+                      message={s.message}
+                      count={s.count}
+                      keptUnlocked={s.keptUnlocked}
+                      action={action(s)}
+                      sync={
+                        s.sync && {
+                          enabled: s.sync.enabled,
+                          copies: s.sync.copies,
+                          ...(s.sync.at && { when: `up to date ${ago(s.sync.at)}` }),
+                          ...(s.sync.problem && { problem: s.sync.problem }),
+                        }
                       }
-                    }
-                  />
-                  {syncControls(s)}
-                  {s.state === 'missing' && s.need && (
-                    <div style={{ paddingInlineStart: 56, paddingBlockEnd: 12 }}>
-                      <GetIt needId={s.need} />
-                    </div>
-                  )}
-                </div>
-              ))}
+                    />
+                    {syncControls(s)}
+                    {s.state === 'missing' && s.need && (
+                      <div style={{ paddingInlineStart: 56, paddingBlockEnd: 12 }}>
+                        <GetIt needId={s.need} />
+                      </div>
+                    )}
+                  </div>
+                ))}
             </div>
             {error && !unlocking && (
               <Callout tone="warning" role="alert">

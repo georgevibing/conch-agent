@@ -69,8 +69,8 @@ person who confirmed it's them.
 The Channels page is gone; it's **Talk to me here**, a filter of Apps beside Work, Files and the
 rest, with the chat apps in the gallery and the "how it works" steps when none is connected yet.
 With everything showing, the gallery is laid out by those same kinds, a heading over each (Work,
-Talk to me here, Files, Design, Business, Developer, Home), each app once under its own kind; a
-filter or a search shows one flat list.
+Talk to me here, Files, Passwords, Design, Business, Developer, Home), each app once under its
+own kind; a filter or a search shows one flat list.
 `/channels` opens it. A chat app's setup and detail pages keep their addresses (`/channels/new/:kind`,
 `/channels/:id`), and lead back to Apps (or to the app they're a half of).
 
@@ -118,6 +118,25 @@ choices are kept); reads honour it, sending always asks. `GET/PATCH/DELETE /api/
 `SlackDetail` are gone; Slack tells pages about itself with `integration.changed` and
 `integration.deleted`. What setting it up needs stays: `POST /api/slack/connect` (answers with the
 app) and `GET /api/slack/setup` (the Slack channel's app, by name only).
+
+### Every password manager is an app
+
+1Password had a card in Apps because it's in the catalog (below); Bitwarden, KeePassXC, Proton
+Pass, Dashlane, Keeper and the macOS Keychain had none, though each does for a person exactly what
+1Password's card says: it fills sign-ins. To a person that read as a mistake. Now each manager
+Passwords can read is an app (`managerItem` in web `features/integrations/apps.ts`):
+
+- One that's on has a card under **Connected** ("fills sign-ins"); its switch is the manager's own.
+- The others are tiles in the gallery, under the kind **Passwords** (1Password's catalog entry is
+  in that kind too). A tile opens the manager's page, `/apps/<id>`, which is one switch: **Fill
+  sign-ins from <name>**, with where to unlock it or what it still needs.
+- ⌘K finds each by name.
+- One this computer can't run (`VaultSource.available: false`: the macOS Keychain off a Mac)
+  isn't offered in Apps, in ⌘K or in Passwords' own list.
+
+Nothing about how a manager is read changes (ADR 0025): the page's switch is the same
+`PATCH /api/vault/sources/:id` that Passwords uses, unlocking still happens in Passwords, and
+Apps asks for the list without `look`, so no manager's own approval window comes up from here.
 
 ### 1Password: one entry point, two clearly named halves
 

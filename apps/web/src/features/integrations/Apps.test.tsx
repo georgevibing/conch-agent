@@ -22,6 +22,7 @@ import {
   groupTiles,
   isFound,
   joinApps,
+  managerItem,
   toolGroups,
 } from './apps';
 import { AppsView } from './AppsView';
@@ -732,5 +733,88 @@ describe('an app disconnected while its page is open', () => {
     await waitFor(() =>
       expect(screen.getByTestId('where').textContent).toBe('/apps?connect=notion'),
     );
+  });
+});
+
+/** Another password manager, as Passwords reports it. */
+const manager = (
+  id: 'bitwarden' | 'keepassxc' | 'keychain',
+  name: string,
+  patch: Partial<VaultSource> = {},
+): VaultSource => ({
+  id,
+  name,
+  state: 'off',
+  writable: false,
+  unlock: id === 'bitwarden' ? 'password' : 'app',
+  ...patch,
+});
+
+describe('every password manager is an app, not only 1Password (ADR 0052)', () => {
+  const sources = [
+    onePassword({ state: 'off' }),
+    manager('bitwarden', 'Bitwarden', { state: 'locked' }),
+    manager('keepassxc', 'KeePassXC'),
+    // Off a Mac it has no way to work, so it isn’t offered anywhere.
+    manager('keychain', 'macOS Keychain', { available: false }),
+  ];
+
+  it('one you turned on is a card; the others are in the gallery under Passwords', () => {
+    const items = joinApps({ integrations: [], catalog, channels: [], sources });
+    expect(items.map((i) => [i.key, i.name, i.brand, i.to, Boolean(i.source)])).toEqual([
+      ['bitwarden', 'Bitwarden', 'bitwarden', '/apps/bitwarden', true],
+    ]);
+    expect(items.map((i) => describeApp(i).meta)).toEqual(['fills sign-ins once unlocked']);
+    // Its page is the same item whether it is on or not.
+    expect(sources.slice(1, 3).map((source) => managerItem(source).to)).toEqual([
+      '/apps/bitwarden',
+      '/apps/keepassxc',
+    ]);
+    const tiles = galleryTiles({ catalog, channelCatalog: [], have: items, sources });
+    expect(
+      tiles.filter((t) => t.kind === 'passwords').map((t) => [t.id, t.categories, t.tagline]),
+    ).toEqual([['keepassxc', ['passwords'], 'Fills your sign-ins']]);
+  });
+
+  it('shows on Apps: connected above, the rest to turn on below', async () => {
+    mockFetch(routes({ sources }));
+    renderApp(<AppsView />, { route: '/apps' });
+    const connected = await screen.findByRole('region', { name: 'Connected' });
+    expect(within(connected).getByRole('button', { name: 'Bitwarden' })).toBeInTheDocument();
+    const passwords = screen.getByRole('region', { name: 'Passwords' });
+    expect(within(passwords).getByRole('button', { name: 'KeePassXC' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'macOS Keychain' })).toBeNull();
+  });
+
+  it('has a page with its one switch, on or not', async () => {
+    const calls = mockFetch(
+      routes({
+        sources,
+        'PATCH /api/vault/sources/keepassxc': () => [manager('keepassxc', 'KeePassXC')],
+      }),
+    );
+    renderApp(<AppDetailView appId="keepassxc" />, { route: '/apps/keepassxc' });
+    expect(await screen.findByRole('heading', { level: 1, name: 'KeePassXC' })).toBeInTheDocument();
+    const fill = within(screen.getByRole('list', { name: 'What KeePassXC does' })).getByRole(
+      'switch',
+      { name: 'Fill sign-ins from KeePassXC' },
+    );
+    expect(fill).not.toBeChecked();
+    await userEvent.click(fill);
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PATCH')).toMatchObject({
+        path: '/api/vault/sources/keepassxc',
+        body: { enabled: true },
+      }),
+    );
+  });
+
+  it('one that’s locked says where to unlock it', async () => {
+    mockFetch(routes({ sources }));
+    renderApp(<AppDetailView appId="bitwarden" />, { route: '/apps/bitwarden' });
+    const fill = await screen.findByRole('switch', { name: 'Fill sign-ins from Bitwarden' });
+    expect(fill).toBeChecked();
+    expect(fill).toHaveAccessibleDescription(/Locked\. Unlock it in Passwords\./);
+    expect(screen.getByRole('button', { name: 'Open Passwords' })).toBeInTheDocument();
   });
 });

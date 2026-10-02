@@ -26,7 +26,7 @@ Turn one on in **More → Password managers…**. Conch reads it through that ma
 
 A manager that asks for your OK in its own window, such as 1Password, is only asked while you have **Passwords** open. Anywhere else in Conch you see what it showed last, and nothing pops up. How long its OK lasts is the manager's to decide: 1Password asks again after ten minutes without use, and on Windows each time Conch restarts.
 
-1Password is an app in **Apps** too, with this as one of its switches: **Fill sign-ins from 1Password**. The other, **Manage Environments**, is for developers. See [Apps](./apps.md#1password).
+Each of these managers is an app in **Apps** too, under **Passwords**. One you turned on has a card there, and its page has the same switch: **Fill sign-ins from** and its name. 1Password has a second switch, **Manage Environments**, for developers. See [Apps](./apps.md#1password). A manager this computer can't run, such as the macOS Keychain on Windows, isn't offered.
 
 **Copy into Conch** makes a manager's items Conch's own, so they are in your vault and your backups. It can keep them up to date, one way, every 30 minutes. No export file is made.
 

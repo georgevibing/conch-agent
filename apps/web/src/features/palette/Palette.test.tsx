@@ -1149,7 +1149,23 @@ describe('Palette search', () => {
         ],
         status: {
           protection: 'keychain',
-          sources: [],
+          sources: [
+            {
+              id: 'bitwarden',
+              name: 'Bitwarden',
+              state: 'off',
+              writable: false,
+              unlock: 'password',
+            },
+            {
+              id: 'keychain',
+              name: 'macOS Keychain',
+              state: 'off',
+              writable: false,
+              unlock: 'app',
+              available: false,
+            },
+          ],
           health: { weak: 0, reused: 0, compromised: 0, expired: 0, insecure: 0 },
           trash: 0,
         },
@@ -1159,6 +1175,15 @@ describe('Palette search', () => {
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'netflix');
     expect(await screen.findByRole('option', { name: /Netflix/ })).toBeInTheDocument();
+    // A password manager is an app to find by name; one this computer has no way to run is not.
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'bitwarden');
+    expect(await screen.findByRole('option', { name: /Bitwarden/ })).toBeInTheDocument();
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'keychain');
+    await waitFor(() =>
+      expect(screen.queryByRole('option', { name: /macOS Keychain/ })).toBeNull(),
+    );
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'generate password');
     expect(await screen.findByRole('option', { name: /Generate a password/ })).toBeInTheDocument();

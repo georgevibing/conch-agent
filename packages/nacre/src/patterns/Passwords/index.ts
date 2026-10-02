@@ -18,6 +18,7 @@ export {
   VaultPasskeyRow,
   VaultSourceRow,
   VaultTransferProgress,
+  vaultSourceColor,
   vaultSourceName,
 } from './Passwords';
 export type {

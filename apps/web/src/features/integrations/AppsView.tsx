@@ -62,6 +62,7 @@ const FILTER_ORDER = [
   TALK,
   'productivity',
   'files',
+  'passwords',
   'design',
   'business',
   'developer',
@@ -114,8 +115,14 @@ export function AppsView() {
     [data, catalog, channelList, vault?.status.sources],
   );
   const tiles = useMemo(
-    () => galleryTiles({ catalog, channelCatalog: channelList?.catalog ?? [], have: items }),
-    [catalog, channelList?.catalog, items],
+    () =>
+      galleryTiles({
+        catalog,
+        channelCatalog: channelList?.catalog ?? [],
+        have: items,
+        sources: vault?.status.sources ?? [],
+      }),
+    [catalog, channelList?.catalog, items, vault?.status.sources],
   );
   const filters = useMemo(() => {
     const present = new Set(tiles.flatMap((t) => t.categories));
@@ -153,6 +160,8 @@ export function AppsView() {
 
   const openTile = (tile: Tile) => {
     if (tile.kind === 'chat') return void navigate(`/channels/new/${tile.id}`);
+    // A password manager: its page has the switch, and says what it needs.
+    if (tile.kind === 'passwords') return void navigate(appPath(tile.id));
     // 1Password is one entry point for both of its halves: its page has a switch for each.
     if (tile.id === '1password') return void navigate(appPath('1password'));
     const entry = catalog.find((c) => c.id === tile.id);

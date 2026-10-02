@@ -94,6 +94,7 @@ export const categoryLabel: Record<CatalogEntry['category'], string> = {
   productivity: 'Work',
   developer: 'Developer',
   files: 'Files',
+  passwords: 'Passwords',
   design: 'Design',
   business: 'Business',
   home: 'Home',

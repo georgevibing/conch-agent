@@ -96,6 +96,8 @@ export interface PasswordSource {
   readonly unlock: 'app' | 'password';
   /** The need (ADR 0016) that brings its program; none when it's part of the system. */
   readonly need?: string;
+  /** `false` when it can't work on this computer at all: it isn't offered there. */
+  readonly available?: boolean;
   state(options?: { force?: boolean }): Promise<Pick<VaultSource, 'state' | 'message'>>;
   list(options?: { force?: boolean; signal?: AbortSignal }): Promise<ExternalItem[]>;
   fields(ref: string, signal?: AbortSignal): Promise<{ fields: ExternalField[]; notes: string }>;
@@ -1729,6 +1731,11 @@ export class KeychainSource implements PasswordSource {
     private readonly exec: Exec = realExec,
     private readonly platform: NodeJS.Platform = process.platform,
   ) {}
+
+  /** Only a Mac has it: elsewhere it isn't among the managers to turn on. */
+  get available(): boolean {
+    return this.platform === 'darwin';
+  }
 
   async state(): Promise<Pick<VaultSource, 'state' | 'message'>> {
     if (this.platform !== 'darwin')

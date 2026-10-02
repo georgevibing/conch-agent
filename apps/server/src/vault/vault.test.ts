@@ -531,6 +531,16 @@ describe('other password managers', () => {
     expect(listings()).toBe(1);
   });
 
+  it('says when a manager can’t work on this computer, so it isn’t offered there', async () => {
+    const keychain = async (platform: NodeJS.Platform) =>
+      (await (await vault({ exec: fakeExec([]), platform })).service.sourceStatus()).find(
+        (s) => s.id === 'keychain',
+      );
+    expect(await keychain('win32')).toMatchObject({ available: false });
+    expect(await keychain('linux')).toMatchObject({ available: false });
+    expect((await keychain('darwin'))?.available).toBeUndefined();
+  });
+
   it('fills an external item only on its own site', async () => {
     const { service } = await vault({ exec: fakeExec([]) });
     await service.setSource('1password', { enabled: true });

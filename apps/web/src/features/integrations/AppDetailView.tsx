@@ -15,7 +15,7 @@ import { Navigate, useNavigate } from 'react-router';
 import { useChannels } from '../channels/queries';
 import { useVault } from '../passwords/queries';
 import { AppAbilitiesSection } from './AppAbilitiesSection';
-import { describeApp, joinApps, type AppItem } from './apps';
+import { describeApp, isManager, joinApps, managerItem, type AppItem } from './apps';
 import { ConnectDialog } from './ConnectDialog';
 import { IntegrationDetailView } from './IntegrationDetailView';
 import styles from './Integrations.module.css';
@@ -56,8 +56,11 @@ export function AppDetailView({ appId }: { appId: string }) {
   if (item && connectedId !== appId) setConnectedId(appId);
   const entry = data?.catalog.find((c) => c.id === appId);
   const onePassword = vault?.status.sources.find((source) => source.id === '1password');
+  // Another password manager, on or not: its page is its switch.
+  const manager = vault?.status.sources.find((source) => source.id === appId && isManager(source));
 
-  if (isPending || channelsPending || (vaultPending && appId === '1password'))
+  // A page for a password manager can't be told from a missing app until Passwords has answered.
+  if (isPending || channelsPending || (vaultPending && !item && (appId === '1password' || !entry)))
     return (
       <div className={styles.page}>
         <Skeleton shape="block" height="4.5rem" />
@@ -102,6 +105,7 @@ export function AppDetailView({ appId }: { appId: string }) {
         onSetUp={setUp}
       />,
     );
+  if (manager) return withDialog(<HalfDetail item={managerItem(manager)} onSetUp={setUp} />);
   // A new visit to an unconnected app offers setup; a removed app returns to Apps.
   if (entry)
     return <Navigate to={connectedId === appId ? APPS_PATH : connectPath(entry.id)} replace />;

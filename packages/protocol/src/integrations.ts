@@ -39,6 +39,8 @@ export const IntegrationCategory = z.enum([
   'productivity',
   'developer',
   'files',
+  /** Password managers: they fill sign-ins (and are in Passwords too). */
+  'passwords',
   /** Design and websites: boards, designs, the sites you publish. */
   'design',
   /** Customers and money: support, payments, sales. */

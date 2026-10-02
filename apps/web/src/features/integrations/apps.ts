@@ -17,7 +17,7 @@ import {
   type IntegrationTool,
   type VaultSource,
 } from '@conch/protocol';
-import type { IntegrationStateValue } from '@conch/nacre';
+import { vaultSourceColor, type IntegrationStateValue } from '@conch/nacre';
 
 import {
   APPS as CHANNEL_APPS,
@@ -64,6 +64,29 @@ export interface AppItem {
 /** A password manager that's in use here: on, and its program is on this computer. */
 export const inUse = (source: VaultSource | undefined) =>
   Boolean(source && source.state !== 'off' && source.state !== 'missing');
+
+/** Another password manager: not Conch's own vault, and one this computer can have. */
+export const isManager = (source: VaultSource) =>
+  source.id !== 'conch' && source.id !== 'system' && source.available !== false;
+
+/**
+ * A password manager as an app (ADR 0052): what it does for you here is fill
+ * sign-ins. 1Password has a catalog entry of its own (it manages Environments
+ * too), so its card is that one; every other manager is this.
+ */
+export function managerItem(source: VaultSource): AppItem {
+  const color = vaultSourceColor(source.id);
+  return {
+    key: source.id,
+    name: source.name,
+    brand: source.id,
+    ...(color && { color }),
+    channels: [],
+    source,
+    to: appPath(source.id),
+    talks: false,
+  };
+}
 
 /**
  * Everything you have, one item per app. Halves join the app they belong to:
@@ -139,6 +162,10 @@ export function joinApps({
     const card = cardFor('1password');
     if (card && onePassword) card.source = onePassword;
   }
+  // Every other password manager you turned on is an app too: it fills sign-ins.
+  for (const source of sources)
+    if (source.id !== '1password' && isManager(source) && inUse(source))
+      items.push(managerItem(source));
   return items;
 }
 
@@ -393,6 +420,7 @@ export const GALLERY_ORDER = [
   'productivity',
   TALK,
   'files',
+  'passwords',
   'design',
   'business',
   'developer',
@@ -440,8 +468,11 @@ export interface Tile {
   featured?: boolean;
   /** For the filter: the catalog's own category, plus `talk` when it can talk to you. */
   categories: string[];
-  /** An app the assistant uses (opens its connect dialog), or a chat app (opens its setup). */
-  kind: 'app' | 'chat';
+  /**
+   * An app the assistant uses (opens its connect dialog), a chat app (opens
+   * its setup), or a password manager (opens its page, where its switch is).
+   */
+  kind: 'app' | 'chat' | 'passwords';
   /** Words to find it by. */
   words: string;
 }
@@ -450,10 +481,12 @@ export function galleryTiles({
   catalog,
   channelCatalog,
   have,
+  sources = [],
 }: {
   catalog: CatalogEntry[];
   channelCatalog: ChannelCatalogEntry[];
   have: AppItem[];
+  sources?: VaultSource[];
 }): Tile[] {
   const haveCatalog = new Set(have.flatMap((i) => [i.key, i.integration?.catalogId ?? '']));
   const haveKinds = new Set(have.flatMap((i) => i.channels.map((c) => c.kind)));
@@ -485,5 +518,20 @@ export function galleryTiles({
       kind: 'chat',
       words: `${c.name} ${c.short ?? ''} ${c.tagline}`.toLowerCase(),
     }));
-  return [...apps, ...chats];
+  // The password managers you could turn on. 1Password's tile is the catalog's.
+  const managers: Tile[] = sources
+    .filter((s) => s.id !== '1password' && isManager(s) && !inUse(s))
+    .map((s) => {
+      const color = vaultSourceColor(s.id);
+      return {
+        id: s.id,
+        name: s.name,
+        tagline: 'Fills your sign-ins',
+        ...(color && { color }),
+        categories: ['passwords'],
+        kind: 'passwords',
+        words: `${s.name} password manager passwords logins sign-ins`.toLowerCase(),
+      };
+    });
+  return [...apps, ...chats, ...managers];
 }
