@@ -74,24 +74,37 @@ describe('optional native terminal', () => {
           env: { PATH: process.env.PATH ?? '' },
         },
       );
+      // Waits on the program itself, not a 1s poll: starting Python, forking a shell and
+      // reading it back is a real process start, which takes seconds on a busy machine.
       let output = '';
-      let code: number | undefined;
+      const seen: { text: string; done: () => void }[] = [];
       child.onData((data) => {
         output += data;
+        for (const wait of seen) if (output.includes(wait.text)) wait.done();
       });
-      child.onExit((exit) => {
-        code = exit.exitCode;
-      });
+      const exited = new Promise<number>((done) => child.onExit((exit) => done(exit.exitCode)));
+      const shows = (text: string) =>
+        Promise.race([
+          new Promise<void>((done) => {
+            if (output.includes(text)) done();
+            else seen.push({ text, done });
+          }),
+          exited.then((code) => {
+            if (!output.includes(text))
+              throw new Error(`Exited ${code} before showing ${text}: ${JSON.stringify(output)}`);
+          }),
+        ]);
       try {
-        await vi.waitFor(() => expect(output).toContain('READY'));
+        await shows('READY');
         child.resize(100, 30);
         child.write('hello\n');
-        await vi.waitFor(() => expect(output).toContain('GOT:hello'));
-        await vi.waitFor(() => expect(code).toBe(7));
+        await shows('GOT:hello');
+        expect(await exited).toBe(7);
       } finally {
         child.kill();
       }
     },
+    30_000,
   );
 });
 
