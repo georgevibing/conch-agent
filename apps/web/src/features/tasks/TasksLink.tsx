@@ -19,13 +19,13 @@ export function TasksLink({ onNavigate }: { onNavigate?: () => void }) {
       tone="neutral"
       block
       leadingIcon={<ListChecks />}
-      trailingIcon={
+      trailing={
         needs > 0 ? (
-          <Badge tone="accent" variant="solid" aria-label={`${needs} need your OK`}>
+          <Badge size="sm" tone="accent" variant="solid" aria-label={`${needs} need your OK`}>
             {needs}
           </Badge>
         ) : working > 0 ? (
-          <Badge tone="neutral" aria-label={`${working} working`}>
+          <Badge size="sm" tone="neutral" aria-label={`${working} working`}>
             {working}
           </Badge>
         ) : undefined

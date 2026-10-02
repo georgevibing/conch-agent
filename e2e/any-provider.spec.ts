@@ -83,7 +83,7 @@ test('what the provider set up comes in by itself; what only it can use is in Se
   page,
   request,
 }) => {
-  // Brought in at start-up: a normal card that asks you to sign in.
+  // Brought in at start-up: an offer in its own section, with one button to sign in.
   await expect
     .poll(
       async () =>
@@ -94,9 +94,12 @@ test('what the provider set up comes in by itself; what only it can use is in Se
     )
     .toContain('Sentry');
   await page.goto('/apps');
-  const connected = page.getByRole('region', { name: 'Connected' });
-  await expect(connected.getByText('Sentry')).toBeVisible();
-  await expect(connected.getByText('Sign in to use it with every model.')).toBeVisible();
+  const found = page.getByRole('region', { name: 'Found in Claude Code' });
+  await expect(found.getByRole('button', { name: 'Sentry', exact: true })).toBeVisible();
+  await expect(found.getByRole('button', { name: 'Sign in to Sentry' })).toBeVisible();
+  // An offer, not a problem: nothing says "again", and the sidebar counts nothing.
+  await expect(page.getByText('Sign in again')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Apps', exact: true })).toBeVisible();
   await expect(page.getByText('From your providers')).toHaveCount(0);
 
   // What only the provider can use is folded away in Settings → Providers.

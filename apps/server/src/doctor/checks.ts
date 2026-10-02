@@ -6,7 +6,7 @@
  */
 import { statfs } from 'node:fs/promises';
 
-import type { DoctorItem, Provider } from '@conch/protocol';
+import { awaitsSignIn, type DoctorItem, type Provider } from '@conch/protocol';
 
 import { CHANNEL_NAMES } from '../channels/catalog';
 import { sandboxSupport } from '../conversations/sandbox';
@@ -106,7 +106,10 @@ export function integrationsCheck(services: Services): DoctorCheck {
     group: INTEGRATIONS,
     title: 'Your apps',
     async run({ repair }) {
-      const items = (await services.integrations.store.all()).filter((i) => i.enabled);
+      // One Conch found in a provider and you haven't signed in to isn't broken: it's an offer.
+      const items = (await services.integrations.store.all()).filter(
+        (i) => i.enabled && !awaitsSignIn(i),
+      );
       const results: DoctorItem[] = [];
       for (const item of items) {
         const broken = ['error', 'needs-auth'].includes(item.health.state);

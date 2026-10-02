@@ -86,4 +86,21 @@ describe('Button', () => {
     expect(link).toContainElement(screen.getByTestId('trail'));
     expect(link.textContent).toBe('Docs');
   });
+
+  it('shows a count after the label, outside the icon’s square and the name', async () => {
+    const { container } = renderNacre(
+      <Button
+        trailingIcon={<svg data-testid="icon" />}
+        trailing={<span data-testid="count">8</span>}
+      >
+        Apps<span className="nc-visually-hidden">, 8 need you</span>
+      </Button>,
+    );
+    const button = screen.getByRole('button', { name: 'Apps, 8 need you' });
+    const count = screen.getByTestId('count');
+    expect(button).toContainElement(count);
+    expect(count.parentElement).not.toBe(screen.getByTestId('icon').parentElement);
+    expect(button.lastElementChild).toBe(count.parentElement);
+    await expectAccessible(container);
+  });
 });

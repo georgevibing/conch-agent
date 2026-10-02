@@ -37,7 +37,7 @@
     }
   }
 
-  /* Needs you: a warm edge on the leading side, the same language as a broken integration. */
+  /* Needs you: a warm hairline all the way round, the same language as a broken integration. */
   .card[data-attention='warning'],
   .card[data-attention='danger'] {
     --attention: light-dark(
@@ -45,8 +45,7 @@
       oklch(0.78 0.14 var(--nc-warning-h))
     );
     box-shadow:
-      inset 3px 0 0 0 var(--attention),
-      inset 0 0 0 1px color-mix(in oklch, var(--attention) 35%, transparent),
+      inset 0 0 0 1px color-mix(in oklch, var(--attention) 45%, transparent),
       var(--nc-glaze-edge),
       var(--nc-elevation-1);
   }

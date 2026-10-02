@@ -32,7 +32,7 @@ export const providerStateMeta: Record<ProviderStateValue, ProviderStateMeta> = 
     attention: false,
   },
   // Not set up yet isn't a problem — it's an invitation. Only something that
-  // broke earns the warm edge.
+  // broke earns the warm hairline.
   'not-installed': {
     label: 'Not on this computer',
     tone: 'neutral',

@@ -1,8 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { ArrowRight, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowRight, Blocks, ListChecks, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { expect, fn, userEvent, within } from 'storybook/test';
 
+import { Badge } from '../Badge';
+import { Kbd } from '../Kbd';
 import { Stack } from '../Stack';
 import { Button } from './Button';
 
@@ -16,6 +18,7 @@ const meta = {
     size: { control: 'inline-radio', options: ['sm', 'md', 'lg'] },
     leadingIcon: { control: false },
     trailingIcon: { control: false },
+    trailing: { control: false },
   },
   parameters: {
     docs: {
@@ -77,6 +80,69 @@ export const WithIcons: Story = {
       </Button>
       <Button {...args} variant="soft" tone="danger" leadingIcon={<Trash2 />}>
         Delete session
+      </Button>
+    </Stack>
+  ),
+};
+
+/**
+ * A count or a key hint goes in `trailing`, not `trailingIcon`: it keeps its
+ * own size, sits on the label's line, and moves to the far end when the
+ * button is wider than its words — a column of them lines up, as in a sidebar.
+ */
+export const WithTrailing: Story = {
+  render: (args) => (
+    <Stack gap={1} style={{ inlineSize: '14rem' }}>
+      <Button
+        {...args}
+        variant="ghost"
+        block
+        leadingIcon={<Search />}
+        trailing={<Kbd keys="mod+k" size="sm" />}
+        style={{ justifyContent: 'flex-start' }}
+      >
+        Search
+      </Button>
+      <Button
+        {...args}
+        variant="ghost"
+        block
+        leadingIcon={<ListChecks />}
+        trailing={
+          <Badge size="sm" tone="neutral">
+            3
+          </Badge>
+        }
+        style={{ justifyContent: 'flex-start' }}
+      >
+        Tasks<span className="nc-visually-hidden">, 3 working</span>
+      </Button>
+      <Button
+        {...args}
+        variant="soft"
+        tone="neutral"
+        block
+        leadingIcon={<Blocks />}
+        trailing={
+          <Badge size="sm" tone="warning" variant="solid">
+            8
+          </Badge>
+        }
+        style={{ justifyContent: 'flex-start' }}
+      >
+        Apps<span className="nc-visually-hidden">, 8 need you</span>
+      </Button>
+      <Button
+        {...args}
+        variant="surface"
+        trailing={
+          <Badge size="sm" tone="accent" variant="solid">
+            12
+          </Badge>
+        }
+        style={{ alignSelf: 'flex-start' }}
+      >
+        Inbox<span className="nc-visually-hidden">, 12 new</span>
       </Button>
     </Stack>
   ),

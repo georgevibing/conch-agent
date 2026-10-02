@@ -1,7 +1,8 @@
-import { ArrowRight, Check, Monitor } from 'lucide-react';
+import { ArrowRight, Check, Monitor, X } from 'lucide-react';
 import { useId, type ComponentProps, type CSSProperties, type ReactNode } from 'react';
 
 import { Button } from '../../components/Button';
+import { IconButton } from '../../components/IconButton';
 import { Switch } from '../../components/Switch';
 import { cx } from '../../utils/cx';
 import { IntegrationLogo } from './IntegrationLogo';
@@ -47,12 +48,24 @@ export interface CatalogCardProps extends Base {
   note?: string;
 }
 
-export type IntegrationCardProps = ConnectedCardProps | CatalogCardProps;
+export interface FoundCardProps extends Base {
+  variant: 'found';
+  /** Where it was found, in two or three words: "engineering plugin". */
+  tagline?: string;
+  /** The one thing that makes it yours ("Sign in"). */
+  action: { label: string; onClick: () => void; loading?: boolean };
+  /** Leave it out of Conch. `label` names it: "Don’t use Asana here". */
+  dismiss?: { label: string; onClick: () => void };
+}
+
+export type IntegrationCardProps = ConnectedCardProps | CatalogCardProps | FoundCardProps;
 
 /**
  * An integration at a glance. `connected` cards show how it's doing and the
- * one button that fixes it; `catalog` tiles are for adding one. Tap
- * anywhere on the card to open it.
+ * one button that fixes it; `catalog` tiles are for adding one; `found`
+ * tiles are apps Conch came across that wait for you to sign in — an offer,
+ * so no switch, no status and no warning colour. Tap anywhere on the card
+ * to open it.
  */
 export function IntegrationCard(props: IntegrationCardProps) {
   const titleId = useId();
@@ -105,6 +118,65 @@ export function IntegrationCard(props: IntegrationCardProps) {
           {connected ? <Check /> : <ArrowRight />}
         </span>
         {connected && <span className="nc-visually-hidden">Connected</span>}
+      </article>
+    );
+  }
+
+  if (props.variant === 'found') {
+    const {
+      variant: _v,
+      tagline,
+      action,
+      dismiss,
+      name: _n,
+      brand: _b,
+      color: _c,
+      onOpen: _o,
+      index: _i,
+      className: _cl,
+      style: _s,
+      ...rest
+    } = props;
+    return (
+      <article
+        aria-labelledby={titleId}
+        data-variant="found"
+        data-lustre=""
+        className={cx(styles.card, styles.tile, styles.found, className)}
+        style={stagger}
+        {...rest}
+      >
+        <IntegrationLogo brand={brand} name={name} color={color} size="md" decorative />
+        <div className={styles.text}>
+          <h3 className={styles.title}>
+            <button type="button" id={titleId} className={styles.open} onClick={onOpen}>
+              {name}
+            </button>
+          </h3>
+          {tagline && <p className={styles.tagline}>{tagline}</p>}
+        </div>
+        <div className={styles.foundActions}>
+          {/* Several in a row: each says which app it's for. */}
+          <Button
+            size="sm"
+            variant="surface"
+            aria-label={`${action.label} to ${name}`}
+            onClick={action.onClick}
+            loading={action.loading}
+          >
+            {action.label}
+          </Button>
+          {dismiss && (
+            <IconButton
+              size="sm"
+              label={dismiss.label}
+              onClick={dismiss.onClick}
+              className={styles.dismiss}
+            >
+              <X />
+            </IconButton>
+          )}
+        </div>
       </article>
     );
   }

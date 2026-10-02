@@ -14,6 +14,14 @@ Each app is one card, whatever it does for you. Slack is one card whether your a
 
 A card that needs you comes first, with its one button, such as **Sign in again** or **Say hello**. The sidebar shows how many need you.
 
+The page has three parts, top to bottom:
+
+1. **Connected**: the apps you have.
+2. **Add another app**: what Conch offers, by kind. The kinds are **Work**, **Talk to me here**, **Files**, **Design**, **Business**, **Developer** and **Home**. Pick a kind above the gallery to see only that one, or type a name in **Find an app**.
+3. **Found in** and a provider's name: apps Conch came across there. See [Apps a provider set up by itself](#apps-a-provider-set-up-by-itself).
+
+Every app in the gallery is one Conch can really connect: before an app goes in, Conch's own sign-in is tried against the service. A few well-known services only let apps they already know sign in, so they aren't offered. **Zapier** reaches many of those, and **Add your own** takes any other.
+
 ## What it does
 
 An app's page starts with **What it does**: a plain switch for each thing, such as **Read & search**, **Draft**, **Send (asks first)** and **Talk to me here**. Turn off what you don't want. A part that isn't set up yet has a **Set up** button instead of a switch, so nothing looks on when it isn't.
@@ -86,9 +94,13 @@ Conch checks your apps and keeps their sign-ins fresh. One that needs you moves 
 
 ## Apps a provider set up by itself
 
-A provider can have apps of its own: set up in its settings, brought by a plugin, or connected in its account. When Conch can connect the same app itself, it does so on its own and shows it under **Connected**, so it works with every model. If it needs you to sign in, its card says so. **Health → Fixed on its own** notes each one.
+A provider can have apps of its own: set up in its settings, brought by a plugin, or connected in its account. When Conch can connect the same app itself, it brings it in on its own, so it works with every model. **Health → Fixed on its own** notes each one.
 
-What Conch can't connect (a program in the provider's settings, a plugin) only works with that provider. It's in **Settings → Providers → Set up inside a provider**, folded away. Something you disconnect stays disconnected; to bring it back, press **Use with every model** there.
+One that needs no sign-in goes straight to **Connected**. One you have to sign in to waits in its own section, **Found in** and the provider's name, at the bottom of the page, below the gallery. It says once where the apps came from, and each has one button: **Sign in**. They aren't problems, so the sidebar doesn't count them. Hover one and press **×** to leave it out of Conch.
+
+Conch only offers what it can really connect. Some services let only apps they already know sign in, and a provider's plugin is one of those. Conch can't sign in to these by itself, so it leaves them with the provider.
+
+What Conch can't connect (a program in the provider's settings, a plugin, a service that takes no new apps) only works with that provider. It's in **Settings → Providers → Set up inside a provider**, folded away. Something you leave out or disconnect stays out; to bring it back, press **Use with every model** there.
 
 ## Connect Slack
 

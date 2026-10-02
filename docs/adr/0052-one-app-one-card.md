@@ -68,6 +68,9 @@ person who confirmed it's them.
 
 The Channels page is gone; it's **Talk to me here**, a filter of Apps beside Work, Files and the
 rest, with the chat apps in the gallery and the "how it works" steps when none is connected yet.
+With everything showing, the gallery is laid out by those same kinds, a heading over each (Work,
+Talk to me here, Files, Design, Business, Developer, Home), each app once under its own kind; a
+filter or a search shows one flat list.
 `/channels` opens it. A chat app's setup and detail pages keep their addresses (`/channels/new/:kind`,
 `/channels/:id`), and lead back to Apps (or to the app they're a half of).
 

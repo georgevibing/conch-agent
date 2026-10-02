@@ -78,14 +78,40 @@ for) brings in what Conch can connect itself, without a click:
 - a server at a web address with nothing secret in it (`adoptableUrl`), unless it's a provider
   account's own (its address belongs to the provider and may carry its sign-in).
 
-OAuth ones arrive as ordinary cards that need a sign-in; no sign-in page is opened by itself.
-Each leaves one `services.healed.note` sentence. The SSRF guard (`integrations/net.ts`) applies
+OAuth ones arrive waiting for a sign-in; no sign-in page is opened by itself. Each leaves one
+`services.healed.note` sentence.
+
+**Found, not connected** (amended the day this was accepted, after the first real use: a
+provider's plugin brought eight servers, which arrived as eight warning cards under
+**Connected** saying **Sign in again**, counted in the sidebar, half of them unable to sign in
+at all). What Conch brings in keeps where it was found (`Integration.from`: the provider, the
+source, the plugin) and, when its name is exactly an app Conch knows, that app's name and logo
+(`likeness`, `Integration.brand`). Until it has worked once it is an offer, not a problem
+(`awaitsSignIn` in the protocol, shared by both sides):
+
+- Apps shows it in its own section, **Found in <provider>**, last on the page, below what
+  Conch offers (the page reads: connected, the gallery by kind, what was found): one sentence
+  on where they came from, then one small tile each with **Sign in** and a way to leave it out.
+  No switch, no status, no warning colour.
+- It isn't counted in the sidebar, and Repair everything doesn't list it.
+- A sign-in left half-way or one that didn't start keeps it there; pressing the button starts
+  again.
+- Once it has worked it is an ordinary card. A sign-in that later runs out is a problem to fix
+  (**Sign in again**), because `health.okAt` is kept across every change of state.
+
+**Only what Conch can really connect.** Signing in to a server starts with Conch registering as
+a new app (RFC 7591). Some services only take apps they already know; a provider's plugin ships
+as one. Before an address comes in, `OAuthFlows.canSignIn` reads the service's public sign-in
+metadata (RFC 9728, RFC 8414, through the guarded fetch) and brings it in only when it can
+register, or nothing there asks for a sign-in. One brought in earlier that can't is let go on the
+next look, with a note. These stay with their provider. Not knowing (the service didn't answer)
+means not now. The SSRF guard (`integrations/net.ts`) applies
 before anything is stored. Nothing comes in twice (same catalog app or same address), and
 nothing you disconnected comes back: `integrations.json` keeps `removed`, `catalog:<id>` or
 `url:<sha-256 of the address>` (never the address). Connecting it again yourself clears it.
 
 What's left — programs in a provider's settings, plugins, account connectors with no app of
-their own — only works with that provider, so it moves off the Integrations page to **Settings
+their own, services that take no new apps — only works with that provider, so it moves off the Integrations page to **Settings
 → Providers → Set up inside a provider**, folded. Things you disconnected wait there with **Use
 with every model** (`POST /api/integrations/adopt`, still looked up by name on the gateway, so
 a forged request can only bring in what the provider really has).

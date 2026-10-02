@@ -162,7 +162,7 @@ const ISSUES: VaultProblem[] = ['compromised', 'reused', 'weak', 'expired', 'ins
 export function PasswordsView({ itemId }: { itemId?: string }) {
   const navigate = useNavigate();
   const client = useQueryClient();
-  const { data, isLoading, error } = useVault();
+  const { data, isLoading, error } = useVault({ looking: true });
   const auth = useAuth();
   const { guard: verify, dialog } = useVerify(auth.data?.method ?? 'none');
   const narrow = useMediaQuery('(max-width: 900px)');

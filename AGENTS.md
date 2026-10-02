@@ -417,8 +417,11 @@ Bitwarden, KeePassXC, Proton Pass, Dashlane, Keeper and the macOS Keychain:
      everything through `toPasskey`, which keeps only real ES256 keys.
    - A program that would stop at a prompt gets `input: ''`, so it fails in
      words instead of hanging. One that asks the person something itself
-     (Touch ID, the keychain's dialog) goes in `PROMPTS`, so its copies only
-     sync while someone's looking at Passwords.
+     (1Password's approval, Touch ID, the keychain's dialog) goes in `PROMPTS`,
+     so it's only read, and its copies only sync, while someone's looking at
+     Passwords (`GET /api/vault?look=1`). Everything else that lists Passwords
+     (the sidebar, Apps, ⌘K) gets what it showed last, and never raises a
+     prompt in another app.
 2. **Through its own program and its own unlock.**
    - The program is a need (ADR 0016) in `setup/known.ts`, so Conch can find,
      install or link to it.

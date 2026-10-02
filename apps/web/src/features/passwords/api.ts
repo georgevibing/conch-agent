@@ -24,7 +24,8 @@ import { ApiError, request, SIGNED_OUT_EVENT } from '../../api/client';
 const Ok = z.object({ ok: z.boolean() });
 
 export const vaultApi = {
-  list: () => request(VaultList, '/api/vault'),
+  /** `look`: from the Passwords page, where another password manager may ask for its OK. */
+  list: (look = false) => request(VaultList, `/api/vault${look ? '?look=1' : ''}`),
   item: (id: string, signal?: AbortSignal) =>
     request(VaultItemDetail, `/api/vault/items/${encodeURIComponent(id)}`, { signal }),
   create: (body: SaveVaultItemBody) =>

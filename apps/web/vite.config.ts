@@ -58,7 +58,11 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
-      '/api': toGateway('http', { changeOrigin: true }),
+      // The browser's own Host goes through untouched (no `changeOrigin`): the
+      // gateway refuses a write whose Origin isn't the Host it was asked on.
+      '/api': toGateway('http', {}),
+      // Where a service sends you back after a sign-in: the gateway's page, not the app's.
+      '/oauth': toGateway('http', {}),
       '/ws': toGateway('ws', { ws: true }),
     },
   },

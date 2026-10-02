@@ -69,8 +69,12 @@
     border-radius: var(--nc-radius-md);
     corner-shape: var(--nc-corner-shape);
     background: var(--nc-surface);
-    box-shadow: inset 3px 0 0 0
-      light-dark(oklch(0.62 0.14 var(--nc-warning-h)), oklch(0.82 0.14 var(--nc-warning-h)));
+    box-shadow: inset 0 0 0 1px
+      color-mix(
+        in oklch,
+        light-dark(oklch(0.72 0.15 var(--nc-warning-h)), oklch(0.78 0.14 var(--nc-warning-h))) 45%,
+        transparent
+      );
   }
 
   .headsIcon {

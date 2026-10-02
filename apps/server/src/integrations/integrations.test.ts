@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import type { ServerEvent } from '@conch/protocol';
+import { awaitsSignIn, type ServerEvent } from '@conch/protocol';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { MockEngine } from '../engines/mock/engine';
@@ -39,6 +39,7 @@ async function setup(
     onHeal?: (message: string) => void;
     retryAfterMs?: number[];
     engines?: () => Promise<Engine[]>;
+    fetchFor?: () => typeof fetch;
   } = {},
 ) {
   const home = await mkdtemp(join(tmpdir(), 'conch-int-'));
@@ -52,6 +53,7 @@ async function setup(
     setup: options.needs,
     onHeal: options.onHeal,
     retryAfterMs: options.retryAfterMs,
+    fetchFor: options.fetchFor,
     blueprints: (id) => {
       if (options.realCatalog) return undefined;
       const entry = CATALOG.get(id);
@@ -616,7 +618,7 @@ describe('Conch-owned apps and provider servers', () => {
       ],
     });
 
-  it('brings in what a provider set up that Conch can connect itself, once, as ordinary cards', async () => {
+  it('brings in what a provider set up that Conch can connect itself, once, saying where it found it', async () => {
     const notes: string[] = [];
     const { service } = await setup({
       engines: async () => [provider()],
@@ -646,13 +648,166 @@ describe('Conch-owned apps and provider servers', () => {
     // The SSRF guard holds for what a provider set up too.
     expect(items.some((i) => JSON.stringify(i).includes('169.254'))).toBe(false);
     expect(notes).toEqual([
-      'Team wiki was set up in Claude Code only. Conch connected it itself, so it works with every model once you sign in to it.',
-      'Notion was set up in Claude Code only. Conch connected it itself, so it works with every model once you sign in to it.',
+      'Found Team wiki in Claude Code. It’s waiting in Apps: sign in once and it works with every model.',
+      'Found Notion in Claude Code. It’s waiting in Apps: sign in once and it works with every model.',
+    ]);
+    // Found, not connected: where it came from is kept, and it isn't a problem to fix.
+    expect(items.map((i) => [i.from?.providerName, i.from?.source, awaitsSignIn(i)])).toEqual([
+      ['Claude Code', 'engine', true],
+      ['Claude Code', 'account', true],
     ]);
 
     // Looking again brings in nothing twice.
     await service.external(true);
     expect(await service.store.all()).toHaveLength(2);
+  });
+
+  it('a server named exactly like an app gets its name and logo; one found before is healed', async () => {
+    const plugin = (name: string, at: string): EngineMcpStatus => ({
+      name,
+      status: 'needs-auth',
+      source: 'plugin',
+      plugin: 'engineering',
+      toolCount: 0,
+      url: vendor.url(at),
+    });
+    const { service } = await setup({
+      engines: async () => [
+        Object.assign(new MockEngine(), {
+          mcpStatus: async () => [
+            plugin('pagerduty', 'pd'),
+            plugin('github', 'gh'),
+            plugin('my github mirror', 'mirror'),
+          ],
+        }),
+      ],
+    });
+    await service.external(true);
+    expect((await service.store.all()).map((i) => [i.name, i.brand, i.from?.plugin])).toEqual([
+      ['PagerDuty', 'pagerduty', 'engineering'],
+      ['GitHub', 'github', 'engineering'],
+      // Only an exact name: one that merely mentions an app keeps its own.
+      ['my github mirror', undefined, 'engineering'],
+    ]);
+    // A plugin's server never takes the catalog app's place: that one has its own way in.
+    expect((await service.store.all()).every((i) => i.catalogId === undefined)).toBe(true);
+
+    // Brought in before Conch kept where it found things: said now, with the name people know.
+    const [old] = await service.store.all();
+    await service.store.update(old?.id ?? '', ({ from: _f, brand: _b, color: _c, ...i }) => ({
+      ...i,
+      name: 'pagerduty',
+    }));
+    await service.external(true);
+    expect((await service.store.all())[0]).toMatchObject({
+      name: 'PagerDuty',
+      brand: 'pagerduty',
+      color: '#06AC38',
+      from: { providerName: 'Claude Code', source: 'plugin', plugin: 'engineering' },
+    });
+    expect(await service.store.all()).toHaveLength(3);
+  });
+
+  it('leaves with its provider what Conch can’t sign in to by itself, and lets go of one it had', async () => {
+    // A service that takes no new apps: its sign-in metadata offers nowhere to register.
+    let closed = false;
+    const picky: typeof fetch = async (input, init) => {
+      const response = await fetch(input, init);
+      if (
+        !closed ||
+        !String(input instanceof Request ? input.url : input).includes(
+          '/.well-known/oauth-authorization-server',
+        )
+      )
+        return response;
+      const { registration_endpoint: _r, ...metadata } = (await response.json()) as Record<
+        string,
+        unknown
+      >;
+      return Response.json(metadata);
+    };
+    const notes: string[] = [];
+    const { service, events } = await setup({
+      fetchFor: () => picky,
+      onHeal: (message) => notes.push(message),
+      engines: async () => [
+        Object.assign(new MockEngine(), {
+          mcpStatus: async (): Promise<EngineMcpStatus[]> => [
+            {
+              name: 'asana',
+              status: 'needs-auth',
+              source: 'plugin',
+              plugin: 'engineering',
+              toolCount: 0,
+              url: vendor.url('asana'),
+            },
+          ],
+        }),
+      ],
+    });
+    // While it took new apps, it came in, waiting for a sign-in.
+    await service.external(true);
+    const [asana] = await service.store.all();
+    expect(asana).toMatchObject({ name: 'Asana', health: { state: 'needs-auth' } });
+
+    // It doesn't any more: pressing Sign in says why, with no button that can't work…
+    closed = true;
+    const failed = await service.connect(asana?.id ?? '', REDIRECT);
+    expect(failed.integration.health).toMatchObject({
+      state: 'error',
+      message:
+        'Asana only lets apps it already knows sign in, so Conch can’t connect to it by itself.',
+    });
+    expect(failed.integration.health.action).toBeUndefined();
+
+    // …and the next look lets it go: it's the provider's, shown in Settings → Providers.
+    const list = await service.external(true);
+    expect(await service.store.all()).toEqual([]);
+    expect(events).toContainEqual({ type: 'integration.deleted', integrationId: asana?.id });
+    expect(list.servers.map((s) => [s.name, s.adoptable])).toEqual([['asana', false]]);
+    expect(notes.at(-1)).toBe(
+      'Asana only signs in through Claude Code, so Conch left it there. It’s under Settings → Providers.',
+    );
+
+    // It isn't brought in again, and nothing is offered that would fail.
+    await service.external(true);
+    expect(await service.store.all()).toEqual([]);
+  });
+
+  it('one brought in by its address becomes the catalog’s app once the catalog knows it, and never twice', async () => {
+    const datadog: EngineMcpStatus = {
+      name: 'datadog',
+      status: 'needs-auth',
+      source: 'plugin',
+      plugin: 'engineering',
+      toolCount: 0,
+      url: vendor.url('datadog'),
+    };
+    const { service } = await setup({
+      engines: async () => [Object.assign(new MockEngine(), { mcpStatus: async () => [datadog] })],
+    });
+    await service.external(true);
+    const [first] = await service.store.all();
+    expect(first).toMatchObject({ catalogId: 'datadog', name: 'Datadog' });
+
+    // As it was before the catalog had Datadog: by its address, under the server's name…
+    await service.store.update(first?.id ?? '', ({ catalogId: _c, ...i }) => ({
+      ...i,
+      name: 'datadog',
+      brand: 'datadog',
+    }));
+    // …and, from a version that didn't look at addresses, a second one from the catalog.
+    await service.store.add(
+      { ...(first as NonNullable<typeof first>), id: 'int_twin', server: 'datadog-2' },
+      { values: {} },
+    );
+    await service.external(true);
+    const after = await service.store.all();
+    expect(after.map((i) => [i.id, i.catalogId, i.name, i.brand])).toEqual([
+      [first?.id, 'datadog', 'Datadog', undefined],
+    ]);
+    await service.external(true);
+    expect(await service.store.all()).toHaveLength(1);
   });
 
   it('never doubles one you connected already', async () => {
