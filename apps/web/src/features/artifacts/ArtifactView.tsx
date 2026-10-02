@@ -152,10 +152,8 @@ export function ArtifactView({
             <ArtifactEditing
               artifact={artifact}
               restored={restored}
-              onSaved={(n) => {
-                setPicked(n);
-                onVersionChange?.(n);
-              }}
+              // The newest, which it now is; and newer ones as they come.
+              onSaved={() => setPicked(undefined)}
             />
           )
         }
