@@ -147,6 +147,36 @@ describe('ModelPicker with a model on this computer', () => {
   });
 });
 
+describe('ModelPicker with a model that can only chat (ADR 0050)', () => {
+  it('says so under its name, in words, and stays choosable', async () => {
+    const onModelChange = vi.fn();
+    const { container } = setup({
+      providers: [claudeCode, onThisComputer],
+      model: 'gemma3:1b',
+      onModelChange,
+      open: true,
+    });
+    const chatOnly = screen.getByRole('radio', { name: /Gemma3 1B/ });
+    expect(chatOnly).toHaveTextContent('Chat only — can’t use your apps');
+    expect(chatOnly).toHaveAttribute('data-chat-only');
+    expect(screen.getByRole('radio', { name: /Qwen3 4B/ })).not.toHaveTextContent('Chat only');
+    await userEvent.click(screen.getByRole('radio', { name: /Qwen3 4B/ }));
+    expect(onModelChange).toHaveBeenCalledWith('qwen3:4b-instruct');
+    await expectAccessible(container);
+  });
+
+  it('is found by “chat only” when searching', async () => {
+    setup({ providers: connectedProviders, model: 'opus', open: true });
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search models' }), 'chat only');
+    const list = screen.getByRole('radiogroup', { name: 'Model' });
+    expect(
+      within(list)
+        .getAllByRole('radio')
+        .map((r) => r.textContent),
+    ).toEqual([expect.stringContaining('LFM 7B')]);
+  });
+});
+
 describe('ModelPicker with every provider', () => {
   const many = () =>
     setup({ providers: connectedProviders, model: 'opus', onModelChange: vi.fn() });

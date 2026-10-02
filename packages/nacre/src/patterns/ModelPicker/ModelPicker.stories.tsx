@@ -100,6 +100,29 @@ export const OnThisComputer: Story = {
   ),
 };
 
+/**
+ * A model that can only chat — no apps, files, commands or memory — says so
+ * under its name, quietly and in words. Choosing it is still allowed; a chat
+ * that needs an app then offers one that can.
+ */
+export const ChatOnly: Story = {
+  name: 'A model that can only chat',
+  render: (args) => (
+    <Stateful
+      {...args}
+      providers={[{ ...claudeCode, note: 'Default' }, onThisComputer]}
+      model="gemma3:1b"
+      open
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    const row = await body.findByRole('radio', { name: /Gemma3 1B/ });
+    await expect(row).toHaveTextContent('Chat only — can’t use your apps');
+    await expect(body.getByRole('radio', { name: /Qwen3 4B/ })).not.toHaveTextContent('Chat only');
+  },
+};
+
 export const Searching: Story = {
   name: 'Search by name',
   render: (args) => <Stateful {...args} providers={connectedProviders} open />,

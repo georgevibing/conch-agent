@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronRight, Search, X, Zap } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, MessageSquare, Search, X, Zap } from 'lucide-react';
 import { Popover as PopoverPrimitive, RadioGroup as RadioPrimitive } from 'radix-ui';
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 
@@ -21,7 +21,15 @@ export interface ModelOption {
   secondary?: boolean;
   /** Extra words search should find it by (an id, a family name). */
   keywords?: string;
+  /**
+   * It can only chat: no apps, files, commands or memory. Says so quietly
+   * under its name, in words, and search finds it by "chat only".
+   */
+  chatOnly?: boolean;
 }
+
+/** What the picker says about a model that can only chat. */
+export const CHAT_ONLY_WORDS = 'Chat only — can’t use your apps';
 
 export interface ModelProvider {
   id: string;
@@ -189,7 +197,13 @@ export function ModelPicker({
               const other = label
                 ? null
                 : match(
-                    [option.description, option.keywords, option.id, provider.label]
+                    [
+                      option.description,
+                      option.keywords,
+                      option.chatOnly && CHAT_ONLY_WORDS,
+                      option.id,
+                      provider.label,
+                    ]
                       .filter(Boolean)
                       .join(' '),
                     q,
@@ -255,6 +269,7 @@ export function ModelPicker({
       value={option.id}
       data-value={option.id}
       data-secondary={(!ranges && option.secondary) || undefined}
+      data-chat-only={option.chatOnly || undefined}
       className={styles.row}
     >
       <span className={styles.rowText}>
@@ -263,6 +278,12 @@ export function ModelPicker({
           {option.badge && <span className={styles.badge}>{option.badge}</span>}
         </span>
         {option.description && <span className={styles.rowDescription}>{option.description}</span>}
+        {option.chatOnly && (
+          <span className={styles.chatOnly}>
+            <MessageSquare aria-hidden />
+            {CHAT_ONLY_WORDS}
+          </span>
+        )}
       </span>
       <RadioPrimitive.Indicator className={styles.check}>
         <Check aria-hidden />

@@ -1,0 +1,84 @@
+@layer nacre.components {
+  /* ── The offer (the message waits) ──────────────────────────────── */
+  .card {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-3) var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge);
+    animation: nc-surface-in var(--nc-duration-slow) var(--nc-ease-out) both;
+  }
+
+  .mark {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 2rem;
+    block-size: 2rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-wash-2);
+    color: var(--nc-text-muted);
+  }
+
+  .mark[data-app] {
+    background: none;
+  }
+
+  .mark > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .words {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-inline-size: 0;
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+    line-height: var(--nc-leading-snug);
+  }
+
+  .body {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+    line-height: var(--nc-leading-snug);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2);
+    margin-block-start: var(--nc-space-2);
+  }
+
+  /* ── Settled (it went) ──────────────────────────────────────────── */
+  .settled {
+    display: inline-flex;
+    align-items: center;
+    align-self: center;
+    gap: var(--nc-space-1-5);
+    font-size: var(--nc-text-xs);
+    letter-spacing: 0.02em;
+    color: var(--nc-text-muted);
+    animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) both;
+  }
+
+  .settled svg {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+  }
+}

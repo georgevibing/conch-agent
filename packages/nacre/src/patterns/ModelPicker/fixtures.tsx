@@ -89,11 +89,14 @@ export const openRouter: ModelProvider = {
     ],
     ['z-ai/glm-4.6', 'Z.AI: GLM 4.6', '203K context · $0.4/$1.75 per million tokens'],
     ['qwen/qwen3-235b-a22b:free', 'Qwen: Qwen3 235B (free)', '131K context · free'],
+    ['liquid/lfm-7b', 'Liquid: LFM 7B', '33K context · $0.01/$0.01 per million tokens'],
   ].map(([id = '', label = '', description = ''], i) => ({
     id,
     label,
     description,
     secondary: i >= 6,
+    // Some models on OpenRouter can't call tools: they only chat (ADR 0050).
+    ...(id === 'liquid/lfm-7b' && { chatOnly: true }),
   })),
 };
 
@@ -115,7 +118,7 @@ export const onThisComputer: ModelProvider = {
   models: [
     { id: 'qwen3.5:9b', label: 'Qwen3.5 9B', description: '6.6 GB · uses your apps' },
     { id: 'qwen3:4b-instruct', label: 'Qwen3 4B', description: '2.5 GB · uses your apps' },
-    { id: 'gemma3:1b', label: 'Gemma3 1B', description: '800 MB · can’t use your apps or memory' },
+    { id: 'gemma3:1b', label: 'Gemma3 1B', description: '800 MB', chatOnly: true },
   ],
 };
 
