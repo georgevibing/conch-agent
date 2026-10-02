@@ -496,4 +496,305 @@
     color: var(--nc-text-subtle);
     font-size: var(--nc-text-xs);
   }
+
+  /* ── Editing by hand (ADR 0039) ───────────────────────────────────── */
+
+  .panelEditing {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-block-size: 0;
+  }
+
+  .editor {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    min-block-size: 0;
+    padding: var(--nc-space-2) var(--nc-space-3) var(--nc-space-3);
+  }
+
+  .editorBar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-1);
+  }
+
+  .editorState {
+    flex: 1;
+    min-inline-size: 6rem;
+    padding-inline: var(--nc-space-2);
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+  }
+
+  .editorProblem {
+    flex: none;
+  }
+
+  .editorPanes {
+    display: grid;
+    flex: 1;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--nc-space-3);
+    min-block-size: 0;
+  }
+
+  .editor[data-layout='split'] .editorPanes {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .editorCode {
+    min-block-size: 280px;
+  }
+
+  .editorCode[hidden],
+  .editorPreview[hidden] {
+    display: none;
+  }
+
+  .editorPreview {
+    min-block-size: 0;
+    padding: var(--nc-space-3);
+    overflow: auto;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  /* ── Live data (ADR 0039) ─────────────────────────────────────────── */
+
+  .live {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-block-size: var(--nc-control-sm);
+    margin-block-end: var(--nc-space-2);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+  }
+
+  .liveDot {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: 50%;
+    background: oklch(0.62 0.15 var(--nc-success-h));
+    box-shadow: 0 0 0 3px color-mix(in oklch, oklch(0.62 0.15 var(--nc-success-h)) 22%, transparent);
+  }
+
+  .live[data-state='failed'] .liveDot {
+    inline-size: 1rem;
+    block-size: 1rem;
+    background: none;
+    box-shadow: none;
+    color: var(--nc-text-subtle);
+  }
+
+  .liveDot svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  .liveText {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .liveRefresh[data-spinning] svg {
+    animation: nc-live-spin 900ms linear infinite;
+  }
+
+  @keyframes nc-live-spin {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .liveRefresh[data-spinning] svg {
+    animation: none;
+  }
+
+  .liveSources {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    min-inline-size: 14rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .liveSources li {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    font-size: var(--nc-text-sm);
+  }
+
+  .liveSources svg {
+    flex: none;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .liveHost {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ask {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2-5);
+    margin-block-end: var(--nc-space-3);
+    padding: var(--nc-space-3) var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border),
+      var(--nc-elevation-1);
+  }
+
+  .askHead {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2-5);
+  }
+
+  .askIcon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--nc-control-sm);
+    block-size: var(--nc-control-sm);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-accent-3);
+    color: var(--nc-accent-11);
+  }
+
+  .askIcon svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .askTitle {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    line-height: var(--nc-leading-snug);
+    overflow-wrap: anywhere;
+  }
+
+  .askText {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+  }
+
+  .askUrls {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .askUrls code {
+    display: block;
+    padding: var(--nc-space-1) var(--nc-space-2);
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-surface-sunken);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+    overflow-wrap: anywhere;
+  }
+
+  .askWarn {
+    flex: none;
+  }
+
+  .askActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--nc-space-2);
+  }
+
+  .liveList ul {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .liveRow {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-2-5) 0;
+    border-block-end: 1px solid var(--nc-border-subtle);
+  }
+
+  .liveRow:last-child {
+    border-block-end: 0;
+  }
+
+  .liveRowIcon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    color: var(--nc-text-subtle);
+  }
+
+  .liveRowIcon svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .liveRowText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .liveRowMeta {
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+  }
+
+  .liveRowLink {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--nc-text-accent);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .liveRowLink:focus-visible {
+    border-radius: var(--nc-radius-xs);
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  @media (hover: hover) {
+    .liveRowLink:hover {
+      text-decoration: underline;
+    }
+  }
 }

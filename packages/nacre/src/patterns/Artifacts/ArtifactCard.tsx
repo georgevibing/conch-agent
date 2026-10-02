@@ -9,7 +9,8 @@ export interface ArtifactCardProps extends Omit<ComponentProps<'button'>, 'title
   title: ReactNode;
   kind: ArtifactKindName;
   version: number;
-  action?: 'created' | 'updated';
+  /** `edited`: you changed it by hand. */
+  action?: 'created' | 'updated' | 'edited';
   /** What changed in this version: "Darker, with a total row". */
   note?: ReactNode;
   /** It's the one showing in the panel now. */
@@ -57,12 +58,12 @@ export function ArtifactCard({
         </span>
         <span className={styles.cardMeta}>
           {k.label} ·{' '}
-          {action === 'updated'
-            ? `version ${version}`
-            : version > 1
+          {action === 'edited'
+            ? `edited by you · version ${version}`
+            : action === 'updated' || version > 1
               ? `version ${version}`
               : 'made for you'}
-          {note && <> · {note}</>}
+          {note && action !== 'edited' && <> · {note}</>}
         </span>
       </span>
       <span className={styles.cardOpen}>

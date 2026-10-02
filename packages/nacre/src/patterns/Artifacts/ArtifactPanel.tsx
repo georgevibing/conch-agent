@@ -3,6 +3,7 @@ import {
   Maximize2,
   Minimize2,
   MoreHorizontal,
+  Pencil,
   Pin,
   PinOff,
   RefreshCw,
@@ -33,6 +34,8 @@ export interface ArtifactPanelVersion {
   note?: string;
   /** Made by "Refresh with fresh data". */
   refreshed?: boolean;
+  /** Made by you, by hand. */
+  edited?: boolean;
 }
 
 export type ArtifactPanelView = 'preview' | 'source' | 'changes';
@@ -62,6 +65,13 @@ export interface ArtifactPanelProps extends Omit<ComponentProps<'section'>, 'tit
   refreshing?: boolean;
   onDelete?: () => void;
   onClose?: () => void;
+  /** It can be edited by hand: an Edit button. */
+  onEdit?: () => void;
+  /**
+   * Editing it (an `ArtifactEditor`): shown instead of View, Code and
+   * Changes, with the header's own actions put away until it's done.
+   */
+  editing?: ReactNode;
   /** Start filling the window. */
   defaultExpanded?: boolean;
   /** No close button or full-screen toggle: the panel is the page (a pinned app). */
@@ -93,6 +103,8 @@ export function ArtifactPanel({
   refreshing,
   onDelete,
   onClose,
+  onEdit,
+  editing,
   defaultExpanded = false,
   standalone,
   className,
@@ -155,7 +167,12 @@ export function ArtifactPanel({
           </span>
         </div>
         <div className={styles.panelActions}>
-          {standalone && onRefresh && (
+          {onEdit && !editing && (
+            <Button size="sm" variant="soft" leadingIcon={<Pencil />} onClick={onEdit}>
+              Edit
+            </Button>
+          )}
+          {standalone && onRefresh && !editing && (
             <Button
               size="sm"
               variant="soft"
@@ -166,8 +183,8 @@ export function ArtifactPanel({
               Refresh
             </Button>
           )}
-          {source !== undefined && <CopyButton value={source} label="Copy" size="sm" />}
-          {downloadHref && (
+          {source !== undefined && !editing && <CopyButton value={source} label="Copy" size="sm" />}
+          {downloadHref && !editing && (
             <IconButton
               label="Download"
               size="sm"
@@ -182,7 +199,7 @@ export function ArtifactPanel({
               <Download />
             </IconButton>
           )}
-          {onPinnedChange && (
+          {onPinnedChange && !editing && (
             <IconButton
               label={pinned ? 'Unpin from the sidebar' : 'Pin as an app'}
               size="sm"
@@ -205,7 +222,7 @@ export function ArtifactPanel({
               {expanded ? <Minimize2 /> : <Maximize2 />}
             </IconButton>
           )}
-          {((onRefresh && !standalone) || onDelete) && (
+          {((onRefresh && !standalone) || onDelete) && !editing && (
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>
                 <IconButton label="More" size="sm">
@@ -238,67 +255,80 @@ export function ArtifactPanel({
         </div>
       </header>
 
-      <Tabs
-        value={view}
-        onValueChange={(v) => setView(v as ArtifactPanelView)}
-        size="sm"
-        className={styles.panelTabs}
-      >
-        <div className={styles.panelBar}>
-          <Tabs.List aria-label="Show">
-            <Tabs.Trigger value="preview">{kind === 'html' ? 'Use' : 'View'}</Tabs.Trigger>
-            <Tabs.Trigger value="source">Code</Tabs.Trigger>
-            <Tabs.Trigger value="changes" disabled={first}>
-              Changes
-            </Tabs.Trigger>
-          </Tabs.List>
-          {versions.length > 1 && (
-            <Select
-              size="sm"
-              variant="ghost"
-              align="end"
-              aria-label="Version"
-              value={String(version)}
-              onValueChange={(v) => onVersionChange?.(Number(v))}
-            >
-              {[...versions].reverse().map((v) => (
-                <Select.Item
-                  key={v.n}
-                  value={String(v.n)}
-                  description={[v.when, v.refreshed ? 'fresh data' : v.note]
-                    .filter(Boolean)
-                    .join(' · ')}
-                >
-                  Version {v.n}
-                  {v.n === versions.at(-1)?.n ? ' (latest)' : ''}
-                </Select.Item>
-              ))}
-            </Select>
-          )}
-        </div>
+      {editing ? (
+        <div className={styles.panelEditing}>{editing}</div>
+      ) : (
+        <Tabs
+          value={view}
+          onValueChange={(v) => setView(v as ArtifactPanelView)}
+          size="sm"
+          className={styles.panelTabs}
+        >
+          <div className={styles.panelBar}>
+            <Tabs.List aria-label="Show">
+              <Tabs.Trigger value="preview">{kind === 'html' ? 'Use' : 'View'}</Tabs.Trigger>
+              <Tabs.Trigger value="source">Code</Tabs.Trigger>
+              <Tabs.Trigger value="changes" disabled={first}>
+                Changes
+              </Tabs.Trigger>
+            </Tabs.List>
+            {versions.length > 1 && (
+              <Select
+                size="sm"
+                variant="ghost"
+                align="end"
+                aria-label="Version"
+                value={String(version)}
+                onValueChange={(v) => onVersionChange?.(Number(v))}
+              >
+                {[...versions].reverse().map((v) => (
+                  <Select.Item
+                    key={v.n}
+                    value={String(v.n)}
+                    description={[
+                      v.when,
+                      v.refreshed ? 'fresh data' : v.edited ? 'edited by you' : v.note,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  >
+                    Version {v.n}
+                    {v.n === versions.at(-1)?.n ? ' (latest)' : ''}
+                  </Select.Item>
+                ))}
+              </Select>
+            )}
+          </div>
 
-        {current?.note && view !== 'source' && <p className={styles.panelNote}>{current.note}</p>}
+          {current?.note && view !== 'source' && <p className={styles.panelNote}>{current.note}</p>}
 
-        <Tabs.Content value="preview" className={styles.panelBody}>
-          {preview}
-        </Tabs.Content>
-        <Tabs.Content value="source" className={styles.panelBody} data-view="source">
-          {source === undefined ? (
-            <Spinner />
-          ) : (
-            <CodeBlock code={source} language={k.language} lineNumbers variant="bare" defaultWrap />
-          )}
-        </Tabs.Content>
-        <Tabs.Content value="changes" className={styles.panelBody}>
-          {changes === undefined ? (
-            <Spinner />
-          ) : changes.length === 0 ? (
-            <p className={styles.panelNote}>Nothing changed from the version before.</p>
-          ) : (
-            <Diff diff={changes} filename={`Version ${version - 1} → ${version}`} />
-          )}
-        </Tabs.Content>
-      </Tabs>
+          <Tabs.Content value="preview" className={styles.panelBody}>
+            {preview}
+          </Tabs.Content>
+          <Tabs.Content value="source" className={styles.panelBody} data-view="source">
+            {source === undefined ? (
+              <Spinner />
+            ) : (
+              <CodeBlock
+                code={source}
+                language={k.language}
+                lineNumbers
+                variant="bare"
+                defaultWrap
+              />
+            )}
+          </Tabs.Content>
+          <Tabs.Content value="changes" className={styles.panelBody}>
+            {changes === undefined ? (
+              <Spinner />
+            ) : changes.length === 0 ? (
+              <p className={styles.panelNote}>Nothing changed from the version before.</p>
+            ) : (
+              <Diff diff={changes} filename={`Version ${version - 1} → ${version}`} />
+            )}
+          </Tabs.Content>
+        </Tabs>
+      )}
 
       {expanded && (
         <Button

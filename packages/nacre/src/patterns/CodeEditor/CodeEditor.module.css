@@ -1,0 +1,75 @@
+@layer nacre.components {
+  .root {
+    /* The same palette as CodeBlock, so code reads the same edited or shown. */
+    --ce-keyword: var(--nc-accent-11);
+    --ce-constant: light-dark(oklch(0.5 0.15 300), oklch(0.8 0.1 300));
+    --ce-string: light-dark(oklch(0.5 0.11 150), oklch(0.8 0.11 150));
+    --ce-function: light-dark(oklch(0.5 0.14 255), oklch(0.8 0.1 255));
+    --ce-parameter: light-dark(oklch(0.55 0.12 60), oklch(0.82 0.1 70));
+    --ce-punctuation: var(--nc-text-subtle);
+    --ce-comment: var(--nc-text-subtle);
+    --ce-link: var(--nc-accent-11);
+    --ce-invalid: light-dark(
+      oklch(0.52 0.18 var(--nc-danger-h)),
+      oklch(0.78 0.13 var(--nc-danger-h))
+    );
+    --ce-active: color-mix(in oklab, var(--nc-accent-9) 6%, transparent);
+    --ce-font: 0.8125rem;
+    --ce-leading: 1.65;
+    --ce-pad-x: var(--nc-space-3);
+    --ce-pad-y: var(--nc-space-3);
+
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-block-size: 0;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    transition: box-shadow var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .root:focus-within {
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-strong),
+      0 0 0 3px var(--nc-ring);
+  }
+
+  .host {
+    flex: 1;
+    min-block-size: 0;
+    overflow: hidden;
+  }
+
+  .host :global(.cm-editor) {
+    block-size: 100%;
+  }
+
+  .loading {
+    display: grid;
+    place-items: center;
+    flex: 1;
+    min-block-size: 160px;
+  }
+
+  .root[data-state='loading'] .host {
+    position: absolute;
+    inset: 0;
+    visibility: hidden;
+  }
+
+  .plain {
+    flex: 1;
+    min-block-size: 240px;
+    padding: var(--ce-pad-y) var(--ce-pad-x);
+    border: none;
+    background: transparent;
+    color: var(--nc-text);
+    font-family: var(--nc-font-mono);
+    font-size: var(--ce-font);
+    line-height: var(--ce-leading);
+    resize: none;
+    outline: none;
+  }
+}

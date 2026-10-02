@@ -1,4 +1,5 @@
 import {
+  AppWindow,
   BadgeCheck,
   Blocks,
   Globe,
@@ -34,6 +35,7 @@ const ICONS: Record<BackupPowerInfo['kind'], ReactNode> = {
   'terminal-remote': <MonitorSmartphone />,
   'channel-people': <MessageCircle />,
   'trusted-publishers': <BadgeCheck />,
+  'page-data-sites': <AppWindow />,
 };
 
 /**

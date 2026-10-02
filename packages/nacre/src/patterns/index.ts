@@ -1,5 +1,6 @@
 export * from './Attachments';
 export * from './CodeBlock';
+export * from './CodeEditor';
 export * from './Composer';
 export * from './CopyButton';
 export * from './Diff';
