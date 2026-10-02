@@ -786,8 +786,9 @@ files with `pnpm docs:build`. The front page is at `/`, the documentation at `/d
 - **The front page** (`src/landing/`) shows the product with the product: each picture
   is the app's own Nacre components (`Message`, `BrowserWindow`, `Handset`, `Diff`, …)
   given a script and a clock (`useClock`) that runs only while the picture is in view,
-  and stands at one chosen moment under reduced motion. Pictures are `inert`, named by
-  a sentence. Counts and names come from `virtual:conch-reference`. The documentation
+  and stands at one chosen moment under reduced motion. Each holds the size of its
+  tallest moment (`Steady`), so the page never shifts as they play. Pictures are `inert`,
+  named by a sentence; the chart is the one left live, so Chart and Table can be pressed. Counts and names come from `virtual:conch-reference`. The documentation
   (its guides, search and sidebar) is loaded only when someone goes there, so the front
   page doesn't carry it.
 - **Checked** by `src/content.test.ts` in `pnpm check`: a provider or channel without a
