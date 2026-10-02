@@ -16,6 +16,11 @@ export interface PermissionTool {
   description?: string;
   access: 'read' | 'write';
   destructive?: boolean;
+  /**
+   * Asks every time whatever the policy says (saving an email draft): only
+   * Ask or Off can be chosen, and the row says so.
+   */
+  alwaysAsks?: boolean;
   /** Your override; unset follows the integration's policy. */
   policy?: ToolPermission;
 }
@@ -32,9 +37,10 @@ export interface ToolPermissionListProps extends Omit<ComponentProps<'div'>, 'on
 
 /** What a tool does when you haven't chosen: mirrors `toolDecision` in the protocol. */
 export function defaultPermission(
-  tool: Pick<PermissionTool, 'access' | 'destructive'>,
+  tool: Pick<PermissionTool, 'access' | 'destructive' | 'alwaysAsks'>,
   policy: IntegrationPolicyValue,
 ): ToolPermission {
+  if (tool.alwaysAsks) return 'ask';
   if (policy === 'trust') return 'allow';
   if (policy === 'ask-writes' && tool.access === 'read' && !tool.destructive) return 'allow';
   return 'ask';
@@ -77,6 +83,11 @@ function ToolRow({
               Can delete
             </Badge>
           )}
+          {tool.alwaysAsks && (
+            <Badge tone="neutral" size="sm" variant="outline">
+              Always asks
+            </Badge>
+          )}
           {tool.policy && tool.policy !== fallback && (
             <span className={styles.custom} title="You changed this">
               <span className="nc-visually-hidden">(you changed this)</span>
@@ -105,7 +116,7 @@ function ToolRow({
         }}
         className={styles.control}
       >
-        <SegmentedControl.Item value="allow">Allow</SegmentedControl.Item>
+        {!tool.alwaysAsks && <SegmentedControl.Item value="allow">Allow</SegmentedControl.Item>}
         <SegmentedControl.Item value="ask">Ask</SegmentedControl.Item>
         <SegmentedControl.Item value="off">Off</SegmentedControl.Item>
       </SegmentedControl>

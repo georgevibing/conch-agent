@@ -245,6 +245,49 @@ function Permissions() {
 
 export const ToolPermissions: Story = { render: () => <Permissions /> };
 
+/** A tool that asks every time whatever the policy (saving a Gmail draft): only Ask or Off. */
+function AlwaysAsksPermissions() {
+  const [tools, setTools] = useState<PermissionTool[]>([
+    {
+      name: 'google_mail_search',
+      title: 'Search your mail',
+      description:
+        'Finds emails with Gmail’s own search. It says which emails match, not what they say.',
+      access: 'read',
+    },
+    {
+      name: 'google_mail_read',
+      title: 'Read an email',
+      description: 'Reads one email as plain text, with who sent it and a link to it in Gmail.',
+      access: 'read',
+      policy: 'ask',
+    },
+    {
+      name: 'google_mail_create_draft',
+      title: 'Save a draft',
+      description:
+        'Saves a new email or a reply in your Drafts, for you to send yourself. It never sends, and asks you every time.',
+      access: 'write',
+      alwaysAsks: true,
+    },
+  ]);
+  return (
+    <div style={{ maxWidth: 640 }}>
+      <ToolPermissionList
+        tools={tools}
+        policy="trust"
+        onChange={(name, policy) =>
+          setTools((all) =>
+            all.map((t) => (t.name === name ? { ...t, policy: policy ?? undefined } : t)),
+          )
+        }
+      />
+    </div>
+  );
+}
+
+export const ToolThatAlwaysAsks: Story = { render: () => <AlwaysAsksPermissions /> };
+
 export const IssueInChat: Story = {
   render: () => (
     <Stack gap={3}>

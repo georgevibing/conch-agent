@@ -168,6 +168,32 @@ describe('ToolPermissionList', () => {
     expect(onChange).toHaveBeenCalledWith('notion-delete', null);
   });
 
+  it('never offers Allow for a tool that always asks, whatever the policy', async () => {
+    const onChange = vi.fn();
+    const { container } = renderNacre(
+      <ToolPermissionList
+        tools={[
+          {
+            name: 'google_mail_create_draft',
+            title: 'Save a draft',
+            access: 'write',
+            alwaysAsks: true,
+          },
+        ]}
+        policy="trust"
+        onChange={onChange}
+      />,
+    );
+    const group = screen.getByRole('radiogroup', { name: 'Save a draft' });
+    expect(within(group).queryByRole('radio', { name: 'Allow' })).not.toBeInTheDocument();
+    expect(within(group).getByRole('radio', { checked: true })).toHaveTextContent('Ask');
+    expect(screen.getByText('Always asks')).toBeInTheDocument();
+    await userEvent.click(within(group).getByRole('radio', { name: 'Off' }));
+    expect(onChange).toHaveBeenLastCalledWith('google_mail_create_draft', 'off');
+    expect(defaultPermission({ access: 'write', alwaysAsks: true }, 'trust')).toBe('ask');
+    await expectAccessible(container);
+  });
+
   it('matches the protocol’s defaults', () => {
     expect(defaultPermission({ access: 'read' }, 'ask-writes')).toBe('allow');
     expect(defaultPermission({ access: 'read', destructive: true }, 'ask-writes')).toBe('ask');
