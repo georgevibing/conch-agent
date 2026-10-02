@@ -265,7 +265,10 @@ describe('Palette search', () => {
           {
             engine: 'openrouter',
             label: 'OpenRouter',
-            models: [model('qwen/qwen3-coder', 'Qwen: Qwen3 Coder')],
+            models: [
+              model('qwen/qwen3-coder', 'Qwen: Qwen3 Coder'),
+              { ...model('liquid/lfm-7b', 'Liquid: LFM 7B'), tools: false },
+            ],
             commands: [],
             permissionModes: ['default'],
           },
@@ -293,6 +296,14 @@ describe('Palette search', () => {
     expect(await screen.findByRole('option', { name: /Qwen3 Coder/ })).toHaveTextContent(
       'OpenRouter',
     );
+
+    // A model that can only chat says so, and is found by the words (ADR 0050).
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'chat only');
+    expect(await screen.findByRole('option', { name: /LFM 7B/ })).toHaveTextContent(
+      'Chat only — can’t use your apps',
+    );
+    expect(screen.queryByRole('option', { name: /Qwen3 Coder/ })).toBeNull();
 
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'providers');

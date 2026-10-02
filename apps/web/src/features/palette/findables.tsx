@@ -1,6 +1,7 @@
-import { generatePassword, type TaskList, type TextRange } from '@conch/protocol';
+import { canUseApps, generatePassword, type TaskList, type TextRange } from '@conch/protocol';
 import {
   ARTIFACT_KINDS,
+  CHAT_ONLY_WORDS,
   IntegrationLogo,
   ProviderLogo,
   SkillIcon,
@@ -294,7 +295,8 @@ export function useFindables(query: string, conversationId: string | undefined):
     models,
     q,
     (m) => m.label,
-    (m) => `${m.model.id} ${m.provider.label}`,
+    (m) =>
+      `${m.model.id} ${m.provider.label}${canUseApps(m.provider, m.model) ? '' : ` ${CHAT_ONLY_WORDS}`}`,
     5,
   ).map(({ item, match }): Findable => {
     const key = modelKey(item.provider.engine, item.model.id);
@@ -304,7 +306,12 @@ export function useFindables(query: string, conversationId: string | undefined):
       id: `model:${key}`,
       label: item.label,
       ranges: match.ranges,
-      description: [many && item.provider.label, item.model.description]
+      description: [
+        many && item.provider.label,
+        // A model that can only chat says so here too (ADR 0050).
+        !canUseApps(item.provider, item.model) && CHAT_ONLY_WORDS,
+        item.model.description,
+      ]
         .filter(Boolean)
         .join(' · '),
       hint: current ? 'In use' : conversationId ? 'Use in this chat' : 'Use',

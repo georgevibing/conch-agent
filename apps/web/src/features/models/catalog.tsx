@@ -1,3 +1,4 @@
+import { canUseApps } from '@conch/protocol';
 import type {
   EffortChoice,
   EngineId,
@@ -104,6 +105,8 @@ export function pickerProviders(
         description: m.description,
         keywords: `${m.id} ${provider.label}`,
         secondary: isSecondaryModel(m) || (long && i >= FEATURED),
+        // Says so under its name (ADR 0050): it can only chat.
+        ...(!canUseApps(provider, m) && { chatOnly: true }),
       })),
     };
   });
