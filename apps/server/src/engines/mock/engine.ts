@@ -489,6 +489,39 @@ export class MockEngine implements Engine {
         yield { type: 'message-done', messageId } as const;
         yield { type: 'done', outcome: 'success' } as const;
       };
+
+      // Gmail as an app (ADR 0048): the Google apps' own tools, whichever way it's signed in.
+      const gmail = /\bsearch my gmail for (.+?)[.?!]*$/i.exec(input.prompt.trim());
+      if (gmail?.[1]) {
+        if (!input.tools.some((t) => t.name === 'google_mail_search')) {
+          yield* speak('Searching Gmail is turned off for me, so I can’t look in it.');
+          return;
+        }
+        const json = (text: string): Record<string, unknown> => {
+          try {
+            return JSON.parse(text) as Record<string, unknown>;
+          } catch {
+            return {};
+          }
+        };
+        const accounts = json(yield* hostTool('google_accounts', {})).accounts as
+          { id: string }[] | undefined;
+        const accountId = accounts?.[0]?.id ?? '';
+        const found = json(
+          yield* hostTool('google_mail_search', { accountId, query: gmail[1], limit: 5 }),
+        ).messages as { id: string }[] | undefined;
+        const first = found?.[0]?.id;
+        const read =
+          first && input.tools.some((t) => t.name === 'google_mail_read')
+            ? json(yield* hostTool('google_mail_read', { accountId, messageId: first }))
+            : {};
+        yield* speak(
+          found?.length
+            ? `I found ${found.length} ${found.length === 1 ? 'email' : 'emails'} about ${gmail[1]}.${typeof read.subject === 'string' ? ` The newest is “${read.subject}”.` : ''}`
+            : `Nothing in Gmail about ${gmail[1]}.`,
+        );
+        return;
+      }
       if (/\bin parallel\b/i.test(input.prompt) && input.tools.some((t) => t.name === 'delegate')) {
         const out = yield* hostTool('delegate', {
           parts: [

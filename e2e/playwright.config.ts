@@ -59,6 +59,8 @@ const scenarios = {
   search: { port: 4396, env: { CONCH_MOCK_STATE: 'ready' } },
   routines: { port: 4395, env: { CONCH_MOCK_STATE: 'ready' } },
   integrations: { port: 4398, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Gmail, Calendar and Drive as apps (ADR 0048): Gmail by app password against the pretend mail service.
+  'google-apps': { port: 4367, env: { CONCH_MOCK_STATE: 'ready' } },
   browser: { port: 4399, env: { CONCH_MOCK_STATE: 'ready' } },
   terminal: { port: 4390, env: { CONCH_MOCK_STATE: 'ready' } },
   recovery: { port: 4388, env: { CONCH_MOCK_STATE: 'ready' } },

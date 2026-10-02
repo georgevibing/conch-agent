@@ -65,8 +65,11 @@ for (const viewport of [
       return route.fulfill({ json: status() });
     });
     await page.goto('/integrations');
-    const google = page.getByRole('region', { name: 'Google accounts' });
-    await google.getByRole('button', { name: 'Calendar briefing' }).click();
+    // Calendar's own tile opens its connect dialog, which only asks for the calendar.
+    const openCalendar = () =>
+      page.getByRole('button', { name: 'Google Calendar', exact: true }).click();
+    await openCalendar();
+    const google = page.getByRole('dialog', { name: 'Connect Google Calendar' });
     await google.getByLabel('Project ID (optional)').fill('personal-conch');
     await google.getByRole('button', { name: 'My project is selected' }).click();
     await expect(google.getByRole('link', { name: 'Open Google Calendar API' })).toHaveAttribute(
@@ -90,18 +93,17 @@ for (const viewport of [
       mimeType: 'application/json',
       buffer: Buffer.from(credentials),
     });
-    await expect(google.getByRole('status')).toContainText('Desktop app · personal-conch');
+    await expect(google.getByText(/Desktop app · personal-conch/)).toBeVisible();
     await google.getByRole('button', { name: 'Save and connect Google' }).click();
     await expect(google.getByRole('link', { name: 'Open Google sign-in' })).toBeVisible();
     // Reload recovery retains only the flow ID, not the credential file or return URL.
     await page.reload();
-    await google.getByRole('button', { name: 'Calendar briefing' }).click();
+    await openCalendar();
     await google
       .getByLabel('Return address from Google')
       .fill('http://127.0.0.1:1/?state=flow&code=private-test-code');
     await google.getByRole('button', { name: 'Finish connecting' }).click();
-    await expect(page.getByText('Google account verified', { exact: true })).toBeVisible();
-    await expect(google.getByRole('button', { name: 'Use ada@example.com' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Google Calendar is connected' })).toBeVisible();
     expect(await page.evaluate(() => JSON.stringify(sessionStorage))).not.toMatch(
       /fake-test-secret|private-test-code/,
     );
