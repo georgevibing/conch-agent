@@ -43,9 +43,12 @@ test('connect Telegram, say hello, chat from the phone and approve with a button
   request,
 }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Channels', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Channels', level: 1 })).toBeVisible();
-  await page.getByRole('button', { name: 'Connect Telegram' }).click();
+  // Chat apps are in Apps, under Talk to me here (ADR 0052).
+  await page.getByRole('button', { name: 'Apps', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Apps', level: 1 })).toBeVisible();
+  await page.getByRole('radio', { name: 'Talk to me here' }).click();
+  await expect(page.getByRole('list', { name: 'How it works' })).toBeVisible();
+  await page.getByRole('button', { name: 'Telegram', exact: true }).click();
 
   // BotFather's two questions are answered for you.
   await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue(

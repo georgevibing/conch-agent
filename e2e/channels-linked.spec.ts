@@ -43,8 +43,9 @@ test('link WhatsApp by scanning, chat in Message yourself, and approve with a nu
   request,
 }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Channels', exact: true }).click();
-  await page.getByRole('button', { name: 'Connect WhatsApp' }).click();
+  await page.getByRole('button', { name: 'Apps', exact: true }).click();
+  await page.getByRole('radio', { name: 'Talk to me here' }).click();
+  await page.getByRole('button', { name: 'WhatsApp', exact: true }).click();
 
   // The code is there at once, with the taps to make and what an unofficial client risks.
   await expect(page.getByRole('img', { name: 'Scan with WhatsApp on your phone' })).toBeVisible();

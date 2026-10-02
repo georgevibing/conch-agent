@@ -38,8 +38,8 @@ test('Matrix: sign in once, then an encrypted DM where a reaction approves', asy
   page,
   request,
 }) => {
-  await page.goto('/channels');
-  await page.getByRole('button', { name: 'Connect Matrix' }).click();
+  await page.goto('/apps?show=talk');
+  await page.getByRole('button', { name: 'Matrix', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Connect Matrix', level: 1 })).toBeVisible();
   await page.getByRole('button', { name: 'It has an account' }).click();
   await page.getByLabel('Homeserver').fill(MATRIX);

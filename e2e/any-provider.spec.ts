@@ -30,7 +30,7 @@ test('connect Slack once, catch up on a channel, and nothing is sent without you
   page,
   request,
 }) => {
-  await page.goto('/integrations');
+  await page.goto('/apps');
   await page.getByRole('button', { name: 'Slack', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Connect Slack' });
   await expect(dialog.getByRole('link', { name: 'Make the app in Slack' })).toBeVisible();
@@ -72,7 +72,7 @@ test('connect Slack once, catch up on a channel, and nothing is sent without you
   ]);
 
   // Its page: sending can be Ask or Off, never Allow.
-  await page.goto('/integrations/slack');
+  await page.goto('/apps/slack');
   const send = page.getByRole('radiogroup', { name: 'Send a message' });
   await expect(send.getByRole('radio', { name: 'Allow' })).toHaveCount(0);
   await send.getByRole('radio', { name: 'Off' }).click();
@@ -93,7 +93,7 @@ test('what the provider set up comes in by itself; what only it can use is in Se
       { timeout: 15_000 },
     )
     .toContain('Sentry');
-  await page.goto('/integrations');
+  await page.goto('/apps');
   const connected = page.getByRole('region', { name: 'Connected' });
   await expect(connected.getByText('Sentry')).toBeVisible();
   await expect(connected.getByText('Sign in to use it with every model.')).toBeVisible();

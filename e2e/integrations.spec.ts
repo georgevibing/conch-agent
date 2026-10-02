@@ -18,7 +18,7 @@ test('connect Notion in a popup, use it in a chat, fix it when it breaks', async
 }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Connect Gmail, Notion, GitHub and more' }).click();
-  await expect(page.getByRole('heading', { name: 'Integrations', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Apps', level: 1 })).toBeVisible();
 
   await page.getByRole('button', { name: 'Notion', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Connect Notion' });
@@ -62,7 +62,7 @@ test('connect Notion in a popup, use it in a chat, fix it when it breaks', async
   await expect(
     page.getByRole('note').filter({ hasText: 'Notion needs you to sign in again' }),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: /Integrations.*1 needs attention/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Apps.*1 needs you/ })).toBeVisible();
 
   // One click from the chat signs in again; the card settles.
   const again = page.waitForEvent('popup');
@@ -74,7 +74,7 @@ test('connect Notion in a popup, use it in a chat, fix it when it breaks', async
 test('a token integration explains a wrong token, and tools can be turned off', async ({
   page,
 }) => {
-  await page.goto('/integrations');
+  await page.goto('/apps');
   await page.getByRole('button', { name: 'GitHub', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Connect GitHub' });
   const token = dialog.getByLabel(/Access token/);
@@ -87,6 +87,10 @@ test('a token integration explains a wrong token, and tools can be turned off', 
 
   await page.getByRole('dialog').getByRole('button', { name: 'Choose what it can do' }).click();
   await expect(page.getByRole('heading', { name: 'GitHub', level: 1 })).toBeVisible();
+  // Plain switches first: what it does, in two words each.
+  const does = page.getByRole('list', { name: 'What GitHub does' });
+  await expect(does.getByRole('switch', { name: 'Look things up' })).toBeChecked();
+  await expect(does.getByRole('switch', { name: /Make changes/ })).toBeChecked();
   const remove = page.getByRole('radiogroup', { name: 'Delete a page' });
   await remove.getByRole('radio', { name: 'Off' }).click();
   await expect(remove.getByRole('radio', { name: 'Off' })).toHaveAttribute('aria-checked', 'true');
@@ -97,12 +101,14 @@ test('a token integration explains a wrong token, and tools can be turned off', 
 
   await page.getByRole('button', { name: 'Disconnect GitHub' }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Disconnect' }).click();
-  await expect(page).toHaveURL(/\/integrations$/);
+  await expect(page).toHaveURL(/\/apps$/);
   await expect(page.getByRole('region', { name: 'Connected' })).toHaveCount(0);
 });
 
 test('saying no on the sign-in page leaves nothing half-connected', async ({ page }) => {
+  // The page's old address still leads there.
   await page.goto('/integrations');
+  await expect(page).toHaveURL(/\/apps$/);
   await page.getByRole('button', { name: 'Linear', exact: true }).click();
   const popupOpened = page.waitForEvent('popup');
   await page.getByRole('button', { name: 'Continue with Linear' }).click();

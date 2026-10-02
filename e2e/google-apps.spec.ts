@@ -29,7 +29,7 @@ test('connect Gmail with an app password, use it in a chat, turn a tool off, fix
   await request.post(`${MAIL}/__control/deliver`, {
     data: { from: 'sam@example.org', subject: 'Lunch on Friday', text: 'Pizza at noon?' },
   });
-  await page.goto('/integrations');
+  await page.goto('/apps');
   // No Google box at the top any more: Gmail is a tile like the others.
   await expect(page.getByText('What would you like to do with Google?')).toHaveCount(0);
   await page
@@ -73,7 +73,7 @@ test('connect Gmail with an app password, use it in a chat, turn a tool off, fix
   ).toBeVisible();
 
   // Off is off on every engine: the tool isn't offered at all.
-  await page.goto('/integrations/gmail');
+  await page.goto('/apps/gmail');
   const draft = page.getByRole('radiogroup', { name: 'Save a draft' });
   await expect(draft.getByRole('radio', { name: 'Allow' })).toHaveCount(0);
   await page
@@ -91,7 +91,7 @@ test('connect Gmail with an app password, use it in a chat, turn a tool off, fix
 
   // The app password is revoked at Google: one fix, right on its page.
   await request.post(`${MAIL}/__control/revoke`);
-  await page.goto('/integrations/gmail');
+  await page.goto('/apps/gmail');
   await page.getByRole('button', { name: 'Check now' }).click();
   await expect(page.getByRole('button', { name: 'Sign in again' })).toBeVisible();
   await request.post(`${MAIL}/__control/reset`);
@@ -102,15 +102,20 @@ test('connect Gmail with an app password, use it in a chat, turn a tool off, fix
   // Disconnecting forgets it and puts the tile back.
   await page.getByRole('button', { name: 'Disconnect Gmail' }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Disconnect' }).click();
-  await expect(page.getByRole('heading', { name: 'Integrations', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Apps', level: 1 })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Gmail', exact: true })).toBeVisible();
   expect((await (await request.get('/api/google')).json()).accounts).toEqual([]);
 });
 
 test('Calendar says plainly it needs your own Google Cloud app', async ({ page }) => {
-  await page.goto('/integrations');
+  await page.goto('/apps');
   await page.getByRole('button', { name: 'Google Calendar', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Connect Google Calendar' });
   await expect(dialog.getByText('This needs a Google Cloud app of your own')).toBeVisible();
   await expect(dialog.getByRole('textbox', { name: 'App password' })).toHaveCount(0);
+  // Said once: no second heading about Google under the dialog's own.
+  await expect(
+    dialog.getByRole('button', { name: 'I already have a credential file' }),
+  ).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Google, connected to Conch' })).toHaveCount(0);
 });

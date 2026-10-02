@@ -37,6 +37,8 @@ test.beforeEach(async ({ request }) => {
   });
   for (const c of (await (await request.get('/api/channels')).json()).channels)
     await request.delete(`/api/channels/${c.id}`);
+  // Gmail the app, when a journey let the email channel's sign-in be used for it.
+  await request.delete('/api/integrations/gmail');
   await request.post(`${MESSAGES}/__control/show`);
 });
 
@@ -44,8 +46,10 @@ test('connect email with an app password, write from the phone, get the answer i
   page,
   request,
 }) => {
+  // Channels is Apps → Talk to me here now (ADR 0052); its old address leads there.
   await page.goto('/channels');
-  await page.getByRole('button', { name: 'Connect Email' }).click();
+  await expect(page.getByRole('radio', { name: 'Talk to me here' })).toBeChecked();
+  await page.getByRole('button', { name: 'Email', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Connect Email' })).toBeVisible();
 
   // The address picks the service; the next step links to where app passwords are made.
@@ -97,9 +101,17 @@ test('connect email with an app password, write from the phone, get the answer i
   expect(answer?.replyTo).toBe('ada+conch@gmail.com');
   expect((await mailSent(request)).some((m) => m.to.includes('grace@example.org'))).toBe(false);
 
+  // Email on Gmail is Gmail's card, one of its switches: Talk to me here.
+  await page.goto('/apps');
+  await page
+    .getByRole('region', { name: 'Connected' })
+    .getByRole('button', { name: 'Gmail', exact: true })
+    .click();
+  const does = page.getByRole('list', { name: 'What Gmail does' });
+  await expect(does.getByRole('switch', { name: 'Talk to me here' })).toBeChecked();
+  await does.getByRole('button', { name: 'Who can write to it' }).click();
+
   // On the channel's page: who may talk, and that nobody else's mail is read.
-  await page.goto('/channels');
-  await page.getByRole('button', { name: 'ada@gmail.com', exact: true }).click();
   await expect(page.getByText('ada+conch@gmail.com on Email')).toBeVisible();
   await expect(page.getByText(/Conch never reads their chats/)).toBeVisible();
   await expect(page.getByText('Grace Hopper')).toHaveCount(0);
@@ -114,6 +126,23 @@ test('connect email with an app password, write from the phone, get the answer i
   await page.keyboard.press('ControlOrMeta+k');
   await page.getByRole('combobox').fill('gmail');
   await expect(page.getByRole('option', { name: /ada@gmail\.com on Email/ })).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // The other half in one tap, only when asked: Gmail the app, with the same app password.
+  expect(
+    (
+      (await (await request.get('/api/integrations')).json()) as { integrations: { id: string }[] }
+    ).integrations.map((i) => i.id),
+  ).not.toContain('gmail');
+  await page.getByRole('button', { name: 'Use it for Gmail' }).click();
+  await expect(page.getByText('Conch can search your Gmail now.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Use it for Gmail' })).toHaveCount(0);
+  await page.getByRole('link', { name: 'Gmail', exact: true }).click();
+  await expect(
+    page
+      .getByRole('list', { name: 'What Gmail does' })
+      .getByRole('switch', { name: 'Read & search' }),
+  ).toBeChecked();
 });
 
 test('a revoked app password stops only that channel, and a new one brings it back', async ({

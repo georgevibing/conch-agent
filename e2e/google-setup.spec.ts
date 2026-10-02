@@ -64,7 +64,7 @@ for (const viewport of [
         });
       return route.fulfill({ json: status() });
     });
-    await page.goto('/integrations');
+    await page.goto('/apps');
     // Calendar's own tile opens its connect dialog, which only asks for the calendar.
     const openCalendar = () =>
       page.getByRole('button', { name: 'Google Calendar', exact: true }).click();
