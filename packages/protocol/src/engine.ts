@@ -115,6 +115,8 @@ export const ModelInfo = z.object({
   supportsAutoMode: z.boolean().default(false),
   /** Whether it can look at images. Unset = the provider's `attachments.images`. */
   images: z.boolean().optional(),
+  /** Provider-declared function calling support; false means chat only. */
+  tools: z.boolean().optional(),
 });
 export type ModelInfo = z.infer<typeof ModelInfo>;
 
@@ -133,6 +135,10 @@ export const Capabilities = z.object({
   engine: EngineId,
   label: z.string(),
   models: z.array(ModelInfo),
+  /** Effective host capabilities; individual model support can narrow these. */
+  tools: z
+    .object({ host: z.boolean(), files: z.boolean(), shell: z.boolean(), approvals: z.boolean() })
+    .optional(),
   commands: z.array(EngineCommand),
   /** The modes this provider honours, safest first (see `honouredMode`). */
   permissionModes: z.array(PermissionMode),

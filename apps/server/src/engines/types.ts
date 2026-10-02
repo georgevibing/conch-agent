@@ -34,7 +34,30 @@ export interface HostTool<Shape extends z.ZodRawShape = z.ZodRawShape> {
   name: string;
   description: string;
   input: Shape;
-  run(args: z.infer<z.ZodObject<Shape>>): Promise<string | HostToolResult>;
+  run(
+    args: z.infer<z.ZodObject<Shape>>,
+    context?: { operationId: string },
+  ): Promise<string | HostToolResult>;
+  /** Optional durable-effect contract; a write is confirmed only by a provider receipt. */
+  verification?: {
+    effect: 'read' | 'write';
+    /** Trusted semantic target, never derived from untrusted model claims. */
+    identity?(args: Record<string, unknown>): string;
+    scope(
+      args: Record<string, unknown>,
+    ): Promise<{ account: string; authorization: string; expiresAt: number }>;
+    reconcile(
+      args: Record<string, unknown>,
+      operationId: string,
+    ): Promise<
+      | {
+          state: 'confirmed';
+          receipt: { provider: string; id: string; label: string; url?: string };
+        }
+      | { state: 'absent' }
+      | { state: 'unknown' }
+    >;
+  };
   /**
    * Load it into the model's context up front, for engines that otherwise defer
    * tools until searched for (Claude Code). For the few tools a task starts with.
@@ -144,6 +167,8 @@ export interface TurnInput {
   systemAppend: string;
   cwd: string;
   tools: HostTool[];
+  /** Apply the task ledger to engine-supplied host tools, too. */
+  wrapTool?: (tool: HostTool) => HostTool;
   requestPermission(request: PermissionRequest, signal: AbortSignal): Promise<PermissionDecision>;
   signal: AbortSignal;
   /** Resolved choices for this turn (conversation overrides merged over defaults). */
@@ -254,6 +279,8 @@ export interface Engine {
   detect(options?: { force?: boolean }): Promise<EngineStatus>;
   /** Start an interactive sign-in. Progress is reported through `onUpdate`. */
   login?(method: LoginMethod, onUpdate: (state: LoginState) => void): LoginHandle;
+  /** Disconnect only credentials owned by Conch, never ambient provider sign-ins. */
+  disconnect?(): Promise<void>;
   /** Store an API key the engine should use instead of an interactive login. */
   setApiKey?(apiKey: string | undefined): Promise<void>;
   /** Models, slash commands and permission modes the engine offers right now. */
@@ -279,6 +306,8 @@ export interface Engine {
    * can't do.
    */
   readonly hostTools?: boolean;
+  /** Commands are always sealed by Conch, independent of the native-provider toggle. */
+  readonly commandSandbox?: 'conch';
   /**
    * Skill folders the engine reads by itself (Claude Code reads
    * `~/.claude/skills`). Conch doesn't list those skills to it a second time.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { honouredMode } from './engine';
+import { Capabilities, honouredMode } from './engine';
 
 describe('honouredMode', () => {
   it('keeps a mode the provider honours', () => {
@@ -19,5 +19,31 @@ describe('honouredMode', () => {
   it('keeps the wish when the provider hasn’t said what it honours', () => {
     expect(honouredMode('acceptEdits', [])).toBe('acceptEdits');
     expect(honouredMode('acceptEdits', undefined)).toBe('acceptEdits');
+  });
+});
+
+describe('provider capability contract', () => {
+  it('retains explicit chat-only models rather than inventing universal tool support', () => {
+    const capabilities = Capabilities.parse({
+      engine: 'ollama',
+      label: 'Local',
+      models: [{ id: 'small', label: 'Small', tools: false }],
+      commands: [],
+      permissionModes: ['default'],
+      tools: { host: true, files: true, shell: false, approvals: true },
+    });
+    expect(capabilities.models[0]?.tools).toBe(false);
+    expect(capabilities.tools?.shell).toBe(false);
+  });
+  it('accepts existing providers without a new capability declaration', () => {
+    expect(
+      Capabilities.parse({
+        engine: 'mock',
+        label: 'Mock',
+        models: [],
+        commands: [],
+        permissionModes: ['default'],
+      }).tools,
+    ).toBeUndefined();
   });
 });
