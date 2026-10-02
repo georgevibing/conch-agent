@@ -902,12 +902,35 @@ describe('Palette search', () => {
             available: true,
           },
           { id: 'signal', name: 'Signal', tagline: '', color: '#3A76F0', available: false },
+          {
+            id: 'email',
+            name: 'Email',
+            tagline: '',
+            color: '#5B6B7F',
+            minutes: 3,
+            available: true,
+          },
+          {
+            id: 'imessage',
+            name: 'iMessage',
+            tagline: '',
+            color: '#34DA50',
+            minutes: 1,
+            available: true,
+          },
         ],
       }),
     });
     renderApp(<Palette />);
     act(() => useUi.getState().setPalette(true));
-    await user.type(await screen.findByRole('combobox'), 'discord');
+    // The words people use for them, not only their names.
+    await user.type(await screen.findByRole('combobox'), 'gmail');
+    expect(await screen.findByRole('option', { name: /Connect Email/ })).toBeInTheDocument();
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'iphone');
+    expect(await screen.findByRole('option', { name: /Connect iMessage/ })).toBeInTheDocument();
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'discord');
     expect(await screen.findByRole('option', { name: /Connect Discord/ })).toBeInTheDocument();
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'telegram');

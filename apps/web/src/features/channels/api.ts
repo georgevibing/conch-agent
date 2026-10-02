@@ -6,6 +6,9 @@ import {
   ChannelList,
   type ChannelSecrets,
   type CheckChannelBody,
+  ImessageSetup,
+  type OpenImessageBody,
+  type ReplaceChannelTokenBody,
   type UpdateChannelBody,
 } from '@conch/protocol';
 import { z } from 'zod';
@@ -21,7 +24,7 @@ export const channelsApi = {
   create: (body: ChannelSecrets) => request(Channel, '/api/channels', { method: 'POST', body }),
   update: (id: string, body: UpdateChannelBody) =>
     request(Channel, `/api/channels/${id}`, { method: 'PATCH', body }),
-  replaceToken: (id: string, body: ChannelSecrets) =>
+  replaceToken: (id: string, body: ReplaceChannelTokenBody) =>
     request(Channel, `/api/channels/${id}/token`, { method: 'PUT', body }),
   remove: (id: string) => request(z.unknown(), `/api/channels/${id}`, { method: 'DELETE' }),
   pair: (id: string) => request(Channel, `/api/channels/${id}/pair`, { method: 'POST', body: {} }),
@@ -45,4 +48,7 @@ export const channelsApi = {
   linkStatus: (id: string) => request(ChannelLink, `/api/channels/link/${id}`),
   stopLink: (id: string) => request(z.unknown(), `/api/channels/link/${id}`, { method: 'DELETE' }),
   test: (id: string) => request(Ok, `/api/channels/${id}/test`, { method: 'POST', body: {} }),
+  imessage: (signal?: AbortSignal) => request(ImessageSetup, '/api/channels/imessage', { signal }),
+  openImessage: (place: OpenImessageBody['place']) =>
+    request(Ok, '/api/channels/imessage/open', { method: 'POST', body: { place } }),
 };

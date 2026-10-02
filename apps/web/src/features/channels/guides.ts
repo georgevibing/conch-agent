@@ -1,3 +1,5 @@
+import type { MailProvider } from '@conch/protocol';
+
 /**
  * The words and links for setting up each app, worked out for the person so
  * they never have to invent a name or find a settings page.
@@ -109,3 +111,84 @@ export function slackCreateUrl(assistant: string): string {
     JSON.stringify(slackManifest(assistant)),
   )}`;
 }
+
+/**
+ * Each mail service as the email setup shows it (ADR 0044): where its app
+ * passwords are made, and the steps to get there. The gateway knows the
+ * same services' servers (`channels/email.ts`).
+ */
+export const MAIL_SERVICES = [
+  {
+    id: 'gmail',
+    name: 'Gmail',
+    passwords: 'https://myaccount.google.com/apppasswords',
+    steps:
+      'Google opens App passwords. Type “Conch” as the name, press Create, and copy the 16 letters it shows.',
+    note: 'If Google says the setting isn’t available, turn on 2-Step Verification first (Security → 2-Step Verification), then come back.',
+    plus: true,
+  },
+  {
+    id: 'icloud',
+    name: 'iCloud',
+    passwords: 'https://account.apple.com/account/manage/section/security',
+    steps:
+      'Sign in, open App-Specific Passwords, press +, name it “Conch”, and copy the password Apple shows.',
+    note: 'iCloud doesn’t take +conch addresses, so you write to yourself with “Conch” at the start of the subject.',
+    plus: false,
+  },
+  {
+    id: 'fastmail',
+    name: 'Fastmail',
+    passwords: 'https://app.fastmail.com/settings/security/apps/new',
+    steps:
+      'Fastmail opens New app password. Name it “Conch”, choose Mail (IMAP/POP/SMTP), press Generate, and copy it.',
+    plus: true,
+  },
+  {
+    id: 'outlook',
+    name: 'Outlook',
+    signInOnly: true,
+    note: 'Since September 2024 Microsoft only lets apps into Outlook.com with its own sign-in, which Conch can’t do yet. Forward your Outlook mail to Gmail, iCloud or Fastmail and connect that instead.',
+    plus: true,
+  },
+  {
+    id: 'other',
+    name: 'Other',
+    steps:
+      'Make an app password in your mail service’s security settings (or use your mail password if it has none), and copy it.',
+    plus: true,
+  },
+] as const satisfies readonly {
+  id: MailProvider;
+  name: string;
+  passwords?: string;
+  steps?: string;
+  note?: string;
+  signInOnly?: boolean;
+  plus: boolean;
+}[];
+
+export type MailService = (typeof MAIL_SERVICES)[number];
+
+/** The address mail for Conch goes to: `you+conch@…`, or your own where `+` doesn't work. */
+export function conchAddress(address: string, plus: boolean): string {
+  const [local = '', domain = ''] = address.trim().toLowerCase().split('@');
+  const base = local.split('+')[0] ?? local;
+  return plus ? `${base}+conch@${domain}` : `${base}@${domain}`;
+}
+
+/** The service an address is most likely at, so the right tab is already chosen. */
+export function guessMail(address: string): MailProvider | undefined {
+  const domain = address.trim().toLowerCase().split('@')[1] ?? '';
+  if (/^(gmail|googlemail)\.com$/.test(domain)) return 'gmail';
+  if (/^(icloud|me|mac)\.com$/.test(domain)) return 'icloud';
+  if (/^(fastmail\.(com|fm)|messagingengine\.com)$/.test(domain)) return 'fastmail';
+  if (/^(outlook|hotmail|live|msn)\.[a-z.]+$/.test(domain)) return 'outlook';
+  return undefined;
+}
+
+/** System Settings' own words, for the iMessage steps. */
+export const MAC_SETTINGS = {
+  fullDiskAccess: ['Privacy & Security', 'Full Disk Access'],
+  automation: ['Privacy & Security', 'Automation'],
+} as const;

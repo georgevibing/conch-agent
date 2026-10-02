@@ -7,7 +7,7 @@ import { relativeTime } from '../../lib/time';
 import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
 import { channelsApi } from './api';
-import { APPS, handleOf, isLinkedKind, SELF_CHAT } from './describe';
+import { APPS, isLinkedKind, SELF_CHAT, whoOf } from './describe';
 import { usePointerFine } from './hooks';
 import { errorText, useChannelAction } from './queries';
 
@@ -36,8 +36,7 @@ export function HelloStep({
   );
   const [testing, setTesting] = useState(false);
   const app = APPS[channel.kind].name;
-  const handle = handleOf(channel);
-  const who = handle ? `@${handle}` : channel.bot.name;
+  const who = whoOf(channel);
   const owner = channel.people[0];
 
   if (owner) {
@@ -67,6 +66,11 @@ export function HelloStep({
             >
               Send a test message
             </Button>
+            {channel.kind === 'email' && channel.bot.chatUrl && (
+              <Button asChild variant="surface">
+                <a href={channel.bot.chatUrl}>Write an email</a>
+              </Button>
+            )}
             {onFinish && (
               <Button variant="ghost" onClick={onFinish}>
                 {finishLabel}
@@ -80,6 +84,21 @@ export function HelloStep({
             Write to your assistant in <b>{SELF_CHAT[channel.kind]}</b> in {app}, from your phone or
             any device. Everything you say there is also here, in Conch. Before anything important
             it asks there, and you answer with a number.
+          </p>
+        ) : channel.kind === 'email' ? (
+          <p>
+            Write to <b>{who}</b> from any mail app
+            {channel.bot.address === owner.username
+              ? ', with “Conch” at the start of the subject'
+              : ''}
+            . Answers come back in the same thread. Before anything important your assistant asks
+            there, and you answer with a number.
+          </p>
+        ) : channel.kind === 'imessage' && channel.bot.address === owner.username ? (
+          <p>
+            Text yourself at <b>{who}</b> from your iPhone, anytime. Everything you say there is
+            also here, in Conch. Before anything important it asks there, and you answer with a
+            number.
           </p>
         ) : (
           <p>
@@ -144,6 +163,11 @@ export function HelloStep({
             ) : (
               <p>Links work for 10 minutes and only once, so nobody else can use an old one.</p>
             )
+          ) : channel.kind === 'imessage' ? (
+            <p>
+              From your iPhone, text <b>{who}</b> anything, like “hi”. Then press <b>That’s me</b>{' '}
+              here.
+            </p>
           ) : channel.kind === 'discord' ? (
             <>
               <p>

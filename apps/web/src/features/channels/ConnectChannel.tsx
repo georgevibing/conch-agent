@@ -48,6 +48,8 @@ import {
   slackManifest,
   telegramNames,
 } from './guides';
+import { EmailSetup } from './ConnectEmail';
+import { ImessageSetup } from './ConnectImessage';
 import { HelloStep } from './HelloStep';
 import { LinkedSetup } from './LinkedSetup';
 import { useKeyCheck, usePasteAnywhere, usePointerFine } from './hooks';
@@ -63,6 +65,8 @@ export function ConnectChannel({ kind }: { kind: string }) {
   if (kind === 'telegram') return <TelegramSetup />;
   if (kind === 'discord') return <DiscordSetup />;
   if (kind === 'whatsapp' || kind === 'signal') return <LinkedSetup kind={kind} />;
+  if (kind === 'imessage') return <ImessageSetup />;
+  if (kind === 'email') return <EmailSetup />;
   return <SlackSetup />;
 }
 
@@ -115,7 +119,9 @@ export function SetupPage({
  * after). `create` connects another way: a Slack bot brought from another
  * app with one key, finished with the other (ADR 0042).
  */
-function useConnect(create: (secrets: ChannelSecrets) => Promise<Channel> = channelsApi.create) {
+export function useConnect(
+  create: (secrets: ChannelSecrets) => Promise<Channel> = channelsApi.create,
+) {
   const client = useQueryClient();
   const auth = useAuth();
   const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
@@ -163,7 +169,7 @@ function Answer({ label, value }: { label: string; value: string }) {
   );
 }
 
-function OpenButton({ href, children }: { href: string; children: ReactNode }) {
+export function OpenButton({ href, children }: { href: string; children: ReactNode }) {
   return (
     <Button asChild variant="solid" trailingIcon={<SquareArrowOutUpRight />} className={styles.fit}>
       <a href={href} target="_blank" rel="noreferrer noopener">

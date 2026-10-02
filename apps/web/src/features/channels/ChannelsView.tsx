@@ -52,7 +52,9 @@ export function ChannelsView() {
   const assistant = state.data?.persona.name ?? 'Conch';
   const channels = [...(data?.channels ?? [])].sort(order);
   const available = data?.catalog.filter((c) => c.available) ?? [];
-  const soon = data?.catalog.filter((c) => !c.available) ?? [];
+  const soon = data?.catalog.filter((c) => !c.available && c.tagline === 'Coming soon.') ?? [];
+  // Here but not on this computer (iMessage away from a Mac): said so, apart from what's coming.
+  const elsewhere = data?.catalog.filter((c) => !c.available && c.tagline !== 'Coming soon.') ?? [];
 
   const act = (channel: Channel) => {
     const state = channelState(channel);
@@ -218,6 +220,13 @@ export function ChannelsView() {
         {soon.length > 0 && (
           <ChannelSoon apps={soon.map((s) => ({ brand: s.id, name: s.name, color: s.color }))} />
         )}
+        {elsewhere.map((entry) => (
+          <ChannelSoon
+            key={entry.id}
+            note={entry.tagline.replace(/\.$/, '')}
+            apps={[{ brand: entry.id, name: entry.name, color: entry.color }]}
+          />
+        ))}
       </section>
 
       <footer className={styles.footer}>

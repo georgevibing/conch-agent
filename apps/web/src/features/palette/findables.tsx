@@ -60,7 +60,7 @@ import { doctorApi } from '../health/api';
 import { LIVE_DATA_FOCUS } from '../artifacts/LiveDataSection';
 import { DEVICES_FOCUS } from '../auth/focus';
 import { FALLBACK_FOCUS } from '../settings/FallbackSection';
-import { APPS } from '../channels/describe';
+import { APP_WORDS, APPS } from '../channels/describe';
 import { useChannels } from '../channels/queries';
 import { useIntegrations } from '../integrations/queries';
 import { downloadMemories } from '../memory/api';
@@ -387,7 +387,7 @@ export function useFindables(query: string, conversationId: string | undefined):
     ...(channels?.channels ?? []).map((c) => ({
       id: c.id,
       label: `${c.bot.name} on ${APPS[c.kind].name}`,
-      keywords: `${APPS[c.kind].name} ${c.bot.username ?? ''} ${c.bot.phone ?? ''} channel bot phone`,
+      keywords: `${APPS[c.kind].name} ${c.bot.username ?? c.bot.address ?? ''} ${c.bot.phone ?? ''} ${APP_WORDS[c.kind] ?? ''} channel bot phone`,
       brand: c.kind as string,
       color: APPS[c.kind].color,
       to: `/channels/${c.id}`,
@@ -398,9 +398,7 @@ export function useFindables(query: string, conversationId: string | undefined):
       .map((c) => ({
         id: `new-${c.id}`,
         label: `Connect ${c.name}`,
-        keywords: `${c.name} channel bot phone chat message reach${
-          c.id === 'whatsapp' || c.id === 'signal' ? ' link qr code linked device scan' : ''
-        }`,
+        keywords: `${c.name} ${APP_WORDS[c.id] ?? ''} channel bot phone chat message reach`,
         brand: c.id,
         color: c.color,
         to: `/channels/new/${c.id}`,

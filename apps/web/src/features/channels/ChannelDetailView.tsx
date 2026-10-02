@@ -1,4 +1,4 @@
-import type { Channel, ChannelSecrets } from '@conch/protocol';
+import type { Channel, ReplaceChannelTokenBody } from '@conch/protocol';
 import {
   AlertDialog,
   Badge,
@@ -28,7 +28,17 @@ import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
 import { channelsApi } from './api';
 import styles from './Channels.module.css';
-import { APPS, channelState, handleOf, isLinkedKind, readablePhone, SELF_CHAT } from './describe';
+import { FullDiskAccessSteps, openOnMac, useImessageSetup } from './ConnectImessage';
+import {
+  APPS,
+  channelState,
+  handleOf,
+  isLinkedKind,
+  isOwnAccount,
+  readablePhone,
+  whereYouTalk,
+  whoOf,
+} from './describe';
 import { LinkStep } from './LinkedSetup';
 import { GetIt } from '../setup/GetIt';
 import { HelloStep } from './HelloStep';
@@ -149,7 +159,9 @@ function Detail({ channel }: { channel: Channel }) {
                 ? `@${handle} on ${app.name}`
                 : channel.bot.phone
                   ? `${readablePhone(channel.bot.phone)} on ${app.name}`
-                  : `${app.name}${channel.bot.workspace ? `, ${channel.bot.workspace}` : ''}`}
+                  : channel.bot.address
+                    ? `${channel.bot.address} on ${app.name}`
+                    : `${app.name}${channel.bot.workspace ? `, ${channel.bot.workspace}` : ''}`}
             </Text>
             <Badge tone={meta.tone} dot={state === 'online' ? true : undefined}>
               {meta.label}
@@ -257,11 +269,11 @@ function Detail({ channel }: { channel: Channel }) {
             ))}
           </ul>
           <Text size="sm" tone="subtle">
-            {isLinkedKind(channel.kind)
+            {isOwnAccount(channel.kind)
               ? channel.settings.others === 'ask'
-                ? `You talk to ${assistant} in ${SELF_CHAT[channel.kind]}. Anyone else who writes to this number gets one polite reply and shows up here for you to let in or block. Groups never hear from it.`
-                : `You talk to ${assistant} in ${SELF_CHAT[channel.kind]}. Other people who write to this number are writing to you: Conch never reads their chats, or your groups.`
-              : `Anyone else who writes to ${handle ? `@${handle}` : channel.bot.name} gets one polite reply and shows up here for you to let in or block.`}
+                ? `You talk to ${assistant} ${whereYouTalk(channel)}. Anyone else who writes to ${whoOf(channel)} gets one polite reply and shows up here for you to let in or block. Groups never hear from it.`
+                : `You talk to ${assistant} ${whereYouTalk(channel)}. Other people who write to ${whoOf(channel)} are writing to you: Conch never reads their chats, or your groups.`
+              : `Anyone else who writes to ${whoOf(channel)} gets one polite reply and shows up here for you to let in or block.`}
             {channel.blocked > 0 &&
               ` You’ve blocked ${channel.blocked === 1 ? 'one person' : `${channel.blocked} people`}.`}
           </Text>
@@ -358,7 +370,11 @@ function Detail({ channel }: { channel: Channel }) {
                 ? `${assistant} stops answering in ${app.name}, Conch leaves your Linked devices and forgets its keys. Your conversations stay here.`
                 : channel.kind === 'signal'
                   ? `${assistant} stops answering in ${app.name}, and Conch forgets its keys. Your conversations stay here. Remove Conch under Linked devices in Signal too.`
-                  : `${assistant} stops answering ${handle ? `@${handle}` : channel.bot.name}, and Conch forgets its key. Your conversations stay here. The bot itself stays in ${app.name} until you delete it there.`}
+                  : channel.kind === 'email'
+                    ? `${assistant} stops answering ${whoOf(channel)}, and Conch forgets its app password. Your conversations stay here, and your mail stays as it is.`
+                    : channel.kind === 'imessage'
+                      ? `${assistant} stops answering ${whoOf(channel)}. Your conversations stay here, and Messages stays as it is.`
+                      : `${assistant} stops answering ${whoOf(channel)}, and Conch forgets its key. Your conversations stay here. The bot itself stays in ${app.name} until you delete it there.`}
             </AlertDialog.Description>
           </AlertDialog.Header>
           <AlertDialog.Footer>
@@ -392,6 +408,21 @@ function Health({
           <Text size="sm">{channel.health.message}</Text>
           <LinkStep kind={channel.kind} channelId={channel.id} auto={false} />
         </Stack>
+      </Callout>
+    );
+  if (state === 'access') return <AccessFix channel={channel} />;
+  if (state === 'needs-token' && channel.kind === 'imessage')
+    return (
+      <Callout
+        tone="warning"
+        title="Connect it again"
+        action={
+          <Button asChild size="sm" variant="solid">
+            <Link to="/channels/new/imessage">Connect iMessage</Link>
+          </Button>
+        }
+      >
+        {channel.health.message}
       </Callout>
     );
   if (state === 'needs-token') return <ReplaceKey channel={channel} />;
@@ -443,29 +474,40 @@ function ReplaceKey({ channel }: { channel: Channel }) {
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const slack = channel.kind === 'slack';
-  // Linked accounts have no key: they link again instead (`Health`).
-  const kind = channel.kind as 'telegram' | 'discord' | 'slack';
-  const body = slack
-    ? token.trim()
-      ? ({ kind: 'slack', botToken: token } as const)
-      : undefined
-    : token.trim()
-      ? ({ kind: kind === 'discord' ? 'discord' : 'telegram', token } as const)
-      : undefined;
-  const { status, check } = useKeyCheck(body, token);
-  const where = {
+  const email = channel.kind === 'email';
+  const body =
+    email || !token.trim()
+      ? undefined
+      : slack
+        ? ({ kind: 'slack', botToken: token } as const)
+        : channel.kind === 'telegram' || channel.kind === 'discord'
+          ? ({ kind: channel.kind, token } as const)
+          : undefined;
+  const checked = useKeyCheck(body, token);
+  // An email's app password is checked when you press Reconnect (it needs the rest of the account).
+  const { status, check } = email
+    ? { status: token.trim() ? ('ok' as const) : ('idle' as const), check: undefined }
+    : checked;
+  const where: Record<Channel['kind'], string> = {
     telegram: 'Open BotFather, send /token, pick your bot, and copy the new key it sends.',
     discord: 'In the Developer Portal, open your app → Bot → Reset Token, then Copy.',
     slack:
       'In your Slack app’s settings: Install App for the bot token, Basic Information → App-Level Tokens for the other.',
-  }[kind];
+    email:
+      'Make a new app password in your mail service’s security settings (the old one was probably removed), and paste it here.',
+    whatsapp: '',
+    signal: '',
+    imessage: '',
+  };
 
   const save = async () => {
-    const secrets: ChannelSecrets = slack
+    const secrets: ReplaceChannelTokenBody = slack
       ? { kind: 'slack', botToken: token, appToken }
-      : channel.kind === 'discord'
-        ? { kind: 'discord', token }
-        : { kind: 'telegram', token };
+      : email
+        ? { kind: 'email', password: token }
+        : channel.kind === 'discord'
+          ? { kind: 'discord', token }
+          : { kind: 'telegram', token };
     setBusy(true);
     setError(undefined);
     try {
@@ -481,13 +523,13 @@ function ReplaceKey({ channel }: { channel: Channel }) {
   };
 
   return (
-    <Callout tone="warning" title="It needs a new key">
+    <Callout tone="warning" title={email ? 'It needs a new app password' : 'It needs a new key'}>
       <Stack gap={3}>
         <Text size="sm">
-          {channel.health.message} {where}
+          {channel.health.message} {where[channel.kind]}
         </Text>
         <KeyField
-          label={slack ? 'Bot token' : 'New key'}
+          label={slack ? 'Bot token' : email ? 'New app password' : 'New key'}
           value={token}
           onValueChange={setToken}
           status={error ? 'error' : status}
@@ -514,6 +556,34 @@ function ReplaceKey({ channel }: { channel: Channel }) {
         </Button>
       </Stack>
       {dialog}
+    </Callout>
+  );
+}
+
+/**
+ * A switch only you can turn on, on this Mac (iMessage): which one, and the
+ * button that opens it. Conch notices by itself once it's on.
+ */
+function AccessFix({ channel }: { channel: Channel }) {
+  // Asked again every few seconds: which app needs the switch, and whether it's on yet.
+  const setup = useImessageSetup();
+  if (channel.health.access === 'automation')
+    return (
+      <Callout
+        tone="warning"
+        title="Let Conch use Messages"
+        action={
+          <Button size="sm" variant="solid" onClick={() => void openOnMac('automation')}>
+            Open System Settings
+          </Button>
+        }
+      >
+        {channel.health.message} Then send a test message to check.
+      </Callout>
+    );
+  return (
+    <Callout tone="warning" title="Turn on Full Disk Access">
+      <FullDiskAccessSteps app={setup.data?.app ?? 'Terminal'} />
     </Callout>
   );
 }

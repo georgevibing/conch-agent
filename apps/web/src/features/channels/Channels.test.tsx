@@ -536,3 +536,177 @@ describe('Linking WhatsApp and Signal', () => {
     );
   });
 });
+describe('Connecting iMessage', () => {
+  it('asks for Full Disk Access first, opens System Settings, and moves on once it’s on', async () => {
+    let access: 'full-disk-access' | 'ready' = 'full-disk-access';
+    const made = channel({
+      id: 'ch_im',
+      kind: 'imessage',
+      bot: {
+        id: 'iYWRh',
+        name: 'You, on this Mac',
+        address: 'ada@icloud.com',
+        chatUrl: 'sms:ada@icloud.com',
+      },
+      people: [{ id: 'iYWRh', name: 'Ada Lovelace', username: 'ada@icloud.com', since: 1 }],
+    });
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'GET /api/channels/imessage': () => ({
+        access,
+        handles: access === 'ready' ? ['ada@icloud.com'] : [],
+        app: 'Terminal',
+      }),
+      'POST /api/channels/imessage/open': () => ({ ok: true }),
+      'POST /api/channels': () => made,
+    });
+    renderApp(<ConnectChannel kind="imessage" />, { route: '/channels/new/imessage' });
+    expect(await screen.findByRole('heading', { name: 'Connect iMessage' })).toBeInTheDocument();
+    expect(screen.getByText(/turn on/)).toHaveTextContent('Full Disk Access and turn on Terminal');
+    expect(
+      screen.getByRole('figure', { name: 'System Settings, on Full Disk Access' }),
+    ).toHaveTextContent('Terminal (off) (turn this on)');
+    await userEvent.click(screen.getByRole('button', { name: 'Open System Settings' }));
+    expect(calls.find((c) => c.path === '/api/channels/imessage/open')?.body).toEqual({
+      place: 'full-disk-access',
+    });
+
+    // Turned on in System Settings: the page notices by itself.
+    access = 'ready';
+    expect(await screen.findByText('ada@icloud.com', {}, { timeout: 5000 })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST' && c.path === '/api/channels')?.body).toEqual({
+        kind: 'imessage',
+        mode: 'self',
+        handle: 'ada@icloud.com',
+      }),
+    );
+    expect(await screen.findByText('You’re connected, Ada')).toBeInTheDocument();
+    expect(screen.getByText(/Text yourself at/)).toHaveTextContent('ada@icloud.com');
+  });
+
+  it('says plainly when this isn’t a Mac', async () => {
+    mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'GET /api/channels/imessage': () => ({ access: 'not-mac', handles: [] }),
+    });
+    renderApp(<ConnectChannel kind="imessage" />, { route: '/channels/new/imessage' });
+    expect(await screen.findByText('iMessage only works on a Mac')).toBeInTheDocument();
+  });
+
+  it('shows the switch to turn on, on the channel’s page, when macOS took it away', async () => {
+    mockFetch({
+      ...base,
+      'GET /api/channels': () => ({
+        channels: [
+          channel({
+            kind: 'imessage',
+            bot: { id: 'i1', name: 'You, on this Mac', address: 'ada@icloud.com' },
+            people: [ada],
+            health: {
+              state: 'error',
+              access: 'full-disk-access',
+              message: 'macOS hides Messages.',
+            },
+          }),
+        ],
+        catalog,
+      }),
+      'GET /api/channels/imessage': () => ({
+        access: 'full-disk-access',
+        handles: [],
+        app: 'iTerm',
+      }),
+    });
+    renderApp(<ChannelDetailView channelId="ch_1" />, { route: '/channels/ch_1' });
+    expect(await screen.findByText('Turn on Full Disk Access')).toBeInTheDocument();
+    await waitFor(() => expect(document.body).toHaveTextContent('turn on iTerm'));
+    expect(screen.getByText('Needs your OK on this Mac')).toBeInTheDocument();
+    expect(screen.getByText(/never reads their chats/)).toBeInTheDocument();
+  });
+});
+
+describe('Connecting email', () => {
+  it('picks the service from the address, checks the app password, and you’re in', async () => {
+    const made = channel({
+      id: 'ch_mail',
+      kind: 'email',
+      bot: {
+        id: 'mYWRh',
+        name: 'ada@gmail.com',
+        address: 'ada+conch@gmail.com',
+        chatUrl: 'mailto:ada+conch@gmail.com?subject=Hello',
+      },
+      people: [{ id: 'mYWRh', name: 'Ada Lovelace', username: 'ada@gmail.com', since: 1 }],
+    });
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'POST /api/channels/check': () => ({ ok: true, bot: made.bot, checked: ['password'] }),
+      'POST /api/channels': () => made,
+    });
+    renderApp(<ConnectChannel kind="email" />, { route: '/channels/new/email' });
+    await userEvent.type(await screen.findByLabelText('Email address'), 'ada@gmail.com');
+    expect(screen.getByRole('radio', { name: 'Gmail' })).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('link', { name: /Make one in Gmail/ })).toHaveAttribute(
+      'href',
+      'https://myaccount.google.com/apppasswords',
+    );
+    await userEvent.click(screen.getByLabelText('App password'));
+    await userEvent.paste('abcd efgh ijkl mnop');
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST' && c.path === '/api/channels')?.body).toEqual({
+        kind: 'email',
+        provider: 'gmail',
+        address: 'ada@gmail.com',
+        password: 'abcd efgh ijkl mnop',
+      }),
+    );
+    expect(await screen.findByText('You’re connected, Ada')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Write an email' })).toHaveAttribute(
+      'href',
+      'mailto:ada+conch@gmail.com?subject=Hello',
+    );
+  });
+
+  it('says Outlook needs a sign-in Conch can’t do yet, instead of failing later', async () => {
+    const calls = mockFetch({ ...base, 'GET /api/channels': () => ({ channels: [], catalog }) });
+    renderApp(<ConnectChannel kind="email" />, { route: '/channels/new/email' });
+    await userEvent.type(await screen.findByLabelText('Email address'), 'ada@outlook.com');
+    expect(screen.getByText('Outlook doesn’t take app passwords any more')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+    expect(calls.some((c) => c.path === '/api/channels/check')).toBe(false);
+  });
+
+  it('asks for only a new app password when the old one stops working', async () => {
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({
+        channels: [
+          channel({
+            kind: 'email',
+            bot: { id: 'm1', name: 'ada@gmail.com', address: 'ada+conch@gmail.com' },
+            people: [ada],
+            health: { state: 'needs-token', message: 'Gmail didn’t take that app password.' },
+          }),
+        ],
+        catalog,
+      }),
+      'PUT /api/channels/ch_1/token': () => channel({ kind: 'email', people: [ada] }),
+    });
+    renderApp(<ChannelDetailView channelId="ch_1" />, { route: '/channels/ch_1' });
+    expect(await screen.findByText('It needs a new app password')).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('New app password'), 'qrst uvwx yzab cdef');
+    await userEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({
+        kind: 'email',
+        password: 'qrst uvwx yzab cdef',
+      }),
+    );
+  });
+});
