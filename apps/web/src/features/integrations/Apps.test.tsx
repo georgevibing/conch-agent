@@ -5,7 +5,7 @@ import type {
   Integration,
   VaultSource,
 } from '@conch/protocol';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes, useLocation } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -18,6 +18,7 @@ import { AppDetailView } from './AppDetailView';
 import { describeApp, galleryTiles, joinApps, toolGroups } from './apps';
 import { AppsView } from './AppsView';
 import { newHome } from './paths';
+import { applyIntegrationEvent } from './queries';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -376,6 +377,56 @@ describe('one app, one card (ADR 0052)', () => {
 });
 
 describe('an app’s page has plain switches for what it does', () => {
+  it.each([false, true])(
+    'a removed integration does not reopen setup (has a chat connection: %s)',
+    async (hasChat) => {
+      mockFetch(routes({ integrations: [hosted('gmail')], channels: hasChat ? [mailBox] : [] }));
+      const { client } = renderApp(
+        <>
+          <Routes>
+            <Route path="/apps/:appId" element={<AppDetailView appId="gmail" />} />
+            <Route path="/apps" element={<AppsView />} />
+          </Routes>
+          <Where />
+        </>,
+        { route: '/apps/gmail' },
+      );
+      await screen.findByRole('button', { name: 'Disconnect Gmail' });
+      // The socket can remove the integration before the disconnect navigation settles.
+      act(() =>
+        applyIntegrationEvent(client, { type: 'integration.deleted', integrationId: 'gmail' }),
+      );
+      if (hasChat) {
+        await waitFor(() =>
+          expect(screen.queryByRole('button', { name: 'Disconnect Gmail' })).toBeNull(),
+        );
+        expect(screen.getByTestId('where')).toHaveTextContent('/apps/gmail');
+        expect(screen.getByRole('switch', { name: 'Talk to me here' })).toBeChecked();
+      } else {
+        expect(await screen.findByRole('heading', { name: 'Apps', level: 1 })).toBeInTheDocument();
+        expect(screen.getByTestId('where').textContent).toBe('/apps');
+        expect(screen.getByRole('button', { name: 'Gmail' })).toBeInTheDocument();
+      }
+      expect(screen.queryByRole('dialog', { name: 'Connect Gmail' })).toBeNull();
+    },
+  );
+
+  it('opening an app that was not connected still offers setup', async () => {
+    mockFetch(routes());
+    renderApp(
+      <>
+        <Routes>
+          <Route path="/apps/:appId" element={<AppDetailView appId="gmail" />} />
+          <Route path="/apps" element={<AppsView />} />
+        </Routes>
+        <Where />
+      </>,
+      { route: '/apps/gmail' },
+    );
+    expect(await screen.findByRole('dialog', { name: 'Connect Gmail' })).toBeInTheDocument();
+    expect(screen.getByTestId('where').textContent).toBe('/apps?connect=gmail');
+  });
+
   it('Slack: Read & search turns its tools off together; Talk to me here sets up with the same app', async () => {
     const calls = mockFetch(
       routes({

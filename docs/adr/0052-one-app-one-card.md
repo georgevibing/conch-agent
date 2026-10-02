@@ -40,6 +40,11 @@ bookmarks, old notifications and ⌘K history land where they should. Sign-in re
 directly. `/integrations/done` stays the sign-in window's own page, and the OAuth redirect address
 (`/oauth/callback`) is unchanged, so registrations made before keep working.
 
+An unconnected app's address opens setup only on a new visit. If an app that was
+being viewed disappears from the live list, its page returns to Apps instead of
+reopening sign-in. If another half remains, that half stays on the app's page.
+This also holds when a deletion event arrives before disconnect navigation settles.
+
 The sidebar's pinned group is called **Pinned**, and pinned things stay at `/apps/a_…`: an artifact
 id always starts with `a_`, which no app id does, so `Shell` tells them apart without a second
 route.

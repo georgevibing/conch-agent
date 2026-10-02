@@ -35,6 +35,7 @@ export function AppDetailView({ appId }: { appId: string }) {
   const navigate = useNavigate();
   // The page keeps the connect dialog, so it stays open when the half it sets up arrives.
   const [connecting, setConnecting] = useState(false);
+  const [connectedId, setConnectedId] = useState<string>();
 
   const items = useMemo(
     () =>
@@ -50,6 +51,9 @@ export function AppDetailView({ appId }: { appId: string }) {
     items.find((i) => i.integration?.id === appId) ??
     items.find((i) => i.key === appId) ??
     items.find((i) => i.integration?.catalogId === appId);
+  // A live deletion can arrive before the disconnect navigation settles. Remember
+  // that this page had an app, so losing it never reopens its sign-in dialog.
+  if (item && connectedId !== appId) setConnectedId(appId);
   const entry = data?.catalog.find((c) => c.id === appId);
   const onePassword = vault?.status.sources.find((source) => source.id === '1password');
 
@@ -98,8 +102,9 @@ export function AppDetailView({ appId }: { appId: string }) {
         onSetUp={setUp}
       />,
     );
-  // Another catalog app that isn't connected: its connect dialog.
-  if (entry) return <Navigate to={connectPath(entry.id)} replace />;
+  // A new visit to an unconnected app offers setup; a removed app returns to Apps.
+  if (entry)
+    return <Navigate to={connectedId === appId ? APPS_PATH : connectPath(entry.id)} replace />;
   return (
     <div className={styles.page}>
       <EmptyState
