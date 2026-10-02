@@ -227,6 +227,13 @@ new key, and only when the old one can't be opened:
   command.
 - No new dependencies.
 
+Sources followed: Greshake et al., "Not what you've signed up for" (2023), on
+injected instructions that act for as long as they're in context; the OWASP
+Cryptographic Storage and Key Management cheat sheets (a key kept encrypted
+under a key-encryption key the platform's keystore holds, failing closed when
+it can't be unwrapped); NIST SP 800-38D for AES-GCM nonces (a fresh random one
+per write, under a per-file subkey).
+
 ## Known limits
 
 - **A long chat stays held after the skill stops mattering.** That's the
