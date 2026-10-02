@@ -1,6 +1,5 @@
 {
   "name": "@conch/nacre",
-  "version": "0.1.0",
   "private": true,
   "description": "Nacre — Conch's design language and React component library.",
   "type": "module",

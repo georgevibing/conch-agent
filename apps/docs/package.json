@@ -1,6 +1,5 @@
 {
   "name": "@conch/docs",
-  "version": "0.1.0",
   "private": true,
   "description": "Conch's documentation: guides in Markdown, reference generated from the code.",
   "type": "module",

@@ -1,6 +1,5 @@
 {
   "name": "@conch/server",
-  "version": "0.1.0",
   "private": true,
   "description": "Conch gateway — bridges the web app to the local Claude Code install.",
   "type": "module",
@@ -8,6 +7,7 @@
     "dev": "node --watch --import tsx src/main.ts",
     "start": "CONCH_OPEN=${CONCH_OPEN:-1} CONCH_SUPERVISE=1 tsx src/start.ts",
     "conch": "tsx src/cli.ts",
+    "release": "tsx src/release/cli.ts",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"

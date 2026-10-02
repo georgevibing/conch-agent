@@ -1,6 +1,5 @@
 {
   "name": "@conch/protocol",
-  "version": "0.1.0",
   "private": true,
   "description": "Typed, validated wire protocol between the Conch web app and gateway.",
   "type": "module",

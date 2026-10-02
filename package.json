@@ -1,5 +1,6 @@
 {
   "name": "conch",
+  "version": "0.2.0",
   "private": true,
   "description": "A beautiful web facade for Claude Code running on your own machine.",
   "type": "module",
@@ -26,6 +27,7 @@
     "start": "pnpm --filter @conch/web build && pnpm --filter @conch/server start",
     "start:network": "CONCH_HOST=0.0.0.0 CONCH_ALLOW_REMOTE=1 pnpm start",
     "conch": "pnpm --silent --filter @conch/server conch",
+    "release": "pnpm --silent --filter @conch/server release",
     "dev:mock": "CONCH_ENGINE=mock turbo run dev",
     "e2e": "pnpm --filter @conch/web build && playwright test -c e2e/playwright.config.ts"
   },
