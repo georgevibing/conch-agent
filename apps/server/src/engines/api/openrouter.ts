@@ -18,7 +18,17 @@ import { severityFor } from '@conch/protocol';
 import { z } from 'zod';
 
 import type { Completion, EngineUsage, TurnImage } from '../types';
-import { sseEvents } from './sse';
+import {
+  ChatCompletion,
+  chatToolResults,
+  chatTools,
+  chatUserMessage,
+  completionText,
+  errorIn,
+  readChatStream,
+  usageFrom,
+  type ChatError,
+} from './chat';
 import {
   ApiError,
   type ApiDeps,
@@ -30,14 +40,10 @@ import {
   type WireMessage,
   type WireModel,
   type WireRequest,
-  type WireStop,
-  type WireToolCall,
-  type WireUsage,
 } from './types';
 import { defaultHome } from './session';
 import {
   contextLabel,
-  frame,
   knownEfforts,
   pickSmallModel,
   retryAfterMs,
@@ -92,83 +98,18 @@ const ModelEntry = z.object({
 
 const ModelList = z.object({ data: z.array(ModelEntry) });
 
-const ErrorEnvelope = z.object({
-  error: z.object({
-    code: z.number().nullish(),
-    message: z.string().nullish(),
-    metadata: z
-      .object({
-        /** The canonical enum to branch on — far more reliable than the status. */
-        error_type: z.string().nullish(),
-        /** For 402: which budget ran out. */
-        limit_source: z.string().nullish(),
-      })
-      .nullish(),
-  }),
-});
-type WireErrorBody = z.infer<typeof ErrorEnvelope>['error'];
-
-const Usage = z.object({
-  prompt_tokens: z.number().nullish(),
-  completion_tokens: z.number().nullish(),
-  /** Credits, which are USD — the real charge for the request. */
-  cost: z.number().nullish(),
-});
-
-const ToolCallDelta = z.object({
-  index: z.number(),
-  id: z.string().nullish(),
-  function: z.object({ name: z.string().nullish(), arguments: z.string().nullish() }).nullish(),
-});
-
-const Chunk = z.object({
-  choices: z
-    .array(
-      z.object({
-        delta: z
-          .object({
-            content: z.string().nullish(),
-            /** Plain reasoning text, for showing. */
-            reasoning: z.string().nullish(),
-            /** Typed reasoning blocks with signatures, for replaying. */
-            reasoning_details: z.array(z.unknown()).nullish(),
-            tool_calls: z.array(ToolCallDelta).nullish(),
-          })
-          .nullish(),
-        finish_reason: z.string().nullish(),
-      }),
-    )
-    .nullish(),
-  usage: Usage.nullish(),
-  error: z
-    .object({
-      code: z.number().nullish(),
-      message: z.string().nullish(),
-      metadata: z
-        .object({ error_type: z.string().nullish(), limit_source: z.string().nullish() })
-        .nullish(),
-    })
-    .nullish(),
-});
-
-const CompletionBody = z.object({
-  choices: z
-    .array(z.object({ message: z.object({ content: z.string().nullish() }).nullish() }))
-    .nullish(),
-  usage: Usage.nullish(),
-  error: ErrorEnvelope.shape.error.nullish(),
-});
-
 // ── Errors ──────────────────────────────────────────────────────────────────
 
 /**
  * One plain sentence per failure, branching on `metadata.error_type` (the
- * canonical enum) rather than the HTTP status. The provider's own message is
- * only passed through where it's the only clue, and always scrubbed.
+ * canonical enum — far more reliable than the status) rather than the HTTP
+ * status, and on `metadata.limit_source` for which budget ran out. The
+ * provider's own message is only passed through where it's the only clue, and
+ * always scrubbed.
  */
 export function mapError(
   status: number,
-  error: WireErrorBody | undefined,
+  error: ChatError | undefined,
   retryAfter: number | undefined,
   key?: string,
 ): ApiError {
@@ -264,13 +205,12 @@ export class OpenRouterWire implements Wire {
 
   async #fail(response: Response, key?: string): Promise<ApiError> {
     const body = await text(response, LABEL).catch(() => '');
-    const parsed = ErrorEnvelope.safeParse(safeJson(body));
-    return mapError(
-      response.status,
-      parsed.success ? parsed.data.error : undefined,
-      retryAfterMs(response.headers),
-      key,
-    );
+    return mapError(response.status, errorIn(body), retryAfterMs(response.headers), key);
+  }
+
+  /** A failure inside a 200: OpenRouter puts the status it means in `code`. */
+  #failIn(error: ChatError, key: string): ApiError {
+    return mapError(typeof error.code === 'number' ? error.code : 0, error, undefined, key);
   }
 
   /**
@@ -373,25 +313,11 @@ export class OpenRouterWire implements Wire {
   }
 
   userMessage(content: string, images?: readonly TurnImage[]): WireMessage {
-    if (!images?.length) return { role: 'user', content };
-    return {
-      role: 'user',
-      content: [
-        ...images.map((image) => ({
-          type: 'image_url',
-          image_url: { url: `data:${image.mimeType};base64,${image.data}` },
-        })),
-        { type: 'text', text: content },
-      ],
-    };
+    return chatUserMessage(content, images);
   }
 
   toolResults(results: ToolResult[]): WireMessage[] {
-    return results.map((result) => ({
-      role: 'tool',
-      tool_call_id: result.id,
-      content: result.text,
-    }));
+    return chatToolResults(results);
   }
 
   #body(request: WireRequest): Record<string, unknown> {
@@ -400,17 +326,7 @@ export class OpenRouterWire implements Wire {
     return {
       model: request.model,
       messages: [{ role: 'system', content: request.system }, ...request.messages],
-      ...(request.tools.length && {
-        tools: request.tools.map((tool) => ({
-          type: 'function',
-          function: {
-            name: tool.name,
-            description: tool.description,
-            parameters: tool.schema,
-          },
-        })),
-        tool_choice: 'auto',
-      }),
+      ...chatTools(request.tools),
       // Only ask for reasoning where the model said which levels it takes.
       ...(request.effort !== 'auto' &&
         efforts.includes(request.effort) && { reasoning: { effort: request.effort } }),
@@ -430,75 +346,12 @@ export class OpenRouterWire implements Wire {
     });
     if (!response.ok) throw await this.#fail(response, request.key);
     if (!response.body) throw new ApiError('network', `${LABEL} sent an empty reply.`);
-
-    let content = '';
-    const reasoning: unknown[] = [];
-    const calls = new Map<number, { id?: string; name?: string; args: string }>();
-    let usage: WireUsage | undefined;
-    let finish: string | undefined;
-
-    for await (const event of sseEvents(response.body, request.signal)) {
-      if (event.data === '[DONE]') break;
-      const chunk = frame(Chunk, event.data);
-      if (!chunk) continue;
-      // A failure after a 200 comes back as an ordinary data frame.
-      if (chunk.error) {
-        throw mapError(chunk.error.code ?? 0, chunk.error, undefined, request.key);
-      }
-      // The usage frame repeats `finish_reason` on an empty delta: count it as
-      // accounting, never as a second end of turn.
-      if (chunk.usage) {
-        usage = {
-          inputTokens: Math.max(0, Math.round(chunk.usage.prompt_tokens ?? 0)),
-          outputTokens: Math.max(0, Math.round(chunk.usage.completion_tokens ?? 0)),
-          ...(typeof chunk.usage.cost === 'number' && { costUsd: Math.max(0, chunk.usage.cost) }),
-        };
-        continue;
-      }
-      const choice = chunk.choices?.[0];
-      if (!choice) continue;
-      const delta = choice.delta;
-      if (delta?.reasoning) yield { type: 'thinking', delta: delta.reasoning };
-      if (delta?.reasoning_details?.length) reasoning.push(...delta.reasoning_details);
-      if (delta?.content) {
-        content += delta.content;
-        yield { type: 'text', delta: delta.content };
-      }
-      for (const call of delta?.tool_calls ?? []) {
-        const existing = calls.get(call.index) ?? { args: '' };
-        calls.set(call.index, {
-          id: call.id ?? existing.id,
-          name: call.function?.name ?? existing.name,
-          args: existing.args + (call.function?.arguments ?? ''),
-        });
-      }
-      if (choice.finish_reason) finish = choice.finish_reason;
-    }
-
-    const toolCalls: WireToolCall[] = [...calls.entries()]
-      .sort(([a], [b]) => a - b)
-      .filter(([, call]) => call.name)
-      .map(([index, call]) => ({
-        // An id always arrives in practice; one derived from the index keeps the
-        // round trip valid if it ever doesn't.
-        id: call.id ?? `call_${index}`,
-        name: call.name ?? '',
-        argumentsJson: call.args,
-      }));
-    const stop: WireStop = toolCalls.length ? 'tools' : finish === 'length' ? 'length' : 'end';
-    const message: WireMessage = {
-      role: 'assistant',
-      content: content.length ? content : null,
-      ...(reasoning.length && { reasoning_details: reasoning }),
-      ...(toolCalls.length && {
-        tool_calls: toolCalls.map((call) => ({
-          id: call.id,
-          type: 'function',
-          function: { name: call.name, arguments: call.argumentsJson },
-        })),
-      }),
-    };
-    yield { type: 'end', message, toolCalls, stop, ...(usage && { usage }) };
+    // Usage is always included: it arrives as the penultimate frame, repeating
+    // `finish_reason` on an empty delta, and the shared reader counts it once.
+    yield* readChatStream(response.body, request.signal, {
+      label: LABEL,
+      fail: (error) => this.#failIn(error, request.key),
+    });
   }
 
   async complete(request: WireCompletion): Promise<Completion> {
@@ -520,19 +373,10 @@ export class OpenRouterWire implements Wire {
       signal: request.signal,
     });
     if (!response.ok) throw await this.#fail(response, request.key);
-    const body = validate(CompletionBody, await text(response, LABEL), LABEL);
+    const body = validate(ChatCompletion, await text(response, LABEL), LABEL);
     // Even a 200 can carry nothing but an error.
-    if (body.error) throw mapError(body.error.code ?? 0, body.error, undefined, request.key);
-    return {
-      text: body.choices?.[0]?.message?.content ?? '',
-      ...(body.usage && {
-        usage: {
-          inputTokens: Math.max(0, Math.round(body.usage.prompt_tokens ?? 0)),
-          outputTokens: Math.max(0, Math.round(body.usage.completion_tokens ?? 0)),
-          ...(typeof body.usage.cost === 'number' && { costUsd: Math.max(0, body.usage.cost) }),
-        },
-      }),
-    };
+    if (body.error) throw this.#failIn(body.error, request.key);
+    return { text: completionText(body), ...(body.usage && { usage: usageFrom(body.usage) }) };
   }
 
   /**
@@ -570,14 +414,6 @@ export class OpenRouterWire implements Wire {
         message: 'This key has no spending limit set at OpenRouter.',
       }),
     };
-  }
-}
-
-function safeJson(body: string): unknown {
-  try {
-    return JSON.parse(body);
-  } catch {
-    return undefined;
   }
 }
 
