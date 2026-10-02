@@ -23,5 +23,7 @@ export async function say(page: Page, text: string, reply: string | RegExp) {
   await composer.fill(text);
   await composer.press('Enter');
   await expect(page.getByText(reply).last()).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole('button', { name: /Stop/ })).toHaveCount(0, { timeout: 20_000 });
+  await expect(page.getByRole('button', { name: /^Stop(?! holding)/ })).toHaveCount(0, {
+    timeout: 20_000,
+  });
 }
