@@ -61,11 +61,12 @@ export function readState(home: string): SwapState {
     };
     const pending = raw.pending as SwapState['pending'] | undefined;
     const from = place(pending?.from);
+    const at = place(pending);
     return {
       ...(place(raw.current) && { current: place(raw.current) }),
       ...(place(raw.previous) && { previous: place(raw.previous) }),
-      ...(pending && place(pending) && from && typeof pending.since === 'number'
-        ? { pending: { ...place(pending)!, since: pending.since, from } }
+      ...(pending && at && from && typeof pending.since === 'number'
+        ? { pending: { ...at, since: pending.since, from } }
         : {}),
       failed: Array.isArray(raw.failed)
         ? raw.failed.filter((v): v is string => typeof v === 'string').slice(-50)

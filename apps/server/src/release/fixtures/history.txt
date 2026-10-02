@@ -1,0 +1,405 @@
+0bba9cf8c00d09806b2ab12dd1a5cb8d2ab2261fchore(channels): name every chat app where the words still listed three
+7466d3887786a6045fada3113b8a012bea09285etest(server): the pretend homeserver sends a room's history on join
+ded2eb9f2e203c6614c99388d905defe23009387docs: Teams, Matrix and WeChat, and the public door (ADR 0045)
+4982795684532eaa9d649f8f8fa38db7025f25betest(e2e): Teams, Matrix and WeChat journeys against their pretend apps
+ecfcb8b2ada1e4c740b3ecd4098f0352ffab20c7feat(server): the public door in the security checkup, and its tests
+8b9f079747815eded4e92f977dc8e91b2aba68bbfeat(web): connect Teams, Matrix and WeChat
+72ded97d04f45fe41fcf151462cc22d3cee9653dfeat(nacre): PublicDoor, and WeChat's mark
+129ad03a53124ce4745e69a23c548406f3d15105feat(server): Teams, Matrix and WeChat channels behind one public door
+28462efbf13addc1fb7a7905714ba6db1c7ad101feat(protocol): Teams, Matrix and WeChat channels, and the public door
+bc28384407499b6faae0f8b44e97aedffc2c99c2refactor(channels): one way for accounts that are your own
+c3271cb0d4eb98ef4ac4299a81cddff4c940c965fix(server): on a mail server of your own, your address needs the Sent-mail proof
+919a767136a4be63ad955afc01f4d2d1ed096221docs: iMessage and email (ADR 0044)
+7b4f2a061129db2b95ff2807216d00b85a5f59f5test(e2e): iMessage and email journeys against a pretend Messages and mail service
+1c8cf47b093208c98f05cc8a25b33a625bbbab64feat(web): connect iMessage and email
+7b12e513c8d6e073f17eeb7fd0dd154a8160626afeat(server): a new email app password alone reconnects; greet by name only when known
+c86243434a929cfa61b82851b3589451f5f6ec90feat(nacre): ChannelSoon says why an app can't be picked
+6ea4b4cad7bbe687c38e029e7af10960e2ed9b08feat(nacre): a settings switch to point at, email's mark, and asking on this Mac
+8ac35329a806f25a80f40821b4a1c66cc5fe83cefeat(server): iMessage and email channels
+162b623dd3f3461100adaf4ac2c7e3144a8df744feat(protocol): iMessage and email channels
+eb6b820c9763e8e9252853f32ac7b556ccec6866docs: renumber edit by hand (0046) and skill scope (0047) after the Google setup and first-result ADRs
+79b63dabb0e3479e9f339fcc16915378d9e2be1ctest(server): the first job's artifacts know about live data
+2f72badecfb29d6da945843df633e9985d9b3593docs: ADR 0039, edit by hand and live data
+401b883e953b99ee8873dc91ae8963d49b4570cffix(nacre): honest words in the live data question; the editor's actions stay together on a phone
+20dc24152fe95cb74a4458cbcc184dee3333c933test(server): Repair everything says what pages read, and tidies stale OKs
+c65f0e429029f3575550924b54c3eba1bc44cc4etest(e2e): canvas, editing by hand and live data (ADR 0039)
+2679ab8cd6dc78e2e81ea66552883d58ed9ff67dfix(web): after saving an edit, show the newest version and newer ones
+4c2239c16db3d31df5afd96d659ec05954fc6031fix(nacre): the editor hears mod+S and Esc before anything else
+f565c83a273a761980c4f0ac95c149097edaefd8fix(server): a page's read is ok only for a 2xx, and an OK starts afresh
+2cbbc5986617b752c4fad372a06ebeb4889f4f0efeat(web): edit artifacts by hand with a live preview, and live data
+f4264cb5111ec92a8dd6565d558a03f01c0f5504feat(nacre): mod+S and Esc from anywhere in the editor
+64feb42c5df1d40ccdaf47ce151516c98f991ccefeat(nacre): CodeEditor, ArtifactEditor and live data patterns
+9688cf8ca6913dbcc02c50554524b7a171dea81cfeat(server): edit artifacts by hand, and live data for sealed pages
+974367768ee8264d679a592e9ed4a73ac6090b65feat(protocol): artifacts edited by hand, and live data for sealed pages
+d789122b743f73f4a52b5159fdc79e95757b3a99docs: ADR 0043, WhatsApp and Signal guides, and where they fit
+5cf234bedb938c2312ab3328f0c4a9b2735c0542test(e2e): link WhatsApp and Signal against the pretend apps
+ea5af11c56992eb01766bca79dae0adb871a6681feat(web): link WhatsApp and Signal by scanning a code
+32ef26b6c348b60a7ce6378acd1bcbdf6d58cb8dfeat(nacre): DeviceLinkCard and LinkedDevicesSketch for linking by QR code
+f9dccbd90888b973ca43835deea63b313f71f8a5feat(server): WhatsApp and Signal as linked devices of your own account
+ed113a461f601ed120daec6ee38e77ebb37b7e24feat(protocol): WhatsApp and Signal channels, linked by QR code
+fab270d0232b2664534181c254c68800d7617c04test(e2e): the reply's Stop, not Stop holding, when waiting for an answer
+8b9e74756226d3fe4c9db6266373d20268836f3adocs: name the sources ADR 0040 followed
+5aa5894630275c645104f9f11364a18a9c181cb3docs: ADR 0040, skill scope and the sealed signing key
+8017c304ed6067ee0ba173f5010c7c383b90f873test(e2e): skill-scope, a chat held to a skill's list and a locked signing key
+926cd7a27f9526e4a61a5b3a36d3d9dcd0793288fix(nacre): name SkillHold's list popover for screen readers
+157682d629f3caf66cdc75d093ce1b6f35e680c8feat(web): show and stop what a chat is held to
+6b9ae67e24c5c1d0f8f8ab938e4437f8cc06b729feat(nacre): SkillHold, the line that says what a chat is held to
+3f6326454488b706b4c4091a4d3469736e90f2fdfeat(server): lock the skill signing key with this computer's device key
+671ae769bf140c81e0798cfe278add4f5d8a0c89feat(server): a skill's limits hold for the whole chat
+f2124419972e91517c662e9e8b0563d7ea21b1fdfeat(protocol): hold a chat to a skill's list until you end it
+4b56130e4e8b27a16e741ebd35812d6ad36c0946docs: ADR 0041, meaning out of the box; close ADR 0032's known limits
+68f669829c79f3909b890a90694eab6c351c981dtest(e2e): meaning, from the offer to a skill asked for three ways
+9bd422c48b35231f72dd97371c707c11ac97f480feat(web): get meaning search in one press, and find it in ⌘K
+b27e5545ee9ebc03e0bf2a24751874fa28fb6a95feat(nacre): MeaningSearch, how memory search works and the one download that helps
+9455ebc6c2f32e2dff201ebb05b4fc2bdf3305e0feat(server): meaning without Ollama, and habits however you word them
+0960f9586a7c0a682a51fc666f6592f220effe25feat(protocol): say whose model gives meaning, why getting it failed, and ask with your languages
+e4540d72ced49ad92a8975af16306b5bf1a69418docs: ADR 0042, Come home brings the model, other agents and half Slack bots
+ce17326127ce4f2317fa1ce028103cb9b013a615test(e2e): Come home brings the model, other agents and a half Slack bot
+8855740cfbfa030cbd42dcc9ff82549927d9d136feat(web): finish a half Slack bot from Come home
+c4ada91d1b46d026000a0a64ac00cd2612939fc1feat(nacre): the model and other agents in ImportPreview
+aab379dcbc11e6ced7eb275c7c844d94553a589ffeat(server): bring the model, other agents and a half Slack bot home
+8475bc66aeec38cecfcdfd07f953351f29a52b02feat(protocol): model choice, other agents and half Slack bots in Come home
+71caa6ef11c76c5b6fe08959609e688d1fcce60btest(docs): assert the guided no-broker Google setup
+1725d9515cb281013575489e9aa484c1eaad7613fix(google): preserve existing access when adding an account twice
+cbfbeb204db481a45dc833cfb83ef5de70c07b18feat(google): streamline setup without a hosted OAuth broker
+4ba48eddc628a7340813f5edaced41ff134dc22afix(providers): retain local model context with guarded host tools
+cb15f4d9185cfd74cfb57c73f9aad5ab2632de25test(server): align fallback and Google fixtures with shared capabilities
+cabbec0232484b06d2ab6802acd67f9257eb2a30test(docs): follow the first useful result navigation title
+1fc91ffb862e470327e975d55618c87140a1a2ebfix(tasks): allow optional actions proven not executed
+828f529ed7c42899980c22a78b05b23d3c55c57adocs: review the implemented P0 experience and next priorities
+2c7a94c3bafe770de523d6ed3ecc80e921f6c34efix(docs): render direct Google auth from shared catalog schema
+44aea692cceec41de300252aeb866e37b4142ee0fix(google): hand chat drafts into their bounded durable task
+8035056a1793ad180868fb660544c17b84b70e1bfix(tasks): bound foreground draft handoffs and skip unrelated MCP startup
+d0dce1f9d0fe4abcf9598ceaca564dcac19463d4feat(onboarding): deliver a verified first result before personalization
+df57a33ab32141cdc609af6728410224a2f455e2fix(google): bind draft approval and cancellation to durable execution
+71d8565dadeb70fd0c8ae839f11c10cb941ff4ddfeat(providers): unify guarded tools and isolated ChatGPT sign-in
+2663133a6a4813d6833a9344ce885009ef4f5a2afeat(artifacts): verify durable task outputs without duplicate saves
+637d6af6eba4314c5616ae422273274688602d4bfeat(tasks): persist verified outcomes and resume effects safely
+c78bdf51520da56989cd40980fc72bc2b4fa593efeat(google): connect owned accounts with verified draft-only jobs
+f1282638dc4fe2b1e1db2d3b47b956217bce2961feat(protocol): declare provider tools and verified host effects
+bae6b48a85b0fbff4086c01885ee62f3b0f4f337fix(ci): bound check concurrency to prevent accessibility timeouts
+165c71f6ce7e69d8e1d2f91f4de96ee2ff6952e8fix(install): provision terminal tools and tolerate native build failures
+4a8263197159fbddbcffd2517c9eae703f46702adocs: the menu bar helper only asks and quits
+422ac7cb3ad6bd53eec4e7a1825776864331c079docs: the documentation moves with the code (working agreement 13)
+85de90aed3463178dd7245892bdf0d9d3e8b1620feat(docs): the documentation, built from Nacre and read from the code
+d6917514adf9d12fcd71dbd4c3b5e460d2152f83feat(nacre): Docs — what a set of pages is made of
+689a270e6c58bc0ce5459d21c5438de80b0e725afix(nacre): icons with asChild, scrollers that aren't landmarks, readable "coming soon"
+eea479b130924a1c3547aed6333c2f2b4d6b98b6refactor(web): mode and effort words are plain data
+eae0945ff686a40177e7284019c261daae3cb283refactor(server): the words for commands, settings and channels are data
+a5d967d8c6b371ec50cbda212747555643b17240fix(server): the menu bar helper no longer offers to hide itself
+d014cf0162b976bd5a9219c8f7d439554da3b9a2test(e2e): journeys wait until Conch is listening and the reply is whole
+bde3d7d18cd9ac5376fcf27806cadc84fb74d15afix(server): the Windows tray menu knows Conch is running, opens at once, and reads right
+c8fbcea59d4463a72566c22862fccfdddc905acdfix(server): the tray shows the pearl alone, as big as its square allows
+446eee6ef1f41c41ee41f3e30cd27200e45cbcebfix(web): in Brave, Notifications names the switch to turn on instead of the browser's error
+27bb95f8bb06affe553125ba56a744c86862f9b1fix(server): the tray helper really starts on Windows, and Repair only says so when it stayed
+24164febe8998dee4e2fa45eec10fde1b185f25afeat(web): Settings is a page of its own, its places in five groups
+7064d3fdb140a2002013f93b0cd7681f1aaa1df1feat(nacre): Dialog size="full" — the window as a page of its own
+7cd7bd6e2afca0a5f129bd2024fa1883d467377bfix(server): a page's link guard listens before the page's own code runs
+5d7fb14f502dfa82f232f04b3494847379842cb0fix(web): browsing stays one trail past the note that it read a page
+7480a3cbd8bca06e23d0c11d5da0d24aad2f8fabfix(web): the terminal you just opened gets your keys
+d071d2f07886a319c00cc0f795a67864ab9b071cdocs: skill trust (ADR 0031), in the README, SECURITY, AGENTS and ARCHITECTURE
+ec099fc57d918f3bd3e9b1752f0c39f6c6634d47test(e2e): skill trust — a signed skill, trusting its publisher, held to its list, changed after
+43fc53043adebe8f9f8940b41717ad6e04906837feat(web): what a skill can do, who signed it, trusting a publisher, sealing per provider
+46c5bc502a265a110901628b45428fb417811a43feat(nacre): SkillPermissionList, SkillSignatureBadge, TrustedPublisherList, SealCoverage
+ac5a16ac865371be77cbd737db1ee361d5ba3905feat(server): skills held to what they say they need, signed skills and trusted publishers, Codex sealed
+86698e331e26975dfd536cd513e2e0ae18025292feat(protocol): skill permissions, signatures, trusted publishers, sealing per provider
+bb31167aded68672d9d2e238e323e6db1ce1cd4efeat(web): Settings → General — the working folder and Start over
+804a00206caf1bc9b3f09aa54446d924fc07f07bfix(nacre): PathPicker says when the Open dialog can't come up, and offers typing
+31d909d6d3a95a6d3c9af7fcd9ea9d41fb058dc1fix(server): the Open dialog opens on macOS
+f744242f1ed928b427b4f0eddd0fd965c7bfea38test(e2e): memories live in What Conch knows, and Always on has more than one switch
+b6f338f4afb7473a514363964c62340d767fb9a7docs: hand it off (ADR 0033), in the README, AGENTS and ARCHITECTURE
+15fe4dad7577f829fd62c6a8eed7e032491ca6edtest(e2e): hand it off — background, stop and try again, helpers side by side, a task that needs your OK
+a060ac3bc38dee8c15e75c88739c75cbd1860e73feat(web): Tasks — do it in the background (⌘⇧↩, ⌘K), live cards in the chat, the Tasks page and badge, notifications
+e8965ed75fd7ac364393d4b1e31f0e2a3f710bc9feat(nacre): TaskCard — a task's status in words, what it's doing, what it did, and what you can do
+72f3793a5afc15b97ff272457501687410d1014cfeat(server): hand it off — background tasks, helpers side by side (delegate), worktrees
+dcdd7f636617eedc53ad8ec970af12ac705eec6edocs: it learns you (ADR 0032), in the README, SECURITY, AGENTS and ARCHITECTURE
+b1044ea1fda6917efe2bbfa9f04866ae792f2d6btest(e2e): it learns you — a memory that waits, the tidy-up with Undo, a skill suggested
+5869ef51fd3a2395f81d73a8c99eb73b3b908a16feat(web): What Conch knows about you — memories, what waits for an OK, the tidy-up with Undo, skill suggestions
+436d8e680a0cf08d20e3c0b437157bdf0b63d9c8feat(nacre): MemoryItem, TidyReport, TidyChangeItem, SkillSuggestionCard
+63ff81697458c82ee379cc73c0cd4f7bb42df485fix(server): typos forgiven in memory search; memories that wait say so in Activity
+197267bf6fd03b02f7edf65d5c798fcf5d434710feat(server): it learns you — meaning search, the memory tidy-up, skills you keep asking for
+6bb34651051e7d7d641d571326b2d4453f51a3b5fix(server): Activity reads what's happening now, not only what has reached the disk
+30a345d7c51e8c9a7dabda0daf29d9e99739de90docs: Show me (ADR 0034), in the README, SECURITY, AGENTS and ARCHITECTURE
+33ef66e898883ca63b4fdd9a783f7fb178f8a111test(e2e): Show me — chart versions, a sealed page's escape attempts, code off, pinned apps, phone
+068213d0f04ad68b45d89743ec08123b9f95d0d0feat(web): Show me — the panel beside the chat, cards, pinned apps, ⌘K
+3d63a33a83573a667510883d3e4158c87db8746bfeat(nacre): Artifacts — SealedFrame, ArtifactPanel, ArtifactChart, ArtifactTable, ArtifactCard
+6a13cb078eff3c176cae2e7e176cc4b3ac15da6efeat(server): Show me — artifacts with versions, a sealed page route, pin and refresh (ADR 0034)
+4a882febbd7525fef28b8bb668ccf51f99246bbcdocs: come home (ADR 0035), in the README, SECURITY, AGENTS and ARCHITECTURE
+c451f1382d2c1941ffb19237a6310a40d9a5cb7btest(e2e): come home — the first-run offer, preview, bringing over, Undo, the dry run
+1f36068efef348fff1f7f88207b926ca0d5d6adafeat(import): words that would reach the assistant are read first
+c7f1cd6204f3677e5392942834d4ad2ffc653f82feat(web): Come home in Settings → Memory, onboarding and ⌘K
+3eec23557a303ee84a76817b6f7793b795efa32afeat(nacre): ImportPreview, ImportOffer, ImportProgress, ImportSummary
+c7edf85253caf264844daa97a9b04a8a333f1ffefeat(server): Come home — bring your things from OpenClaw and Hermes
+958e60f635b97d43fbadc6c0f8c3d15ef3a4cb31test(server): the taint-after-restart test waits for the first log to reach disk
+4f05ac766496f47b869aed24455f27475d8d9b97docs: in the menu bar, and a little computer (ADR 0029)
+d902803f5d042c383cfdd8b22e7d55459c90bf75feat(install): --server for a little computer; e2e journey for the menu bar
+996c6675c6010875c2702aa43bf63e73d9a6de2cfeat(web): the menu bar, after logout and keep-awake under Always on
+dee1242b674331d3333f8f04b8a85ecd4bffb73cfeat(server): Conch in the menu bar, tray or panel, and a little computer
+f4f0bec86c09cb20517c8cc62db774fc5e5ea9bbdocs: Undo (ADR 0030), in the README, SECURITY, AGENTS and ARCHITECTURE
+1236c2b502cd244ed58aa1737677b3ab2be3b4e2test(e2e): Undo — a real file undone with a preview, redone, and a conflict from Activity
+8ec41d658614c19e09e1349eec899a9dff7213dbfeat(web): Undo from the chat, Activity and ⌘K, with a preview and Redo; forget a memory from Activity
+b8f04b39188caa5f08dd86f0a8bdd140112f06d1feat(nacre): UndoPreview, FilesChanged; ActivityTimeline row actions
+ecc7282fe49cb145075c9514a52628abb21f11fbfeat(server): Undo — every file the assistant changes can be put back, for every provider
+39a47cb2ace10eca77bc3fc111998e0843bdd1c0fix(providers): Health only worries about providers you use; a default that never worked moves to one that does
+1abb04215fb44bd4f50c9e96b23ba46a9c87453edocs: safe hands (ADR 0028), in the README, SECURITY, AGENTS and ARCHITECTURE
+e51c9ad6e09b7a30dd3c462084bd5615fec17dcbtest(e2e): safe hands — asking after reading, Safety settings, Activity, a worrying skill
+e6a74d3a8cba9e132db63a69c49db5f41ca11f19feat(web): Safety in Settings → Security, Activity, the guard on cards, skill review
+e0e14c4ced123a18fec7a8791178882890c9f0d4feat(nacre): TaintNotice, GuardNote, ActivityTimeline, SkillReview; BrowserApproval guard
+49eac788590cd05b89928ab569c26e61f3762ef2feat(server): safe hands — check after reading, sealed commands, activity, skills read first
+fa2525184e1e21d105b39b3f7f1e484f57803a13fix(passwords): a manager kept unlocked never shows as locked while it opens itself
+1be41ce944504935de83c835e4371cfdcc9d188dfeat(passwords): keep a password manager unlocked on this computer; KeePassXC says why it won't open
+254309f4f2dc831bbe4e78ee40b0f5af552d63b2docs: in your pocket (ADR 0027), in the README, SECURITY, AGENTS and ARCHITECTURE
+d9dcc15c4feb3367980cc87aeb5bf8d8896f3f80test(e2e): in your pocket — the app, the offline screen, the phone's address, notifications and voice
+e2327278c3423d9e94fcd23f4b1c2272865f9970feat(web): Conch as an installed app, notifications, dictation, read aloud and talking hands free
+d362742bb27f36ab7fee9a5b9c681ab43b80ecbafeat(nacre): NotifyThisDevice, AddToHomeScreen, NotifiedDevices, VoiceButton and TalkMode
+9ed1c33f3887fd88c0a88e9e5c0fd4391d903ff1feat(server): in your pocket — the phone's secure address, notifications (Web Push) and private dictation
+587afc41dd57655b880135213f077b64bb35832cdocs: Always on and the installer (ADR 0026), in the README, AGENTS and ARCHITECTURE
+1de78ccae1adf1ec68de37ee5953225aa2a745adtest(e2e): Always on — the hint, on, the app, Repair everything, off, quit
+1d3542bcd10c0f116c5c9e131ebf94704e87ae78feat: one-line installers for macOS, Linux and Windows
+b2a348429c8c250854d3748bafd9776e84c9daf6feat(web): Always on in Settings → Health, the hint beside routines and chat apps, and the app icon
+e0267438b5061f139ccd135ace217683f742928afeat(nacre): AlwaysOn, and RestartScreen's stopped state
+076a74a5bf951678a168ddde76474dfd94fb2dc5feat(server): Always on — start at login, run with no window, hand over from a window, quit, Conch as an app
+f7a1671f0af032192327a205fc1c0b5828aa77ddtest(web): palette search tests get room to wait under a full parallel run
+2b7ba7f8dec732553879d33a40a85c5aa646fe60feat(passwords): connected managers on the start screen; edited and used dates tracked and shown
+99f7514ac515bc4e8eb9a217f003420e4d3ee01cfix(passwords): calmer, clearer UI — no more typed paths, instant KeePassXC values
+89c5f6f1f3d58ac42aec93e66ebe7a358be9357ddocs: Passwords (ADR 0025), in AGENTS, ARCHITECTURE, NACRE and the backups ADR
+b75f2466a076199b252f3164cb14fb0a30646508test(e2e): Passwords — add, import, delete, ask in the chat, read a PIN, the lock, passkeys
+765204ded0213811071333f3c7dd20135b45c312feat(web): Passwords — the list, details, editor, import, password managers, Copy into Conch, passkeys, the lock and chat cards
+265a313fb214e57883aa9b0da82d78abfb3b400ffeat(nacre): Passwords — rows, fields, codes, generator, Security check, sources, passkeys, copy progress and chat cards
+349c649a8331fffd4ce3dd8153a47fe6f868b9e1feat(server): Passwords — an encrypted vault, other password managers, passkeys and copying in
+8d8887a477e513fc33444fdc7d68410db62d6bccdocs: approve new devices (ADR 0024), in SECURITY, ARCHITECTURE, AGENTS and the README
+35feef28495196f71a8eb76eca23cc2635d1862ctest(e2e): approve new devices — in Settings, in the terminal, turned down, removed
+e6a10186d5ba9d2c2981a63d22578bc0b003f4e4feat(web): approving new devices — the waiting screen and Settings → Security → Devices
+c75af955efa61f938225b18d464f64857061c2a3feat(nacre): DeviceApproval, DeviceRequests, and remembered devices in DeviceList
+6429d6402e90e13cfa83d7e9ad232fca8392745ffeat(server): pnpm conch devices — list, approve, reject, remove, rename, on, off
+065b146b926fcd58a39ccdfcdc3d89e3730930c2feat(server): keep track of devices, and approve new ones
+f6a5a6090be83797c8db9b9892704da94c8dbc36feat(protocol): devices, and approving new ones, on the wire
+f1fd35ac3a59ef7da672eb6fa3ede2d438f8e65cdocs: README reflects where Conch is now
+9754822699451ce329e9f656cc05f2fe6868628atest(e2e): stop a reply that is still running, however slow the runner
+dc07c8bd8720ff32dd27da4d3a9c774b772902ecfix(web): Stop right after sending a new chat is never lost
+241ee14880a8ad7f4fbc0491ee6aa4fbc5e4f164fix(web): a phone opening its sign-in link stays signed in
+8204bd841b78a194c011a527e22c09c8e852009etest(channels): wait for the reply to a stranger before counting it
+e2a665a609bb944fdfa1822338fc5b77f0d32818fix(channels): reads wait for writes under way, so a restart never loses a change
+d2aa60eddb770bdaae09fc23fc0268f5242c9d0ffix(server): the mock engine stops on a Stop that came between two pauses
+d335afaeb54a43238e24405214dc6dd066cda895docs: offline and limits is ADR 0023 (main's Channels took 0018)
+267e4c776fbcf265c44f7fd67f7c1f7d32c51ff5fix(nacre): a tall dialog keeps its margin on a short screen
+2fe2cfb4fc48a66443343699ffec99ec18039943test(e2e): three journeys at a time — steadier, and quicker than a dozen
+6dcd59723aaebdb6e9bd449253e09317a4faa6b4docs: backups preview reads the files; restore keeps this Conch's sign-in
+5a0abdd0cc5d12aadec26a4749b2ce0dec27e05dfeat(web): the restore dialog previews from the backup's files, with what can act for you
+667384a16a003a3c3cf5a6ee63838d9f4a73dfe3fix(web): Backups says when the first backup comes once, not twice
+67fdd799f086869936dcf845fb40a60c7792c6d6feat(nacre): the restore preview says what in a backup can act for you
+99cca966eef84efad85817f6e49bde6fef2f007efix(server): the restore preview reads the backup's files, not its header
+2f218c2d987d5bcd4450d3c5a58c47349a1edc10fix(channels): review — one turn per person, answers that fit, nothing left running
+664804f7c5bdbb2fb671a29234a4bc91d11d5409fix(server): restoring a backup never brings back a revoked credential
+96eb83fc8627a9f71ee982c17e1e39e46facfd20fix(server): backups stop reading after the end, and check room before staging
+a6c3d851e5755087f5718f48f9ca4cdebaa6b7b3fix: restarting Conch needs a recent sign-in; uploads check free space
+14f9b5e81ef25f52f420445f5ac1dd497fa9c3e9fix(web): a failed connect isn't retried in a loop
+e077300ff42ae3e30e2c51f9bf7efa8774393d9dfix(nacre): ChannelCard's controls line up under the words on a phone
+49f0b451ceb81539a890de91e53a4f6dae2af08efix(channels): pretend apps take any free port; strangers can't fill memory
+f5be48b55b374678c57ab773d53eb11354902260fix(server): self-update merges exactly what it listed, never over ignored files
+e9a70aeba3697c39a43b6a817d20fda3f356aa49fix(server): Ollama that Conch starts never answers the network
+b74649ea1bdf40e6962856ae22e2718ed856bcc8feat(channels): in a group, the bot says it only talks privately
+f82f307c4e6a4718b8c9180c902b8d74e6f40e3dfeat(channels): a new bot gets Conch's pearl, and the new-chat screen points to Channels
+d423ed3af70d7dc89eeff85b96948220a810a8e1fix(server): cloud models are never listed as on this computer
+de95a20121a96d3ae2d9e059ab6ff96248db82fdfix(web): what sits beside a settings title keeps its size on a phone
+6663ae6ebec7e2b42440434902c4374cb692a750test(e2e): channels journeys against pretend Telegram, Discord and Slack
+3f6ade6fc6c377ec3b49d6185bf59bbc6becb200fix: Stop works the moment you send
+457e645d0fb404517ffc83ac9f702fcb564e8628docs: channels (ADR 0018)
+431a8caf98178b5fdf05930f19c69732d9ea3967feat(server): the security checkup knows about channels
+8e8d22db6659ea1c60dfa33f064e84395d1fdbe8test(e2e): the local journey waits for the app and for the whole reply
+4b8d5d060d9d44c4abf142325eb1a1b9890f4ebffeat(web): Channels — connect Telegram, Discord and Slack in a few guided steps
+f321f067b2ed72f3f74255c5f19c353dc1ebde88test: steadier under a full parallel run (git-driven update tests, ⌘K empty state)
+f992bf42fb5332a5983364c868ee95a64e3c8914docs(agents): one place for the whole-Conch rules (agreement 12), and the tests that enforce them
+a0ba9d8b2c4094af78a2e9e6f3524ea6d3754588docs: backups (ADR 0020)
+25bcc2bfef0e79f993d0a4d54c7171daac62e5d5fix(server): backups — tighter limits on a crafted lock, no short names, a fresh Undo copy
+c7f28a18d4a15135735d129532925e6ede89d260fix(web): the calm restart screen shows over Settings; Restart now for a waiting restore
+50f20fa4d6c0277f1adab7f46dbe00eac4c1638ctest(e2e): back up, change something, restore it, see it back, undo
+e60f1315dc1042510c6fca3a7010ed6816ddf2eefeat(web): Settings → Health → Backups, restore with preview and undo, ⌘K
+b98358e878af4a9600f2191aa8b9bec0ff26d347fix(server): mention a restore, with Undo, for a day
+c0a4741d4e971fc77af55e38b2a0889469b7e938feat(nacre): Backups — overview, list, what a backup holds, restore preview and options
+1ade78d2930e4727ecd8aacf85aca241d098e1bbdocs: updates (ADR 0019), and how a new program joins them
+051f280ba9c43bb578ef2e73a15bcb2b2556d234fix(web): the restart after an update is calm, and brings you back
+be6b5ef36ea1e9e0cbaaea8595e31387ae7dce13feat(nacre): Channels — tiles, cards, guide steps, handset, hello card, key field, people, portal sketch
+f8c24bf66e26ccf52e27772898196df6cf2ea3e7docs: a model on this computer (ADR 0022)
+85b00b2fd568e0de93c79eac0f26625a8cae5d77fix(web): a local model's page says "Model", and "Use it for new chats"
+7923305aa1755b57938acd4d988923a78ea40d64test(e2e): the `local` journey, against a pretend Ollama
+85df9e6ac00b6a18aa920583c005fad6530a3ad1docs: connect from the chat (ADR 0021)
+3513e6f8d0dfe5d46d74246479b6c7d4750ad1e2feat(web): Settings → Health → Updates, quiet signals, and ⌘K
+1196a8f6e781113673cdfcd4b65ea5c21ed250a6fix(web): the offer lines up with the reply it belongs to
+7c06f09f562e180fe69aa1b712c6a062a16e2520fix(web): carry on to the model only once Ollama's installer is done
+d63f3d9a77858ed8acc4d8b89d231d16a5f5a869fix(server): start Ollama only once it's installed, and fall back to `ollama serve`
+a77a60bd33685510094b0d9ab311b2cbbbac4517feat(server): channels for Discord and Slack
+888afdcb57133ae975445fac1b335db98789de90feat: at a limit, the usage line says who carries on
+c3e3a5baa05d92b1bcf8c987f57594bb1b25bbf7feat(server): updates say whether Conch can restart itself
+53288a5a792c3522b443202a7d65be31efb3f264feat(nacre): Tabs.Trigger can wear a quiet dot too
+a8ca10aa9056138f435a9f329ec7a2fc830e50d2feat(web): at a limit, answering with another provider once offers 'Always'
+ff50fffdecbd755cf8d00c25420217d13788e444test(e2e): connect from the chat (scenario suggest, port 4383)
+3e1dc74b484f0d4c941fbacbf881133aac77e378feat(nacre): Updates — SoftwareUpdate and ProgramUpdates
+220f3ca00ba132c1374fde629889969a492d07eafix(server): say which apps aren't connected even when nothing is offered
+e78140fd992a80494ba60b4f6605b03c3e5379a6feat(nacre): IconButton can wear a quiet dot
+cac48be9e83096f2fee9ce6e0813d2c2f53e3194docs: offline and limits (ADR 0018); agreement 12 — every new part joins Repair everything, backups, updates, cues and routing
+412ff8fc7ebd043c42105f84a06b5d3bb672570ffeat(server): channels stream answers into Telegram and stop on its Stop button
+98df25fc46de6e66c55c7067fd472e53a3a3935efix(nacre): IntegrationSuggestionCard passes its ref through
+83986f45f7076a76a148a1e6ba70941d1bedb9bdfeat(web): connect an app right from the chat
+26febb1b14a25499d7720022a6385ac32f71c69atest(e2e): offline, a message waits and goes by itself when the internet is back
+be138cdca7dc6bea8d398e686f3537a28e52cb21feat(server): daily backups, restore with undo, and a Repair everything check
+8efdfdb734474c567b75e6b56947f6a239cf0afafeat(server): the backup manifest and the .conchbackup format
+2471742080acf4f2d499d0a86775e96b471d3ba9feat(protocol): backups on the wire
+57488c333d6c1f2b6f077a4387bb24ee93e6a510feat(web): Settings → Providers → On this computer, as one flow
+b93f3a3d277011e1c80fce07ad5ab6ebf436ff39feat(nacre): a model on this computer — its mark, its words, its download
+d61c2c00bd414415dd790d52c361ea79200f8380feat(server): quiet update checks, one-click updates, Conch updates itself
+9e8b5f32d7966c23fdc06b01691ae9629a1d5cb2feat(server): needs say their version, and the newest one out
+0b3bcc98aab7817c63c8f7bcb883fe1422d080effeat(protocol): updates for Conch and the programs it uses
+7c0661a0be8c20e68ea467c7aa71d154401e1771feat: offline, a message waits in the chat and goes by itself; the model on this computer can answer now
+4b989a85a71a72522d07783b2c9e495e6bf24f76feat(server): channels — reach your assistant from Telegram
+066868b4c17c9ddc3100fbabe219cf3254633dc9feat(nacre): IntegrationSuggestionCard — offer to connect an app in the chat
+fa9a60735b9091aded3a14537da82c11fa35bba4fix(server): messages sent while offline wait together and go as one turn
+39b499579296050b436ce62983f9ddfcb6446fa8feat(server): a model on this computer — find Ollama, start it, get a model
+0e49f02f5eb120ef891afbb39f0c4073cc0b21f4feat(server): speak Ollama's native chat API, on this computer only
+8d74a62c28a73e383d0f755844b2f39238f04999feat(protocol): a model on this computer — `ollama` and LocalStatus
+8ec016c377d9cfd48f46d29a2d78ec8db0350313feat(server): offer to connect an app the person asks about
+a5c7ebfc44749674494951c73a3c09510072c5d4feat(server): catalog entries declare cues for connect-from-chat
+9f19885140ac362cdf1721c5895237e94e0669e6feat(server): offline, messages wait or the model on this computer answers; at a limit, your pick carries on
+a5abbda2bdc1e12401a968bcc915f4cc0b46c848feat: Repair everything — one calm line, what needs you opens by itself
+ebafdd4c74abdcd6bf3fa976ed20e4329b665e03feat(protocol): offer to connect an app from the chat
+05d05a6363a196ac77bb88dcacc0f5d18a20f69efeat: Repair everything panel in Settings → Health (work in progress)
+360d5a290a7c9f98fa2e289fde7d01129c8fb689feat(server): Repair everything looks at providers, apps, the browser, search and this computer
+241021e89a8b60bb78851e7a780b9ad09bf4c74efeat: Conch keeps itself running, and can start itself again
+ab34364c30436075c202b483ca7b975d372c9abffeat: providers and engines say when their model runs on this computer
+00c69bc66509a068b9e3dcf8457fde397e0744f8feat: Repair everything — the frame, and Settings → Health
+885f70f45002bf64cb8c9e21a9acce3fc3d7e0ccfix(server): terminals heal a spawn helper that lost its execute bit
+99f453e214016ed9106edfec2bb86a291d138261fix(server): compare Windows PATHs by ';' on every machine
+bee95e7309cb71c9126f8f0390a49d36a6c0e644docs: attachments (ADR 0017)
+c8658ac4fab1ad8eacccfe41d23ce307a62e9578feat(web): attach files, pictures and long pastes to a message
+02da383299efadd43301df36cf1c1b51ba8ca3b4feat(nacre): Attachments — cards, preview, drop overlay; composer folds long pastes
+d975d1e444411817113db7426c6e6b7e013044d9feat(server): uploads, and attachments reach every provider
+3913117b8c44d28d06b90fe85a9854ede400134efeat(protocol): attachments on messages, and what each provider can do with them
+88b42f9e03c0c8b4e5d8fdde6b8c6329ecb92475test(e2e): wait for the first-run save instead of racing it
+8390f5a277294eea007ed2afb03e8e4da8e63258feat(server): a busy port opens the running Conch or moves to a free one
+28b33df384149c71e8b94b1c0e0aa724eef0650atest(server): wait for the recovery note, not the state it follows
+1b514a5fe2693c847e068ca8842327cdc6e787f7test(e2e): signed out mid-chat, sign in from the chat, message goes again
+fb25b7ce8be5af597fcb44c4375637817a8272e7fix(web): "Sign in" from a chat opens that provider's page, fresh
+4ae963170a8bdae449892194047e389182865dccfeat: a broken skill offers "Write the description for me"
+753b7fe00287157401b00c2cb1aa05a586fcdd9cfix(server): the search index rebuilds itself
+4681c518ef3aec965d429abb642c63262a2cbd3fdocs: retrying, healing notes and needs everywhere (agreement 11, ADR 0016)
+6f2c7f034906351bb724ddc633a75cc7f62558a9feat: a signed-out or unreachable provider no longer strands a chat or a routine
+d850c9dde4d92afc7ec10638c6f0ae65e0e3bed8feat: one fix button for every security-checkup finding
+a81f5c4c8cb35fc54bbcade58ddcafea204a5014fix(server): set a damaged store aside and carry on; lock sign-in instead
+bc8cfbe2e9b783af3cc99e6c0ab370795620c5a4feat: bring a provider's own web servers into Conch, for every model
+a30da140f323483352803c162d87e9d169d9f86cfeat: integrations get the programs they run with
+d1498ba27a716bfe75e01a7703c6daedd46e31ccfeat(server): integrations renew their sign-in and come back by themselves
+be54afcaeca4fe17bb768a0fb53d8cc86a452ad0feat: get the 1Password CLI in one click, and open 1Password when it's locked
+763e8dbab37c14aa94242207e8da9e34e3d861e1feat: Claude Code comes with Conch; install and update provider CLIs in one click
+41a4ee0ae365363ab33fc675f105f8bd5f21f6b3fix(server): see programs installed since Conch started
+8abd851830a3495f1fc8d9e39025086fcd21c2fafeat: one place for what Conch fixed on its own
+96801ad18f807eaa756d6f4635e845932e21a775docs: offer to get what's missing (agreement 11), ADR 0016
+5d62943f8edca81a794754d92a2a14ec61635bf4fix(server): 1Password CLI install hint for each platform
+78459330fb252e0b2c2e8b21d4e1ffe622c7cc9bfeat(web): set up local apps from the connect dialog
+b34a4b4f19cef9052d50140d18432e69b40f7653feat(nacre): SetupChecklist, and connected cards that keep their lines together
+ea2d9667ed9e1604cacbf89740d52cb82ca41c05feat(server): find, install and open what integrations need
+83bedb23ff559ab4360bc585744caf73e651a001fix(server): find Windows app execution aliases on PATH
+3a59cad9936c4f1440657251d4eecbb4c680b95ffix(nacre): stop the idle Lustre rim drawing a ring in dark mode
+5297b954cf7804cb2331d14ee6da2a03cca69a0dfix(web): say what the mode in effect does, in one set of words
+81767d7facdcdcec25d0aa3b97b5d96a883c3ca1fix(nacre): ModePicker names the assistant, not Claude
+50ae405c4541c06962592a802efa77492d5f6b8ffix: run every provider in the mode the chat shows
+4f546f52b7d64cfd8180b3a968864e4281546370feat(web): the terminal drawer, a keystroke away (ADR 0015)
+bed42ab3308804725391235eda99ff8d32912254feat(nacre): Terminal patterns in Conch's own palette
+e3ab93253743853591766553b23bc54ef23cc526feat(server): terminals on the host, locked to you (ADR 0015)
+90e087e6aa66929cd1eaa0e4d62f3936f6035db3fix(nacre): browser step preview fits its card
+4d8b59b1d350c2beb3d6cb4a49234153922fa984feat: core browser tools load up front; one trail across an answered question
+3f9748110527c9f839d0559b99b668d86df84c6fchore: ignore .worktrees in prettier and git
+fd81819b0493e7e4e32640dfca314f9dfa6ffc7etest(e2e): run the browser journeys last, and open Settings by clicking
+6924259a7283ddb3f79b0e73ef4da381de9a6de7docs: the Conch promise, "fix it before you ask", and the browser
+f1230450e809d4ce63036007b25519255ff3ca4etest(e2e): browse, allow a site once, hand over to sign in
+ecc63138e20c5ccd2f81af148801b6e9d1fade4afeat(web): the browser panel, in-chat cards, Settings › Browser, ⌘K
+97d02b447d965185627bb6a5741b2afcd8627c9afeat(nacre): Browser patterns and ResizeHandle
+e4c7aaccfc18a06797e32b48e71694f1628853aefeat(server): the browser fits the panel, heals a held profile, asks in the checkup
+d4de6fd7801a4478e3fac919234b54de1d57143cfeat(server): Conch's own browser, for every engine
+e9c57cab16f01496e68e32dd460716e76a9ea410fix(web): only title retry notices "Still trying…"
+996d95187dbd845152e12b8552a234d0420101ecfix(server): resume Codex threads with the sandbox as config
+28e28e53f924598b22a0a2e635c0f6898b7069a1feat: every provider at once, Conch-level integrations, skills
+63f801020387c7a7a3973e3f28a5b3eda13e8b73feat(nacre): searchable multi-provider ModelPicker, Skill patterns
+78d13e54209322c67aeb01a1ec79708909465a33docs(adr): every provider at once (0012) and skills (0013)
+a540ba36cef1d7c156da6b710e1d0ce2979b3569fix(web): short folder and model names in the composer
+a65a7086cddd79eec8061bf06157e68d25e8e06ffix(nacre): composer toolbar gives way in order instead of overflowing
+cb681cc4fb574f4c9e6846905363af60222e36aetest(server): close the search index before removing proxy test homes
+991484cbd07b540dafdd347cfbc3665eddd3483cfix(nacre): RoutineCard takes a locale; pin locales in time tests
+a9a8903e52cd20c99014a817f9d504398e29fdcftest(e2e): run the end-to-end suite on Windows
+17946524958ae4f8c9c343539376dfac1cdf8416fix(server): a dev watcher that starts under turbo on Windows
+44daa01f92a04a9e4e7b86471ac61a9d0cea264bfeat(server): open the browser on Windows too
+927aab6a599464b1e4afab597e7052dd04209eb2test(server): skip POSIX file-mode checks on Windows
+e482d48837560e4eb8279dab8f074b18687237d1fix(server): wait out Windows' brief refusals when replacing a saved file
+6b4ecd864d9b8623980efe11e257115b374647cffix(server): start npm- and pnpm-installed CLIs on Windows, without a shell
+eb0652b525616e62b79b017da50801c8f9fdc461fix: run package scripts through pnpm's shell on Windows
+0586a1261ae040c3b39db167e0a21cf9132fb710chore: check files out with LF on Windows too
+9594bc8081e33156b7e594d685cf8a4c98f3900efix(security): close rejected WebSocket upgrade connections
+3de89a846d7e1f7a59621ad1f180635521c8911edocs(security): define configurable two-gate reverse-proxy deployment
+bd0a2d901cc0bea04ac99276bcc9bc3d94697f96docs: ADR 0010 providers; Conch is a shell around the agent you choose
+45799ab95d05f58cb4eb96f33fae004995c85db0feat(server): providers — pick your engine, keep its key where you like
+c892850bee93a8ccb899d74db6b34c83ea0dce71feat(web): Settings → Providers, and a first run that asks what powers you
+fff80de40abbc624443c65946a7f04061dc6679ffeat(nacre): provider cards, and a key field that can point at 1Password
+21263f46ae23d50c02f7fc56d695b5c78f1dd5d5feat(protocol): providers — what powers the assistant, and where its key lives
+07f590b4d3bdec9538e82b91477c93de92ce6d9afix(nacre): small working Pearl breathes visibly so busy chats read at a glance
+b440dace8a12508197fd5e83bbdb3c36ee052004test: give CI the headroom a shared runner needs
+d52defc5a7a5fad57331f927c6457e73079fbb20fix(server): spawn the MCP test fixture with node, not tsx — CI timeout
+46a449048f18b8f7697601ffcbe460e6e8a76083docs: ADR 0009 integrations; design every feature for every provider
+e35a7f38fc17336939a402ccdbef452073105ac5feat(web): Integrations — connect apps in one click, see and fix what's broken
+8a49e2086b2207b26c6315028999170904ea6914feat(server): integrations for every engine — OAuth, health, policies, MCP bridge
+a0ce955305e1f2db40f731cce7f6fb1d67112f2efeat(nacre): integration patterns — logos, cards, handshake, tool permissions
+07f6099bad8e469f66dc7f5a8646116b321ca731feat(protocol): integrations — catalog, health, policies, provider capabilities
+c9ef011732c089d7e51a281ad0e13b04e0424021fix(web): no dead air while Claude reasons; history shows at rest
+f8c7d27aa2cc941adbeece1fe7b3acf08209eb34fix(web): Rename starts from the generated title, not the first line
+ed1014f21b850854165afa649a3720eff722ca1dtest(server): give scrypt-heavy auth tests headroom on slow CI runners
+20c53913dd03b2af9f98224e8760adfdd0130bbffeat(web): the reply is prepared in place, then flows in word by word
+ee663284e09c6c5787969b9bee2feecc3f2291eafeat(nacre): anticipation and arrival — smooth streaming, living verbs, a forming shell
+0a896ee5e4061f6540f6f5ea511bc047b1f389d9fix(web): API key field uses PasswordInput (show/hide toggle)
+9edc62f50a063621808cce030cd3fd02d1b39341feat(nacre): NumberField, TimePicker, DatePicker — never native pickers
+8897b68ffdb1aeede27677ea96813ca4d2fe3daedocs: security guide, ADR 0008, security engineering standards; e2e journey
+8bea6f15139bb5b21dda74ba1515b9a32ad4dcb0feat(web): sign-in screen and Settings → Security
+62fa154ed19dafc75cac310b4cc9468365cb3465feat(server): sign-in with a password or access keys; hardened gateway
+44d36b6a0333ebbcfd9a63e99eb339201f34bef6feat(nacre): PasswordInput, StrengthMeter, QRCode and Security patterns
+f0c7bdb817721442b76ade7ae386299fb3e4b841fix(server): close audit findings — traversal, agent escalation, leaks
+56cb293315d4596d58a4f79de5c23f371b8b9df8feat(protocol): access schemas, password policy, and path-safe ids
+fd6613c625fd92a529018e7e51b4173b06a01c92fix(nacre): centre the radio dot on whole pixels
+5e5da47f366034279e39be57023cf082db3cd46cchore(deps): add uqr for QR codes
+7e5732dafb7e8dc4c3f77c5846270e410d71aefefeat: name new chats after what they're about
+48aa2838e87079d2991c0a3e6b2b31f60fc608dafeat: usage limits — see what's left of your plan or budget; ADR 0005
+1be68792ead30870a8679d66901d5c7ede26131afeat(web): ⌘K search everything, ⌘F find in chat
+e8e628863d92b539e396b3a891e66eceebd78e7bfeat(nacre): Highlight, FindBar + useFind, SearchPreview; palette preview pane
+7d2a8e062b37d3aa2f9ee1d1137e64f4210e3b06feat(server): full-text search across every conversation
+7ef7c4097a4d764b7186ffebdf4bd0c2d622912afix(web): one call to action on the empty Routines page
+48e3cdefe3043ec36cdf772bb8b7ca3cb70d8f98feat(routines): local one-off times, clearer drafts; ADR 0006
+db7d2ed6408768d1a0bf4ea1efd71cd93d139604feat(web): Routines — scheduled tasks anyone can set up
+21097bd1fd6d3cd6c68d6a07ce01fcf9990100f9feat(nacre): routine patterns — schedule editor, routine card, run timeline
+2d6ee719e42fb60f0cf6a98c13e4b195417eb383feat(server): routines — scheduled tasks that run as real conversations
+d0a3c133192ab072830f426c571c6ffe3b3efc92fix: picker footer spacing; serve rebuilt web assets without restart
+0b243f4a5e42dcaee092c41f7fa9ea03ebc9ababfix: calmer slash menu with real Claude Code commands
+830105eecdfecbf9720b248319c6d5e957620244feat(web): model picker, trust modes and slash commands
+b0ccba992526f5e4102db26650f01435c397bbc2feat(nacre): ModelPicker, ModePicker, CommandMenu and provider logos
+07d099fc0e74f826728c8310ed4cf0f7f51ae3c6feat: models, thinking effort, fast mode, trust modes and slash commands (server)
+c5cbd9a09d1ac8f50c44a92531bbb0ef010a1658docs: document start, dev:mock and e2e commands
+66eb8b035d79e5a16cc6592d8351f854a7a7d4betest: Playwright end-to-end journeys for onboarding and chat
+825c5deb94040cb5cd2fe76555d42f628cf2b9a4feat(web): the Conch app — onboarding, chat, memory and settings
+5ae2ca8a3474c7f63fa00b9508fa727b75d0d4a3feat(server): mock engine can simulate installing Claude Code mid-onboarding
+7195efebbbb94a0c744b24a645818202a61ca7e7docs: memory and engine ADRs; architecture and README for the agent
+2ee24db2abdd17a6ad64190d6244f2ab3bdd1f1etest(server): avoid non-null assertion
+257dec5f4e906a540afc1761d9dfbac93a33af81test(server): detection, sign-in, memory, prompt, translation and gateway
+ab6090e2fc4543dd80679fbdd25398fd7b1ce9b9chore: web app deps, loose turbo env for the gateway, start/dev:mock scripts
+57084826e90df6f861a5cb35e783463234baff80feat(server): Conch gateway with Claude Code engine, memory and conversations
+e59b7a447f8f4ab6f514383e7e931303de646abefeat(protocol): v2 — engines, personality, profile, memory, conversations
+14ebd58f6f0894d8521563b19d3186caa6ff62e6fix(nacre): meet WCAG AA contrast across stories; add a11y sweep
+91ccfda7496c4e8db0faac0209a77c57b9ab5f29docs: keep Turborepo's managed agent guidance block in AGENTS.md
+ab03a3cc966051cf19d8c42796b1227de6fc503efeat(nacre): chat patterns for the Conch app
+a6dd06a055ee809286ce74377c0182a08096199bfix(nacre): keep shared nc-* keyframes global under CSS Modules
+c28db838efd3c8fe38940ee82ed15b069a37aa2ffeat(nacre): export all primitives from the public barrel
+fb5191c8e5b241d6f1762675f03cca6c99fb9015fix(nacre): keep circular icon buttons round under squircle corners
+ddba70f959ea29f8afd0d91edc14b7fed507b9b2feat(nacre): navigation, display and feedback primitives
+78367bbddb779d4a81bd611f05b21fece4f5c35efeat(nacre): overlay and feedback primitives
+e69dfdf29aef6e484b898e4200737baa22525240fix(nacre): apply motion preference to JS animations via MotionConfig
+a178421def73ee4ad4d7aacc2b3d091432e5de38chore(nacre): use neutral placeholder in password story
+4e7fa82d1e7f6fe08e5291cf9eb42f0ea34a5669feat(nacre): form primitives
+cda8f3309c47a6c6f02e78f1604472e3de82a04fci: add GitHub Actions workflow running pnpm check and Storybook build
+577a2f42a65e04c9a4c8b25b0f666410f6b40546test(nacre): stories and tests for foundation primitives
+187d9266a649c093b4b223ac1af5c45c4f363d2ffeat: add protocol package and web/server skeletons
+0e1612722835fef132d0a760faf578eca5f4ec52docs: add agent routing guide, architecture, Nacre design language and ADRs
+74f6d0a1994cddd967a5a10a91a321e7e5b95351chore: bootstrap Conch monorepo and Nacre foundations

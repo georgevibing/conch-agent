@@ -157,7 +157,8 @@ export function cleanLine(text: string): string | undefined {
 function rarity(commits: Parsed[]): Map<string, number> {
   const seen = new Map<string, number>();
   for (const commit of commits) for (const w of commit.words) seen.set(w, (seen.get(w) ?? 0) + 1);
-  const n = Math.max(commits.length, 2);
+  // A short release reads as if among a few dozen commits: a word shared by its few is still rare.
+  const n = Math.max(commits.length, 40);
   return new Map([...seen].map(([w, count]) => [w, Math.log(n / count)]));
 }
 
@@ -376,9 +377,11 @@ export function parseNotes(text: string): Notes {
       continue;
     }
     const item = /^[-*•]\s+(.+)$/.exec(line)?.[1];
+    // Any other words end the group: what follows isn't part of it.
+    if (!item && line) at = undefined;
     if (!at || !item) continue;
     // eslint-disable-next-line no-control-regex
-    const clean = item.replace(/[\u0000-\u001f\u007f​-‏‪-‮]/g, '').trim();
+    const clean = item.replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e]/g, '').trim();
     if (clean && notes[at].length < 12) notes[at].push(clean.slice(0, 160));
   }
   return notes;

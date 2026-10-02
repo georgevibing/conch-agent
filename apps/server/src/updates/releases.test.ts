@@ -22,6 +22,13 @@ if (step === 'install') console.log('Progress: resolved 10, reused 5, downloaded
 if (fs.existsSync('fail-' + step)) { console.error('ERR_PNPM something broke'); process.exitCode = 1; }
 `;
 
+/** The first offer, which a test expects to be there. */
+function first<T>(list: T[]): T {
+  const [one] = list;
+  if (!one) throw new Error('Nothing was offered.');
+  return one;
+}
+
 const dirs: string[] = [];
 afterEach(async () => {
   for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true });
@@ -142,7 +149,7 @@ describe('finding releases', () => {
     // This copy only knows the old key: 0.3.0 is refused, 0.2.0 (which brings the new key) is offered.
     expect(old.offers.map((o) => o.version)).toEqual(['0.2.0']);
     expect(old.refused).toMatch(/0\.3\.0 isn’t signed by a key this Conch trusts/);
-    const staged = await w.follower().stage(old.offers[0]!, old.offers, () => undefined);
+    const staged = await w.follower().stage(first(old.offers), old.offers, () => undefined);
     expect(staged.kind).toBe('staged');
     // Running 0.2.0, Conch trusts the key 0.2.0 named.
     const there = await w.look(w.follower(join(w.home, 'versions', '0.2.0')));
@@ -174,7 +181,7 @@ describe('where updates come from', () => {
     const w = await world();
     w.release('0.3.0-beta.1', 'Talk to it');
     const f = w.follower();
-    const staged = await f.stage((await w.look(f, 'beta')).offers[0]!, [], () => undefined);
+    const staged = await f.stage(first((await w.look(f, 'beta')).offers), [], () => undefined);
     expect(staged.kind).toBe('staged');
     const beta = w.follower(join(w.home, 'versions', '0.3.0-beta.1'));
     w.release('0.2.1', 'An older fix');
@@ -223,7 +230,7 @@ describe('updating beside the running version', () => {
     const { offers } = await w.look(f);
     const steps: string[] = [];
     const head = git(w.conch, 'rev-parse', 'HEAD');
-    const result = await f.stage(offers[0]!, offers, (p) => steps.push(p.phase));
+    const result = await f.stage(first(offers), offers, (p) => steps.push(p.phase));
     const folder = join(w.home, 'versions', '0.2.0');
     expect(result).toMatchObject({ kind: 'staged', version: '0.2.0', folder });
     expect(steps).toEqual(['verify', 'fetch', 'install', 'install', 'build', 'backup']);
@@ -248,7 +255,7 @@ describe('updating beside the running version', () => {
     w.release('0.2.0', 'Does not build', w.key, { 'fail-build': 'x' });
     const f = w.follower();
     const { offers } = await w.look(f);
-    const result = await f.stage(offers[0]!, offers, () => undefined);
+    const result = await f.stage(first(offers), offers, () => undefined);
     expect(result).toEqual({
       kind: 'failed',
       message:
@@ -258,7 +265,7 @@ describe('updating beside the running version', () => {
     expect(currentFolder(w.home)).toBeUndefined();
     expect(git(w.conch, 'worktree', 'list').split('\n')).toHaveLength(1);
     // Trying again starts afresh.
-    expect((await f.stage(offers[0]!, offers, () => undefined)).kind).toBe('failed');
+    expect((await f.stage(first(offers), offers, () => undefined)).kind).toBe('failed');
   });
 
   it('no backup, no swap', async () => {
@@ -267,7 +274,7 @@ describe('updating beside the running version', () => {
     w.backup.mockRejectedValueOnce(new Error('There isn’t room for a backup.'));
     const f = w.follower();
     const { offers } = await w.look(f);
-    expect(await f.stage(offers[0]!, offers, () => undefined)).toEqual({
+    expect(await f.stage(first(offers), offers, () => undefined)).toEqual({
       kind: 'refused',
       reason:
         'Conch couldn’t make a backup first (There isn’t room for a backup), so it left the version you have.',
@@ -281,7 +288,7 @@ describe('updating beside the running version', () => {
     const f = w.follower();
     const { offers } = await w.look(f);
     const unsigned = git(w.conch, 'mktree');
-    const forged = { ...offers[0]!, object: unsigned };
+    const forged = { ...first(offers), object: unsigned };
     expect(await f.stage(forged, offers, () => undefined)).toMatchObject({ kind: 'refused' });
   });
 
@@ -290,17 +297,17 @@ describe('updating beside the running version', () => {
     w.release('0.2.0', 'Two');
     let f = w.follower();
     let { offers } = await w.look(f);
-    await f.stage(offers[0]!, offers, () => undefined);
+    await f.stage(first(offers), offers, () => undefined);
     prove(w.home, join(w.home, 'versions', '0.2.0'));
     w.release('0.3.0', 'Three');
     f = w.follower(join(w.home, 'versions', '0.2.0'));
     ({ offers } = await w.look(f));
-    await f.stage(offers[0]!, offers, () => undefined);
+    await f.stage(first(offers), offers, () => undefined);
     prove(w.home, join(w.home, 'versions', '0.3.0'));
     w.release('0.4.0', 'Four');
     f = w.follower(join(w.home, 'versions', '0.3.0'));
     ({ offers } = await w.look(f));
-    await f.stage(offers[0]!, offers, () => undefined);
+    await f.stage(first(offers), offers, () => undefined);
     prove(w.home, join(w.home, 'versions', '0.4.0'));
     const removed = await w.follower(join(w.home, 'versions', '0.4.0')).prune([]);
     // 0.4.0 runs, 0.3.0 is kept to go back to, the checkout stays; 0.2.0 goes.
