@@ -1,0 +1,108 @@
+@layer nacre.components {
+  .scene {
+    container-type: inline-size;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    gap: var(--nc-space-8);
+  }
+
+  .words {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-4);
+    min-inline-size: 0;
+  }
+
+  .kicker {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-accent);
+  }
+
+  .title {
+    margin: 0;
+    font-family: var(--nc-font-display);
+    font-size: clamp(var(--nc-text-4xl), 6.4cqi, 3.5rem);
+    font-weight: 400;
+    line-height: 1.04;
+    letter-spacing: -0.018em;
+    color: var(--nc-text);
+    text-wrap: balance;
+  }
+
+  .title em {
+    font-style: italic;
+    color: var(--nc-text-accent);
+  }
+
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    max-inline-size: 34rem;
+    font-size: var(--nc-text-xl);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  .body > * {
+    margin: 0;
+  }
+
+  .points {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    max-inline-size: 34rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--nc-text-lg);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text);
+  }
+
+  .points > li {
+    position: relative;
+    padding-inline-start: var(--nc-space-5);
+    text-wrap: pretty;
+  }
+
+  /* A small pearl before each line, in place of a bullet. */
+  .points > li::before {
+    content: '';
+    position: absolute;
+    inset-block-start: 0.55em;
+    inset-inline-start: 0;
+    inline-size: 0.4375rem;
+    block-size: 0.4375rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-9);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--nc-accent-9) 16%, transparent);
+  }
+
+  .stage {
+    min-inline-size: 0;
+  }
+
+  @container (min-width: 56rem) {
+    .layout {
+      grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+      gap: var(--nc-space-16);
+    }
+
+    .layout[data-flip] > .words {
+      order: 2;
+    }
+
+    .layout[data-flip] {
+      grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
+    }
+  }
+}

@@ -1,0 +1,35 @@
+@layer nacre.components {
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    block-size: 2.5rem;
+    padding-inline: var(--nc-space-2) var(--nc-space-3-5);
+    border-radius: var(--nc-radius-full);
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-medium);
+    white-space: nowrap;
+    color: var(--nc-text);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+  }
+
+  .logo {
+    display: grid;
+    place-items: center;
+  }
+
+  .chip[data-soon] .logo {
+    filter: saturate(0.35);
+    opacity: 0.8;
+  }
+
+  .soon {
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-regular);
+    color: var(--nc-text-muted);
+  }
+}

@@ -1,0 +1,37 @@
+@layer nacre.components {
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+    gap: var(--nc-space-6) var(--nc-space-4);
+    margin: 0;
+  }
+
+  .fact {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+    padding-inline-start: var(--nc-space-4);
+    box-shadow: inset 1px 0 0 0 var(--nc-border);
+  }
+
+  /* The number first to the eye, the name first in the page. */
+  .value {
+    order: -1;
+    margin: 0;
+    font-family: var(--nc-font-display);
+    font-size: var(--nc-text-5xl);
+    font-weight: 400;
+    font-variant-numeric: lining-nums;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--nc-text);
+  }
+
+  .label {
+    font-size: var(--nc-text-md);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+    text-wrap: balance;
+  }
+}

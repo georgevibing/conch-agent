@@ -1,0 +1,44 @@
+@layer nacre.components {
+  .reveal {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+    filter: blur(5px);
+    transition:
+      opacity var(--nc-duration-slower) var(--nc-ease-out),
+      filter var(--nc-duration-slower) var(--nc-ease-out),
+      transform var(--nc-spring-soft-duration) var(--nc-spring-soft);
+    transition-delay: calc(var(--rv-index, 0) * var(--nc-duration-instant));
+  }
+
+  .reveal[data-shown] {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal {
+      opacity: 1;
+      transform: none;
+      filter: none;
+      transition: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .reveal {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
+
+  /* Paper never scrolls: everything is there. */
+  @media print {
+    .reveal {
+      opacity: 1;
+      transform: none;
+      filter: none;
+      transition: none;
+    }
+  }
+}

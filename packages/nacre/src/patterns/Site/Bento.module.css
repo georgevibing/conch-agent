@@ -1,0 +1,100 @@
+@layer nacre.components {
+  .frame {
+    container-type: inline-size;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--nc-space-3);
+  }
+
+  .tile {
+    --nc-rim-rest: 0.18;
+    --nc-rim-hover: 0.85;
+    --nc-sheen-size: 300px;
+    --nc-sheen-hover: 0.16;
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-5);
+    min-inline-size: 0;
+    padding: var(--nc-space-6);
+    border-radius: var(--nc-radius-2xl);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+  }
+
+  .words {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+  }
+
+  .title {
+    margin: 0;
+    font-family: var(--nc-font-display);
+    font-size: var(--nc-text-3xl);
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: -0.012em;
+    color: var(--nc-text);
+    text-wrap: balance;
+  }
+
+  .text {
+    margin: 0;
+    font-size: var(--nc-text-lg);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  /* The picture sits at the foot of the tile, however tall its neighbours make it. */
+  .picture {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: flex-end;
+    margin: 0;
+    min-inline-size: 0;
+  }
+
+  .inner {
+    min-inline-size: 0;
+  }
+
+  @container (min-width: 36rem) {
+    .grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .tile[data-span='4'],
+    .tile[data-span='6'] {
+      grid-column: span 2;
+    }
+  }
+
+  @container (min-width: 62rem) {
+    .grid {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .tile[data-span='2'] {
+      grid-column: span 2;
+    }
+    .tile[data-span='3'] {
+      grid-column: span 3;
+    }
+    .tile[data-span='4'] {
+      grid-column: span 4;
+    }
+    .tile[data-span='6'] {
+      grid-column: span 6;
+    }
+  }
+}

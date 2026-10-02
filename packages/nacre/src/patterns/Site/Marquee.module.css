@@ -1,0 +1,94 @@
+@layer nacre.components {
+  .marquee {
+    overflow: hidden;
+    /* The row arrives from, and leaves into, nothing. */
+    mask-image: linear-gradient(
+      90deg,
+      transparent,
+      var(--nc-gray-12) 8%,
+      var(--nc-gray-12) 92%,
+      transparent
+    );
+  }
+
+  .track {
+    display: flex;
+    inline-size: max-content;
+    animation: nc-marquee var(--mq-seconds, 48s) linear infinite;
+  }
+
+  .marquee[data-reverse] .track {
+    animation-direction: reverse;
+  }
+
+  @media (hover: hover) {
+    .marquee:hover .track {
+      animation-play-state: paused;
+    }
+  }
+
+  .row {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--nc-space-3);
+    margin: 0;
+    padding: var(--nc-space-1) 0;
+    padding-inline-end: var(--nc-space-3);
+    list-style: none;
+  }
+
+  .item {
+    display: flex;
+    flex-shrink: 0;
+  }
+
+  @keyframes nc-marquee {
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  /* Still: everything in view at once, wrapped, and no second copy. */
+  @media (prefers-reduced-motion: reduce) {
+    .marquee {
+      mask-image: none;
+    }
+
+    .track {
+      inline-size: auto;
+      animation: none;
+    }
+
+    .row {
+      flex-wrap: wrap;
+      flex-shrink: 1;
+      justify-content: center;
+      padding-inline-end: 0;
+    }
+
+    .row[aria-hidden] {
+      display: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .marquee {
+    mask-image: none;
+  }
+
+  [data-nacre-motion='reduced'] .track {
+    inline-size: auto;
+    animation: none;
+  }
+
+  [data-nacre-motion='reduced'] .row {
+    flex-wrap: wrap;
+    flex-shrink: 1;
+    justify-content: center;
+    padding-inline-end: 0;
+  }
+
+  [data-nacre-motion='reduced'] .row[aria-hidden] {
+    display: none;
+  }
+}

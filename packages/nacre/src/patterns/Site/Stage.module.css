@@ -1,0 +1,87 @@
+@layer nacre.components {
+  .stage {
+    position: relative;
+    isolation: isolate;
+    margin: 0;
+    min-inline-size: 0;
+  }
+
+  .window {
+    --nc-rim-rest: 0.28;
+    --nc-rim-hover: 0.9;
+    --nc-sheen-size: 320px;
+    --nc-sheen-hover: 0.14;
+
+    display: flex;
+    flex-direction: column;
+    min-block-size: var(--stage-min, auto);
+    overflow: hidden;
+    border-radius: var(--nc-radius-2xl);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-3);
+  }
+
+  .bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-3);
+    min-block-size: 2.75rem;
+    padding: var(--nc-space-2) var(--nc-space-4);
+    font-size: var(--nc-text-sm);
+    box-shadow: 0 1px 0 0 var(--nc-border-subtle);
+  }
+
+  .body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    min-block-size: 0;
+    padding: var(--nc-space-4);
+  }
+
+  .window[data-align='start'] .body {
+    justify-content: flex-start;
+  }
+
+  .window[data-align='end'] .body {
+    justify-content: flex-end;
+  }
+
+  .window[data-bare] .body {
+    padding: 0;
+  }
+
+  /* A slow tide of pearl light behind the window: decoration, never state. */
+  .tide {
+    position: absolute;
+    inset: -14% -10%;
+    z-index: -1;
+    border-radius: var(--nc-radius-full);
+    background: conic-gradient(from var(--nc-angle) in oklab, var(--nc-pearl-spectrum));
+    opacity: calc(0.42 * var(--nc-lustre));
+    filter: blur(56px) saturate(1.25);
+    animation: nc-stage-tide 28s linear infinite;
+  }
+
+  @keyframes nc-stage-tide {
+    to {
+      --nc-angle: 360deg;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tide {
+      animation: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .tide {
+    animation: none;
+  }
+}

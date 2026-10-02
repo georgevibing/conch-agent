@@ -206,6 +206,28 @@ Conch and another app, so Nacre shows the other app. It never describes it.
   brand rules forbid recolouring its mark, so it keeps its four colours on a
   porcelain tile (`brandArt`).
 
+### The site (the front page)
+
+The front page shows Conch with Conch. Nothing on it is a screenshot or a drawing of
+the app: the pictures are the components themselves, playing a short script.
+
+- **The picture** (`Stage`). A porcelain window holding real components, `inert` and
+  named by one sentence, so it reads as a figure and nothing in it can be pressed. The
+  hero's stage carries the pearl tide behind it; no other does.
+- **The claim** (`Scene`). One sentence in the display serif, the turn of it in italic
+  accent, beside the picture that proves it. Words first in the page's order, always;
+  the picture changes sides down the page.
+- **The rest** (`Bento`). Smaller claims as tiles of uneven width, each with a small
+  picture. `Facts` is a row of numbers in the serif; `Marquee` drifts a long list of
+  logos (`LogoChip`) past, slowly, and stops under the pointer.
+- **The last word** (`Statement`). One centred sentence, large, with room around it.
+- **Arriving** (`Reveal`). Things surface once as they scroll into view: a short rise
+  out of a slight blur on `--nc-spring-soft`, staggered by `index`. With reduced motion
+  everything is there from the start, and every script stands at its best moment.
+
+Motion on the page is the app's motion (text streaming, a tool finishing, the pearl
+cursor gliding) and little else. Nothing loops faster than a person reads.
+
 ### The terminal
 
 The terminal is a tool you reach for, so it is plain, quick and quiet. It is a drawer

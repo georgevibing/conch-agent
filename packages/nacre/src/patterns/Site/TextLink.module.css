@@ -1,0 +1,49 @@
+@layer nacre.components {
+  .link {
+    color: var(--nc-text-accent);
+    text-decoration-line: underline;
+    text-decoration-thickness: 1px;
+    text-decoration-color: color-mix(in oklch, currentColor 35%, transparent);
+    text-underline-offset: 0.22em;
+    border-radius: var(--nc-radius-xs);
+    transition:
+      text-decoration-color var(--nc-duration-fast) var(--nc-ease-out),
+      text-underline-offset var(--nc-duration-base) var(--nc-spring-snappy);
+  }
+
+  .link[data-arrow] {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    gap: var(--nc-space-1-5);
+    font-size: var(--nc-text-lg);
+    font-weight: var(--nc-weight-medium);
+    text-decoration-color: transparent;
+  }
+
+  .arrow {
+    inline-size: 1em;
+    block-size: 1em;
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  @media (hover: hover) {
+    .link:hover {
+      text-decoration-color: currentColor;
+      text-underline-offset: 0.16em;
+    }
+
+    .link[data-arrow='forward']:hover .arrow {
+      transform: translateX(3px);
+    }
+
+    .link[data-arrow='away']:hover .arrow {
+      transform: translate(2px, -2px);
+    }
+  }
+
+  .link:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+}
