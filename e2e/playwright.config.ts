@@ -123,7 +123,7 @@ const scenarios = {
   },
   // Releases (ADR 0051): signed tags from a pretend upstream, a staged swap, and the restart.
   releases: {
-    port: 4367,
+    port: 4359,
     env: { CONCH_MOCK_STATE: 'ready', CONCH_E2E_RELEASES_WORLD: releasesWorld },
     command: 'node --import tsx ../../e2e/releases-gateway.ts',
   },
