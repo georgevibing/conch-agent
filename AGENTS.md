@@ -36,7 +36,8 @@ working agreement 11: _fix it before you ask_.
 | The browser (live view, takeover, per-site permissions)                                                        | `apps/server/src/browser/`, `apps/web/src/features/browser/`, `packages/nacre/src/patterns/Browser/` + [ADR 0014](./docs/adr/0014-browser.md) — security-relevant                                                                                                                                                                                                                               |
 | The terminal (shells on the host, the drawer, who may open one)                                                | `apps/server/src/terminal/`, `apps/web/src/features/terminal/`, `packages/nacre/src/patterns/Terminal/` + [ADR 0015](./docs/adr/0015-terminal.md) — security-relevant                                                                                                                                                                                                                           |
 | Something a feature needs installed (apps, CLIs, runtimes)                                                     | `apps/server/src/setup/`, Nacre `SetupChecklist` + [ADR 0016](./docs/adr/0016-getting-what-a-feature-needs.md) — security-relevant                                                                                                                                                                                                                                                              |
-| Updates (Conch itself, the programs it uses, rollback)                                                         | `apps/server/src/updates/`, `apps/web/src/features/health/UpdatesSection.tsx`, Nacre `SoftwareUpdate` + [ADR 0019](./docs/adr/0019-updates.md) — security-relevant                                                                                                                                                                                                                              |
+| Updates (Conch itself, the programs it uses, rollback)                                                         | `apps/server/src/updates/`, `apps/web/src/features/health/UpdatesSection.tsx`, Nacre `SoftwareUpdate` + [ADR 0019](./docs/adr/0019-updates.md), [ADR 0048](./docs/adr/0048-releases.md) — security-relevant                                                                                                                                                                                     |
+| Releases: `pnpm release`, channels, signed tags, the staged swap and going back                                | `apps/server/src/release/`, `updates/{releases,layout}.ts`, `supervisor.ts`, `release/allowed_signers`, Nacre `ReleaseNotes`, `UpdateBanner`, `ReleaseChannelPicker` + [docs/RELEASING.md](./docs/RELEASING.md), [ADR 0048](./docs/adr/0048-releases.md) — security-relevant                                                                                                                    |
 | Attachments (long pastes, files, pictures, drop, previews)                                                     | `apps/server/src/attachments/`, `apps/web/src/features/chat/`, Nacre `Attachments` + [ADR 0017](./docs/adr/0017-attachments.md) — security-relevant                                                                                                                                                                                                                                             |
 | Passwords (the vault, other password managers, filling sign-ins)                                               | `apps/server/src/vault/`, `apps/web/src/features/passwords/`, Nacre `Passwords` + [ADR 0025](./docs/adr/0025-passwords.md), [§ Adding a password manager](#adding-a-password-manager) — security-relevant                                                                                                                                                                                       |
 | Backups (what's in one, the format, restore, automatic backups)                                                | `apps/server/src/backup/`, `apps/web/src/features/health/`, Nacre `Backups` + [ADR 0020](./docs/adr/0020-backups.md) — security-relevant                                                                                                                                                                                                                                                        |
@@ -91,25 +92,26 @@ scripts/          Repo tooling (e.g. snap.mjs visual QA screenshots)
 
 Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or `npm i -g pnpm`).
 
-| Command                                                                       | What it does                                                                                                            |
-| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `pnpm install`                                                                | Install everything                                                                                                      |
-| `pnpm dev`                                                                    | Run all dev servers via Turbo                                                                                           |
-| `pnpm storybook`                                                              | Nacre Storybook on http://localhost:6006                                                                                |
-| `pnpm docs:dev`                                                               | The documentation on http://localhost:4400, redrawn as you write and as the code it reads changes                       |
-| `pnpm docs:build`                                                             | The documentation as a static site in `apps/docs/dist` (`pnpm docs:preview` builds and opens it)                        |
-| `pnpm check`                                                                  | Format check + lint + typecheck + tests. **Must pass before every commit.**                                             |
-| `pnpm test`                                                                   | All unit tests (Vitest)                                                                                                 |
-| `pnpm e2e`                                                                    | Builds the web app and runs Playwright journeys against the gateway + mock engine                                       |
-| `pnpm dev:mock`                                                               | Dev servers with the scripted mock engine (no Claude usage)                                                             |
-| `pnpm start`                                                                  | Build and run Conch for real at http://localhost:4317                                                                   |
-| `pnpm start:network`                                                          | Same, reachable from your network (sign-in required; prefer Tailscale)                                                  |
-| `pnpm conch <command>`                                                        | From the terminal: `status`, `password`, `key`, `pair`, `devices`, `background`, `tray`, `phone` … (`pnpm conch help`)  |
-| `pnpm --filter @conch/nacre test -- src/components/Button`                    | Tests for one component                                                                                                 |
-| `pnpm a11y [--filter=button]`                                                 | axe (incl. colour contrast) on every story, light + dark, in real Chrome (Storybook must be running)                    |
-| `node scripts/snap.mjs <story-id> [--mode=dark] [--hover=css] [--clip=css]`   | Screenshot a story for visual QA (Storybook must be running)                                                            |
-| `node apps/docs/scripts/shot.mjs <page> [--mode=dark] [--width=390] [--full]` | Screenshot a documentation page for visual QA (`pnpm docs:dev` must be running)                                         |
-| `node apps/docs/scripts/a11y.mjs [--filter=providers]`                        | axe (incl. colour contrast) on every documentation page, light + dark, in real Chrome (`pnpm docs:dev` must be running) |
+| Command                                                                       | What it does                                                                                                                                                   |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm install`                                                                | Install everything                                                                                                                                             |
+| `pnpm dev`                                                                    | Run all dev servers via Turbo                                                                                                                                  |
+| `pnpm storybook`                                                              | Nacre Storybook on http://localhost:6006                                                                                                                       |
+| `pnpm docs:dev`                                                               | The documentation on http://localhost:4400, redrawn as you write and as the code it reads changes                                                              |
+| `pnpm docs:build`                                                             | The documentation as a static site in `apps/docs/dist` (`pnpm docs:preview` builds and opens it)                                                               |
+| `pnpm check`                                                                  | Format check + lint + typecheck + tests. **Must pass before every commit.**                                                                                    |
+| `pnpm test`                                                                   | All unit tests (Vitest)                                                                                                                                        |
+| `pnpm e2e`                                                                    | Builds the web app and runs Playwright journeys against the gateway + mock engine                                                                              |
+| `pnpm dev:mock`                                                               | Dev servers with the scripted mock engine (no Claude usage)                                                                                                    |
+| `pnpm start`                                                                  | Build and run Conch for real at http://localhost:4317                                                                                                          |
+| `pnpm start:network`                                                          | Same, reachable from your network (sign-in required; prefer Tailscale)                                                                                         |
+| `pnpm conch <command>`                                                        | From the terminal: `status`, `password`, `key`, `pair`, `devices`, `background`, `tray`, `phone` … (`pnpm conch help`)                                         |
+| `pnpm release [beta\|alpha] [--dry-run]`                                      | Make a release: version and notes from the commits, one question, then check, tag (signed), push ([docs/RELEASING.md](./docs/RELEASING.md)). Maintainers only. |
+| `pnpm --filter @conch/nacre test -- src/components/Button`                    | Tests for one component                                                                                                                                        |
+| `pnpm a11y [--filter=button]`                                                 | axe (incl. colour contrast) on every story, light + dark, in real Chrome (Storybook must be running)                                                           |
+| `node scripts/snap.mjs <story-id> [--mode=dark] [--hover=css] [--clip=css]`   | Screenshot a story for visual QA (Storybook must be running)                                                                                                   |
+| `node apps/docs/scripts/shot.mjs <page> [--mode=dark] [--width=390] [--full]` | Screenshot a documentation page for visual QA (`pnpm docs:dev` must be running)                                                                                |
+| `node apps/docs/scripts/a11y.mjs [--filter=providers]`                        | axe (incl. colour contrast) on every documentation page, light + dark, in real Chrome (`pnpm docs:dev` must be running)                                        |
 
 ## Working agreements
 
@@ -495,6 +497,16 @@ coming, and each one follows the same shape:
    `apps/docs/content/channels/<app>.md` with the same steps in words, and a
    picture of the other app in `apps/docs/src/embeds/channels.tsx`. The tile and
    the facts come from the catalog entry.
+
+## Releasing
+
+Pushing to `main` is no longer a release. A release is `pnpm release`, by the
+maintainer (docs/RELEASING.md). Write `feat` and `fix` subjects in the person's
+words, since they become the release notes, and put what the person must do in
+a `BREAKING CHANGE:` footer. Never run `pnpm release`, create `v*` tags or
+change `release/allowed_signers` unless you're asked to: installs trust them.
+A change to stored data must stay readable by the version before (ADR 0048 §
+Data across versions).
 
 ## Definition of done
 

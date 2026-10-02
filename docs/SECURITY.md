@@ -228,6 +228,26 @@ address, so for them Conch can open one ([ADR 0045](./adr/0045-teams-matrix-wech
 - **On Matrix**, chats stay end-to-end encrypted, and your assistant only reads
   messages from your sessions that your account has verified.
 
+## Updates to Conch itself
+
+- **Conch installs only signed releases.** Each release is a tag signed with
+  the maintainer's SSH key. Conch checks it against the keys pinned in the
+  version you already have, so a release can't vouch for itself. One signed by
+  anyone else, or not signed at all, is refused in plain words.
+- **The keys carry forward.** A release that changes the keys must be signed
+  by a key you already trust. An install made before the first release learns
+  the key once, from that release, and says so.
+- **Nothing changes under you.** A new version is made ready in its own folder,
+  your things are backed up, and only then does Conch switch and restart. If
+  the new version doesn't start, Conch goes back to the one before by itself,
+  and won't offer that version again. **Go back to** also does it at once.
+- **The assistant can't touch it.** Conch's versions folder is off limits to
+  the assistant's own tools. Changing the channel, going back, or following
+  every change needs you to confirm it's you.
+- **A developer's copy** (on another branch, with changes of its own, or with
+  "Every change on main" on) follows its branch unsigned. That's the same
+  trust as `git pull`.
+
 ## Backups
 
 - **Conch backs itself up every day, on this computer** (Settings → Health). Those

@@ -1,6 +1,6 @@
 # 0019 — Updates: quiet checks, one-click updates, Conch updating itself
 
-- Status: accepted
+- Status: accepted (amended by [ADR 0048](./0048-releases.md): Conch's own updates now follow signed releases, made ready beside the running version)
 - Date: 2026-09-30
 
 ## Context

@@ -224,8 +224,13 @@ plainly which providers are sealed. ([ADR 0031](./docs/adr/0031-skill-trust.md),
 **It looks after itself.** **Settings → Health** has one **Repair everything**
 button, a quiet list of what Conch fixed on its own, daily backups you can restore
 (with a preview and Undo), and one-click updates for Conch and the programs it uses.
-Conch restarts itself after a crash. ([ADR 0016](./docs/adr/0016-getting-what-a-feature-needs.md),
-[0019](./docs/adr/0019-updates.md), [0020](./docs/adr/0020-backups.md))
+Conch follows signed releases (stable by default, beta or alpha if you like),
+says what each one brings in a few plain words, gets it ready while you keep
+working, and goes back at once if it doesn't start. Conch restarts itself after a crash.
+Maintainers release with `pnpm release` ([docs/RELEASING.md](./docs/RELEASING.md)).
+([ADR 0016](./docs/adr/0016-getting-what-a-feature-needs.md),
+[0019](./docs/adr/0019-updates.md), [0020](./docs/adr/0020-backups.md),
+[0048](./docs/adr/0048-releases.md))
 
 **One box for everything.** <kbd>⌘</kbd> + <kbd>K</kbd> finds chats and messages,
 models, skills, apps, routines, pages and settings by name.

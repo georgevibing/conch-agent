@@ -95,10 +95,12 @@ src/
   providers/                  the words for each engine, connecting them, switching, keys
   secrets/                    where a key lives: this computer, or 1Password (`op read`)
   setup/                      what features need from this computer; find, install, update, open
-  updates/                    daily quiet checks, one-click updates, Conch updating its own checkout
+  updates/                    daily quiet checks, one-click updates, Conch following signed releases (ADR 0048)
+  release/                    `pnpm release`: version, notes, signing (ADR 0048)
   lib/healed.ts               "fixed on its own" notes (~/.conch/healed.json, `healed` event)
   lib/lifecycle.ts            this run's `BOOT_ID`; `restart()` (exit 75, the supervisor starts it again)
-  start.ts, supervisor.ts     `pnpm start` runs Conch as a child it restarts (on request, or after a crash)
+  start.ts, supervisor.ts     `pnpm start` runs Conch as a child it restarts (on request, or after a crash),
+                              from the version `versions/current` names, going back if it fails to start
   background/                 Always on: login items (launchd, systemd, the Run key), the launcher, the handover, Conch as an app (ADR 0026); the menu bar helper, lingering, keep-awake (ADR 0029)
   network/tailscale.ts        your phone's secure address: `tailscale serve`, looked at and turned on (ADR 0027)
   push/                       notifications: RFC 8291/8292 Web Push on node:crypto, subscriptions, presence (ADR 0027)
@@ -206,6 +208,17 @@ src/
   under `/api/updates` (updating and turning automation on need sudo mode);
   `updates.changed` is pushed live. Repair everything's `updates` check lists what
   waits.
+- **Releases** (`release/`, `updates/{releases,layout}.ts`, [ADR 0048](./docs/adr/0048-releases.md)).
+  `pnpm release` makes a signed, annotated `vX.Y.Z` tag with notes written from
+  the commits. An install follows releases in its channel (stable, beta,
+  alpha). A developer's copy follows its branch as above. Tags are fetched into
+  `refs/conch/tags/*` and checked against `release/allowed_signers` from the
+  installed commit. Updating makes `CONCH_HOME/versions/<v>` (a git worktree),
+  installs, builds and backs up there, then moves the pointer
+  `versions/current`. The supervisor starts the gateway from the pointer's
+  folder (`CONCH_RELEASE_ROOT`), waits for it to prove itself (the gateway
+  answers `/api/health`), and goes back by itself if it doesn't. The login
+  launchers read the same pointer.
 - **Always on** (`background/`, [ADR 0026](./docs/adr/0026-always-on.md)). Conch starts at
   login through the computer's own mechanism (a LaunchAgent, a systemd user unit or
   XDG autostart, the Run key) running one launcher, `~/.conch/background/Conch`, that
