@@ -84,6 +84,12 @@ const scenarios = {
   },
   // Show me: things made beside the chat, sealed pages, pinned apps (ADR 0034).
   'show-me': { port: 4371, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Edit by hand and live data (ADR 0039), against a pretend data site on a port the system picks.
+  canvas: {
+    port: 4360,
+    env: { CONCH_MOCK_STATE: 'ready' },
+    command: 'node --import tsx ../../e2e/canvas-gateway.ts',
+  },
   // It learns you: what Conch knows, the tidy-up with Undo, memories that wait, skill suggestions.
   memory: { port: 4373, env: { CONCH_MOCK_STATE: 'ready' } },
   // Search by meaning (ADR 0041): the pretend model's download, then meaning in search and skill suggestions.
