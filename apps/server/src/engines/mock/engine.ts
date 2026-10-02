@@ -407,6 +407,17 @@ export class MockEngine implements Engine {
       { name: 'Google Calendar', status: 'connected', source: 'account', toolCount: 7 },
       { name: 'Gmail', status: 'needs-auth', source: 'account', toolCount: 0 },
       { name: 'filesystem', status: 'connected', source: 'engine', toolCount: 11 },
+      // An app Conch can connect itself, which it brings in by itself (ADR 0049).
+      ...(process.env.CONCH_MOCK_EXTERNAL === 'portable'
+        ? [
+            {
+              name: 'Sentry',
+              status: 'needs-auth' as const,
+              source: 'account' as const,
+              toolCount: 0,
+            },
+          ]
+        : []),
     ];
   }
 
@@ -515,6 +526,44 @@ export class MockEngine implements Engine {
           found?.length
             ? `I found ${found.length} ${found.length === 1 ? 'email' : 'emails'} about ${gmail[1]}.${typeof read.subject === 'string' ? ` The newest is “${read.subject}”.` : ''}`
             : `Nothing in Gmail about ${gmail[1]}.`,
+        );
+        return;
+      }
+      // Slack with every model (ADR 0049): catch up on a channel, search, or post to one.
+      const slack = (name: string) => input.tools.some((t) => t.name === name);
+      const slackChannel = async function* (wanted: string) {
+        const listed = JSON.parse((yield* hostTool('slack_channels', {})) || '{}') as {
+          channels?: { id: string; name: string }[];
+        };
+        return listed.channels?.find((c) => c.name === wanted.toLowerCase())?.id;
+      };
+      const catchUp = /\bcatch me up on (?:slack )?#([\w-]+)/i.exec(input.prompt);
+      if (catchUp?.[1] && slack('slack_read_channel')) {
+        const id = yield* slackChannel(catchUp[1]);
+        const read = id
+          ? (JSON.parse(
+              (yield* hostTool('slack_read_channel', { channel: id, limit: 20 })) || '{}',
+            ) as { messages?: { from: string; text: string }[] })
+          : {};
+        const messages = read.messages ?? [];
+        const first = messages[0];
+        yield* speak(
+          first
+            ? `#${catchUp[1]} has ${messages.length} new messages. ${first.from} said: “${first.text}”`
+            : `I couldn’t find #${catchUp[1]} in your Slack.`,
+        );
+        return;
+      }
+      const post = /\bpost in (?:slack )?#([\w-]+):\s*(.+)$/i.exec(input.prompt);
+      if (post?.[1] && post[2] && slack('slack_send_message')) {
+        const id = yield* slackChannel(post[1]);
+        const out = id
+          ? yield* hostTool('slack_send_message', { channel: id, text: post[2] })
+          : 'no such channel';
+        yield* speak(
+          /"sent":true/.test(out)
+            ? `Posted it in #${post[1]}.`
+            : `I didn’t post it: ${out.replace(/^\{.*\}$/, 'Slack said no.')}`,
         );
         return;
       }

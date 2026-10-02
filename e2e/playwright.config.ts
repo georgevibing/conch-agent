@@ -75,6 +75,12 @@ const scenarios = {
   suggest: { port: 4383, env: { CONCH_MOCK_STATE: 'ready' } },
   // A model that can only chat (ADR 0050): a message that needs an app offers one that can.
   'chat-only': { port: 4358, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Every app with every model (ADR 0049): Slack as Conch's own, and what a provider set up
+  // coming in by itself (the mock provider has Sentry in its account).
+  'any-provider': {
+    port: 4359,
+    env: { CONCH_MOCK_STATE: 'ready', CONCH_MOCK_EXTERNAL: 'portable' },
+  },
   // Runs under the supervisor (`pnpm start`), so a restore can start Conch again.
   backups: { port: 4382, env: { CONCH_MOCK_STATE: 'ready', CONCH_SUPERVISE: '1' }, entry: 'start' },
   channels: { port: 4387, env: { CONCH_MOCK_STATE: 'ready' } },
