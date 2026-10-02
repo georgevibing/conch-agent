@@ -1,0 +1,82 @@
+/* Layout only: the order and the room between the parts of the front page. */
+
+.landing {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(4.5rem, 12vw, 9rem);
+  inline-size: 100%;
+  max-inline-size: 76rem;
+  margin-inline: auto;
+  padding: clamp(var(--nc-space-10), 7vw, 6rem) var(--docs-gutter) var(--nc-space-10);
+  /* A wide row drifting past must never make the page scroll sideways. */
+  overflow-x: clip;
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nc-space-2);
+}
+
+/* The numbers sit close under the hero: they finish its sentence. */
+.facts {
+  margin-block-start: calc(clamp(4.5rem, 12vw, 9rem) * -0.45);
+}
+
+.band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-8);
+}
+
+.bandHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-3);
+  max-inline-size: 44rem;
+}
+
+.bandTitle {
+  text-wrap: balance;
+}
+
+.closing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nc-space-10);
+}
+
+.closingActions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nc-space-4);
+  inline-size: 100%;
+  max-inline-size: 38rem;
+}
+
+.closingActions > :first-child {
+  inline-size: 100%;
+}
+
+.closingActions .buttons {
+  justify-content: center;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nc-space-3) var(--nc-space-6);
+  padding-block-start: var(--nc-space-6);
+  box-shadow: 0 -1px 0 0 var(--nc-border-subtle);
+}
+
+.footerLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nc-space-2) var(--nc-space-5);
+  font-size: var(--nc-text-sm);
+}

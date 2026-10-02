@@ -10,7 +10,9 @@ configure({ asyncUtilTimeout: 5000 });
 if (!window.matchMedia) {
   window.matchMedia = (query: string) =>
     ({
-      matches: false,
+      // Tests see the pages standing still: the pictures on the front page show
+      // their resting moment instead of playing on a clock.
+      matches: query.includes('prefers-reduced-motion'),
       media: query,
       onchange: null,
       addEventListener: () => {},

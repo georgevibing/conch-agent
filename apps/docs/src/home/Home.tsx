@@ -17,9 +17,8 @@ import reference from 'virtual:conch-reference';
 import { ChannelGrid } from '../embeds/channels';
 import { InstallCommand } from '../embeds/install';
 import { ProviderGrid } from '../embeds/providers';
-import { REPO_URL, SECTIONS } from '../site/config';
+import { SECTIONS } from '../site/config';
 import { pagesIn } from '../site/pages';
-import { Demo } from './Demo';
 import styles from './Home.module.css';
 
 const ICONS: Record<string, ReactNode> = {
@@ -49,7 +48,7 @@ function Band({ title, lede, children }: { title: string; lede: string; children
   );
 }
 
-/** The front door: what Conch is, the one line that installs it, and where to go next. */
+/** The documentation's own front page: where everything is, and where to start. */
 export function Home() {
   useEffect(() => {
     document.title = 'Conch documentation';
@@ -70,13 +69,13 @@ export function Home() {
         }
         title={
           <>
-            Whoever holds the conch <em>gets to speak.</em>
+            Everything Conch does, <em>in plain words.</em>
           </>
         }
-        lede="Conch is a calm home for the AI assistants you choose, running on your own computer. It sets itself up, fixes what breaks, and asks only when it matters."
+        lede="A guide for each thing it does, and a reference read straight from the code, so it is never behind it."
         actions={
           <>
-            <InstallCommand typed />
+            <InstallCommand />
             <div className={styles.heroButtons}>
               {first && (
                 <Button size="lg" trailingIcon={<ArrowRight />} asChild>
@@ -84,14 +83,11 @@ export function Home() {
                 </Button>
               )}
               <Button size="lg" variant="ghost" tone="neutral" asChild>
-                <a href={REPO_URL} target="_blank" rel="noreferrer">
-                  View the source
-                </a>
+                <Link to="/start/how-it-works">How Conch works</Link>
               </Button>
             </div>
           </>
         }
-        media={<Demo />}
       />
 
       <Band title="Find your way" lede="Eight short sections. Start at the top, or jump in.">

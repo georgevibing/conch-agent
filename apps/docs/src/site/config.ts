@@ -2,6 +2,12 @@
 export const REPO_URL = 'https://github.com/giotiskl/conch-agent';
 export const REPO_BRANCH = 'main';
 
+/**
+ * Who signs the note on the front page. A placeholder taken from the
+ * repository's address: change it to the name and page you want there.
+ */
+export const AUTHOR = { name: 'giotiskl', url: 'https://github.com/giotiskl' } as const;
+
 /** The one-line installers (README § Quick start). */
 export const INSTALL = {
   unix: `curl -fsSL https://raw.githubusercontent.com/giotiskl/conch-agent/${REPO_BRANCH}/scripts/install.sh | sh`,

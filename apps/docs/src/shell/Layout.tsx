@@ -11,14 +11,16 @@ import {
   useNacreTheme,
 } from '@conch/nacre';
 import { ArrowUpRight, Menu, Moon, Search as SearchIcon, Sun } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router';
 import reference from 'virtual:conch-reference';
 
 import { REPO_URL } from '../site/config';
 import styles from './Layout.module.css';
-import { Search } from './Search';
-import { SiteNav } from './SiteNav';
+
+// Search and the contents know every page, so they come with the guides, not with the front page.
+const Search = lazy(() => import('./Search').then((module) => ({ default: module.Search })));
+const SiteNav = lazy(() => import('./SiteNav').then((module) => ({ default: module.SiteNav })));
 
 /** Goes to the top of a new page, or to the heading its address names. */
 function useScrollToPlace() {
@@ -46,9 +48,27 @@ function useScrollToPlace() {
 export function Layout() {
   const theme = useNacreTheme();
   const [searching, setSearching] = useState(false);
+  const [wantsSearch, setWantsSearch] = useState(false);
   const [menu, setMenu] = useState(false);
   useScrollToPlace();
   const dark = theme.resolvedMode === 'dark';
+
+  const openSearch = () => {
+    setWantsSearch(true);
+    setSearching(true);
+  };
+  // Until search has loaded, nothing is listening for its shortcut: this does.
+  useEffect(() => {
+    if (wantsSearch) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== 'k' || !(event.metaKey || event.ctrlKey)) return;
+      event.preventDefault();
+      setWantsSearch(true);
+      setSearching(true);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [wantsSearch]);
 
   return (
     <div className={styles.page}>
@@ -68,12 +88,14 @@ export function Layout() {
                 <Sheet.Title>Contents</Sheet.Title>
               </Sheet.Header>
               <ScrollArea className={styles.sheetNav} label="Contents">
-                <SiteNav onNavigate={() => setMenu(false)} />
+                <Suspense fallback={null}>
+                  <SiteNav onNavigate={() => setMenu(false)} />
+                </Suspense>
               </ScrollArea>
             </Sheet.Content>
           </Sheet.Root>
 
-          <Link to="/" className={styles.brand} aria-label="Conch documentation, home">
+          <Link to="/" className={styles.brand} aria-label="Conch, home">
             <Pearl size="sm" label={null} />
             <Heading level={2} display size="2xl" asChild>
               <span>Conch</span>
@@ -84,13 +106,16 @@ export function Layout() {
           </Link>
 
           <div className={styles.actions}>
+            <Button variant="ghost" tone="neutral" asChild>
+              <Link to="/docs">Docs</Link>
+            </Button>
             <Button
               variant="surface"
               tone="neutral"
               leadingIcon={<SearchIcon />}
               className={styles.search}
               aria-label="Search"
-              onClick={() => setSearching(true)}
+              onClick={openSearch}
             >
               <Text as="span" tone="muted" className={styles.searchLabel}>
                 Search
@@ -114,7 +139,12 @@ export function Layout() {
 
       <Outlet />
 
-      <Search open={searching} onOpenChange={setSearching} />
+      {/* Loaded the first time it's asked for: by the button, or by ⌘K. */}
+      {wantsSearch && (
+        <Suspense fallback={null}>
+          <Search open={searching} onOpenChange={setSearching} />
+        </Suspense>
+      )}
     </div>
   );
 }

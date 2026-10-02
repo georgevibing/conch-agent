@@ -1,0 +1,70 @@
+/* Layout only: how the app's components sit inside each picture. */
+
+.speaker {
+  display: flex;
+  align-items: center;
+  gap: var(--nc-space-2);
+  animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+}
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-1);
+  /* The transcript brings its own side room; the window's padding would double it. */
+  margin-inline: calc(var(--nc-space-2) * -1);
+}
+
+.reply {
+  display: grid;
+  gap: var(--nc-space-2-5);
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-3);
+  min-inline-size: 0;
+}
+
+.providers {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: var(--nc-space-2);
+  list-style: none;
+}
+
+.providers > li {
+  display: flex;
+  align-items: center;
+  gap: var(--nc-space-3);
+  padding: var(--nc-space-3);
+  border-radius: var(--nc-radius-lg);
+  transition: background-color var(--nc-duration-slow) var(--nc-ease-out);
+}
+
+.providers > li[data-speaking] {
+  background: var(--nc-wash-2);
+}
+
+.providerWords {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+
+.phone {
+  display: grid;
+  justify-items: center;
+}
+
+.phone > * {
+  inline-size: min(100%, 22rem);
+}
+
+/* The browser draws into whatever room it's given: give it a screen's shape. */
+.browser {
+  block-size: clamp(17rem, 62cqi, 27rem);
+}

@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import reference from 'virtual:conch-reference';
 
 import { Home } from '../home/Home';
+import { Landing } from '../landing/Landing';
 import { DocPage } from '../pages/DocPage';
 import { Layout } from '../shell/Layout';
 import { SECTIONS } from '../site/config';
@@ -17,7 +18,8 @@ function open(path: string) {
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route element={<Layout />}>
-            <Route index element={<Home />} />
+            <Route index element={<Landing />} />
+            <Route path="docs" element={<Home />} />
             <Route path="*" element={<DocPage />} />
           </Route>
         </Routes>
@@ -32,11 +34,11 @@ const accessible = async (container: Element) =>
     (await axe(container, { rules: { 'color-contrast': { enabled: false } } })).violations,
   ).toEqual([]);
 
-describe('the home page', () => {
-  it('says what Conch is, how to install it, and where everything is', async () => {
-    const { container } = open('/');
+describe('the documentation’s front page', () => {
+  it('says what the pages are, how to install Conch, and where everything is', async () => {
+    const { container } = open('/docs');
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
-      'Whoever holds the conch gets to speak.',
+      'Everything Conch does, in plain words.',
     );
     expect(screen.getByRole('button', { name: 'Copy command' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Get started' })).toHaveAttribute(
