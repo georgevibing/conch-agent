@@ -22,7 +22,11 @@ export const importApi = {
     request(ImportResult, '/api/import', { method: 'POST', body: { source, items } }),
   undo: () => request(UndoImportResult, '/api/import/undo', { method: 'POST', body: {} }),
   /** A Slack bot another app had one key for (ADR 0042): which key and app, never the key. */
-  slack: () => request(ImportSlackStatus, '/api/import/slack'),
+  slack: (source?: ImportSourceId) =>
+    request(
+      ImportSlackStatus,
+      `/api/import/slack${source ? `?source=${encodeURIComponent(source)}` : ''}`,
+    ),
   finishSlack: (source: ImportSourceId, body: FinishSlackImportBody) =>
     request(Channel, `/api/import/${encodeURIComponent(source)}/slack`, { method: 'POST', body }),
 };

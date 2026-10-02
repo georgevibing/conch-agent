@@ -607,7 +607,7 @@ describe('bringing the model over (ADR 0042)', () => {
   it('a model you chose yourself stays ticked off; one it can’t place is a sentence', async () => {
     hermesHome(home);
     const t = targets([CLAUDE_CODE]);
-    await t.settings.update({ preferences: { model: 'opus' } });
+    await (t.settings as SettingsStore).update({ preferences: { model: 'opus' } });
     const service = new ImportService({ home: conch, sourceHome: home, targets: t });
     expect((await service.plan('hermes')).items.find((i) => i.id === 'model')?.checked).toBe(false);
 

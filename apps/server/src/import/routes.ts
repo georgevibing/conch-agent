@@ -42,7 +42,11 @@ export function registerImportRoutes(
   app.get('/api/import', () => imports.status());
 
   // A Slack bot another app had one key for (ADR 0042): what the Slack setup picks up from.
-  app.get('/api/import/slack', () => imports.slack());
+  app.get<{ Querystring: { source?: string } }>('/api/import/slack', (request) => {
+    // From Come home, the app it came from; otherwise whichever has one.
+    const source = ImportSourceId.safeParse(request.query.source);
+    return imports.slack(source.success ? source.data : undefined);
+  });
 
   app.post<{ Params: { source: string } }>('/api/import/:source/slack', async (request, reply) => {
     const source = ImportSourceId.safeParse(request.params.source);

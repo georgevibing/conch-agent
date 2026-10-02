@@ -890,8 +890,10 @@ export class Services {
             })),
           // A default model belongs to a default provider, as the model picker sets them.
           choose: async ({ engine, model }) => {
-            await this.providers.use(engine);
-            await this.settings.update({ preferences: { model } });
+            // Exactly as asked (Undo puts back what was there), then the provider service
+            // follows; a provider pinned with CONCH_ENGINE stays the only one.
+            await this.settings.update({ preferences: { engine, model } });
+            await this.providers.use(engine).catch(() => undefined);
           },
         },
         keys: {

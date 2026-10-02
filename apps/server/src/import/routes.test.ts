@@ -153,7 +153,7 @@ describe('Come home over HTTP', () => {
   it('finishes a Slack bot Hermes had one key for, and Undo takes it back (ADR 0042)', async () => {
     const { app, services, cookie, home } = await setup(hermesHome);
     const status = ImportSlackStatus.parse(
-      (await app.inject({ url: '/api/import/slack', headers: { cookie } })).json(),
+      (await app.inject({ url: '/api/import/slack?source=hermes', headers: { cookie } })).json(),
     );
     expect(status.half).toMatchObject({ source: 'hermes', has: 'botToken', appId: 'A0MOCKAPP' });
     const wrong = await app.inject({

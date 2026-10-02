@@ -611,9 +611,10 @@ function DiscordPreview({
 function useSlackHalf() {
   const [params] = useSearchParams();
   const from = ImportSourceId.safeParse(params.get('from'));
+  const source = from.success ? from.data : undefined;
   const { data } = useQuery({
-    queryKey: ['import', 'slack'],
-    queryFn: importApi.slack,
+    queryKey: ['import', 'slack', source],
+    queryFn: () => importApi.slack(source),
     staleTime: 60_000,
     retry: false,
   });

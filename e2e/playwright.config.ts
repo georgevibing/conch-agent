@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { defineConfig, devices } from '@playwright/test';
 
-import { openClawHome } from '../apps/server/src/import/fixtures';
+import { hermesHome, openClawHome, openClawTeamHome } from '../apps/server/src/import/fixtures';
 
 /**
  * End-to-end tests run the real gateway (with the scripted mock engine) serving
@@ -29,6 +29,17 @@ const devicesHome = (process.env.CONCH_E2E_DEVICES_HOME ??= mkdtempSync(
 const importHome = (process.env.CONCH_E2E_IMPORT_HOME ??= (() => {
   const home = mkdtempSync(join(tmpdir(), 'conch-e2e-import-'));
   openClawHome(home);
+  return home;
+})());
+
+/**
+ * The `import-more` journey (ADR 0042): OpenClaw with another agent and a
+ * Slack bot with one key, and Hermes with its model and the same.
+ */
+const importMoreHome = (process.env.CONCH_E2E_IMPORT_MORE_HOME ??= (() => {
+  const home = mkdtempSync(join(tmpdir(), 'conch-e2e-import-more-'));
+  openClawTeamHome(home);
+  hermesHome(home);
   return home;
 })());
 
@@ -59,6 +70,11 @@ const scenarios = {
   undo: { port: 4375, env: { CONCH_MOCK_STATE: 'ready' } },
   // Come home (ADR 0035), from a pretend OpenClaw.
   import: { port: 4370, env: { CONCH_MOCK_STATE: 'ready', CONCH_IMPORT_HOME: importHome } },
+  // Come home, more of it (ADR 0042): the model, other agents, a Slack bot with one key.
+  'import-more': {
+    port: 4363,
+    env: { CONCH_MOCK_STATE: 'ready', CONCH_IMPORT_HOME: importMoreHome },
+  },
   // Show me: things made beside the chat, sealed pages, pinned apps (ADR 0034).
   'show-me': { port: 4371, env: { CONCH_MOCK_STATE: 'ready' } },
   // It learns you: what Conch knows, the tidy-up with Undo, memories that wait, skill suggestions.
