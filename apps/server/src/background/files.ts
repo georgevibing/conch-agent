@@ -142,6 +142,11 @@ if [ -z "$NODE" ]; then
   echo "Conch needs Node.js ${NODE_MAJOR} or newer and couldn't find it. Install it from https://nodejs.org, then open Conch again."
   exit 78
 fi
+# A release swapped in since (ADR 0048) is where Conch runs from now.
+if [ -f "$CONCH_HOME/versions/current" ]; then
+  CURRENT=$(head -n 1 "$CONCH_HOME/versions/current")
+  if [ -n "$CURRENT" ] && [ -f "$CURRENT/apps/server/src/start.ts" ]; then CHECKOUT=$CURRENT; fi
+fi
 if ! cd "$CHECKOUT/apps/server" 2>/dev/null; then
   echo "Conch's folder isn't at $CHECKOUT any more. Run Conch from where it is now (pnpm start), and it puts this right."
   exit 78
@@ -270,7 +275,12 @@ export function windowsLauncher(spec: LaunchSpec): string {
     `set "NODE=${batch(spec.node)}"`,
     'if not exist "%NODE%" for /f "delims=" %%i in (\'where node 2^>nul\') do if not defined FOUND set "NODE=%%i" & set FOUND=1',
     `if not exist "%NODE%" (echo Conch needs Node.js ${NODE_MAJOR} or newer and couldn't find it. Install it from https://nodejs.org. >> "%LOG%" & exit /b 78)`,
-    `cd /d "${batch(spec.checkout)}\\apps\\server" || (echo Conch's folder has moved. Run Conch from where it is now and it puts this right. >> "%LOG%" & exit /b 78)`,
+    `set "CHECKOUT=${batch(spec.checkout)}"`,
+    'rem A release swapped in since (ADR 0048) is where Conch runs from now.',
+    'set "CURRENT="',
+    'if exist "%CONCH_HOME%\\versions\\current" set /p CURRENT=<"%CONCH_HOME%\\versions\\current"',
+    'if defined CURRENT if exist "%CURRENT%\\apps\\server\\src\\start.ts" set "CHECKOUT=%CURRENT%"',
+    `cd /d "%CHECKOUT%\\apps\\server" || (echo Conch's folder has moved. Run Conch from where it is now and it puts this right. >> "%LOG%" & exit /b 78)`,
     'echo --- %DATE% %TIME% Conch is starting in the background >> "%LOG%"',
     '"%NODE%" --import tsx src\\start.ts >> "%LOG%" 2>&1',
     '',

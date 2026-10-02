@@ -663,8 +663,21 @@ export async function buildApp(services: Services) {
   app.patch('/api/updates/settings', async (request, reply) => {
     const body = parse(UpdatesSettingsBody, request.body, reply);
     if (!body) return;
-    if (body.auto && verifyRequired(request, reply)) return;
-    return services.updates.setAuto(body.auto);
+    // Anything that lets Conch install by itself, or take less settled releases, asks that it's you.
+    const raises =
+      body.auto === true ||
+      body.everyChange === true ||
+      (body.channel !== undefined && body.channel !== 'stable');
+    if (raises && verifyRequired(request, reply)) return;
+    return services.updates.setSettings(body);
+  });
+  // Back to the version before, at once (ADR 0048): it changes the code that runs, so it asks that it's you.
+  app.post('/api/updates/conch/back', async (request, reply) => {
+    if (verifyRequired(request, reply)) return;
+    return guarded(reply, async () => {
+      await services.updates.goBack();
+      return services.updates.status();
+    });
   });
 
   // What a catalog entry needs from this computer (ADR 0016). Installing

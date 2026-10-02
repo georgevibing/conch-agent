@@ -17,6 +17,7 @@ import {
 } from './port';
 import { SERVER_VERSION, Services } from './services';
 import { RESTART_CODE } from './supervisor';
+import { prove, readState } from './updates/layout';
 import { sandboxSupport } from './conversations/sandbox';
 
 const config = loadConfig();
@@ -92,6 +93,22 @@ await recordGateway(config.CONCH_HOME, {
   startedAt: Date.now(),
   ...(background && { background }),
 });
+// A release just swapped in proves itself by answering (ADR 0048); until it
+// does, the supervisor is ready to go back to the version before.
+const releaseRoot = process.env.CONCH_RELEASE_ROOT;
+if (releaseRoot && readState(config.CONCH_HOME).pending) {
+  const host = /^(0\.0\.0\.0|::)$/.test(config.CONCH_HOST) ? '127.0.0.1' : config.CONCH_HOST;
+  const answered = await fetch(
+    `http://${host.includes(':') ? `[${host}]` : host}:${config.CONCH_PORT}/api/health`,
+    {
+      signal: AbortSignal.timeout(10_000),
+    },
+  )
+    .then((res) => res.ok)
+    .catch(() => false);
+  if (answered && prove(config.CONCH_HOME, releaseRoot))
+    console.warn(`\n  🐚  Conch ${services.updates.version} is running.`);
+}
 // Always on: the file that starts Conch at login still fits where Conch is now.
 void services.background.heal().catch(() => undefined);
 // The menu bar helper and keeping a Mac awake (ADR 0029): with Conch itself, never a dev server.

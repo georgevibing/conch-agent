@@ -237,6 +237,21 @@ export class PushService {
     return false;
   }
 
+  /**
+   * A new release of Conch is ready (ADR 0048): said once per version, only
+   * to devices that turned `updates` on (it's off until they do).
+   */
+  async releaseReady(version: string): Promise<void> {
+    const short = version.replace(/^(\d+\.\d+)\.0$/, '$1');
+    await this.notify('updates', {
+      title: `Conch ${short} is ready`,
+      body: 'See what’s new, and update when it suits you.',
+      quiet: 'A new version of Conch is ready.',
+      url: '/?open=updates',
+      tag: 'conch-update',
+    });
+  }
+
   /** Conch's live stream, turned into the notifications that matter. */
   async onEvent(event: ServerEvent): Promise<void> {
     if (event.type === 'task.changed') {

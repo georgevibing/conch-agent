@@ -39,7 +39,7 @@ import { ProviderKeys } from './providers/keys';
 import { RoutineService } from './routines/service';
 import { RoutineStore } from './routines/store';
 import { SkillStore } from './skills/store';
-import { findCheckout } from './updates/conch';
+import { findRepository } from './updates/conch';
 import { PROVIDER_COPY } from './providers/catalog';
 import { SettingsStore } from './settings/store';
 import { skillsCommand } from './skills/cli';
@@ -293,7 +293,7 @@ async function backgroundService() {
   const recorded = await runningGateway(config.CONCH_HOME);
   return new BackgroundService({
     home: config.CONCH_HOME,
-    checkout: findCheckout(import.meta.dirname, config.CONCH_CHECKOUT),
+    checkout: findRepository(import.meta.dirname, config.CONCH_CHECKOUT),
     // A person at this terminal; a Conch the computer started is left running.
     running: recorded?.background ? 'background' : 'window',
     since: Date.now(),
@@ -310,7 +310,7 @@ function trayService() {
   const settings = new SettingsStore(config.CONCH_HOME, heal);
   return new TrayService({
     home: config.CONCH_HOME,
-    checkout: findCheckout(import.meta.dirname, config.CONCH_CHECKOUT),
+    checkout: findRepository(import.meta.dirname, config.CONCH_CHECKOUT),
     url: `http://localhost:${config.CONCH_PORT}`,
     ask: askUrl(config.CONCH_HOST, config.CONCH_PORT),
     spec: { node: process.execPath, env: carriedEnv(process.env), path: process.env.PATH ?? '' },

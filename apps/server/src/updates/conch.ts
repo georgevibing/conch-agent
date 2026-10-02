@@ -12,7 +12,7 @@
  * local would be lost.
  */
 import { spawn as nodeSpawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 
 import type { ConchUpdateStep } from '@conch/protocol';
@@ -45,6 +45,32 @@ export function findCheckout(
     if (up === dir) return undefined;
     dir = up;
   }
+}
+
+/**
+ * The folder `git worktree` folders belong to: Conch's own checkout, where
+ * every version comes from (ADR 0048). A version folder's `.git` is a file
+ * naming it.
+ */
+export function repositoryOf(root: string): string {
+  try {
+    const gitdir = /^gitdir:\s*(.+)$/m.exec(readFileSync(join(root, '.git'), 'utf8'))?.[1]?.trim();
+    // …/repo/.git/worktrees/<name> → …/repo
+    if (gitdir) return dirname(dirname(dirname(resolve(root, gitdir))));
+  } catch {
+    // A folder (not a file): this is the checkout itself.
+  }
+  return root;
+}
+
+/**
+ * Conch's checkout, never a version folder made from it: what login items,
+ * the menu bar and the app shortcut start from. They read
+ * `versions/current` themselves to find the version to run.
+ */
+export function findRepository(from?: string, override?: string): string | undefined {
+  const checkout = findCheckout(from, override);
+  return checkout && repositoryOf(checkout);
 }
 
 /**
@@ -543,5 +569,5 @@ export class ConchCheckout {
 }
 
 /** Fixed arguments, never from input. `confirmModulesPurge` would otherwise ask a question. */
-const INSTALL = ['install', '--frozen-lockfile', '--config.confirmModulesPurge=false'];
-const BUILD = ['--filter', '@conch/web', 'build'];
+export const INSTALL = ['install', '--frozen-lockfile', '--config.confirmModulesPurge=false'];
+export const BUILD = ['--filter', '@conch/web', 'build'];

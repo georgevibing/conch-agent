@@ -1,8 +1,30 @@
 import { EventEmitter } from 'node:events';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { nextStep, RESTART_CODE, shouldSupervise, supervise } from './supervisor';
+import {
+  gatewayLaunch,
+  nextStep,
+  nodeFlags,
+  RESTART_CODE,
+  shouldSupervise,
+  supervise,
+} from './supervisor';
+import { point, prove, readState, swapIn, writeState } from './updates/layout';
+
+const homes: string[] = [];
+afterEach(() => {
+  for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true });
+});
+/** A CONCH_HOME of its own, so no test reads the versions of whoever runs it. */
+function tempHome(): string {
+  const home = mkdtempSync(join(tmpdir(), 'conch-supervise-'));
+  homes.push(home);
+  return home;
+}
 
 describe('keeping Conch running', () => {
   it('supervises only when started for real, and never twice', () => {
@@ -52,10 +74,133 @@ describe('keeping Conch running', () => {
         exit: exit as never,
         log: () => undefined,
         sleep: async () => undefined,
+        home: tempHome(),
       }),
     ).rejects.toMatchObject({ code: 0 });
     expect(spawn.mock.calls[0]?.[0]).toBe(process.execPath);
     expect(started.map((env) => env.CONCH_STARTED_BECAUSE)).toEqual(['start', 'restart', 'crash']);
     expect(started.every((env) => env.CONCH_SUPERVISED === '1')).toBe(true);
+  });
+});
+
+/** A folder that looks like a Conch to start (ADR 0048). */
+function version(home: string, name: string): string {
+  const folder = join(home, 'versions', name);
+  mkdirSync(join(folder, 'apps', 'server', 'src'), { recursive: true });
+  writeFileSync(join(folder, 'apps', 'server', 'src', 'start.ts'), '');
+  return folder;
+}
+
+describe('starting the version swapped in, and going back when it fails', () => {
+  it('leaves out tsx’s own loaders, which belong to another folder', () => {
+    expect(
+      nodeFlags([
+        '--require',
+        '/a/node_modules/tsx/dist/preflight.cjs',
+        '--import',
+        'file:///a/node_modules/tsx/dist/loader.mjs',
+        '--max-old-space-size=4096',
+        '--import=tsx',
+      ]),
+    ).toEqual(['--max-old-space-size=4096']);
+  });
+
+  it('starts from the pointer’s folder, or as it was started without one', () => {
+    const home = tempHome();
+    expect(gatewayLaunch(home, ['--import', 'tsx'], ['node', 'src/start.ts'])).toEqual({
+      args: ['--import', 'tsx', 'src/start.ts'],
+    });
+    const next = version(home, '0.3.0');
+    point(home, next);
+    expect(gatewayLaunch(home, ['--import', 'tsx'], ['node', 'src/start.ts'])).toEqual({
+      args: ['--import', 'tsx', join('src', 'start.ts')],
+      cwd: join(next, 'apps', 'server'),
+      folder: next,
+    });
+    // A pointer at something that isn't a Conch is passed over.
+    point(home, join(home, 'gone'));
+    expect(gatewayLaunch(home, [], ['node', 'x.ts']).folder).toBeUndefined();
+  });
+
+  /** A pretend gateway: does what `act` says when started, from the folder it was started in. */
+  function world(
+    act: (cwd: string, child: EventEmitter & { kill: () => void }, home: string) => void,
+  ) {
+    const home = tempHome();
+    const old = version(home, '0.2.0');
+    const next = version(home, '0.3.0');
+    writeState(home, { current: { folder: old, version: '0.2.0' }, failed: [] });
+    swapIn(home, { folder: next, version: '0.3.0' }, { folder: old, version: '0.2.0' });
+    const cwds: string[] = [];
+    const roots: (string | undefined)[] = [];
+    const spawn = vi.fn(
+      (_cmd: string, _args: string[], options: { cwd?: string; env: NodeJS.ProcessEnv }) => {
+        const child = Object.assign(new EventEmitter(), {
+          kill: () => queueMicrotask(() => child.emit('exit', null, 'SIGTERM')),
+        });
+        cwds.push(options.cwd ?? '');
+        roots.push(options.env.CONCH_RELEASE_ROOT);
+        // Stop after the third start, cleanly.
+        if (cwds.length >= 3) queueMicrotask(() => child.emit('exit', 0, null));
+        else act(options.cwd ?? '', child, home);
+        return child;
+      },
+    );
+    const logs: string[] = [];
+    const run = supervise({
+      spawn: spawn as never,
+      exit: ((code: number) => {
+        throw Object.assign(new Error('exit'), { code });
+      }) as never,
+      log: (m) => logs.push(m),
+      sleep: async () => undefined,
+      home,
+      proveWithinMs: 200,
+      lookEveryMs: 10,
+    });
+    return { home, old, next, cwds, roots, logs, run };
+  }
+
+  it('goes back to the version before when the new one stops before answering', async () => {
+    const { home, old, next, cwds, roots, logs, run } = world((cwd, child) => {
+      if (cwd.includes('0.3.0')) queueMicrotask(() => child.emit('exit', 1, null));
+      else queueMicrotask(() => child.emit('exit', RESTART_CODE, null));
+    });
+    await expect(run).rejects.toMatchObject({ code: 0 });
+    expect(cwds[0]).toBe(join(next, 'apps', 'server'));
+    expect(roots[0]).toBe(next);
+    // At once, from the folder that worked.
+    expect(cwds[1]).toBe(join(old, 'apps', 'server'));
+    expect(logs.join('')).toContain(
+      'Conch 0.3.0 didn’t start properly, so Conch went back to 0.2.0.',
+    );
+    const state = readState(home);
+    expect(state.failed).toEqual(['0.3.0']);
+    expect(state.current).toEqual({ folder: old, version: '0.2.0' });
+    expect(state.pending).toBeUndefined();
+    expect(state.wentBack).toMatchObject({ version: '0.3.0', to: '0.2.0' });
+  });
+
+  it('goes back when the new one runs but never answers', async () => {
+    const { home, old, cwds, run } = world((cwd, child) => {
+      // 0.3.0 hangs; the old one asks for a restart, then the third start ends.
+      if (!cwd.includes('0.3.0')) queueMicrotask(() => child.emit('exit', RESTART_CODE, null));
+    });
+    await expect(run).rejects.toMatchObject({ code: 0 });
+    expect(cwds[1]).toBe(join(old, 'apps', 'server'));
+    expect(readState(home).failed).toEqual(['0.3.0']);
+  });
+
+  it('keeps the new version once it’s answering', async () => {
+    const { home, next, cwds, run } = world((cwd, child, at) => {
+      prove(at, cwd.replace(/[\\/]apps[\\/]server$/, ''));
+      setTimeout(() => child.emit('exit', RESTART_CODE, null), 50);
+    });
+    await expect(run).rejects.toMatchObject({ code: 0 });
+    expect(cwds.slice(0, 2)).toEqual([join(next, 'apps', 'server'), join(next, 'apps', 'server')]);
+    const state = readState(home);
+    expect(state.current?.version).toBe('0.3.0');
+    expect(state.previous?.version).toBe('0.2.0');
+    expect(state.failed).toEqual([]);
   });
 });

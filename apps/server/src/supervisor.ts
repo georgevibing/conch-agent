@@ -7,8 +7,18 @@
  * gateway that stops unexpectedly is started again with backoff, and the new
  * one says so quietly. The supervisor stays attached to the terminal, so Ctrl+C
  * still stops everything and the logs stay where they were.
+ *
+ * After a release is swapped in (ADR 0048), the gateway starts from the folder
+ * `CONCH_HOME/versions/current` names, read afresh every time. A new version
+ * has to prove itself: until it's answering (it says so in
+ * `versions/state.json`), stopping or staying silent for too long means it's
+ * broken, and the supervisor goes back to the version before by itself.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
+import { homedir } from 'node:os';
+import { join, resolve } from 'node:path';
+
+import { currentFolder, goBack, PROVE_WITHIN_MS, readState } from './updates/layout';
 
 /** "Start me again": the gateway exits with this to be restarted (EX_TEMPFAIL). */
 export const RESTART_CODE = 75;
@@ -29,6 +39,47 @@ export interface SuperviseDeps {
   log?: (message: string) => void;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
+  /** `CONCH_HOME`, where the version to run is written down. */
+  home?: string;
+  /** How long a new version has to answer (tests make it short). */
+  proveWithinMs?: number;
+  /** How often to look whether it has. */
+  lookEveryMs?: number;
+}
+
+/**
+ * Node's own flags, without the ones that load tsx from a particular folder
+ * (`tsx` adds `--require …/tsx/dist/preflight.cjs` and `--import
+ * file:///…/loader.mjs`): a version in another folder loads its own.
+ */
+export function nodeFlags(execArgv: string[]): string[] {
+  const kept: string[] = [];
+  for (let i = 0; i < execArgv.length; i++) {
+    const arg = execArgv[i] ?? '';
+    if (/^(--require|-r|--import|--loader|--experimental-loader)$/.test(arg)) {
+      if (/tsx/.test(execArgv[i + 1] ?? '')) {
+        i++;
+        continue;
+      }
+    } else if (/^--(require|import|loader|experimental-loader)=.*tsx/.test(arg)) continue;
+    kept.push(arg);
+  }
+  return kept;
+}
+
+/** How to start the gateway now: from the version swapped in, or as this supervisor was started. */
+export function gatewayLaunch(
+  home: string,
+  execArgv: string[] = process.execArgv,
+  argv: string[] = process.argv,
+): { args: string[]; cwd?: string; folder?: string } {
+  const folder = currentFolder(home);
+  if (!folder) return { args: [...execArgv, ...argv.slice(1)] };
+  return {
+    args: [...nodeFlags(execArgv), '--import', 'tsx', join('src', 'start.ts')],
+    cwd: join(folder, 'apps', 'server'),
+    folder,
+  };
 }
 
 /** What to do when the gateway stops: start it again (and how soon), or stop too. */
@@ -55,6 +106,7 @@ export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
   const log = deps.log ?? ((message: string) => console.warn(message));
   const now = deps.now ?? Date.now;
   const sleep = deps.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
+  const home = deps.home ?? process.env.CONCH_HOME ?? join(homedir(), '.conch');
   const crashes: number[] = [];
   let stopping = false;
   let child: ChildProcess | undefined;
@@ -69,14 +121,48 @@ export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
 
   let reason: 'start' | 'restart' | 'crash' = 'start';
   for (;;) {
-    child = start(process.execPath, [...process.execArgv, ...process.argv.slice(1)], {
+    const launch = gatewayLaunch(home);
+    // A version swapped in that hasn't answered yet: watch it.
+    const pending = readState(home).pending;
+    const proving =
+      pending && launch.folder && resolve(pending.folder) === resolve(launch.folder)
+        ? pending
+        : undefined;
+    child = start(process.execPath, launch.args, {
       stdio: 'inherit',
-      env: { ...process.env, CONCH_SUPERVISED: '1', CONCH_STARTED_BECAUSE: reason },
+      ...(launch.cwd && { cwd: launch.cwd }),
+      env: {
+        ...process.env,
+        CONCH_SUPERVISED: '1',
+        CONCH_STARTED_BECAUSE: reason,
+        ...(launch.folder && { CONCH_RELEASE_ROOT: launch.folder }),
+        // The folder this supervisor runs from: never tidied away under it.
+        CONCH_SUPERVISOR_ROOT: resolve(import.meta.dirname, '..', '..', '..'),
+      },
     });
-    const [code, signal] = await new Promise<[number | null, NodeJS.Signals | null]>((resolve) => {
-      child?.once('exit', (c, s) => resolve([c, s]));
-      child?.once('error', () => resolve([1, null]));
+    const running = child;
+    const exited = new Promise<[number | null, NodeJS.Signals | null]>((resolve) => {
+      running.once('exit', (c, s) => resolve([c, s]));
+      running.once('error', () => resolve([1, null]));
     });
+    if (proving) {
+      const verdict = await prove(exited, deps, () => readState(home).pending === undefined);
+      if (verdict !== 'proved' && !stopping) {
+        if (verdict === 'silent') {
+          running.kill('SIGTERM');
+          const forced = setTimeout(() => running.kill('SIGKILL'), 5_000);
+          await exited;
+          clearTimeout(forced);
+        }
+        const back = goBack(home, now());
+        log(
+          `\n  Conch ${back?.version ?? proving.version} didn’t start properly, so Conch went back to ${back?.to ?? proving.from.version}.\n`,
+        );
+        reason = 'restart';
+        continue;
+      }
+    }
+    const [code, signal] = await exited;
     const step = nextStep(code, signal, crashes, now(), stopping);
     if (step.kind === 'exit') {
       if (!stopping && code !== 0)
@@ -97,5 +183,35 @@ export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
     }
     if (step.delay) await sleep(step.delay);
     if (stopping) return exit(0);
+  }
+}
+
+/**
+ * Wait for a new version to say it's answering. `'proved'` when it did;
+ * `'stopped'` when it stopped first; `'silent'` when it's still running but
+ * never answered in time.
+ */
+async function prove(
+  exited: Promise<unknown>,
+  deps: SuperviseDeps,
+  proved: () => boolean,
+): Promise<'proved' | 'stopped' | 'silent'> {
+  const within = deps.proveWithinMs ?? PROVE_WITHIN_MS;
+  const every = deps.lookEveryMs ?? 500;
+  let timer: NodeJS.Timeout | undefined;
+  const watching = new Promise<'proved' | 'silent'>((resolveWatch) => {
+    const started = Date.now();
+    timer = setInterval(() => {
+      if (proved()) resolveWatch('proved');
+      else if (Date.now() - started > within) resolveWatch('silent');
+    }, every);
+  });
+  try {
+    return await Promise.race([
+      exited.then((): 'proved' | 'stopped' => (proved() ? 'proved' : 'stopped')),
+      watching,
+    ]);
+  } finally {
+    clearInterval(timer);
   }
 }

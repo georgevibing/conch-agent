@@ -69,7 +69,12 @@ describe('quoting', () => {
       env: {},
       path: 'C:\\bin',
     });
-    expect(cmd).toContain('cd /d "C:\\Users\\100%% me\\Conch\\apps\\server"');
+    expect(cmd).toContain('set "CHECKOUT=C:\\Users\\100%% me\\Conch"');
+    // A release swapped in (ADR 0048) is read from its pointer file: no symlink needed.
+    expect(cmd).toContain(
+      'if exist "%CONCH_HOME%\\versions\\current" set /p CURRENT=<"%CONCH_HOME%\\versions\\current"',
+    );
+    expect(cmd).toContain('cd /d "%CHECKOUT%\\apps\\server"');
     expect(cmd).toContain('\r\n');
     expect(windowsHidden('C:\\a "b"\\conch.cmd')).toBe(
       'CreateObject("WScript.Shell").Run """C:\\a ""b""\\conch.cmd""", 0, False\r\n',
@@ -187,6 +192,23 @@ if [ "$1" = "-e" ]; then [ ${major} -ge 24 ]; exit $?; fi
     expect(ran).toContain('bg=1');
     expect(ran).toContain('host=0.0.0.0');
     expect(readFileSync(spec.log, 'utf8')).toContain('Conch is starting in the background');
+  });
+
+  it('starts the release swapped in, and the checkout when the pointer names no Conch', async () => {
+    fakeNode(spec.node, 24);
+    const release = join(spec.home, 'versions', '0.3.0');
+    mkdirSync(join(release, 'apps', 'server', 'src'), { recursive: true });
+    writeFileSync(join(release, 'apps', 'server', 'src', 'start.ts'), '');
+    writeFileSync(join(spec.home, 'versions', 'current'), `${release}\n`);
+    expect(await launch()).toBe(0);
+    expect(readFileSync(join(spec.home, 'ran'), 'utf8')).toContain(
+      `cwd=${join(release, 'apps', 'server')}`,
+    );
+    writeFileSync(join(spec.home, 'versions', 'current'), `${join(spec.home, 'gone')}\n`);
+    expect(await launch()).toBe(0);
+    expect(readFileSync(join(spec.home, 'ran'), 'utf8')).toContain(
+      `cwd=${join(spec.checkout, 'apps', 'server')}`,
+    );
   });
 
   it('finds a Node on its PATH when the one it was given is gone', async () => {

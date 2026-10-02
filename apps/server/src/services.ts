@@ -116,7 +116,8 @@ import { SettingsStore } from './settings/store';
 import { SkillService } from './skills/service';
 import { externalRoots, SkillStore } from './skills/store';
 import { SkillTrust } from './skills/trust';
-import { ConchCheckout, findCheckout } from './updates/conch';
+import { ConchCheckout, findCheckout, findRepository } from './updates/conch';
+import { ReleaseFollower } from './updates/releases';
 import { updatesCheck } from './updates/doctor';
 import { lookup } from './updates/latest';
 import { mockPrograms } from './updates/mock';
@@ -826,14 +827,25 @@ export class Services {
     const programs = mock
       ? mockPrograms(config.CONCH_HOME)
       : { specs: KNOWN_NEEDS, setup: this.setup, lookup: lookup() };
+    // The folder running: the release the supervisor started (ADR 0048), else the checkout.
     const root =
-      mock && !config.CONCH_CHECKOUT
+      process.env.CONCH_RELEASE_ROOT?.trim() ||
+      (mock && !config.CONCH_CHECKOUT
         ? undefined
-        : findCheckout(import.meta.dirname, config.CONCH_CHECKOUT);
+        : findCheckout(import.meta.dirname, config.CONCH_CHECKOUT));
     return new UpdatesService({
       home: config.CONCH_HOME,
       ...programs,
       conch: root ? new ConchCheckout(root) : undefined,
+      releases: root
+        ? new ReleaseFollower(root, {
+            home: config.CONCH_HOME,
+            // Your things are backed up before a new version is swapped in (ADR 0020).
+            backup: async () => void (await this.backups.backupNow()),
+          })
+        : undefined,
+      announce: (version) => void this.push.releaseReady(version).catch(() => undefined),
+      keep: [process.env.CONCH_SUPERVISOR_ROOT].filter((f): f is string => Boolean(f)),
       version: SERVER_VERSION,
       bootId: BOOT_ID,
       emit: (status) => this.broadcast.emit({ type: 'updates.changed', status }),
@@ -852,7 +864,8 @@ export class Services {
    */
   #background(config: Config): BackgroundService {
     const mock = config.CONCH_ENGINE === 'mock';
-    const checkout = findCheckout(import.meta.dirname, config.CONCH_CHECKOUT);
+    // Conch's checkout itself: the launcher finds the version to run (ADR 0048).
+    const checkout = findRepository(import.meta.dirname, config.CONCH_CHECKOUT);
     const backend = mock ? pretendBackend() : backendFor(config.CONCH_HOME);
     const spec = {
       node: process.execPath,
