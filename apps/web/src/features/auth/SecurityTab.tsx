@@ -66,6 +66,7 @@ import { applySignedIn } from './signedIn';
 import { useCountdown } from './useCountdown';
 import { useVerify } from './useVerify';
 import { PhoneSetup } from '../phone/PhoneSetup';
+import { LIVE_DATA_FOCUS, LiveDataSection } from '../artifacts/LiveDataSection';
 import { SafetySection } from '../safety/SafetySection';
 
 type Guard = ReturnType<typeof useVerify>['guard'];
@@ -1040,6 +1041,11 @@ export function SecurityTab() {
     useUi.setState({ settingsFocus: undefined });
     focusOn('devices');
   }, [settingsFocus, loaded, focusOn]);
+  useEffect(() => {
+    if (settingsFocus !== LIVE_DATA_FOCUS || !loaded) return;
+    useUi.setState({ settingsFocus: undefined });
+    focusOn('live-data');
+  }, [settingsFocus, loaded, focusOn]);
 
   // "Add your phone" with no sign-in yet: a phone signs in with a password, so
   // that comes first, and the code for the phone follows by itself once it's set.
@@ -1092,6 +1098,7 @@ export function SecurityTab() {
         <SecurityCheckup items={items} />
       </Section>
       <SafetySection />
+      <LiveDataSection focus={fix.focus} />
       <SignInSection access={data} guard={guard} focus={fix.focus} />
       {data.method !== 'none' && <DevicesSection access={data} guard={guard} focus={fix.focus} />}
       <ReachSection access={data} focus={fix.focus} />

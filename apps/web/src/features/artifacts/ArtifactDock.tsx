@@ -76,6 +76,11 @@ export function ArtifactDock({
             hideClose
             aria-label="Made for you"
             className={styles.sheet}
+            // Esc while editing cancels the edit (ADR 0039); it doesn't close the sheet.
+            onEscapeKeyDown={(event) => {
+              if ((event.target as Element | null)?.closest?.('[data-editing]'))
+                event.preventDefault();
+            }}
           >
             <Sheet.Title className={styles.srOnly}>Made for you</Sheet.Title>
             {panel}

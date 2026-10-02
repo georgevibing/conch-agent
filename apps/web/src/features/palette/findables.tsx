@@ -31,6 +31,7 @@ import {
   KeyRound,
   Palette as PaletteIcon,
   Paperclip,
+  Pencil,
   SquareTerminal,
   Plus,
   Mic,
@@ -56,6 +57,7 @@ import { useNavigate } from 'react-router';
 import { useUi, type SettingsTab } from '../../app/ui';
 import { COME_HOME_FOCUS } from '../import/api';
 import { doctorApi } from '../health/api';
+import { LIVE_DATA_FOCUS } from '../artifacts/LiveDataSection';
 import { DEVICES_FOCUS } from '../auth/focus';
 import { FALLBACK_FOCUS } from '../settings/FallbackSection';
 import { APPS } from '../channels/describe';
@@ -183,6 +185,14 @@ const settingsPlaces: {
     label: 'Security',
     keywords: 'password keys devices sign in checkup',
     icon: <ShieldCheck />,
+  },
+  {
+    tab: 'security',
+    focus: LIVE_DATA_FOCUS,
+    label: 'Live data in pages',
+    keywords:
+      'live data pages apps sites fetch fresh numbers weather prices api allowed allow revoke take back read from network',
+    icon: <Globe />,
   },
   {
     tab: 'security',
@@ -464,6 +474,27 @@ export function useFindables(query: string, conversationId: string | undefined):
     description: `${ARTIFACT_KINDS[item.kind].label}${item.pinned ? ' · pinned' : ''}`,
     icon: ARTIFACT_KINDS[item.kind].icon,
     run: () => {
+      if (item.pinned || !item.conversationId) return void navigate(`/apps/${item.id}`);
+      openArtifact(item.conversationId, item.id);
+      void navigate(`/c/${item.conversationId}`);
+    },
+  }));
+  // Editing one by hand (ADR 0039): asked for in words ("edit the budget"), the
+  // closest two, straight into the editor. Not offered for a plain name: that opens it.
+  const editItems = find(
+    /\b(?:edit|change|fix)\b/i.test(q) ? (artifacts ?? []) : [],
+    q,
+    (a) => `Edit “${a.title}”`,
+    (a) => `edit change fix by hand ${a.title} ${ARTIFACT_KINDS[a.kind].label}`,
+    2,
+  ).map(({ item, match }): Findable => ({
+    id: `artifact-edit:${item.id}`,
+    label: `Edit “${item.title}”`,
+    ranges: match.ranges,
+    description: `${ARTIFACT_KINDS[item.kind].label} · by hand`,
+    icon: <Pencil />,
+    run: () => {
+      useUi.setState({ artifactEditRequest: item.id });
       if (item.pinned || !item.conversationId) return void navigate(`/apps/${item.id}`);
       openArtifact(item.conversationId, item.id);
       void navigate(`/c/${item.conversationId}`);
@@ -781,7 +812,7 @@ export function useFindables(query: string, conversationId: string | undefined):
     { heading: 'Integrations', items: appItems },
     { heading: 'Channels', items: channelItems },
     { heading: 'Routines', items: routineItems },
-    { heading: 'Made for you', items: artifactItems },
+    { heading: 'Made for you', items: [...artifactItems, ...editItems] },
     { heading: 'Tasks', items: taskItems },
   ].filter((group) => group.items.length > 0);
 }

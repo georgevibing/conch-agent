@@ -7,11 +7,14 @@ import {
   type ArtifactPanelVersion,
 } from '@conch/nacre';
 import { Shapes, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
+import { useUi } from '../../app/ui';
 import { downloadUrl } from './api';
+import { ArtifactEditing } from './ArtifactEditing';
 import { ArtifactPreview } from './ArtifactPreview';
 import styles from './Artifacts.module.css';
+import { useEdits } from './edits';
 import {
   useArtifact,
   useArtifactVersion,
@@ -73,6 +76,23 @@ export function ArtifactView({
   const previousN = index > 0 ? kept[index - 1]?.n : undefined;
   const current = useArtifactVersion(artifact?.id, version);
   const previous = useArtifactVersion(artifact?.id, previousN);
+  const editing = useEdits((s) => (artifact ? s.edits[artifact.id] : undefined));
+  const startEdit = useEdits((s) => s.start);
+  // An edit already waiting when this opened came back from before.
+  const [restored] = useState(() => Boolean(useEdits.getState().edits[artifactId]));
+  const text = artifact ? readable(artifact.kind, current.data) : undefined;
+  const begin = () => {
+    if (!artifact || text === undefined || !latest) return;
+    startEdit(artifact.id, { content: text, original: text, base: latest });
+  };
+  // ⌘K's "Edit …": straight into editing, once its text is here.
+  const requested = useUi((s) => s.artifactEditRequest === artifactId);
+  useEffect(() => {
+    if (!requested || !artifact || text === undefined || !latest) return;
+    useUi.setState({ artifactEditRequest: undefined });
+    if (!useEdits.getState().edits[artifact.id])
+      startEdit(artifact.id, { content: text, original: text, base: latest });
+  }, [requested, artifact, text, latest, startEdit]);
 
   if (isPending) return <Skeleton className={styles.loadingPanel} />;
   if (isError || !artifact || !version)
@@ -90,6 +110,7 @@ export function ArtifactView({
     when: when(v.at),
     note: v.note,
     refreshed: v.refreshed,
+    edited: v.edited,
   }));
   const key = `${artifact.id}:${version}`;
 
@@ -125,6 +146,19 @@ export function ArtifactView({
         onDelete={() => setConfirm(true)}
         onClose={onClose}
         standalone={standalone}
+        onEdit={text !== undefined ? begin : undefined}
+        editing={
+          editing && (
+            <ArtifactEditing
+              artifact={artifact}
+              restored={restored}
+              onSaved={(n) => {
+                setPicked(n);
+                onVersionChange?.(n);
+              }}
+            />
+          )
+        }
       />
       <AlertDialog.Root open={confirm} onOpenChange={setConfirm}>
         <AlertDialog.Content tone="danger" icon={<Trash2 />}>

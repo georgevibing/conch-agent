@@ -107,6 +107,8 @@ interface UiState {
   artifactWidth: number;
   openArtifact(conversationId: string, artifactId: string, version?: number): void;
   closeArtifact(): void;
+  /** Open this one straight into editing by hand (⌘K's "Edit …", ADR 0039). */
+  artifactEditRequest?: string;
   setArtifactWidth(width: number): void;
   /** The terminal drawer is open. */
   terminalOpen: boolean;

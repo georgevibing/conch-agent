@@ -119,7 +119,8 @@ export type TranscriptItem =
       title: string;
       artifactKind: ArtifactKind;
       version: number;
-      action: 'created' | 'updated';
+      /** `edited`: you changed it by hand (ADR 0039). */
+      action: 'created' | 'updated' | 'edited';
       note?: string;
       at: number;
     }

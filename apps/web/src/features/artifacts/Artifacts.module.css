@@ -55,4 +55,16 @@
     gap: var(--nc-space-2);
     padding-block-start: var(--nc-space-2);
   }
+
+  /* A page with its live data above it (ADR 0039). */
+  .livePage {
+    display: flex;
+    flex-direction: column;
+    min-block-size: 0;
+  }
+
+  .livePage[data-fill] {
+    flex: 1;
+    block-size: 100%;
+  }
 }

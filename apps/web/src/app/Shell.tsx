@@ -7,6 +7,7 @@ import { useConversations } from '../api/queries';
 import { ActivityView } from '../features/activity/ActivityView';
 import { AppView } from '../features/artifacts/AppView';
 import { useArtifact } from '../features/artifacts/queries';
+import { useUnsavedGuard } from '../features/artifacts/edits';
 import { MemoryView } from '../features/memory/MemoryView';
 import { RestartWatch } from '../features/health/RestartWatch';
 import { PushKeeper } from '../features/notifications/PushKeeper';
@@ -85,6 +86,8 @@ export function Shell() {
   }, [navigate]);
   // A provider sign-in that had to come back to this tab instead of a popup.
   useProviderSignInResult();
+  // An edit by hand not saved yet: leaving the page asks first (ADR 0039).
+  useUnsavedGuard();
   const { data: conversations } = useConversations();
   const narrow = useMediaQuery('(max-width: 820px)');
   const { sidebarOpen, toggleSidebar, mobileSidebarOpen, setMobileSidebar, openSettings } = useUi();

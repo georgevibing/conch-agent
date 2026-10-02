@@ -455,6 +455,57 @@ describe('Palette search', () => {
     act(() => useUi.setState({ stopHolding: undefined }));
   });
 
+  it('edits a thing made in a chat by hand, and finds what pages may read (ADR 0039)', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'GET /api/artifacts': () => ({
+        artifacts: [
+          {
+            id: 'a_3',
+            title: 'Budget',
+            kind: 'table',
+            conversationId: 'c9',
+            createdAt: 1,
+            updatedAt: 2,
+            versions: [{ n: 1, at: 1, size: 1 }],
+          },
+        ],
+      }),
+    });
+    renderApp(
+      <>
+        <Palette />
+        <Where />
+      </>,
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'edit budget');
+    await user.click(await screen.findByRole('option', { name: /Edit “Budget”.*Table · by hand/ }));
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/c/c9'));
+    expect(useUi.getState()).toMatchObject({
+      artifactOpen: { conversationId: 'c9', artifactId: 'a_3' },
+      artifactEditRequest: 'a_3',
+    });
+    act(() => useUi.setState({ artifactOpen: null, artifactEditRequest: undefined }));
+
+    for (const words of ['live data', 'weather', 'revoke']) {
+      act(() => useUi.getState().setPalette(true));
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /Settings: Live data in pages/ }),
+      ).toBeInTheDocument();
+    }
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect(useUi.getState()).toMatchObject({ settings: 'security', settingsFocus: 'live-data' }),
+    );
+    act(() => useUi.setState({ settings: null, settingsFocus: undefined }));
+  });
+
   it('backs up and restores by name, straight into Settings → Health', async () => {
     const user = userEvent.setup();
     mockFetch({
