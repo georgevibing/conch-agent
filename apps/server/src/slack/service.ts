@@ -184,12 +184,6 @@ export class SlackService {
     return data.tools[name] !== 'off';
   }
 
-  /** Connected and turned on: the assistant may use it. */
-  async ready(): Promise<boolean> {
-    const data = await this.deps.store.read();
-    return Boolean(data.connection && data.enabled && data.health.state !== 'needs-auth');
-  }
-
   /** What a tool may do without asking: the person's choice, else reads go and sending asks. */
   async decide(name: SlackToolName): Promise<ToolPolicy> {
     const data = await this.deps.store.read();
