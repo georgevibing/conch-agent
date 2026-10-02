@@ -27,6 +27,11 @@ export interface ConnectedCardProps extends Base {
   meta?: ReactNode;
   /** The one thing to do about a problem ("Sign in again"). */
   action?: { label: string; onClick: () => void; loading?: boolean };
+  /**
+   * Something calm to do next when nothing's wrong — say hello to finish,
+   * someone waiting to be let in. Said in place of `meta`, with its button.
+   */
+  notice?: { message: string; label: string; onClick: () => void };
   enabled: boolean;
   onToggle?: (enabled: boolean) => void;
 }
@@ -110,6 +115,7 @@ export function IntegrationCard(props: IntegrationCardProps) {
     message,
     meta,
     action,
+    notice,
     enabled,
     onToggle,
     name: _n,
@@ -124,6 +130,7 @@ export function IntegrationCard(props: IntegrationCardProps) {
   const info = integrationStateMeta[state];
   const attention = info.attention;
   const busy = state === 'checking' || state === 'connecting';
+  const calm = !attention && !busy && state !== 'off' ? notice : undefined;
 
   return (
     <article
@@ -151,7 +158,7 @@ export function IntegrationCard(props: IntegrationCardProps) {
             {name}
           </button>
         </h3>
-        <p id={statusId} className={styles.status} data-tone={info.tone}>
+        <p id={statusId} className={styles.status} data-tone={calm ? 'info' : info.tone}>
           {(attention || busy || state === 'off') && (
             <span className={styles.statusIcon} aria-hidden>
               {info.icon}
@@ -159,13 +166,24 @@ export function IntegrationCard(props: IntegrationCardProps) {
           )}
           <span className={styles.statusText}>
             <span className="nc-visually-hidden">{info.label}. </span>
-            {attention || busy ? (message ?? info.label) : state === 'off' ? 'Off' : meta}
+            {attention || busy
+              ? (message ?? info.label)
+              : state === 'off'
+                ? 'Off'
+                : (calm?.message ?? meta)}
           </span>
         </p>
         {action && attention && (
           <div className={styles.action}>
             <Button size="sm" variant="surface" onClick={action.onClick} loading={action.loading}>
               {action.label}
+            </Button>
+          </div>
+        )}
+        {calm && (
+          <div className={styles.action}>
+            <Button size="sm" variant="soft" onClick={calm.onClick}>
+              {calm.label}
             </Button>
           </div>
         )}

@@ -59,6 +59,47 @@ describe('IntegrationStatusBadge', () => {
 });
 
 describe('IntegrationCard', () => {
+  it('says a calm next step in place of its facts, with its button, and never over a problem', async () => {
+    const onHello = vi.fn();
+    const { container, rerender } = renderNacre(
+      <IntegrationCard
+        variant="connected"
+        name="Telegram"
+        brand="telegram"
+        state="ok"
+        meta="@adas_conch_bot"
+        notice={{
+          message: 'Say hello from Telegram to finish.',
+          label: 'Say hello',
+          onClick: onHello,
+        }}
+        enabled
+      />,
+    );
+    expect(screen.getByText('Say hello from Telegram to finish.')).toBeInTheDocument();
+    expect(screen.queryByText('@adas_conch_bot')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Say hello' }));
+    expect(onHello).toHaveBeenCalledOnce();
+    await expectAccessible(container);
+    rerender(
+      <IntegrationCard
+        variant="connected"
+        name="Telegram"
+        brand="telegram"
+        state="needs-auth"
+        message="Telegram stopped accepting this bot’s key."
+        notice={{
+          message: 'Say hello from Telegram to finish.',
+          label: 'Say hello',
+          onClick: onHello,
+        }}
+        enabled
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Say hello' })).toBeNull();
+    expect(screen.getByText('Telegram stopped accepting this bot’s key.')).toBeInTheDocument();
+  });
+
   it('shows what’s wrong and the one button that fixes it', async () => {
     const onFix = vi.fn();
     const onOpen = vi.fn();

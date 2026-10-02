@@ -167,6 +167,67 @@ export const ConnectedCards: Story = {
   ),
 };
 
+/**
+ * One app, one card (ADR 0052): Slack the assistant uses and talks to you
+ * in, a chat app on its own, and a calm next step that isn't a problem — a
+ * hello to finish, someone waiting to be let in.
+ */
+export const OneAppOneCard: Story = {
+  render: () => (
+    <div style={grid}>
+      <IntegrationCard
+        variant="connected"
+        name="Slack"
+        brand="slack"
+        color="#4A154B"
+        state="ok"
+        meta="4 tools · used 5 minutes ago · talks to you here"
+        enabled
+        onToggle={() => {}}
+      />
+      <IntegrationCard
+        variant="connected"
+        name="Telegram"
+        brand="telegram"
+        color="#26A5E4"
+        state="ok"
+        meta="@adas_conch_bot"
+        notice={{
+          message: 'Connected. Say hello from Telegram to finish.',
+          label: 'Say hello',
+          onClick: () => {},
+        }}
+        enabled
+        onToggle={() => {}}
+      />
+      <IntegrationCard
+        variant="connected"
+        name="Discord"
+        brand="discord"
+        color="#5865F2"
+        state="ok"
+        notice={{
+          message: '2 people want to talk to you here.',
+          label: 'Review',
+          onClick: () => {},
+        }}
+        enabled
+        onToggle={() => {}}
+      />
+      <IntegrationCard
+        variant="connected"
+        name="Gmail"
+        brand="gmail"
+        color="#EA4335"
+        state="ok"
+        meta="3 tools · not used yet · talks to you here"
+        enabled
+        onToggle={() => {}}
+      />
+    </div>
+  ),
+};
+
 export const CatalogTiles: Story = {
   render: () => (
     <div

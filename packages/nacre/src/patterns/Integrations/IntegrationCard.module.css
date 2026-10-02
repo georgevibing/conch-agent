@@ -283,6 +283,10 @@
     color: light-dark(oklch(0.56 0.2 var(--nc-danger-h)), oklch(0.74 0.16 var(--nc-danger-h)));
   }
 
+  .status[data-tone='info'] {
+    color: var(--nc-text);
+  }
+
   .action {
     position: relative;
     z-index: 2;
