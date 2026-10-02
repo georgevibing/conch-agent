@@ -451,7 +451,9 @@ export class Services {
               ...vaultTools(this.vault, ctx),
               ...this.artifacts.tools(ctx),
               ...this.tasks.tools(ctx),
-              ...googleTools(this.google, ctx),
+              ...googleTools(this.google, ctx, (draft) =>
+                this.tasks.createDraft({ parentConversationId: ctx.conversationId, draft }),
+              ),
             ],
       context: async (engine) =>
         [
