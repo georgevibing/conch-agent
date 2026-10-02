@@ -79,6 +79,8 @@ const scenarios = {
   'show-me': { port: 4371, env: { CONCH_MOCK_STATE: 'ready' } },
   // It learns you: what Conch knows, the tidy-up with Undo, memories that wait, skill suggestions.
   memory: { port: 4373, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Search by meaning (ADR 0041): the pretend model's download, then meaning in search and skill suggestions.
+  meaning: { port: 4362, env: { CONCH_MOCK_STATE: 'ready' } },
   // Hand it off: background tasks, helpers side by side, approvals from a task.
   tasks: { port: 4372, env: { CONCH_MOCK_STATE: 'ready' } },
   // Skill trust (ADR 0031): a signed skill, trusting its publisher, held to what it says it needs.
