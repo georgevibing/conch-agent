@@ -27,7 +27,7 @@ export const SCOPES: Record<GoogleCapability, string[]> = {
 };
 const ALL_CAPABILITIES = Object.keys(SCOPES) as GoogleCapability[];
 export const APP_PASSWORD_ONLY_MAIL =
-  'This account is signed in with a Gmail app password, which only reaches Gmail. Google Calendar and Google Drive need your own Google Cloud app: connect them from Integrations.';
+  'This account is signed in with a Gmail app password, which only reaches Gmail. Google Calendar and Google Drive need your own Google Cloud app: connect them from Apps.';
 /** An app-password account's id: the same address is the same account. */
 export const passwordId = (address: string) =>
   `pw-${createHash('sha256').update(address.trim().toLowerCase()).digest('base64url').slice(0, 24)}`;
@@ -289,7 +289,7 @@ export class GoogleService {
     if (login.profile.state === 'needs-auth')
       throw new GoogleError(
         'expired',
-        'Gmail stopped taking this app password. Paste a new one in Integrations → Gmail.',
+        'Gmail stopped taking this app password. Paste a new one in Apps → Gmail.',
       );
     return { address: login.address, password: login.password, generation: login.generation };
   }
@@ -387,7 +387,7 @@ export class GoogleService {
     const input = GoogleConnect.parse(raw),
       data = await this.store.read(),
       config = data.config;
-    if (!config) throw new GoogleError('setup', 'Finish Google app setup in Integrations first.');
+    if (!config) throw new GoogleError('setup', 'Finish Google app setup in Apps first.');
     if (
       config.clientType === 'web' &&
       (!config.redirectUrl || new URL(config.redirectUrl).origin !== origin)
@@ -633,18 +633,15 @@ export class GoogleService {
       account = data.accounts[id];
     if (!account && data.passwords[id]) throw new GoogleError('scope', APP_PASSWORD_ONLY_MAIL);
     if (!account || !data.config || account.profile.state === 'needs-auth')
-      throw new GoogleError('expired', 'Reconnect this Google account in Integrations.');
+      throw new GoogleError('expired', 'Reconnect this Google account in Apps.');
     if (!SCOPES[required].every((s) => account.credential.scopes.includes(s)))
-      throw new GoogleError(
-        'scope',
-        `Allow ${required} for this Google account in Integrations first.`,
-      );
+      throw new GoogleError('scope', `Allow ${required} for this Google account in Apps first.`);
     if (!force && account.credential.expiresAt > Date.now() + 120_000) return account.credential;
     const ensure = (c: Credential) => {
       if (!SCOPES[required].every((scope) => c.scopes.includes(scope)))
         throw new GoogleError(
           'scope',
-          'Google no longer allows access for this job. Reconnect in Integrations.',
+          'Google no longer allows access for this job. Reconnect in Apps.',
         );
       return c;
     };
@@ -691,7 +688,7 @@ export class GoogleService {
         await this.#needsAuth(id, old.generation);
         throw new GoogleError(
           'expired',
-          'Google access expired or was revoked. Reconnect in Integrations.',
+          'Google access expired or was revoked. Reconnect in Apps.',
         );
       }
       throw fail();

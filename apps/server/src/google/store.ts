@@ -25,7 +25,7 @@ const AppSettings = z.object({
   enabled: z.boolean().default(true),
   policy: IntegrationPolicy.default('ask-writes'),
   tools: z.record(z.string(), ToolPolicy).default({}),
-  /** Disconnected from Integrations: not shown, and its tools aren't offered, until connected again. */
+  /** Disconnected from Apps: not shown, and its tools aren't offered, until connected again. */
   hidden: z.boolean().default(false),
   createdAt: z.number().optional(),
   lastUsedAt: z.number().optional(),

@@ -256,7 +256,7 @@ export interface HostedApps {
  *
  * Health is checked when something changes, a few seconds after start-up,
  * every half hour, and whenever a turn finds one broken — so a problem shows
- * up on the Integrations page (and in the chat that hit it) instead of as a
+ * up in Apps (and in the chat that hit it) instead of as a
  * silent missing tool.
  */
 export class IntegrationService {
@@ -1433,7 +1433,7 @@ export class IntegrationService {
       (i) => !['needs-auth', 'error', 'connecting'].includes(i.health.state),
     );
     const broken = items.filter((i) => ['needs-auth', 'error'].includes(i.health.state));
-    const lines = ['## Integrations'];
+    const lines = ['## Apps'];
     if (working.length) {
       lines.push(
         'The user connected these apps through Conch. Their tools are named `mcp__<server>__<tool>`.',
@@ -1450,7 +1450,7 @@ export class IntegrationService {
       );
     if (broken.length || hosted.broken.length) {
       lines.push(
-        'These aren’t working right now. If the user asks for something that needs one, say so plainly and suggest fixing it from Integrations in the sidebar — don’t try to work around it:',
+        'These aren’t working right now. If the user asks for something that needs one, say so plainly and suggest fixing it from Apps in the sidebar — don’t try to work around it:',
         ...broken.map((i) => `- ${i.name}: ${i.health.message ?? 'needs attention'}`),
         ...hosted.broken,
       );

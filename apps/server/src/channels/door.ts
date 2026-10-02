@@ -555,7 +555,7 @@ function equal(a: string, b: string) {
 export function doorCheck(door: ChannelDoorService): DoctorCheck {
   const base = {
     id: 'channel-door',
-    group: 'Channels',
+    group: 'Talk to me here',
     title: 'Public address for Teams and WeChat',
   };
   return {

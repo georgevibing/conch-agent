@@ -5,7 +5,7 @@ import type { SlackService } from './service';
 export function registerSlackDoctor(doctor: Doctor, slack: SlackService) {
   doctor.register({
     id: 'slack',
-    group: 'Integrations',
+    group: 'Apps',
     title: 'Slack',
     async run({ repair }) {
       const before = await slack.status();
@@ -16,7 +16,7 @@ export function registerSlackDoctor(doctor: Doctor, slack: SlackService) {
       return [
         {
           id: 'slack',
-          group: 'Integrations',
+          group: 'Apps',
           title: before.workspace ? `Slack · ${before.workspace}` : 'Slack',
           state: fine
             ? repair && before.health.state !== 'ok' && state === 'ok'

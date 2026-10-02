@@ -24,7 +24,7 @@ const STATUS: Record<ChannelServiceError['code'], number> = {
 };
 
 /**
- * The Channels page's routes (ADR 0018). All under `/api`, so Host, Origin,
+ * The routes for chat apps in Apps (ADR 0018). All under `/api`, so Host, Origin,
  * Fetch Metadata and sign-in apply as everywhere. Opening a new way in —
  * connecting a bot, letting someone talk to it, turning one back on — is a
  * trust decision: from another device it needs a password or key from the

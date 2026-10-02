@@ -224,7 +224,7 @@ export class Services {
   readonly tasks: TaskService;
   /** Direct Google account connections, shared by every engine. */
   readonly google: GoogleService;
-  /** Gmail, Google Calendar and Google Drive as apps on the Integrations page (ADR 0048). */
+  /** Gmail, Google Calendar and Google Drive as apps in Apps (ADR 0048). */
   readonly googleApps: GoogleApps;
   /** Slack connected to Conch itself, so it works with every model (ADR 0049). */
   readonly slack: SlackService;
@@ -1205,12 +1205,10 @@ export class Services {
         title: 'Google app credentials',
         usedBy: 'Google integration',
         hint: 'Saved securely',
-        manage: { label: 'Open Integrations', place: 'integrations' },
+        manage: { label: 'Open Apps', place: 'integrations' },
         reveal: () =>
           Promise.reject(
-            new Error(
-              'Google app credentials are managed in Integrations; there is nothing to copy.',
-            ),
+            new Error('Google app credentials are managed in Apps; there is nothing to copy.'),
           ),
       });
     for (const account of googleStatus.accounts) {
@@ -1220,7 +1218,7 @@ export class Services {
           title: `Gmail · ${account.email}`,
           usedBy: 'Gmail',
           hint: 'App password',
-          manage: { label: 'Open Integrations', place: 'integrations' },
+          manage: { label: 'Open Apps', place: 'integrations' },
           reveal: async () =>
             (await this.google.store.read()).passwords[account.id]?.password ?? '',
         });
@@ -1231,7 +1229,7 @@ export class Services {
         title: `Google · ${account.email}`,
         usedBy: 'Google integration',
         hint: 'Sign-in saved',
-        manage: { label: 'Open Integrations', place: 'integrations' },
+        manage: { label: 'Open Apps', place: 'integrations' },
         reveal: () =>
           Promise.reject(
             new Error(
@@ -1247,7 +1245,7 @@ export class Services {
         title: slack.team ? `Slack · ${slack.team}` : 'Slack',
         usedBy: 'Slack integration',
         hint: tail(slack.token),
-        manage: { label: 'Open Integrations', place: 'integrations' },
+        manage: { label: 'Open Apps', place: 'integrations' },
         reveal: async () => slack.token,
       });
     for (const item of await this.integrations.store.all().catch(() => [])) {
@@ -1259,7 +1257,7 @@ export class Services {
           title: `${item.name} · ${key}`,
           usedBy: `${item.name} integration`,
           hint: tail(value),
-          manage: { label: 'Open Integrations', place: 'integrations', focus: item.id },
+          manage: { label: 'Open Apps', place: 'integrations', focus: item.id },
           reveal: async () => value,
         });
       }
@@ -1269,7 +1267,7 @@ export class Services {
           title: `${item.name} sign-in`,
           usedBy: `${item.name} integration`,
           hint: 'Signed in',
-          manage: { label: 'Open Integrations', place: 'integrations', focus: item.id },
+          manage: { label: 'Open Apps', place: 'integrations', focus: item.id },
           reveal: () =>
             Promise.reject(
               new Error(
@@ -1289,7 +1287,7 @@ export class Services {
           title: `${name} link`,
           usedBy: `${name} channel`,
           hint: channel.bot.phone ?? 'Linked',
-          manage: { label: 'Open Channels', place: 'channels', focus: channel.id },
+          manage: { label: 'Open in Apps', place: 'channels', focus: channel.id },
           reveal: () =>
             Promise.reject(
               new Error(
@@ -1305,7 +1303,7 @@ export class Services {
           title: `${name} ${label}`,
           usedBy: `${name} channel`,
           hint: tail(value),
-          manage: { label: 'Open Channels', place: 'channels', focus: channel.id },
+          manage: { label: 'Open in Apps', place: 'channels', focus: channel.id },
           reveal: async () => value,
         });
     }

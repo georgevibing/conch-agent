@@ -18,9 +18,9 @@ import type { DoctorCheck } from './service';
 const LOW_DISK_BYTES = 1024 ** 3;
 
 const PROVIDERS = 'Providers';
-const INTEGRATIONS = 'Integrations';
+const INTEGRATIONS = 'Apps';
 const COMPUTER = 'This computer';
-const CHANNELS = 'Channels';
+const CHANNELS = 'Talk to me here';
 
 function providerItem(provider: Provider, fixed: boolean): DoctorItem {
   const { status } = provider;
@@ -148,7 +148,7 @@ export function channelsCheck(services: Services): DoctorCheck {
   return {
     id: 'channels',
     group: CHANNELS,
-    title: 'Channels',
+    title: 'Talk to me here',
     async run({ repair }) {
       const { channels } = await services.channels.list();
       const results: DoctorItem[] = [];

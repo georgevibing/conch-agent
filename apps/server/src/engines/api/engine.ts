@@ -203,8 +203,7 @@ export class ApiEngine implements Engine {
    */
   readonly integrations: EngineIntegrations = {
     mode: 'bridge',
-    signInHint:
-      'Conch connects these apps itself — add them, and sign in to them, in Settings → Integrations.',
+    signInHint: 'Conch connects these apps itself — add them, and sign in to them, in Apps.',
   };
   /** Models that can see get images; none of these can open files on this computer. */
   readonly attachments = { images: true, files: false };

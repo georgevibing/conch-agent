@@ -4,14 +4,14 @@ import type { GoogleService } from './service';
 
 /**
  * Gmail, Google Calendar and Google Drive in Repair everything, one line per
- * app, like every other app on the Integrations page (ADR 0048). Repair checks
+ * app, like every other app in Apps (ADR 0048). Repair checks
  * each account they use again: that renews a Google sign-in and retries what
  * passes. A refused app password or a revoked sign-in is the person's to fix.
  */
 export function registerGoogleDoctor(doctor: Doctor, google: GoogleService, apps?: GoogleApps) {
   doctor.register({
     id: 'google',
-    group: 'Integrations',
+    group: 'Apps',
     title: 'Google apps',
     async run({ repair, signal }) {
       const before = await google.status();
@@ -20,7 +20,7 @@ export function registerGoogleDoctor(doctor: Doctor, google: GoogleService, apps
           ? [
               {
                 id: 'google:setup',
-                group: 'Integrations',
+                group: 'Apps',
                 title: 'Google apps',
                 state: 'needs-you' as const,
                 message: 'Your Google app is saved. Sign in to connect an account.',
@@ -51,7 +51,7 @@ export function registerGoogleDoctor(doctor: Doctor, google: GoogleService, apps
         .map((item) => {
           const base = {
             id: `integrations:${item.id}`,
-            group: 'Integrations',
+            group: 'Apps',
             title: item.name,
           };
           const { health } = item;

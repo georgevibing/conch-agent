@@ -158,7 +158,7 @@ export class WhatsAppAdapter implements ChannelAdapter {
     if (!session)
       throw new ChannelError(
         'auth',
-        'Conch lost its WhatsApp link. Link it again with the code on the Channels page.',
+        'Conch lost its WhatsApp link. Link it again with the code on its page in Apps.',
       );
     return waBot(session.me);
   }
@@ -233,7 +233,7 @@ export class WhatsAppAdapter implements ChannelAdapter {
         if (!session) {
           events.state('needs-token', {
             message:
-              'Conch lost its WhatsApp link. Link it again with the code on the Channels page.',
+              'Conch lost its WhatsApp link. Link it again with the code on its page in Apps.',
           });
           return;
         }

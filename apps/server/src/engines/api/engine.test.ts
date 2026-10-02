@@ -763,7 +763,7 @@ describe('how these engines take part in integrations', () => {
     const { engine } = await engineFor(stubWire());
     expect(engine.integrations.mode).toBe('bridge');
     expect(engine.integrations.account).toBeUndefined();
-    expect(engine.integrations.signInHint).toContain('Settings');
+    expect(engine.integrations.signInHint).toContain('in Apps');
   });
 
   it('only offers a usage reading where the provider publishes one', async () => {

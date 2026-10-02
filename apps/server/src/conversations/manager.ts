@@ -225,7 +225,7 @@ export function notConnectedPrompt(
     `Don’t pretend to have ${names} data, and don’t guess at it. Answer what you can without it, then say that once ${names} ${one ? 'is' : 'are'} connected you’ll be able to help with that part. ${
       offered.length
         ? 'Don’t explain how to connect it: the button does that.'
-        : 'They can connect it from Integrations in the sidebar.'
+        : 'They can connect it from Apps in the sidebar.'
     }`,
   ].join('\n');
 }
@@ -1194,7 +1194,7 @@ export class ConversationManager {
       )
         return 'deny';
       await keepBefore(request.toolUseId, request.toolName, request.input);
-      // Your choices on the Integrations page come first: "Don't ask", or a tool you turned off.
+      // Your choices in Apps come first: "Don't ask", or a tool you turned off.
       const policy = await integrations?.decide(request.toolName).catch(() => undefined);
       if (policy === 'off') return 'deny';
       const taint = await mustAsk(request);
@@ -1239,7 +1239,7 @@ export class ConversationManager {
       if ((await integrations?.decide(request.toolName).catch(() => undefined)) === 'off')
         return {
           decision: 'deny',
-          message: 'The user turned this tool off on the Integrations page.',
+          message: 'The user turned this tool off in Apps.',
         };
       const taint = await mustAsk(request);
       return taint ? { decision: 'ask', reason: taint } : undefined;

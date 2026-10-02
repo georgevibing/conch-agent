@@ -55,7 +55,7 @@ describe('Google setup repair', () => {
     expect(await check?.run({ repair: true, signal: new AbortController().signal })).toEqual([
       {
         id: 'integrations:gmail',
-        group: 'Integrations',
+        group: 'Apps',
         title: 'Gmail',
         state: 'needs-you',
         message: 'Gmail stopped taking this app password.',

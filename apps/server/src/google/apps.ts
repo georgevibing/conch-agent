@@ -381,7 +381,7 @@ export class GoogleApps {
 
   #guarded(tool: HostTool, ctx: ToolContext): HostTool {
     const offText = {
-      text: 'The user turned this off in Integrations. Nothing was done; say so if it matters.',
+      text: 'The user turned this off in Apps. Nothing was done; say so if it matters.',
       effect: 'not-executed' as const,
     };
     const verification = tool.verification && {

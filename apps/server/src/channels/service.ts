@@ -175,7 +175,7 @@ export function normalizeSecrets(secrets: ChannelSecrets, kept?: ChannelSecrets)
  * Everything a person sends becomes an ordinary conversation with the default
  * provider, so every provider works here. Approvals come to the chat as
  * buttons. People who aren't let in get one polite answer and show up as a
- * request on the Channels page; letting anyone in is a person's decision in
+ * request on its page in Apps; letting anyone in is a person's decision in
  * Conch, never the bot's or the agent's.
  */
 export class ChannelService {
@@ -507,7 +507,7 @@ export class ChannelService {
     if (isLinked(input.kind))
       throw new ChannelServiceError(
         'invalid',
-        `${CHANNEL_NAMES[input.kind]} links with a code: open Channels and choose ${CHANNEL_NAMES[input.kind]}.`,
+        `${CHANNEL_NAMES[input.kind]} links with a code: open Apps and choose ${CHANNEL_NAMES[input.kind]}.`,
       );
     const { secrets, bot } = await this.#settle(normalizeSecrets(input));
     const adapter = this.deps.adapter(secrets);

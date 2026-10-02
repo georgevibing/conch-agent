@@ -209,7 +209,7 @@ export async function slackCall<T extends Record<string, unknown>>(
   if (code === 'missing_scope')
     throw new SlackApiError(
       'scope',
-      'The Slack app is missing a permission. Open Slack in Integrations and follow “Give it what it needs”.',
+      'The Slack app is missing a permission. Open Slack in Apps and follow “Give it what it needs”.',
       { code, ...(typeof data.needed === 'string' && { needed: data.needed.slice(0, 80) }) },
     );
   if (code === 'ratelimited')

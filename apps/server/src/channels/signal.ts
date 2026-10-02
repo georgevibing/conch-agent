@@ -98,7 +98,7 @@ export class SignalAdapter implements ChannelAdapter {
     if (!accounts.some((a) => a.number === this.account))
       throw new ChannelError(
         'auth',
-        'Signal unlinked Conch. Link it again with the code on the Channels page.',
+        'Signal unlinked Conch. Link it again with the code on its page in Apps.',
       );
     const name = await this.#name().catch(() => undefined);
     return signalBot(this.account, name);
@@ -372,7 +372,7 @@ function toChannelError(error: unknown): ChannelError {
   if (UNLINKED.test(message))
     return new ChannelError(
       'auth',
-      'Signal unlinked Conch. Link it again with the code on the Channels page.',
+      'Signal unlinked Conch. Link it again with the code on its page in Apps.',
     );
   if (/rate ?limit|429/i.test(message))
     return new ChannelError('rate-limit', 'Signal asked Conch to slow down.', {

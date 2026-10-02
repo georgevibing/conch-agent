@@ -68,7 +68,7 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
 export interface SinkContext {
   /** The chat's work folder: changing files there is the work. */
   workspace: string;
-  /** For an integration's tool: `read` when it only reads (Integrations page). */
+  /** For an integration's tool: `read` when it only reads (its page in Apps). */
   access?: 'read' | 'write';
   app?: string;
 }
