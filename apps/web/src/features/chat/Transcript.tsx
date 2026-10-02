@@ -20,6 +20,7 @@ import {
 } from './TranscriptItems';
 import { BrowserApprovalItem, BrowserTrailItem, HandoffItem } from '../browser/ChatCards';
 import { IntegrationIssue, IntegrationSuggestion } from '../integrations/ChatBits';
+import { NeedsAppsItem } from './NeedsApps';
 import { HeldItem, RoutedItem } from './OfflineBits';
 import { ArtifactChatCard } from '../artifacts/ArtifactChatCard';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
@@ -315,6 +316,9 @@ export function Transcript({
               <HeldItem item={block.item} conversationId={conversationId} />
             )}
             {block.item?.kind === 'routed' && <RoutedItem item={block.item} />}
+            {block.item?.kind === 'needs-apps' && (
+              <NeedsAppsItem item={block.item} conversationId={conversationId} />
+            )}
             {block.item?.kind === 'integration-suggestion' && (
               <IntegrationSuggestion
                 item={block.item}

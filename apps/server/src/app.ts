@@ -887,8 +887,9 @@ export async function buildApp(services: Services) {
     if (!body) return;
     try {
       const sent = await services.conversations.release(request.params.id, body.engine, body.model);
-      return sent
-        ? { ok: true }
+      if (sent) return { ok: true };
+      return services.network.online
+        ? reply.code(409).send({ error: 'conflict', message: 'That message has already gone.' })
         : reply
             .code(409)
             .send({ error: 'offline', message: 'You’re still offline. It goes when you’re back.' });

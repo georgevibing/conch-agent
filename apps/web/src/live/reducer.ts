@@ -1,5 +1,7 @@
 import { foldHolds } from '@conch/protocol';
 import type {
+  AppNeed,
+  AppsModel,
   ArtifactKind,
   Attachment,
   ChangedFile,
@@ -188,6 +190,18 @@ export type TranscriptItem =
       /** How many messages wait together (they go as one). */
       count: number;
       sent?: boolean;
+    }
+  | {
+      /**
+       * The chat's model can't use what a message needs (ADR 0050): it waits
+       * for a choice. `settled` says how it went once it did.
+       */
+      kind: 'needs-apps';
+      id: string;
+      needs: AppNeed[];
+      model: { engine: EngineId; id: string; label: string };
+      switchTo?: AppsModel;
+      settled?: 'switched' | 'answered';
     }
   | {
       /** Another provider answered for this chat's own: offline, or at a usage limit. */
@@ -463,7 +477,21 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
       return {
         ...base,
         status: event.status,
-        items: event.status === 'running' ? sendHeld(items) : items,
+        items: event.status === 'running' ? settleNeeds(sendHeld(items), view.options) : items,
+      };
+    case 'turn.needs-apps':
+      return {
+        ...base,
+        items: [
+          ...items,
+          {
+            kind: 'needs-apps',
+            id: `needs-apps-${event.seq}`,
+            needs: event.needs,
+            model: event.model,
+            ...(event.switchTo && { switchTo: event.switchTo }),
+          },
+        ],
       };
     case 'turn.held': {
       // One card, at the end, counting what waits: a failure that led here
@@ -686,6 +714,23 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         ],
       };
   }
+}
+
+/**
+ * A message that waited for a model that can use its apps went: with the
+ * model offered (the chat switched to it first), or without.
+ */
+function settleNeeds(items: TranscriptItem[], options: TurnOptions | undefined): TranscriptItem[] {
+  const index = items.findLastIndex((i) => i.kind === 'needs-apps' && !i.settled);
+  if (index === -1) return items;
+  const item = items[index] as Extract<TranscriptItem, { kind: 'needs-apps' }>;
+  const switched =
+    item.switchTo &&
+    options?.engine === item.switchTo.engine &&
+    options.model === item.switchTo.model;
+  const next = items.slice();
+  next[index] = { ...item, settled: switched ? 'switched' : 'answered' };
+  return next;
 }
 
 /** The waiting card becomes "sent when you were back online". */

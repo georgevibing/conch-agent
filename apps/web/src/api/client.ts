@@ -175,11 +175,14 @@ export const api = {
   renameConversation: (id: string, title: string) =>
     request(Ok, `/api/conversations/${id}`, { method: 'PATCH', body: { title } }),
   deleteConversation: (id: string) => request(Ok, `/api/conversations/${id}`, { method: 'DELETE' }),
-  /** A message waiting for the internet goes now — with `engine` (the model on this computer), if given. */
-  releaseTurn: (id: string, engine?: EngineId) =>
+  /**
+   * A waiting message goes now — with `engine` (the model on this computer), if
+   * given; switched to its `model` (one that can use the apps it needs), if given.
+   */
+  releaseTurn: (id: string, engine?: EngineId, model?: string) =>
     request(Ok, `/api/conversations/${id}/release`, {
       method: 'POST',
-      body: engine ? { engine } : {},
+      body: { ...(engine && { engine }), ...(engine && model && { model }) },
     }),
   /** Stop holding this conversation to a skill's list (ADR 0047). */
   stopHolding: (id: string, skillId: string) =>
