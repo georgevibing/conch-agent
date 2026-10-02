@@ -5,6 +5,7 @@ import {
   type ExternalList,
   type Integration,
   type IntegrationHealth,
+  type IntegrationOrigin,
   type IntegrationResult,
   type IntegrationsList,
   IntegrationUrl,
@@ -26,6 +27,7 @@ import { type NeedSpec, Setup } from '../setup/needs';
 import {
   type Blueprint,
   CATALOG,
+  likeness,
   matchCatalog,
   publicCatalog,
   type ResolvedCatalogItem,
@@ -149,6 +151,14 @@ interface FoundServer {
   /** `catalog`: the same app from Conch's catalog; `url`: the same address. */
   portable?: { kind: 'catalog'; entry: ResolvedCatalogItem } | { kind: 'url'; url: string };
 }
+
+/** Where it was found, kept with the app so its card can say so. */
+const originOf = (found: FoundServer): IntegrationOrigin => ({
+  provider: found.engine.id,
+  providerName: found.engine.label,
+  source: found.status.source,
+  ...(found.status.plugin && { plugin: found.status.plugin }),
+});
 
 const keyOf = (found: FoundServer) =>
   found.portable?.kind === 'catalog'
@@ -357,6 +367,7 @@ export class IntegrationService {
     const lists = await Promise.all(engines.map((engine) => this.#externalOf(engine)));
     const found = lists.flatMap((l) => l.found);
     await this.#adoptFound(found);
+    await this.#rememberFound(found);
     const items = await this.store.all();
     const removed = await this.store.removed();
     const addresses = new Set(
@@ -453,23 +464,26 @@ export class IntegrationService {
         if ((await this.store.removed()).has(key)) continue;
         const items = await this.store.all();
         const portable = f.portable;
+        const at = (url: string | undefined) =>
+          url !== undefined &&
+          items.some(
+            (i) => i.transport.type === 'http' && sameAddress(i.transport.url) === sameAddress(url),
+          );
+        // The catalog's app, or the same address under whatever name: never twice.
         const already =
           portable.kind === 'catalog'
-            ? items.some((i) => i.catalogId === portable.entry.id)
-            : items.some(
-                (i) =>
-                  i.transport.type === 'http' &&
-                  sameAddress(i.transport.url) === sameAddress(portable.url),
-              );
+            ? items.some((i) => i.catalogId === portable.entry.id) || at(f.status.url)
+            : at(portable.url);
         if (already) continue;
         try {
           const item =
             portable.kind === 'catalog'
-              ? await this.#adoptEntry(portable.entry)
-              : await this.#adoptAddress(f.status.name, portable.url);
-          const later = item.health.state === 'needs-auth';
+              ? await this.#adoptEntry(portable.entry, originOf(f))
+              : await this.#adoptAddress(f.status.name, portable.url, originOf(f));
           this.deps.onHeal?.(
-            `${item.name} was set up in ${f.engine.label} only. Conch connected it itself, so it works with every model${later ? ' once you sign in to it' : ''}.`,
+            item.health.state === 'needs-auth'
+              ? `Found ${item.name} in ${f.engine.label}. It’s waiting in Apps: sign in once and it works with every model.`
+              : `${item.name} was set up in ${f.engine.label} only. Conch connected it itself, so it works with every model.`,
           );
         } catch {
           // An address Conch would never call (the SSRF guard), or one that's gone: left where it is.
@@ -479,8 +493,82 @@ export class IntegrationService {
     return this.#adopting;
   }
 
-  /** The catalog's own app, as a card: signing in is yours to do, when you're ready. */
-  async #adoptEntry(entry: ResolvedCatalogItem): Promise<StoredIntegration> {
+  /**
+   * Looks again at what was brought in and never signed in to (one you use
+   * is yours, whatever a provider also has):
+   *
+   * - One brought in before Conch kept where it found things says so now,
+   *   and gets the name people know.
+   * - One brought in by its address that the catalog has since learned
+   *   (Datadog) becomes the catalog's app: its name, its logo, its page.
+   * - The same app twice (brought in once by its address and once as the
+   *   catalog's) becomes one: the one you use if there is one, else the first.
+   * - One Conch can't sign in to by itself (`OAuthFlows.canSignIn`) is let
+   *   go: offering it would be a button that never works. It stays with its
+   *   provider, under Settings → Providers.
+   */
+  async #rememberFound(found: FoundServer[]): Promise<void> {
+    for (const f of found) {
+      const portable = f.portable;
+      if (!portable) continue;
+      const url = portable.kind === 'url' ? portable.url : f.status.url;
+      const twins = (await this.store.all()).filter(
+        (i) =>
+          (portable.kind === 'catalog' && i.catalogId === portable.entry.id) ||
+          (url !== undefined &&
+            i.transport.type === 'http' &&
+            sameAddress(i.transport.url) === sameAddress(url)),
+      );
+      let item = twins.find((i) => i.health.okAt) ?? twins[0];
+      for (const twin of twins) {
+        if (twin === item || twin.health.okAt || !twin.from || this.oauth.isPending(twin.id))
+          continue;
+        await this.store.remove(twin.id);
+        this.deps.emit({ type: 'integration.deleted', integrationId: twin.id });
+      }
+      if (!item || item.health.okAt) continue;
+      if (portable.kind === 'catalog' && !item.catalogId) {
+        const { entry } = portable;
+        item = await this.store.update(item.id, ({ brand: _b, color: _c, ...i }) => ({
+          ...i,
+          catalogId: entry.id,
+          name: entry.name,
+          from: i.from ?? originOf(f),
+        }));
+        if (item) this.#emit(item);
+        continue;
+      }
+      if (!item) continue;
+      if (!item.from && item.health.state === 'needs-auth') {
+        const like =
+          item.catalogId || item.name !== f.status.name ? undefined : likeness(item.name);
+        item = await this.store.update(item.id, (i) => ({
+          ...i,
+          from: originOf(f),
+          ...(like && { name: like.name, brand: like.brand, color: like.color }),
+        }));
+        if (item) this.#emit(item);
+      }
+      if (!item?.from || item.catalogId || item.auth !== 'oauth') continue;
+      if (item.transport.type !== 'http' || this.oauth.isPending(item.id)) continue;
+      const address = item.transport.url;
+      const can = await reachOf(address)
+        .then((reach) => this.oauth.canSignIn(address, reach))
+        .catch(() => undefined);
+      if (can !== false) continue;
+      await this.store.remove(item.id);
+      this.deps.emit({ type: 'integration.deleted', integrationId: item.id });
+      this.deps.onHeal?.(
+        `${item.name} only signs in through ${f.engine.label}, so Conch left it there. It’s under Settings → Providers.`,
+      );
+    }
+  }
+
+  /** The catalog's own app, found: signing in is yours to do, when you're ready. */
+  async #adoptEntry(
+    entry: ResolvedCatalogItem,
+    from: IntegrationOrigin,
+  ): Promise<StoredIntegration> {
     const now = Date.now();
     const transport = { type: 'http' as const, url: this.#urlFor(entry, {}) };
     await this.#checkUrl(transport.url);
@@ -507,6 +595,7 @@ export class IntegrationService {
       secrets: [],
       createdAt: now,
       updatedAt: now,
+      from,
     };
     await this.store.add(item, { values: {} });
     this.#emit(item);
@@ -515,13 +604,25 @@ export class IntegrationService {
   }
 
   /** The same address, from Conch: asking before everything, as for anything added by address. */
-  async #adoptAddress(name: string, raw: string): Promise<StoredIntegration> {
+  async #adoptAddress(
+    name: string,
+    raw: string,
+    from: IntegrationOrigin,
+  ): Promise<StoredIntegration> {
     const url = IntegrationUrl.parse(raw);
     await this.#checkUrl(url);
+    // Only what Conch can really connect: a service that lets no new app sign
+    // in stays with its provider, rather than arrive as a button that fails.
+    if ((await this.oauth.canSignIn(url, await reachOf(url))) !== true)
+      throw new IntegrationError('unavailable', 'Conch can’t sign in to it by itself.');
     const now = Date.now();
+    // `github` is GitHub: the name and the logo people know, not the server's.
+    const like = likeness(name);
     const item: StoredIntegration = {
       id: newId('int'),
-      name: name.slice(0, 40) || 'Integration',
+      name: like?.name ?? (name.slice(0, 40) || 'Integration'),
+      ...(like && { brand: like.brand, color: like.color }),
+      from,
       server: await this.#uniqueServer(name),
       transport: { type: 'http', url },
       auth: 'none',
@@ -928,16 +1029,21 @@ export class IntegrationService {
       });
       return { integration: publicView(updated ?? item), authorizeUrl: url.href };
     } catch (error) {
+      // Pressing Sign in again can't help when the service takes no new apps: say that instead.
+      const closed = /dynamic client registration/i.test((error as Error).message);
       const message =
         error instanceof EndpointError
           ? error.message
-          : `Couldn’t start signing in to ${item.name}.`;
+          : closed
+            ? `${item.name} only lets apps it already knows sign in, so Conch can’t connect to it by itself.`
+            : `Couldn’t start signing in to ${item.name}.`;
       const updated = await this.#setHealth(id, {
         state: 'error',
         message,
         detail: scrub((error as Error).message),
-        action: 'reconnect',
+        ...(!closed && { action: 'reconnect' as const }),
         checkedAt: Date.now(),
+        okAt: item.health.okAt,
       });
       return { integration: publicView(updated ?? item) };
     }
@@ -1106,7 +1212,10 @@ export class IntegrationService {
           : // Everything it needs is here, yet it didn't start: a switch in its app is likely off.
             entry?.switchedOff && !/timed? ?out/i.test(result.health.detail ?? '')
             ? { ...result.health, message: entry.switchedOff, action: 'setup' as const }
-            : result.health;
+            : // Never signed in to here: there's no "again" about it.
+              result.health.state === 'needs-auth' && item.auth === 'oauth' && !item.health.okAt
+              ? { ...result.health, message: 'Sign in to use it with every model.' }
+              : result.health;
       return this.#setHealth(id, { ...health, okAt: item.health.okAt });
     }
     const now = Date.now();
@@ -1163,7 +1272,11 @@ export class IntegrationService {
       return {
         state: 'needs-auth',
         message:
-          item.auth === 'token' ? 'Add a token to connect it.' : 'Sign in again to keep using it.',
+          item.auth === 'token'
+            ? 'Add a token to connect it.'
+            : item.health.okAt
+              ? 'Sign in again to keep using it.'
+              : 'Sign in to use it with every model.',
         action: item.auth === 'token' ? 'edit' : 'reconnect',
         checkedAt: Date.now(),
         okAt: item.health.okAt,
@@ -1560,7 +1673,12 @@ export class IntegrationService {
   }
 
   async #setHealth(id: string, health: IntegrationHealth): Promise<StoredIntegration | undefined> {
-    const updated = await this.store.update(id, (item) => ({ ...item, health }));
+    // When it last worked is never forgotten by a change of state: it's how a
+    // sign-in that expired is told from one that was never made.
+    const updated = await this.store.update(id, (item) => ({
+      ...item,
+      health: { ...health, okAt: health.okAt ?? item.health.okAt },
+    }));
     if (updated) this.#emit(updated);
     return updated;
   }

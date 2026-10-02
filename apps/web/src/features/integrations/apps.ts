@@ -6,14 +6,16 @@
  * plain switches for what it does; this file decides which halves belong to
  * which app, and how the card sums them up. Pure, so it's tested on its own.
  */
-import type {
-  CatalogEntry,
-  Channel,
-  ChannelCatalogEntry,
-  ChannelKind,
-  Integration,
-  IntegrationTool,
-  VaultSource,
+import {
+  awaitsSignIn,
+  type CatalogEntry,
+  type Channel,
+  type ChannelCatalogEntry,
+  type ChannelKind,
+  type Integration,
+  type IntegrationProvider,
+  type IntegrationTool,
+  type VaultSource,
 } from '@conch/protocol';
 import type { IntegrationStateValue } from '@conch/nacre';
 
@@ -25,7 +27,7 @@ import {
   needsYou,
   whoOf,
 } from '../channels/describe';
-import { fixLabel, needsAttention, quietMeta } from './describe';
+import { fixLabel, needsAttention, originLabel, quietMeta } from './describe';
 import { appPath } from './paths';
 
 /** Apps in the gallery that can also talk to you, and the chat app that does it. */
@@ -82,11 +84,13 @@ export function joinApps({
   const entryOf = (id: string | undefined) => catalog.find((c) => c.id === id);
   const items: AppItem[] = integrations.map((integration) => {
     const entry = entryOf(integration.catalogId);
+    // One Conch found that looks like an app it knows wears that app's logo.
+    const color = entry?.color ?? integration.color;
     return {
       key: integration.id,
       name: integration.name,
-      brand: integration.catalogId ?? 'custom',
-      ...(entry?.color && { color: entry.color }),
+      brand: integration.catalogId ?? integration.brand ?? 'custom',
+      ...(color && { color }),
       ...(entry && { entry }),
       integration,
       channels: [],
@@ -136,6 +140,57 @@ export function joinApps({
     if (card && onePassword) card.source = onePassword;
   }
   return items;
+}
+
+/**
+ * Found, not connected: Conch came across it in a provider and it has never
+ * been signed in to here. Shown apart from what's connected, as an offer.
+ */
+export const isFound = (
+  item: AppItem,
+): item is AppItem & { integration: Integration & Required<Pick<Integration, 'from'>> } =>
+  Boolean(item.integration && awaitsSignIn(item.integration)) &&
+  item.channels.length === 0 &&
+  !inUse(item.source);
+
+/** What the found apps' section says, once, so no tile has to repeat it. */
+export interface FoundWords {
+  /** "Found in Claude Code" */
+  title: string;
+  /** Where they came from and what signing in does, in one or two sentences. */
+  lead: string;
+  /** Where each one came from, by its key — only when they didn't all come from one place. */
+  taglines: Record<string, string>;
+}
+
+export function describeFound(
+  found: AppItem[],
+  assistant: string,
+  providers: IntegrationProvider[] = [],
+): FoundWords {
+  const origins = found.flatMap((i) => (i.integration?.from ? [i.integration.from] : []));
+  const names = [...new Set(origins.map((o) => o.providerName))];
+  const one = names.length === 1 ? names[0] : undefined;
+  const labelOf = (item: AppItem) => {
+    const from = item.integration?.from;
+    if (!from) return '';
+    return one
+      ? originLabel(
+          from,
+          providers.find((p) => p.id === from.provider),
+        )
+      : from.providerName;
+  };
+  const labels = found.map(labelOf);
+  const same = new Set(labels).size <= 1;
+  const plugin = same && one && origins[0]?.source === 'plugin' ? origins[0].plugin : undefined;
+  const who = plugin ? `${one}’s ${plugin} plugin` : (one ?? 'Your providers');
+  const single = found.length === 1;
+  return {
+    title: one ? `Found in ${one}` : 'Found in your providers',
+    lead: `${who} already ${one ? 'has' : 'have'} ${single ? 'this one' : 'these'}. Sign in once, and ${assistant} can use ${single ? 'it' : 'them'} with every model.`,
+    taglines: same ? {} : Object.fromEntries(found.map((item, i) => [item.key, labels[i] ?? ''])),
+  };
 }
 
 /** What a card says about an app, whichever halves it has. */
@@ -329,6 +384,51 @@ export const groupOn = (group: ToolGroup) => group.tools.some((t) => t.policy !=
 /** The change that turns a group on (each tool back to the policy) or off. */
 export const groupPatch = (group: ToolGroup, on: boolean) =>
   Object.fromEntries(group.tools.map((t) => [t.name, on ? null : ('off' as const)]));
+
+/**
+ * The gallery's kinds, in the order a person looks for things: what most
+ * people connect first, then where they talk to it, then the rest.
+ */
+export const GALLERY_ORDER = [
+  'productivity',
+  TALK,
+  'files',
+  'design',
+  'business',
+  'developer',
+  'home',
+  'browser',
+  'other',
+];
+
+/** One kind of app in the gallery, with its tiles. */
+export interface TileGroup {
+  id: string;
+  tiles: Tile[];
+}
+
+/**
+ * The gallery by kind. Each tile is there once, under its own kind (a chat
+ * app under Talk to me here; Slack, which is both, under Work), the ones most
+ * people want first.
+ */
+export function groupTiles(tiles: Tile[]): TileGroup[] {
+  const groups = new Map<string, Tile[]>();
+  for (const tile of tiles) {
+    const kind = tile.categories[0] ?? 'other';
+    groups.set(kind, [...(groups.get(kind) ?? []), tile]);
+  }
+  const rank = (id: string) => {
+    const at = GALLERY_ORDER.indexOf(id);
+    return at === -1 ? GALLERY_ORDER.length : at;
+  };
+  return [...groups]
+    .sort(([a], [b]) => rank(a) - rank(b))
+    .map(([id, list]) => ({
+      id,
+      tiles: [...list].sort((a, b) => Number(Boolean(b.featured)) - Number(Boolean(a.featured))),
+    }));
+}
 
 /** The gallery: apps you can add, from both catalogs, one tile each. */
 export interface Tile {

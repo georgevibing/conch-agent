@@ -129,6 +129,19 @@ export function useCheckIntegration() {
   });
 }
 
+/** Say no to an app Conch found: it stays with its provider, and Settings can bring it back. */
+export function useDismissFound() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (integration: Integration) => integrationsApi.remove(integration.id),
+    onSuccess: (_r, integration) => {
+      dropIntegration(client, integration.id);
+      toast(`${integration.name} won’t be used here. Settings → Providers can bring it back.`);
+    },
+    onError: (error) => toast.error(errorText(error, 'Couldn’t remove it.')),
+  });
+}
+
 export function useRemoveIntegration() {
   const client = useQueryClient();
   return useMutation({

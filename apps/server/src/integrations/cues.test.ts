@@ -125,6 +125,90 @@ const positives: [text: string, app: string][] = [
   ['list the stripe customers who churned', 'stripe'],
   ['any failed charges in stripe today?', 'stripe'],
   ['check my Stripe balance', 'stripe'],
+  // Todoist
+  ['What’s due today in Todoist?', 'todoist'],
+  ['add “book the dentist” to my todoist for Friday', 'todoist'],
+  ['clear out the todoist inbox before the weekend', 'todoist'],
+  // Airtable
+  ['Which orders are still open in Airtable?', 'airtable'],
+  ['add a record to my airtable base for the new supplier', 'airtable'],
+  ['summarise https://airtable.com/appAbC123xyz/tblOrders', 'airtable'],
+  // ClickUp
+  ['What’s assigned to me in ClickUp this sprint?', 'clickup'],
+  ['create a clickup task for the invoice bug', 'clickup'],
+  ['move it to our clickup', 'clickup'],
+  // monday.com
+  ['what’s stuck on our monday board for the launch?', 'monday'],
+  ['add an item to my monday board', 'monday'],
+  ['summarise the updates on monday.com for the design team', 'monday'],
+  // Calendly
+  ['Who booked a call with me through Calendly this week?', 'calendly'],
+  ['send Priya my calendly link', 'calendly'],
+  ['cancel the 3pm booking in my calendly', 'calendly'],
+  // Granola
+  ['What did we agree yesterday? Check my Granola notes', 'granola'],
+  ['pull the action items from the meeting notes in Granola', 'granola'],
+  ['find the granola transcript of the board call', 'granola'],
+  // Evernote
+  ['Find my note about the boiler warranty in Evernote', 'evernote'],
+  ['save this recipe to my evernote', 'evernote'],
+  ['which evernote notebooks have I not touched this year?', 'evernote'],
+  // Dropbox
+  ['Find the signed lease in my Dropbox', 'dropbox'],
+  ['what’s in the dropbox folder called Taxes 2025?', 'dropbox'],
+  ['summarise the PDF I saved to our dropbox yesterday', 'dropbox'],
+  // Miro
+  ['Summarise the sticky notes on the Retro board in Miro', 'miro'],
+  ['add these ideas to our miro board', 'miro'],
+  ['what’s on the miro whiteboard from Tuesday’s workshop?', 'miro'],
+  // Webflow
+  ['Add this article to the Blog collection in Webflow as a draft', 'webflow'],
+  ['which webflow pages are missing a meta description?', 'webflow'],
+  ['publish the changes on our webflow', 'webflow'],
+  // WordPress.com
+  ['Draft a post on my WordPress about the open day', 'wordpress'],
+  ['which posts on our wordpress got the most views this month?', 'wordpress'],
+  ['reply to the latest comments on my wordpress site', 'wordpress'],
+  // Intercom
+  ['What are customers asking about most in Intercom this week?', 'intercom'],
+  ['summarise the open intercom conversations', 'intercom'],
+  ['find the chat with Dana in our intercom', 'intercom'],
+  // PayPal
+  ['Which PayPal invoices are still unpaid?', 'paypal'],
+  ['how much came in through my paypal last month?', 'paypal'],
+  ['any disputes in PayPal I need to answer?', 'paypal'],
+  // Square
+  ['What were yesterday’s sales in our Square?', 'square'],
+  ['look up the square order for Mrs Patel', 'square'],
+  ['send a Square invoice to the bakery for £120', 'square'],
+  // Attio
+  ['Which deals in Attio are waiting on a reply from us?', 'attio'],
+  ['add a note to the Acme record in attio', 'attio'],
+  ['show me the attio pipeline for this quarter', 'attio'],
+  // Datadog
+  ['Which Datadog monitors are alerting right now?', 'datadog'],
+  ['search the logs in datadog for the checkout timeout', 'datadog'],
+  ['what does the latency dashboard in Datadog show for last night?', 'datadog'],
+  // PostHog
+  ['How did sign-ups change after the release? Look in PostHog', 'posthog'],
+  ['which posthog feature flags are still at 50%?', 'posthog'],
+  ['show the checkout funnel from our posthog', 'posthog'],
+  // Mixpanel
+  ['Where do people drop off in the checkout funnel in Mixpanel?', 'mixpanel'],
+  ['pull the mixpanel retention report for March', 'mixpanel'],
+  ['how many daily users does my mixpanel show?', 'mixpanel'],
+  // Neon
+  ['Which tables grew the most in our neon database?', 'neon'],
+  ['create a neon branch for the migration test', 'neon'],
+  ['how big is my Neon project’s storage?', 'neon'],
+  // Hugging Face
+  ['Find a small model on Hugging Face that’s good at summarising legal text', 'huggingface'],
+  ['which hugging face datasets have Greek speech?', 'huggingface'],
+  ['what does https://huggingface.co/google/gemma-3 need to run?', 'huggingface'],
+  // Netlify
+  ['Why did the last Netlify deploy of the docs site fail?', 'netlify'],
+  ['show me the build logs on netlify', 'netlify'],
+  ['which domains are on my netlify?', 'netlify'],
 ];
 
 /**
@@ -132,6 +216,80 @@ const positives: [text: string, app: string][] = [
  * don't need them connected. None of these may suggest anything.
  */
 const negatives: string[] = [
+  // monday, the day
+  'What should I do on Monday about the board meeting?',
+  'Remind me on Monday to call the bank',
+  'prepare the slides for the Monday board meeting',
+  'what’s the weather on Monday?',
+  'what did Monday’s standup decide?',
+  'book a table for Monday at 7',
+  // granola, the breakfast
+  'a recipe for granola bars with honey',
+  'is granola actually healthy?',
+  'how much sugar is in granola?',
+  'recommend a breakfast: granola or porridge?',
+  // Miró, the painter
+  'who painted this, Miro or Picasso?',
+  'tell me about Joan Miro’s early paintings',
+  // square, the shape, the place and the unit
+  'what is the square root of 1764?',
+  'the flat is 70 square metres',
+  'how many square feet is a tennis court?',
+  'meet me in the town square at noon',
+  'put square brackets around the citation',
+  'draw a red square in SVG',
+  'make the hero image a perfect square',
+  'sales were flat in the market square last weekend',
+  // neon, the gas and the colour
+  'why do neon signs glow?',
+  'paint the logo in neon green',
+  'neon tetras keep dying in my tank',
+  'what colour is neon pink in hex?',
+  'how do database branches work in Postgres?',
+  // the intercom by the door
+  'the intercom at my apartment is broken',
+  'how do I wire a door intercom system?',
+  'our office intercom keeps buzzing',
+  'is there an intercom button on this lift?',
+  // building an app into a product is coding
+  'add PayPal checkout to the shop page',
+  'how do PayPal fees work for international payments?',
+  'explain how PayPal makes money',
+  'set up Stripe and PayPal buttons on the checkout page',
+  'write a WordPress plugin that adds a contact form',
+  'how do I install WordPress on a VPS?',
+  'which is the best WordPress theme for a bakery?',
+  'set up Datadog on the new server',
+  'what’s the dog breed in the Datadog logo?',
+  'install the PostHog snippet in our Next.js app',
+  'add Mixpanel tracking to the sign-up button',
+  'deploy this site to Netlify',
+  // words that only sound like an app
+  'what is a dropbox at a post office?',
+  'leave the keys in the dropbox outside the office',
+  'tape the drop box shut',
+  'click up to the top of the page',
+  'what’s a good air table for a hockey game room?',
+  'a mix panel of experts for the conference',
+  'pay my pal back for lunch',
+  'evergreen notes about gardening',
+  'flow the text around the image on the web page',
+  'train a model on my own laptop',
+  'my to-do list for today is too long, help me prioritise',
+  'I need a to-do app recommendation',
+  'my blog needs a new name',
+  'the post on the fence is rotten',
+  'what is product analytics?',
+  'log the monitor’s serial number in the spreadsheet',
+  'write an intro for our weekly all-hands',
+  'how many people can sit at a round table?',
+  'what’s the best way to learn the piano?',
+  'tidy up this paragraph without changing its meaning',
+  'give me three names for a bakery',
+  'how long should I boil an egg?',
+  'what does “idempotent” mean?',
+  'make this sound friendlier',
+  'explain compound interest with an example',
   // linear, the adjective
   'Can you explain linear algebra like I’m five?',
   'Linear algebra is so hard, help me with eigenvectors',

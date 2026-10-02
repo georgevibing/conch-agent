@@ -28,6 +28,33 @@ export const brands = [
   { id: 'supabase', name: 'Supabase', color: '#3FCF8E', tagline: 'Databases and backends' },
   { id: 'cloudflare', name: 'Cloudflare', color: '#F38020', tagline: 'Domains, DNS and Workers' },
   { id: 'stripe', name: 'Stripe', color: '#635BFF', tagline: 'Payments and customers' },
+  { id: 'todoist', name: 'Todoist', color: '#E44332', tagline: 'Tasks and to-do lists' },
+  { id: 'airtable', name: 'Airtable', color: '#18BFFF', tagline: 'Bases, tables and records' },
+  { id: 'clickup', name: 'ClickUp', color: '#7B68EE', tagline: 'Tasks, docs and projects' },
+  // No mark in Simple Icons: a monogram on the brand's colour.
+  { id: 'monday', name: 'monday.com', color: '#FF3D57', tagline: 'Boards and projects' },
+  { id: 'calendly', name: 'Calendly', color: '#006BFF', tagline: 'Booking links and meetings' },
+  { id: 'granola', name: 'Granola', color: '#5F7A3A', tagline: 'Meeting notes' },
+  { id: 'evernote', name: 'Evernote', color: '#00A82D', tagline: 'Notes and notebooks' },
+  { id: 'dropbox', name: 'Dropbox', color: '#0061FF', tagline: 'Files and folders' },
+  { id: 'miro', name: 'Miro', color: '#050038', tagline: 'Whiteboards and diagrams' },
+  { id: 'webflow', name: 'Webflow', color: '#146EF5', tagline: 'Sites and their content' },
+  { id: 'wordpress', name: 'WordPress.com', color: '#21759B', tagline: 'Your site and its posts' },
+  { id: 'intercom', name: 'Intercom', color: '#286EFA', tagline: 'Customer conversations' },
+  { id: 'paypal', name: 'PayPal', color: '#002991', tagline: 'Payments and invoices' },
+  { id: 'square', name: 'Square', color: '#3E4348', tagline: 'Sales, orders and customers' },
+  { id: 'attio', name: 'Attio', color: '#1A1D21', tagline: 'Customers and deals' },
+  { id: 'datadog', name: 'Datadog', color: '#632CA6', tagline: 'Monitors, logs and metrics' },
+  { id: 'posthog', name: 'PostHog', color: '#1D4AFF', tagline: 'Product analytics' },
+  { id: 'mixpanel', name: 'Mixpanel', color: '#7856FF', tagline: 'Product analytics' },
+  { id: 'neon', name: 'Neon', color: '#34D59A', tagline: 'Postgres databases' },
+  {
+    id: 'huggingface',
+    name: 'Hugging Face',
+    color: '#FF9D00',
+    tagline: 'Models, datasets and Spaces',
+  },
+  { id: 'netlify', name: 'Netlify', color: '#00C7B7', tagline: 'Sites and deploys' },
 ];
 
 export const notionTools: PermissionTool[] = [

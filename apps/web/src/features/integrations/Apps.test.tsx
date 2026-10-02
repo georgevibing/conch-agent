@@ -15,7 +15,15 @@ import { Shell } from '../../app/Shell';
 import { appState, mockFetch, renderApp } from '../../test/harness';
 import { AppsLink } from './AppsLink';
 import { AppDetailView } from './AppDetailView';
-import { describeApp, galleryTiles, joinApps, toolGroups } from './apps';
+import {
+  describeApp,
+  describeFound,
+  galleryTiles,
+  groupTiles,
+  isFound,
+  joinApps,
+  toolGroups,
+} from './apps';
 import { AppsView } from './AppsView';
 import { newHome } from './paths';
 import { applyIntegrationEvent } from './queries';
@@ -512,6 +520,217 @@ describe('an app’s page has plain switches for what it does', () => {
         path: '/api/vault/sources/1password',
         body: { enabled: false },
       }),
+    );
+  });
+});
+
+/** One Conch came across in a provider, never signed in to here. */
+const found = (name: string, patch: Partial<Integration> = {}): Integration => ({
+  id: `int_${name.toLowerCase()}`,
+  name,
+  server: name.toLowerCase(),
+  transport: { type: 'http', url: `https://mcp.${name.toLowerCase()}.example/mcp` },
+  auth: 'oauth',
+  enabled: true,
+  policy: 'ask',
+  health: {
+    state: 'needs-auth',
+    message: 'Sign in to use it with every model.',
+    action: 'reconnect',
+    checkedAt: 1,
+  },
+  tools: [],
+  values: {},
+  secrets: [],
+  createdAt: 1,
+  updatedAt: 1,
+  from: {
+    provider: 'claude-code',
+    providerName: 'Claude Code',
+    source: 'plugin',
+    plugin: 'engineering',
+  },
+  ...patch,
+});
+
+describe('what Conch found in a provider is an offer, apart from what’s connected', () => {
+  it('says once where they came from; names each origin only when they differ', () => {
+    const items = (integrations: Integration[]) =>
+      joinApps({ integrations, catalog, channels: [] });
+    const same = items([found('Datadog', { brand: 'datadog', color: '#632CA6' }), found('Linear')]);
+    expect(same.map((i) => [i.brand, i.color, isFound(i)])).toEqual([
+      ['datadog', '#632CA6', true],
+      ['custom', undefined, true],
+    ]);
+    expect(describeFound(same, 'Conch')).toEqual({
+      title: 'Found in Claude Code',
+      lead: 'Claude Code’s engineering plugin already has these. Sign in once, and Conch can use them with every model.',
+      taglines: {},
+    });
+    const mixed = items([
+      found('Datadog'),
+      found('Notion', {
+        from: { provider: 'claude-code', providerName: 'Claude Code', source: 'account' },
+      }),
+    ]);
+    expect(describeFound(mixed, 'Conch').taglines).toEqual({
+      int_datadog: 'engineering plugin',
+      int_notion: 'Your account there',
+    });
+    expect(describeFound(items([found('Linear')]), 'Ada').lead).toBe(
+      'Claude Code’s engineering plugin already has this one. Sign in once, and Ada can use it with every model.',
+    );
+    // One you've used is yours: when its sign-in runs out it's a problem to fix, among the connected.
+    const used = found('Linear', { health: { state: 'needs-auth', okAt: 5, action: 'reconnect' } });
+    expect(items([used]).map(isFound)).toEqual([false]);
+    expect(items([used]).map((i) => describeApp(i).fix?.label)).toEqual(['Sign in again']);
+  });
+
+  it('waits in its own section with one Sign in each: no switch, no warning, no “again”', async () => {
+    const calls = mockFetch(
+      routes({
+        integrations: [hosted('slack'), found('Datadog'), found('Linear')],
+        'POST /api/integrations/int_datadog/connect': () => ({
+          integration: found('Datadog', {
+            health: { state: 'connecting', message: 'Waiting for you to sign in.' },
+          }),
+        }),
+        'DELETE /api/integrations/int_linear': () => ({ ok: true }),
+      }),
+    );
+    renderApp(<AppsView />, { route: '/apps' });
+    const section = await screen.findByRole('region', { name: 'Found in Claude Code' });
+    expect(section).toHaveTextContent(
+      'Claude Code’s engineering plugin already has these. Sign in once, and',
+    );
+    const tiles = within(section).getAllByRole('article');
+    expect(tiles.map((t) => t.getAttribute('aria-labelledby') && t.textContent)).toEqual([
+      'DatadogSign in',
+      'LinearSign in',
+    ]);
+    expect(within(section).queryByRole('switch')).toBeNull();
+    expect(screen.queryByText(/Sign in again/)).toBeNull();
+    // What's connected is only what is.
+    const connected = screen.getByRole('region', { name: 'Connected' });
+    expect(within(connected).getAllByRole('article')).toHaveLength(1);
+    expect(within(connected).queryByText('Datadog')).toBeNull();
+
+    await userEvent.click(within(section).getByRole('button', { name: 'Sign in to Datadog' }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.path.startsWith('/api/integrations/int_datadog/connect'))).toBe(
+        true,
+      ),
+    );
+    // Half-way through it stays where it was, and pressing again starts over.
+    expect(
+      await within(section).findByRole('button', { name: 'Signing in… to Datadog' }),
+    ).toBeEnabled();
+
+    // Saying no leaves it with its provider.
+    await userEvent.click(within(section).getByRole('button', { name: 'Don’t use Linear here' }));
+    await waitFor(() => expect(within(section).queryByText('Linear')).toBeNull());
+    expect(
+      calls.some((c) => c.method === 'DELETE' && c.path === '/api/integrations/int_linear'),
+    ).toBe(true);
+  });
+
+  it('isn’t counted as needing you in the sidebar', async () => {
+    mockFetch(routes({ integrations: [found('Datadog'), found('Linear')] }));
+    renderApp(<AppsLink />, { route: '/' });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Apps' })).toBeInTheDocument());
+    expect(screen.queryByText('2')).toBeNull();
+  });
+});
+
+describe('the page reads top to bottom: connected, what Conch offers by kind, what it found', () => {
+  it('groups the gallery by kind, each tile once, the ones most people want first', () => {
+    const tiles = galleryTiles({
+      catalog: [
+        ...catalog,
+        entry({ id: 'dropbox', name: 'Dropbox', auth: 'oauth', category: 'files' }),
+        entry({ id: 'stripe', name: 'Stripe', auth: 'oauth', category: 'business' }),
+      ],
+      channelCatalog: chats,
+      have: [],
+    });
+    expect(groupTiles(tiles).map((g) => [g.id, g.tiles.map((t) => t.name)])).toEqual([
+      // Slack and Gmail can talk to you too, and are still one tile each, under Work.
+      ['productivity', ['Gmail', 'Slack', 'Notion']],
+      ['talk', ['Telegram', 'Email']],
+      ['files', ['Dropbox']],
+      ['business', ['Stripe']],
+      ['developer', ['1Password']],
+    ]);
+  });
+
+  it('shows the three parts in that order, and a kind’s heading over its tiles', async () => {
+    mockFetch(routes({ integrations: [hosted('slack'), found('Datadog')] }));
+    renderApp(<AppsView />, { route: '/apps' });
+    await screen.findByRole('region', { name: 'Found in Claude Code' });
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
+      'Connected',
+      'Add another app',
+      'Found in Claude Code',
+    ]);
+    const work = screen.getByRole('region', { name: 'Work' });
+    expect(within(work).getByRole('button', { name: 'Gmail' })).toBeInTheDocument();
+    expect(within(work).queryByRole('button', { name: 'Telegram' })).toBeNull();
+    expect(
+      within(screen.getByRole('region', { name: 'Talk to me here' })).getByRole('button', {
+        name: 'Telegram',
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('a filter or a search is one list, and a search finds a found app too', async () => {
+    mockFetch(routes({ integrations: [found('Datadog')] }));
+    renderApp(<AppsView />, { route: '/apps' });
+    await screen.findByRole('region', { name: 'Work' });
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Find an app' }), 'gmai');
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Work' })).toBeNull());
+    expect(screen.getByRole('button', { name: 'Gmail' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Found in Claude Code' })).toBeNull();
+
+    await userEvent.clear(screen.getByRole('searchbox', { name: 'Find an app' }));
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Find an app' }), 'datad');
+    expect(await screen.findByRole('button', { name: 'Sign in to Datadog' })).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing called/)).toBeNull();
+  });
+});
+
+describe('an app disconnected while its page is open', () => {
+  it('goes back to Apps, not into its connect dialog', async () => {
+    let integrations = [found('Notion', { id: 'int_notion', catalogId: 'notion' })];
+    mockFetch({
+      ...routes(),
+      'GET /api/integrations': () => ({ catalog, providers: [], integrations }),
+    });
+    const { client } = renderApp(
+      <Routes>
+        <Route path="/apps/:appId" element={<AppDetailView appId="notion" />} />
+        <Route path="*" element={<Where />} />
+      </Routes>,
+      { route: '/apps/notion' },
+    );
+    expect(await screen.findByRole('heading', { level: 1, name: 'Notion' })).toBeInTheDocument();
+    // Its going arrives before the page has left (Disconnect, here or on another device).
+    integrations = [];
+    await client.invalidateQueries();
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/apps'));
+    expect(screen.getByTestId('where').textContent).toBe('/apps');
+  });
+
+  it('one that was never connected still opens its connect dialog', async () => {
+    mockFetch(routes());
+    renderApp(
+      <Routes>
+        <Route path="/apps/:appId" element={<AppDetailView appId="notion" />} />
+        <Route path="*" element={<Where />} />
+      </Routes>,
+      { route: '/apps/notion' },
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('where').textContent).toBe('/apps?connect=notion'),
     );
   });
 });

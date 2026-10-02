@@ -64,6 +64,19 @@
     display: grid;
   }
 
+  /* The gallery by kind: a quiet heading, then its tiles. */
+  .kinds {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-5);
+  }
+
+  .kind {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+  }
+
   .catalogHeader {
     display: flex;
     flex-wrap: wrap;

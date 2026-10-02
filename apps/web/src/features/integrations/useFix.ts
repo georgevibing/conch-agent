@@ -1,4 +1,5 @@
-import type { Integration } from '@conch/protocol';
+import { awaitsSignIn, type Integration } from '@conch/protocol';
+import { toast } from '@conch/nacre';
 import { useNavigate } from 'react-router';
 
 import { integrationsApi } from './api';
@@ -14,6 +15,15 @@ export function useFix() {
   return {
     pending: check.isPending ? check.variables : undefined,
     fix(integration: Integration) {
+      // Found and waiting: signing in is the fix, also when a sign-in was left
+      // half-way (a window closed, a page that never came back) — start it again.
+      if (awaitsSignIn(integration) && integration.auth === 'oauth')
+        return void signIn((display) => integrationsApi.connect(integration.id, display)).then(
+          (result) => {
+            const health = result?.integration.health;
+            if (health?.state === 'error' && health.message) toast.error(health.message);
+          },
+        );
       switch (integration.health.action) {
         case 'reconnect':
           // Gmail, Calendar, Drive, Slack: their page has the fix (a new app password,

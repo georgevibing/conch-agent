@@ -59,6 +59,36 @@ describe('IntegrationStatusBadge', () => {
 });
 
 describe('IntegrationCard', () => {
+  it('a found app is an offer: one button, a way to say no, and no switch or warning', async () => {
+    const onSignIn = vi.fn();
+    const onDismiss = vi.fn();
+    const onOpen = vi.fn();
+    const { container } = renderNacre(
+      <IntegrationCard
+        variant="found"
+        name="Asana"
+        brand="asana"
+        tagline="engineering plugin"
+        action={{ label: 'Sign in', onClick: onSignIn }}
+        dismiss={{ label: 'Don’t use Asana here', onClick: onDismiss }}
+        onOpen={onOpen}
+      />,
+    );
+    const card = screen.getByRole('article', { name: 'Asana' });
+    expect(card).not.toHaveAttribute('data-attention');
+    expect(screen.queryByRole('switch')).toBeNull();
+    expect(screen.getByText('engineering plugin')).toBeInTheDocument();
+    // Eight of them in a row: each button says which app it signs in to.
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in to Asana' }));
+    expect(onSignIn).toHaveBeenCalledOnce();
+    await userEvent.click(screen.getByRole('button', { name: 'Don’t use Asana here' }));
+    expect(onDismiss).toHaveBeenCalledOnce();
+    expect(onOpen).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Asana' }));
+    expect(onOpen).toHaveBeenCalledOnce();
+    await expectAccessible(container);
+  });
+
   it('says a calm next step in place of its facts, with its button, and never over a problem', async () => {
     const onHello = vi.fn();
     const { container, rerender } = renderNacre(

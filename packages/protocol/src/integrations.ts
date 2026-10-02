@@ -35,9 +35,14 @@ export const CatalogAuth = z.enum([...IntegrationAuth.options, 'google', 'slack'
 export type CatalogAuth = z.infer<typeof CatalogAuth>;
 
 export const IntegrationCategory = z.enum([
+  /** Work: notes, tasks, mail, calendars. */
   'productivity',
   'developer',
   'files',
+  /** Design and websites: boards, designs, the sites you publish. */
+  'design',
+  /** Customers and money: support, payments, sales. */
+  'business',
   'home',
   'browser',
   'other',
@@ -195,6 +200,21 @@ export const ServerName = z
   .regex(/^[a-z0-9][a-z0-9_-]{0,31}$/, 'Use lowercase letters, numbers, dashes and underscores.')
   .refine((name) => name !== 'conch', 'That name is taken.');
 
+/**
+ * Where Conch found an app it brought in by itself: a provider had it set up
+ * (its settings, a plugin, its account), and Conch connected the same app so
+ * every model can use it (ADR 0049).
+ */
+export const IntegrationOrigin = z.object({
+  provider: EngineId,
+  /** "Claude Code" */
+  providerName: z.string(),
+  source: z.enum(['engine', 'project', 'account', 'plugin', 'other']),
+  /** The plugin that adds it, when a plugin does. */
+  plugin: z.string().optional(),
+});
+export type IntegrationOrigin = z.infer<typeof IntegrationOrigin>;
+
 export const Integration = z.object({
   id: z.string(),
   /** The catalog entry it came from; unset for ones you added yourself. */
@@ -217,8 +237,25 @@ export const Integration = z.object({
   createdAt: z.number(),
   updatedAt: z.number(),
   lastUsedAt: z.number().optional(),
+  /** Set when Conch brought it in from a provider, rather than you adding it. */
+  from: IntegrationOrigin.optional(),
+  /** A well-known app it looks like, for its logo, when it isn't from the catalog. */
+  brand: z.string().optional(),
+  /** That app's colour for the logo tile, as a hex value. */
+  color: z.string().optional(),
 });
 export type Integration = z.infer<typeof Integration>;
+
+/**
+ * Found, not connected yet: Conch brought it in from a provider and it has
+ * never worked here — waiting for a first sign-in, in the middle of one, or
+ * after one that didn't start. That's an invitation, not a problem: it isn't
+ * counted as needing you, and its button says Sign in, not Sign in again.
+ */
+export const awaitsSignIn = (integration: Pick<Integration, 'from' | 'health'>): boolean =>
+  Boolean(integration.from) &&
+  integration.health.okAt === undefined &&
+  ['needs-auth', 'connecting', 'error'].includes(integration.health.state);
 
 /**
  * An MCP server a provider loads by itself (its own settings, its account's

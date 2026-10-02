@@ -51,10 +51,16 @@ export function connectsItself(entry: Pick<CatalogItem, 'auth' | 'blueprint'>): 
 /**
  * Integrations Conch sets up for you. Every one belongs to Conch, so it works
  * with every model whichever provider answers (ADR 0049). Every remote one was
- * checked against its vendor's live server (Sept 2026): `oauth` entries
+ * checked against its vendor's live server (Sept and Oct 2026): `oauth` entries
  * support dynamic client registration, so "Connect" is one click with no app
  * to register. Google connects through your own Google OAuth client, Slack
  * through your own Slack app; GitHub takes a token.
+ *
+ * Checked means registering, not reading metadata: a service can advertise a
+ * registration address and still refuse a new app (Figma answers 403). Apps
+ * people would look for that take no new apps at all — Asana, HubSpot, Box,
+ * PagerDuty, Zendesk, Xero, Figma — aren't here: Conch could never sign in to
+ * them, and a tile that can't connect is worse than no tile.
  */
 const raw: CatalogItem[] = [
   {
@@ -340,7 +346,7 @@ const raw: CatalogItem[] = [
     name: 'Canva',
     tagline: 'Designs and presentations',
     description: 'Find your designs and create new ones from a description.',
-    category: 'productivity',
+    category: 'design',
     auth: 'oauth',
     color: '#00C4CC',
     homepage: 'https://www.canva.com',
@@ -558,7 +564,7 @@ const raw: CatalogItem[] = [
     name: 'Stripe',
     tagline: 'Payments and customers',
     description: 'Look up payments, customers and subscriptions.',
-    category: 'developer',
+    category: 'business',
     auth: 'oauth',
     color: '#635BFF',
     homepage: 'https://stripe.com',
@@ -576,6 +582,477 @@ const raw: CatalogItem[] = [
         /\b(?:integrat\w*|implement\w*|add(?:ing)?|set(?:ting)?\s+up|build(?:ing)?|wir(?:e|ing)\s+up|hook(?:ing)?\s+up|install(?:ing)?)\s+(?:with\s+)?stripe(?:\s+(?:payments?|checkout|billing|subscriptions?|elements|webhooks?|connect|sdk|api))?\b/gi,
       ],
       links: [/\bdashboard\.stripe\.com\b/i],
+    },
+  },
+  // ── Work ───────────────────────────────────────────────────────────────
+  {
+    id: 'todoist',
+    name: 'Todoist',
+    tagline: 'Tasks and to-do lists',
+    description: 'See what’s due, add tasks and tick them off.',
+    category: 'productivity',
+    auth: 'oauth',
+    color: '#E44332',
+    homepage: 'https://www.todoist.com',
+    examples: ['What’s due today?', 'Add “book the dentist” for Friday'],
+    access: ['Read your tasks and projects', 'Add, change and complete tasks (asks first)'],
+    blueprint: { type: 'http', url: 'https://ai.todoist.net/mcp' },
+    cues: {
+      match: [
+        named('Todoist'),
+        /\btodoist\s+(?:tasks?|projects?|inbox|labels?|filters?|lists?|reminders?|karma)\b/i,
+        /\b(?:in|into|to|from|on)\s+(?:my\s+|our\s+)?todoist\b/i,
+        /\bmy\s+todoist\b/i,
+      ],
+      links: [/\btodoist\.com\/(?:app|showTask)\b/i],
+    },
+  },
+  {
+    id: 'airtable',
+    name: 'Airtable',
+    tagline: 'Bases, tables and records',
+    description: 'Look things up in your bases, and add or change records.',
+    category: 'productivity',
+    auth: 'oauth',
+    color: '#18BFFF',
+    homepage: 'https://www.airtable.com',
+    examples: ['Which orders in the Fulfilment base are still open?'],
+    access: ['Read the bases you choose', 'Add and change records (asks first)'],
+    blueprint: { type: 'http', url: 'https://mcp.airtable.com/mcp' },
+    cues: {
+      match: [
+        named('Airtable'),
+        /\bairtable\s+(?:bases?|tables?|records?|views?|grids?|rows?|fields?|workspaces?|interfaces?)\b/i,
+        /\b(?:in|into|to|from|on)\s+(?:my\s+|our\s+)?airtable\b/i,
+        /\bmy\s+airtable\b/i,
+      ],
+      links: [/\bairtable\.com\/app\w+/i],
+    },
+  },
+  {
+    id: 'clickup',
+    name: 'ClickUp',
+    tagline: 'Tasks, docs and projects',
+    description: 'Find tasks, see what’s on your plate and update them.',
+    category: 'productivity',
+    auth: 'oauth',
+    color: '#7B68EE',
+    homepage: 'https://clickup.com',
+    examples: ['What’s assigned to me this sprint?'],
+    access: ['Read tasks, lists and docs', 'Create and update tasks (asks first)'],
+    blueprint: { type: 'http', url: 'https://mcp.clickup.com/mcp' },
+    cues: {
+      match: [
+        named('ClickUp'),
+        /\bclickup\s+(?:tasks?|lists?|spaces?|docs?|folders?|sprints?|workspaces?|boards?|goals?)\b/i,
+        /\b(?:in|into|to|from|on)\s+(?:my\s+|our\s+)?clickup\b/i,
+        /\bmy\s+clickup\b/i,
+      ],
+      links: [/\bapp\.clickup\.com\b/i],
+    },
+  },
+  {
+    id: 'monday',
+    name: 'monday.com',
+    tagline: 'Boards and projects',
+    description: 'Read your boards, see where work stands and update items.',
+    category: 'productivity',
+    auth: 'oauth',
+    color: '#FF3D57',
+    homepage: 'https://monday.com',
+    examples: ['What’s stuck on the Launch board?'],
+    access: ['Read your boards and items', 'Create and update items (asks first)'],
+    blueprint: { type: 'http', url: 'https://mcp.monday.com/mcp' },
+    cues: {
+      // The day of the week is almost every “monday”: only the board words, said as an app's.
+      match: [
+        /\b(?:in|on|from|to|into)\s+(?:my\s+|our\s+|the\s+)?monday\s+(?:boards?|workspaces?|account|crm)\b/i,
+        /\b(?:my|our)\s+monday\s+(?:boards?|workspaces?|account|crm)\b/i,
+      ],
+      not: [/\bmonday\s+board\s+meetings?\b/gi],
+      links: [/\bmonday\.com\b/i],
+    },
+  },
+  {
+    id: 'calendly',
+    name: 'Calendly',
+    tagline: 'Booking links and meetings',
+    description: 'See who booked time with you and share the right link.',
+    category: 'productivity',
+    auth: 'oauth',
+    color: '#006BFF',
+    homepage: 'https://calendly.com',
+    examples: ['Who booked a call with me this week?'],
+    access: ['Read your event types and bookings', 'Create links and cancel bookings (asks first)'],
+    blueprint: { type: 'http', url: 'https://mcp.calendly.com' },
+    cues: {
+      match: [
+        named('Calendly'),
+        /\bcalendly\s+(?:links?|events?|bookings?|meetings?|event\s+types?|availability|invitees?|account)\b/i,
+        /\b(?:in|on|from|to|through|via)\s+(?:my\s+|our\s+)?calendly\b/i,
+        /\bmy\s+calendly\b/i,
+      ],
+      links: [/\bcalendly\.com\/[\w-]/i],
+    },
+  },
+  {
+    id: 'granola',
+    name: 'Granola',
+    tagline: 'Meeting notes',
+    description: 'Search the notes and transcripts of your meetings.',
+    category: 'productivity',
+    auth: 'oauth',
+    color: '#5F7A3A',
+    homepage: 'https://www.granola.ai',
+    examples: ['What did we agree in yesterday’s call with Acme?'],
+    access: ['Read your meeting notes and transcripts'],
+    blueprint: { type: 'http', url: 'https://mcp.granola.ai/mcp' },
+    cues: {
+      // Breakfast is the other granola: only next to the words for what it keeps.
+      match: [
+        /\bgranola\s+(?:notes?|meeting\s+notes?|transcripts?|meetings?|summar(?:y|ies)|recordings?)\b/i,
+        /\b(?:notes?|meetings?|transcripts?|summar(?:y|ies)|calls?)\b[^.?!\n]{0,40}\b(?:in|from)\s+(?:my\s+|our\s+)?granola\b/i,
+      ],
+    },
+  },
+  {
+    id: 'evernote',
+    name: 'Evernote',
+    tagline: 'Notes and notebooks',
+    description: 'Search your notes, read them and write new ones.',
+    category: 'productivity',
+    auth: 'oauth',
+    color: '#00A82D',
+    homepage: 'https://evernote.com',
+    examples: ['Find my note about the boiler warranty'],
+    access: ['Search and read your notes', 'Create and edit notes (asks first)'],
+    blueprint: { type: 'http', url: 'https://mcp.evernote.com/mcp' },
+    cues: {
+      match: [
+        named('Evernote'),
+        /\bevernote\s+(?:notes?|notebooks?|tags?|account)\b/i,
+        /\b(?:in|into|to|from|on)\s+(?:my\s+)?evernote\b/i,
+        /\bmy\s+evernote\b/i,
+      ],
+    },
+  },
+  // ── Files ──────────────────────────────────────────────────────────────
+  {
+    id: 'dropbox',
+    name: 'Dropbox',
+    tagline: 'Files and folders',
+    description: 'Find files in your Dropbox and read what’s in them.',
+    category: 'files',
+    auth: 'oauth',
+    color: '#0061FF',
+    homepage: 'https://www.dropbox.com',
+    examples: ['Find the signed lease in my Dropbox'],
+    access: ['Search and read your files'],
+    blueprint: { type: 'http', url: 'https://mcp.dropbox.com/mcp' },
+    cues: {
+      match: [
+        named('Dropbox'),
+        /\bdropbox\s+(?:files?|folders?|account|paper|links?)\b/i,
+        /\b(?:in|into|to|from|on)\s+(?:my\s+|our\s+)dropbox\b/i,
+        /\bmy\s+dropbox\b/i,
+      ],
+      links: [/\bdropbox\.com\/(?:s|scl|sh|home)\b/i],
+    },
+  },
+  // ── Design ─────────────────────────────────────────────────────────────
+  {
+    id: 'miro',
+    name: 'Miro',
+    tagline: 'Whiteboards and diagrams',
+    description: 'Read your boards and add notes, diagrams and frames.',
+    category: 'design',
+    auth: 'oauth',
+    color: '#050038',
+    homepage: 'https://miro.com',
+    examples: ['Summarise the sticky notes on the Retro board'],
+    access: ['Read the boards you choose', 'Add to boards (asks first)'],
+    blueprint: { type: 'http', url: 'https://mcp.miro.com/' },
+    cues: {
+      // Joan Miró painted: only next to the words for a board.
+      match: [
+        /\bmiro\s+(?:boards?|whiteboards?|diagrams?|frames?|stick(?:y|ies)(?:\s+notes?)?|mind\s*maps?)\b/i,
+        /\b(?:boards?|whiteboards?|diagrams?|stick(?:y|ies)|frames?|mind\s*maps?)\b[^.?!\n]{0,40}\b(?:in|on|from)\s+(?:my\s+|our\s+)?miro\b/i,
+      ],
+      links: [/\bmiro\.com\/app\/board\b/i],
+    },
+  },
+  {
+    id: 'webflow',
+    name: 'Webflow',
+    tagline: 'Sites and their content',
+    description: 'Look through your sites, and add or edit pages and collection items.',
+    category: 'design',
+    auth: 'oauth',
+    color: '#146EF5',
+    homepage: 'https://webflow.com',
+    examples: ['Add this article to the Blog collection as a draft'],
+    access: ['Read your sites and their content', 'Edit pages and items (asks first)'],
+    blueprint: { type: 'http', url: 'https://mcp.webflow.com/mcp' },
+    cues: {
+      match: [
+        named('Webflow'),
+        /\bwebflow\s+(?:sites?|cms|collections?|pages?|items?|projects?|designer|account)\b/i,
+        /\b(?:in|into|to|from|on)\s+(?:my\s+|our\s+)?webflow\b/i,
+        /\bmy\s+webflow\b/i,
+      ],
+    },
+  },
+  {
+    id: 'wordpress',
+    name: 'WordPress.com',
+    tagline: 'Your site and its posts',
+    description: 'Read your posts, pages and comments, and write drafts.',
+    category: 'design',
+    auth: 'oauth',
+    color: '#21759B',
+    homepage: 'https://wordpress.com',
+    examples: ['Draft a post from these notes', 'Which posts got the most views this month?'],
+    access: ['Read your sites, posts and stats', 'Write drafts and edit posts (asks first)'],
+    blueprint: { type: 'http', url: 'https://public-api.wordpress.com/wpcom/v2/mcp/v1' },
+    cues: {
+      // Building a theme or a plugin is coding: these are about what's on your own site.
+      match: [
+        /\bmy\s+wordpress(?:\.com)?\s+(?:site|blog|posts?|pages?|drafts?|comments?|stats)\b/i,
+        /\b(?:posts?|drafts?|pages?|comments?|stats)\b[^.?!\n]{0,40}\b(?:on|in|from|to)\s+(?:my\s+|our\s+)wordpress\b/i,
+      ],
+      not: [/\bwordpress\s+(?:plugins?|themes?|hooks?|multisite|install\w*|development)\b/gi],
+    },
+  },
+  // ── Business ───────────────────────────────────────────────────────────
+  {
+    id: 'intercom',
+    name: 'Intercom',
+    tagline: 'Customer conversations',
+    description: 'Search conversations and contacts, and see what customers are asking.',
+    category: 'business',
+    auth: 'oauth',
+    color: '#286EFA',
+    homepage: 'https://www.intercom.com',
+    examples: ['What are customers asking about most this week?'],
+    access: ['Read conversations and contacts'],
+    blueprint: { type: 'http', url: 'https://mcp.intercom.com/mcp' },
+    cues: {
+      match: [
+        /\bintercom\s+(?:conversations?|inbox|tickets?|chats?|customers?|contacts?|articles?|help\s+cent(?:er|re))\b/i,
+        /\b(?:conversations?|tickets?|chats?|customers?|contacts?)\b[^.?!\n]{0,40}\b(?:in|from|on)\s+(?:my\s+|our\s+)?intercom\b/i,
+        /\b(?:my|our)\s+intercom\b/i,
+      ],
+      // The one by the door.
+      not: [
+        /\b(?:door|apartment|building|gate|video|wireless|baby|office|home)\s+intercoms?\b/gi,
+        /\bintercoms?\s+(?:system|button|speaker|buzzer|panel)\b/gi,
+      ],
+    },
+  },
+  {
+    id: 'paypal',
+    name: 'PayPal',
+    tagline: 'Payments and invoices',
+    description: 'Look up transactions, send invoices and check disputes.',
+    category: 'business',
+    auth: 'oauth',
+    color: '#002991',
+    homepage: 'https://www.paypal.com',
+    examples: ['Which invoices are still unpaid?'],
+    access: ['Read transactions and invoices', 'Create invoices and refunds (asks first)'],
+    blueprint: { type: 'http', url: 'https://mcp.paypal.com/mcp' },
+    cues: {
+      match: [
+        /\bpaypal\s+(?:transactions?|payments?|invoices?|balance|account|disputes?|orders?|payouts?|sales|refunds?)\b/i,
+        /\b(?:transactions?|payments?|invoices?|balance|disputes?|refunds?|sales|orders?)\b[^.?!\n]{0,40}\b(?:in|on|from)\s+(?:my\s+|our\s+)?paypal\b/i,
+        /\bmy\s+paypal\b/i,
+      ],
+      // Building PayPal into an app is coding, not looking at your account.
+      not: [
+        /\b(?:integrat\w*|implement\w*|add(?:ing)?|set(?:ting)?\s+up|build(?:ing)?|install(?:ing)?)\s+(?:with\s+)?paypal(?:\s+(?:payments?|checkout|buttons?|sdk|api))?\b/gi,
+      ],
+    },
+  },
+  {
+    id: 'square',
+    name: 'Square',
+    tagline: 'Sales, orders and customers',
+    description: 'See what you sold, look up orders and customers, and send invoices.',
+    category: 'business',
+    auth: 'oauth',
+    color: '#3E4348',
+    homepage: 'https://squareup.com',
+    examples: ['What were yesterday’s sales at the market stall?'],
+    access: ['Read sales, orders and customers', 'Create invoices and refunds (asks first)'],
+    blueprint: { type: 'http', url: 'https://mcp.squareup.com/sse' },
+    cues: {
+      // A shape, a place and a unit before it's a till: only next to what a shop keeps there.
+      match: [
+        /\bsquare\s+(?:payments?|invoices?|dashboard|pos|orders?|catalog(?:ue)?|sales|customers?|payouts?|transactions?|account)\b/i,
+        /\b(?:payments?|invoices?|orders?|sales|customers?|payouts?|transactions?|refunds?)\b[^.?!\n]{0,40}\b(?:in|on|from)\s+(?:my\s+|our\s+)square\b/i,
+      ],
+      not: [
+        /\bsquare\s+(?:root|feet|foot|met(?:er|re)s?|miles?|inch(?:es)?|brackets?|kilomet\w+|yards?)\b/gi,
+        /\b(?:town|times|city|market|public|red|main)\s+square\b/gi,
+      ],
+    },
+  },
+  {
+    id: 'attio',
+    name: 'Attio',
+    tagline: 'Customers and deals',
+    description: 'Look up people, companies and deals, and keep them up to date.',
+    category: 'business',
+    auth: 'oauth',
+    color: '#1A1D21',
+    homepage: 'https://attio.com',
+    examples: ['Which deals are waiting on a reply from us?'],
+    access: ['Read people, companies and deals', 'Add notes and update records (asks first)'],
+    blueprint: { type: 'http', url: 'https://mcp.attio.com/mcp' },
+    cues: {
+      match: [
+        named('Attio'),
+        /\battio\s+(?:records?|deals?|companies|people|lists?|notes?|crm|workspaces?|pipelines?)\b/i,
+        /\b(?:in|into|to|from|on)\s+(?:my\s+|our\s+)?attio\b/i,
+      ],
+    },
+  },
+  // ── Developer ──────────────────────────────────────────────────────────
+  {
+    id: 'datadog',
+    name: 'Datadog',
+    tagline: 'Monitors, logs and metrics',
+    description: 'Check what’s alerting, search logs and read dashboards.',
+    category: 'developer',
+    auth: 'oauth',
+    color: '#632CA6',
+    homepage: 'https://www.datadoghq.com',
+    examples: ['Which monitors are alerting right now?'],
+    access: ['Read monitors, logs, metrics and incidents'],
+    blueprint: { type: 'http', url: 'https://mcp.datadoghq.com/api/unstable/mcp-server/mcp' },
+    cues: {
+      match: [
+        /\bdatadog\s+(?:monitors?|dashboards?|logs?|metrics?|alerts?|incidents?|traces?|apm)\b/i,
+        /\b(?:monitors?|dashboards?|logs?|metrics?|alerts?|incidents?|traces?|errors?)\b[^.?!\n]{0,40}\b(?:in|on|from)\s+(?:my\s+|our\s+)?datadog\b/i,
+        /\b(?:in|on|from)\s+(?:my\s+|our\s+)?Datadog\b/,
+      ],
+      // Putting its agent on a server is the agent's own job.
+      not: [
+        /\b(?:integrat\w*|install(?:ing)?|set(?:ting)?\s+up|add(?:ing)?|configur\w*)\s+(?:the\s+)?datadog(?:\s+agent)?\b/gi,
+      ],
+      links: [/\bapp\.datadoghq\.(?:com|eu)\b/i],
+    },
+  },
+  {
+    id: 'posthog',
+    name: 'PostHog',
+    tagline: 'Product analytics',
+    description: 'Ask about your product’s numbers, feature flags and experiments.',
+    category: 'developer',
+    auth: 'oauth',
+    color: '#1D4AFF',
+    homepage: 'https://posthog.com',
+    examples: ['How did sign-ups change after last week’s release?'],
+    access: ['Read insights, events and flags', 'Change flags and dashboards (asks first)'],
+    blueprint: { type: 'http', url: 'https://mcp.posthog.com/mcp' },
+    cues: {
+      match: [
+        /\bposthog\s+(?:insights?|dashboards?|events?|funnels?|feature\s+flags?|flags?|experiments?|recordings?|cohorts?|surveys?)\b/i,
+        /\b(?:in|on|from)\s+(?:my\s+|our\s+)?posthog\b/i,
+        /\bmy\s+posthog\b/i,
+      ],
+      not: [
+        /\b(?:integrat\w*|install(?:ing)?|set(?:ting)?\s+up|add(?:ing)?)\s+(?:the\s+)?posthog\b/gi,
+      ],
+    },
+  },
+  {
+    id: 'mixpanel',
+    name: 'Mixpanel',
+    tagline: 'Product analytics',
+    description: 'Ask about funnels, retention and what people do in your product.',
+    category: 'developer',
+    auth: 'oauth',
+    color: '#7856FF',
+    homepage: 'https://mixpanel.com',
+    examples: ['Where do people drop off in the checkout funnel?'],
+    access: ['Read reports, events and cohorts'],
+    blueprint: { type: 'http', url: 'https://mcp.mixpanel.com/mcp' },
+    cues: {
+      match: [
+        /\bmixpanel\s+(?:reports?|dashboards?|events?|funnels?|cohorts?|insights?|boards?|retention)\b/i,
+        /\b(?:in|on|from)\s+(?:my\s+|our\s+)?mixpanel\b/i,
+        /\bmy\s+mixpanel\b/i,
+      ],
+      not: [
+        /\b(?:integrat\w*|install(?:ing)?|set(?:ting)?\s+up|add(?:ing)?)\s+(?:the\s+)?mixpanel\b/gi,
+      ],
+    },
+  },
+  {
+    id: 'neon',
+    name: 'Neon',
+    tagline: 'Postgres databases',
+    description: 'Look at your databases and branches, and run queries.',
+    category: 'developer',
+    auth: 'oauth',
+    color: '#34D59A',
+    homepage: 'https://neon.com',
+    examples: ['Which tables grew the most this month?'],
+    access: ['Read your projects and data', 'Run queries and change schemas (asks first)'],
+    blueprint: { type: 'http', url: 'https://mcp.neon.tech/mcp' },
+    cues: {
+      // A gas and a colour first: only next to what a database has.
+      match: [
+        /\bneon\s+(?:projects?|branch(?:es)?|databases?|db|postgres|console|compute)\b/i,
+        /\b(?:databases?|branch(?:es)?|tables?|rows?)\b[^.?!\n]{0,40}\b(?:in|on|from)\s+(?:my\s+|our\s+)neon\b/i,
+      ],
+      not: [
+        /\bneon\s+(?:signs?|lights?|colou?rs?|green|pink|blue|yellow|orange|glow|tetras?|gas|lamps?|genesis)\b/gi,
+      ],
+      links: [/\bconsole\.neon\.tech\b/i],
+    },
+  },
+  {
+    id: 'huggingface',
+    name: 'Hugging Face',
+    tagline: 'Models, datasets and Spaces',
+    description: 'Search models, datasets and papers, and use Spaces as tools.',
+    category: 'developer',
+    auth: 'oauth',
+    color: '#FF9D00',
+    homepage: 'https://huggingface.co',
+    examples: ['Find a small model that’s good at summarising legal text'],
+    access: ['Search what’s public and what’s in your account', 'Run the Spaces you add'],
+    blueprint: { type: 'http', url: 'https://huggingface.co/mcp' },
+    cues: {
+      match: [
+        /\bhugging\s*face\s+(?:models?|datasets?|spaces?|hub|papers?|account|profile)\b/i,
+        /\b(?:models?|datasets?|spaces?|papers?)\b[^.?!\n]{0,40}\b(?:on|from|in)\s+(?:the\s+|my\s+)?hugging\s*face\b/i,
+      ],
+      links: [/\bhuggingface\.co\/[\w-]/i],
+    },
+  },
+  {
+    id: 'netlify',
+    name: 'Netlify',
+    tagline: 'Sites and deploys',
+    description: 'Check deploys, read build logs and look through your sites.',
+    category: 'developer',
+    auth: 'oauth',
+    color: '#00C7B7',
+    homepage: 'https://www.netlify.com',
+    examples: ['Why did the last deploy of the docs site fail?'],
+    access: ['Read sites, deploys and logs', 'Change settings and deploy (asks first)'],
+    blueprint: { type: 'http', url: 'https://netlify-mcp.netlify.app/mcp' },
+    cues: {
+      // Deploying is the agent's job; these read what already happened.
+      match: [
+        /\bnetlify\s+(?:sites?|deploys?|deployments?|builds?|logs?|functions?|forms?|domains?|account|projects?|dashboard)\b/i,
+        /\b(?:sites?|deploys?|deployments?|builds?|logs?|domains?|forms?)\s+(?:on|in|from)\s+(?:my\s+|our\s+)?netlify\b/i,
+        /\bmy\s+netlify\b/i,
+      ],
+      links: [/\bapp\.netlify\.com\b/i],
     },
   },
 ];
@@ -621,6 +1098,36 @@ export function publicCatalog(): CatalogEntry[] {
     );
 }
 
+/**
+ * Apps a provider's plugins often bring that aren't in the catalog: the name
+ * people know them by and their colour, so their card isn't a lowercase
+ * server name with a plug on it. Each has its mark in Nacre's `brands.ts`.
+ */
+const WELL_KNOWN: Record<string, { name: string; color: string }> = {
+  asana: { name: 'Asana', color: '#F06A6A' },
+  pagerduty: { name: 'PagerDuty', color: '#06AC38' },
+};
+
+const plain = (text: string) => text.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * What a server a provider named should be called and look like in Conch,
+ * when its name is exactly an app we know (`github` is GitHub, `pagerduty` is
+ * PagerDuty). Only an exact name: a server that merely mentions an app keeps
+ * the name its owner gave it.
+ */
+export function likeness(
+  name: string,
+): { name: string; brand: string; color?: string } | undefined {
+  const key = plain(name);
+  if (!key) return undefined;
+  for (const entry of CATALOG.values())
+    if (plain(entry.id) === key || plain(entry.name) === key)
+      return { name: entry.name, brand: entry.id, ...(entry.color && { color: entry.color }) };
+  const known = WELL_KNOWN[key];
+  return known ? { name: known.name, brand: key, color: known.color } : undefined;
+}
+
 /** Guess which catalog entry an MCP server someone else configured is, for its logo. */
 export function matchCatalog(name: string, url?: string): string | undefined {
   const text = `${name} ${url ?? ''}`.toLowerCase();
@@ -642,6 +1149,27 @@ export function matchCatalog(name: string, url?: string): string | undefined {
     [/supabase/, 'supabase'],
     [/cloudflare/, 'cloudflare'],
     [/stripe/, 'stripe'],
+    [/todoist/, 'todoist'],
+    [/airtable/, 'airtable'],
+    [/clickup/, 'clickup'],
+    [/monday\.com|mcp\.monday/, 'monday'],
+    [/calendly/, 'calendly'],
+    [/granola/, 'granola'],
+    [/evernote/, 'evernote'],
+    [/dropbox/, 'dropbox'],
+    [/\bmiro\b/, 'miro'],
+    [/webflow/, 'webflow'],
+    [/wordpress/, 'wordpress'],
+    [/intercom/, 'intercom'],
+    [/paypal/, 'paypal'],
+    [/squareup/, 'square'],
+    [/attio/, 'attio'],
+    [/datadog/, 'datadog'],
+    [/posthog/, 'posthog'],
+    [/mixpanel/, 'mixpanel'],
+    [/neon\.tech|\bneon\b/, 'neon'],
+    [/hugging\s*face/, 'huggingface'],
+    [/netlify/, 'netlify'],
   ];
   return rules.find(([pattern]) => pattern.test(text))?.[1];
 }

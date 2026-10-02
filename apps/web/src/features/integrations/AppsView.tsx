@@ -26,7 +26,10 @@ import { useVault, vaultKeys } from '../passwords/queries';
 import {
   appNeedsYou,
   describeApp,
+  describeFound,
   galleryTiles,
+  groupTiles,
+  isFound,
   joinApps,
   TALK,
   type AppItem,
@@ -37,7 +40,12 @@ import { CustomDialog } from './CustomDialog';
 import { categoryLabel } from './describe';
 import styles from './Integrations.module.css';
 import { appPath } from './paths';
-import { useAssistantName, useIntegrations, useUpdateIntegration } from './queries';
+import {
+  useAssistantName,
+  useDismissFound,
+  useIntegrations,
+  useUpdateIntegration,
+} from './queries';
 import { useFix } from './useFix';
 import { useSignInResult } from './useSignInResult';
 
@@ -54,6 +62,8 @@ const FILTER_ORDER = [
   TALK,
   'productivity',
   'files',
+  'design',
+  'business',
   'developer',
   'home',
   'browser',
@@ -66,6 +76,12 @@ const FILTER_ORDER = [
  * card whether it reads for you, talks to you, or both — and "Talk to me
  * here" is a filter, where the chat apps are. Everything here belongs to
  * Conch, so it works with every model (ADR 0049).
+ *
+ * Three parts, top to bottom: what's connected; what Conch offers, by kind
+ * (a filter or a search shows one flat list instead); and, last, what Conch
+ * came across in a provider and you haven't signed in to. Those aren't
+ * connected and aren't a problem: said once where they came from, one small
+ * tile and one button each.
  */
 export function AppsView() {
   useSignInResult();
@@ -74,6 +90,7 @@ export function AppsView() {
   const { data: vault } = useVault();
   const assistant = useAssistantName();
   const update = useUpdateIntegration();
+  const dismiss = useDismissFound();
   const client = useQueryClient();
   const auth = useAuth();
   const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
@@ -119,7 +136,12 @@ export function AppsView() {
 
   const needle = query.trim().toLowerCase();
   const talking = show === TALK;
-  const mine = items.filter((i) => !talking || i.talks);
+  const found = items.filter(isFound);
+  // Looking for one by name finds it wherever it is on the page.
+  const foundShown = found.filter((i) => !needle || i.name.toLowerCase().includes(needle));
+  const foundWords = describeFound(found, assistant, data?.providers);
+  const connected = items.filter((i) => !isFound(i));
+  const mine = connected.filter((i) => !talking || i.talks);
   const shown = tiles
     .filter((t) => show === 'all' || t.categories.includes(show))
     .filter((t) => !needle || t.words.includes(needle))
@@ -188,6 +210,23 @@ export function AppsView() {
   };
 
   const loading = isPending || channelsPending;
+  // Everything at once reads best by kind; a filter or a search is one list.
+  const grouped = show === 'all' && !needle && shown.length > 0;
+  const tileCard = (tile: Tile, index: number) => (
+    <li key={`${tile.kind}:${tile.id}`}>
+      <IntegrationCard
+        variant="catalog"
+        index={index}
+        name={tile.name}
+        brand={tile.id}
+        color={tile.color}
+        tagline={tile.tagline}
+        local={tile.local}
+        connected={false}
+        onOpen={() => openTile(tile)}
+      />
+    </li>
+  );
 
   return (
     <div className={styles.page}>
@@ -280,7 +319,7 @@ export function AppsView() {
       <section aria-labelledby="apps-gallery" className={styles.section}>
         <div className={styles.catalogHeader}>
           <Heading level={2} id="apps-gallery" size="sm" tone="muted">
-            {items.length ? 'Add another app' : 'Connect your first app'}
+            {connected.length ? 'Add another app' : 'Connect your first app'}
           </Heading>
           <div className={styles.filters}>
             {filters.length > 2 && (
@@ -315,25 +354,24 @@ export function AppsView() {
               <Skeleton key={i} shape="block" height="4.25rem" />
             ))}
           </div>
-        ) : shown.length ? (
-          <ul className={styles.tiles}>
-            {shown.map((tile, index) => (
-              <li key={`${tile.kind}:${tile.id}`}>
-                <IntegrationCard
-                  variant="catalog"
-                  index={index}
-                  name={tile.name}
-                  brand={tile.id}
-                  color={tile.color}
-                  tagline={tile.tagline}
-                  local={tile.local}
-                  connected={false}
-                  onOpen={() => openTile(tile)}
-                />
-              </li>
+        ) : grouped ? (
+          <div className={styles.kinds}>
+            {groupTiles(shown).map((group) => (
+              <section
+                key={group.id}
+                aria-labelledby={`apps-kind-${group.id}`}
+                className={styles.kind}
+              >
+                <Heading level={3} id={`apps-kind-${group.id}`} size="xs" tone="subtle">
+                  {FILTER_WORDS[group.id] ?? group.id}
+                </Heading>
+                <ul className={styles.tiles}>{group.tiles.map(tileCard)}</ul>
+              </section>
             ))}
-          </ul>
-        ) : (
+          </div>
+        ) : shown.length ? (
+          <ul className={styles.tiles}>{shown.map(tileCard)}</ul>
+        ) : needle && foundShown.length ? null : (
           <Stack gap={2} align="start" className={styles.noMatch}>
             <Text tone="muted">
               {needle ? `Nothing called “${query}” here yet.` : 'You have every app here already.'}
@@ -351,6 +389,53 @@ export function AppsView() {
           </Stack>
         )}
       </section>
+
+      {!loading && !talking && foundShown.length > 0 && (
+        <section aria-labelledby="apps-found" className={styles.section}>
+          <Stack gap={0.5}>
+            <Heading level={2} id="apps-found" size="sm" tone="muted">
+              {foundWords.title}
+            </Heading>
+            <Text size="sm" tone="subtle">
+              {foundWords.lead}
+            </Text>
+          </Stack>
+          <ul className={styles.cards}>
+            {foundShown.map((item, index) => (
+              <li key={item.key}>
+                <IntegrationCard
+                  variant="found"
+                  index={index}
+                  name={item.name}
+                  brand={item.brand}
+                  color={item.color}
+                  // A try that didn't start says why, where its origin would be.
+                  tagline={
+                    item.integration.health.state === 'error'
+                      ? item.integration.health.message
+                      : foundWords.taglines[item.key]
+                  }
+                  action={{
+                    label:
+                      item.integration.health.state === 'connecting'
+                        ? 'Signing in…'
+                        : item.integration.health.state === 'error'
+                          ? 'Try again'
+                          : 'Sign in',
+                    onClick: () => fix(item.integration),
+                    loading: pending === item.integration.id,
+                  }}
+                  dismiss={{
+                    label: `Don’t use ${item.name} here`,
+                    onClick: () => dismiss.mutate(item.integration),
+                  }}
+                  onOpen={() => void navigate(item.to)}
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <footer className={styles.pageFooter}>
         <ShieldCheck aria-hidden />

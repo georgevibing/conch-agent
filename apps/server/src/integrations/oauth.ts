@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 
 import {
   auth,
+  discoverOAuthServerInfo,
   type OAuthClientProvider,
   type OAuthDiscoveryState,
 } from '@modelcontextprotocol/sdk/client/auth.js';
@@ -176,6 +177,26 @@ export class OAuthFlows {
     private readonly store: IntegrationStore,
     private readonly fetchFor: (reach: Reach) => typeof fetch = (reach) => guardedFetch(reach),
   ) {}
+
+  /**
+   * Can Conch sign in to this server by itself? Signing in starts with Conch
+   * registering as a new app with the service (RFC 7591). Some services only
+   * accept apps they already know — a provider's own plugin ships as one — and
+   * those can't be connected from here, however often you press Sign in.
+   * `true`: it can, or nothing there asks for a sign-in. `false`: only an app
+   * the service already knows can. `undefined`: couldn't find out just now.
+   * Read-only: the service's public metadata, through the same guarded fetch.
+   */
+  async canSignIn(serverUrl: string, reach: Reach): Promise<boolean | undefined> {
+    try {
+      const { authorizationServerMetadata: metadata } = await discoverOAuthServerInfo(serverUrl, {
+        fetchFn: this.fetchFor(reach),
+      });
+      return !metadata || Boolean(metadata.registration_endpoint);
+    } catch {
+      return undefined;
+    }
+  }
 
   /** Discover, register if needed, and return the page to sign in on. */
   async start(input: {

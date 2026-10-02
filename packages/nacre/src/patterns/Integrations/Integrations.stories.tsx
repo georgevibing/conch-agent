@@ -169,6 +169,66 @@ export const ConnectedCards: Story = {
 };
 
 /**
+ * Apps Conch came across in a provider (its settings, a plugin, its account)
+ * and brought in, waiting for a first sign-in. An offer, not a problem: said
+ * once above them where they came from, then one small tile each with the
+ * one button, and a way to say no that appears when you reach for it.
+ */
+export const FoundApps: Story = {
+  render: () => (
+    <Stack gap={8} style={{ maxWidth: 960 }}>
+      <Stack gap={3}>
+        <Stack gap={0.5}>
+          <Heading level={2} size="sm" tone="muted">
+            Found in Claude Code
+          </Heading>
+          <span style={{ color: 'var(--nc-text-subtle)', fontSize: 'var(--nc-text-sm)' }}>
+            Claude Code already has these. Sign in once, and Conch can use them with every model.
+          </span>
+        </Stack>
+        <div style={grid}>
+          <IntegrationCard
+            variant="found"
+            name="Datadog"
+            brand="datadog"
+            color="#632CA6"
+            tagline="engineering plugin"
+            action={{ label: 'Sign in', onClick: () => {} }}
+            dismiss={{ label: 'Don’t use Datadog here', onClick: () => {} }}
+          />
+          <IntegrationCard
+            variant="found"
+            name="Jira & Confluence"
+            brand="atlassian"
+            color="#0052CC"
+            tagline="engineering plugin"
+            action={{ label: 'Sign in', onClick: () => {} }}
+            dismiss={{ label: 'Don’t use Jira & Confluence here', onClick: () => {} }}
+          />
+          <IntegrationCard
+            variant="found"
+            name="Linear"
+            brand="linear"
+            color="#5E6AD2"
+            tagline="engineering plugin"
+            action={{ label: 'Sign in', onClick: () => {}, loading: true }}
+            dismiss={{ label: 'Don’t use Linear here', onClick: () => {} }}
+          />
+          <IntegrationCard
+            variant="found"
+            name="Team wiki"
+            brand="custom"
+            tagline="Claude Code settings"
+            action={{ label: 'Sign in', onClick: () => {} }}
+            dismiss={{ label: 'Don’t use Team wiki here', onClick: () => {} }}
+          />
+        </div>
+      </Stack>
+    </Stack>
+  ),
+};
+
+/**
  * One app, one card (ADR 0052): Slack the assistant uses and talks to you
  * in, a chat app on its own, and a calm next step that isn't a problem — a
  * hello to finish, someone waiting to be let in.
@@ -377,8 +437,11 @@ export const IssueInChat: Story = {
   ),
 };
 
-/** How the pieces compose into the Integrations page. */
-/** The Apps page (ADR 0052): one card per app, chat apps among them, Talk to me here as a filter. */
+/**
+ * The Apps page (ADR 0052), top to bottom: what's connected, one card per app;
+ * what Conch offers, by kind, chat apps among them; and last, what it found in
+ * a provider, waiting for a sign-in.
+ */
 export const Page: Story = {
   render: () => (
     <Stack gap={8} style={{ maxWidth: 960 }}>
@@ -460,34 +523,96 @@ export const Page: Story = {
             <SegmentedControl.Item value="developer">Developer</SegmentedControl.Item>
           </SegmentedControl>
         </Stack>
-        <div
-          style={{
-            ...grid,
-            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 15rem), 1fr))',
-          }}
-        >
-          {[
-            ...brands.filter((b) => !['github', 'notion', 'slack'].includes(b.id)).slice(0, 6),
-            { id: 'whatsapp', name: 'WhatsApp', color: '#25D366', tagline: 'Message yourself' },
-            {
-              id: 'discord',
-              name: 'Discord',
-              color: '#5865F2',
-              tagline: 'A private bot of your own',
-            },
-            { id: 'imessage', name: 'iMessage', color: '#34DA50', tagline: 'Text yourself' },
-          ].map((b, i) => (
-            <IntegrationCard
-              key={b.id}
-              variant="catalog"
-              index={i}
-              name={b.name}
-              brand={b.id}
-              color={b.color}
-              tagline={b.tagline}
-              onOpen={() => {}}
-            />
-          ))}
+        {[
+          { kind: 'Work', ids: ['gmail', 'google-calendar', 'todoist', 'airtable', 'calendly'] },
+          {
+            kind: 'Talk to me here',
+            apps: [
+              { id: 'whatsapp', name: 'WhatsApp', color: '#25D366', tagline: 'Message yourself' },
+              {
+                id: 'discord',
+                name: 'Discord',
+                color: '#5865F2',
+                tagline: 'A private bot of your own',
+              },
+              { id: 'imessage', name: 'iMessage', color: '#34DA50', tagline: 'Text yourself' },
+            ],
+          },
+          { kind: 'Files', ids: ['google-drive', 'dropbox'] },
+          { kind: 'Design', ids: ['canva', 'miro', 'webflow'] },
+          { kind: 'Business', ids: ['stripe', 'paypal', 'intercom', 'attio'] },
+        ].map((group) => (
+          <Stack key={group.kind} gap={2}>
+            <Heading level={3} size="xs" tone="subtle">
+              {group.kind}
+            </Heading>
+            <div
+              style={{
+                ...grid,
+                gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 14.5rem), 1fr))',
+              }}
+            >
+              {(group.apps ?? brands.filter((b) => group.ids?.includes(b.id))).map((b, i) => (
+                <IntegrationCard
+                  key={b.id}
+                  variant="catalog"
+                  index={i}
+                  name={b.name}
+                  brand={b.id}
+                  color={b.color}
+                  tagline={b.tagline}
+                  onOpen={() => {}}
+                />
+              ))}
+            </div>
+          </Stack>
+        ))}
+      </Stack>
+      <Stack gap={3}>
+        <Stack gap={0.5}>
+          <Heading level={2} size="sm" tone="muted">
+            Found in Claude Code
+          </Heading>
+          <span style={{ color: 'var(--nc-text-subtle)', fontSize: 'var(--nc-text-sm)' }}>
+            Claude Code already has these. Sign in once, and Conch can use them with every model.
+          </span>
+        </Stack>
+        <div style={grid}>
+          <IntegrationCard
+            variant="found"
+            name="Datadog"
+            brand="datadog"
+            color="#632CA6"
+            tagline="engineering plugin"
+            action={{ label: 'Sign in', onClick: () => {} }}
+            dismiss={{ label: 'Don’t use Datadog here', onClick: () => {} }}
+          />
+          <IntegrationCard
+            variant="found"
+            name="Jira & Confluence"
+            brand="atlassian"
+            color="#0052CC"
+            tagline="engineering plugin"
+            action={{ label: 'Sign in', onClick: () => {} }}
+            dismiss={{ label: 'Don’t use Jira & Confluence here', onClick: () => {} }}
+          />
+          <IntegrationCard
+            variant="found"
+            name="Linear"
+            brand="linear"
+            color="#5E6AD2"
+            tagline="engineering plugin"
+            action={{ label: 'Sign in', onClick: () => {}, loading: true }}
+            dismiss={{ label: 'Don’t use Linear here', onClick: () => {} }}
+          />
+          <IntegrationCard
+            variant="found"
+            name="Team wiki"
+            brand="custom"
+            tagline="Claude Code settings"
+            action={{ label: 'Sign in', onClick: () => {} }}
+            dismiss={{ label: 'Don’t use Team wiki here', onClick: () => {} }}
+          />
         </div>
       </Stack>
     </Stack>

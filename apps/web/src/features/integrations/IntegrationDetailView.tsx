@@ -1,4 +1,4 @@
-import type { Integration, IntegrationPolicy } from '@conch/protocol';
+import { awaitsSignIn, type Integration, type IntegrationPolicy } from '@conch/protocol';
 import {
   AlertDialog,
   Button,
@@ -94,7 +94,7 @@ export function IntegrationDetailView({
   return (
     <Detail
       integration={integration}
-      color={entry?.color}
+      color={entry?.color ?? integration.color}
       entry={entry}
       item={item}
       onSetUp={onSetUp}
@@ -132,6 +132,9 @@ function Detail({
   );
   const { health } = integration;
   const attention = needsAttention(integration);
+  // Found in a provider, never signed in to here: an offer, not a warning.
+  const waiting = awaitsSignIn(integration);
+  const offer = waiting && integration.health.state !== 'error';
   const label = fixLabel(integration);
   const prefix = new RegExp(`^${integration.server.replace(/[-_]\d+$/, '')}[-_]`, 'i');
 
@@ -157,7 +160,7 @@ function Detail({
 
       <header className={styles.detailHeader}>
         <IntegrationLogo
-          brand={integration.catalogId ?? 'custom'}
+          brand={integration.catalogId ?? integration.brand ?? 'custom'}
           name={integration.name}
           color={color}
           size="xl"
@@ -191,10 +194,14 @@ function Detail({
         </label>
       </header>
 
-      {attention && health.message && (
+      {(attention || waiting) && health.message && (
         <Callout
-          tone={health.state === 'error' ? 'danger' : 'warning'}
-          title={health.message}
+          tone={offer ? 'info' : health.state === 'error' ? 'danger' : 'warning'}
+          title={
+            offer
+              ? `${integration.from?.providerName ?? 'A provider'} already has ${integration.name}. Sign in once, and ${assistant} can use it with every model.`
+              : health.message
+          }
           live="polite"
           action={
             label &&
