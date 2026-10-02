@@ -304,8 +304,9 @@ export function verifiedOutcome(task: Task): boolean {
     ops.every(
       (op) =>
         op.state === 'confirmed' ||
-        ((op.goalRevision ?? 0) !== (task.goalRevision ?? 0) &&
-          (op.state === 'not-run' || op.effect === 'read')),
+        // Proven no-dispatch is resolved, but cannot satisfy a receipt expectation.
+        op.state === 'not-run' ||
+        ((op.goalRevision ?? 0) !== (task.goalRevision ?? 0) && op.effect === 'read'),
     ) &&
     expectations.every((expected) => {
       const current = ops.filter(

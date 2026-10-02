@@ -257,6 +257,38 @@ describe('durable task operations', () => {
     expect((await f.get()).operations?.[0]?.state).toBe('confirmed');
   });
 
+  it('optional declined writes do not block confirmed work, but required or ambiguous writes do', async () => {
+    const f = await setup();
+    await f.update({ expectations: [{ tool: 'artifact_create', minimum: 1 }] });
+    await f
+      .ledger()
+      .wrap({ ...f.tool, name: 'artifact_create' })
+      .run({});
+    f.tool.run = vi.fn(async () => ({
+      text: 'Approval declined; nothing saved.',
+      effect: 'not-executed' as const,
+    }));
+    await f.ledger().wrap(f.tool).run({});
+    f.restart();
+    const task = await f.get();
+    expect(task.operations?.map((op) => op.state)).toEqual(['confirmed', 'not-run']);
+    expect(verifiedOutcome(task)).toBe(true);
+    expect(
+      verifiedOutcome({
+        ...task,
+        expectations: [...(task.expectations ?? []), { tool: 'draft', minimum: 1 }],
+      }),
+    ).toBe(false);
+    for (const state of ['running', 'unresolved'] as const) {
+      expect(
+        verifiedOutcome({
+          ...task,
+          operations: task.operations?.map((op) => (op.tool === 'draft' ? { ...op, state } : op)),
+        }),
+      ).toBe(false);
+    }
+  });
+
   it('per-tool write limits bound effects, including concurrent different arguments', async () => {
     const f = await setup();
     await f.update({ toolScope: { names: ['draft'], limits: { draft: 1 } } });
