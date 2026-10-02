@@ -24,7 +24,7 @@ const axe = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 
 const browser = await chromium.launch({ channel: 'chrome' });
 
-/** The home page, and every page the contents list. */
+/** The front page, the documentation's own, and every page the contents list. */
 async function pages() {
   const tab = await browser.newPage();
   await tab.goto(`${origin}/start/install`, { waitUntil: 'networkidle' });
@@ -32,7 +32,9 @@ async function pages() {
     .locator('nav[aria-label="Documentation"] a')
     .evaluateAll((links) => links.map((link) => link.getAttribute('href')));
   await tab.close();
-  return ['/', ...listed].filter((path) => path && (!opts.filter || path.includes(opts.filter)));
+  return ['/', '/docs', ...listed].filter(
+    (path) => path && (!opts.filter || path.includes(opts.filter)),
+  );
 }
 
 let failures = 0;
