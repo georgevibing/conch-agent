@@ -17,8 +17,11 @@ import { z } from 'zod';
 
 import { Id } from './common';
 
-/** The apps Conch can talk through today. */
-export const ChannelKind = z.enum(['telegram', 'discord', 'slack']);
+/**
+ * The apps Conch can talk through today. WhatsApp and Signal aren't bots:
+ * Conch joins your own account as a linked device (ADR 0043).
+ */
+export const ChannelKind = z.enum(['telegram', 'discord', 'slack', 'whatsapp', 'signal']);
 export type ChannelKind = z.infer<typeof ChannelKind>;
 
 /**
@@ -52,6 +55,8 @@ export const ChannelHealth = z.object({
   retryAt: z.number().optional(),
   /** Since when it has been in this state. */
   since: z.number().optional(),
+  /** What has to be installed for it to work (a need id, ADR 0016): Signal needs signal-cli. */
+  need: z.string().max(64).optional(),
 });
 export type ChannelHealth = z.infer<typeof ChannelHealth>;
 
@@ -72,6 +77,8 @@ export const ChannelBot = z.object({
   inviteUrl: z.string().max(2000).optional(),
   /** Discord: how many servers it's in (people can only message it from a server they share with it). */
   servers: z.number().int().nonnegative().optional(),
+  /** WhatsApp, Signal: the number Conch is linked to, as `+4915123456789`. */
+  phone: z.string().max(32).optional(),
 });
 export type ChannelBot = z.infer<typeof ChannelBot>;
 
@@ -111,6 +118,13 @@ export type ChannelPairing = z.infer<typeof ChannelPairing>;
 export const ChannelSettings = z.object({
   /** Send routine results (and their questions) to the people here. */
   notifyRoutines: z.boolean().default(true),
+  /**
+   * WhatsApp, Signal: what happens when someone else writes to the linked
+   * number. `ignore` (the default: it's your own number, so your friends'
+   * chats are never read) or `ask` (a number just for your assistant:
+   * they get one polite reply and wait for you to let them in).
+   */
+  others: z.enum(['ignore', 'ask']).optional(),
 });
 export type ChannelSettings = z.infer<typeof ChannelSettings>;
 
@@ -168,6 +182,9 @@ export const ChannelSecrets = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('telegram'), token: secret }),
   z.object({ kind: z.literal('discord'), token: secret }),
   z.object({ kind: z.literal('slack'), botToken: secret, appToken: secret }),
+  // Linked devices: what's kept is where their keys are, not a key (ADR 0043).
+  z.object({ kind: z.literal('whatsapp'), session: Id }),
+  z.object({ kind: z.literal('signal'), account: z.string().regex(/^\+\d{6,15}$/) }),
 ]);
 export type ChannelSecrets = z.infer<typeof ChannelSecrets>;
 

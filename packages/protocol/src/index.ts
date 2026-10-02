@@ -11,6 +11,7 @@ import { Artifact, ArtifactKind } from './artifacts';
 import { ATTACHMENT_LIMITS, Attachment } from './attachments';
 import { BrowserHandoff, BrowserPermission, BrowserStatus, BrowserStep } from './browser';
 import { Channel, ChannelOrigin } from './channels';
+import { ChannelLink } from './linking';
 import {
   EffortChoice,
   EngineId,
@@ -47,6 +48,7 @@ export * from './healed';
 export * from './import';
 export * from './integrations';
 export * from './learning';
+export * from './linking';
 export * from './local';
 export * from './memory';
 export * from './common';
@@ -653,6 +655,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   /** A channel was connected, changed, went on- or offline, or someone asked to talk. */
   z.object({ type: z.literal('channel.changed'), channel: Channel }),
   z.object({ type: z.literal('channel.deleted'), channelId: z.string() }),
+  /** Linking WhatsApp or Signal by QR code: a new code, scanned, linked (ADR 0043). */
+  z.object({ type: z.literal('channel.link'), link: ChannelLink }),
   /** Conch fixed something on its own: a quiet note, never an alert. */
   z.object({ type: z.literal('healed'), note: HealNote }),
   /** A backup was made, kept or let go, or a restore got ready: refetch the list. */
