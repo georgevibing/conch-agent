@@ -155,7 +155,12 @@ describe('readable mail and verified follow-up drafts', () => {
   it('asks with verified account and full body, saves one threaded draft, verifies actual provider contents', async () => {
     const { service, calls } = fixture();
     const ask = vi.fn(async () => 'allow' as const);
-    const ctx = { ask, signal: new AbortController().signal } as unknown as ToolContext;
+    const ctx = {
+      ask,
+      signal: new AbortController().signal,
+      untrusted: () => 'This chat read email.',
+      restricted: async () => 'This skill did not declare apps.',
+    } as unknown as ToolContext;
     const draft = googleTools(service, ctx).find(
       (t) => t.name === 'google_mail_create_draft',
     ) as unknown as {
@@ -167,8 +172,10 @@ describe('readable mail and verified follow-up drafts', () => {
     };
     expect(result.state).toBe('confirmed');
     expect(result.receipt.url).toContain('authuser=person%40example.com#drafts/draftMessage1');
+    expect(ask).toHaveBeenCalledTimes(1);
     expect(ask).toHaveBeenCalledWith(
       expect.objectContaining({
+        taint: 'This chat read email. This skill did not declare apps.',
         input: expect.objectContaining({ accountEmail: 'person@example.com', body: args.body }),
       }),
     );
@@ -178,6 +185,19 @@ describe('readable mail and verified follow-up drafts', () => {
     expect(await reconcileDraft(service, args, 'op1')).toMatchObject({ state: 'confirmed' });
     await draft.run(args, { operationId: 'op1' });
     expect(calls.filter((c) => c.options?.method === 'POST')).toHaveLength(1);
+  });
+  it('hands ordinary chat drafts to a durable task without asking or writing', async () => {
+    const { service, calls } = fixture();
+    const ask = vi.fn();
+    const handoff = vi.fn(async () => ({ id: 'task1' }));
+    const draft = googleTools(service, { ask } as unknown as ToolContext, handoff).find(
+      (t) => t.name === 'google_mail_create_draft',
+    );
+    const result = await draft?.run(args);
+    expect(JSON.parse(result as string)).toMatchObject({ state: 'queued', taskId: 'task1' });
+    expect(handoff).toHaveBeenCalledWith(args);
+    expect(ask).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
   });
   it('does not save if account authority changes while approval waits', async () => {
     const { service, calls } = fixture();

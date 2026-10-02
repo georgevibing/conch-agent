@@ -22,7 +22,8 @@ export const SCOPES: Record<GoogleCapability, string[]> = {
 const ALL_CAPABILITIES = Object.keys(SCOPES) as GoogleCapability[];
 export class GoogleError extends Error {
   constructor(
-    readonly kind: 'setup' | 'expired' | 'scope' | 'unavailable' | 'invalid' | 'ambiguous',
+    readonly kind:
+      'setup' | 'expired' | 'scope' | 'unavailable' | 'invalid' | 'ambiguous' | 'not-executed',
     message: string,
   ) {
     super(message);
@@ -340,6 +341,7 @@ export class GoogleService {
       body?: unknown;
       query?: Record<string, string>;
       authorization?: string;
+      signal?: AbortSignal;
     } = {},
   ): Promise<unknown> {
     if (
@@ -361,17 +363,22 @@ export class GoogleService {
         'expired',
         'Google access changed after approval. Start the job again.',
       );
-    const perform = () =>
-      this.fetcher(url, {
+    const perform = () => {
+      if (options.signal?.aborted)
+        throw new GoogleError('not-executed', 'Stopped before the Google request was dispatched.');
+      return this.fetcher(url, {
         method: options.method ?? 'GET',
         redirect: 'error',
-        signal: AbortSignal.timeout(20_000),
+        signal: options.signal
+          ? AbortSignal.any([options.signal, AbortSignal.timeout(20_000)])
+          : AbortSignal.timeout(20_000),
         headers: {
           Authorization: `Bearer ${credential.accessToken}`,
           'Content-Type': 'application/json',
         },
         ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
       });
+    };
     let response: Response;
     try {
       response = await perform();

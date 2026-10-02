@@ -215,6 +215,38 @@ describe('Google consent and credentials', () => {
     });
     await expect(connect()).rejects.toThrow('did not allow');
   });
+  it('never dispatches a draft when stopped during credential refresh', async () => {
+    await connect();
+    fetcher.mockClear();
+    await store.update((d) => {
+      must(d.accounts.account1).credential.expiresAt = 0;
+    });
+    const controller = new AbortController();
+    let release!: () => void;
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const paused = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const refresh = await fake().refreshAccessToken();
+    client.refreshAccessToken.mockImplementation(async () => {
+      entered();
+      await paused;
+      return refresh;
+    });
+    const request = service.api('account1', 'mail-draft', '/gmail/v1/users/me/drafts', {
+      method: 'POST',
+      signal: controller.signal,
+      body: {},
+    });
+    await started;
+    controller.abort();
+    release();
+    await expect(request).rejects.toMatchObject({ kind: 'not-executed' });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
   it('single-flights concurrent refresh, preserves refresh token, and marks revoked consent', async () => {
     await connect();
     await store.update((d) => {

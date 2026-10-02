@@ -170,7 +170,11 @@ function readReceipt(name: string, result: unknown) {
 }
 
 /** Google tools belong to Conch, never an engine. Every account argument is explicit. */
-export function googleTools(service: GoogleService, ctx: ToolContext): HostTool[] {
+export function googleTools(
+  service: GoogleService,
+  ctx: ToolContext,
+  draftTask?: (args: z.infer<typeof DraftInput>) => Promise<{ id: string }>,
+): HostTool[] {
   const createdDrafts = new Map<string, string>();
   const readEvidence = new Map<string, ReturnType<typeof readReceipt>>();
   const read = (
@@ -308,6 +312,14 @@ export function googleTools(service: GoogleService, ctx: ToolContext): HostTool[
     },
     async run(raw: Record<string, unknown>, context?: { operationId: string }) {
       const args = DraftInput.parse(raw);
+      if (!context?.operationId && draftTask) {
+        const task = await draftTask(args);
+        return JSON.stringify({
+          state: 'queued',
+          taskId: task.id,
+          message: 'Draft queued for review in a durable task. Nothing has been saved yet.',
+        });
+      }
       if (!context?.operationId)
         throw new GoogleError(
           'invalid',
@@ -319,11 +331,13 @@ export function googleTools(service: GoogleService, ctx: ToolContext): HostTool[
       const account = (await service.status()).accounts.find((a) => a.id === args.accountId);
       if (!account) throw new GoogleError('expired', 'Google account was disconnected.');
       const authorized = await service.verificationScope(args.accountId, 'mail-draft');
+      const restricted = await ctx.restricted?.('apps', 'google');
+      const warning = [ctx.untrusted?.(), restricted].filter(Boolean).join(' ');
       const decision = await ctx.ask({
         toolName: 'google_mail_create_draft',
         input: { ...args, accountEmail: account.email },
         summary: `save a draft to ${args.to.join(', ')} with subject “${args.subject}” (not send it)`,
-        taint: ctx.untrusted?.(),
+        ...(warning ? { taint: warning } : {}),
       });
       if (decision === 'deny')
         return {
@@ -349,18 +363,29 @@ export function googleTools(service: GoogleService, ctx: ToolContext): HostTool[
           text: 'Google account access changed while waiting for approval. Nothing was saved; start the job again.',
           effect: 'not-executed' as const,
         };
-      const result = Draft.parse(
-        await service.api(args.accountId, 'mail-draft', '/gmail/v1/users/me/drafts', {
-          method: 'POST',
-          authorization: authorized.authorization,
-          body: {
-            message: {
-              raw: Buffer.from(draftRaw(args, context.operationId, reply)).toString('base64url'),
-              ...(reply ? { threadId: reply.threadId } : {}),
+      let result;
+      try {
+        result = Draft.parse(
+          await service.api(args.accountId, 'mail-draft', '/gmail/v1/users/me/drafts', {
+            method: 'POST',
+            signal: ctx.signal,
+            authorization: authorized.authorization,
+            body: {
+              message: {
+                raw: Buffer.from(draftRaw(args, context.operationId, reply)).toString('base64url'),
+                ...(reply ? { threadId: reply.threadId } : {}),
+              },
             },
-          },
-        }),
-      );
+          }),
+        );
+      } catch (error) {
+        if (error instanceof GoogleError && error.kind === 'not-executed')
+          return {
+            text: 'Stopped before saving the draft; nothing was saved.',
+            effect: 'not-executed' as const,
+          };
+        throw error;
+      }
       if (createdDrafts.size >= 100) createdDrafts.clear();
       createdDrafts.set(context.operationId, result.id);
       const verified = Draft.parse(

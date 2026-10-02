@@ -14,7 +14,7 @@ import type {
 } from '../engines/types';
 import { MemoryStore } from '../memory/store';
 import { SettingsStore } from '../settings/store';
-import { ConversationManager } from './manager';
+import { ConversationManager, type ToolProvider } from './manager';
 import { ConversationStore } from './store';
 import { describeTaint, leavesSandbox, sinkReason, taintFrom } from './taint';
 
@@ -128,7 +128,7 @@ class Scripted implements Engine {
   }
 }
 
-async function setup() {
+async function setup(tools?: ToolProvider) {
   const home = await mkdtemp(join(tmpdir(), 'conch-taint-'));
   const engine = new Scripted();
   const settings = new SettingsStore(home);
@@ -140,6 +140,7 @@ async function setup() {
     settings,
     memory: new MemoryStore(join(home, 'memory')),
     engine: () => engine,
+    tools,
   });
   return { manager, engine, settings };
 }
@@ -173,6 +174,56 @@ const readsPage = async function* (): AsyncGenerator<EngineEvent> {
 };
 
 describe('the guard, end to end', () => {
+  it('lets the trusted Google draft tool ask once with the complete preview, not a generic taint prompt first', async () => {
+    const { manager, engine } = await setup((ctx) => [
+      {
+        name: 'google_mail_create_draft',
+        description: 'Fixture owns its concrete approval',
+        input: {},
+        run: async () => {
+          const decision = await ctx.ask({
+            toolName: 'google_mail_create_draft',
+            input: {
+              accountEmail: 'person@example.com',
+              to: ['friend@example.com'],
+              subject: 'Reply',
+              body: 'The complete draft',
+            },
+            summary: 'save this exact draft',
+            taint: ctx.untrusted?.(),
+          });
+          return decision === 'deny' ? 'Not saved' : 'Saved';
+        },
+      },
+    ]);
+    engine.script.push(async function* (input) {
+      for (const name of ['google_mail_create_draft', 'mcp__conch__google_mail_create_draft'])
+        engine.decisions.push(await input.guard?.({ toolName: name, input: {} }));
+      const tool = input.tools.find((t) => t.name === 'google_mail_create_draft');
+      if (!tool) throw new Error('Missing tool');
+      await tool.run({});
+      yield { type: 'text', messageId: 'm', delta: 'done' };
+    });
+    const convo = await manager.send({
+      clientMessageId: 'google-u1',
+      text: 'Draft a reply',
+      untrusted: { kind: 'app', label: 'Gmail' },
+    });
+    const events = await settle(manager, convo.id, (e) =>
+      e.some((x) => x.type === 'permission.requested'),
+    );
+    const permission = events.find((e) => e.type === 'permission.requested');
+    if (permission?.type !== 'permission.requested') throw new Error('Missing approval');
+    expect(engine.decisions).toEqual([undefined, undefined]);
+    expect(permission).toMatchObject({
+      toolName: 'google_mail_create_draft',
+      input: { body: 'The complete draft', accountEmail: 'person@example.com' },
+      taint: expect.stringContaining('Gmail'),
+    });
+    await manager.respond(convo.id, permission.permissionId, 'deny');
+    const done = await settle(manager, convo.id, (e) => e.some((x) => x.type === 'turn.completed'));
+    expect(done.filter((e) => e.type === 'permission.requested')).toHaveLength(1);
+  });
   it('in Full trust: after reading a page, a command asks — with why, and no “always”', async () => {
     const { manager, engine } = await setup();
     const command = async function* (input: TurnInput): AsyncGenerator<EngineEvent> {

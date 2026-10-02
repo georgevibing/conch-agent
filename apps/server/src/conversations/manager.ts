@@ -276,7 +276,7 @@ export interface ToolContext {
    */
   untrusted?: () => string | undefined;
   /** A skill in use doesn't say it needs this (ADR 0031): why, in a sentence. */
-  restricted?: (capability: SkillCapability) => Promise<string | undefined>;
+  restricted?: (capability: SkillCapability, detail?: string) => Promise<string | undefined>;
 }
 
 /** Tools every conversation gets from other parts of Conch (e.g. routines, skills, the browser). */
@@ -929,7 +929,7 @@ export class ConversationManager {
             permissionMode: resolved.permissionMode,
             ask: (request) => askUser({ ...request, remember: false }, abort.signal),
             signal: abort.signal,
-            restricted: (capability) => skillLimit({ capability }),
+            restricted: (capability, detail) => skillLimit({ capability, detail }),
             untrusted: () => {
               const tainted = settings.preferences.checkAfterReading ? this.#tainted(live) : [];
               return tainted.length ? describeTaint(tainted) : undefined;
@@ -1043,6 +1043,10 @@ export class ConversationManager {
     }): Promise<string | undefined> => {
       if (leavesSandbox(request.toolName, request.input))
         return 'This command wants to run outside the sealed box, where it could reach anything on this computer.';
+      // Google draft creation always asks inside its trusted tool, after it has
+      // resolved the real account/thread and full draft. That one card also
+      // carries taint and skill restrictions; a generic preflight would ask twice.
+      if (/^(?:mcp__conch__)?google_mail_create_draft$/.test(request.toolName)) return undefined;
       const server = /^mcp__([a-z0-9_-]+?)__/.exec(request.toolName)?.[1];
       const limited = await skillLimit(
         needs(request.toolName, request.input, { workspace, server }),
