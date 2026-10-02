@@ -78,14 +78,16 @@ export function ChannelTile({
 
 export interface ChannelSoonProps extends ComponentProps<'div'> {
   apps: { brand: string; name: string; color?: string }[];
+  /** Why they can't be picked: "Coming soon", or "Only on a Mac". */
+  note?: string;
 }
 
-/** The chat apps that are coming, quietly, in a row. */
-export function ChannelSoon({ apps, className, ...props }: ChannelSoonProps) {
+/** The chat apps that are coming (or that need another computer), quietly, in a row. */
+export function ChannelSoon({ apps, note = 'Coming soon', className, ...props }: ChannelSoonProps) {
   return (
     <div className={cx(styles.soon, className)} {...props}>
-      <span className={styles.soonNote}>Coming soon</span>
-      <ul className={styles.soonList} aria-label="Coming soon">
+      <span className={styles.soonNote}>{note}</span>
+      <ul className={styles.soonList} aria-label={note}>
         {apps.map((app) => (
           <li key={app.brand} className={styles.soonItem}>
             <IntegrationLogo
