@@ -55,6 +55,7 @@ import { attachmentUrl } from './uploads';
 const attachmentSrc = (attachment: Attachment) => attachmentUrl(attachment.id);
 import { AttachmentViewer, type Viewable } from './AttachmentViewer';
 import { ComposerOffline } from './OfflineBits';
+import { ChatHolds } from '../skills/ChatHolds';
 import { Transcript } from './Transcript';
 import type { TurnRecovery } from './TranscriptItems';
 import { type Draft, useDraftAttachments } from './useDraftAttachments';
@@ -534,6 +535,14 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
           {view.notice.message}
         </Callout>
       )}
+      {/* What this chat is held to (ADR 0040): quiet, and one press to stop. */}
+      {conversationId && (
+        <ChatHolds
+          conversationId={conversationId}
+          holds={view.holds ?? []}
+          running={running || pending.length > 0}
+        />
+      )}
       <Composer
         ref={composerRef}
         value={draft}
@@ -696,6 +705,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
         conversationId={conversationId}
         columnRef={columnRef}
         routineRun={isRoutineRun}
+        taskChat={origin?.kind === 'task'}
         overlay={
           conversationId && (
             <ChatFind

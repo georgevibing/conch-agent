@@ -1,10 +1,11 @@
 import type { SearchPreview, SearchResults, TerminalStatus } from '@conch/protocol';
 import { act, configure, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useLocation } from 'react-router';
+import { Route, Routes, useLocation } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useUi } from '../../app/ui';
+import { useLiveStore } from '../../live/store';
 import { appState, mockFetch, renderApp } from '../../test/harness';
 import { Palette } from './Palette';
 
@@ -418,6 +419,40 @@ describe('Palette search', () => {
       artifactId: 'a_2',
     });
     act(() => useUi.setState({ artifactOpen: null }));
+  });
+
+  it('stops holding the open chat to a skill’s list by name (ADR 0040)', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    act(() =>
+      useLiveStore.getState().apply({
+        type: 'skill.used',
+        skillId: 'quick-setup',
+        name: 'quick-setup',
+        title: 'Quick setup',
+        by: 'user',
+        conversationId: 'c7',
+        seq: 0,
+        at: 1,
+      }),
+    );
+    renderApp(
+      <Routes>
+        <Route path="/c/:conversationId" element={<Palette />} />
+      </Routes>,
+      { route: '/c/c7' },
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'stop holding');
+    await user.click(
+      await screen.findByRole('option', { name: /Stop holding this chat to Quick setup’s list/ }),
+    );
+    expect(useUi.getState().stopHolding).toEqual({ conversationId: 'c7', skillId: 'quick-setup' });
+    act(() => useUi.setState({ stopHolding: undefined }));
   });
 
   it('backs up and restores by name, straight into Settings → Health', async () => {

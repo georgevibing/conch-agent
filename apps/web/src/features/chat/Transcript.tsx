@@ -1,4 +1,4 @@
-import { MessageList } from '@conch/nacre';
+import { MessageList, SkillHoldEnded } from '@conch/nacre';
 import { useState, type ReactNode, type Ref } from 'react';
 
 import type { ConversationView, TranscriptItem } from '../../live/reducer';
@@ -133,11 +133,14 @@ export function Transcript({
   columnRef,
   conversationId,
   routineRun,
+  taskChat,
   onAskAgain,
   focusComposer,
 }: TranscriptProps & {
   /** This conversation is a routine run: its first message is the routine's instruction. */
   routineRun?: boolean;
+  /** This conversation is a task's: a skill carried into it came from the chat it started in. */
+  taskChat?: boolean;
 }) {
   // News is what happened after the chat was opened. A reload replays history as a
   // burst of events (turn status included), so their own timestamps are what tell.
@@ -198,6 +201,7 @@ export function Transcript({
       last?.kind === 'memory' ||
       last?.kind === 'files' ||
       last?.kind === 'skill' ||
+      last?.kind === 'skill-ended' ||
       last?.kind === 'routine' ||
       last?.kind === 'artifact' ||
       last?.kind === 'task' ||
@@ -281,7 +285,12 @@ export function Transcript({
               />
             )}
             {block.item?.kind === 'memory' && <MemoryPill item={block.item} />}
-            {block.item?.kind === 'skill' && <SkillUsedLine item={block.item} />}
+            {block.item?.kind === 'skill' && (
+              <SkillUsedLine item={block.item} carriedFrom={taskChat ? 'chat' : 'helper'} />
+            )}
+            {block.item?.kind === 'skill-ended' && (
+              <SkillHoldEnded title={block.item.title} className={styles.skillUsed} />
+            )}
             {block.item?.kind === 'routine' && (
               <RoutineChatCard
                 routineId={block.item.routineId}

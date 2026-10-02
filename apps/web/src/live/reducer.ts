@@ -1,3 +1,4 @@
+import { foldHolds } from '@conch/protocol';
 import type {
   ArtifactKind,
   Attachment,
@@ -10,6 +11,7 @@ import type {
   BrowserStep,
   ConversationEvent,
   ConversationStatus,
+  SkillHold,
   EngineId,
   TaskKind,
   TaskStatus,
@@ -168,7 +170,14 @@ export type TranscriptItem =
       skillId: string;
       name: string;
       title: string;
-      by: 'user' | 'assistant';
+      /** `carried`: work brought it from another chat (ADR 0040). */
+      by: 'user' | 'assistant' | 'carried';
+    }
+  | {
+      /** You stopped holding the chat to a skill's list (ADR 0040). */
+      kind: 'skill-ended';
+      id: string;
+      title: string;
     }
   | {
       /** Waiting for the internet (ADR 0023); `sent` once it went by itself. */
@@ -212,6 +221,8 @@ export interface ConversationView {
   notice?: { code: string; message: string };
   /** The conversation's model/effort/mode overrides, as last seen in the log. */
   options?: TurnOptions;
+  /** The skills this chat is held to (ADR 0040), as the gateway reads them from the same log. */
+  holds?: readonly SkillHold[];
 }
 
 export const emptyView: ConversationView = { lastSeq: -1, items: [], status: 'idle' };
@@ -249,7 +260,14 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
     event.type === 'tool.started' ||
     event.type === 'turn.completed' ||
     event.type === 'user.message';
-  const base = { ...view, lastSeq: event.seq, notice: progressed ? undefined : view.notice };
+  const base = {
+    ...view,
+    lastSeq: event.seq,
+    notice: progressed ? undefined : view.notice,
+    ...((event.type === 'skill.used' || event.type === 'skill.hold.ended') && {
+      holds: foldHolds(view.holds ?? [], event),
+    }),
+  };
   const items =
     event.type === 'tool.started' ||
     event.type === 'permission.requested' ||
@@ -583,6 +601,14 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             title: event.title,
             by: event.by,
           },
+        ],
+      };
+    case 'skill.hold.ended':
+      return {
+        ...base,
+        items: [
+          ...items,
+          { kind: 'skill-ended', id: `skill-ended-${event.seq}`, title: event.title },
         ],
       };
     case 'browser.step': {

@@ -65,7 +65,7 @@ export function useTurnOn() {
                 : skill.source === 'conch'
                   ? 'It’s in your skills.'
                   : `It’s from ${skill.sourceLabel}.`}{' '}
-              While it’s in use, it’s held to this list.
+              A chat it’s used in is held to this list until you stop it.
             </AlertDialog.Description>
           </AlertDialog.Header>
           <SkillCan skill={skill} compact />

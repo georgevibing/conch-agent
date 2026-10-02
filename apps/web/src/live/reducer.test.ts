@@ -229,3 +229,46 @@ describe('offline and at a limit (ADR 0023)', () => {
     expect(released.items.map((i) => i.kind)).toEqual(['user', 'routed']);
   });
 });
+
+describe('what the chat is held to (ADR 0040)', () => {
+  it('folds holds from the log, and says where one ended', () => {
+    const view = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: '/quick-setup' },
+        {
+          type: 'skill.used',
+          skillId: 'quick-setup',
+          name: 'quick-setup',
+          title: 'Quick setup',
+          by: 'user',
+          permissions: {
+            declared: true,
+            capabilities: ['commands'],
+            commands: ['git'],
+            words: ['run commands (only `git`)'],
+          },
+        },
+        { type: 'turn.completed', outcome: 'success' },
+        { type: 'user.message', messageId: 'u2', text: 'go on' },
+      ),
+    );
+    expect(view.holds).toMatchObject([
+      { skillId: 'quick-setup', permissions: { commands: ['git'] } },
+    ]);
+    const ended = reduce(view, {
+      type: 'skill.hold.ended',
+      skillId: 'quick-setup',
+      title: 'Quick setup',
+      reason: 'you',
+      conversationId: 'c1',
+      seq: 9,
+      at: 2000,
+    });
+    expect(ended.holds).toEqual([]);
+    expect(ended.items.at(-1)).toEqual({
+      kind: 'skill-ended',
+      id: 'skill-ended-9',
+      title: 'Quick setup',
+    });
+  });
+});

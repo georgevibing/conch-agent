@@ -71,6 +71,7 @@ import { useRoutines } from '../routines/queries';
 import { taskKeys } from '../tasks/queries';
 import { fuzzyFilter, type FuzzyMatch } from '../search/fuzzy';
 import { useSkills } from '../skills/queries';
+import { useLiveStore } from '../../live/store';
 import { useTerminalStatus } from '../terminal/queries';
 import { undoLast } from '../undo/UndoHost';
 import { useUpdates } from '../updates/queries';
@@ -270,6 +271,8 @@ export function useFindables(query: string, conversationId: string | undefined):
   const { data: channels } = useChannels();
   const { data: terminal } = useTerminalStatus();
   const { data: updates } = useUpdates();
+  // What the open chat is held to (ADR 0040): each can be let go of by name.
+  const holds = useLiveStore((s) => (conversationId ? s.views[conversationId]?.holds : undefined));
   const q = query.trim();
   if (!q) return [];
 
@@ -668,6 +671,15 @@ export function useFindables(query: string, conversationId: string | undefined):
       icon: <Blocks />,
       run: () => void navigate('/integrations'),
     },
+    ...(conversationId
+      ? [...new Map((holds ?? []).map((h) => [h.skillId, h])).values()].map((hold) => ({
+          id: `stop-holding-${hold.skillId}`,
+          label: `Stop holding this chat to ${hold.title}’s list`,
+          keywords: 'skill held hold limit list permissions let go stop holding allow',
+          icon: <ShieldCheck />,
+          run: () => useUi.setState({ stopHolding: { conversationId, skillId: hold.skillId } }),
+        }))
+      : []),
     ...(conversationId
       ? [
           {

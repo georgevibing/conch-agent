@@ -421,8 +421,14 @@ export function MemoryPill({ item }: { item: Of<'memory'> }) {
   );
 }
 
-/** Which skill shaped this reply; opens the skill. */
-export function SkillUsedLine({ item }: { item: Of<'skill'> }) {
+/** Which skill shaped this reply, or came with the work; opens the skill. */
+export function SkillUsedLine({
+  item,
+  carriedFrom,
+}: {
+  item: Of<'skill'>;
+  carriedFrom?: 'chat' | 'helper';
+}) {
   const navigate = useNavigate();
   return (
     <div className={styles.skillUsed}>
@@ -430,6 +436,7 @@ export function SkillUsedLine({ item }: { item: Of<'skill'> }) {
         name={item.name}
         title={item.title}
         by={item.by}
+        carriedFrom={carriedFrom}
         onOpen={() => void navigate(`/skills/${encodeURIComponent(item.skillId)}`)}
       />
     </div>

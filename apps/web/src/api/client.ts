@@ -181,6 +181,13 @@ export const api = {
       method: 'POST',
       body: engine ? { engine } : {},
     }),
+  /** Stop holding this conversation to a skill's list (ADR 0040). */
+  stopHolding: (id: string, skillId: string) =>
+    request(
+      Ok,
+      `/api/conversations/${encodeURIComponent(id)}/skills/${encodeURIComponent(skillId)}/stop-holding`,
+      { method: 'POST', body: {} },
+    ),
   /** “Not now” on an offer to connect an app, for the rest of this conversation. */
   dismissSuggestion: (id: string, catalogId: string) =>
     request(

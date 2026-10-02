@@ -59,6 +59,8 @@ interface UiState {
    * still speaks it.
    */
   talking?: { from?: number };
+  /** Asking whether to stop holding a chat to a skill's list (ADR 0040), e.g. from ⌘K. */
+  stopHolding?: { conversationId: string; skillId: string };
   find: FindState | null;
   /** What find last searched for, so ⌘F reopens where you left off. */
   lastFind?: { conversationId: string; query: string };
