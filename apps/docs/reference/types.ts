@@ -1,3 +1,5 @@
+import type { CatalogAuth } from '@conch/protocol';
+
 /**
  * Everything the documentation reads from the code, as one plain object.
  * `build.ts` fills it in from the server, the web app and the protocol; the
@@ -52,8 +54,8 @@ export interface IntegrationRef {
   tagline: string;
   description: string;
   category: string;
-  /** `oauth`, `token`, `none`, or `account` (through your provider's own account). */
-  auth: 'oauth' | 'token' | 'none' | 'account';
+  /** Catalog auth, including Conch-owned Google and provider-owned account connections. */
+  auth: CatalogAuth;
   color?: string;
   homepage?: string;
   featured: boolean;

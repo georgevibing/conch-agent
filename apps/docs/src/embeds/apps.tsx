@@ -14,6 +14,7 @@ const CATEGORIES: Record<string, string> = {
 };
 
 const AUTH: Record<IntegrationRef['auth'], { label: string; tone: BadgeTone }> = {
+  google: { label: 'Google sign-in · setup required', tone: 'accent' },
   oauth: { label: 'One-click sign-in', tone: 'accent' },
   token: { label: 'Paste a token', tone: 'neutral' },
   none: { label: 'Nothing to sign in to', tone: 'neutral' },

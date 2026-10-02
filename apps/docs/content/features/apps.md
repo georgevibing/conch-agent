@@ -4,7 +4,7 @@ description: Connect Notion, GitHub, Gmail and more from a gallery, and decide w
 order: 4
 ---
 
-Connect the apps you already use, and your assistant can look things up and act in them: find a page in Notion, open an issue in GitHub, check your calendar. You connect an app once and it works with every model you pick. There is no file to edit.
+Connect the apps you already use, and your assistant can look things up and act in them: find a page in Notion, open an issue in GitHub, check your calendar. Apps connected to Conch work across providers with models that support tools. Connections owned by a provider stay with that provider. There is no file to edit.
 
 In Conch, the page is called **Integrations**.
 
@@ -26,7 +26,7 @@ Ask about an app that isn't connected ("what's assigned to me in Linear?") and a
 
 ## Decide what it may do
 
-Open a connected app and choose how your assistant uses it:
+For connected MCP apps, choose how your assistant uses them. Direct Google access instead follows the permissions requested for your job, and saving a draft always asks for your approval:
 
 - **Ask every time.** It asks before every action.
 - **Ask before changes.** It looks things up on its own, and asks before it creates, sends, changes or deletes anything. Apps from the gallery start here.

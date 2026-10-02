@@ -88,6 +88,16 @@ describe('a page', () => {
     for (const limit of codex?.limits ?? []) expect(facts).toHaveTextContent(limit);
   });
 
+  it('renders direct Google catalog entries with their operator setup requirement', () => {
+    open('/features/apps');
+    const google = reference.integrations.filter((app) => app.auth === 'google');
+    expect(google.map((app) => app.id)).toEqual(
+      expect.arrayContaining(['gmail', 'google-calendar', 'google-drive']),
+    );
+    expect(screen.getAllByText('Google sign-in · setup required')).toHaveLength(google.length);
+    expect(screen.getByText(/must register a Google Cloud/)).toBeInTheDocument();
+  });
+
   it('about a channel leads with what the code says about it', () => {
     open('/channels/telegram');
     const telegram = reference.channels.find((channel) => channel.id === 'telegram');
