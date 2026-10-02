@@ -420,7 +420,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     title: z.string(),
     kind: ArtifactKind,
     version: z.number().int().positive(),
-    action: z.enum(['created', 'updated']),
+    /** `edited`: you changed it by hand (ADR 0039). */
+    action: z.enum(['created', 'updated', 'edited']),
     note: z.string().optional(),
   }),
   /**
