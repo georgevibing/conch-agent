@@ -4,6 +4,7 @@ import {
   Heading,
   Input,
   IntegrationCard,
+  Page,
   SegmentedControl,
   Skeleton,
   Stack,
@@ -238,7 +239,7 @@ export function AppsView() {
   );
 
   return (
-    <div className={styles.page}>
+    <Page gap={8}>
       <header className={styles.pageHeader}>
         <Stack gap={1}>
           <Heading level={1} display size="4xl">
@@ -475,6 +476,6 @@ export function AppsView() {
       />
       <CustomDialog open={custom} onOpenChange={setCustom} />
       {dialog}
-    </div>
+    </Page>
   );
 }

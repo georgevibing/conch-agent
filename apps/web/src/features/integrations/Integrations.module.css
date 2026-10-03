@@ -1,15 +1,4 @@
 @layer nacre.components {
-  .page {
-    display: flex;
-    flex-direction: column;
-    gap: var(--nc-space-8);
-    inline-size: 100%;
-    max-inline-size: 64rem;
-    margin-inline: auto;
-    padding: var(--nc-space-8) var(--nc-space-6) var(--nc-space-12);
-    overflow-y: auto;
-  }
-
   .pageHeader {
     display: flex;
     align-items: flex-end;
@@ -410,10 +399,6 @@
   }
 
   @media (max-width: 640px) {
-    .page {
-      padding-inline: var(--nc-space-4);
-    }
-
     .search {
       inline-size: 100%;
     }

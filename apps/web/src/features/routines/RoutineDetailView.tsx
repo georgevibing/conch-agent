@@ -10,6 +10,7 @@ import {
   formatWhen,
   Heading,
   IconButton,
+  Page,
   RunStatusBadge,
   RunTimeline,
   Skeleton,
@@ -85,14 +86,14 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
 
   if (isPending) {
     return (
-      <div className={styles.page}>
+      <Page gap={6}>
         <Skeleton shape="block" height="8rem" />
-      </div>
+      </Page>
     );
   }
   if (error || !data) {
     return (
-      <div className={styles.page}>
+      <Page gap={6}>
         <EmptyState
           title="This routine is gone"
           description="It may have been deleted."
@@ -102,7 +103,7 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
             </Button>
           }
         />
-      </div>
+      </Page>
     );
   }
 
@@ -123,7 +124,7 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
   }));
 
   return (
-    <div className={styles.page}>
+    <Page gap={6}>
       <Link to="/routines" className={styles.back}>
         <ArrowLeft aria-hidden size={14} /> Routines
       </Link>
@@ -356,6 +357,6 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
           </AlertDialog.Footer>
         </AlertDialog.Content>
       </AlertDialog.Root>
-    </div>
+    </Page>
   );
 }

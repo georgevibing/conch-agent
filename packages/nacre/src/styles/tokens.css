@@ -311,6 +311,11 @@
     --nc-space-12: 3rem;
     --nc-space-16: 4rem;
 
+    /* ── Layout ──────────────────────────────────────────────────────── */
+    /* Every page's column (Apps, Routines, Tasks, Settings…): one width, so
+       nothing jumps sideways moving between them. */
+    --nc-page-width: 64rem;
+
     /* ── Control sizing ──────────────────────────────────────────────── */
     --nc-control-xs: 1.5rem; /* 24 */
     --nc-control-sm: 1.875rem; /* 30 */

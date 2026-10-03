@@ -1,15 +1,16 @@
 import type { ActivityEntry, ActivityKind, Memory } from '@conch/protocol';
 import {
+  type ActivityRow,
   ActivityTimeline,
   Button,
   EmptyState,
   Heading,
   InlineCode,
+  Page,
   SegmentedControl,
   Skeleton,
   Stack,
   Text,
-  type ActivityRow,
 } from '@conch/nacre';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { History } from 'lucide-react';
@@ -21,7 +22,6 @@ import { useUi } from '../../app/ui';
 import { dayGroup } from '../../lib/time';
 import { safetyApi, safetyKeys } from '../safety/api';
 import { ActivityAction } from '../undo/ActivityActions';
-import styles from './Activity.module.css';
 
 const FILTERS: { value: ActivityKind | 'all'; label: string }[] = [
   { value: 'all', label: 'Everything' },
@@ -103,7 +103,7 @@ export function ActivityView() {
   };
 
   return (
-    <div className={styles.page}>
+    <Page gap={5}>
       <Stack gap={1}>
         <Heading level={1} display size="3xl">
           Activity
@@ -146,6 +146,6 @@ export function ActivityView() {
           )}
         </>
       )}
-    </div>
+    </Page>
   );
 }

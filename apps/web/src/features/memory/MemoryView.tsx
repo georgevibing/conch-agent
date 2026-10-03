@@ -2,12 +2,13 @@ import type { MemoryKind, TidyRun, TidyStatus } from '@conch/protocol';
 import {
   Button,
   DropdownMenu,
-  formatBytes,
   EmptyState,
+  formatBytes,
   Heading,
   Input,
   MeaningSearch,
   MemoryList,
+  Page,
   SegmentedControl,
   Skeleton,
   Stack,
@@ -275,7 +276,7 @@ export function MemoryView() {
   };
 
   return (
-    <div className={styles.page}>
+    <Page gap={8}>
       <header className={styles.header}>
         <Stack gap={1}>
           <Heading level={1} display size="3xl">
@@ -422,6 +423,6 @@ export function MemoryView() {
         )}
         <SearchMode />
       </section>
-    </div>
+    </Page>
   );
 }

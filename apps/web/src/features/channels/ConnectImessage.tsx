@@ -7,6 +7,7 @@ import {
   GuideSteps,
   Handset,
   Input,
+  Page,
   PortalSketch,
   RadioGroup,
   Skeleton,
@@ -104,14 +105,14 @@ export function ImessageSetup() {
 
   if (setup.isPending)
     return (
-      <div className={styles.page}>
+      <Page gap={8}>
         <Skeleton shape="block" height="10rem" />
-      </div>
+      </Page>
     );
   const info: Setup = setup.data ?? { access: 'not-mac', handles: [] };
   if (info.access === 'not-mac')
     return (
-      <div className={styles.page}>
+      <Page gap={8}>
         <EmptyState
           title="iMessage only works on a Mac"
           description="Conch reads and sends iMessages through the Messages app, which only a Mac has. Run Conch on a Mac to use it, or connect Telegram, Discord, Slack or email instead."
@@ -119,7 +120,7 @@ export function ImessageSetup() {
             <Button onClick={() => void navigate('/apps?show=talk')}>See the other apps</Button>
           }
         />
-      </div>
+      </Page>
     );
 
   const ready = info.access === 'ready';

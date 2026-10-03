@@ -13,17 +13,18 @@ import {
   Field,
   Heading,
   Input,
+  Page,
   SegmentedControl,
-  SkillIcon,
-  SkillProblem,
-  SkillReview,
-  skillModeLabels,
   Skeleton,
+  SkillIcon,
+  skillModeLabels,
+  SkillProblem,
+  type SkillProblemFix,
+  SkillReview,
   Stack,
   Text,
   Textarea,
   toast,
-  type SkillProblemFix,
 } from '@conch/nacre';
 import {
   ArrowLeft,
@@ -58,22 +59,22 @@ export function SkillDetailView({ skillId }: { skillId: string }) {
 
   if (isPending) {
     return (
-      <div className={`${styles.page} ${styles.narrow}`}>
+      <Page gap={6}>
         <Skeleton shape="block" height="4rem" />
         <Skeleton shape="block" height="12rem" />
-      </div>
+      </Page>
     );
   }
   if (isError || !skill) {
     return (
-      <div className={`${styles.page} ${styles.narrow}`}>
+      <Page gap={6}>
         <EmptyState
           icon={<SearchX />}
           title="That skill isn’t here any more"
           description="It may have been renamed, removed, or moved out of its folder."
           actions={<Button onClick={() => void navigate('/skills')}>See all skills</Button>}
         />
-      </div>
+      </Page>
     );
   }
   return <SkillPage key={skill.id} skill={skill} />;
@@ -183,7 +184,7 @@ function SkillPage({ skill }: { skill: SkillDetail }) {
         : { kind: 'check', onCheck: lookAgain };
 
   return (
-    <div className={`${styles.page} ${styles.narrow}`}>
+    <Page gap={6}>
       <Button
         variant="ghost"
         size="sm"
@@ -481,6 +482,6 @@ function SkillPage({ skill }: { skill: SkillDetail }) {
           </AlertDialog.Footer>
         </AlertDialog.Content>
       </AlertDialog.Root>
-    </div>
+    </Page>
   );
 }

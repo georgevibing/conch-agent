@@ -3,6 +3,7 @@ import {
   Button,
   EmptyState,
   Heading,
+  Page,
   Pearl,
   RoutineCard,
   Skeleton,
@@ -93,7 +94,7 @@ export function RoutinesView() {
   );
 
   return (
-    <div className={styles.page}>
+    <Page gap={6}>
       <header className={styles.pageHeader}>
         <Stack gap={1}>
           <Heading level={1} display size="4xl">
@@ -163,6 +164,6 @@ export function RoutinesView() {
       </footer>
 
       <NewRoutine open={creating} onOpenChange={setCreating} />
-    </div>
+    </Page>
   );
 }

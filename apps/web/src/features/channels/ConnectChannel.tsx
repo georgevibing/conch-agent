@@ -22,6 +22,7 @@ import {
   Input,
   IntegrationLogo,
   KeyField,
+  Page,
   PortalSketch,
   QRCode,
   Stack,
@@ -91,7 +92,7 @@ export function SetupPage({
 }) {
   const app = APPS[kind];
   return (
-    <div className={styles.page}>
+    <Page gap={8}>
       <div className={styles.setup}>
         <div className={styles.setupMain}>
           <Button
@@ -117,7 +118,7 @@ export function SetupPage({
           {preview}
         </aside>
       </div>
-    </div>
+    </Page>
   );
 }
 

@@ -5,6 +5,7 @@ import {
   Heading,
   Input,
   Kbd,
+  Page,
   SegmentedControl,
   SkillCard,
   skillModeLabels,
@@ -153,7 +154,7 @@ export function NewSkill() {
   const pending = writing && needsWords;
 
   return (
-    <div className={`${styles.page} ${styles.narrow}`}>
+    <Page gap={6}>
       <Button
         variant="ghost"
         size="sm"
@@ -303,6 +304,6 @@ export function NewSkill() {
           </Button>
         </Stack>
       </div>
-    </div>
+    </Page>
   );
 }

@@ -1,4 +1,4 @@
-import { EmptyState, Heading, Kbd, Skeleton, Stack, Text } from '@conch/nacre';
+import { EmptyState, Heading, Kbd, Page, Skeleton, Stack, Text } from '@conch/nacre';
 import { ListChecks } from 'lucide-react';
 
 import { LiveTaskCard } from './LiveTaskCard';
@@ -18,7 +18,7 @@ export function TasksView() {
   const finished = tasks.filter((t) => !going(t));
 
   return (
-    <div className={styles.page}>
+    <Page gap={6}>
       <Stack gap={1}>
         <Heading level={1} display size="3xl">
           Tasks
@@ -76,6 +76,6 @@ export function TasksView() {
           )}
         </>
       )}
-    </div>
+    </Page>
   );
 }

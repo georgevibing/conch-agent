@@ -73,6 +73,10 @@ pearly near-white instead of mud.
 ## Space, size, shape
 
 - 4 px grid: `--nc-space-*`.
+- Every page (Apps, Routines, Tasks, Settings…) is one centred column at
+  `--nc-page-width` (64rem), drawn with `Page`: switching pages, nothing jumps
+  sideways. The pane around it scrolls from edge to edge, so the scrollbar sits
+  at the window's side, not beside the column.
 - Control heights: 24 / 30 / 36 / 44 px (`xs`…`lg`).
 - Radii scale with `--nc-radius-scale`. Where supported, corners use
   `corner-shape: squircle` (continuous curvature) with radii re-tuned so the optical

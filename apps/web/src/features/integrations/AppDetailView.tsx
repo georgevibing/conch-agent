@@ -4,6 +4,7 @@ import {
   Heading,
   IntegrationLogo,
   IntegrationStatusBadge,
+  Page,
   Skeleton,
   Stack,
   Text,
@@ -62,10 +63,10 @@ export function AppDetailView({ appId }: { appId: string }) {
   // A page for a password manager can't be told from a missing app until Passwords has answered.
   if (isPending || channelsPending || (vaultPending && !item && (appId === '1password' || !entry)))
     return (
-      <div className={styles.page}>
+      <Page gap={8}>
         <Skeleton shape="block" height="4.5rem" />
         <Skeleton shape="block" height="12rem" />
-      </div>
+      </Page>
     );
 
   const dialogEntry = item?.entry ?? entry;
@@ -110,13 +111,13 @@ export function AppDetailView({ appId }: { appId: string }) {
   if (entry)
     return <Navigate to={connectedId === appId ? APPS_PATH : connectPath(entry.id)} replace />;
   return (
-    <div className={styles.page}>
+    <Page gap={8}>
       <EmptyState
         title="This app isn’t here any more"
         description="It may have been disconnected on another device."
         actions={<Button onClick={() => void navigate(APPS_PATH)}>See all apps</Button>}
       />
-    </div>
+    </Page>
   );
 }
 
@@ -129,7 +130,7 @@ function HalfDetail({ item, onSetUp }: { item: AppItem; onSetUp: () => void }) {
   }, [item.name]);
   const anything = item.channels.length > 0 || Boolean(item.source);
   return (
-    <div className={styles.page}>
+    <Page gap={8}>
       <div>
         <Button
           variant="ghost"
@@ -164,6 +165,6 @@ function HalfDetail({ item, onSetUp }: { item: AppItem; onSetUp: () => void }) {
         </Stack>
       </header>
       <AppAbilitiesSection item={item} onSetUp={onSetUp} />
-    </div>
+    </Page>
   );
 }

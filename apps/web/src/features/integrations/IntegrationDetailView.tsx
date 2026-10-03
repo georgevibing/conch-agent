@@ -10,14 +10,15 @@ import {
   Input,
   IntegrationLogo,
   IntegrationStatusBadge,
+  Page,
   PasswordInput,
   SegmentedControl,
   Skeleton,
   Stack,
   Switch,
   Text,
-  ToolPermissionList,
   toast,
+  ToolPermissionList,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, KeyRound, RotateCw, Unplug } from 'lucide-react';
@@ -74,21 +75,21 @@ export function IntegrationDetailView({
 
   if (isPending) {
     return (
-      <div className={styles.page}>
+      <Page gap={8}>
         <Skeleton shape="block" height="4.5rem" />
         <Skeleton shape="block" height="12rem" />
-      </div>
+      </Page>
     );
   }
   if (!integration) {
     return (
-      <div className={styles.page}>
+      <Page gap={8}>
         <EmptyState
           title="This app isn’t here any more"
           description="It may have been disconnected on another device."
           actions={<Button onClick={() => void navigate(APPS_PATH)}>See all apps</Button>}
         />
-      </div>
+      </Page>
     );
   }
   return (
@@ -146,7 +147,7 @@ function Detail({
     void guard(() => integrationsApi.update(integration.id, { policy })).then(() => update.reset());
 
   return (
-    <div className={styles.page}>
+    <Page gap={8}>
       <div>
         <Button
           variant="ghost"
@@ -411,7 +412,7 @@ function Detail({
         </AlertDialog.Content>
       </AlertDialog.Root>
       {dialog}
-    </div>
+    </Page>
   );
 }
 

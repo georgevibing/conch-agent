@@ -10,6 +10,7 @@ import {
   Heading,
   IntegrationLogo,
   KeyField,
+  Page,
   PersonRow,
   Skeleton,
   Stack,
@@ -60,19 +61,19 @@ export function ChannelDetailView({ channelId }: { channelId: string }) {
   const navigate = useNavigate();
   if (isPending)
     return (
-      <div className={styles.page}>
+      <Page gap={8}>
         <Skeleton shape="block" height="6rem" />
-      </div>
+      </Page>
     );
   if (!channel)
     return (
-      <div className={styles.page}>
+      <Page gap={8}>
         <EmptyState
           title="That isn’t connected any more"
           description="It may have been disconnected on another device."
           actions={<Button onClick={() => void navigate(TALK_PATH)}>See all apps</Button>}
         />
-      </div>
+      </Page>
     );
   return <Detail channel={channel} />;
 }
@@ -133,7 +134,7 @@ function Detail({ channel }: { channel: Channel }) {
   };
 
   return (
-    <div className={styles.page}>
+    <Page gap={8}>
       <Button
         asChild
         variant="ghost"
@@ -402,7 +403,7 @@ function Detail({ channel }: { channel: Channel }) {
         </AlertDialog.Content>
       </AlertDialog.Root>
       {dialog}
-    </div>
+    </Page>
   );
 }
 

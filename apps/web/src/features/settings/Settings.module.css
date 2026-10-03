@@ -74,19 +74,21 @@
     display: none;
   }
 
+  /* Scrolls from edge to edge, like every page (Nacre Page). */
   .panel {
     display: flex;
     flex-direction: column;
     min-block-size: 0;
     overflow-y: auto;
+    scrollbar-gutter: stable both-edges;
   }
 
-  /* One calm column to read down, however wide the window. */
+  /* The same column as every page, so moving between them nothing jumps. */
   .column {
     inline-size: 100%;
-    max-inline-size: 44rem;
+    max-inline-size: var(--nc-page-width);
     margin-inline: auto;
-    padding: calc(3.25rem + var(--nc-space-1)) var(--nc-space-8) var(--nc-space-16);
+    padding: calc(3.25rem + var(--nc-space-1)) var(--nc-space-6) var(--nc-space-16);
   }
 
   .section {

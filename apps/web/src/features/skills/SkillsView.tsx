@@ -4,10 +4,11 @@ import {
   EmptyState,
   Heading,
   Input,
+  Page,
   SegmentedControl,
+  Skeleton,
   SkillCard,
   SkillIcon,
-  Skeleton,
   Stack,
   Text,
 } from '@conch/nacre';
@@ -103,7 +104,7 @@ export function SkillsView() {
   );
 
   return (
-    <div className={styles.page}>
+    <Page gap={6}>
       <header className={styles.pageHeader}>
         <Stack gap={1}>
           <Heading level={1} display size="4xl">
@@ -220,6 +221,6 @@ export function SkillsView() {
         </>
       )}
       {turnOn.dialog}
-    </div>
+    </Page>
   );
 }

@@ -13,6 +13,7 @@ export { cx, useMediaQuery, usePrefersReducedMotion } from './utils';
 
 // Layout & typography
 export * from './components/Stack';
+export * from './components/Page';
 export * from './components/Surface';
 export * from './components/Text';
 export * from './components/Separator';
