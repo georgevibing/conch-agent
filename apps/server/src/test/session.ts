@@ -50,11 +50,23 @@ export async function gateway(home?: string) {
 
 export type Gateway = Awaited<ReturnType<typeof gateway>>;
 
-/** Send a message and wait for the reply to finish. */
+/**
+ * Send a message and wait for the reply to finish. A turn that stops to ask
+ * (a skill held to its own list, ADR 0047) is answered as a person would, with
+ * Deny, so the reply still finishes.
+ */
 export async function chat(services: Services, text: string, attachments: string[] = []) {
   const done = new Promise<void>((resolve) => {
     const off = services.conversations.events.on((event: ServerEvent) => {
-      if (event.type === 'conversation.event' && event.event.type === 'turn.completed') {
+      if (event.type !== 'conversation.event') return;
+      if (event.event.type === 'permission.requested') {
+        void services.conversations.respond(
+          event.event.conversationId,
+          event.event.permissionId,
+          'deny',
+        );
+      }
+      if (event.event.type === 'turn.completed') {
         off();
         resolve();
       }

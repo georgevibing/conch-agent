@@ -106,7 +106,7 @@ describe('Come home over HTTP', () => {
     // A key is checked with its provider before it's kept: one it refuses says so, and stays out.
     expect(result.outcomes.find((o) => o.id === 'key:openrouter')).toMatchObject({
       ok: false,
-      message: expect.stringMatching(/refused/),
+      message: expect.stringMatching(/no longer knows this key/),
     });
     expect(await services.keys.describe('openrouter')).toBeFalsy();
     // The key is sealed in Conch's key file, never in the ledger.
