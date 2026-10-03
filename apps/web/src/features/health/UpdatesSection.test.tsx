@@ -87,6 +87,87 @@ describe('Settings → Health → Updates', () => {
     expect(within(programs).getByRole('button', { name: 'Update to 0.160.0' })).toBeInTheDocument();
   });
 
+  it('lists apps you added with a newer version: one press, or what changed first (ADR 0061)', async () => {
+    const user = userEvent.setup();
+    const found = (version: string) => ({
+      manifest: {
+        conch: 1,
+        id: 'plant-diary',
+        name: 'Plant diary',
+        tagline: 'When you watered what',
+        description: '',
+        version,
+        icon: { glyph: 'leaf', color: 'green' },
+        kind: 'personal',
+        pages: [],
+        reaches: [],
+        settings: [],
+        instructions: '',
+        examples: [],
+      },
+      tools: [],
+      signature: { state: 'verified', publisher: 'Ada' },
+      hash: 'pd-1.1.0',
+      problems: [],
+    });
+    const calls = mockFetch({
+      'GET /api/updates': () =>
+        status({
+          apps: [
+            {
+              appId: 'plant-diary',
+              name: 'Plant diary',
+              installed: '1.0.0',
+              latest: '1.1.0',
+              sameSigner: true,
+              reachesAdded: [],
+            },
+            {
+              appId: 'trains',
+              name: 'Train check',
+              installed: '0.3.0',
+              latest: '0.4.0',
+              sameSigner: true,
+              reachesAdded: ['api.rail.example'],
+            },
+          ],
+        }),
+      'GET /api/conch-apps/plant-diary/update': () => found('1.1.0'),
+      'POST /api/conch-apps/plant-diary/update': () => ({
+        id: 'plant-diary',
+        integrationId: 'capp_plant-diary',
+        manifest: found('1.1.0').manifest,
+        tools: [],
+        source: {
+          kind: 'github',
+          owner: 'ada',
+          repo: 'plant-diary',
+          url: 'https://github.com/ada/plant-diary',
+        },
+        signature: { state: 'verified', publisher: 'Ada' },
+        hash: 'pd-1.1.0',
+        addedAt: 1,
+        updatedAt: 2,
+      }),
+    });
+    renderApp(<UpdatesSection />);
+    const apps = await screen.findByRole('list', { name: 'Apps you added' });
+    // Reaching somewhere new is looked at first, on its page.
+    expect(apps).toHaveTextContent('Version 0.4.0 also reaches api.rail.example');
+    expect(within(apps).getByRole('button', { name: 'See what changed' })).toBeInTheDocument();
+    await user.click(within(apps).getByRole('button', { name: 'Update to 1.1.0' }));
+    // Exactly the version it named: the press carries what was looked at.
+    await waitFor(() =>
+      expect(calls).toContainEqual(
+        expect.objectContaining({
+          method: 'POST',
+          path: '/api/conch-apps/plant-diary/update',
+          body: { hash: 'pd-1.1.0' },
+        }),
+      ),
+    );
+  });
+
   it('offers the update with what’s new, and shows real progress once it starts', async () => {
     const user = userEvent.setup();
     let current = status({}, ready);

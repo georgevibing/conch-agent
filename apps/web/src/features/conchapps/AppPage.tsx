@@ -193,14 +193,15 @@ export function AppPageView({ appId, pageId }: { appId: string; pageId: string }
   return (
     <div className={styles.pageView}>
       <header className={styles.pageBar}>
-        <Button
+        {/* Back to the app's page in Apps, where its switches and settings are. */}
+        <IconButton
+          label={`Back to ${app.manifest.name}`}
           variant="ghost"
           size="sm"
-          leadingIcon={<ArrowLeft />}
           onClick={() => void navigate(conchAppPath(app.id))}
         >
-          {app.manifest.name}
-        </Button>
+          <ArrowLeft />
+        </IconButton>
         <PageTitle icon={app.manifest.icon} title={titled} />
       </header>
       <AppPageFrame
