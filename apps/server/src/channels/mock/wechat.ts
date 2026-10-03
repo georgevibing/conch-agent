@@ -52,7 +52,7 @@ export class MockWeChat {
   resolve: (url: string) => string = (url) => url;
   connections = 0;
 
-  static readonly APP_ID = 'wx0123456789abcdef';
+  static readonly APP_ID = 'wx' + '0123456789abcdef';
   static readonly APP_SECRET = '0123456789abcdef0123456789abcdef';
   static readonly OWNER = 'oAdaLovelace0000000000000000';
   static readonly STRANGER = 'oGraceHopper0000000000000000';

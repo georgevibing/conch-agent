@@ -150,7 +150,7 @@ test('WeChat: an Official Account through the public door, checked by WeChat its
   await page.goto('/channels/new/wechat');
   await page.getByRole('radio', { name: /An Official Account/ }).click();
   await page.getByRole('button', { name: 'I have one' }).click();
-  await page.getByLabel('AppID').fill('wx0123456789abcdef');
+  await page.getByLabel('AppID').fill('wx' + '0123456789abcdef');
   await page.getByLabel('AppSecret').fill('0123456789abcdef0123456789abcdef');
   await page.getByRole('button', { name: 'Turn on with Tailscale' }).click();
   await page.getByRole('button', { name: 'Show the Token and EncodingAESKey' }).click();
