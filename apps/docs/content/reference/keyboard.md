@@ -23,6 +23,6 @@ In a question your assistant asks, <kbd>1</kbd> to <kbd>6</kbd> choose an option
 
 In the browser panel, <kbd>shift+esc</kbd> gives the keyboard back to Conch.
 
-In Passwords, <kbd>/</kbd> goes to the search. There, <kbd>↓</kbd> and <kbd>↑</kbd> walk through what was found, <kbd>Enter</kbd> opens the first one, and <kbd>esc</kbd> puts an open item away.
+In Passwords, <kbd>/</kbd> goes to the search. There, <kbd>↓</kbd> and <kbd>↑</kbd> walk through what was found, <kbd>Enter</kbd> opens the first one, and <kbd>esc</kbd> puts an open item away. On the item with focus or open, <kbd>mod+c</kbd> copies its password, <kbd>mod+shift+c</kbd> its username and <kbd>mod+alt+c</kbd> its one-time code. <kbd>mod+a</kbd> in the list chooses everything shown, <kbd>delete</kbd> moves Conch's own to Recently deleted, and <kbd>esc</kbd> ends a choice.
 
 While you edit something made for you, <kbd>mod+s</kbd> saves, <kbd>esc</kbd> cancels, <kbd>mod+z</kbd> undoes and <kbd>mod+shift+z</kbd> redoes.
