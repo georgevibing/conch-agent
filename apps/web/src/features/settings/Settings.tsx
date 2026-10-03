@@ -42,10 +42,10 @@ import {
   User,
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 
 import { useAppState, useMemories, useUpdateSettings } from '../../api/queries';
-import { useUi, type SettingsTab } from '../../app/ui';
+import { useUi } from '../../app/ui';
 import { SecurityTab } from '../auth/SecurityTab';
 import { updatesWaiting, useUpdates } from '../updates/queries';
 import { BrowserSettings } from '../browser/BrowserSettings';
@@ -59,6 +59,7 @@ import { ProvidersTab } from '../providers/ProvidersTab';
 import { UsageTab } from '../usage/UsageTab';
 import styles from './Settings.module.css';
 import { CommandsTab } from './CommandsTab';
+import { settingsAt, type SettingsTab } from './paths';
 import { GeneralTab } from './GeneralTab';
 import { ModelsTab } from './ModelsTab';
 import { SaveStatus, Section } from './Section';
@@ -161,7 +162,6 @@ function MemoryTab({ autoMemory, tidyMemory }: { autoMemory: boolean; tidyMemory
   const memories = useMemories();
   const update = useUpdateSettings();
   const navigate = useNavigate();
-  const closeSettings = useUi((s) => s.closeSettings);
   const all = memories.data ?? [];
   const waiting = all.filter((m) => m.pending).length;
   const kept = all.length - waiting;
@@ -203,14 +203,7 @@ function MemoryTab({ autoMemory, tidyMemory }: { autoMemory: boolean; tidyMemory
                 {waiting > 0 && ` · ${waiting} waiting for your OK`}
               </Text>
             </Stack>
-            <Button
-              size="sm"
-              variant="surface"
-              onClick={() => {
-                closeSettings();
-                void navigate('/memory');
-              }}
-            >
+            <Button size="sm" variant="surface" onClick={() => void navigate('/memory')}>
               Open
             </Button>
           </div>
@@ -361,10 +354,16 @@ const groups: { label: string; hidden?: boolean; places: Place[] }[] = [
  * Settings is a page of its own: it takes the whole window, its places where
  * the app's sidebar was, with Back (and Escape) to return. On a phone it's a
  * list, then the place you chose, with ‹ Settings to go back to the list.
+ *
+ * Each place has its address (`/settings/providers`, and a provider's own page
+ * under it), so a reload, a link or the browser's Back lands where you were.
+ * The page it opened over stays behind it, as it was.
  */
 export function Settings() {
-  const tab = useUi((s) => s.settings);
-  const browsing = useUi((s) => s.settingsBrowse);
+  const address = settingsAt(useLocation().pathname);
+  const tab = address ? (address.tab ?? 'general') : null;
+  const browsing = !address?.tab;
+  const restarting = useUi((s) => Boolean(s.restarting));
   const open = useUi((s) => s.openSettings);
   const close = useUi((s) => s.closeSettings);
   const { data: app } = useAppState();
@@ -373,7 +372,7 @@ export function Settings() {
   const view = narrow ? (browsing ? 'list' : 'place') : undefined;
 
   return (
-    <Dialog.Root open={tab !== null} onOpenChange={(o) => !o && close()}>
+    <Dialog.Root open={tab !== null && !restarting} onOpenChange={(o) => !o && close()}>
       <Dialog.Content
         size="full"
         hideClose
@@ -445,8 +444,11 @@ export function Settings() {
                           value={t.value}
                           icon={t.icon}
                           dot={t.value === 'health' && updates ? 'Update available' : undefined}
-                          // On a phone, choosing the place already chosen still opens it.
-                          onClick={() => useUi.setState({ settingsBrowse: false })}
+                          // The place already chosen still opens it: from the list on a
+                          // phone, or from a page inside it (a provider's) to the place.
+                          onClick={() => {
+                            if (t.value === tab && (browsing || address?.item)) open(t.value);
+                          }}
                         >
                           {t.label}
                         </Tabs.Trigger>
@@ -463,7 +465,7 @@ export function Settings() {
                     variant="ghost"
                     size="sm"
                     leadingIcon={<ChevronLeft />}
-                    onClick={() => useUi.setState({ settingsBrowse: true })}
+                    onClick={() => open()}
                   >
                     Settings
                   </Button>

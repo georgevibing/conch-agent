@@ -114,7 +114,7 @@ const result: ImportResult = {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  useUi.setState({ settings: null, settingsFocus: undefined });
+  useUi.setState({ settingsFocus: undefined });
   useImportProgress.setState({ done: 0, total: 0, current: undefined });
 });
 

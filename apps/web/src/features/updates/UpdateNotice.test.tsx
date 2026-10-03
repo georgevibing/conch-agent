@@ -7,7 +7,7 @@ import { useUi } from '../../app/ui';
 import { mockFetch, renderApp } from '../../test/harness';
 import { UpdateNotice } from './UpdateNotice';
 
-afterEach(() => useUi.setState({ settings: null, settingsFocus: undefined }));
+afterEach(() => useUi.setState({ settingsFocus: undefined }));
 
 function status(announce: boolean): UpdatesStatus {
   return {
@@ -44,10 +44,11 @@ describe('the new-release banner', () => {
         return status(false);
       },
     });
-    renderApp(<UpdateNotice />);
+    const { where } = renderApp(<UpdateNotice />);
     expect(await screen.findByRole('region', { name: 'Conch 0.3 is ready' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'What’s new' }));
-    expect(useUi.getState()).toMatchObject({ settings: 'health', settingsFocus: 'updates' });
+    expect(where()).toBe('/settings/health');
+    expect(useUi.getState().settingsFocus).toBe('updates');
     await user.click(screen.getByRole('button', { name: 'Update' }));
     expect(useUi.getState()).toMatchObject({ settingsFocus: 'update-conch' });
     await user.click(screen.getByRole('button', { name: 'Not now' }));

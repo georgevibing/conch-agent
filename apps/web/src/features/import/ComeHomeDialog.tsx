@@ -17,7 +17,6 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 
 import { ApiError } from '../../api/client';
-import { useUi } from '../../app/ui';
 import { finishSlackPath, importApi, useImportProgress } from './api';
 
 type Guard = (task: () => Promise<unknown>) => Promise<boolean>;
@@ -44,11 +43,9 @@ function nextSteps(result: ImportResult, onClose: () => void): ReactNode[] {
           {o.message}{' '}
           <Link
             to={finishSlackPath(result.source)}
-            onClick={() => {
-              // Settings may be open around Come home: the Slack setup is a page of its own.
-              onClose();
-              useUi.getState().closeSettings();
-            }}
+            // Settings may be open around Come home: the Slack setup is a page of its
+            // own, and going there leaves Settings.
+            onClick={onClose}
           >
             Finish connecting Slack
           </Link>

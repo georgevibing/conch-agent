@@ -10,9 +10,11 @@ import {
   Text,
 } from '@conch/nacre';
 import { useId, useState } from 'react';
+import { useLocation } from 'react-router';
 
 import { useAppState } from '../../api/queries';
 import { ProviderServers } from '../integrations/ProviderServers';
+import { settingsAt } from '../settings/paths';
 import { Section } from '../settings/Section';
 import { useUi } from '../../app/ui';
 import { AddServer } from './AddServer';
@@ -58,12 +60,11 @@ export function ProvidersTab() {
   const { data: app } = useAppState();
   const assistant = app?.persona.name ?? 'Conch';
   const yoursId = useId();
-  // Opened to sign in to one provider (from a chat): its page, straight away.
-  const [connecting, setConnecting] = useState<string | undefined>(() => {
-    const focus = useUi.getState().settingsFocus;
-    if (focus) useUi.setState({ settingsFocus: undefined });
-    return focus;
-  });
+  // A provider's page is its own address (`/settings/providers/<id>`), so the
+  // place in Settings' list, Back and a reload all work from it.
+  const connecting = settingsAt(useLocation().pathname)?.item;
+  const openSettings = useUi((s) => s.openSettings);
+  const setConnecting = (id?: string) => openSettings('providers', id);
   const [removing, setRemoving] = useState<Provider>();
   const use = useUseProvider();
   const check = useCheckProvider();

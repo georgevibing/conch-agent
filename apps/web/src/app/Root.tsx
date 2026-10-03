@@ -7,11 +7,16 @@ import { OAuthDone } from '../features/integrations/OAuthDone';
 import { APPS_PATH, newHome } from '../features/integrations/paths';
 import { ProviderDone } from '../features/providers/ProviderDone';
 import { Onboarding } from '../features/onboarding/Onboarding';
+import { behindOf, settingsAt } from '../features/settings/paths';
+import { Settings } from '../features/settings/Settings';
 import { Shell } from './Shell';
 import styles from './Root.module.css';
 
 export function Root() {
   const state = useAppState();
+  const location = useLocation();
+  // Settings opens over the page you were on, which stays as it was behind it.
+  const behind = settingsAt(location.pathname) ? (behindOf(location) ?? '/') : undefined;
 
   if (state.isPending) {
     return (
@@ -48,29 +53,32 @@ export function Root() {
   if (!state.data.onboarded) return <Onboarding />;
 
   return (
-    <Routes>
-      <Route path="/" element={<Shell />} />
-      <Route path="/c/:conversationId" element={<Shell />} />
-      <Route path="/tasks" element={<Shell />} />
-      <Route path="/routines" element={<Shell />} />
-      <Route path="/routines/:routineId" element={<Shell />} />
-      <Route path="/skills" element={<Shell />} />
-      <Route path="/skills/new" element={<Shell />} />
-      <Route path="/skills/:skillId" element={<Shell />} />
-      <Route path="/apps" element={<Shell />} />
-      <Route path="/apps/:appId" element={<Shell />} />
-      {/* Integrations and Channels are Apps now (ADR 0052): old links still arrive. */}
-      <Route path="/integrations" element={<MovedToApps />} />
-      <Route path="/integrations/:integrationId" element={<MovedToApps />} />
-      <Route path="/channels" element={<MovedToApps />} />
-      <Route path="/channels/new/:channelKind" element={<Shell />} />
-      <Route path="/channels/:channelId" element={<Shell />} />
-      <Route path="/passwords" element={<Shell />} />
-      <Route path="/activity" element={<Shell />} />
-      <Route path="/memory" element={<Shell />} />
-      <Route path="/passwords/:itemId" element={<Shell />} />
-      <Route path="*" element={<Shell />} />
-    </Routes>
+    <>
+      <Routes location={behind ?? location}>
+        <Route path="/" element={<Shell />} />
+        <Route path="/c/:conversationId" element={<Shell />} />
+        <Route path="/tasks" element={<Shell />} />
+        <Route path="/routines" element={<Shell />} />
+        <Route path="/routines/:routineId" element={<Shell />} />
+        <Route path="/skills" element={<Shell />} />
+        <Route path="/skills/new" element={<Shell />} />
+        <Route path="/skills/:skillId" element={<Shell />} />
+        <Route path="/apps" element={<Shell />} />
+        <Route path="/apps/:appId" element={<Shell />} />
+        {/* Integrations and Channels are Apps now (ADR 0052): old links still arrive. */}
+        <Route path="/integrations" element={<MovedToApps />} />
+        <Route path="/integrations/:integrationId" element={<MovedToApps />} />
+        <Route path="/channels" element={<MovedToApps />} />
+        <Route path="/channels/new/:channelKind" element={<Shell />} />
+        <Route path="/channels/:channelId" element={<Shell />} />
+        <Route path="/passwords" element={<Shell />} />
+        <Route path="/activity" element={<Shell />} />
+        <Route path="/memory" element={<Shell />} />
+        <Route path="/passwords/:itemId" element={<Shell />} />
+        <Route path="*" element={<Shell />} />
+      </Routes>
+      <Settings />
+    </>
   );
 }
 

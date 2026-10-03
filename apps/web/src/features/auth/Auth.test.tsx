@@ -4,7 +4,6 @@ import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { useUi } from '../../app/ui';
 import { appState, mockFetch, renderApp } from '../../test/harness';
 import { SecurityTab } from './SecurityTab';
 import { SignIn } from './SignIn';
@@ -388,7 +387,6 @@ describe('SecurityTab', () => {
 
   it('opens Models for a choice made there', async () => {
     const user = userEvent.setup();
-    useUi.setState({ settings: 'security' });
     mockFetch({
       'GET /api/access': () =>
         settings({
@@ -403,9 +401,9 @@ describe('SecurityTab', () => {
           ],
         }),
     });
-    renderApp(<SecurityTab />);
+    const { where } = renderApp(<SecurityTab />, { route: '/settings/security' });
     await user.click(await screen.findByRole('button', { name: /Review/ }));
-    expect(useUi.getState().settings).toBe('models');
+    expect(where()).toBe('/settings/models');
   });
 
   it('asks for a restart when the gateway is older than the page', async () => {

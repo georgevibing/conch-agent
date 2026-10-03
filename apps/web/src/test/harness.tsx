@@ -6,6 +6,7 @@ import type { ReactElement } from 'react';
 import { MemoryRouter } from 'react-router';
 import { vi } from 'vitest';
 
+import { here, Navigator } from '../app/navigation';
 import { LiveProvider } from '../live/LiveProvider';
 
 /** In-memory WebSocket so tests can assert what's sent and push server events. */
@@ -200,10 +201,18 @@ export function renderApp(ui: ReactElement, { route = '/' } = {}) {
     <NacreProvider scope="local">
       <QueryClientProvider client={client}>
         <LiveProvider url="ws://test/ws">
-          <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
+          <MemoryRouter initialEntries={[route]}>
+            <Navigator />
+            {ui}
+          </MemoryRouter>
         </LiveProvider>
       </QueryClientProvider>
     </NacreProvider>,
   );
-  return { ...view, client };
+  /** The address the app is at now (path and query). */
+  const where = () => {
+    const at = here();
+    return at ? at.pathname + at.search : route;
+  };
+  return { ...view, client, where };
 }

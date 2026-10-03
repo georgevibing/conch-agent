@@ -55,7 +55,6 @@ export function LiveDataSection({ focus }: { focus?: { place: string; done: () =
           onRevoke={(a) => revoke.mutate({ artifactId: a.artifactId, host: a.host })}
           onOpen={(a) => {
             const made = artifacts?.find((x) => x.id === a.artifactId);
-            useUi.getState().closeSettings();
             if (made?.pinned || !made?.conversationId) return navigate(`/apps/${a.artifactId}`);
             useUi.getState().openArtifact(made.conversationId, made.id);
             navigate(`/c/${made.conversationId}`);

@@ -63,7 +63,7 @@ describe('a chat-only model and a message that needs an app (ADR 0050)', () => {
       'GET /api/conversations': () => [],
       'POST /api/conversations/c1/release': () => ({ ok: true }),
     });
-    renderApp(<ChatView conversationId="c1" />, { route: '/c/c1' });
+    const { where } = renderApp(<ChatView conversationId="c1" />, { route: '/c/c1' });
     await screen.findByRole('textbox', { name: 'Message Conch' });
     act(() => {
       // The live store outlives a test: later numbers are new events.
@@ -73,8 +73,9 @@ describe('a chat-only model and a message that needs an app (ADR 0050)', () => {
     const card = await screen.findByRole('group', { name: 'Chat Lite can’t use Linear' });
     expect(card).toHaveTextContent('None of the models you’ve set up can use apps');
     await userEvent.click(screen.getByRole('button', { name: 'Connect a provider' }));
-    expect(useUi.getState().settings).toBe('providers');
+    expect(where()).toBe('/settings/providers');
     act(() => useUi.getState().closeSettings());
+    expect(where()).toBe('/c/c1');
 
     await userEvent.click(screen.getByRole('button', { name: 'Answer without it' }));
     await waitFor(() =>

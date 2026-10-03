@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router';
 
 import { AuthGate } from '../features/auth/AuthGate';
 import { LiveProvider } from '../live/LiveProvider';
+import { Navigator } from './navigation';
 import { Root } from './Root';
 
 export function App() {
@@ -22,6 +23,7 @@ export function App() {
         <AuthGate>
           <LiveProvider>
             <BrowserRouter>
+              <Navigator />
               <Root />
             </BrowserRouter>
           </LiveProvider>

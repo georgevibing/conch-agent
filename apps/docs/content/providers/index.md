@@ -29,6 +29,8 @@ Open **Settings → Providers**. Yours are on top. The rest wait below as tiles,
 - **On this computer.** A model on this computer, through Ollama or LM Studio, or a [server you run yourself](servers.md).
 - **Pay as you go.** Paste a key and Conch checks it before keeping it. "Saved" means it works.
 
+Each provider opens on a page of its own, and stays there once it connects so you can see it worked. **Providers**, at the top of that page or in Settings' list, goes back to them all. Every place in Settings has its own address, like `/settings/providers`, so reloading, a bookmark or the browser's back button lands where you were.
+
 ## Have a key? Paste it anywhere
 
 Paste a key anywhere on **Settings → Providers**. When it starts with something only one company uses (`gsk_` is Groq, `xai-` is xAI), Conch knows whose it is and checks it with that provider straight away. Plenty of keys just start `sk-`, and some start with nothing at all; for those, Conch asks whose it is first. A key is only ever sent to the company it belongs to, never tried at several to see which one takes it.

@@ -44,7 +44,6 @@ function ActionButton({ action }: { action: DoctorAction }) {
                       ? `/skills${action.focus ? `/${encodeURIComponent(action.focus)}` : ''}`
                       : undefined;
         if (!page) return openSettings(action.place as SettingsTab, action.focus);
-        useUi.getState().closeSettings();
         window.dispatchEvent(new CustomEvent('conch:navigate', { detail: page }));
       }}
     >

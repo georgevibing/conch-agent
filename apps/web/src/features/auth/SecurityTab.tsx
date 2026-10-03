@@ -1008,8 +1008,7 @@ function useCheckupFix(guard: Guard) {
     if (fix.kind === 'open') {
       if (fix.place === 'models') openSettings('models');
       else if (fix.place === 'channels') {
-        // A page, not a part of Settings: close Settings and go there.
-        useUi.getState().closeSettings();
+        // A page, not a part of Settings: going there leaves Settings.
         window.dispatchEvent(new CustomEvent('conch:navigate', { detail: '/apps?show=talk' }));
       } else setFocus({ place: fix.place, done: () => setFocus(undefined) });
       return undefined;

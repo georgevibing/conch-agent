@@ -286,7 +286,7 @@ describe('Palette search', () => {
         ],
       }),
     });
-    renderApp(
+    const { where } = renderApp(
       <>
         <Palette />
         <Where />
@@ -354,7 +354,7 @@ describe('Palette search', () => {
     await user.type(screen.getByRole('combobox'), 'cookies');
     expect(await screen.findByRole('option', { name: /Settings: Browser/ })).toBeInTheDocument();
     await user.keyboard('{Enter}');
-    await waitFor(() => expect(useUi.getState().settings).toBe('browser'));
+    await waitFor(() => expect(where()).toBe('/settings/browser'));
   });
 
   it('finds devices and approving them, straight into Settings → Security → Devices', async () => {
@@ -364,7 +364,7 @@ describe('Palette search', () => {
       'GET /api/conversations': () => [],
       'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
     });
-    renderApp(<Palette />);
+    const { where } = renderApp(<Palette />);
     act(() => useUi.getState().setPalette(true));
     for (const words of ['approve', 'devices', 'pending', 'trusted']) {
       await user.clear(await screen.findByRole('combobox'));
@@ -373,9 +373,12 @@ describe('Palette search', () => {
     }
     await user.keyboard('{Enter}');
     await waitFor(() =>
-      expect(useUi.getState()).toMatchObject({ settings: 'security', settingsFocus: 'devices' }),
+      expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
+        at: '/settings/security',
+        focus: 'devices',
+      }),
     );
-    act(() => useUi.setState({ settings: null, settingsFocus: undefined }));
+    act(() => useUi.setState({ settingsFocus: undefined }));
   });
 
   it('finds the working folder in General by the words people use', async () => {
@@ -385,7 +388,7 @@ describe('Palette search', () => {
       'GET /api/conversations': () => [],
       'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
     });
-    renderApp(<Palette />);
+    const { where } = renderApp(<Palette />);
     act(() => useUi.getState().setPalette(true));
     for (const words of ['working folder', 'workspace', 'directory']) {
       await user.clear(await screen.findByRole('combobox'));
@@ -395,8 +398,8 @@ describe('Palette search', () => {
       ).toBeInTheDocument();
     }
     await user.keyboard('{Enter}');
-    await waitFor(() => expect(useUi.getState()).toMatchObject({ settings: 'general' }));
-    act(() => useUi.setState({ settings: null, settingsFocus: undefined }));
+    await waitFor(() => expect(where()).toBe('/settings/general'));
+    act(() => useUi.setState({ settingsFocus: undefined }));
   });
 
   it('finds things made in chats: a pinned app on its page, anything else beside its chat', async () => {
@@ -497,7 +500,7 @@ describe('Palette search', () => {
         ],
       }),
     });
-    renderApp(
+    const { where } = renderApp(
       <>
         <Palette />
         <Where />
@@ -523,9 +526,12 @@ describe('Palette search', () => {
     }
     await user.keyboard('{Enter}');
     await waitFor(() =>
-      expect(useUi.getState()).toMatchObject({ settings: 'security', settingsFocus: 'live-data' }),
+      expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
+        at: '/settings/security',
+        focus: 'live-data',
+      }),
     );
-    act(() => useUi.setState({ settings: null, settingsFocus: undefined }));
+    act(() => useUi.setState({ settingsFocus: undefined }));
   });
 
   it('backs up and restores by name, straight into Settings → Health', async () => {
@@ -535,13 +541,16 @@ describe('Palette search', () => {
       'GET /api/conversations': () => [],
       'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
     });
-    renderApp(<Palette />);
+    const { where } = renderApp(<Palette />);
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'back up');
     expect(await screen.findByRole('option', { name: /Back up now/ })).toBeInTheDocument();
     await user.keyboard('{Enter}');
     await waitFor(() =>
-      expect(useUi.getState()).toMatchObject({ settings: 'health', settingsFocus: 'backup' }),
+      expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
+        at: '/settings/health',
+        focus: 'backup',
+      }),
     );
 
     act(() => useUi.getState().setPalette(true));
@@ -553,9 +562,12 @@ describe('Palette search', () => {
     }
     await user.keyboard('{Enter}');
     await waitFor(() =>
-      expect(useUi.getState()).toMatchObject({ settings: 'health', settingsFocus: 'restore' }),
+      expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
+        at: '/settings/health',
+        focus: 'restore',
+      }),
     );
-    act(() => useUi.setState({ settings: null, settingsFocus: undefined }));
+    act(() => useUi.setState({ settingsFocus: undefined }));
   });
 
   it('finds Come home by the other apps’ names, straight into Settings → Memory', async () => {
@@ -565,7 +577,7 @@ describe('Palette search', () => {
       'GET /api/conversations': () => [],
       'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
     });
-    renderApp(<Palette />);
+    const { where } = renderApp(<Palette />);
     act(() => useUi.getState().setPalette(true));
     for (const words of ['openclaw', 'hermes', 'migrate']) {
       await user.clear(await screen.findByRole('combobox'));
@@ -576,9 +588,12 @@ describe('Palette search', () => {
     }
     await user.keyboard('{Enter}');
     await waitFor(() =>
-      expect(useUi.getState()).toMatchObject({ settings: 'memory', settingsFocus: 'come-home' }),
+      expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
+        at: '/settings/memory',
+        focus: 'come-home',
+      }),
     );
-    act(() => useUi.setState({ settings: null, settingsFocus: undefined }));
+    act(() => useUi.setState({ settingsFocus: undefined }));
   });
 
   it('finds what Conch knows about you, tidying up and exporting, by the words people use', async () => {
@@ -632,7 +647,7 @@ describe('Palette search', () => {
       'GET /api/conversations': () => [],
       'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
     });
-    renderApp(<Palette />);
+    const { where } = renderApp(<Palette />);
     act(() => useUi.getState().setPalette(true));
     for (const words of [
       'always on',
@@ -649,7 +664,10 @@ describe('Palette search', () => {
     }
     await user.keyboard('{Enter}');
     await waitFor(() =>
-      expect(useUi.getState()).toMatchObject({ settings: 'health', settingsFocus: 'background' }),
+      expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
+        at: '/settings/health',
+        focus: 'background',
+      }),
     );
     act(() => useUi.getState().setPalette(true));
     for (const words of ['tray', 'menu bar']) {
@@ -662,7 +680,7 @@ describe('Palette search', () => {
       await user.type(screen.getByRole('combobox'), words);
       expect(await screen.findByRole('option', { name: /Quit Conch/ })).toBeInTheDocument();
     }
-    act(() => useUi.setState({ settings: null, settingsFocus: undefined, paletteOpen: false }));
+    act(() => useUi.setState({ settingsFocus: undefined, paletteOpen: false }));
   });
 
   it('finds the publishers you trust by the words people use, straight to the list', async () => {
@@ -699,7 +717,7 @@ describe('Palette search', () => {
       'GET /api/conversations': () => [],
       'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
     });
-    renderApp(<Palette />);
+    const { where } = renderApp(<Palette />);
     act(() => useUi.getState().setPalette(true));
     for (const words of ['notifications', 'push', 'lock screen']) {
       await user.clear(await screen.findByRole('combobox'));
@@ -715,9 +733,12 @@ describe('Palette search', () => {
     }
     await user.keyboard('{Enter}');
     await waitFor(() =>
-      expect(useUi.getState()).toMatchObject({ settings: 'security', settingsFocus: 'add-device' }),
+      expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
+        at: '/settings/security',
+        focus: 'add-device',
+      }),
     );
-    act(() => useUi.setState({ settings: null, settingsFocus: undefined, paletteOpen: false }));
+    act(() => useUi.setState({ settingsFocus: undefined, paletteOpen: false }));
   });
 
   it('opens the terminal by the words people use for it, and hides it while it’s off', async () => {
@@ -805,7 +826,7 @@ describe('Palette search', () => {
       'GET /api/conversations': () => [],
       'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
     });
-    renderApp(<Palette />);
+    const { where } = renderApp(<Palette />);
     for (const words of ['offline', 'ollama', 'private model', 'local']) {
       act(() => useUi.getState().setPalette(true));
       const box = await screen.findByRole('combobox');
@@ -817,7 +838,7 @@ describe('Palette search', () => {
     }
     await user.click(screen.getByRole('option', { name: /Model on this computer/ }));
     // Straight to its setup page.
-    expect(useUi.getState()).toMatchObject({ settings: 'providers', settingsFocus: 'ollama' });
+    expect(where()).toBe('/settings/providers/ollama');
   });
 
   it('checks for updates, and offers “Update Conch” only when one is ready', async () => {
@@ -842,21 +863,27 @@ describe('Palette search', () => {
         restartable: true,
       }),
     });
-    const { client } = renderApp(<Palette />);
+    const { client, where } = renderApp(<Palette />);
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'upgrade');
     expect(await screen.findByRole('option', { name: /Check for updates/ })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /Update Conch/ })).toBeNull();
     await user.click(screen.getByRole('option', { name: /Check for updates/ }));
-    expect(useUi.getState()).toMatchObject({ settings: 'health', settingsFocus: 'check-updates' });
+    expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
+      at: '/settings/health',
+      focus: 'check-updates',
+    });
 
     behind = 3;
     await act(() => client.invalidateQueries({ queryKey: ['updates'] }));
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'update conch');
     await user.click(await screen.findByRole('option', { name: /Update Conch/ }));
-    expect(useUi.getState()).toMatchObject({ settings: 'health', settingsFocus: 'update-conch' });
-    useUi.setState({ settings: null, settingsFocus: undefined });
+    expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
+      at: '/settings/health',
+      focus: 'update-conch',
+    });
+    useUi.setState({ settingsFocus: undefined });
   });
 
   it('finds Apps by its old names too: integrations, and channels for Talk to me here', async () => {
@@ -995,15 +1022,18 @@ describe('Palette search', () => {
         restartable: true,
       }),
     });
-    renderApp(<Palette />);
+    const { where } = renderApp(<Palette />);
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'update conch');
     expect(await screen.findByRole('option', { name: /Update Conch to 0\.3/ })).toBeInTheDocument();
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'beta');
     await user.click(await screen.findByRole('option', { name: /Release channel/ }));
-    expect(useUi.getState()).toMatchObject({ settings: 'health', settingsFocus: 'updates' });
-    useUi.setState({ settings: null, settingsFocus: undefined });
+    expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
+      at: '/settings/health',
+      focus: 'updates',
+    });
+    useUi.setState({ settingsFocus: undefined });
   });
 
   it('finds WhatsApp by what linking it means: a code to scan', async () => {

@@ -1,22 +1,10 @@
 import type { TurnOptions } from '@conch/protocol';
 import { create } from 'zustand';
 
-export type SettingsTab =
-  | 'general'
-  | 'personality'
-  | 'about'
-  | 'memory'
-  | 'models'
-  | 'commands'
-  | 'usage'
-  | 'health'
-  | 'security'
-  | 'notifications'
-  | 'voice'
-  | 'providers'
-  | 'browser'
-  | 'terminal'
-  | 'appearance';
+import { leaveSettings, showSettings, type SettingsMove } from '../features/settings/navigate';
+import type { SettingsTab } from '../features/settings/paths';
+
+export type { SettingsTab };
 
 /** Which composer picker is open (so `/model` and `/mode` can open them). */
 export type Picker = 'model' | 'mode' | null;
@@ -34,7 +22,6 @@ export interface FindState {
 interface UiState {
   sidebarOpen: boolean;
   mobileSidebarOpen: boolean;
-  settings: SettingsTab | null;
   /**
    * Conch is starting itself again (an update, a restore): the page rests
    * until it's back. `reopen`: the settings tab to show again after the reload.
@@ -46,10 +33,8 @@ interface UiState {
     /** Quit on purpose: the page rests until Conch is opened again. */
     stopped?: boolean;
   };
-  /** Something to open inside the settings tab (a provider's page), once. */
+  /** Something in a settings place to bring into view, once (Settings → Security → Devices). */
   settingsFocus?: string;
-  /** On a phone, Settings shows its list rather than one place (opened without naming one). */
-  settingsBrowse?: boolean;
   paletteOpen: boolean;
   /** Undo's preview is open for these change sets (ADR 0030). */
   undoing?: { ids: string[]; direction: 'undo' | 'redo' };
@@ -82,9 +67,14 @@ interface UiState {
   setDraftOptions(options: TurnOptions): void;
   toggleSidebar(): void;
   setMobileSidebar(open: boolean): void;
-  /** `focus`: open this inside the tab straight away (e.g. a provider, to sign in). */
-  openSettings(tab?: SettingsTab, focus?: string): void;
+  /**
+   * Settings is a page with an address (`/settings/<place>`): this goes there.
+   * `focus`: a provider's own page under Providers (to sign in), or anything
+   * else to bring into view once.
+   */
+  openSettings(tab?: SettingsTab, focus?: string, move?: SettingsMove): void;
   setRestarting(restarting: UiState['restarting']): void;
+  /** Back to the page Settings opened over. Going anywhere else leaves it too. */
   closeSettings(): void;
   setPalette(open: boolean): void;
   openFind(conversationId: string, query?: string, target?: string): void;
@@ -149,7 +139,6 @@ function storedWidth(key = BROWSER_WIDTH_KEY): number {
 export const useUi = create<UiState>((set) => ({
   sidebarOpen: typeof localStorage === 'undefined' || localStorage.getItem(SIDEBAR_KEY) !== '0',
   mobileSidebarOpen: false,
-  settings: null,
   paletteOpen: false,
   find: null,
   usageOpen: false,
@@ -169,17 +158,17 @@ export const useUi = create<UiState>((set) => ({
       return { sidebarOpen: !s.sidebarOpen };
     }),
   setMobileSidebar: (mobileSidebarOpen) => set({ mobileSidebarOpen }),
-  openSettings: (tab, focus) =>
-    set({
-      settings: tab ?? 'general',
-      settingsFocus: focus,
-      settingsBrowse: tab === undefined,
-      paletteOpen: false,
-    }),
-  // The whole page rests while Conch starts again: nothing stays open over the calm screen.
+  openSettings: (tab, focus, move) => {
+    // A provider's page is a place of its own; any other focus is brought into view.
+    const item = tab === 'providers' ? focus : undefined;
+    set({ settingsFocus: item ? undefined : focus, paletteOpen: false });
+    showSettings(tab, item, move);
+  },
+  // The whole page rests while Conch starts again: nothing stays open over the calm
+  // screen (Settings steps aside, and is where it was after the reload).
   setRestarting: (restarting) =>
-    set(restarting ? { restarting, settings: null, paletteOpen: false } : { restarting }),
-  closeSettings: () => set({ settings: null }),
+    set(restarting ? { restarting, paletteOpen: false } : { restarting }),
+  closeSettings: () => leaveSettings(),
   setPalette: (paletteOpen) => set({ paletteOpen }),
   openFind: (conversationId, query, target) =>
     set((s) => ({

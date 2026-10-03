@@ -30,7 +30,6 @@ import { TasksView } from '../features/tasks/TasksView';
 import { NewSkill } from '../features/skills/NewSkill';
 import { SkillDetailView } from '../features/skills/SkillDetailView';
 import { SkillsView } from '../features/skills/SkillsView';
-import { Settings } from '../features/settings/Settings';
 import { Sidebar } from '../features/sidebar/Sidebar';
 import { UsageIndicator } from '../features/usage/UsageIndicator';
 import { useLiveStore } from '../live/store';
@@ -236,7 +235,6 @@ export function Shell() {
         </div>
         <TerminalDock />
       </main>
-      <Settings />
       <Palette />
       <RestartWatch />
       <RestoredNotice />

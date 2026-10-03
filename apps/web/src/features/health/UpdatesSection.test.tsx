@@ -123,8 +123,7 @@ describe('Settings → Health → Updates', () => {
 
   it('rests on “Updating Conch…” while Conch starts itself again on the new version', async () => {
     mockFetch({ 'GET /api/updates': () => status({}, ready) });
-    useUi.setState({ settings: 'health' });
-    renderApp(<UpdatesSection />);
+    const { where } = renderApp(<UpdatesSection />, { route: '/settings/health' });
     await screen.findByRole('region', { name: 'An update is ready' });
     act(() =>
       FakeSocket.last?.push({
@@ -135,24 +134,19 @@ describe('Settings → Health → Updates', () => {
         ),
       }),
     );
-    // Settings steps aside for the calm screen, and comes back after the reload.
+    // Settings steps aside for the calm screen; its address brings it back after the reload.
     await waitFor(() =>
-      expect(useUi.getState().restarting).toEqual({
-        title: 'Updating Conch…',
-        from: 'boot-1',
-        reopen: 'health',
-      }),
+      expect(useUi.getState().restarting).toEqual({ title: 'Updating Conch…', from: 'boot-1' }),
     );
-    expect(useUi.getState().settings).toBeNull();
+    expect(where()).toBe('/settings/health');
   });
 
   it('opens Health again once the page is back from the restart', async () => {
     mockFetch({ 'GET /api/updates': () => status() });
     sessionStorage.setItem('conch.reopenAfterRestart', 'health');
-    renderApp(<RestartWatch />);
-    await waitFor(() => expect(useUi.getState().settings).toBe('health'));
+    const { where } = renderApp(<RestartWatch />);
+    await waitFor(() => expect(where()).toBe('/settings/health'));
     expect(sessionStorage.getItem('conch.reopenAfterRestart')).toBeNull();
-    useUi.setState({ settings: null });
   });
 
   it('says why one press can’t do it, with the command to run by hand', async () => {

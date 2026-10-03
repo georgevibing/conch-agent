@@ -696,9 +696,15 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
 
 ### Web app (`apps/web`)
 
-- React 19 + Vite, React Router (`/`, `/c/:id`), TanStack Query for REST, a zustand
+- React 19 + Vite, React Router (`/`, `/c/:id`, …), TanStack Query for REST, a zustand
   store that folds `ConversationEvent`s into view models (pure, unit-tested reducer),
   and a reconnecting WebSocket client.
+- **Settings has addresses.** `/settings/<place>` (`features/settings/paths.ts`), and
+  a page inside a place below it: a provider's own page is `/settings/providers/<id>`.
+  Settings opens over the page you were on, which the history entry keeps
+  (`state.behind`); `Root` renders the routes at that page, so it stays mounted
+  behind, and leaving goes back to it. `useUi.openSettings` keeps its signature for
+  every caller and moves the router through `app/navigation.tsx` (`Navigator`, `go`).
 - First run is a short, skippable flow: welcome → connect Claude Code (install /
   sign-in / API key, with live re-checks) → personality and "about you" → chat.
 - **Passwords** (ADR 0025). `/passwords`: one list of Conch's own encrypted vault and the
