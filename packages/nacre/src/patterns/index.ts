@@ -13,6 +13,7 @@ export * from './ToolCall';
 export * from './CommandMenu';
 export * from './ModelPicker';
 export * from './ModelSwitch';
+export * from './ReplyChips';
 export * from './ModePicker';
 export * from './Routines';
 export * from './Safety';
