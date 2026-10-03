@@ -148,6 +148,11 @@ export interface TrayDeps {
   settle?: number;
   env?: NodeJS.ProcessEnv;
   heal?: (message: string) => void;
+  /**
+   * The desktop app (ADR 0054): its own icon is the menu bar, so no helper is
+   * built; the switch shows or hides the app's icon instead.
+   */
+  app?: { show: (on: boolean) => Promise<boolean> };
 }
 
 export class TrayService {
@@ -173,6 +178,7 @@ export class TrayService {
    * AppIndicator for Python.
    */
   async support(): Promise<Pick<TrayStatus, 'available' | 'unavailable' | 'need'>> {
+    if (this.deps.app) return { available: true };
     const env = this.deps.env ?? process.env;
     const platform = this.#platform;
     if (platform === 'darwin') {
@@ -228,11 +234,13 @@ export class TrayService {
   async status(): Promise<TrayStatus> {
     const where = WHERE[this.#platform] ?? 'menu bar';
     const support = await this.support().catch(() => ({ available: false }));
+    const on = await this.deps.wanted();
     return {
       ...support,
       where,
-      on: await this.deps.wanted(),
-      running: (await this.#pid()) !== undefined,
+      on,
+      // The app shows its icon whenever it's wanted.
+      running: this.deps.app ? on : (await this.#pid()) !== undefined,
     };
   }
 
@@ -363,6 +371,10 @@ nohup /bin/sh ${shQuote(join(this.#dir, 'launch'))} >/dev/null 2>&1 &
    */
   async ensure(): Promise<'running' | 'started' | 'off' | 'unavailable' | 'failed'> {
     try {
+      if (this.deps.app) {
+        const on = await this.deps.wanted();
+        return (await this.deps.app.show(on)) ? (on ? 'running' : 'off') : 'failed';
+      }
       if (!(await this.deps.wanted())) return 'off';
       if (!(await this.support()).available) return 'unavailable';
       await this.token();
@@ -421,6 +433,10 @@ nohup /bin/sh ${shQuote(join(this.#dir, 'launch'))} >/dev/null 2>&1 &
   }
 
   async stop(): Promise<void> {
+    if (this.deps.app) {
+      await this.deps.app.show(false);
+      return;
+    }
     const pid = await this.#pid();
     if (pid) this.#kill(pid);
     await rm(join(this.#dir, 'pid'), { force: true });

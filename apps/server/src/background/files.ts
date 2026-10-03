@@ -28,6 +28,11 @@ export interface LaunchSpec {
   env: Record<string, string>;
   /** The PATH Conch was started with: the programs it runs live there. */
   path: string;
+  /**
+   * The desktop app's own program (ADR 0054). Then the launcher starts the
+   * app with `--background` (no window, just the menu bar) instead of Node.
+   */
+  app?: string;
 }
 
 /** The label a computer knows Conch by. Another `CONCH_HOME` (a test) gets its own. */
@@ -102,6 +107,7 @@ const NODE_VERSION_DIRS = [
  * in the log, and Repair everything says it in words.
  */
 export function shellLauncher(spec: LaunchSpec): string {
+  if (spec.app) return appShellLauncher(spec, spec.app);
   const exports = Object.entries({
     // Quiet by default: a log nobody reads shouldn't grow with every request.
     CONCH_LOG_LEVEL: 'warn',
@@ -152,6 +158,32 @@ if ! cd "$CHECKOUT/apps/server" 2>/dev/null; then
   exit 78
 fi
 exec "$NODE" --import tsx src/start.ts
+`;
+}
+
+/**
+ * The launcher for the desktop app: the app itself, with no window. It runs
+ * its own Conch, so nothing here looks for Node or a folder. Exit 78 when the
+ * app isn't where it was: opening it from where it is now puts this right.
+ */
+function appShellLauncher(spec: LaunchSpec, app: string): string {
+  return `#!/bin/sh
+# Starts the Conch app in the background when you log in (Settings → Health → Always on).
+# Conch writes this file and rewrites it when the app moves; changes here don't last.
+export CONCH_HOME=${shQuote(spec.home)}
+APP=${shQuote(app)}
+LOG=${shQuote(spec.log)}
+
+umask 077
+mkdir -p "$(dirname "$LOG")"
+if [ -f "$LOG" ] && [ "$(wc -c < "$LOG")" -gt 5000000 ]; then mv -f "$LOG" "$LOG.1"; fi
+exec >>"$LOG" 2>&1
+echo "--- $(date '+%Y-%m-%d %H:%M:%S') The Conch app is starting in the background"
+if [ ! -x "$APP" ]; then
+  echo "The Conch app isn't at $APP any more. Open Conch from where it is now, and it puts this right."
+  exit 78
+fi
+exec "$APP" --background
 `;
 }
 
@@ -254,6 +286,19 @@ const batch = (value: string) => value.replaceAll('%', '%%');
 
 /** The batch file that starts Conch, written for `wscript` to run with no window. */
 export function windowsLauncher(spec: LaunchSpec): string {
+  if (spec.app)
+    return [
+      '@echo off',
+      'rem Starts the Conch app in the background when you sign in (Settings > Health > Always on).',
+      'rem Conch writes this file and rewrites it when the app moves.',
+      `set "CONCH_HOME=${batch(spec.home)}"`,
+      `set "LOG=${batch(spec.log)}"`,
+      `set "APP=${batch(spec.app)}"`,
+      `if not exist "%APP%" (echo The Conch app has moved. Open Conch from where it is now and it puts this right. >> "%LOG%" & exit /b 78)`,
+      'echo --- %DATE% %TIME% The Conch app is starting in the background >> "%LOG%"',
+      'start "" "%APP%" --background',
+      '',
+    ].join('\r\n');
   const sets = Object.entries({
     // Quiet by default: a log nobody reads shouldn't grow with every request.
     CONCH_LOG_LEVEL: 'warn',

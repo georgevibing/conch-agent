@@ -102,6 +102,59 @@ describe('runningAs', () => {
     expect(runningAs({ CONCH_SUPERVISED: '1' })).toBe('window');
     expect(runningAs({})).toBe('dev');
   });
+
+  it('is the app only while the app’s channel is open (ADR 0054)', () => {
+    const had = process.send;
+    try {
+      process.send = (() => true) as typeof process.send;
+      expect(
+        runningAs({
+          CONCH_APP: '/Applications/Conch.app/Contents/MacOS/Conch',
+          CONCH_SUPERVISED: '1',
+        }),
+      ).toBe('app');
+      // Started at login by Always on: the app, in the background.
+      expect(runningAs({ CONCH_APP: '/x/Conch', CONCH_BACKGROUND: '1' })).toBe('background');
+      process.send = undefined;
+      // A Conch started from the app's own terminal inherits the variable, not the channel.
+      expect(runningAs({ CONCH_APP: '/x/Conch', CONCH_SUPERVISED: '1' })).toBe('window');
+    } finally {
+      process.send = had;
+    }
+  });
+});
+
+describe('turning it on from the app', () => {
+  it('registers the app to start at login, and starts nothing now: the app is already running', async () => {
+    const { backend, calls } = computer();
+    const { service: bg, handover } = service({
+      backend,
+      running: 'app',
+      spec: {
+        node: '/x/node',
+        env: {},
+        path: '/usr/bin',
+        app: '/Applications/Conch.app/Contents/MacOS/Conch',
+      },
+    });
+    const result = await bg.set(true);
+    expect(result).toMatchObject({ handover: false, status: { on: true, running: 'app' } });
+    expect(result.status.problem).toBeUndefined();
+    expect(handover).not.toHaveBeenCalled();
+    expect(calls).toEqual(['install']);
+    const launcher = readFileSync(join(backgroundDir(home), 'Conch'), 'utf8');
+    expect(launcher).toContain("APP='/Applications/Conch.app/Contents/MacOS/Conch'");
+    expect(launcher).toContain('exec "$APP" --background');
+    expect(launcher).not.toContain('start.ts');
+  });
+
+  it('off says Conch runs until the app quits', async () => {
+    const { service: bg } = service({ running: 'app' });
+    const [item] = await bg
+      .doctorCheck()
+      .run({ repair: false, signal: new AbortController().signal });
+    expect(item?.message).toBe('Conch runs until you quit the app.');
+  });
 });
 
 describe('turning it on from a window', () => {

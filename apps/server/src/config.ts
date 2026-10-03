@@ -1,7 +1,7 @@
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { EngineId } from '@conch/protocol';
+import { AppUpdates, EngineId } from '@conch/protocol';
 import { z } from 'zod';
 
 /** What each variable is for is in `ENV_ABOUT` below, where the documentation reads it too. */
@@ -40,6 +40,8 @@ export const Env = z.object({
   CONCH_LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
+  CONCH_APP: z.string().optional(),
+  CONCH_APP_UPDATES: AppUpdates.optional(),
 });
 
 export type Config = z.infer<typeof Env>;
@@ -137,6 +139,18 @@ export const ENV_ABOUT: Record<keyof Config, EnvAbout> = {
   },
   CONCH_LOG_LEVEL: {
     about: 'How much Conch logs. Logs never hold query strings, headers or bodies.',
+  },
+  CONCH_APP: {
+    about:
+      'The desktop app that started this gateway (ADR 0054): what Always on starts at login. The app sets it.',
+    unset: 'not started by the desktop app',
+    internal: true,
+  },
+  CONCH_APP_UPDATES: {
+    about:
+      'install when the desktop app can replace itself with a new version; download when the person installs it (an unsigned Mac app, a .deb). The app sets it.',
+    unset: 'download',
+    internal: true,
   },
 };
 

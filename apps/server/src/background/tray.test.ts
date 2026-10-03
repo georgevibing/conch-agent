@@ -497,3 +497,34 @@ describe('a little computer', () => {
     expect(started).toBe(1);
   });
 });
+
+describe('in the desktop app (ADR 0054)', () => {
+  it('shows and hides the app’s own icon, and builds no helper', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'conch-tray-app-'));
+    try {
+      let wanted = true;
+      const shown: boolean[] = [];
+      const spawned: string[] = [];
+      const tray = new TrayService({
+        home,
+        url: 'http://127.0.0.1:4317',
+        spec: { node: process.execPath, env: {}, path: '/usr/bin' },
+        wanted: async () => wanted,
+        setWanted: async (on) => void (wanted = on),
+        onToken: () => undefined,
+        platform: 'linux',
+        env: {},
+        spawn: (file) => void spawned.push(file),
+        app: { show: async (on) => (shown.push(on), true) },
+      });
+      // Linux with no desktop variable still has the app's own icon.
+      expect(await tray.status()).toMatchObject({ available: true, on: true, running: true });
+      expect(await tray.ensure()).toBe('running');
+      expect((await tray.set(false)).running).toBe(false);
+      expect(shown).toEqual([true, false]);
+      expect(spawned).toEqual([]);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+});

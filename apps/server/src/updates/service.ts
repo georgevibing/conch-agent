@@ -25,6 +25,7 @@ import { z } from 'zod';
 import { writeJson } from '../lib/fs';
 import { readStore } from '../lib/recover';
 import type { LatestLookup, NeedSpec, Setup } from '../setup/needs';
+import { downloadReason, type AppReleases } from './app';
 import type { ConchCheckout, ConchResult, UpdateProgressReport } from './conch';
 import { currentFolder, readState, swapIn, writeState } from './layout';
 import type { Offer, ReleaseFollower } from './releases';
@@ -73,6 +74,27 @@ const ReleaseCache = z.object({
   firstTrust: z.string().optional(),
 });
 
+/** What the desktop app's last look at releases found (ADR 0054). */
+const AppCache = z.object({
+  offers: z
+    .array(
+      z.object({
+        version: z.string(),
+        channel: ReleaseChannel,
+        feed: z.string(),
+        page: z.string(),
+        notes: ReleaseNotes,
+      }),
+    )
+    .default([]),
+  checkedAt: z.number().optional(),
+  problem: z.string().optional(),
+  /** Downloaded and handed to the installer: the next start says whether it took. */
+  installing: z.string().optional(),
+  /** Versions that didn't install here: not offered again until a newer one. */
+  failed: z.array(z.string()).default([]),
+});
+
 const Cache = z.object({
   /** Program updates install by themselves overnight. */
   auto: z.boolean().default(false),
@@ -93,6 +115,7 @@ const Cache = z.object({
   seen: z.array(z.string()).default([]),
   /** Versions already told to phones, so each is said once. */
   told: z.array(z.string()).default([]),
+  app: AppCache.prefault({}),
 });
 type Cache = z.infer<typeof Cache>;
 
@@ -120,6 +143,8 @@ export interface UpdatesDeps {
   conch?: ConchCheckout;
   /** The same folder, following releases (ADR 0051). */
   releases?: ReleaseFollower;
+  /** The desktop app's releases, instead of a folder (ADR 0054). */
+  app?: AppReleases;
   /** Tell phones that asked: "Conch 0.3 is ready" (push topic `updates`). */
   announce?: (version: string) => void;
   /** Folders a prune must keep (the supervisor's own). */
@@ -264,6 +289,7 @@ export class UpdatesService {
 
   #conch(): ConchUpdate {
     const version = this.#version();
+    if (this.deps.app) return this.#appConch(this.deps.app);
     if (!this.deps.conch)
       return {
         checkable: false,
@@ -327,6 +353,37 @@ export class UpdatesService {
     };
   }
 
+  /** The desktop app: GitHub's releases in the channel, and the app installs them (ADR 0054). */
+  #appConch(app: AppReleases): ConchUpdate {
+    const known = this.#cache.app;
+    const job = this.#conchJob;
+    const outcome = this.#cache.outcome;
+    const newest = known.offers[0];
+    const notes = known.offers.map((o) => o.notes);
+    const lines = (n: ReleaseNotes) => [...n.headsUp, ...n.new, ...n.better, ...n.fixed];
+    return {
+      checkable: true,
+      version: this.#version(),
+      behind: known.offers.length,
+      improvements: notes.reduce((n, r) => n + lines(r).length, 0),
+      whatsNew: newest ? lines(newest.notes) : [],
+      ...(known.checkedAt && { checkedAt: known.checkedAt }),
+      ...(known.problem && { problem: known.problem }),
+      ...(app.updates === 'download' &&
+        newest && { blocked: { reason: downloadReason(app.platform), download: newest.page } }),
+      ...(job && { running: { ...job } }),
+      restartNeeded: false,
+      ...(outcome && this.#now() - outcome.at < OUTCOME_FOR_MS && { outcome }),
+      source: 'releases',
+      channel: this.#channel(),
+      everyChange: false,
+      ...(newest && { latest: { version: newest.version, channel: newest.channel } }),
+      releases: notes,
+      announce: Boolean(newest && this.#cache.dismissed !== newest.version && !job),
+      failed: known.failed,
+    };
+  }
+
   /** Said once until it's put away. */
   #notice(): { id: string; message: string } | undefined {
     const rel = this.#cache.releases;
@@ -368,6 +425,7 @@ export class UpdatesService {
   }
 
   async #checkConch(fetch: boolean): Promise<void> {
+    if (this.deps.app) return this.#checkApp(this.deps.app, fetch);
     const conch = this.deps.conch;
     if (!conch || this.#conchJob) return;
     if (await this.#checkReleases(fetch)) return;
@@ -439,6 +497,32 @@ export class UpdatesService {
       }
     }
     return true;
+  }
+
+  /** The desktop app's look at GitHub's releases (ADR 0054). Without `fetch`, the last look stands. */
+  async #checkApp(app: AppReleases, fetch: boolean): Promise<void> {
+    if (!fetch || this.#conchJob) return;
+    const before = this.#cache.app;
+    const found = await app
+      .check({ channel: this.#channel(), failed: before.failed })
+      .catch(() => undefined);
+    if (!found) return;
+    this.#cache.app = {
+      ...before,
+      // Offline: what the last look found stands.
+      offers: found.problem ? before.offers : found.offers,
+      checkedAt: found.problem ? before.checkedAt : this.#now(),
+      problem: found.problem,
+    };
+    const newest = this.#cache.app.offers[0];
+    if (newest && !this.#cache.told.includes(newest.version)) {
+      this.#cache.told = [...this.#cache.told, newest.version].slice(-20);
+      try {
+        this.deps.announce?.(newest.version);
+      } catch {
+        // Telling phones is best effort.
+      }
+    }
   }
 
   async #checkPrograms(): Promise<void> {
@@ -598,6 +682,7 @@ export class UpdatesService {
    */
   async updateConch(): Promise<void> {
     await this.#load();
+    if (this.deps.app) return this.#updateApp(this.deps.app);
     const conch = this.deps.conch;
     if (!conch)
       throw new UpdatesError('unavailable', 'Conch isn’t running from a folder it can update.');
@@ -615,6 +700,74 @@ export class UpdatesService {
     this.#cache.outcome = undefined;
     this.#emit();
     void (offer ? this.#updateRelease(offer) : this.#updateConch(conch));
+  }
+
+  /**
+   * The desktop app: it downloads the release and installs it, which
+   * restarts Conch on the new version (ADR 0054). An app that can't replace
+   * itself offers the release page instead, so there's nothing to do here.
+   */
+  async #updateApp(app: AppReleases): Promise<void> {
+    if (this.#conchJob) return;
+    if (app.updates === 'download')
+      throw new UpdatesError('unavailable', downloadReason(app.platform));
+    const offer = this.#cache.app.offers[0];
+    if (!offer) return;
+    if (this.deps.busy())
+      throw new UpdatesError(
+        'busy',
+        'A chat is still working. Update Conch when it’s finished, so nothing is cut short.',
+      );
+    const label = `Downloading Conch ${offer.version}`;
+    this.#conchJob = { phase: 'fetch', label, step: 1, steps: 2, percent: 0 };
+    this.#cache.outcome = undefined;
+    this.#emit();
+    void this.#installApp(app, offer, label);
+  }
+
+  async #installApp(
+    app: AppReleases,
+    offer: z.infer<typeof AppCache>['offers'][number],
+    label: string,
+  ): Promise<void> {
+    const result = await app
+      .install(offer, (percent) => {
+        this.#conchJob = { phase: 'fetch', label, step: 1, steps: 2, percent };
+        this.#emit();
+      })
+      .catch((error: unknown) => ({ kind: 'failed' as const, message: (error as Error).message }));
+    if (result.kind === 'ready') {
+      // The app quits now, and the installer starts the new version.
+      this.#cache.app = { ...this.#cache.app, installing: offer.version };
+      this.#cache.outcome = {
+        kind: 'updated',
+        message: `Conch was updated to ${offer.version}.`,
+        at: this.#now(),
+        whatsNew: [],
+        releases: this.#cache.app.offers
+          .filter((o) => compareVersions(o.version, offer.version) <= 0)
+          .map((o) => o.notes),
+      };
+      this.#cache.dismissed = offer.version;
+      this.#conchJob = {
+        phase: 'restart',
+        label: 'Updating Conch…',
+        step: 2,
+        steps: 2,
+        percent: 100,
+      };
+    } else {
+      this.#conchJob = undefined;
+      this.#cache.outcome = {
+        kind: 'failed',
+        message: `Conch couldn’t update itself: ${result.message}`,
+        at: this.#now(),
+        whatsNew: [],
+        releases: [],
+      };
+    }
+    await this.#save();
+    this.#emit();
   }
 
   /** Restart onto what was just made ready, after a moment for the page to say so. */
@@ -840,6 +993,24 @@ export class UpdatesService {
       };
       const { wentBack: _said, ...rest } = state;
       writeState(this.deps.home, rest);
+    }
+    // The desktop app handed a release to its installer: did it take? (ADR 0054)
+    const installing = this.#cache.app.installing;
+    if (installing) {
+      const took = this.#version() === installing;
+      this.#cache.app = {
+        ...this.#cache.app,
+        installing: undefined,
+        offers: took ? [] : this.#cache.app.offers,
+      };
+      if (!took)
+        this.#cache.outcome = {
+          kind: 'failed',
+          message: `Conch ${installing} didn’t install, so you still have ${this.#version()}. Try again, or download it from its page.`,
+          at: this.#now(),
+          whatsNew: [],
+          releases: [],
+        };
     }
     // Versions nobody needs any more go, quietly.
     void this.deps.releases?.prune(this.deps.keep ?? []).catch(() => undefined);

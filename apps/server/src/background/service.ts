@@ -56,20 +56,27 @@ export const shortcutDir = (home: string) => join(home, 'shortcut');
 /** How the Conch answering now was started. */
 export function runningAs(env: NodeJS.ProcessEnv = process.env): BackgroundRunning {
   if (env.CONCH_BACKGROUND === '1') return 'background';
+  // Only with the app's channel open: a Conch started from the app's terminal isn't the app.
+  if (env.CONCH_APP?.trim() && typeof process.send === 'function') return 'app';
   if (env.CONCH_SUPERVISED === '1') return 'window';
   return 'dev';
 }
 
-/** The computer's own way of starting Conch at login, if there is one. */
+/**
+ * The computer's own way of starting Conch at login, if there is one. The
+ * desktop app opens a window, so on Linux it starts with the desktop
+ * (autostart), never as a systemd service that has no desktop to show it on.
+ */
 export async function backendFor(
   home: string,
   platform: NodeJS.Platform = process.platform,
+  { app = false }: { app?: boolean } = {},
 ): Promise<Backend | undefined> {
   const label = serviceLabel(home);
   if (platform === 'darwin') return launchdBackend(label);
   if (platform === 'win32') return windowsBackend(label);
   if (platform === 'linux')
-    return (await hasSystemdUser()) ? systemdBackend(label) : autostartBackend(label);
+    return !app && (await hasSystemdUser()) ? systemdBackend(label) : autostartBackend(label);
   return undefined;
 }
 
@@ -321,7 +328,8 @@ export class BackgroundService {
     if (!backend) throw new Error('This computer has no way for Conch to start by itself.');
     const launcher = await this.#writeLauncher();
     await backend.install(launcher);
-    if (this.deps.running === 'background') return;
+    // The background Conch is this one; the app keeps running when its window closes.
+    if (this.deps.running === 'background' || this.deps.running === 'app') return;
     await rm(waitingFile(this.deps.home), { force: true });
     await backend.start(launcher);
   }
@@ -340,8 +348,9 @@ export class BackgroundService {
       };
       return { status: await this.status(), handover: false };
     }
-    // Already the background one: it's registered again, and that's all.
-    if (running === 'background') return { status: await this.status(), handover: false };
+    // Already the background one, or the app (it keeps running without its window): that's all.
+    if (running === 'background' || running === 'app')
+      return { status: await this.status(), handover: false };
     if (backend.kind === 'pretend') return { status: await this.status(), handover: false };
     // The background Conch says it's waiting for this one's place: hand over.
     const deadline = Date.now() + (this.deps.waitMs ?? HANDOVER_WAIT_MS);
@@ -466,7 +475,9 @@ export class BackgroundService {
           'off',
           status.running === 'background'
             ? 'Conch is running now, and won’t start by itself at the next login.'
-            : 'Conch runs while its window is open.',
+            : status.running === 'app'
+              ? 'Conch runs until you quit the app.'
+              : 'Conch runs while its window is open.',
         );
       },
     };

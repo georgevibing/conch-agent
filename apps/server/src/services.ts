@@ -129,7 +129,9 @@ import { lookup } from './updates/latest';
 import { mockPrograms } from './updates/mock';
 import { UpdatesService } from './updates/service';
 import { UsageService } from './usage/service';
-import { SERVER_VERSION } from './version';
+import { REPOSITORY, SERVER_VERSION } from './version';
+import { theApp } from './desktop/app';
+import { AppReleases } from './updates/app';
 
 export { SERVER_VERSION };
 
@@ -851,12 +853,15 @@ export class Services {
     const programs = mock
       ? mockPrograms(config.CONCH_HOME)
       : { specs: KNOWN_NEEDS, setup: this.setup, lookup: lookup() };
+    // The desktop app updates by installing its releases (ADR 0054), never a folder.
+    const app = theApp();
     // The folder running: the release the supervisor started (ADR 0051), else the checkout.
-    const root =
-      process.env.CONCH_RELEASE_ROOT?.trim() ||
-      (mock && !config.CONCH_CHECKOUT
-        ? undefined
-        : findCheckout(import.meta.dirname, config.CONCH_CHECKOUT));
+    const root = app
+      ? undefined
+      : process.env.CONCH_RELEASE_ROOT?.trim() ||
+        (mock && !config.CONCH_CHECKOUT
+          ? undefined
+          : findCheckout(import.meta.dirname, config.CONCH_CHECKOUT));
     return new UpdatesService({
       home: config.CONCH_HOME,
       ...programs,
@@ -868,6 +873,10 @@ export class Services {
             backup: async () => void (await this.backups.backupNow()),
           })
         : undefined,
+      app:
+        app && REPOSITORY
+          ? new AppReleases({ app, repository: REPOSITORY, version: SERVER_VERSION })
+          : undefined,
       announce: (version) => void this.push.releaseReady(version).catch(() => undefined),
       keep: [process.env.CONCH_SUPERVISOR_ROOT].filter((f): f is string => Boolean(f)),
       version: SERVER_VERSION,
@@ -888,13 +897,20 @@ export class Services {
    */
   #background(config: Config): BackgroundService {
     const mock = config.CONCH_ENGINE === 'mock';
+    // The desktop app (ADR 0054) carries its own Conch, and starts itself at login.
+    const app = theApp();
     // Conch's checkout itself: the launcher finds the version to run (ADR 0051).
-    const checkout = findRepository(import.meta.dirname, config.CONCH_CHECKOUT);
-    const backend = mock ? pretendBackend() : backendFor(config.CONCH_HOME);
+    const checkout = app
+      ? resolve(import.meta.dirname, '..', '..', '..')
+      : findRepository(import.meta.dirname, config.CONCH_CHECKOUT);
+    const backend = mock
+      ? pretendBackend()
+      : backendFor(config.CONCH_HOME, process.platform, { app: Boolean(app) });
     const spec = {
       node: process.execPath,
       env: carriedEnv(process.env),
       path: process.env.PATH ?? '',
+      ...(app && { app: app.exe }),
     };
     const url = `http://localhost:${config.CONCH_PORT}`;
     // The menu bar helper, a little computer's settings (ADR 0029). Pretend ones for the mock engine.
@@ -909,6 +925,8 @@ export class Services {
       onToken: (token) => this.gate.setTrayToken(token),
       heal: (message) => void this.healed.note('gateway', message),
       ...(mock && pretendTray()),
+      // The app's own icon is the menu bar.
+      ...(app && { app: { show: (on: boolean) => app.send({ type: 'tray', on }) } }),
     });
     const little = mock
       ? pretendLittle()
@@ -935,18 +953,21 @@ export class Services {
       spec,
       needed: () => this.unattended(),
       url,
-      // The mock engine's app lands in its own home, never in your Applications.
-      shortcut: new Shortcut({
-        version: SERVER_VERSION,
-        ...(mock && {
-          platform: 'linux' as const,
-          places: {
-            macApp: join(config.CONCH_HOME, 'shortcut', 'Conch.app'),
-            startMenu: join(config.CONCH_HOME, 'shortcut', 'Conch.lnk'),
-            desktopEntry: join(config.CONCH_HOME, 'shortcut', 'conch.desktop'),
-          },
-        }),
-      }),
+      // The mock engine's app lands in its own home, never in your Applications. The
+      // desktop app was put there by its installer.
+      shortcut: app
+        ? undefined
+        : new Shortcut({
+            version: SERVER_VERSION,
+            ...(mock && {
+              platform: 'linux' as const,
+              places: {
+                macApp: join(config.CONCH_HOME, 'shortcut', 'Conch.app'),
+                startMenu: join(config.CONCH_HOME, 'shortcut', 'Conch.lnk'),
+                desktopEntry: join(config.CONCH_HOME, 'shortcut', 'conch.desktop'),
+              },
+            }),
+          }),
       handover: () =>
         stopSoon(
           '🐚  Conch now runs in the background, so you can close this window.\n    It starts by itself when you log in. To stop it: pnpm conch quit',

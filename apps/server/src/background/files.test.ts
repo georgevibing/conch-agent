@@ -82,6 +82,57 @@ describe('quoting', () => {
   });
 });
 
+describe('the launcher for the desktop app (ADR 0054)', () => {
+  const app: LaunchSpec = {
+    checkout: '/Applications/Conch.app/Contents/Resources/conch',
+    home: `/Users/me/${AWKWARD}/.conch`,
+    node: '/x/node',
+    log: `/Users/me/${AWKWARD}/.conch/logs/conch.log`,
+    env: { CONCH_PORT: '4400' },
+    path: '/usr/bin',
+    app: `/Applications/${AWKWARD}/Conch.app/Contents/MacOS/Conch`,
+  };
+
+  it('starts the app with no window, and needs no Node or folder of its own', () => {
+    const text = shellLauncher(app);
+    expect(text).toContain(`APP=${shQuote(app.app ?? '')}`);
+    expect(text).toContain('exec "$APP" --background');
+    expect(text).not.toMatch(/NODE|start\.ts|CONCH_SUPERVISE/);
+    const batch = windowsLauncher({
+      ...app,
+      app: 'C:\\Users\\me\\AppData\\Local\\Programs\\Conch 100%\\Conch.exe',
+    });
+    expect(batch).toContain(
+      'set "APP=C:\\Users\\me\\AppData\\Local\\Programs\\Conch 100%%\\Conch.exe"',
+    );
+    expect(batch).toContain('start "" "%APP%" --background');
+    expect(batch).not.toMatch(/node|start\.ts/i);
+    // A batch file's lines end the way cmd.exe reads them.
+    expect(batch.split('\r\n').length).toBeGreaterThan(5);
+  });
+
+  it.runIf(posix)('says where the app went when it has moved, and stops with 78', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'conch-app-launcher-'));
+    try {
+      const launcher = join(dir, 'Conch');
+      const log = join(dir, 'logs', 'conch.log');
+      writeFileSync(
+        launcher,
+        shellLauncher({ ...app, home: dir, log, app: join(dir, 'gone', 'Conch') }),
+      );
+      chmodSync(launcher, 0o700);
+      const code = await run('/bin/sh', [launcher]).then(
+        () => 0,
+        (error: { code?: number }) => error.code,
+      );
+      expect(code).toBe(78);
+      expect(readFileSync(log, 'utf8')).toMatch(/The Conch app isn't at .* any more/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('the launchd agent', () => {
   it('is a plist macOS accepts', async () => {
     if (process.platform !== 'darwin') return;

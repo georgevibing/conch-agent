@@ -2,7 +2,11 @@
   "name": "conch",
   "version": "0.2.0",
   "private": true,
-  "description": "A beautiful web facade for Claude Code running on your own machine.",
+  "description": "A self-hosted shell for the coding agents and models of your choosing.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/giotiskl/conch-agent.git"
+  },
   "type": "module",
   "packageManager": "pnpm@12.6.0",
   "engines": {

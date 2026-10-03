@@ -4,7 +4,9 @@ import { applyPendingRestore } from './backup/restore';
 import { exposure } from './auth/network';
 import { loadConfig, portIsExplicit } from './config';
 import { runningAs, waitForTurn } from './background/service';
-import { setRestartHandler, setStopHandler } from './lib/lifecycle';
+import { askUrl } from './background/tray';
+import { theApp } from './desktop/app';
+import { setRestartHandler, setStopHandler, stopSoon } from './lib/lifecycle';
 import { openInBrowser } from './lib/open';
 import {
   choosePort,
@@ -25,6 +27,13 @@ const addressOf = (port: number) =>
   `http://${config.CONCH_HOST === '127.0.0.1' ? 'localhost' : config.CONCH_HOST}:${port}`;
 
 const background = runningAs() === 'background';
+// The desktop app that started this gateway, if one did (ADR 0054): told where Conch is.
+const desktop = theApp();
+// The app went away (it quit, crashed or was killed): don't outlive it. Before
+// Conch is listening there's nothing to close, so it just stops.
+desktop?.onGone(() => {
+  if (!stopSoon()) process.exit(0);
+});
 // Before anything starts: is the port free, already a Conch, or another program's?
 const choose = async () =>
   choosePort({
@@ -40,6 +49,7 @@ let choice = await choose();
 if (
   choice.kind === 'running' &&
   background &&
+  !desktop &&
   !(await runningGateway(config.CONCH_HOME))?.background
 ) {
   console.warn('  🐚  Conch is open in a window; this one takes over when it closes.');
@@ -47,6 +57,11 @@ if (
   choice = await choose();
 }
 if (choice.kind === 'running') {
+  // The app shows that one instead of starting a second.
+  if (desktop) {
+    await desktop.send({ type: 'elsewhere', url: askUrl(config.CONCH_HOST, choice.port) });
+    process.exit(0);
+  }
   const running = addressOf(choice.port);
   console.warn(
     `\n  🐚  Conch is already running at ${running}${config.CONCH_OPEN ? ' — opening it.' : '.'}\n`,
@@ -56,6 +71,7 @@ if (choice.kind === 'running') {
 }
 if (choice.kind === 'taken') {
   const message = takenMessage(choice, await whoHolds(choice.port));
+  await desktop?.send({ type: 'failed', message });
   console.error(`\n  ${message.replaceAll('\n', '\n  ')}\n`);
   process.exit(1);
 }
@@ -86,6 +102,8 @@ try {
   );
   process.exit(1);
 }
+// The app's window opens on it now, by number (`askUrl`: `localhost` tries ::1 first).
+void desktop?.send({ type: 'listening', url: askUrl(config.CONCH_HOST, config.CONCH_PORT) });
 await recordGateway(config.CONCH_HOME, {
   pid: process.pid,
   host: config.CONCH_HOST,
@@ -112,7 +130,11 @@ if (releaseRoot && readState(config.CONCH_HOME).pending) {
 // Always on: the file that starts Conch at login still fits where Conch is now.
 void services.background.heal().catch(() => undefined);
 // The menu bar helper and keeping a Mac awake (ADR 0029): with Conch itself, never a dev server.
-if (runningAs() !== 'dev' || config.CONCH_ENGINE === 'mock') {
+if (desktop) {
+  // The app's own icon is the menu bar: shown when it's wanted.
+  void services.tray.ensure();
+  void services.background.applyKeepAwake().catch(() => undefined);
+} else if (runningAs() !== 'dev' || config.CONCH_ENGINE === 'mock') {
   // The gate learns the helper's token even while it's hidden: `pnpm conch tray on` can show it any time.
   const showTray = () =>
     void services.tray
