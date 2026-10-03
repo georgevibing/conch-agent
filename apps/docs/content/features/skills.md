@@ -27,6 +27,15 @@ Either way, a line in the chat names the skill that shaped the reply. Skills are
 
 Change the setting on the skill's page, or flip its switch in the list. **Try it in a chat** starts a new chat with the skill filled in.
 
+## When a skill that's off would help
+
+If a skill is **Off** or **When I ask** and it fits what you asked, your assistant can offer it under the reply, in a card with the skill's name and why it would help. Nothing changes until you press something.
+
+- For a skill that's **Off**, press **Turn on**. The card opens to show what the skill can do, in the same words as its page. Press **Turn on** again to set it to **Automatically**.
+- For a skill set to **When I ask**, press **Use it** to see what it can do, then **Use it** to use it for this request only, or **Always** to set it to **Automatically**.
+
+Either way the chat carries on by itself with what you asked, now using the skill. **Not now** and **Don't suggest** work as they do for [apps](./apps.md#or-connect-from-a-chat). A skill Conch found something worrying in is never offered: open it from **Skills** and look first.
+
 ## Skills you already have
 
 Conch saves a skill as a `SKILL.md`, the format Claude Code, Codex, OpenClaw and Hermes all read. Skills it finds in other assistants' folders appear under **From other apps**.

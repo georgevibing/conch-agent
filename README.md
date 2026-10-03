@@ -23,7 +23,8 @@ what breaks, and asks only for approvals that matter.
   OpenRouter, Anthropic, OpenAI, Google, Mistral, DeepSeek and more.
 - **Apps, skills and routines for every model.** Gmail, Google Calendar and
   Drive, Slack, GitHub, Notion, Linear and more from one gallery, plus Agent Skills
-  (`SKILL.md`) and routines that run on a schedule you read in plain words.
+  (`SKILL.md`) and routines that run on a schedule you read in plain words. When
+  one that isn't on would help, the chat offers it, and carries on once it's on.
 - **Memory you can read.** Memories are Markdown files you can edit or delete,
   and search finds any line in months of chats.
 - **A tidy list, nothing lost.** Archive a chat to take it out of your list
