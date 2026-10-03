@@ -92,6 +92,7 @@
   Search finds any line in months of chats, and "like last time" finds the chat it means.
 - **Skills from what worked.** After the assistant works something hard out, one
   press keeps how it did it as a skill. Nothing is saved or turned on until you say so.
+  Or describe one in a sentence, and it writes the steps for you to read and change.
 
 ### 📱 Wherever you are
 
@@ -111,8 +112,8 @@
 
 - **Asks before anything risky.** After a chat reads a web page or an email,
   anything risky asks first. Commands run sealed off from your keys.
-- **See it, undo it.** **Activity** shows everything the assistant did, and
-  **Undo** puts back the files it changed.
+- **See it, undo it.** **Activity** shows everything the assistant did, finds any
+  of it as you type, and **Undo** puts back the files it changed.
 - **Repair everything.** One button checks every part of Conch and fixes what it
   can. Daily backups, and signed updates that go back if something fails.
 

@@ -4,6 +4,7 @@ import {
   SkillSuggestions,
   SkillDetail,
   SkillDraft,
+  SkillWritten,
   SkillsList,
   TrustedPublisher,
   type CreateSkillBody,
@@ -23,6 +24,9 @@ export const skillsApi = {
   /** A title, name and description for these instructions, written by a model. */
   draft: (instructions: string, signal?: AbortSignal) =>
     request(SkillDraft, '/api/skills/draft', { method: 'POST', body: { instructions }, signal }),
+  /** A whole skill from an idea or rough notes: the steps, a title and a description. */
+  write: (idea: string, signal?: AbortSignal) =>
+    request(SkillWritten, '/api/skills/write', { method: 'POST', body: { idea }, signal }),
   create: (body: z.input<typeof CreateSkillBody>) =>
     request(SkillDetail, '/api/skills', { method: 'POST', body }),
   update: (id: string, body: UpdateSkillBody) =>

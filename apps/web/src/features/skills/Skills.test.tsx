@@ -184,6 +184,82 @@ describe('New skill', () => {
   });
 });
 
+describe('Write it for me', () => {
+  const STEPS = [
+    'Review the week.',
+    '',
+    '## Steps',
+    '1. Read the calendar.',
+    '2. Write the review.',
+  ].join('\n');
+  const page = () =>
+    renderApp(
+      <Routes>
+        <Route path="/skills/new" element={<NewSkill />} />
+        <Route path="/settings/providers" element={<p>Providers</p>} />
+      </Routes>,
+      { route: '/skills/new' },
+    );
+
+  it('writes the whole skill from a sentence, and your own words are one press away', async () => {
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'POST /api/skills/draft': () => ({
+        title: 'Friday thing',
+        name: 'friday-thing',
+        description: 'Does a Friday thing. Use when asked.',
+        generated: true,
+      }),
+      'POST /api/skills/write': () => ({
+        instructions: STEPS,
+        title: 'Weekly review',
+        name: 'weekly-review',
+        description: 'Drafts a weekly review from your calendar. Use when asked about the week.',
+        generated: true,
+        noModel: false,
+      }),
+    });
+    page();
+    const box = await screen.findByRole('textbox', { name: /know how to do/ });
+    await userEvent.type(box, 'review my week on fridays');
+    await userEvent.click(screen.getByRole('button', { name: 'Write the steps for me' }));
+    expect(calls.find((c) => c.path === '/api/skills/write')?.body).toEqual({
+      idea: 'review my week on fridays',
+    });
+    await waitFor(() => expect(box).toHaveValue(STEPS), { timeout: 4000 });
+    expect(screen.getByDisplayValue('Weekly review')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Conch wrote these from your words. Read them, and change anything.'),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Back to my words' }));
+    expect(box).toHaveValue('review my week on fridays');
+  });
+
+  it('says what it needs when nothing can write, and keeps your words', async () => {
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'POST /api/skills/write': () => ({
+        instructions: 'tidy my downloads',
+        title: 'Tidy my downloads',
+        name: 'tidy-my-downloads',
+        description: 'Tidy my downloads.',
+        generated: false,
+        noModel: true,
+      }),
+    });
+    page();
+    const box = await screen.findByRole('textbox', { name: /know how to do/ });
+    await userEvent.type(box, 'tidy my downloads');
+    await userEvent.click(screen.getByRole('button', { name: 'Write the steps for me' }));
+    expect(
+      await screen.findByText('Writing the steps needs a provider that can write'),
+    ).toBeInTheDocument();
+    expect(box).toHaveValue('tidy my downloads');
+    await userEvent.click(screen.getByRole('button', { name: 'Connect one' }));
+    expect(await screen.findByText('Providers')).toBeInTheDocument();
+  });
+});
+
 describe('One skill', () => {
   it('lets you copy another app’s skill to edit it, and choose when it’s used', async () => {
     const detail: SkillDetail = { ...triage, instructions: 'Run gh issue list.' };

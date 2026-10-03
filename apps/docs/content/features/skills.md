@@ -10,8 +10,14 @@ A skill is a set of instructions your assistant follows for one kind of job: you
 
 1. Open **Skills** in the sidebar and press **New skill**.
 2. Describe what it should do: the steps, the tone, what to include and what to leave out.
+   A sentence is enough if you'd rather not write the steps: press **Write the steps for me**
+   and Conch writes them, with a title and a description. Read them and change anything.
+   **Back to my words** puts back what you typed.
 3. Pause. Conch writes a title and a one-line description for you. Change either if you like.
 4. Under **Use it**, choose **Automatically** or **When I ask**, then press **Create skill**.
+
+Writing the steps needs a provider that can write, such as Claude Code or a key for a model
+you pay for as you go. Without one, your own words become the skill as they are.
 
 Not sure where to begin? The page offers a few ideas to start from.
 

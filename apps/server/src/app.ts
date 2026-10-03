@@ -17,6 +17,7 @@ import {
   CreateSkillBody,
   DescribeSkillBody,
   DraftSkillBody,
+  WriteSkillBody,
   TidyShelfBody,
   Id,
   LoginCodeBody,
@@ -832,6 +833,12 @@ export async function buildApp(services: Services) {
     const body = parse(DraftSkillBody, request.body, reply);
     if (!body) return;
     return services.skills.draft(body.instructions);
+  });
+  // A whole skill from an idea (the steps, a title, a description), to read before it's saved.
+  app.post('/api/skills/write', async (request, reply) => {
+    const body = parse(WriteSkillBody, request.body, reply);
+    if (!body) return;
+    return services.skills.write(body.idea);
   });
   app.post('/api/skills', async (request, reply) => {
     const body = parse(CreateSkillBody, request.body, reply);

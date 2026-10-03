@@ -20,7 +20,7 @@ When one turn changed several things, its last line also offers to undo them all
 
 ## From Activity, or from anywhere
 
-**Activity**, in the sidebar, shows everything your assistant did in every chat and routine. Each change to your files has **Undo** or **Redo** beside it.
+**Activity**, in the sidebar, shows everything your assistant did in every chat and routine. Each change to your files has **Undo** or **Redo** beside it. To find something, type in **Find in activity**: it looks through all of it, loosely, in what happened and the chat it happened in, so `gpush` finds “git push”.
 
 To undo the newest change without looking for it, press <kbd>mod+k</kbd> and choose **Undo the last change**. You see the same preview first.
 

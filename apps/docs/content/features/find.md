@@ -44,6 +44,10 @@ Type in <kbd>mod+k</kbd> while a chat is open and the list also offers to find t
 
 The rest of the keys are in [Keyboard shortcuts](../reference/keyboard.md).
 
+## What your assistant did
+
+**Activity** has its own **Find in activity** box. It looks through everything your assistant did, in every chat and routine, not just what's on screen, and it's forgiving: `gpush` finds “git push”, and a chat's name finds what happened in it.
+
 ## Good to know
 
 - Search happens on the computer Conch runs on. No outside service is involved.
