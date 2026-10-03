@@ -422,6 +422,9 @@ export class Services {
           home: config.CONCH_HOME,
           heal: (message) => void this.healed.note('integrations', message),
           gatewayPort: config.CONCH_PORT,
+          // Made further down; only asked for once Conch is running.
+          trust: () => this.skillTrust,
+          redact: () => this.vault.redactor(),
         }),
       emit: (event) => this.broadcast.emit(event),
       heal: (message) => void this.healed.note('integrations', message),

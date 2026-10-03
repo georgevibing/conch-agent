@@ -550,7 +550,10 @@ export const tools = {
       { 'lib/twice.mjs': 'export const twice = (n) => n * 2;\n' },
     );
     const runtime = start(app);
-    expect(await runtime.list()).toEqual([
+    const listed = await runtime.list();
+    // Each carries its input schema, so every model is told what to send.
+    expect(listed.every((t) => typeof t.input === 'object')).toBe(true);
+    expect(listed.map(({ input: _input, ...rest }) => rest)).toEqual([
       { name: 'say', title: 'T', description: 'Does a thing. Use when asked.', changes: false },
       { name: 'numbers', title: 'T', description: 'Does a thing. Use when asked.', changes: false },
       { name: 'nothing', title: 'T', description: 'Does a thing. Use when asked.', changes: true },

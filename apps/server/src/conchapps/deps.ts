@@ -5,6 +5,15 @@
  * tested on its own against `types.ts`; this is the one place they're
  * joined, so the service and its tests run with fakes.
  */
+import { SERVER_VERSION } from '../version';
+import type { SkillTrust } from '../skills/trust';
+import { checkApp } from './check';
+import { createFetcher } from './fetcher';
+import { appHash, findApps, packApp, readFiles, readFolder, SIGNATURE_FILE } from './package';
+import { createPublisher } from './publish';
+import { createRuntime } from './runtime';
+import { signApp, verifyAppWith } from './sign';
+import { createSources } from './sources';
 import type {
   AppFetcher,
   AppFiles,
@@ -47,37 +56,36 @@ export interface PartsContext {
   heal: (message: string) => void;
   /** The gateway's own port, which `app.fetch` must never reach. */
   gatewayPort: number;
+  /** Whose signatures you trust, and your signing key (shared, so one lock guards it). */
+  trust: () => SkillTrust;
+  /** The vault's redactor: nothing secret may be written into an app. */
+  redact: () => (text: string) => string;
 }
 
-const notWired = (part: string): never => {
-  throw new Error(`Not wired yet: ${part}`);
-};
-
-/**
- * The real parts. Each throws until it's joined here, so a Conch without
- * them still starts: apps you have show as broken, and making one says so.
- */
+/** The real parts, joined: each was built and tested alone against `types.ts`. */
 export function conchAppParts(context: PartsContext): ConchAppParts {
-  void context;
+  // One fetcher for every app: the hourly limit lives in it.
+  const fetcher = createFetcher({ gatewayPort: context.gatewayPort });
   return {
-    readFiles: async () => notWired('readFiles'),
-    readFolder: async () => notWired('readFolder'),
-    appHash: () => notWired('appHash'),
-    packApp: async () => notWired('packApp'),
-    findApps: async () => notWired('findApps'),
-    checkApp: async () => notWired('checkApp'),
-    signApp: async () => notWired('signApp'),
-    verifyApp: async () => notWired('verifyApp'),
-    runtime: () => notWired('createRuntime'),
-    fetcher: async () => notWired('createFetcher'),
-    sources: {
-      fetch: async () => notWired('sources.fetch'),
-      search: async () => notWired('sources.search'),
-      latest: async () => notWired('sources.latest'),
+    readFiles: async (files) => readFiles(files),
+    readFolder,
+    appHash,
+    packApp: async (files) => {
+      const read = readFiles(files);
+      if (!read.ok) throw new Error(read.problems[0]?.message ?? 'This app doesn’t read.');
+      // The signature travels with the files, though the hash leaves it out.
+      return packApp({ ...read.app, files });
     },
-    publisher: {
-      state: () => notWired('publisher.state'),
-      publish: async () => notWired('publisher.publish'),
+    findApps: async (archive, options) => (await findApps(archive, options)).map((f) => f.read),
+    checkApp: (files, options) => checkApp(files, { redact: context.redact(), ...options }),
+    signApp: async (app, home) => {
+      const sig = await signApp(app, home, { trust: context.trust() });
+      return new Map([...app.files, [SIGNATURE_FILE, sig]]);
     },
+    verifyApp: (app) => verifyAppWith(app, context.trust()),
+    runtime: (options) => createRuntime({ ...options, heal: options.heal ?? context.heal }),
+    fetcher,
+    sources: createSources({ version: SERVER_VERSION }),
+    publisher: createPublisher({ home: context.home, redact: (text) => context.redact()(text) }),
   };
 }

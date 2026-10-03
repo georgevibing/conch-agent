@@ -292,6 +292,10 @@ export class SealedRuntime implements AppRuntime {
         title: d.title ?? '',
         description: d.description ?? '',
         changes: d.changes === true,
+        // Its input schema, so every model is told what to send.
+        ...(d.input && typeof d.input === 'object' && !Array.isArray(d.input)
+          ? { input: d.input as Record<string, unknown> }
+          : {}),
       });
       if (!parsed.success) {
         const issue = parsed.error.issues[0];
