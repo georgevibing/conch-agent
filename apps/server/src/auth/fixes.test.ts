@@ -151,6 +151,46 @@ describe('checkup findings', () => {
     expect(items.every((i) => i.level === 'ok' && !i.fix)).toBe(true);
   });
 
+  it('know about an address of your own (ADR 0064): approval, its health, and a passkey', () => {
+    const at = (state: 'ready' | 'problem', patch: Partial<AccessFile> = {}) =>
+      checkup({
+        config: loadConfig({ CONCH_HOME: join(tmpdir(), 'conch-own') }),
+        access: access({ method: 'password', ...patch }),
+        permissionMode: 'default',
+        secure: true,
+        homeProblems: [],
+        address:
+          state === 'ready'
+            ? { state, name: 'conch.example.com' }
+            : {
+                state,
+                name: 'conch.example.com',
+                problem: { kind: 'unreachable', message: 'Port 80 can’t be reached.' },
+              },
+      });
+    const open = at('ready');
+    expect(open.find((i) => i.id === 'devices')).toMatchObject({
+      level: 'warn',
+      fix: { place: 'devices' },
+    });
+    expect(open.find((i) => i.id === 'address')).toMatchObject({ level: 'ok' });
+    expect(open.find((i) => i.id === 'passkeys')).toMatchObject({
+      level: 'info',
+      fix: { place: 'passkeys' },
+    });
+    expect(open.find((i) => i.id === 'encryption')).toMatchObject({ level: 'ok' });
+
+    const safe = at('ready', { approval: true });
+    expect(safe.find((i) => i.id === 'devices')?.level).toBe('ok');
+
+    const broken = at('problem', { approval: true });
+    expect(broken.find((i) => i.id === 'address')).toMatchObject({
+      level: 'warn',
+      detail: 'Port 80 can’t be reached.',
+      fix: { place: 'address' },
+    });
+  });
+
   it('show the one line that removes CONCH_TOKEN where it is set', async () => {
     expect(removeTokenCommand('win32')).toBe(
       `[Environment]::SetEnvironmentVariable('CONCH_TOKEN', $null, 'User')`,

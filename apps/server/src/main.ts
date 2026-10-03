@@ -1,4 +1,5 @@
 import { buildApp } from './app';
+import { quietCryptoWarnings } from './lib/quiet';
 import { checkup, secureHome, workspaceRules } from './auth/checkup';
 import { openHere } from './auth/open-here';
 import { applyPendingRestore } from './backup/restore';
@@ -23,6 +24,7 @@ import { RESTART_CODE } from './supervisor';
 import { prove, readState } from './updates/layout';
 import { sandboxSupport } from './conversations/sandbox';
 
+quietCryptoWarnings();
 const config = loadConfig();
 const addressOf = (port: number) =>
   `http://${config.CONCH_HOST === '127.0.0.1' ? 'localhost' : config.CONCH_HOST}:${port}`;

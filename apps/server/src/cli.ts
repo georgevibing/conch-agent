@@ -44,6 +44,7 @@ import { terminalRemote } from './terminal/service';
 import { loadConfig } from './config';
 import { IntegrationStore } from './integrations/store';
 import { Healed } from './lib/healed';
+import { quietCryptoWarnings } from './lib/quiet';
 import type { Heal } from './lib/recover';
 import { importCommand } from './import/cli';
 import { ImportService } from './import/service';
@@ -62,6 +63,7 @@ import { SkillUsage } from './skills/usage';
 import { deviceSealer, registerSealer } from './lib/sealed';
 import { deviceKeyFor, keystoreMode } from './vault/keystore';
 
+quietCryptoWarnings();
 const config = loadConfig();
 // Conch may have started on another port (the usual one was busy): links point where it really is.
 const running = await runningGateway(config.CONCH_HOME);

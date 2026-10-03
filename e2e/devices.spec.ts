@@ -140,11 +140,11 @@ test('a new device waits after the right password until it’s approved', async 
   await signIn(laptop.page);
   const laptopCode = await codeOn(laptop.page);
   const listing = await conch('devices');
-  expect(listing).toContain('Waiting for you (1)');
+  expect(listing).toContain('Knocking at the door (1)');
   expect(listing).toContain(laptopCode.replace(/^(...)(...)$/, '$1-$2'));
   expect(listing).toContain('from 100.64.0.9');
   const approved = await conch('devices', 'approve', laptopCode.toLowerCase());
-  expect(approved).toMatch(/✓ Approved Chrome on \w+/);
+  expect(approved).toMatch(/Chrome on \w+ is in\./);
   await inApp(laptop.page);
 
   // ── On the phone, Settings shows the devices, but approval can only be turned off here.

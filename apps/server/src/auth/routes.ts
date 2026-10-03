@@ -223,6 +223,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
           sealedCommands: preferences.sealedCommands,
           sandboxAvailable: sandboxSupport().available,
         },
+        address: services.address.status(),
         ...(services.config.CONCH_TOKEN && { tokenProfile: await findTokenProfile() }),
       }),
       exposure: exposure(services.config),
@@ -734,7 +735,8 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
       ok: check.ok,
       ...(check.ok ? { expiresAt: check.expiresAt } : { reason: check.reason }),
       address: request.headers.host ?? '',
-      suggestedUsername: suggestedUsername(),
+      // This computer's account name is for the person holding a good link, never for a guess.
+      suggestedUsername: check.ok ? suggestedUsername() : '',
       passkeys: passkeyPlace(request) !== undefined,
     });
   });

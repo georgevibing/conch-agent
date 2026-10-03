@@ -25,8 +25,24 @@ export function registerAddressRoutes(
 ): void {
   const status = () => AddressStatus.parse(address.status());
 
-  /** Only an owner on a device that's let in, who just confirmed it's them. */
+  /**
+   * Only the owner in a browser: this computer, or a signed-in device that's
+   * let in (when new devices need approving), who just confirmed it's them.
+   * Never a script's access key: where Conch can be reached is a person's choice.
+   */
   const owner = async (request: FastifyRequest, reply: FastifyReply) => {
+    const session = request.access?.kind === 'session' ? request.access.session : undefined;
+    const allowed =
+      gate.isLocal(request) ||
+      (session !== undefined &&
+        (!(await gate.store.approvalOn()) || (await gate.store.deviceApproved(session.deviceId))));
+    if (!allowed) {
+      void reply.code(403).send({
+        error: 'approver-only',
+        message: 'Change where Conch can be reached from Conch itself, on a device you’ve let in.',
+      });
+      return false;
+    }
     if (!gate.verified(request.access)) {
       void reply.code(403).send({
         error: 'verify-required',
@@ -34,14 +50,7 @@ export function registerAddressRoutes(
       });
       return false;
     }
-    const session = request.access?.kind === 'session' ? request.access.session : undefined;
-    if (gate.isLocal(request) || !session || (await gate.store.deviceApproved(session.deviceId)))
-      return true;
-    void reply.code(403).send({
-      error: 'approver-only',
-      message: 'Only a device that’s already let in can change where Conch can be reached.',
-    });
-    return false;
+    return true;
   };
 
   const name = (request: FastifyRequest, reply: FastifyReply) => {
@@ -86,7 +95,9 @@ export function registerAddressRoutes(
       return AddressStatus.parse(await address.remove());
     });
 
-    app.post(`${base}/renew`, async () => {
+    // Renewing spends Let's Encrypt's limits, so it's the owner's to ask for too.
+    app.post(`${base}/renew`, async (request, reply) => {
+      if (!(await guard(request, reply))) return;
       void address.renew().catch(() => undefined);
       await new Promise((resolve) => setImmediate(resolve));
       return status();

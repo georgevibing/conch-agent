@@ -2,7 +2,12 @@ import { chmod, lstat, readFile, readdir, rename, stat } from 'node:fs/promises'
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import { isStaleKey, type CheckupItem, type PermissionMode } from '@conch/protocol';
+import {
+  isStaleKey,
+  type AddressStatus,
+  type CheckupItem,
+  type PermissionMode,
+} from '@conch/protocol';
 
 import type { Config } from '../config';
 import { exposure } from './network';
@@ -183,6 +188,8 @@ export interface CheckupInput {
   door?: { url: string; apps: string[] };
   /** Safe hands (ADR 0028): the guard, and the sealed box for commands. */
   safety?: { checkAfterReading: boolean; sealedCommands: boolean; sandboxAvailable: boolean };
+  /** An address of your own (ADR 0064): the internet reaches Conch there. */
+  address?: AddressStatus;
 }
 
 /**
@@ -193,6 +200,8 @@ export function checkup(input: CheckupInput): CheckupItem[] {
   const { config, access } = input;
   const items: CheckupItem[] = [];
   const network = exposure(config) === 'network';
+  // An address of your own that Conch answers on (or is trying to): the internet reaches it there.
+  const own = input.address?.state !== 'off' ? input.address?.name : undefined;
 
   if (process.getuid?.() === 0) {
     items.push({
@@ -268,7 +277,16 @@ export function checkup(input: CheckupInput): CheckupItem[] {
         level: 'ok',
         title: 'New devices need your approval',
         detail:
-          'Even with the right password or key, a new device can’t use Conch until you approve it on this computer.',
+          'Even with the right password or key, a new device can’t use Conch until you approve it, on a device you’ve already let in or on this computer.',
+      });
+    } else if (own) {
+      items.push({
+        id: 'devices',
+        level: 'warn',
+        title: 'New devices get in with just your password',
+        detail: `Conch is on the internet at ${own}. Turn on Approve new devices, so a password someone learns gets them nowhere: each new device waits for your OK.`,
+        command: `${cliName()} devices on`,
+        fix: { kind: 'open', label: 'Turn it on', place: 'devices' },
       });
     } else if (network || input.tailscale) {
       items.push({
@@ -276,10 +294,41 @@ export function checkup(input: CheckupInput): CheckupItem[] {
         level: 'info',
         title: 'Approve new devices for extra protection',
         detail:
-          'With this on, someone who learns your password still can’t get in: each new device waits until you approve it on this computer.',
+          'With this on, someone who learns your password still can’t get in: each new device waits until you approve it.',
         fix: { kind: 'open', label: 'Turn it on', place: 'devices' },
       });
     }
+  }
+
+  if (own && input.address) {
+    const { state, problem } = input.address;
+    if (state === 'problem' && problem)
+      items.push({
+        id: 'address',
+        level: 'warn',
+        title: `Conch isn’t answering at ${own}`,
+        detail: problem.message,
+        ...(problem.command && { command: problem.command }),
+        fix: { kind: 'open', label: 'Open', place: 'address' },
+      });
+    else if (state === 'ready')
+      items.push({
+        id: 'address',
+        level: problem ? 'info' : 'ok',
+        title: `Conch answers at ${own}, over its own secure connection`,
+        detail: problem?.message ?? 'Its certificate renews by itself, long before it runs out.',
+        ...(problem && {
+          fix: { kind: 'open' as const, label: 'Open', place: 'address' as const },
+        }),
+      });
+    if (access.method === 'password' && !access.passkeys.length)
+      items.push({
+        id: 'passkeys',
+        level: 'info',
+        title: 'Add a passkey',
+        detail: `Conch is on the internet at ${own}. A passkey (Touch ID, Windows Hello, Face ID) can’t be phished or guessed the way a password can.`,
+        fix: { kind: 'open', label: 'Add one', place: 'passkeys' },
+      });
   }
 
   if (network && !input.secure) {
@@ -296,12 +345,14 @@ export function checkup(input: CheckupInput): CheckupItem[] {
     items.push({
       id: 'encryption',
       level: 'ok',
-      title: network ? 'Encrypted connection' : 'Only this computer can connect',
+      title: network || own ? 'Encrypted connection' : 'Only this computer can connect',
       detail: network
         ? 'Traffic to this device is encrypted.'
-        : input.tailscale
-          ? 'Other devices can reach it privately through Tailscale.'
-          : 'Conch isn’t reachable from your network.',
+        : own
+          ? `Other devices reach Conch at ${own}, encrypted with its own certificate.`
+          : input.tailscale
+            ? 'Other devices can reach it privately through Tailscale.'
+            : 'Conch isn’t reachable from your network.',
     });
   }
 
