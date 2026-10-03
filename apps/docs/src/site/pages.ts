@@ -15,7 +15,16 @@ import reference from 'virtual:conch-reference';
 
 import { REPO_BRANCH, REPO_URL, SECTIONS } from './config';
 import { embedHeadings } from '../embeds/words';
-import { firstParagraph, frontMatter, headings, segments, splitTitle, type Heading } from './text';
+import { articleHead, type Head } from './head';
+import {
+  firstParagraph,
+  frontMatter,
+  headings,
+  plain,
+  segments,
+  splitTitle,
+  type Heading,
+} from './text';
 
 export interface Page {
   /** Its address: `/start/install`. */
@@ -194,6 +203,14 @@ export function pageAt(path: string): Page | undefined {
 
 export function pagesIn(section: string): Page[] {
   return PAGES.filter((page) => page.section === section);
+}
+
+/** What search engines and link previews are told about a page. */
+export function headOf(page: Page): Head {
+  // A decision record's own line is its status; what it decided starts its first paragraph.
+  const description =
+    page.section === 'decisions' ? firstParagraph(page.body) || page.description : page.description;
+  return articleHead({ ...page, description: plain(description) });
 }
 
 /** The decision records, oldest first. */

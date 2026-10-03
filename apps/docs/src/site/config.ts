@@ -1,3 +1,6 @@
+/** Where the site is: every page's one true address starts here. */
+export const SITE_URL = 'https://conchagent.com';
+
 /** Where the code lives, for "Edit this page" and links to files that aren't pages. */
 export const REPO_URL = 'https://github.com/georgevibing/conch-agent';
 export const REPO_BRANCH = 'main';
@@ -11,10 +14,10 @@ export const AUTHOR = { name: 'George Kal', url: 'https://github.com/georgevibin
  */
 export const DOWNLOADS = `${REPO_URL}/releases/latest`;
 
-/** The one-line installers (README § Install). */
+/** The one-line installers (README § Install), served by the site from `scripts/` when it's built. */
 export const INSTALL = {
-  unix: `curl -fsSL https://raw.githubusercontent.com/georgevibing/conch-agent/${REPO_BRANCH}/scripts/install.sh | sh`,
-  windows: `irm https://raw.githubusercontent.com/georgevibing/conch-agent/${REPO_BRANCH}/scripts/install.ps1 | iex`,
+  unix: `curl -fsSL ${SITE_URL}/install.sh | sh`,
+  windows: `irm ${SITE_URL}/install.ps1 | iex`,
 } as const;
 
 export interface Section {

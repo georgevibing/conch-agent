@@ -107,30 +107,30 @@ scripts/          Repo tooling (e.g. snap.mjs visual QA screenshots)
 
 Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or `npm i -g pnpm`).
 
-| Command                                                                       | What it does                                                                                                                                                   |
-| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm install`                                                                | Install everything                                                                                                                                             |
-| `pnpm dev`                                                                    | Run all dev servers via Turbo                                                                                                                                  |
-| `pnpm storybook`                                                              | Nacre Storybook on http://localhost:6006                                                                                                                       |
-| `pnpm docs:dev`                                                               | The site on http://localhost:4400 (the front page at `/`, the documentation at `/docs`), redrawn as you write and as the code it reads changes                 |
-| `pnpm docs:build`                                                             | The site as static files in `apps/docs/dist` (`pnpm docs:preview` builds and opens it)                                                                         |
-| `pnpm check`                                                                  | Format check + lint + typecheck + tests. **Must pass before every commit.**                                                                                    |
-| `pnpm test`                                                                   | All unit tests (Vitest)                                                                                                                                        |
-| `pnpm e2e`                                                                    | Builds the web app and runs Playwright journeys against the gateway + mock engine                                                                              |
-| `pnpm dev:mock`                                                               | Dev servers with the scripted mock engine (no Claude usage)                                                                                                    |
-| `pnpm start`                                                                  | Build and run Conch for real at http://localhost:4317                                                                                                          |
-| `pnpm start:network`                                                          | Same, reachable from your network (sign-in required; prefer Tailscale)                                                                                         |
-| `pnpm desktop:dev`                                                            | The desktop app on the repository: Vite's hot reload, the gateway restarted on change                                                                          |
-| `pnpm desktop:start`                                                          | Builds the web app, the app's code and what it carries, then opens the app as it ships                                                                         |
-| `pnpm desktop:build`                                                          | This computer's installers in `apps/desktop/out` (`:mac`, `:win`, `:linux` on that system; CI builds them all)                                                 |
-| `pnpm desktop:e2e`                                                            | Builds the app as it ships (unpackaged) and drives it with Playwright: window, tray, crash, quit                                                               |
-| `pnpm conch <command>`                                                        | From the terminal: `status`, `password`, `key`, `pair`, `devices`, `background`, `tray`, `phone` … (`pnpm conch help`)                                         |
-| `pnpm release [beta\|alpha] [--dry-run]`                                      | Make a release: version and notes from the commits, one question, then check, tag (signed), push ([docs/RELEASING.md](./docs/RELEASING.md)). Maintainers only. |
-| `pnpm --filter @conch/nacre test -- src/components/Button`                    | Tests for one component                                                                                                                                        |
-| `pnpm a11y [--filter=button]`                                                 | axe (incl. colour contrast) on every story, light + dark, in real Chrome (Storybook must be running)                                                           |
-| `node scripts/snap.mjs <story-id> [--mode=dark] [--hover=css] [--clip=css]`   | Screenshot a story for visual QA (Storybook must be running)                                                                                                   |
-| `node apps/docs/scripts/shot.mjs <page> [--mode=dark] [--width=390] [--full]` | Screenshot a page for visual QA: `home` is the front page, `--still` is reduced motion (`pnpm docs:dev` must be running)                                       |
-| `node apps/docs/scripts/a11y.mjs [--filter=providers]`                        | axe (incl. colour contrast) on the front page and every documentation page, light + dark, in real Chrome (`pnpm docs:dev` must be running)                     |
+| Command                                                                       | What it does                                                                                                                                                      |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm install`                                                                | Install everything                                                                                                                                                |
+| `pnpm dev`                                                                    | Run all dev servers via Turbo                                                                                                                                     |
+| `pnpm storybook`                                                              | Nacre Storybook on http://localhost:6006                                                                                                                          |
+| `pnpm docs:dev`                                                               | The site on http://localhost:4400 (the front page at `/`, the documentation at `/docs`), redrawn as you write and as the code it reads changes                    |
+| `pnpm docs:build`                                                             | The site as static files in `apps/docs/dist`, every page drawn ahead of time for search; `site.yml` publishes it to conchagent.com (`pnpm docs:preview` opens it) |
+| `pnpm check`                                                                  | Format check + lint + typecheck + tests. **Must pass before every commit.**                                                                                       |
+| `pnpm test`                                                                   | All unit tests (Vitest)                                                                                                                                           |
+| `pnpm e2e`                                                                    | Builds the web app and runs Playwright journeys against the gateway + mock engine                                                                                 |
+| `pnpm dev:mock`                                                               | Dev servers with the scripted mock engine (no Claude usage)                                                                                                       |
+| `pnpm start`                                                                  | Build and run Conch for real at http://localhost:4317                                                                                                             |
+| `pnpm start:network`                                                          | Same, reachable from your network (sign-in required; prefer Tailscale)                                                                                            |
+| `pnpm desktop:dev`                                                            | The desktop app on the repository: Vite's hot reload, the gateway restarted on change                                                                             |
+| `pnpm desktop:start`                                                          | Builds the web app, the app's code and what it carries, then opens the app as it ships                                                                            |
+| `pnpm desktop:build`                                                          | This computer's installers in `apps/desktop/out` (`:mac`, `:win`, `:linux` on that system; CI builds them all)                                                    |
+| `pnpm desktop:e2e`                                                            | Builds the app as it ships (unpackaged) and drives it with Playwright: window, tray, crash, quit                                                                  |
+| `pnpm conch <command>`                                                        | From the terminal: `status`, `password`, `key`, `pair`, `devices`, `background`, `tray`, `phone` … (`pnpm conch help`)                                            |
+| `pnpm release [beta\|alpha] [--dry-run]`                                      | Make a release: version and notes from the commits, one question, then check, tag (signed), push ([docs/RELEASING.md](./docs/RELEASING.md)). Maintainers only.    |
+| `pnpm --filter @conch/nacre test -- src/components/Button`                    | Tests for one component                                                                                                                                           |
+| `pnpm a11y [--filter=button]`                                                 | axe (incl. colour contrast) on every story, light + dark, in real Chrome (Storybook must be running)                                                              |
+| `node scripts/snap.mjs <story-id> [--mode=dark] [--hover=css] [--clip=css]`   | Screenshot a story for visual QA (Storybook must be running)                                                                                                      |
+| `node apps/docs/scripts/shot.mjs <page> [--mode=dark] [--width=390] [--full]` | Screenshot a page for visual QA: `home` is the front page, `--still` is reduced motion (`pnpm docs:dev` must be running)                                          |
+| `node apps/docs/scripts/a11y.mjs [--filter=providers]`                        | axe (incl. colour contrast) on the front page and every documentation page, light + dark, in real Chrome (`pnpm docs:dev` must be running)                        |
 
 ## Working agreements
 
@@ -313,6 +313,12 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
       What someone should know before installing is in “Good to know”, three
       tiles at most. A picture that plays never changes size (Nacre `Steady`),
       so nothing under it moves.
+    - **Every page is found by search.** The site is drawn ahead of time and
+      published at conchagent.com (`SITE_URL`); each page's title and
+      `description` become what a search result and a shared link show
+      (`src/site/head.ts`). Give a new page a `description` of one sentence, at
+      most 160 characters, and a title no other page has:
+      `src/site/head.test.ts` fails otherwise.
 
     | You’re adding or changing…                                                                                            | The documentation, in the same change                                                                                                                                                                                                            |
     | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

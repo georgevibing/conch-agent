@@ -17,7 +17,7 @@ import {
   TextLink,
 } from '@conch/nacre';
 import { ArrowRight, ArrowUpRight } from 'lucide-react';
-import { useEffect, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import reference from 'virtual:conch-reference';
 
@@ -25,6 +25,7 @@ import { DownloadApp } from '../embeds/download';
 import { HowItWorks } from '../embeds/how';
 import { InstallCommand } from '../embeds/install';
 import { AUTHOR, REPO_URL } from '../site/config';
+import { LANDING_HEAD, useHead } from '../site/head';
 import {
   ApprovalDemo,
   BrowserDemo,
@@ -99,9 +100,7 @@ function Band({
  * it is read from the code, and it claims nothing Conch can't show.
  */
 export function Landing() {
-  useEffect(() => {
-    document.title = 'Conch · a calm home for your AI agents';
-  }, []);
+  useHead(LANDING_HEAD);
 
   return (
     <main id="content" className={styles.landing}>

@@ -37,7 +37,7 @@ Run the same line again to update. Conch also updates itself with one click, in 
 To remove it, add `--uninstall`. Your chats and memories stay unless you also add `--delete-data`.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/georgevibing/conch-agent/main/scripts/install.sh | sh -s -- --uninstall
+curl -fsSL https://conchagent.com/install.sh | sh -s -- --uninstall
 ```
 
 On Windows, set `$env:CONCH_UNINSTALL = '1'` and run the line again.
@@ -47,7 +47,7 @@ On Windows, set `$env:CONCH_UNINSTALL = '1'` and run the line again.
 For a Mac mini or a Raspberry Pi in a cupboard, add `--server`. Conch opens no browser, keeps running after you log out, and prints your phone's secure address with a QR code to sign it in.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/georgevibing/conch-agent/main/scripts/install.sh | sh -s -- --server
+curl -fsSL https://conchagent.com/install.sh | sh -s -- --server
 ```
 
 ## From a checkout

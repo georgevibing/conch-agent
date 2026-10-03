@@ -942,6 +942,15 @@ files with `pnpm docs:build`. The front page is at `/`, the documentation at `/d
   named by a sentence; the chart is the one left live, so Chart and Table can be pressed. Counts and names come from `virtual:conch-reference`. The documentation
   (its guides, search and sidebar) is loaded only when someone goes there, so the front
   page doesn't carry it.
+- **Drawn ahead of time, for search.** `pnpm docs:build` builds the site twice, for the
+  browser and for Node (`src/prerender.tsx`), then `scripts/prerender.mjs` writes every
+  page as HTML at its own address (`start/install.html`, `404.html`) with its title,
+  description, canonical address, Open Graph tags and schema.org JSON-LD
+  (`src/site/head.ts`), plus `sitemap.xml`, `robots.txt`, `CNAME` and the installers.
+  In the browser, the page's code arrives first and the live page replaces the drawn one
+  in one go; `useHead` keeps `<head>` true as people move on. The site lives at
+  [conchagent.com](https://conchagent.com) (`SITE_URL`), published by
+  `.github/workflows/site.yml`.
 - **Checked** by `src/content.test.ts` in `pnpm check`: a provider or channel without a
   guide, a dead link, an unknown part or an unlisted keyboard shortcut fails with the
   fix in its message (AGENTS.md working agreement 13). `src/landing/Landing.test.tsx`

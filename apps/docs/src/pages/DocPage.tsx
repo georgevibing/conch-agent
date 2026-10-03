@@ -1,6 +1,6 @@
 import { Button, Callout, DocsPager, DocsToc, Heading, ScrollArea, Text } from '@conch/nacre';
 import { PencilLine } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 
 import { ChannelFacts } from '../embeds/channels';
@@ -8,7 +8,8 @@ import { ProviderFacts } from '../embeds/providers';
 import { Markdown } from '../markdown/Markdown';
 import { SiteNav } from '../shell/SiteNav';
 import { SECTIONS } from '../site/config';
-import { fileUrl, neighbours, pageAt, type Page } from '../site/pages';
+import { useHead } from '../site/head';
+import { fileUrl, headOf, neighbours, pageAt, type Page } from '../site/pages';
 import type { Heading as PageHeading } from '../site/text';
 import styles from './DocPage.module.css';
 import { NotFound } from './NotFound';
@@ -52,9 +53,7 @@ function Article({ page }: { page: Page }) {
   const { previous, next } = neighbours(page);
   const section = SECTIONS.find((s) => s.id === page.section);
 
-  useEffect(() => {
-    document.title = `${page.title} · Conch`;
-  }, [page]);
+  useHead(useMemo(() => headOf(page), [page]));
 
   return (
     <>
