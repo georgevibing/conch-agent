@@ -127,8 +127,10 @@
   .permission {
     display: flex;
     flex-direction: column;
-    gap: var(--nc-space-4);
-    padding: var(--nc-space-4) var(--nc-space-5);
+    gap: var(--nc-space-3);
+    padding: var(--nc-chat-card-pad);
+    border-radius: var(--nc-chat-card-radius);
+    background: var(--nc-chat-card-surface);
     animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
   }
 
@@ -141,18 +143,18 @@
   .permissionIcon {
     display: grid;
     place-items: center;
-    inline-size: 2rem;
-    block-size: 2rem;
+    inline-size: var(--nc-chat-card-mark);
+    block-size: var(--nc-chat-card-mark);
     flex-shrink: 0;
-    border-radius: var(--nc-radius-md);
+    border-radius: var(--nc-radius-full);
     corner-shape: var(--nc-corner-shape);
     color: var(--nc-accent-11);
     background: var(--nc-accent-3);
   }
 
   .permissionIcon svg {
-    inline-size: 1.05rem;
-    block-size: 1.05rem;
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
   }
 
   .permissionCommand {
@@ -178,14 +180,14 @@
     display: flex;
     align-items: center;
     gap: var(--nc-space-2);
-    font-size: var(--nc-text-sm);
-    color: var(--nc-text-subtle);
+    font-size: var(--nc-chat-note-size);
+    color: var(--nc-text-muted);
     animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
   }
 
   .resolved svg {
-    inline-size: 0.9rem;
-    block-size: 0.9rem;
+    inline-size: var(--nc-chat-note-icon);
+    block-size: var(--nc-chat-note-icon);
   }
 
   .resolved[data-allowed] svg {

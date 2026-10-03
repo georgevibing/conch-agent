@@ -329,7 +329,7 @@ export function PermissionCard({
   return (
     <Surface
       lustre
-      elevation={2}
+      elevation={1}
       radius="lg"
       className={styles.permission}
       role="group"
@@ -340,11 +340,11 @@ export function PermissionCard({
           <ShieldQuestion />
         </span>
         <Stack gap={0.5}>
-          <Text weight="semibold">
+          <Text size="sm" weight="semibold">
             {name} would like to{' '}
             {withCode(item.summary.charAt(0).toLowerCase() + item.summary.slice(1))}
           </Text>
-          <Text size="sm" tone="muted">
+          <Text size="xs" tone="muted">
             Nothing happens until you decide.
           </Text>
         </Stack>
