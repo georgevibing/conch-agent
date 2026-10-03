@@ -567,6 +567,61 @@ export class MockEngine implements Engine {
         );
         return;
       }
+      // A question with answers to tap (ADR 0055): "book a call with Ada" asks when and how.
+      if (
+        /\bbook a call with ada\b/i.test(input.prompt) &&
+        input.tools.some((t) => t.name === 'ask')
+      ) {
+        for (const chunk of bursts('Happy to set that up. Two quick things first.')) {
+          await wait(chunk.pause);
+          yield { type: 'text', messageId, delta: chunk.text };
+        }
+        yield { type: 'message-done', messageId };
+        const day = (offset: number) => {
+          const at = new Date();
+          at.setDate(at.getDate() + offset);
+          const pad = (n: number) => String(n).padStart(2, '0');
+          return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
+        };
+        const answer = yield* hostTool('ask', {
+          title: 'Your call with Ada',
+          fields: [
+            {
+              id: 'when',
+              label: 'When suits you?',
+              kind: 'datetime',
+              min: day(0),
+              max: day(14),
+              suggested: `${day(3)}T10:00`,
+            },
+            {
+              id: 'how',
+              label: 'How would you like to talk?',
+              kind: 'choice',
+              options: [
+                { id: 'video', label: 'Video call', description: 'A link in the invite' },
+                { id: 'phone', label: 'Phone call' },
+                { id: 'office', label: 'In person', description: 'At the office' },
+              ],
+            },
+          ],
+        });
+        const chosen = /^They answered: (.+)$/m.exec(answer)?.[1];
+        const own = /^They answered in their own words: “([\s\S]+)”\./.exec(answer)?.[1];
+        const reply = chosen
+          ? `Done: your call with Ada is booked for ${chosen}. I’ll send her the invite.`
+          : own
+            ? `Got it: “${own}”. I’ll book the call with Ada around that and send her the invite.`
+            : 'I went with the first free morning and a video call, since that’s what you usually pick. Booked it with Ada; tell me if another time suits you better.';
+        const next = newId('msg');
+        for (const chunk of bursts(reply)) {
+          await wait(chunk.pause);
+          yield { type: 'text', messageId: next, delta: chunk.text };
+        }
+        yield { type: 'message-done', messageId: next };
+        yield { type: 'done', outcome: 'success' };
+        return;
+      }
       if (/\bin parallel\b/i.test(input.prompt) && input.tools.some((t) => t.name === 'delegate')) {
         const out = yield* hostTool('delegate', {
           parts: [
