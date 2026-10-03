@@ -425,6 +425,7 @@ export class Services {
           // Made further down; only asked for once Conch is running.
           trust: () => this.skillTrust,
           redact: () => this.vault.redactor(),
+          pretend: config.CONCH_ENGINE === 'mock',
         }),
       emit: (event) => this.broadcast.emit(event),
       heal: (message) => void this.healed.note('integrations', message),

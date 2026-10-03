@@ -35,3 +35,19 @@ describe('where apps were published', () => {
     expect(await publishedRepos(home).get('tally')).toBeUndefined();
   });
 });
+
+describe('publishing with the mock engine', () => {
+  it('walks the steps a person sees without running gh', async () => {
+    const { createPretendPublisher } = await import('./pretend');
+    const publisher = createPretendPublisher({ stepMs: 5 });
+    const manifest = { id: 'tally', version: '1.0.0' } as never;
+    expect((await publisher.publish({ id: 'tally', dir: '/nowhere', manifest })).state).toBe(
+      'needs-sign-in',
+    );
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(publisher.state('tally')).toMatchObject({
+      state: 'published',
+      url: 'https://github.com/conch-mock/tally',
+    });
+  });
+});

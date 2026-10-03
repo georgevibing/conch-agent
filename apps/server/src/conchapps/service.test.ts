@@ -839,7 +839,7 @@ describe('its tools, for every model', () => {
     const count = tools.find((t) => t.name === 'app_tally__count');
     expect(Object.keys(count?.input ?? {})).toEqual(['by']);
     expect(await count?.run({ by: 2 })).toMatchObject({ effect: 'not-executed' });
-    expect(asked[0]?.summary).toBe('Tally wants to count one more: 2');
+    expect(asked[0]?.summary).toBe('use Tally to count one more: 2');
     expect(await count?.run({ by: 2 })).toContain('"total":2');
     const read = tools.find((t) => t.name === 'app_tally__read_count');
     expect(await read?.run({})).toContain('"total":2');

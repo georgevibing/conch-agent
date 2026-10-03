@@ -273,6 +273,10 @@ export default defineConfig({
         mkdtempSync(join(tmpdir(), 'conch-e2e-nohome-')),
       CONCH_WEB_DIST: join(root, 'apps/web/dist'),
       CONCH_LOG_LEVEL: 'warn',
+      // No journey can reach GitHub as whoever runs it: no gh sign-in, no token.
+      GH_CONFIG_DIR: mkdtempSync(join(tmpdir(), 'conch-e2e-gh-')),
+      GH_TOKEN: '',
+      GITHUB_TOKEN: '',
     },
   })),
 });

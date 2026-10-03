@@ -256,7 +256,8 @@ export class ConchApps implements HostedApps {
       const answer = await ctx.ask({
         toolName: name,
         input: args,
-        summary: `${plainLine(app.manifest.name, 40)} wants to ${inSentence(plainLine(tool.title || tool.name, 80))}${what ? `: ${what}` : ''}`,
+        // The card reads “Conch would like to use Tally to count one more: 2”.
+        summary: `use ${plainLine(app.manifest.name, 40)} to ${inSentence(plainLine(tool.title || tool.name, 80))}${what ? `: ${what}` : ''}`,
         ...(why && { taint: why }),
       });
       if (answer === 'deny')

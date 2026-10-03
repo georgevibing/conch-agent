@@ -13,6 +13,7 @@ import { appHash, findApps, packApp, readFiles, readFolder, SIGNATURE_FILE } fro
 import { join } from 'node:path';
 
 import { Mutex, readJson, writeJson } from '../lib/fs';
+import { createPretendPublisher } from './pretend';
 import { createPublisher, type PublishedRepos } from './publish';
 import { createRuntime } from './runtime';
 import { signApp, verifyAppWith } from './sign';
@@ -63,6 +64,8 @@ export interface PartsContext {
   trust: () => SkillTrust;
   /** The vault's redactor: nothing secret may be written into an app. */
   redact: () => (text: string) => string;
+  /** The mock engine: publishing pretends, and never runs `gh` with this machine's sign-in. */
+  pretend?: boolean;
 }
 
 /**
@@ -116,10 +119,12 @@ export function conchAppParts(context: PartsContext): ConchAppParts {
     runtime: (options) => createRuntime({ ...options, heal: options.heal ?? context.heal }),
     fetcher,
     sources: createSources({ version: SERVER_VERSION }),
-    publisher: createPublisher({
-      home: context.home,
-      redact: (text) => context.redact()(text),
-      published: publishedRepos(context.home),
-    }),
+    publisher: context.pretend
+      ? createPretendPublisher()
+      : createPublisher({
+          home: context.home,
+          redact: (text) => context.redact()(text),
+          published: publishedRepos(context.home),
+        }),
   };
 }
