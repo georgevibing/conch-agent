@@ -13,6 +13,7 @@ const PURPOSES: Record<PickPurpose, PickOptions> = {
   'keepassxc-keyfile': { prompt: 'Choose the key file for your KeePassXC database', kind: 'file' },
   workspace: { prompt: 'Choose the folder your assistant works in', kind: 'folder' },
   'watch-folder': { prompt: 'Choose the folder to watch for changes', kind: 'folder' },
+  'conch-app': { prompt: 'Choose the app to add', kind: 'file', extensions: ['conchapp'] },
 };
 
 /**

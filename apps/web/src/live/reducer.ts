@@ -774,6 +774,10 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
       return base;
     case 'plan':
       return base;
+    // Drawn by the chat's app cards (ADR 0061).
+    case 'conch-app.offer':
+    case 'conch-app.share':
+      return base;
     case 'skill.used':
       return {
         ...base,

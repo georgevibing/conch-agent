@@ -245,6 +245,8 @@ export const Integration = z.object({
   brand: z.string().optional(),
   /** That app's colour for the logo tile, as a hex value. */
   color: z.string().optional(),
+  /** An app you made or added (ADR 0061): its id in `GET /api/conch-apps`. */
+  conchApp: z.string().optional(),
 });
 export type Integration = z.infer<typeof Integration>;
 

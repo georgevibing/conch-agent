@@ -22,6 +22,7 @@ import {
 } from './chat-cards';
 import { BrowserHandoff, BrowserPermission, BrowserStatus, BrowserStep } from './browser';
 import { Channel, ChannelDoor, ChannelOrigin } from './channels';
+import { ConchAppOffer, ConchAppShareCard } from './conch-apps';
 import { ChannelLink } from './linking';
 import {
   EffortChoice,
@@ -51,6 +52,7 @@ export * from './access';
 export * from './apps';
 export * from './artifacts';
 export * from './chat-cards';
+export * from './conch-apps';
 export * from './questions';
 export * from './attachments';
 export * from './background';
@@ -686,6 +688,13 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     replies: z.array(ReplySuggestion).min(1).max(3),
     by: z.enum(['assistant', 'conch']),
   }),
+  /**
+   * An app the assistant made, or found at a link, offered to add (ADR 0061).
+   * A later event with the same `offerId` replaces it: added, updated, stale.
+   */
+  z.object({ ...logged, type: z.literal('conch-app.offer'), offer: ConchAppOffer }),
+  /** "Put it on GitHub": the share buttons, pressed by the person (ADR 0061). */
+  z.object({ ...logged, type: z.literal('conch-app.share'), share: ConchAppShareCard }),
   /** The assistant's plan for this reply, as it stands now; a later one replaces it. */
   z.object({
     ...logged,
@@ -807,6 +816,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
     total: z.number().int().min(0),
     current: z.string().max(200),
   }),
+  /** Apps you made or added changed: one added, updated, removed, or an update found (ADR 0061). */
+  z.object({ type: z.literal('conch-apps.changed') }),
   /** An artifact changed: a new version, pinned, renamed, removed (ADR 0034). */
   z.object({ type: z.literal('artifact.changed'), artifact: Artifact }),
   z.object({ type: z.literal('artifact.deleted'), artifactId: z.string() }),
