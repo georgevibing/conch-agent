@@ -11,6 +11,7 @@ import {
   DEVICE_URL,
   realExec,
   type Exec,
+  publishedInMemory,
   readCode,
   readme,
   type Running,
@@ -66,7 +67,18 @@ async function tree(dir: string, prefix = ''): Promise<string[]> {
 interface World {
   signedIn: boolean;
   /** The repository by the app's name on Ada's GitHub. */
-  repo: 'none' | 'empty' | { manifestId?: string; archived?: boolean };
+  repo:
+    | 'none'
+    | 'empty'
+    | {
+        manifestId?: string;
+        archived?: boolean;
+        fork?: boolean;
+        /** What GitHub calls it: another name when the old one was renamed or moved. */
+        fullName?: string;
+        /** GitHub's repository id (7001 unless said). */
+        id?: number;
+      };
   release: 'none' | 'exists' | 'raced';
   push: RunResult;
   status: string;
@@ -112,7 +124,18 @@ function programs(world: Partial<World> = {}) {
     if (words === 'api repos/ada/plant-diary')
       return w.repo === 'none'
         ? no('gh: Not Found (HTTP 404)')
-        : ok(JSON.stringify({ archived: typeof w.repo === 'object' && !!w.repo.archived }));
+        : ok(
+            JSON.stringify(
+              typeof w.repo === 'object'
+                ? {
+                    id: w.repo.id ?? 7001,
+                    full_name: w.repo.fullName ?? 'ada/plant-diary',
+                    fork: !!w.repo.fork,
+                    archived: !!w.repo.archived,
+                  }
+                : { id: 7001, full_name: 'ada/plant-diary', fork: false, archived: false },
+            ),
+          );
     if (words === 'api repos/ada/plant-diary/contents/conch-app.json') {
       const id = typeof w.repo === 'object' ? w.repo.manifestId : undefined;
       return id
@@ -352,6 +375,7 @@ describe('publishing on GitHub', () => {
       'api user',
       'api repos/ada/plant-diary',
       'repo create ada/plant-diary --public --description=Keeps track of when you water your plants',
+      'api repos/ada/plant-diary',
       'repo edit ada/plant-diary --add-topic conch-app',
       'release view v1.1.0 --repo ada/plant-diary --json tagName',
       'release create v1.1.0 --repo ada/plant-diary --title=Plant diary 1.1.0 --notes=Keeps track of when you water your plants\n\nIn Conch, open **Apps**, press **Add your own**, choose **From a link** and paste this repository’s address.',
@@ -516,6 +540,75 @@ describe('publishing on GitHub', () => {
       expect(fake.said(GH)).not.toContainEqual(expect.stringMatching(/^(repo|release) /));
       expect(fake.calls.filter((c) => c.file === GIT)).toEqual([]);
     }
+  });
+
+  it('never empties a fork, even of this very app', async () => {
+    const fake = programs({ repo: { manifestId: 'plant-diary', fork: true } });
+    const publish = publisher(fake);
+    await publish.publish(app());
+    expect(await publish.settled('plant-diary')).toEqual({
+      state: 'failed',
+      message:
+        'Your repository ada/plant-diary is a copy of someone else’s, so Conch left it alone. Give the app another name, then press Publish on GitHub again.',
+    });
+    expect(fake.calls.filter((c) => c.file === GIT)).toEqual([]);
+    expect(fake.said(GH)).not.toContainEqual(expect.stringMatching(/^(repo|release) /));
+  });
+
+  it('never follows GitHub from a renamed or moved repository’s old name', async () => {
+    for (const fullName of ['ada/plant-diary-old', 'grace/plant-diary']) {
+      const fake = programs({ repo: { manifestId: 'plant-diary', fullName } });
+      const publish = publisher(fake);
+      await publish.publish(app());
+      expect(await publish.settled('plant-diary')).toMatchObject({
+        state: 'failed',
+        message: expect.stringMatching(
+          /^GitHub sends ada\/plant-diary on to a repository with another name/,
+        ),
+      });
+      expect(fake.calls.filter((c) => c.file === GIT)).toEqual([]);
+    }
+    // GitHub's names ignore case.
+    const same = programs({ repo: { manifestId: 'plant-diary', fullName: 'Ada/Plant-Diary' } });
+    const publish = publisher(same);
+    await publish.publish(app());
+    expect(await publish.settled('plant-diary')).toMatchObject({ state: 'published' });
+  });
+
+  it('remembers the repository it published to by GitHub’s id, and updates only that one', async () => {
+    const published = publishedInMemory();
+    const first = programs();
+    const publisherOne = publisher(first, { published });
+    await publisherOne.publish(app());
+    expect(await publisherOne.settled('plant-diary')).toMatchObject({ state: 'published' });
+    expect(await published.get('plant-diary')).toEqual({ repoId: 7001 });
+    // The same repository later, even without a manifest Conch would recognise: its own.
+    const again = programs({ repo: { id: 7001 } });
+    const publisherTwo = publisher(again, { published });
+    await publisherTwo.publish(app());
+    expect(await publisherTwo.settled('plant-diary')).toMatchObject({ state: 'published' });
+    expect(again.said(GIT)).toContain('push --quiet https://github.com/ada/plant-diary.git HEAD');
+    // Another repository by that name since (deleted and made again, or moved in):
+    // not its own, whatever its manifest says.
+    const other = programs({ repo: { id: 9999, manifestId: 'plant-diary' } });
+    const publisherThree = publisher(other, { published });
+    await publisherThree.publish(app());
+    expect(await publisherThree.settled('plant-diary')).toMatchObject({
+      state: 'failed',
+      message: expect.stringMatching(/isn’t this app, so Conch left it alone/),
+    });
+    expect(other.calls.filter((c) => c.file === GIT)).toEqual([]);
+    expect(await published.get('plant-diary')).toEqual({ repoId: 7001 });
+  });
+
+  it('fills an empty repository by that name whatever it remembered, and remembers it', async () => {
+    const published = publishedInMemory();
+    await published.set('plant-diary', 1234);
+    const fake = programs({ repo: 'empty' });
+    const publish = publisher(fake, { published });
+    await publish.publish(app());
+    expect(await publish.settled('plant-diary')).toMatchObject({ state: 'published' });
+    expect(await published.get('plant-diary')).toEqual({ repoId: 7001 });
   });
 
   it('leaves an archived repository alone, saying how to unarchive it', async () => {
