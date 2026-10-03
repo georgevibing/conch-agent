@@ -486,6 +486,28 @@ export class ConversationManager {
     this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
   }
 
+  /**
+   * Out of the chat list, or back in it. Nothing else changes: an archived
+   * chat keeps its place in search, and a turn still running carries on.
+   */
+  async archive(id: string, archived: boolean) {
+    const live = await this.#get(id);
+    if (Boolean(live.record.archivedAt) === archived) return;
+    live.record = { ...live.record, archivedAt: archived ? Date.now() : undefined };
+    await this.deps.store.upsert(live.record);
+    this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
+  }
+
+  /**
+   * An archived chat comes back to the list when it's written in or needs
+   * you, as a reply brings a thread back to an inbox. True when it did.
+   */
+  #unarchive(live: Live): boolean {
+    if (!live.record.archivedAt) return false;
+    live.record = { ...live.record, archivedAt: undefined };
+    return true;
+  }
+
   async remove(id: string) {
     const live = this.#live.get(id);
     live?.abort?.abort();
@@ -565,12 +587,14 @@ export class ConversationManager {
 
     let live: Live;
     let autoTitle = false;
+    let unarchived = false;
     if (existing) {
       // Checked again after the waits above: another message may have started meanwhile.
       if (existing.abort)
         throw new ConversationError('busy', 'Still replying to your last message.');
       live = existing;
       if (input.options) this.#applyOptions(live, input.options);
+      unarchived = this.#unarchive(live);
     } else {
       const now = Date.now();
       const { preferences } = await this.deps.settings.get();
@@ -610,6 +634,8 @@ export class ConversationManager {
     if (expanded?.skill) this.#append(live, { type: 'skill.used', ...expanded.skill, by: 'user' });
     if (input.untrusted) this.#taint(live, input.untrusted);
     live.record = { ...live.record, preview: said.slice(0, 140), updatedAt: Date.now() };
+    if (unarchived)
+      this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
     const { prompt, attachments: sending } = joinHeld(waiting, {
       engine: chosen.id,
       prompt: expanded?.prompt ?? input.text,
@@ -1628,6 +1654,9 @@ export class ConversationManager {
     if (live.record.status === status) return;
     live.extras?.onStatus?.(status);
     live.record = { ...live.record, status };
+    // A question for you never waits out of sight.
+    if (status === 'awaiting-permission' && this.#unarchive(live))
+      void this.deps.store.upsert(live.record).catch(() => undefined);
     this.#append(live, { type: 'status', status });
     this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
   }
@@ -1760,7 +1789,7 @@ export class ConversationManager {
 }
 
 function summary(record: ConversationRecord): ConversationSummary {
-  const { id, title, preview, createdAt, updatedAt, status, origin, titling } = record;
+  const { id, title, preview, createdAt, updatedAt, status, origin, titling, archivedAt } = record;
   return {
     id,
     title,
@@ -1771,6 +1800,7 @@ function summary(record: ConversationRecord): ConversationSummary {
     ...(titling && { titling }),
     options: record.options ?? {},
     ...(origin && { origin }),
+    ...(archivedAt && { archivedAt }),
   };
 }
 

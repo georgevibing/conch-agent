@@ -46,6 +46,7 @@ const StoredRecord = z.object({
   titling: z.boolean().optional().catch(undefined),
   options: TurnOptions.catch({}),
   origin: ConversationSummary.shape.origin.catch(undefined),
+  archivedAt: z.number().optional().catch(undefined),
   engine: EngineId.catch('claude-code'),
   resumeId: z.string().optional().catch(undefined),
   sessions: z

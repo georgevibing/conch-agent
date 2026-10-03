@@ -25,9 +25,9 @@ import {
   ProbeServerBody,
   AddServerBody,
   UpdateServerBody,
+  UpdateConversationBody,
   ServerId,
   ReleaseTurnBody,
-  RenameConversationBody,
   SchedulePreviewBody,
   UpdateRoutineBody,
   SaveCommandBody,
@@ -940,11 +940,15 @@ export async function buildApp(services: Services) {
       return sendError(reply, error);
     }
   });
+  /** Rename a conversation, archive it, or put it back in the list. */
   app.patch<{ Params: { id: string } }>('/api/conversations/:id', async (request, reply) => {
-    const body = parse(RenameConversationBody, request.body, reply);
+    const body = parse(UpdateConversationBody, request.body, reply);
     if (!body) return;
     try {
-      await services.conversations.rename(request.params.id, body.title);
+      if (body.title !== undefined)
+        await services.conversations.rename(request.params.id, body.title);
+      if (body.archived !== undefined)
+        await services.conversations.archive(request.params.id, body.archived);
       return { ok: true };
     } catch (error) {
       return sendError(reply, error);

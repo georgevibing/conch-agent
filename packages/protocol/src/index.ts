@@ -312,10 +312,25 @@ export const ConversationSummary = z.object({
       z.object({ kind: z.literal('task'), taskId: z.string() }),
     ])
     .optional(),
+  /**
+   * When you archived it: out of the chat list, still searchable. Writing in
+   * it, or it needing you, puts it back.
+   */
+  archivedAt: z.number().optional(),
 });
 export type ConversationSummary = z.infer<typeof ConversationSummary>;
 
-export const RenameConversationBody = z.object({ title: z.string().trim().min(1).max(120) });
+/** Rename a conversation, archive it, or put it back — at least one of them. */
+export const UpdateConversationBody = z
+  .object({
+    title: z.string().trim().min(1).max(120).optional(),
+    archived: z.boolean().optional(),
+  })
+  .strict()
+  .refine((body) => body.title !== undefined || body.archived !== undefined, {
+    message: 'Nothing to change.',
+  });
+export type UpdateConversationBody = z.infer<typeof UpdateConversationBody>;
 
 export const ToolStatus = z.enum(['pending', 'running', 'success', 'error']);
 export type ToolStatus = z.infer<typeof ToolStatus>;
