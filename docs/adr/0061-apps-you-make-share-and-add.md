@@ -302,6 +302,20 @@ an "always allow" on first use, and its skills start **When I ask**.
   person has seen them yet: after the chat read something from outside,
   `app_try` and a draft page's calls ask first, naming the hosts, and running a
   draft that reaches the web taints the chat.
+- **A stranger's code runs only after a press.** Finding an update in the
+  background reads, hashes and compares the package and scans its files as text;
+  it never loads its tools. They load when the person opens the update's preview,
+  or the preview of a link, a file or an `app_get` card, and then only in a
+  throwaway runtime: a temporary data folder, none of your settings, and an
+  `app.fetch` that refuses everything ("Nothing is fetched before you add it").
+  **Update** carries the hash of the version the person looked at; a newer one
+  that arrived since is refused, and who signed it is read from the files again
+  on the press.
+- **Made after reading.** An app offered in a chat that had read something from
+  outside records what it read (`afterReading`), and a change to someone else's
+  app records whose it was (`basedOn`). Its card says so, and it's treated as
+  from outside: Ask every time, skills When I ask, its notes fenced, its tools
+  tainting the chat, and adding it needs a recent sign-in.
 - **What tools carry.** An app's tools carry their input schema to every model
   (`ConchAppTool.input`), and Conch checks what the model sends against it before
   the tool sees it.

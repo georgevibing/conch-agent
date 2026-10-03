@@ -100,7 +100,13 @@ export function describeChanges(changes: ConchAppChanges, names: ChangeNames = {
     names.manifest?.settings?.find((s) => s.key === key)?.label ?? key;
   const page = (id: string) => names.manifest?.pages?.find((p) => p.id === id)?.title ?? id;
   const out: string[] = [];
-  if (changes.reachesAdded.length) out.push(`Now also reaches ${and(changes.reachesAdded)}`);
+  // Your keys go with it to its new websites: said plainly, first.
+  if (changes.reachesAdded.length)
+    out.push(
+      changes.carriesOver
+        ? `Your saved settings will go with it, and it now also reaches ${and(changes.reachesAdded)}`
+        : `Now also reaches ${and(changes.reachesAdded)}`,
+    );
   if (changes.toolsNowChange.length)
     out.push(
       `${list(changes.toolsNowChange.map(tool))} ${changes.toolsNowChange.length > 1 ? 'now make' : 'now makes'} changes`,

@@ -30,6 +30,7 @@ import { newId } from '../lib/ids';
 import { Mutex, removeTree, safeJoin, writeJson } from '../lib/fs';
 import { type Heal, readStore } from '../lib/recover';
 import type { AppFiles } from './types';
+import { own } from './words';
 
 /** A version kept for Go back, with whose it was: only the same hands' versions are kept. */
 export const KeptVersion = ConchAppVersion.extend({
@@ -115,6 +116,23 @@ export async function writeFiles(dir: string, files: AppFiles): Promise<void> {
     const target = pathIn(dir, rel);
     await mkdir(join(target, '..'), { recursive: true, mode: 0o700 });
     await writeFile(target, bytes, { mode: 0o600 });
+  }
+}
+
+/** Errors Windows gives for a moment while a process that just ended still holds a folder. */
+const BUSY = new Set(['EPERM', 'EACCES', 'EBUSY', 'ENOTEMPTY']);
+
+/** `rename`, waiting out a moment's refusal (about two seconds in all), then giving up in words. */
+export async function renameSoon(from: string, to: string, tries = 10): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await rename(from, to);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? '';
+      if (!BUSY.has(code) || attempt >= tries - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(25 * 2 ** attempt, 500)));
+    }
   }
 }
 
@@ -213,7 +231,7 @@ export class ConchAppStore {
   /** Whose data was kept for an app that was removed, if any. */
   async keptData(id: string): Promise<KeptData | undefined> {
     await this.read();
-    return this.#kept[id];
+    return own(this.#kept, id);
   }
 
   /** Remember (or forget) whose data is kept for an app that's gone. */
@@ -339,7 +357,7 @@ export class ConchAppStore {
     if (!(await exists(dir))) return false;
     await mkdir(this.#incoming, { recursive: true, mode: 0o700 });
     const aside = join(this.#incoming, newId('data'));
-    await rename(dir, aside);
+    await renameSoon(dir, aside);
     await removeTree(aside);
     return true;
   }
@@ -372,7 +390,7 @@ export class ConchAppStore {
   }
 
   async secrets(id: string): Promise<Record<string, string>> {
-    return { ...(await this.#readSecrets()).apps[id] };
+    return { ...own((await this.#readSecrets()).apps, id) };
   }
 
   async allSecrets(): Promise<Record<string, Record<string, string>>> {
@@ -387,7 +405,9 @@ export class ConchAppStore {
         values === undefined
           ? {}
           : Object.fromEntries(
-              Object.entries({ ...data.apps[id], ...values }).filter(([, value]) => value !== ''),
+              Object.entries({ ...own(data.apps, id), ...values }).filter(
+                ([, value]) => value !== '',
+              ),
             );
       data.apps = Object.fromEntries(
         Object.entries({ ...data.apps, [id]: next }).filter(

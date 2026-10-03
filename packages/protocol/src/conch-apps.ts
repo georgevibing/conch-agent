@@ -391,6 +391,8 @@ export const ConchAppChanges = z.object({
    * signer): it replaces that app, and its settings and keys don't carry over.
    */
   otherMaker: z.boolean().optional(),
+  /** The same hands: your saved settings, keys and data go with the new version. */
+  carriesOver: z.boolean().optional(),
 });
 export type ConchAppChanges = z.infer<typeof ConchAppChanges>;
 

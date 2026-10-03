@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path';
 import { Task } from '@conch/protocol';
 import { z } from 'zod';
 
-import { Mutex, readJson, writeJson } from '../lib/fs';
+import { Mutex, readJson, syncFile, writeJson } from '../lib/fs';
 import { type Heal } from '../lib/recover';
 
 const TasksFile = z.object({ tasks: z.array(Task).default([]) });
@@ -98,12 +98,7 @@ export class TaskStore {
   async #write(tasks: Task[]): Promise<void> {
     await writeJson(this.#path, { tasks });
     // Receipt/intention must reach stable storage before external effects proceed.
-    const file = await open(this.#path, 'r');
-    try {
-      await file.sync();
-    } finally {
-      await file.close();
-    }
+    await syncFile(this.#path);
     if (process.platform !== 'win32') {
       const directory = await open(dirname(this.#path), 'r');
       try {

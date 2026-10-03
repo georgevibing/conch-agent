@@ -1384,3 +1384,222 @@ describe('an app made after reading something from outside (ADR 0028)', () => {
     expect(second.source).toMatchObject({ basedOn: { name: 'Weather' } });
   });
 });
+
+describe('one runtime per app, never on files being swapped', () => {
+  it('two callers at once get one runtime', async () => {
+    const h = await harness();
+    const { offer } = await makeTally(h);
+    await h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' });
+    await h.service.stop();
+    h.parts.runtimes.length = 0;
+    const [a, b] = await Promise.all([
+      h.service.runtimeFor('tally'),
+      h.service.runtimeFor('tally'),
+    ]);
+    expect(a).toBe(b);
+    expect(h.parts.runtimes).toHaveLength(1);
+  });
+
+  it('a call during an update waits for it, and runs on the new files; nothing is left running on the old', async () => {
+    const h = await harness();
+    const first = await makeTally(h);
+    await h.service.acceptOffer(first.offer.offerId, { conversationId: 'c_chat' });
+    const draft = await h.service.editDraft('c_chat', 'tally');
+    const tools = (tallyFiles('1.1.0')['tools.mjs'] ?? '').replace(
+      "return { total: (await app.data.get('total')) ?? 0 };",
+      "return { total: (await app.data.get('total')) ?? 0, version: 2 };",
+    );
+    await h.service.write(draft.id, 'tools.mjs', tools);
+    await h.service.write(draft.id, 'conch-app.json', tallyFiles('1.1.0')['conch-app.json'] ?? '');
+    await h.service.check(draft.id);
+    await h.service.tryTool(draft.id, 'count', {});
+    await h.service.tryTool(draft.id, 'read_count', {});
+    await h.service.check(draft.id);
+    const offer = await h.service.present(h.chat(), draft.id, 'v2');
+    // The update holds its files a moment as they go into place; a call arrives then.
+    const store = h.service.store;
+    const place = store.place.bind(store);
+    let placing!: () => void;
+    const entered = new Promise<void>((resolve) => (placing = resolve));
+    store.place = async (...args) => {
+      placing();
+      await new Promise((r) => setTimeout(r, 30));
+      return place(...args);
+    };
+    const [updated, during] = await Promise.all([
+      h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' }),
+      entered.then(() => h.service.callFromPage({ appId: 'tally' }, 'read_count', {}, false)),
+    ]);
+    expect(updated.manifest.version).toBe('1.1.0');
+    expect(during).toMatchObject({ ok: true, json: { version: 2 } });
+    const live = h.parts.runtimes.filter(
+      (r) => r.app === 'tally' && !r.stopped && r.appDir.endsWith('current'),
+    );
+    expect(live).toHaveLength(1);
+  });
+});
+
+describe('looking at an app before adding it', () => {
+  it('runs its tools only in a throwaway runtime: a temporary folder, no settings, no fetching', async () => {
+    const h = await harness();
+    const seen: Parameters<FakeParts['runtime']>[0][] = [];
+    const runtime = h.parts.runtime;
+    h.parts.runtime = (options) => {
+      seen.push(options);
+      return runtime(options);
+    };
+    // An app of the same id is already added, with a key: none of it reaches the preview.
+    const preview = await h.service.preview({
+      file: signedPackage(keyed()).toString('base64'),
+      name: 'weather.conchapp',
+    });
+    if (!preview?.apps[0]) throw new Error('nothing');
+    expect(seen).toHaveLength(1);
+    const [looked] = seen;
+    expect(looked?.dataDir).not.toContain('conch-app-data');
+    expect(await looked?.settings()).toEqual({});
+    expect(
+      await looked?.fetcher(
+        { id: 'weather', reaches: ['api.weather.example'] },
+        { url: 'https://api.weather.example/x', method: 'GET', headers: {} },
+        new AbortController().signal,
+      ),
+    ).toMatchObject({ ok: false, refused: 'Nothing is fetched before you add it.' });
+    // The throwaway folder is gone.
+    expect(await readdir(join(h.home, 'conch-apps', '.incoming')).catch(() => [])).toEqual([]);
+  });
+});
+
+describe('a card made before things changed', () => {
+  it('won’t replace an app that another maker’s took the place of since', async () => {
+    const h = await harness();
+    // A card to add Tally, made here…
+    const { offer } = await makeTally(h);
+    expect(offer.action).toBe('add');
+    // …and meanwhile someone else's Tally was added from a file.
+    const files = { ...tallyFiles(), 'README.md': '# Theirs\n' };
+    const preview = await h.service.preview({
+      file: signedPackage(files, { fingerprint: 'MMMM', publisher: 'Mallory' }).toString('base64'),
+      name: 'tally.conchapp',
+    });
+    if (!preview?.apps[0]) throw new Error('nothing');
+    await h.service.install({
+      packageId: preview.packageId,
+      appId: 'tally',
+      hash: preview.apps[0].hash,
+      settings: {},
+    });
+    await expect(
+      h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' }),
+    ).rejects.toThrow(
+      'What this would replace changed since the card was made, so nothing was added. Ask for a new card.',
+    );
+    expect(h.latest(offer.offerId)?.state).toBe('failed');
+    expect((await h.service.get('tally')).source.kind).toBe('file');
+  });
+
+  it('won’t update an app that was replaced or removed since', async () => {
+    const h = await harness();
+    const first = await makeTally(h);
+    await h.service.acceptOffer(first.offer.offerId, { conversationId: 'c_chat' });
+    const draft = await h.service.editDraft('c_chat', 'tally');
+    await h.service.write(draft.id, 'conch-app.json', tallyFiles('1.1.0')['conch-app.json'] ?? '');
+    await h.service.check(draft.id);
+    await h.service.tryTool(draft.id, 'count', {});
+    await h.service.tryTool(draft.id, 'read_count', {});
+    await h.service.check(draft.id);
+    const offer = await h.service.present(h.chat(), draft.id, 'v1.1');
+    expect(offer.action).toBe('update');
+    await h.service.remove('tally', { keepData: false });
+    await expect(
+      h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' }),
+    ).rejects.toThrow(/Ask for a new card/);
+    expect(await h.service.list()).toEqual([]);
+  });
+});
+
+describe('names that are also built-in words', () => {
+  it('a setting called constructor, in an app called constructor, is just a name', async () => {
+    const h = await harness();
+    const files = tallyFiles();
+    const manifest = JSON.parse(files['conch-app.json'] ?? '{}') as Record<string, unknown>;
+    manifest.id = 'constructor';
+    manifest.name = 'Builder';
+    manifest.settings = [
+      { key: 'constructor', label: 'Token', secret: true },
+      { key: 'toString', label: 'City' },
+    ];
+    const preview = await h.service.preview({
+      file: signedPackage({ ...files, 'conch-app.json': JSON.stringify(manifest) }).toString(
+        'base64',
+      ),
+      name: 'b.conchapp',
+    });
+    if (!preview?.apps[0]) throw new Error('nothing');
+    const app = await h.service.install({
+      packageId: preview.packageId,
+      appId: 'constructor',
+      hash: preview.apps[0].hash,
+      settings: {},
+    });
+    expect(app.saved).toEqual([]);
+    expect(app.missing).toEqual(['constructor', 'toString']);
+    expect(app.values).toEqual({});
+    expect(await h.service.systemKeys()).toEqual([]);
+    expect((await h.service.hosted.get('capp_constructor')).health.state).toBe('needs-auth');
+    const set = await h.service.setSettings('constructor', {
+      constructor: 'tok-0001',
+      toString: 'Porto',
+    });
+    expect(set).toMatchObject({
+      saved: ['constructor', 'toString'],
+      missing: [],
+      values: { toString: 'Porto' },
+    });
+    await h.service.remove('constructor', { keepData: false });
+    // Nothing kept means nothing kept, even for this name.
+    expect(await h.service.store.keptData('constructor')).toBeUndefined();
+  });
+});
+
+describe('your own app, changed in a chat that read something', () => {
+  it('keeps your key and data, and its card says plainly that they go to its new website', async () => {
+    const h = await harness();
+    const manifest = JSON.parse(tallyFiles()['conch-app.json'] ?? '{}') as Record<string, unknown>;
+    manifest.settings = [{ key: 'apiKey', label: 'API key', secret: true }];
+    const first = await makeTally(h, '1.0.0', { 'conch-app.json': JSON.stringify(manifest) });
+    await h.service.acceptOffer(first.offer.offerId, { conversationId: 'c_chat' });
+    await h.service.setSettings('tally', { apiKey: 'sk-mine-0001' });
+    await h.service.callFromPage({ appId: 'tally' }, 'count', { by: 4 }, true);
+    // Changed in a chat that read the service's own docs.
+    const ctx = h.chat('c_docs');
+    ctx.append({ type: 'taint', source: { kind: 'web', label: 'docs.api.example' } });
+    const draft = await h.service.editDraft('c_docs', 'tally');
+    await h.service.write(
+      draft.id,
+      'conch-app.json',
+      JSON.stringify({ ...manifest, version: '1.1.0', reaches: ['api.example'] }),
+    );
+    await h.service.check(draft.id);
+    await h.service.tryTool(draft.id, 'count', {});
+    await h.service.tryTool(draft.id, 'read_count', {});
+    await h.service.check(draft.id);
+    const offer = await h.service.present(ctx, draft.id, 'Now it reaches the API.');
+    expect(offer.source).toMatchObject({ afterReading: ['docs.api.example'] });
+    expect(offer.changes).toMatchObject({ carriesOver: true, reachesAdded: ['api.example'] });
+    expect(offer.changes?.otherMaker).toBeUndefined();
+    const { describeChanges } = await import('@conch/protocol');
+    expect(describeChanges(offer.changes ?? ({} as never))[0]).toBe(
+      'Your saved settings will go with it, and it now also reaches api.example',
+    );
+    const updated = await h.service.acceptOffer(offer.offerId, { conversationId: 'c_docs' });
+    expect(updated.saved).toEqual(['apiKey']);
+    expect(await h.service.callFromPage({ appId: 'tally' }, 'read_count', {}, false)).toMatchObject(
+      {
+        json: { total: 4 },
+      },
+    );
+    // Still from outside in every other way.
+    expect((await h.service.hosted.get('capp_tally')).policy).toBe('ask');
+  });
+});

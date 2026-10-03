@@ -226,6 +226,41 @@ describe('the maker’s tools (ADR 0061 §4)', () => {
     expect(taints).toHaveLength(2);
   });
 
+  it('after reading something from outside, still show a repository app_find found, and only that', async () => {
+    const found = 'https://github.com/bea/weather';
+    const options: FakeOptions = {
+      repos: [{ owner: 'bea', repo: 'weather', description: 'Weather.', stars: 1, url: found }],
+      links: new Map([
+        [
+          found,
+          {
+            archive: fakePack(textFiles(tallyFiles())),
+            source: { kind: 'github', owner: 'bea', repo: 'weather', url: found },
+          },
+        ],
+        [
+          'https://evil.example/x.conchapp',
+          {
+            archive: fakePack(textFiles(tallyFiles())),
+            source: { kind: 'link', url: 'https://evil.example/x.conchapp' },
+          },
+        ],
+      ]),
+    };
+    const { run } = await setup(options, {
+      taints: () => [{ kind: 'web', label: 'evil.example' }],
+      lastMessage: async () => 'is there an app for the weather?',
+    });
+    expect(await run('app_get', { link: found })).toMatch(
+      /only shows an app from a link the person typed/,
+    );
+    await run('app_find', { query: 'weather' });
+    expect(await run('app_get', { link: found })).toContain('is under your reply');
+    expect(await run('app_get', { link: 'https://evil.example/x.conchapp' })).toMatch(
+      /only shows an app from a link the person typed themselves, or one app_find found/,
+    );
+  });
+
   it('the prompt says how making works, and in a chat with a draft, where it stands and the guide', async () => {
     const { service, run } = await setup();
     expect(await appsPrompt(service, 'c_chat', { tools: false })).toBe('');
