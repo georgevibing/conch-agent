@@ -56,6 +56,10 @@ on a mid-priced model, about $58 a day.
 - **How a provider charges is asked, never assumed.** `RoutineSpend.billing`:
   `Engine.local` is free; `usage()` saying `plan` or `metered` decides; else a
   `subscription` sign-in is a plan and anything else is metered.
+- **Summarising a long chat is spending too** (ADR 0055): the API engine adds the
+  summary's cost to the turn and says so in a `usage` event before its next
+  request, so the run limit sees it. Priced from the turn's model when the provider
+  doesn't say, which can only overstate it.
 - **Every run records a `RunCost`**: billing, money (and whether the provider
   or Conch priced it), and on a plan its share of the tightest window (the
   window read before and after the run, same window, no reset between).

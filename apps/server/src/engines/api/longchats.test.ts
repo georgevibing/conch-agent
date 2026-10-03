@@ -177,6 +177,22 @@ describe('a long chat on a model API', () => {
     expect(done?.usage?.costUsd).toBeCloseTo(0.001, 6);
   });
 
+  it('says what summarising cost as soon as it’s paid, before the next request (ADR 0057)', async () => {
+    const chat = await setup({ window: 9_000 });
+    for (let i = 0; i < 8; i++) {
+      const events = await chat.ask(long(i), i);
+      if (!compactions(events).length) continue;
+      const folded = events.findIndex((e) => e.type === 'compacted');
+      const said = events.findIndex((e, at) => at > folded && e.type === 'usage');
+      expect(said).toBeGreaterThan(folded);
+      expect(events[said]).toMatchObject({ type: 'usage', usage: { costUsd: 0.001 } });
+      // Before the model's answer: an unattended run can stop at its limit first.
+      expect(said).toBeLessThan(events.findIndex((e) => e.type === 'text'));
+      return;
+    }
+    throw new Error('never compacted');
+  });
+
   it('keeps every turn while the chat is short, and the prefix the same from turn to turn', async () => {
     const chat = await setup();
     for (let i = 0; i < 3; i++) await chat.ask(`short ${i}`, i);

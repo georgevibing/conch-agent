@@ -603,8 +603,11 @@ export class ApiEngine implements Engine {
     });
     let key: string | undefined;
     /** What summarising cost, in this turn: the person pays for it, so it's counted. */
+    /** A summary was paid for since the turn last said what it has used. */
+    let unsaid = false;
     const spent = (extra: Usage | undefined) => {
       if (!extra) return;
+      unsaid = true;
       total.inputTokens += extra.inputTokens;
       total.outputTokens += extra.outputTokens;
       if (extra.costUsd !== undefined) {
@@ -696,6 +699,11 @@ export class ApiEngine implements Engine {
         let end: Extract<WireEvent, { type: 'end' }> | undefined;
         // The chat fits the window before every request: tool results grow it mid-turn too.
         yield* this.#fit(fitting);
+        // Summarising is spending too: say so before the next request (ADR 0057).
+        if (unsaid) {
+          unsaid = false;
+          yield { type: 'usage', usage: usage() };
+        }
         const request: WireRequest = {
           key,
           model,
