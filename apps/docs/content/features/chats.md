@@ -1,6 +1,6 @@
 ---
 title: Your chats
-description: Rename a chat, archive it to tidy your list, find it again in Archived, or delete it for good.
+description: Send what to say next with a tap, rename a chat, archive it to tidy your list, find it again in Archived, or delete it for good.
 order: 12
 ---
 
@@ -35,6 +35,21 @@ From there:
 ## Delete
 
 Choose **Delete**, from the list or from **Archived chats**, and confirm. The chat and what was attached only to it are removed from Conch. Anything your assistant remembered from it stays in [memory](./memory.md), where you can forget it too.
+
+## What to say next
+
+Under the latest reply, up to three small buttons hold what you might well say next: “Make it shorter”, “Add Ada to the invite”. Press one and it's sent, exactly as it reads, as if you'd typed it. The chat's model and settings stay as they are, and anything you were writing in the message box stays there.
+
+They come from two places:
+
+- **Your assistant** offers them when the next step is clear. Most replies have none.
+- **Conch** reads the reply itself. Under a table of numbers, **Show it as a chart** draws it beside the chat.
+
+They go as soon as anything newer is in the chat: a message from you, here or on another device, or a new reply. You'll never see them:
+
+- while something else is waiting for you in that reply, like a question or a card to connect an app, so there's one thing at a time;
+- from your assistant after the chat has read something from outside, like a web page or an email, because those words could be someone else's (Conch's own still show);
+- in [routines](./routines.md), background tasks or chats from your [chat apps](../channels/index.md), where nobody is there to press them.
 
 ## Good to know
 

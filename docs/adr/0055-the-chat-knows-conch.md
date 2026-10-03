@@ -148,13 +148,20 @@ The chips come from two places:
   called last if at all. The prompt says to offer only next steps that are
   concrete and likely, and never filler like "Tell me more".
 - **Conch itself** (`replies/conch.ts`), from what the reply contains. A
-  Markdown table of numbers gets "Show it as a chart". A finished reply that a
-  routine could repeat, asked for the third time (the habit finder, ADR 0032),
-  gets "Do this every …".
+  Markdown table of numbers gets "Show it as a chart". A rule that needs
+  Conch's tools to answer (a chart is an artifact) isn't offered to a model
+  that can only chat.
 
-A turn that read something untrusted gets only Conch's own chips. Chips go away
-as soon as anything newer is in the chat. They never appear in unattended
-runs.
+A habit chip ("Do this every …", from the habit finder of ADR 0032) is left
+out for now. The habit finder reads every chat in a batch, and it knows that a
+request repeats, not how often it should run, so the chip couldn't say "every"
+what. It joins the rules when a turn can know both cheaply.
+
+A chat that has read something untrusted gets only Conch's own chips. Chips go
+away as soon as anything newer is in the chat. They never appear in unattended
+runs, after a turn that didn't finish, or while something else in the turn
+waits for the person (a question, an approval, an offer): one thing asks for
+attention at a time.
 
 ### 6. The plan, ticking itself off
 
