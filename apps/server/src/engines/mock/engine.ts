@@ -356,6 +356,35 @@ export class MockEngine implements Engine {
         usage: { inputTokens: 300, outputTokens: 40, costUsd: 0.0004 },
       };
     }
+    // A whole skill to write from an idea: the steps in the house shape. "write-fail" fails.
+    const idea = /<idea>\n([\s\S]*)\n<\/idea>/.exec(input.prompt)?.[1]?.trim();
+    if (idea !== undefined) {
+      if (/write-fail/i.test(idea)) throw new Error('Mock completion failed.');
+      const [first = 'Tidy', second = 'things'] = idea
+        .replace(/[^\p{L}\p{N}\s'-]/gu, ' ')
+        .split(/\s+/)
+        .filter((w) => w.length > 3 && !STOPWORDS.has(w.toLowerCase()));
+      const title = `${first.charAt(0).toUpperCase()}${first.slice(1).toLowerCase()} ${second.toLowerCase()}`;
+      return {
+        text: JSON.stringify({
+          title,
+          does: `Handles ${title.toLowerCase()} the way you described`,
+          when: `Use when you ask about ${second.toLowerCase()}`,
+          instructions: [
+            `Do this for the person: ${idea}.`,
+            '',
+            '## Steps',
+            '1. Ask for anything missing before you start.',
+            `2. ${idea.charAt(0).toUpperCase()}${idea.slice(1)}.`,
+            '3. Say what you did in a few short lines.',
+            '',
+            '## Good to know',
+            'Keep it short and plain. Leave out anything they didn’t ask for.',
+          ].join('\n'),
+        }),
+        usage: { inputTokens: 400, outputTokens: 160, costUsd: 0.001 },
+      };
+    }
     // “Only if…” (ADR 0056): yes when the condition's words are in the event; "garbled" answers nonsense.
     if (/whether one event matches a condition/.test(input.system)) {
       const condition = /^Condition: only if (.*)$/m.exec(input.prompt)?.[1] ?? '';

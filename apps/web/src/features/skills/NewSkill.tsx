@@ -423,15 +423,18 @@ export function NewSkill() {
 
       <div className={styles.actions}>
         <Stack direction="row" gap={1} align="center" wrap>
-          <Button
-            variant="soft"
-            leadingIcon={<Waypoints />}
-            disabled={text.length < WRITE_MIN_CHARS || writer.state === 'writing'}
-            loading={writer.state === 'writing'}
-            onClick={() => write(writer.state === 'written' ? (writer.before ?? text) : text)}
-          >
-            {writer.state === 'written' ? 'Write the steps again' : 'Write the steps for me'}
-          </Button>
+          {/* Once written, the note under the steps has Write it again. */}
+          {writer.state !== 'written' && (
+            <Button
+              variant="soft"
+              leadingIcon={<Waypoints />}
+              disabled={text.length < WRITE_MIN_CHARS || writer.state === 'writing'}
+              loading={writer.state === 'writing'}
+              onClick={() => write(text)}
+            >
+              Write the steps for me
+            </Button>
+          )}
           <Button
             variant="ghost"
             leadingIcon={<Sparkles />}
