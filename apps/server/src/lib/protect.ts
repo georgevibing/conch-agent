@@ -42,6 +42,8 @@ export function protectedPaths(home: string): string[] {
     join(home, 'conch-apps'),
     join(home, 'conch-app-data'),
     join(home, 'conch-apps.json'),
+    // Which repositories publishing may push to: the assistant mustn't point it elsewhere.
+    join(home, 'conch-apps-published.json'),
     join(home, 'conch-apps.secrets.json'),
   ];
 }
