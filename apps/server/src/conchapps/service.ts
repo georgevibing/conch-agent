@@ -233,13 +233,13 @@ function rethrow(error: unknown): never {
   throw error;
 }
 
-/** Refuses every request: an app that's only being looked at fetches nothing. */
+/** Refuses every request: an app that's only being looked at (a preview) fetches nothing. */
 const noFetch: AppFetcher = async () => ({
   ok: false,
   status: 0,
   headers: {},
   body: '',
-  refused: 'Nothing is fetched while an app is only being looked at.',
+  refused: 'Nothing is fetched before you add it.',
 });
 
 export class ConchAppService {

@@ -1438,3 +1438,34 @@ describe('one runtime per app, never on files being swapped', () => {
     expect(live).toHaveLength(1);
   });
 });
+
+describe('looking at an app before adding it', () => {
+  it('runs its tools only in a throwaway runtime: a temporary folder, no settings, no fetching', async () => {
+    const h = await harness();
+    const seen: Parameters<FakeParts['runtime']>[0][] = [];
+    const runtime = h.parts.runtime;
+    h.parts.runtime = (options) => {
+      seen.push(options);
+      return runtime(options);
+    };
+    // An app of the same id is already added, with a key: none of it reaches the preview.
+    const preview = await h.service.preview({
+      file: signedPackage(keyed()).toString('base64'),
+      name: 'weather.conchapp',
+    });
+    if (!preview?.apps[0]) throw new Error('nothing');
+    expect(seen).toHaveLength(1);
+    const [looked] = seen;
+    expect(looked?.dataDir).not.toContain('conch-app-data');
+    expect(await looked?.settings()).toEqual({});
+    expect(
+      await looked?.fetcher(
+        { id: 'weather', reaches: ['api.weather.example'] },
+        { url: 'https://api.weather.example/x', method: 'GET', headers: {} },
+        new AbortController().signal,
+      ),
+    ).toMatchObject({ ok: false, refused: 'Nothing is fetched before you add it.' });
+    // The throwaway folder is gone.
+    expect(await readdir(join(h.home, 'conch-apps', '.incoming')).catch(() => [])).toEqual([]);
+  });
+});
