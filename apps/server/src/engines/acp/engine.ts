@@ -260,6 +260,20 @@ export function offerOf(started: SessionStarted, modelAtStart: boolean): Offer {
   };
 }
 
+/**
+ * Why Conch can't start `file`, if it can't: a batch file that isn't a package
+ * manager's shim. A file it can't read is left for the start itself to report.
+ */
+export function whyUnstartable(file: string): string | undefined {
+  try {
+    launch(file);
+    return undefined;
+  } catch (error) {
+    if (!(error instanceof Error) || 'code' in error) return undefined;
+    return error.message;
+  }
+}
+
 /** Whether a permission request is for one of the door's own tools (Conch checks those itself). */
 export function forDoor(
   call: z.infer<typeof PermissionRequest>['toolCall'],
@@ -455,6 +469,17 @@ export class AcpEngine implements Engine {
         fix: { need: this.agent.need, kind: 'install' },
         message: `Install ${this.label} to use it here. Conch can do that for you.`,
       });
+    // Found, but not something Conch can start (a hand-made batch file): say so now,
+    // not after someone presses Sign in.
+    const unstartable = whyUnstartable(file);
+    if (unstartable)
+      return remember({
+        ...base,
+        state: 'error',
+        executablePath: file,
+        fix: { need: this.agent.need, kind: 'install' },
+        message: `${this.label} didn’t start: ${unstartable}`,
+      });
     const version = await (this.options.version ?? ((path) => this.#version(path)))(file);
     if (version && !isAtLeast(version, this.agent.minVersion))
       return remember({
@@ -512,6 +537,9 @@ export class AcpEngine implements Engine {
 
   async #version(file: string): Promise<string | undefined> {
     const result = await run(file, ['--version'], { env: this.#env(), timeout: 15_000 });
+    // A program that crashed says nothing about its version; Node's own crash report
+    // ("Node.js v24.21.0") isn't the program's.
+    if (result.code !== 0) return undefined;
     return parseVersion(`${result.stdout}\n${result.stderr}`);
   }
 

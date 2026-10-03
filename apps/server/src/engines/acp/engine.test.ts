@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -13,7 +13,7 @@ import { SettingsStore } from '../../settings/store';
 import { collect } from '../api/fake';
 import type { HostTool, TurnInput } from '../types';
 import { ACP_AGENTS, type AcpAgent } from './agents';
-import { AcpEngine, deviceSignIn, forDoor, offerOf, preamble } from './engine';
+import { AcpEngine, deviceSignIn, forDoor, offerOf, preamble, whyUnstartable } from './engine';
 import { fakeSpawn, type AgentScript } from './fake';
 
 async function settings() {
@@ -409,6 +409,33 @@ describe('words and checks', () => {
     expect(
       deviceSignIn('Open http://github.com/login/device and enter ABCD-1234', hosts),
     ).toBeUndefined();
+  });
+
+  it('says up front when the program found is a batch file Conch can’t start', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'conch-acp-cmd-'));
+    const handMade = join(dir, 'copilot.cmd');
+    await writeFile(handMade, '@"C:\\somewhere\\copilot.cmd" %*\r\n');
+    const npm = join(dir, 'grok.cmd');
+    await writeFile(npm, '@ECHO off\r\n"%_prog%"  "%dp0%\\node_modules\\grok\\cli.js" %*\r\n');
+    // Only Windows starts programs through batch files.
+    const windows = process.platform === 'win32';
+    expect(whyUnstartable(handMade)).toBe(
+      windows
+        ? 'copilot.cmd is a batch file Conch can’t start safely. Point Conch at the program it runs instead.'
+        : undefined,
+    );
+    expect(whyUnstartable(npm)).toBeUndefined();
+    expect(whyUnstartable(join(dir, 'gone.cmd'))).toBeUndefined();
+
+    if (!windows) return;
+    const engine = new AcpEngine(ACP_AGENTS.copilot, await settings(), {
+      find: async () => handMade,
+      version: async () => '1.0.91',
+    });
+    const status = await engine.detect();
+    expect(status.state).toBe('error');
+    expect(status.message).toMatch(/^GitHub Copilot didn’t start: copilot\.cmd is a batch file/);
+    expect(status.fix).toEqual({ need: 'copilot', kind: 'install' });
   });
 });
 
