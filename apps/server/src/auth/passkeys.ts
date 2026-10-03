@@ -141,11 +141,8 @@ export class PasskeyCeremonies {
     helloCode?: string;
     userName: string;
   }): Promise<Record<string, unknown>> {
-    const ownerId =
-      input.purpose === 'hello' ? randomToken(16) : await this.store.ownerHandle();
-    const existing = (await this.store.passkeyRecords()).filter(
-      (p) => p.rpId === input.place.rpId,
-    );
+    const ownerId = input.purpose === 'hello' ? randomToken(16) : await this.store.ownerHandle();
+    const existing = (await this.store.passkeyRecords()).filter((p) => p.rpId === input.place.rpId);
     const options = await generateRegistrationOptions({
       rpName: 'Conch',
       rpID: input.place.rpId,

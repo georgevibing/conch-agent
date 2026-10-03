@@ -92,21 +92,22 @@ describe('the public door', () => {
 
   it('uses Conch’s own address in one press, and stops offering it once it does (ADR 0064)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'conch-door-'));
-    let address: string | undefined;
+    // Conch’s own address, as Services would say it: none yet, then ready.
+    const conch: { address?: string } = {};
     const service: ChannelDoorService = new ChannelDoorService({
       home: dir,
       port: 0,
       tailscale: tailscale(),
       // Conch's own listener sends https://<name>/conch/… to the door, prefix and all.
       fetch: (url, init) => fetch(service.localFor(String(url)), init),
-      conchAddress: () => address,
+      conchAddress: () => conch.address,
     });
     door = service;
     expect(service.status().address).toBeUndefined();
     await expect(service.useConchAddress()).rejects.toThrow('doesn’t answer');
     const told = vi.fn();
     service.onChange(told);
-    address = 'https://conch.example.com';
+    conch.address = 'https://conch.example.com';
     service.addressChanged();
     expect(told).toHaveBeenLastCalledWith(
       expect.objectContaining({ address: 'https://conch.example.com' }),

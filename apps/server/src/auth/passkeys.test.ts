@@ -91,7 +91,10 @@ describe('making and using a passkey', () => {
       purpose: 'sign-in',
     });
     expect(used.id).toBe(passkey.id);
-    expect((await store.passkeys(PLACE.rpId))[0]).toMatchObject({ here: true, lastUsedAt: expect.any(Number) });
+    expect((await store.passkeys(PLACE.rpId))[0]).toMatchObject({
+      here: true,
+      lastUsedAt: expect.any(Number),
+    });
   });
 
   it('names a passkey from an unknown maker after the device it was made on', async () => {
@@ -132,7 +135,10 @@ describe('making and using a passkey', () => {
     const { store, ceremonies } = await setup();
     const { authenticator } = await addOne(store, ceremonies);
     const elsewhere = { rpId: 'localhost', origin: 'http://localhost:4317' };
-    const options = await ceremonies.authenticationOptions({ place: elsewhere, purpose: 'sign-in' });
+    const options = await ceremonies.authenticationOptions({
+      place: elsewhere,
+      purpose: 'sign-in',
+    });
     await expect(
       ceremonies.verifyAuthentication({
         response: authenticator.get(options, elsewhere.origin, { rpId: PLACE.rpId }),
@@ -307,12 +313,22 @@ describe('the hello link (ADR 0064)', () => {
       deviceName: 'Safari on Mac',
     });
     expect(made.ownerId).toBeTruthy();
-    await store.claim(code, { kind: 'passkey', passkey: made.passkey, ownerId: made.ownerId ?? '' });
+    await store.claim(code, {
+      kind: 'passkey',
+      passkey: made.passkey,
+      ownerId: made.ownerId ?? '',
+    });
     const file = await store.get();
     expect(file).toMatchObject({ method: 'passkey', approval: true, ownerId: made.ownerId });
     expect(file.hellos).toEqual([]);
     expect(await store.checkHello(code)).toEqual({ ok: false, reason: 'claimed' });
-    await expect(store.claim(code, { kind: 'password', username: 'x', password: 'purple otters juggle at dawn' })).rejects.toThrow(AccessError);
+    await expect(
+      store.claim(code, {
+        kind: 'password',
+        username: 'x',
+        password: 'purple otters juggle at dawn',
+      }),
+    ).rejects.toThrow(AccessError);
     await expect(store.createHello()).rejects.toThrow('already someone’s');
   });
 
@@ -328,7 +344,11 @@ describe('the hello link (ADR 0064)', () => {
       username: 'george',
       password: 'purple otters juggle at dawn',
     });
-    expect(await store.get()).toMatchObject({ method: 'password', username: 'george', approval: true });
+    expect(await store.get()).toMatchObject({
+      method: 'password',
+      username: 'george',
+      approval: true,
+    });
   });
 
   it('won’t take a code that doesn’t match, or one bound to another hello', async () => {
