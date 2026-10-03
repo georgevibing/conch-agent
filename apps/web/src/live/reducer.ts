@@ -18,6 +18,7 @@ import type {
   TaskKind,
   TaskStatus,
   ToolStatus,
+  ToolView,
   TurnOptions,
   TurnProblem,
   Usage,
@@ -60,6 +61,8 @@ export type TranscriptItem =
       output?: string;
       durationMs?: number;
       startedAt: number;
+      /** What it found, drawn under its row (ADR 0055). */
+      view?: ToolView;
     }
   | {
       kind: 'permission';
@@ -373,6 +376,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         status: event.status,
         output: event.output,
         durationMs: event.durationMs,
+        ...(event.view && { view: event.view }),
       }));
       return updated ? { ...base, items: updated } : base;
     }

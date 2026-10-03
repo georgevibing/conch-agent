@@ -1,4 +1,4 @@
-import type { ConversationEvent, ConversationEventInput } from '@conch/protocol';
+import type { ConversationEvent, ConversationEventInput, ToolView } from '@conch/protocol';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -65,6 +65,23 @@ describe('transcript reducer', () => {
     expect(view.items[1]).toMatchObject({ thoughtEndedAt: 1200, continuation: false });
     expect(view.items[2]).toMatchObject({ status: 'success', output: 'a\nb' });
     expect(view.items[3]).toMatchObject({ id: 'm1#1', text: 'Two files.', continuation: true });
+  });
+
+  it('keeps what a tool found on its row (ADR 0055)', () => {
+    const view: ToolView = { kind: 'files', items: [{ name: 'Q4 deck' }] };
+    const out = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'Find the deck' },
+        {
+          type: 'tool.started',
+          toolUseId: 't1',
+          name: 'mcp__conch__google_drive_search',
+          input: {},
+        },
+        { type: 'tool.finished', toolUseId: 't1', status: 'success', output: '{}', view },
+      ),
+    );
+    expect(out.items[1]).toMatchObject({ kind: 'tool', status: 'success', view });
   });
 
   it('is idempotent when events are replayed', () => {

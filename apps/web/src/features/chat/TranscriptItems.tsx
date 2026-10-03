@@ -31,6 +31,7 @@ import { useAutoFocus } from '../../lib/useAutoFocus';
 import { SentAttachments } from './AttachmentViewer';
 import { StreamingMarkdown } from './Markdown';
 import { formatInput, toolDiff, toolSummary } from './tools';
+import { ToolFound } from './ToolFound';
 import { memoryApi } from '../memory/api';
 import styles from './Transcript.module.css';
 import { useToolLabel } from '../integrations/ChatBits';
@@ -218,6 +219,7 @@ export function ToolItem({ item }: { item: Of<'tool'> }) {
       input={diff ? undefined : formatInput(item.input)}
       inputLanguage="json"
       output={item.output || undefined}
+      view={item.view && <ToolFound view={item.view} />}
     >
       {diff && <Diff diff={diff} header={false} lineNumbers={false} />}
     </ToolCall>
