@@ -9,6 +9,9 @@ export const Env = z.object({
   CONCH_HOST: z.string().default('127.0.0.1'),
   CONCH_PORT: z.coerce.number().int().min(1).max(65535).default(4317),
   CONCH_DOOR_PORT: z.coerce.number().int().min(1).max(65535).default(4319),
+  CONCH_HTTPS_PORT: z.coerce.number().int().min(1).max(65535).default(443),
+  CONCH_HTTP_PORT: z.coerce.number().int().min(1).max(65535).default(80),
+  CONCH_ACME_DIRECTORY: z.string().url().default('https://acme-v02.api.letsencrypt.org/directory'),
   CONCH_ALLOW_REMOTE: z
     .enum(['0', '1'])
     .default('0')
@@ -74,6 +77,20 @@ export const ENV_ABOUT: Record<keyof Config, EnvAbout> = {
     about:
       'The port of the public door, the separate listener on this computer that Teams and WeChat deliver messages to (ADR 0045). It serves only those channels’ signed deliveries; the next free one of the ten after it is used when it’s taken.',
     unset: '4319',
+  },
+  CONCH_HTTPS_PORT: {
+    about:
+      'Where your own address answers over HTTPS (ADR 0064). Change it only when something in front of Conch sends 443 to another port.',
+  },
+  CONCH_HTTP_PORT: {
+    about:
+      'Where your own address answers Let’s Encrypt’s check and sends everyone else to HTTPS (ADR 0064). Let’s Encrypt always knocks on port 80, so change it only when something in front of Conch forwards 80 here.',
+  },
+  CONCH_ACME_DIRECTORY: {
+    about:
+      'The certificate authority your own address gets its certificate from, as an ACME directory.',
+    unset: 'Let’s Encrypt',
+    internal: true,
   },
   CONCH_ALLOW_REMOTE: {
     about:

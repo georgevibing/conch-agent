@@ -395,6 +395,9 @@ importers:
       postal-mime:
         specifier: ^4.0.2
         version: 4.0.2
+      reflect-metadata:
+        specifier: 0.2.2
+        version: 0.2.2
       tldts:
         specifier: 7.4.16
         version: 7.4.16

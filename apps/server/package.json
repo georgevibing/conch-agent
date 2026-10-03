@@ -37,6 +37,7 @@
     "nodemailer": "^10.0.13",
     "playwright-core": "1.63.0",
     "postal-mime": "^4.0.2",
+    "reflect-metadata": "0.2.2",
     "tldts": "7.4.16",
     "tsx": "^4.23.15",
     "uqr": "0.1.3",

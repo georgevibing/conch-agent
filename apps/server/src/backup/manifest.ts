@@ -100,6 +100,11 @@ export const RULES: readonly BackupRule[] = [
     why: 'The search index: rebuilt from your chats when it’s missing.',
   },
   {
+    match: 'address/**',
+    class: 'derived',
+    why: 'Your own address’s certificate, its key and the ACME account: a new computer gets its own, and keys never leave this one.',
+  },
+  {
     match: 'healed.json',
     class: 'derived',
     why: 'What Conch fixed on this computer: reassurance about this machine, not something to move.',
@@ -203,6 +208,12 @@ export const RULES: readonly BackupRule[] = [
     class: 'kept',
     group: 'settings',
     why: 'Personality, about you, preferences.',
+  },
+  {
+    match: 'address.json',
+    class: 'kept',
+    group: 'settings',
+    why: 'The address of your own Conch answers at. Restored on another computer, it opens nothing until you turn it on there.',
   },
   {
     match: 'browser.json',
