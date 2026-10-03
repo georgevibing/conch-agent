@@ -103,6 +103,41 @@ describe('OpenRouter keys', () => {
     expect(error.message).not.toContain('sk-or');
   });
 
+  it('says when the key runs out, once that’s soon', async () => {
+    const now = Date.parse('2026-10-03T10:00:00Z');
+    const at = (expires_at: string | null) => {
+      const fetch = fakeFetch(() => jsonResponse({ data: { ...KEY_INFO.data, expires_at } }));
+      return new OpenRouterWire(fetch.fetch, () => now).check({ key: KEY });
+    };
+
+    expect(await at('2026-10-06T09:00:00Z')).toEqual({
+      description: 'OpenRouter · $12.40 left · key expires in 3 days',
+    });
+    expect(await at('2026-10-04T08:00:00Z')).toEqual({
+      description: 'OpenRouter · $12.40 left · key expires tomorrow',
+    });
+    expect(await at('2026-10-03T18:00:00Z')).toEqual({
+      description: 'OpenRouter · $12.40 left · key expires today',
+    });
+    // Far off, never, or something that isn't a date: nothing to say.
+    expect(await at('2027-12-31T23:59:59Z')).toEqual({ description: 'OpenRouter · $12.40 left' });
+    expect(await at(null)).toEqual({ description: 'OpenRouter · $12.40 left' });
+    expect(await at('soon')).toEqual({ description: 'OpenRouter · $12.40 left' });
+  });
+
+  it('says a key OpenRouter no longer knows expired or was deleted', async () => {
+    // What OpenRouter answers for an expired key, and for a deleted one.
+    const { wire: or } = wire(() =>
+      jsonResponse({ error: { code: 401, message: 'User not found.' } }, 401),
+    );
+
+    const error = await failure(or.check({ key: KEY }));
+    expect(error.kind).toBe('auth');
+    expect(error.message).toBe(
+      'OpenRouter no longer knows this key: it expired, or was deleted at openrouter.ai. Add a new one in Settings.',
+    );
+  });
+
   it('turns an unreachable provider into a sentence, not a stack', async () => {
     const { wire: or } = wire(() => {
       throw new TypeError('fetch failed');

@@ -57,6 +57,8 @@ import {
 
 const BASE = 'https://openrouter.ai/api/v1';
 const LABEL = 'OpenRouter';
+/** How long before a key's end date the card starts saying so. */
+const EXPIRY_NOTICE_DAYS = 14;
 
 // ── Wire schemas (the wire is untrusted; nothing is read before Zod agrees) ──
 
@@ -68,6 +70,8 @@ const KeyInfo = z.object({
     limit_remaining: z.number().nullish(),
     usage: z.number().nullish(),
     is_free_tier: z.boolean().nullish(),
+    /** When the key stops working (ISO 8601), if it was made with an end date. */
+    expires_at: z.string().nullish(),
     free_model_daily_requests: z
       .object({
         used: z.number(),
@@ -117,6 +121,12 @@ export function mapError(
   const source = error?.metadata?.limit_source ?? '';
   const detail = error?.message ? scrub(error.message, key) : '';
   if (type === 'authentication' || status === 401 || status === 403) {
+    // OpenRouter's answer for a key it no longer has: one past its end date, or deleted.
+    if (/user not found/i.test(detail))
+      return new ApiError(
+        'auth',
+        `${LABEL} no longer knows this key: it expired, or was deleted at openrouter.ai. Add a new one in Settings.`,
+      );
     return new ApiError('auth', `${LABEL} refused your key. Add a new one in Settings.`);
   }
   if (type === 'payment_required' || status === 402) {
@@ -180,11 +190,13 @@ function money(usd: number): string {
 export class OpenRouterWire implements Wire {
   readonly source = LABEL;
   #fetch: FetchLike;
+  #now: () => number;
   /** What the last model list said, so a turn only sends options the model takes. */
   #models = new Map<string, WireModel>();
 
-  constructor(fetchImpl: FetchLike) {
+  constructor(fetchImpl: FetchLike, now: () => number = Date.now) {
     this.#fetch = fetchImpl;
+    this.#now = now;
   }
 
   /**
@@ -223,7 +235,22 @@ export class OpenRouterWire implements Wire {
       typeof info.limit_remaining === 'number'
         ? `${money(info.limit_remaining)} left`
         : (info.label ?? '').trim().slice(0, 60);
-    return { description: left ? `${LABEL} · ${left}` : `${LABEL} key` };
+    const ends = this.#ends(info.expires_at);
+    return {
+      description: [left ? `${LABEL} · ${left}` : `${LABEL} key`, ends].filter(Boolean).join(' · '),
+    };
+  }
+
+  /**
+   * A key made with an end date says so while there's time to make another:
+   * once it's past, OpenRouter only answers "User not found".
+   */
+  #ends(expiresAt: string | null | undefined): string | undefined {
+    const at = expiresAt ? Date.parse(expiresAt) : NaN;
+    if (Number.isNaN(at)) return undefined;
+    const days = Math.max(0, Math.round((at - this.#now()) / 86_400_000));
+    if (days > EXPIRY_NOTICE_DAYS) return undefined;
+    return `key expires ${days === 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`}`;
   }
 
   async #key(key: string, signal?: AbortSignal) {
