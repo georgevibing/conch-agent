@@ -1,0 +1,18 @@
+@layer nacre.components {
+  /* In the reply's flow, lined up with its words like the tools around it, and as close to them. */
+  .plan {
+    margin-block: calc(var(--nc-space-3) * -1);
+    margin-inline-start: 2.75rem;
+  }
+
+  .approval {
+    margin-inline-start: 2.75rem;
+  }
+
+  @media (max-width: 640px) {
+    .plan,
+    .approval {
+      margin-inline-start: 0;
+    }
+  }
+}

@@ -29,8 +29,15 @@ export function toolSummary(name: string, raw: unknown): string | undefined {
     case 'Task':
     case 'Agent':
       return str(input, 'description');
-    case 'TodoWrite':
-      return 'Updated the plan';
+    // Drawn as the plan's own card now (ADR 0055); older chats still have the rows.
+    case 'TodoWrite': {
+      const todos = Array.isArray(input.todos) ? (input.todos as Input[]) : [];
+      const done = todos.filter((t) => t.status === 'completed').length;
+      return todos.length ? `Plan · ${done} of ${todos.length} done` : 'Plan';
+    }
+    case 'TaskCreate':
+    case 'TaskUpdate':
+      return str(input, 'subject') ?? 'Plan';
     default:
       return str(input, 'description') ?? file;
   }
