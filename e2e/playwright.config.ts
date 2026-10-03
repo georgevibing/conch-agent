@@ -77,6 +77,8 @@ const scenarios = {
   suggest: { port: 4383, env: { CONCH_MOCK_STATE: 'ready' } },
   // A model that can only chat (ADR 0050): a message that needs an app offers one that can.
   'chat-only': { port: 4358, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Questions answered with a tap (ADR 0055): tapped, typed, skipped, and a reload while one waits.
+  questions: { port: 4377, env: { CONCH_MOCK_STATE: 'ready' } },
   // Every app with every model (ADR 0049): Slack as Conch's own, and what a provider set up
   // coming in by itself (the mock provider has Sentry in its account).
   'any-provider': {
