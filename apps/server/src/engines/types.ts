@@ -165,6 +165,12 @@ export interface TurnInput {
   protectedPaths?: string[];
   /** Engine-native session to continue, from a previous turn's `session` event. */
   resumeId?: string;
+  /**
+   * Where the message this turn answers sits in the chat's log. An engine that
+   * keeps the transcript itself (`context`) remembers it per turn, so it can
+   * say where the model's memory starts after summarising (ADR 0055).
+   */
+  seq?: number;
   /** Appended to the engine's own system prompt. */
   systemAppend: string;
   cwd: string;
@@ -223,6 +229,12 @@ export type EngineEvent =
   | { type: 'notice'; code: string; message: string }
   /** Integrations that failed to connect at the start of the turn. */
   | { type: 'mcp-status'; failed: { name: string; error: string }[] }
+  /**
+   * The start of the chat no longer fit what the model reads at once, so it
+   * was folded into a summary (ADR 0055). `healed`: the provider had already
+   * said "too long", and the turn went again by itself.
+   */
+  | ({ type: 'compacted'; healed?: boolean } & Compacted)
   | {
       type: 'done';
       outcome: 'success' | 'interrupted' | 'error';
@@ -238,7 +250,41 @@ export interface CompletionInput {
   prompt: string;
   /** Undefined = the engine's default model. */
   model?: string;
+  /** A longer answer than a title (a chat's summary). Undefined = a few words. */
+  maxTokens?: number;
   signal: AbortSignal;
+}
+
+/** What summarising the start of a chat came to (ADR 0055). */
+export interface Compacted {
+  /** What the model keeps of the earlier turns. Empty when no model could write one. */
+  summary: string;
+  /** Where in the chat's log the model's word-for-word memory now starts, when known. */
+  fromSeq?: number;
+  /** How many earlier turns the summary stands for, in all. */
+  turns: number;
+  /** The model it was done for, by name. */
+  model?: string;
+}
+
+/**
+ * How an engine fits a long chat into what its model reads at once (ADR
+ * 0055). Engines that keep the transcript themselves (the model APIs) offer
+ * it; the rest leave it to the provider, which compacts by itself (Claude
+ * Code, Codex) or is handed a fresh, bounded handoff every turn (the ACP
+ * programs).
+ */
+export interface EngineContext {
+  /**
+   * Fold everything but the newest turn of a chat into its summary now
+   * (`/compact`), keeping `focus` above all. Undefined: nothing to fold.
+   */
+  compact(input: {
+    resumeId: string;
+    model?: string;
+    focus?: string;
+    signal: AbortSignal;
+  }): Promise<Compacted | undefined>;
 }
 
 export interface Completion {
@@ -312,6 +358,8 @@ export interface Engine {
   readonly commandSandbox?: 'conch';
   /** Each turn uses Conch’s complete handoff, not a provider-native resume ID. */
   readonly conversationHistory?: boolean;
+  /** Conch fits long chats for it by summarising their start (ADR 0055). Absent: the provider does. */
+  readonly context?: EngineContext;
   /**
    * Skill folders the engine reads by itself (Claude Code reads
    * `~/.claude/skills`). Conch doesn't list those skills to it a second time.

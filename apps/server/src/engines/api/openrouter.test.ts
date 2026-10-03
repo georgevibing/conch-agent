@@ -164,6 +164,7 @@ describe('OpenRouter models', () => {
       id: 'anthropic/claude-sonnet-4.6',
       label: 'Anthropic: Claude Sonnet 4.6',
       description: '200k context · $3.00/$15.00 per million tokens',
+      context: 200_000,
       // 'ludicrous' isn't an effort Conch knows, so it isn't offered.
       efforts: ['low', 'medium', 'high'],
       supportsFastMode: false,

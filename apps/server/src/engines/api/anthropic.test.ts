@@ -108,6 +108,8 @@ describe('Anthropic models', () => {
       label: 'Claude Opus 5',
       // `max_input_tokens` is the context window — there is no `context_window`.
       description: '200k context',
+      // …and what Conch fits a long chat into (ADR 0055).
+      context: 200_000,
       efforts: ['low', 'medium', 'high', 'xhigh'],
       supportsFastMode: false,
       supportsAutoMode: false,

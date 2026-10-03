@@ -358,6 +358,8 @@ describe('Ollama, streamed', () => {
     ]);
     // Chat only is the picker's badge, not the description's words (ADR 0050).
     expect(models[2]?.info.description).toBe('2.5 GB');
+    // What a long chat must fit is the window Conch asks Ollama for (ADR 0055).
+    expect(models.map((m) => m.info.context)).toEqual([32_768, 32_768, 32_768]);
   });
 });
 

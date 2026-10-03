@@ -81,6 +81,11 @@ export const TidyRun = z.object({
   at: z.number(),
   /** `nightly` while you slept, `now` when you asked. */
   trigger: z.enum(['nightly', 'now']),
+  /**
+   * Learned from one chat just before its start was summarised (ADR 0055):
+   * its id. Such a run only reads what you said there.
+   */
+  chat: z.string().optional(),
   /** Whether a model helped (it can only merge exact repeats without one). */
   model: z.boolean(),
   changes: z.array(TidyChange),

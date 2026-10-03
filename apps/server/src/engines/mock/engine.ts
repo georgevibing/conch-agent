@@ -20,6 +20,7 @@ import type {
   Completion,
   CompletionInput,
   Engine,
+  EngineContext,
   EngineEvent,
   EngineIntegrations,
   EngineMcpStatus,
@@ -98,6 +99,25 @@ export class MockEngine implements Engine {
   };
   /** Sees images, can't open files: the degraded file path gets exercised too. */
   readonly attachments = { images: true, files: false };
+  /**
+   * Long chats are fitted by Conch, as for a model API (ADR 0055): `/compact`
+   * gives a scripted summary, so the divider and its words can be seen and tested.
+   */
+  readonly context: EngineContext = {
+    compact: async ({ focus }) => ({
+      summary: [
+        'What the person wants',
+        '- A plan for the garden, planted by May.',
+        'Decided or done',
+        '- Tomatoes along the south fence; no peppers this year.',
+        ...(focus ? ['Facts to keep', `- ${focus}`] : []),
+        'Still open',
+        '- Which compost to buy.',
+      ].join('\n'),
+      turns: 3,
+      model: 'Mock model',
+    }),
+  };
   #state: EngineState;
   #signedOutOnce = false;
   #speed: number;
@@ -452,6 +472,26 @@ export class MockEngine implements Engine {
     this.#spend();
     try {
       yield { type: 'session', resumeId: input.resumeId ?? newId('mock-session'), model: 'mock' };
+      // Scripted for tests and demos: a chat grown past the model's window (ADR 0055).
+      const long = /pretend (?:this|the) chat is long/i.test(input.prompt)
+        ? await this.context.compact({ resumeId: 'mock', signal: input.signal })
+        : undefined;
+      if (long)
+        yield {
+          type: 'compacted',
+          ...long,
+          ...(input.seq !== undefined && { fromSeq: input.seq }),
+        };
+      if (/pretend (?:this|the) chat is too long/i.test(input.prompt)) {
+        yield {
+          type: 'done',
+          outcome: 'error',
+          error:
+            'This chat is longer than the model can read at once, even with its start summarised. Pick a model with a bigger window, or start a new chat.',
+          problem: 'too-long',
+        };
+        return;
+      }
       if (chatOnly)
         yield {
           type: 'notice',

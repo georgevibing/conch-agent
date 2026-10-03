@@ -425,7 +425,7 @@ describe('a turn against the real OpenRouter wire', () => {
     ['rate-limit', 'limit'],
     ['overloaded', 'unavailable'],
     ['network', 'unavailable'],
-    ['context', undefined],
+    ['context', 'too-long'],
   ] as const)('says a %s failure is %s, so the chat knows who can help', async (kind, problem) => {
     const wire = stubWire({
       stream: () =>

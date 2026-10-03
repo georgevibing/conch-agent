@@ -334,6 +334,23 @@ export const UpdateConversationBody = z
   });
 export type UpdateConversationBody = z.infer<typeof UpdateConversationBody>;
 
+/** `/compact [focus]`: summarise the start of a chat now (ADR 0055). */
+export const CompactBody = z
+  .object({
+    /** What the summary should keep above all, in the person's words. */
+    focus: z.string().trim().max(500).optional(),
+  })
+  .strict();
+export type CompactBody = z.infer<typeof CompactBody>;
+
+export const CompactResult = z.object({
+  /** Whether anything was summarised (a short chat has nothing to fold). */
+  compacted: z.boolean(),
+  /** One sentence to show: what happened, or why nothing did. */
+  message: z.string(),
+});
+export type CompactResult = z.infer<typeof CompactResult>;
+
 export const ToolStatus = z.enum(['pending', 'running', 'success', 'error']);
 export type ToolStatus = z.infer<typeof ToolStatus>;
 
@@ -543,6 +560,27 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     model: z.object({ engine: EngineId, id: z.string(), label: z.string() }),
     /** The best model you already set up that can; absent when there's none. */
     switchTo: AppsModel.optional(),
+  }),
+  /**
+   * A long chat no longer fits what the model reads at once, so the start of
+   * it was folded into a summary (ADR 0055). From `before` (a message's id)
+   * on, the model reads the chat word for word; before it, only `summary`.
+   * The latest one is the one that counts. The person keeps every message.
+   */
+  z.object({
+    ...logged,
+    type: z.literal('context.compacted'),
+    /** What the model keeps from the earlier messages. Empty when none could be written. */
+    summary: z.string().max(40_000),
+    /** The first message the model still reads in full. */
+    before: z.string().optional(),
+    engine: EngineId,
+    /** The model's name, as the picker shows it. */
+    model: z.string().optional(),
+    /** How many earlier turns the summary stands for, in all. */
+    turns: z.number().int().nonnegative(),
+    /** You asked for it (`/compact`), rather than the chat growing past the window. */
+    asked: z.boolean().optional(),
   }),
   /** This turn was answered by another provider than the chat's, and why. */
   z.object({

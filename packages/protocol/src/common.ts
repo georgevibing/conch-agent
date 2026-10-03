@@ -108,5 +108,10 @@ export const TurnProblem = z.enum([
   'limit',
   /** The key lives in 1Password, which is locked. */
   'key-locked',
+  /**
+   * More than the model can read at once, even after Conch summarised the
+   * chat's start and tried again (ADR 0055): a model with a bigger window helps.
+   */
+  'too-long',
 ]);
 export type TurnProblem = z.infer<typeof TurnProblem>;

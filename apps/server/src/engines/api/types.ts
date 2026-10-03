@@ -149,6 +149,10 @@ export interface WireModel {
   maxOutputTokens?: number;
 }
 
+/** The sentence for a request longer than the model reads at once (ADR 0055 heals it first). */
+export const TOO_LONG =
+  'This chat is longer than the model can read at once, even with its start summarised. Pick a model with a bigger window, or start a new chat.';
+
 /** Why a request failed, in the few shapes the engine reacts to differently. */
 export type ApiErrorKind =
   | 'auth'
@@ -171,16 +175,19 @@ export class ApiError extends Error {
   readonly retryable: boolean;
   /** How long the provider asked us to wait, when it said. */
   readonly retryAfterMs?: number;
+  /** For `context`: the window the provider named, in tokens, when it did. */
+  readonly window?: number;
 
   constructor(
     kind: ApiErrorKind,
     message: string,
-    options: { retryable?: boolean; retryAfterMs?: number } = {},
+    options: { retryable?: boolean; retryAfterMs?: number; window?: number } = {},
   ) {
     super(message);
     this.name = 'ApiError';
     this.kind = kind;
     this.retryable = options.retryable ?? false;
     this.retryAfterMs = options.retryAfterMs;
+    if (options.window) this.window = options.window;
   }
 }

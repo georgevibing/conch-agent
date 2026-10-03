@@ -28,9 +28,11 @@ import { z } from 'zod';
 import { gigabytes } from '../../local/models';
 import { errorOf, ndjson, type OllamaClient } from '../../local/ollama';
 import type { Completion, EngineUsage, TurnImage } from '../types';
+import { tooLong, windowIn } from './context';
 import { defaultHome } from './session';
 import {
   ApiError,
+  TOO_LONG,
   type ApiVariant,
   type WireAccount,
   type WireCompletion,
@@ -136,11 +138,9 @@ export function mapError(status: number, message: string, model: string): ApiErr
       `${model} needs more memory than this computer has free right now. Close a few apps, or pick a smaller model.`,
     );
   }
-  if (/context|too long|exceeds/i.test(message)) {
-    return new ApiError(
-      'context',
-      'This conversation is longer than the model can read. Start a new chat to carry on.',
-    );
+  if (tooLong(message) || /context|exceeds/i.test(message)) {
+    const window = windowIn(message);
+    return new ApiError('context', TOO_LONG, { ...(window && { window }) });
   }
   if (status === 503 || /server busy|maximum pending/i.test(message)) {
     return new ApiError('overloaded', 'Ollama is busy with another request.', {
@@ -184,6 +184,8 @@ export class OllamaWire implements Wire {
           supportsFastMode: false,
           supportsAutoMode: false,
           images: m.vision,
+          // What it reads at once is what Conch asks Ollama for, not what the model could.
+          context: this.link.contextFor(m.name),
         },
         tools,
         thinking,

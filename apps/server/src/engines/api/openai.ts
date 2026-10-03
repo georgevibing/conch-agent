@@ -32,8 +32,10 @@ import {
   readChatStream,
   type ChatError,
 } from './chat';
+import { tooLong, windowIn } from './context';
 import {
   ApiError,
+  TOO_LONG,
   type FetchLike,
   type WireAccount,
   type WireCompletion,
@@ -433,15 +435,10 @@ export function mapChatError(
       'not-found',
       `That model isn’t available at ${label} any more. Pick another one.`,
     );
-  if (
-    /context.?length|too long|maximum context|exceeds? the (context|model)|token limit|\b1261\b|input length|too_many_tokens|reduce the length|token count \+ max_tokens/.test(
-      words,
-    )
-  )
-    return new ApiError(
-      'context',
-      'This conversation is longer than the model can read. Start a new chat, or pick a model with a bigger context.',
-    );
+  if (tooLong(words) || status === 413) {
+    const window = windowIn(said);
+    return new ApiError('context', TOO_LONG, { ...(window && { window }) });
+  }
   if (/content.?policy|content_filter|safety|sensitive/.test(words))
     return new ApiError('policy', `${label} refused this request under its content policy.`);
   if (
@@ -658,6 +655,7 @@ export class OpenAiWire implements Wire {
         id: m.id,
         label: m.name ?? this.preset.modelLabel?.(m.id) ?? prettyModel(m.id),
         description: contextLabel(m.context) ?? '',
+        ...(m.context ? { context: Math.round(m.context) } : {}),
         efforts,
         supportsFastMode: false,
         supportsAutoMode: false,

@@ -22,14 +22,17 @@ import { z } from 'zod';
 import { sandboxSupport } from '../../conversations/sandbox';
 import { authorizeTool, hostComputerTools, HOST_NAMES } from '../host';
 
+import { cheapestModel } from '../../conversations/title';
 import { newId } from '../../lib/ids';
 import type { ProviderKeys } from '../../providers/keys';
 import type { SettingsStore } from '../../settings/store';
 import {
   hostToolText,
+  type Compacted,
   type Completion,
   type CompletionInput,
   type Engine,
+  type EngineContext,
   type EngineEvent,
   type EngineIntegrations,
   type EngineUsage,
@@ -37,7 +40,26 @@ import {
   type TurnInput,
 } from '../types';
 import { bridgedSchema, hostToolSpec, wireName } from './jsonschema';
-import { sessionsDir, TranscriptStore } from './session';
+import {
+  budgetFor,
+  calibrate,
+  chunk,
+  cleanSummary,
+  DEFAULT_WINDOW,
+  estimateTokens,
+  LOCAL_DEFAULT_WINDOW,
+  planFold,
+  preface,
+  readable,
+  shrink,
+  SUMMARY_SYSTEM,
+  summaryPrompt,
+  summaryWords,
+  textTokens,
+  turnStarts,
+  withSummary,
+} from './context';
+import { sessionsDir, TranscriptStore, type Session } from './session';
 import {
   ApiError,
   type ApiVariant,
@@ -65,6 +87,8 @@ export const MAX_MODELS = 60;
 const MAX_TOOLS = 128;
 /** A title is a handful of words; nothing here needs a long answer. */
 const COMPLETION_MAX_TOKENS = 256;
+/** One summarising request may take this long before the next model is asked. */
+const SUMMARY_TIMEOUT_MS = 90_000;
 
 /**
  * The capability line, added after Conch's own system text so it has the last
@@ -112,6 +136,26 @@ export interface Callable {
   ): Promise<{ text: string; isError: boolean }>;
 }
 
+/** What fitting a chat into its model's window needs to know (ADR 0055). */
+interface Fitting {
+  session: Session;
+  model: string;
+  /** The model's name, for the chat's divider. */
+  label: string;
+  system: string;
+  specs: ToolSpec[];
+  signal: AbortSignal;
+  /** Only the turn being answered stays: the provider said "too long". */
+  force?: boolean;
+  /** Keep this many newest turns, whatever the size (`/compact`). */
+  keep?: number;
+  focus?: string;
+  /** The provider had already refused it as too long. */
+  healed?: boolean;
+  /** What the summary cost, added to the turn's. */
+  spent?: (usage: Usage | undefined) => void;
+}
+
 /** A notice the engine may need to emit from inside a retry loop. */
 interface Notice {
   type: 'notice';
@@ -151,6 +195,8 @@ export function problemOf(error: unknown): TurnProblem | undefined {
     case 'timeout':
     case 'network':
       return 'unavailable';
+    case 'context':
+      return 'too-long';
     default:
       return undefined;
   }
@@ -258,6 +304,14 @@ export class ApiEngine implements Engine {
   #probing?: Promise<Capabilities>;
   #usage?: { value: EngineUsage; at: number };
   #usageProbe?: Promise<EngineUsage>;
+  /** Windows a provider named when it said "too long", smaller than its list said (ADR 0055). */
+  #learned = new Map<string, number>();
+  /** A `/compact` in progress, by session: a turn waits for it rather than racing it. */
+  #compacting = new Map<string, Promise<unknown>>();
+  /** Conch keeps the transcript, so Conch fits long chats into the window (ADR 0055). */
+  readonly context: EngineContext = {
+    compact: (input) => this.#compactNow(input),
+  };
 
   constructor(
     private readonly variant: ApiVariant,
@@ -516,7 +570,7 @@ export class ApiEngine implements Engine {
         model,
         system: input.system,
         prompt: input.prompt,
-        maxTokens: COMPLETION_MAX_TOKENS,
+        maxTokens: input.maxTokens ?? COMPLETION_MAX_TOKENS,
         signal: input.signal,
       });
     } catch (error) {
@@ -548,6 +602,16 @@ export class ApiEngine implements Engine {
       durationMs: Date.now() - startedAt,
     });
     let key: string | undefined;
+    /** What summarising cost, in this turn: the person pays for it, so it's counted. */
+    const spent = (extra: Usage | undefined) => {
+      if (!extra) return;
+      total.inputTokens += extra.inputTokens;
+      total.outputTokens += extra.outputTokens;
+      if (extra.costUsd !== undefined) {
+        cost += extra.costUsd;
+        priced = true;
+      }
+    };
 
     try {
       key = await this.#key(input.signal);
@@ -559,12 +623,16 @@ export class ApiEngine implements Engine {
       // the name of the transcript file, not a session on the provider's side.
       if (!resuming) yield { type: 'session', resumeId: sessionId, model };
 
-      const messages: WireMessage[] = resuming ? await this.#sessions.load(resuming, this.id) : [];
+      // A `/compact` still writing this chat's summary finishes first.
+      if (resuming) await this.#compacting.get(resuming)?.catch(() => undefined);
+      const session: Session = resuming
+        ? await this.#sessions.open(resuming, this.id)
+        : { messages: [], seqs: [] };
+      const listed = (await this.capabilities()).models.find((m) => m.id === model);
       // A model the provider says is blind gets a note instead of pictures it would refuse.
-      const blind =
-        input.images?.length &&
-        (await this.capabilities()).models.find((m) => m.id === model)?.images === false;
-      messages.push(
+      const blind = input.images?.length && listed?.images === false;
+      session.seqs.push(input.seq ?? null);
+      session.messages.push(
         blind
           ? this.variant.wire.userMessage(
               `${input.prompt}\n\n[The images named above couldn't be shown: ${model} can't see images. If the message depends on them, say so.]`,
@@ -596,8 +664,26 @@ export class ApiEngine implements Engine {
       const system = [input.systemAppend.trim(), note].filter(Boolean).join('\n\n');
       const save = () =>
         this.#sessions
-          .save(sessionId, { provider: this.id, model, messages })
+          .save(sessionId, {
+            provider: this.id,
+            model,
+            messages: session.messages,
+            ...(session.summary && { summary: session.summary }),
+            seqs: session.seqs,
+            ...(session.factor && { factor: session.factor }),
+          })
           .catch(() => undefined);
+      const fitting: Fitting = {
+        session,
+        model,
+        label: listed?.label ?? model,
+        system,
+        specs,
+        signal: input.signal,
+        spent,
+      };
+      /** Asked again once, by itself, after the provider said "too long" (ADR 0055). */
+      let healed = false;
 
       for (let step = 0; step < MAX_STEPS; step++) {
         if (input.signal.aborted) {
@@ -608,36 +694,61 @@ export class ApiEngine implements Engine {
         const messageId = newId('msg');
         let said = false;
         let end: Extract<WireEvent, { type: 'end' }> | undefined;
+        // The chat fits the window before every request: tool results grow it mid-turn too.
+        yield* this.#fit(fitting);
         const request: WireRequest = {
           key,
           model,
           system,
-          messages,
+          messages: withSummary(session.messages, session.summary?.text),
           // Tools go on every request in the loop, including the one carrying
           // results — leave them off and the model forgets it has any.
           tools: specs,
           effort: input.options.effort,
           signal: input.signal,
         };
-        for await (const event of this.#stream(request)) {
-          if (event.type === 'notice') {
-            yield event;
-          } else if (event.type === 'text' || event.type === 'thinking') {
-            said = true;
-            yield { type: event.type, messageId, delta: event.delta };
-          } else {
-            end = event;
+        try {
+          for await (const event of this.#stream(request)) {
+            if (event.type === 'notice') {
+              yield event;
+            } else if (event.type === 'text' || event.type === 'thinking') {
+              said = true;
+              yield { type: event.type, messageId, delta: event.delta };
+            } else {
+              end = event;
+            }
           }
+        } catch (error) {
+          // "Too long" before a word was said: fold harder and ask once more, quietly.
+          if (
+            healed ||
+            said ||
+            input.signal.aborted ||
+            !(error instanceof ApiError && error.kind === 'context')
+          )
+            throw error;
+          healed = true;
+          if (error.window) this.#learn(model, error.window);
+          yield* this.#fit({ ...fitting, force: true, healed: true });
+          await save();
+          continue;
         }
         if (!end) throw new ApiError('other', `${this.label} ended without an answer.`);
 
+        // The provider's own count corrects the estimate for this chat.
+        if (end.usage?.inputTokens)
+          session.factor = calibrate(
+            session.factor,
+            end.usage.inputTokens,
+            estimateTokens(system) + estimateTokens(specs) + estimateTokens(request.messages),
+          );
         total.inputTokens += end.usage?.inputTokens ?? 0;
         total.outputTokens += end.usage?.outputTokens ?? 0;
         if (end.usage?.costUsd !== undefined) {
           cost += end.usage.costUsd;
           priced = true;
         }
-        messages.push(end.message);
+        session.messages.push(end.message);
         if (said) yield { type: 'message-done', messageId };
 
         if (!end.toolCalls.length) {
@@ -674,7 +785,7 @@ export class ApiEngine implements Engine {
           results.push({ id: call.id, name: call.name, text, isError: status === 'error' });
           yield { type: 'tool-end', toolUseId: call.id, status, output: text };
         }
-        messages.push(...this.variant.wire.toolResults(results));
+        session.messages.push(...this.variant.wire.toolResults(results));
         await save();
         if (stopped) {
           yield { type: 'done', outcome: 'interrupted', usage: usage() };
@@ -701,6 +812,204 @@ export class ApiEngine implements Engine {
         ...(problem && { problem }),
         usage: usage(),
       };
+    }
+  }
+
+  // ── Long chats (ADR 0055) ─────────────────────────────────────────────────
+
+  /** A smaller window the provider named for a model; the smallest one heard wins. */
+  #learn(model: string, window: number) {
+    const known = this.#learned.get(model);
+    this.#learned.set(model, known ? Math.min(known, window) : window);
+  }
+
+  /** How many tokens the model reads at once: what the provider said, else a careful guess. */
+  async #window(model: string): Promise<number> {
+    const listed = (await this.capabilities().catch(() => undefined))?.models.find(
+      (m) => m.id === model,
+    )?.context;
+    const known = listed ?? (this.local ? LOCAL_DEFAULT_WINDOW : DEFAULT_WINDOW);
+    const learned = this.#learned.get(model);
+    return learned ? Math.min(learned, known) : known;
+  }
+
+  /**
+   * Fit the transcript into the model's window. Over budget, the oldest whole
+   * turns are folded into the summary — down to half the budget, so the next
+   * fold is a long way off — and a single turn bigger than everything has its
+   * longest texts shortened. `force` keeps only the turn being answered.
+   */
+  async *#fit(fitting: Fitting): AsyncGenerator<EngineEvent, void> {
+    const { session } = fitting;
+    const factor = session.factor ?? 1;
+    const count = (value: unknown) => Math.ceil(estimateTokens(value) * factor);
+    const window = await this.#window(fitting.model);
+    const { budget, low } = budgetFor({
+      window,
+      system: count(fitting.system),
+      tools: count(fitting.specs),
+    });
+    const summaryCost = session.summary
+      ? Math.ceil(textTokens(preface(session.summary.text)) * factor)
+      : 0;
+    const room = { budget: Math.max(1, budget - summaryCost), low };
+    const fold = planFold(session.messages, {
+      budget: room,
+      count,
+      ...(fitting.force && { force: true }),
+      ...(fitting.keep !== undefined && { keep: fitting.keep }),
+    });
+    if (fold) {
+      const fromSeq = session.seqs[fold.turns] ?? undefined;
+      const written = await this.#summarise({
+        ...(session.summary && { previous: session.summary.text }),
+        messages: session.messages.slice(0, fold.cut),
+        words: summaryWords(budget),
+        model: fitting.model,
+        signal: fitting.signal,
+        ...(fitting.focus && { focus: fitting.focus }),
+      });
+      fitting.spent?.(written.usage);
+      // `/compact` without a summary changes nothing: dropping is only for when it must fit.
+      if (!written.text && fitting.keep !== undefined)
+        throw new Error(
+          `${this.label} couldn’t write a summary just now, so the chat is as it was. Try again in a moment.`,
+        );
+      const turns = (session.summary?.turns ?? 0) + fold.turns;
+      session.messages = session.messages.slice(fold.cut);
+      session.seqs = session.seqs.slice(fold.turns);
+      const text = written.text ?? session.summary?.text;
+      // No model answered: the turns go without one, as they always did, and the old one stays.
+      session.summary = text ? { text, turns, at: Date.now() } : undefined;
+      yield {
+        type: 'compacted',
+        summary: text ?? '',
+        ...(fromSeq !== undefined && { fromSeq }),
+        turns,
+        model: fitting.label,
+        ...(fitting.healed && { healed: true }),
+      };
+    }
+    const summaryNow = session.summary
+      ? Math.ceil(textTokens(preface(session.summary.text)) * factor)
+      : 0;
+    const limit = Math.max(1, (budget - summaryNow) * (fitting.force ? 0.6 : 1));
+    const total = session.messages.reduce((sum, m) => sum + count(m), 0);
+    if (total > limit)
+      session.messages = shrink(session.messages, {
+        from: turnStarts(session.messages).at(-1) ?? 0,
+        budget: limit,
+        count,
+      });
+  }
+
+  /**
+   * The summary of some turns, folded into the one before: by the provider's
+   * cheapest model, else the chat's own. A model on this computer only ever
+   * uses the chat's, already in memory. Undefined when no model gave a
+   * summary worth keeping.
+   */
+  async #summarise(input: {
+    previous?: string;
+    messages: WireMessage[];
+    words: number;
+    model: string;
+    signal: AbortSignal;
+    focus?: string;
+  }): Promise<{ text?: string; usage?: Usage }> {
+    const lines = input.messages.flatMap(readable);
+    if (!lines.length) return { ...(input.previous && { text: input.previous }) };
+    const { chunks, leftOut } = chunk(lines);
+    const listed = (await this.capabilities().catch(() => undefined))?.models ?? [];
+    const cheap = this.local ? undefined : (cheapestModel(listed) ?? this.smallModel);
+    const usage: Usage = { inputTokens: 0, outputTokens: 0 };
+    let priced = false;
+    for (const model of [...new Set([cheap, input.model])]) {
+      if (!model || input.signal.aborted) continue;
+      let summary = input.previous;
+      let failed = false;
+      for (const [i, piece] of chunks.entries()) {
+        try {
+          const reply = await this.complete({
+            system: SUMMARY_SYSTEM,
+            prompt: summaryPrompt({
+              ...(summary && { previous: summary }),
+              piece,
+              words: input.words,
+              ...(input.focus && { focus: input.focus }),
+              leftOut: leftOut && i === 0,
+            }),
+            model,
+            maxTokens: input.words * 2 + 256,
+            signal: AbortSignal.any([input.signal, AbortSignal.timeout(SUMMARY_TIMEOUT_MS)]),
+          });
+          usage.inputTokens += reply.usage?.inputTokens ?? 0;
+          usage.outputTokens += reply.usage?.outputTokens ?? 0;
+          if (reply.usage?.costUsd !== undefined) {
+            usage.costUsd = (usage.costUsd ?? 0) + reply.usage.costUsd;
+            priced = true;
+          }
+          const clean = cleanSummary(reply.text);
+          if (!clean) throw new Error('Not a summary.');
+          summary = clean;
+        } catch {
+          failed = true;
+          break;
+        }
+      }
+      if (!failed && summary) return { text: summary, usage };
+    }
+    return priced || usage.inputTokens ? { usage } : {};
+  }
+
+  /** `/compact`: fold all but the newest turn now, whatever the size. */
+  async #compactNow(input: {
+    resumeId: string;
+    model?: string;
+    focus?: string;
+    signal: AbortSignal;
+  }): Promise<Compacted | undefined> {
+    const id = input.resumeId;
+    if (!TranscriptStore.valid(id)) return undefined;
+    await this.#compacting.get(id)?.catch(() => undefined);
+    const work = (async (): Promise<Compacted | undefined> => {
+      const session = await this.#sessions.open(id, this.id);
+      if (!session.messages.length) return undefined;
+      const model = await this.#model(input.model);
+      const label =
+        (await this.capabilities().catch(() => undefined))?.models.find((m) => m.id === model)
+          ?.label ?? model;
+      let found: Compacted | undefined;
+      for await (const event of this.#fit({
+        session,
+        model,
+        label,
+        system: '',
+        specs: [],
+        signal: input.signal,
+        keep: 1,
+        ...(input.focus && { focus: input.focus }),
+      }))
+        if (event.type === 'compacted') {
+          const { type: _type, healed: _healed, ...compacted } = event;
+          found = compacted;
+        }
+      if (!found) return undefined;
+      await this.#sessions.save(id, {
+        provider: this.id,
+        model,
+        messages: session.messages,
+        ...(session.summary && { summary: session.summary }),
+        seqs: session.seqs,
+        ...(session.factor && { factor: session.factor }),
+      });
+      return found;
+    })();
+    this.#compacting.set(id, work);
+    try {
+      return await work;
+    } finally {
+      if (this.#compacting.get(id) === work) this.#compacting.delete(id);
     }
   }
 

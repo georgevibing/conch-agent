@@ -19,10 +19,12 @@
 import { z } from 'zod';
 
 import type { Completion, TurnImage } from '../types';
+import { tooLong, windowIn } from './context';
 import { sseEvents } from './sse';
 import { defaultHome } from './session';
 import {
   ApiError,
+  TOO_LONG,
   type ApiDeps,
   type ApiVariant,
   type FetchLike,
@@ -157,11 +159,9 @@ export function mapError(
   if (status === 504 || type === 'timeout_error') {
     return new ApiError('timeout', 'The model took too long to answer.', { retryable: true });
   }
-  if (type === 'invalid_request_error' && /too long|exceed|context/i.test(detail)) {
-    return new ApiError(
-      'context',
-      'This conversation is longer than the model can read. Start a new chat, or pick a model with a bigger context.',
-    );
+  if (type === 'invalid_request_error' && (tooLong(detail) || /exceed|context/i.test(detail))) {
+    const window = windowIn(detail);
+    return new ApiError('context', TOO_LONG, { ...(window && { window }) });
   }
   return new ApiError('other', detail || `${LABEL} couldn’t answer that request.`);
 }
@@ -262,6 +262,7 @@ export class AnthropicWire implements Wire {
         id: entry.id,
         label: entry.display_name?.trim() || entry.id,
         description: contextLabel(entry.max_input_tokens) ?? '',
+        ...(entry.max_input_tokens ? { context: entry.max_input_tokens } : {}),
         efforts: knownEfforts(Object.keys(entry.capabilities?.effort ?? {})),
         supportsFastMode: false,
         supportsAutoMode: false,

@@ -29,8 +29,10 @@ import {
   usageFrom,
   type ChatError,
 } from './chat';
+import { tooLong, windowIn } from './context';
 import {
   ApiError,
+  TOO_LONG,
   type ApiDeps,
   type ApiVariant,
   type FetchLike,
@@ -154,11 +156,9 @@ export function mapError(
       ...(retryAfter !== undefined && { retryAfterMs: retryAfter }),
     });
   }
-  if (type === 'context_length_exceeded') {
-    return new ApiError(
-      'context',
-      'This conversation is longer than the model can read. Start a new chat, or pick a model with a bigger context.',
-    );
+  if (type === 'context_length_exceeded' || (status === 400 && tooLong(detail))) {
+    const window = windowIn(detail);
+    return new ApiError('context', TOO_LONG, { ...(window && { window }) });
   }
   if (type === 'content_policy_violation') {
     return new ApiError(
@@ -320,6 +320,7 @@ export class OpenRouterWire implements Wire {
         label: entry.name?.trim() || entry.id,
         // Chat only is the picker's badge (ADR 0050), not words here.
         description: [contextLabel(entry.context_length), cost].filter(Boolean).join(' · '),
+        ...(entry.context_length ? { context: entry.context_length } : {}),
         // Only the levels OpenRouter enumerated for this model: guessing here
         // would offer a choice the provider rejects.
         efforts: knownEfforts(entry.reasoning?.supported_efforts ?? undefined),
