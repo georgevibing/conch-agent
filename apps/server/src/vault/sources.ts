@@ -11,7 +11,10 @@
  *   memory for a few minutes; secret values are fetched for one use, then
  *   dropped (they stay in the redaction set so they can't leak into a chat).
  * - **Nothing is copied into Conch's vault** unless the person imports it.
- * - **Read-only.** Edits happen in the manager's own app.
+ * - **Read-only, but for Copy to.** Edits happen in the manager's own app.
+ *   The one write is `add`: a new item, made from one of Conch's own when the
+ *   person chooses **Copy to <manager>** (ADR 0062), its values on the
+ *   program's stdin.
  */
 import { createHash, createPrivateKey, type JsonWebKey } from 'node:crypto';
 
@@ -22,7 +25,7 @@ import type {
   VaultSource,
   VaultSourceId,
 } from '@conch/protocol';
-import { siteOf } from '@conch/protocol';
+import { isConcealed, siteOf } from '@conch/protocol';
 
 import { agentEnv, findExecutable, run, type RunResult } from '../lib/proc';
 import { parseCsv } from './importers';
@@ -60,6 +63,22 @@ export interface FullItem {
   fields: (Omit<ExternalField, 'value'> & { value: string })[];
   notes: string;
   passkeys?: PasskeyInput[];
+}
+
+/** One of Conch's own items, going into a manager through Copy to (ADR 0062). */
+export interface OutgoingItem {
+  type: VaultItemType;
+  title: string;
+  fields: { label: string; kind: VaultFieldKind; role?: VaultFieldRole; value: string }[];
+  urls: string[];
+  tags: string[];
+  notes: string;
+}
+
+/** Where in a manager a copy can go: a 1Password vault. */
+export interface SourcePlace {
+  id: string;
+  name: string;
 }
 
 export class SourceError extends Error {}
@@ -110,6 +129,13 @@ export interface PasswordSource {
    * Optional: without it, Conch asks `value` for each concealed field.
    */
   full?(ref: string, signal?: AbortSignal): Promise<FullItem>;
+  /**
+   * Make a new item from one of Conch's (Copy to, ADR 0062). Optional: a
+   * manager without it is only read. Values go on stdin, never in argv.
+   */
+  add?(item: OutgoingItem, options?: { place?: string; signal?: AbortSignal }): Promise<void>;
+  /** Where `add` can put it, from what the last list read. Cheap: never asks the program. */
+  places?(): SourcePlace[];
   /** For `password` sources: unlock with what the person typed. */
   unlockWith?(password: string): Promise<void>;
   lock?(): void;
@@ -181,6 +207,82 @@ interface OpField {
 
 const OP_ID = /^[a-z0-9]{1,64}$/;
 
+/** The category a copy of each kind becomes; one 1Password has no match for is a note. */
+const OP_CATEGORIES: Partial<Record<VaultItemType, string>> = {
+  login: 'LOGIN',
+  card: 'CREDIT_CARD',
+  identity: 'IDENTITY',
+  note: 'SECURE_NOTE',
+  apiKey: 'API_CREDENTIAL',
+  wifi: 'WIRELESS_ROUTER',
+  bank: 'BANK_ACCOUNT',
+  server: 'SERVER',
+  database: 'DATABASE',
+  license: 'SOFTWARE_LICENSE',
+  wallet: 'CRYPTO_WALLET',
+};
+
+const OP_FIELD_TYPES: Partial<Record<VaultFieldKind, string>> = {
+  secret: 'CONCEALED',
+  pin: 'CONCEALED',
+  secretText: 'CONCEALED',
+  totp: 'OTP',
+  email: 'EMAIL',
+  url: 'URL',
+  phone: 'PHONE',
+};
+
+/**
+ * One of Conch's items as 1Password's item template. A login's username and
+ * password take 1Password's own places; every other field is a field of its
+ * own, concealed when it was concealed here.
+ */
+export function toOpTemplate(item: OutgoingItem) {
+  const category = OP_CATEGORIES[item.type] ?? 'SECURE_NOTE';
+  const login = category === 'LOGIN';
+  const fields: Record<string, string>[] = [];
+  let username = false;
+  let password = false;
+  for (const f of item.fields) {
+    if (!f.value) continue;
+    if (login && f.role === 'username' && !username) {
+      username = true;
+      fields.push({
+        id: 'username',
+        type: 'STRING',
+        purpose: 'USERNAME',
+        label: 'username',
+        value: f.value,
+      });
+    } else if (login && f.role === 'password' && !password) {
+      password = true;
+      fields.push({
+        id: 'password',
+        type: 'CONCEALED',
+        purpose: 'PASSWORD',
+        label: 'password',
+        value: f.value,
+      });
+    } else
+      fields.push({ type: OP_FIELD_TYPES[f.kind] ?? 'STRING', label: f.label, value: f.value });
+  }
+  if (item.notes)
+    fields.push({
+      id: 'notesPlain',
+      type: 'STRING',
+      purpose: 'NOTES',
+      label: 'notesPlain',
+      value: item.notes,
+    });
+  return {
+    title: item.title,
+    category,
+    ...(item.tags.length && { tags: item.tags }),
+    ...(item.urls.length && { urls: item.urls.map((href, i) => ({ href, primary: i === 0 })) }),
+    fields,
+  };
+}
+
 export class OnePasswordSource implements PasswordSource {
   readonly id = '1password' as const;
   readonly name = '1Password';
@@ -190,13 +292,17 @@ export class OnePasswordSource implements PasswordSource {
 
   constructor(private readonly exec: Exec = realExec) {}
 
-  async #op(args: string[], signal?: AbortSignal): Promise<RunResult> {
+  async #op(args: string[], signal?: AbortSignal, input?: string): Promise<RunResult> {
     const op = await this.exec.find('op');
     if (!op)
       throw new SourceError(
         'Install the 1Password command line tool to see your 1Password items here.',
       );
-    return this.exec.run(op, args, { timeout: UNLOCK_WAIT_MS, ...(signal && { signal }) });
+    return this.exec.run(op, args, {
+      timeout: UNLOCK_WAIT_MS,
+      ...(signal && { signal }),
+      ...(input !== undefined && { input }),
+    });
   }
 
   async state(): Promise<Pick<VaultSource, 'state' | 'message'>> {
@@ -304,6 +410,35 @@ export class OnePasswordSource implements PasswordSource {
     return result.stdout.trim();
   }
 
+  places(): SourcePlace[] {
+    const seen = new Map<string, string>();
+    for (const item of this.#list?.items ?? []) {
+      const vault = /^op_([a-z0-9]+)_/.exec(item.ref)?.[1];
+      if (vault && !seen.has(vault)) seen.set(vault, item.container ?? 'Vault');
+    }
+    return [...seen].map(([id, name]) => ({ id, name }));
+  }
+
+  async add(item: OutgoingItem, options: { place?: string; signal?: AbortSignal } = {}) {
+    if (options.place !== undefined && !OP_ID.test(options.place))
+      throw new SourceError('That 1Password vault isn’t known.');
+    // The item as 1Password's own JSON template, piped in: `-` reads it from stdin.
+    const result = await this.#op(
+      [
+        'item',
+        'create',
+        ...(options.place ? ['--vault', options.place] : []),
+        '--format',
+        'json',
+        '-',
+      ],
+      options.signal,
+      JSON.stringify(toOpTemplate(item)),
+    );
+    if (result.code !== 0) throw new SourceError(this.#explain(result.stderr));
+    this.#list = undefined;
+  }
+
   #explain(stderr: string): string {
     const text = firstLine(stderr).toLowerCase();
     if (/lock|sign|authoriz|session|biometric/.test(text))
@@ -344,6 +479,60 @@ interface BwItem {
 const BW_ID = /^[0-9a-f-]{36}$/i;
 
 /**
+ * One of Conch's items as Bitwarden's item JSON: a login or a card in its own
+ * places, anything else a secure note. The rest are custom fields, hidden
+ * when they were concealed here.
+ */
+export function toBitwardenItem(item: OutgoingItem) {
+  const type = item.type === 'login' ? 1 : item.type === 'card' ? 3 : 2;
+  const taken = new Set<VaultFieldRole>();
+  const own = (role: VaultFieldRole) => {
+    if (taken.has(role)) return undefined;
+    const found = item.fields.find((f) => f.role === role && f.value);
+    if (found) taken.add(role);
+    return found;
+  };
+  const login =
+    type === 1
+      ? {
+          username: own('username')?.value ?? null,
+          password: own('password')?.value ?? null,
+          totp: own('totp')?.value ?? null,
+          uris: item.urls.map((uri) => ({ uri, match: null })),
+        }
+      : null;
+  let card = null;
+  if (type === 3) {
+    const expiry = /^(\d{1,2})\s*\/\s*(\d{2,4})$/.exec(own('expiry')?.value.trim() ?? '');
+    card = {
+      cardholderName: own('cardholder')?.value ?? null,
+      number: own('cardNumber')?.value ?? null,
+      code: own('cvv')?.value ?? null,
+      expMonth: expiry?.[1] ?? null,
+      expYear: expiry?.[2] ? (expiry[2].length === 2 ? `20${expiry[2]}` : expiry[2]) : null,
+      brand: null,
+    };
+  }
+  const used = new Set(
+    [...taken].map((role) => item.fields.find((f) => f.role === role && f.value)),
+  );
+  return {
+    type,
+    name: item.title,
+    notes: item.notes || null,
+    favorite: false,
+    folderId: null,
+    reprompt: 0,
+    login,
+    card,
+    ...(type === 2 && { secureNote: { type: 0 } }),
+    fields: item.fields
+      .filter((f) => f.value && !used.has(f))
+      .map((f) => ({ name: f.label, value: f.value, type: isConcealed(f.kind) ? 1 : 0 })),
+  };
+}
+
+/**
  * Bitwarden through `bw`. Unlocking gives a session key, kept in memory only
  * (never written, never logged) and passed back in `BW_SESSION`.
  */
@@ -357,7 +546,12 @@ export class BitwardenSource implements PasswordSource {
 
   constructor(private readonly exec: Exec = realExec) {}
 
-  async #bw(args: string[], extra: Record<string, string> = {}, signal?: AbortSignal) {
+  async #bw(
+    args: string[],
+    extra: Record<string, string> = {},
+    signal?: AbortSignal,
+    input?: string,
+  ) {
     const bw = await this.exec.find('bw');
     if (!bw)
       throw new SourceError(
@@ -371,6 +565,7 @@ export class BitwardenSource implements PasswordSource {
         ...extra,
       }),
       ...(signal && { signal }),
+      ...(input !== undefined && { input }),
     });
   }
 
@@ -415,6 +610,18 @@ export class BitwardenSource implements PasswordSource {
 
   lock(): void {
     this.#session = undefined;
+    this.#list = undefined;
+  }
+
+  async add(item: OutgoingItem, options: { signal?: AbortSignal } = {}) {
+    if (!this.#session) throw new SourceError('Unlock Bitwarden first.');
+    // `bw create item` reads the encoded item from stdin when it isn't an argument.
+    const encoded = Buffer.from(JSON.stringify(toBitwardenItem(item))).toString('base64');
+    const result = await this.#bw(['create', 'item'], {}, options.signal, encoded);
+    if (result.code !== 0) {
+      if (/locked|session/i.test(result.stderr)) this.lock();
+      throw new SourceError(firstLine(result.stderr) || 'Bitwarden didn’t take it.');
+    }
     this.#list = undefined;
   }
 

@@ -528,10 +528,14 @@ Bitwarden, KeePassXC, Proton Pass, Dashlane, Keeper and the macOS Keychain:
      environment variable, **never as an argument**, and is kept in memory
      only.
    - The `Exec` seam lets a test pretend to be the program.
-3. **Read-only.** Edits happen in the manager's own app. Items come into
-   Conch's vault only when the person imports a file or chooses **Copy into
-   Conch** (`vault/transfer.ts`: one way, one item at a time, through the
-   program, never an export file on disk).
+3. **Read-only, but for Copy to.** Edits happen in the manager's own app. Items
+   come into Conch's vault only when the person imports a file or chooses **Copy
+   into Conch** (`vault/transfer.ts`: one way, one item at a time, through the
+   program, never an export file on disk). The one write is `add` (optional,
+   ADR 0062): a new item made from one of Conch's own when the person chooses
+   **Copy to <manager>**, its values on the program's stdin, behind a recent
+   sign-in, with no tool for the assistant. Offer it only when the program takes
+   a new item on stdin.
 4. **Ids are id-safe** (`xx_…`, at most 128 characters of `[A-Za-z0-9_-]`) and
    map back to the item without guessing.
 5. **Reads and fills follow the vault's rules unchanged** (`readPolicy`, `fillPolicy`, an Unlock card when locked): only on the item's own sites

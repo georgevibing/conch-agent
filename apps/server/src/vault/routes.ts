@@ -15,6 +15,8 @@ import {
   TotpCode,
   TotpRequest,
   UnlockSourceBody,
+  VaultCopyOutBody,
+  VaultCopyOutResult,
   VaultIdsBody,
   VaultItemDetail,
   VaultList,
@@ -341,6 +343,26 @@ export function registerVaultRoutes(
   app.post<{ Params: { jobId: string } }>('/api/vault/transfers/:jobId/cancel', async (request) => {
     vault.cancelTransfer(request.params.jobId);
     return { ok: true };
+  });
+
+  // ── Copy to: Conch's own items, made as new items in another manager (ADR 0062) ──
+  // It sends passwords to another program: a recent sign-in, as for an export.
+  app.post<{ Params: { id: string } }>('/api/vault/sources/:id/copy', async (request, reply) => {
+    const id = sourceId(reply, request.params.id);
+    const body = id && parse(VaultCopyOutBody, request.body ?? {}, reply);
+    if (!id || !body) return;
+    if (id === 'system')
+      return reply.code(404).send({ error: 'not-found', message: 'Nothing can be copied there.' });
+    if (!verify(request, reply)) return;
+    return guarded(reply, async () =>
+      VaultCopyOutResult.parse(
+        await vault.copyOut(id, {
+          ids: body.ids,
+          ...(body.place && { place: body.place }),
+          skipDuplicates: body.skipDuplicates,
+        }),
+      ),
+    );
   });
 
   app.patch<{ Params: { id: string } }>('/api/vault/sources/:id/sync', async (request, reply) => {

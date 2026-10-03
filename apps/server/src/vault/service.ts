@@ -32,6 +32,7 @@ import {
   type VaultStatus,
   type VaultItemType,
   type VaultRequest,
+  type VaultCopyOutResult,
 } from '@conch/protocol';
 import { z } from 'zod';
 
@@ -52,6 +53,7 @@ import {
   KeeperSource,
   KeychainSource,
   OnePasswordSource,
+  type OutgoingItem,
   type PasswordSource,
   ProtonPassSource,
   realExec,
@@ -490,6 +492,8 @@ export class VaultService {
         name: source.name,
         ...state,
         writable: false,
+        ...(source.add && { accepts: true }),
+        ...(source.add && source.places && { places: source.places() }),
         ...(source.need && { need: source.need }),
         unlock: source.unlock,
         ...(source.available === false && { available: false }),
@@ -1388,6 +1392,70 @@ export class VaultService {
 
   cancelTransfer(jobId: string) {
     this.transfers.cancel(jobId);
+  }
+
+  /**
+   * Copy to (ADR 0062): some of Conch's own items, made as new items in
+   * another password manager through its own program. Their values go on
+   * the program's stdin, one item at a time; nothing is written in between.
+   * Only a person asks for this (a route behind a recent sign-in); the
+   * assistant has no tool for it.
+   */
+  async copyOut(
+    id: VaultSourceId,
+    options: { ids: string[]; place?: string; skipDuplicates: boolean },
+  ): Promise<VaultCopyOutResult> {
+    const records = await this.#records();
+    const source = await this.#readySource(id);
+    if (!source.add)
+      throw new VaultError(
+        'invalid',
+        `Conch can’t add items to ${source.name}. Export them from Conch and import them there.`,
+      );
+    const wanted = new Set(options.ids);
+    const chosen = records.filter((r) => wanted.has(r.id) && !r.deletedAt);
+    if (!chosen.length) throw new VaultError('not-found', 'Those items aren’t in Conch any more.');
+    // What it already holds, by site and account: names only, from its list.
+    const listed = options.skipDuplicates
+      ? await source.list().catch((error: Error) => {
+          throw new VaultError('unavailable', error.message);
+        })
+      : [];
+    const held = new Set(
+      listed.map((i) => `${siteOf(i.urls[0] ?? '') ?? i.title.toLowerCase()}\0${i.subtitle}`),
+    );
+    const result: VaultCopyOutResult = { copied: 0, skipped: 0, failed: [] };
+    for (const r of chosen) {
+      const user = r.fields.find((f) => f.role === 'username')?.value ?? '';
+      const site = siteOf(r.urls[0] ?? '') ?? r.title.toLowerCase();
+      if (options.skipDuplicates && (r.origin?.source === id || held.has(`${site}\0${user}`))) {
+        result.skipped++;
+        continue;
+      }
+      const item: OutgoingItem = {
+        type: r.type,
+        title: r.title,
+        fields: r.fields.map((f) => ({
+          label: f.label,
+          kind: f.kind,
+          ...(f.role && { role: f.role }),
+          value: f.value,
+        })),
+        urls: r.urls,
+        tags: r.tags,
+        notes: r.notes,
+      };
+      try {
+        await source.add(item, { ...(options.place && { place: options.place }) });
+        result.copied++;
+      } catch (error) {
+        result.failed.push({ title: r.title, message: (error as Error).message.slice(0, 200) });
+        // Locked part way: the rest would fail the same way.
+        if (/locked|unlock/i.test((error as Error).message)) break;
+      }
+    }
+    if (result.copied) this.#changed();
+    return result;
   }
 
   async #saveSync(id: VaultSourceId, state: SyncState) {
