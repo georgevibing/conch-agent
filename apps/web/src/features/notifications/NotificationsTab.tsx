@@ -36,8 +36,8 @@ export function usePush() {
 const TOPICS: { key: keyof PushPrefs; label: string; description?: string }[] = [
   {
     key: 'approvals',
-    label: 'When it needs your OK',
-    description: 'With Deny right on the notification.',
+    label: 'When it needs you',
+    description: 'An OK to give, with Deny right on the notification, or a question to answer.',
   },
   {
     key: 'replies',

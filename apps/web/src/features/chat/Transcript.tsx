@@ -21,6 +21,7 @@ import {
 import { BrowserApprovalItem, BrowserTrailItem, HandoffItem } from '../browser/ChatCards';
 import { IntegrationIssue, IntegrationSuggestion } from '../integrations/ChatBits';
 import { NeedsAppsItem } from './NeedsApps';
+import { QuestionItem } from '../questions/QuestionItem';
 import { HeldItem, RoutedItem } from './OfflineBits';
 import { ArtifactChatCard } from '../artifacts/ArtifactChatCard';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
@@ -211,6 +212,7 @@ export function Transcript({
       (last?.kind === 'browser' && last.step.status !== 'running') ||
       (last?.kind === 'handoff' && last.handoff.state !== 'waiting') ||
       (last?.kind === 'permission' && Boolean(last.decision)) ||
+      (last?.kind === 'question' && last.answer !== undefined) ||
       (last?.kind === 'assistant' && last.done));
 
   return (
@@ -270,6 +272,14 @@ export function Transcript({
                 item={block.item}
                 name={name}
                 onRespond={(d) => onRespond((block.item as { id: string }).id, d)}
+              />
+            )}
+            {block.item?.kind === 'question' && (
+              <QuestionItem
+                item={block.item}
+                conversationId={conversationId}
+                name={name}
+                waiting={running}
               />
             )}
             {block.item?.kind === 'taint' && (

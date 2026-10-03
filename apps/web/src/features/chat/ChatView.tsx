@@ -32,7 +32,12 @@ import { canPickHere, pickPath } from '../../lib/pick';
 import { useUi } from '../../app/ui';
 import { greeting } from '../../lib/time';
 import { useLive } from '../../live/LiveProvider';
-import { emptyView, lastUserMessage, type ConversationView } from '../../live/reducer';
+import {
+  emptyView,
+  lastUserMessage,
+  pendingQuestion,
+  type ConversationView,
+} from '../../live/reducer';
 import { NEW, useLiveStore } from '../../live/store';
 import { useSlashCommands } from '../commands/useSlashCommands';
 import { ArchivedBanner } from '../archive/ArchivedBanner';
@@ -318,6 +323,8 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   const canTalk = typeof window !== 'undefined' && window.isSecureContext && canSpeak();
   const engine = app?.engine;
   const running = view.status === 'running' || view.status === 'awaiting-permission';
+  // A question waits (ADR 0055): what's typed here answers it.
+  const asking = running && Boolean(pendingQuestion(view));
   const isEmpty = view.items.length === 0 && pending.length === 0;
 
   useEffect(() => {
@@ -555,13 +562,16 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
         onFiles={(files) => void attachments.addFiles(files)}
         onLongPaste={attachments.addPaste}
         foldPaste={shouldFoldPaste}
-        canSubmitEmpty={attachments.ready.length > 0}
+        canSubmitEmpty={attachments.ready.length > 0 && !asking}
+        allowSubmitWhileRunning={asking}
         sendBlocked={
-          attachments.uploading
-            ? 'Waiting for attachments to upload…'
-            : attachments.failed
-              ? 'Remove or retry the attachment that didn’t upload'
-              : undefined
+          asking && attachments.ready.length
+            ? 'Answer the question first, then send your files'
+            : attachments.uploading
+              ? 'Waiting for attachments to upload…'
+              : attachments.failed
+                ? 'Remove or retry the attachment that didn’t upload'
+                : undefined
         }
         onTextareaKeyDown={(e) => {
           if (e.key === 'Enter' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
@@ -577,9 +587,11 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
         onStop={() => live.interrupt(conversationId)}
         running={running || pending.length > 0}
         placeholder={
-          running || pending.length > 0
-            ? `${name} is working…`
-            : `Message ${name}, or type / for commands`
+          asking
+            ? 'Answer above, or type it here'
+            : running || pending.length > 0
+              ? `${name} is working…`
+              : `Message ${name}, or type / for commands`
         }
         label={`Message ${name}`}
         actions={
