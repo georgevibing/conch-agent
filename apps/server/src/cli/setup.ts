@@ -242,32 +242,7 @@ async function ownAddress(deps: SetupDeps, args: Args, asking: boolean): Promise
   }
 
   // 2. Conch may answer on ports 80 and 443.
-  if (!(await deps.ports.allowed())) {
-    ui.blank();
-    ui.say('Conch runs as you, never as root, so it needs one permission to answer on');
-    ui.say('the web’s ports (80 and 443). Only Conch’s own copy of Node gets it.');
-    const node = await working(ui, 'Making sure Conch has its own Node', () =>
-      deps.ports.privateNode(),
-    );
-    const command = await deps.ports.command(node);
-    ui.command(command);
-    if (!asking || !(await prompts.confirm('Run it now? It asks for your password once.', true))) {
-      ui.hint(`Run it yourself, then ${deps.conch(`setup --domain ${name}`)} again.`);
-      return false;
-    }
-    if (!(await deps.sudo(command))) {
-      ui.error('That didn’t work, so Conch can’t answer on those ports yet.');
-      ui.hint(`Run the command above yourself, then ${deps.conch('setup')} again.`);
-      return false;
-    }
-    const back = await working(ui, 'Starting Conch again with its new permission', () =>
-      deps.gateway.restartOn(node),
-    );
-    if (!back) {
-      ui.hint(`Start it by hand to see why: ${deps.conch('background on')}`);
-      return false;
-    }
-  }
+  if (!(await deps.ports.allowed()) && !(await grantPorts(deps, name, asking))) return false;
 
   // 3. This server's firewall lets them in.
   const firewall = await deps.firewall();
@@ -285,10 +260,17 @@ async function ownAddress(deps: SetupDeps, args: Args, asking: boolean): Promise
   ui.blank();
   ui.hint('Conch gets its certificate from Let’s Encrypt, free and renewed by itself.');
   ui.hint('Their terms: https://letsencrypt.org/repository/');
+  let granted = false;
   for (;;) {
     const result = await connect(deps, name);
     if (result.state === 'ready') break;
     const problem = result.problem;
+    // Conch runs on a Node that may not use the ports after all (another copy, say): fix that, once.
+    if (problem?.kind === 'ports-privilege' && !granted) {
+      granted = true;
+      if (await grantPorts(deps, name, asking)) continue;
+      return false;
+    }
     ui.error(problem?.message ?? 'Conch couldn’t answer at that address yet.');
     if (problem?.command) ui.command(problem.command);
     const again =
@@ -302,6 +284,36 @@ async function ownAddress(deps: SetupDeps, args: Args, asking: boolean): Promise
 
   // 5. Make it yours.
   return makeItYours(deps, `https://${name}`);
+}
+
+/**
+ * Linux keeps ports below 1024 for root. Conch's own copy of Node gets the one
+ * capability it needs (asking once for `sudo`), and Conch starts again on it.
+ */
+async function grantPorts(deps: SetupDeps, name: string, asking: boolean): Promise<boolean> {
+  const { ui, prompts } = deps;
+  ui.blank();
+  ui.say('Conch runs as you, never as root, so it needs one permission to answer on');
+  ui.say('the web’s ports (80 and 443). Only Conch’s own copy of Node gets it.');
+  const node = await working(ui, 'Making sure Conch has its own Node', () =>
+    deps.ports.privateNode(),
+  );
+  const command = await deps.ports.command(node);
+  ui.command(command);
+  if (!asking || !(await prompts.confirm('Run it now? It asks for your password once.', true))) {
+    ui.hint(`Run it yourself, then ${deps.conch(`setup --domain ${name}`)} again.`);
+    return false;
+  }
+  if (!(await deps.sudo(command))) {
+    ui.error('That didn’t work, so Conch can’t answer on those ports yet.');
+    ui.hint(`Run the command above yourself, then ${deps.conch('setup')} again.`);
+    return false;
+  }
+  const back = await working(ui, 'Starting Conch again with its new permission', () =>
+    deps.gateway.restartOn(node),
+  );
+  if (!back) ui.hint(`Start it by hand to see why: ${deps.conch('background on')}`);
+  return back;
 }
 
 /** Set the address and follow it until it's ready or something's in the way. */

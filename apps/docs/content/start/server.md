@@ -50,3 +50,4 @@ New devices need your approval from the start, so a password someone learns gets
 - **Already run a web server there?** If something else answers on ports 80 and 443, Conch says which program it is. Put Conch behind it instead: see [Behind a reverse proxy](../security/reverse-proxy.md).
 - **Rather keep it private?** Choose **Only from my own devices** instead. Conch then uses [Tailscale](./phone.md), and nothing is opened to the internet.
 - **Change it later** with `conch setup`, or in **Settings → Security → Your address**.
+- **Setting up many servers?** Add `--domain conch.yourname.com` to the install line, and Conch skips the first two questions.

@@ -171,6 +171,26 @@ describe('an address of my own', () => {
     );
   });
 
+  it('gets the port permission when Conch finds it missing after all, then carries on', async () => {
+    const status = vi
+      .fn<SetupDeps['gateway']['address']['status']>()
+      .mockResolvedValueOnce({
+        state: 'problem',
+        name: NAME,
+        problem: { kind: 'ports-privilege', message: 'Conch may not answer on ports 80 and 443.' },
+      })
+      .mockResolvedValue(ready);
+    const base = deps().deps;
+    const t = deps(
+      { gateway: { ...base.gateway, address: { set: base.gateway.address.set, status } } },
+      { choose: 'address', ask: [NAME], confirm: [true] },
+    );
+    expect(await setup([], t.deps)).toBe(0);
+    expect(t.deps.sudo).toHaveBeenCalledWith(expect.stringContaining('setcap'));
+    expect(t.deps.gateway.restartOn).toHaveBeenCalled();
+    expect(t.text()).not.toContain('Conch may not answer on ports 80 and 443.');
+  });
+
   it('offers to open the server’s firewall', async () => {
     const t = deps(
       {
