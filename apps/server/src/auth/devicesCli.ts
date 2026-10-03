@@ -3,9 +3,9 @@
  * devices. The terminal of the computer running Conch is where approving
  * happens: having it is the proof that it's you.
  *
- * Modelled on OpenClaw's `devices list | approve | reject | remove | rename`.
- * With no code, `approve` shows who is waiting and asks, or waits for the
- * device to ask.
+ * Subcommands: `list`, `approve`, `reject`, `remove` and `rename`. With no
+ * code, `approve` shows who is waiting and asks, or waits for the device to
+ * ask.
  */
 import {
   formatApprovalCode,

@@ -11,19 +11,19 @@ provider key in `secrets.json` (owner-only, in plain text) or a 1Password
 reference. Someone without 1Password had nowhere to keep a password, no way to
 let the assistant sign in for them, and nothing in their backups.
 
-How other agents do it (read in their code, October 2026):
+How other agents store secrets (from their public code, October 2026):
 
 - **Hermes Agent** keeps provider keys in `~/.hermes/.env` (0600), and has a
-  Fernet vault with its key file beside it. Ideas worth borrowing: the model
-  only sees handles, logins are bound to a site, payment fills ask, and it
-  redacts by exact value.
-- **OpenClaw** keeps secrets in SQLite. Ideas worth borrowing: its `secrets` tool lets the agent _request_ a value
-  through a card (with no way to write one itself), shows the site by host,
-  and passes the agent stand-ins rather than keys.
+  Fernet vault with its key file beside it. The model sees only handles, logins
+  are bound to a site, payment fills ask, and values are redacted exactly.
+- **OpenClaw** keeps secrets in SQLite. Its `secrets` tool lets the agent
+  _request_ a value through a card (with no way to write one itself), shows the
+  site by host, and passes the agent stand-ins rather than keys.
 - **Claude Code** uses the macOS Keychain (a 0600 file elsewhere). **Codex**
   uses an `auth.json` file by default, or the OS keyring.
 
-Conch builds on these ideas and adds:
+Conch's vault has the common safeguards (the model sees handles, a login
+belongs to its site, filling asks), and also:
 
 - the key lives in the keychain, never next to the vault;
 - names and sites are encrypted too;

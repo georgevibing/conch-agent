@@ -12,7 +12,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Unified diff for file edits made by the agent: old/new gutters, tinted add/remove rows with an edge marker, hunk headers, and a GitHub-style change bar.',
+          'Unified diff for file edits made by the agent: old/new gutters, tinted add/remove rows with an edge marker, hunk headers, and a bar of added and removed blocks.',
       },
     },
   },
