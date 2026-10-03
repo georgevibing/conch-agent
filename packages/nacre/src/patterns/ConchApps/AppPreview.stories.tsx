@@ -107,6 +107,37 @@ export const Adding: Story = { args: { busy: 'plant-diary' } };
 
 export const Added: Story = { args: { added: ['plant-diary'] } };
 
+/** A file of an earlier version than the one you have: said as it is, never as new. */
+export const EarlierVersion: Story = {
+  args: {
+    apps: [
+      {
+        ...plant,
+        installed: '1.2.0',
+        changes: { from: '1.2.0', to: '1.0.0' },
+        words: { ...plant.words, changes: ['No longer: Weekly report'] },
+      },
+    ],
+  },
+};
+
+/** It has your app's name but comes from someone else: said before you add it. */
+export const ReplacesAnother: Story = {
+  args: {
+    apps: [
+      {
+        ...plant,
+        warnings: [
+          {
+            message:
+              'It replaces the Plant diary you have, which came from someone else. Its settings and keys don’t carry over.',
+          },
+        ],
+      },
+    ],
+  },
+};
+
 /** You have 1.0.0: Update, with the new reach first. */
 export const Update: Story = {
   args: {

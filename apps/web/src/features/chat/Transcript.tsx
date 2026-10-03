@@ -26,6 +26,7 @@ import { QuestionItem } from '../questions/QuestionItem';
 import { PastChatsItem } from './PastChatsItem';
 import { HeldItem, RoutedItem } from './OfflineBits';
 import { ArtifactChatCard } from '../artifacts/ArtifactChatCard';
+import { AppOfferItem, AppShareItem } from '../conchapps/ChatCards';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
 import { ChatFiles, turnChanges } from '../undo/ChatFiles';
 import { TaskChatCard } from '../tasks/TaskChatCard';
@@ -103,8 +104,15 @@ function blocks(items: TranscriptItem[]): Block[] {
   return out;
 }
 
-/** An offer waits under the reply it came with; one that was taken is where the chat carried on. */
-const heldOffer = (item: TranscriptItem) => item.kind === 'offer' && item.resolution !== 'accepted';
+/**
+ * An offer waits under the reply it came with; one that was taken is where
+ * the chat carried on. An app's card (ADR 0061) is logged before the words
+ * that introduce it, and belongs under them too.
+ */
+const heldOffer = (item: TranscriptItem) =>
+  (item.kind === 'offer' && item.resolution !== 'accepted') ||
+  item.kind === 'conch-app-offer' ||
+  item.kind === 'conch-app-share';
 
 /**
  * An offer is logged as the turn starts (or mid-reply), but it belongs under
@@ -411,6 +419,17 @@ export function Transcript({
                 }
                 focusComposer={focusComposer}
               />
+            )}
+            {block.item?.kind === 'conch-app-offer' && (
+              <AppOfferItem
+                item={block.item}
+                conversationId={conversationId}
+                onSend={onReply ?? onSend}
+                className={styles.suggestion}
+              />
+            )}
+            {block.item?.kind === 'conch-app-share' && (
+              <AppShareItem item={block.item} className={styles.suggestion} />
             )}
             {block.item?.kind === 'turn-end' && (
               <TurnEnd

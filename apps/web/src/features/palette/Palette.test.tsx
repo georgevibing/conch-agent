@@ -1211,6 +1211,94 @@ describe('Palette search', () => {
     expect(screen.getByTestId('where')).toHaveTextContent('/apps/1password');
   });
 
+  it('makes an app, adds one from a link, and opens apps you made and their pages (ADR 0061)', async () => {
+    const user = userEvent.setup();
+    const page = { id: 'plants', title: 'Plants', file: 'pages/plants.html' };
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'GET /api/integrations': () => ({
+        catalog: [],
+        providers: [],
+        integrations: [
+          {
+            id: 'capp_plant-diary',
+            conchApp: 'plant-diary',
+            name: 'Plant diary',
+            server: 'app_plant_diary',
+            transport: { type: 'host', how: 'Runs sealed off on this computer' },
+            auth: 'none',
+            enabled: true,
+            policy: 'ask-writes',
+            health: { state: 'ok', checkedAt: 1 },
+            tools: [],
+            values: {},
+            secrets: [],
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        ],
+      }),
+      'GET /api/conch-apps': () => ({
+        apps: [
+          {
+            id: 'plant-diary',
+            integrationId: 'capp_plant-diary',
+            manifest: {
+              conch: 1,
+              id: 'plant-diary',
+              name: 'Plant diary',
+              tagline: 'When you watered what',
+              description: '',
+              version: '1.0.0',
+              icon: { glyph: 'leaf', color: 'green' },
+              kind: 'personal',
+              pages: [page],
+              reaches: [],
+              settings: [],
+              instructions: '',
+              examples: [],
+            },
+            tools: [],
+            source: { kind: 'made' },
+            signature: { state: 'unsigned' },
+            hash: 'h',
+            addedAt: 1,
+            updatedAt: 1,
+          },
+        ],
+      }),
+    });
+    renderApp(
+      <>
+        <Palette />
+        <Routes>
+          <Route path="*" element={<Where />} />
+        </Routes>
+      </>,
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'make an app');
+    await user.click(await screen.findByRole('option', { name: /^Make an app/ }));
+    expect(screen.getByTestId('where')).toHaveTextContent('/apps?add=describe');
+
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'github');
+    await user.click(await screen.findByRole('option', { name: /^Add an app from a link/ }));
+    expect(screen.getByTestId('where')).toHaveTextContent('/apps?add=link');
+
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'plants');
+    await user.click(await screen.findByRole('option', { name: /Plant diary — Plants/ }));
+    expect(screen.getByTestId('where')).toHaveTextContent('/apps/capp_plant-diary/plants');
+
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'plant diary');
+    await user.click(await screen.findByRole('option', { name: /^Plant diary\s*Open$/ }));
+    expect(screen.getByTestId('where')).toHaveTextContent('/apps/capp_plant-diary');
+  });
+
   it('finds Gmail, Calendar and Drive as apps: open one that’s connected, connect the others', async () => {
     const user = userEvent.setup();
     const google = (id: string, name: string) => ({

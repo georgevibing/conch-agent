@@ -126,7 +126,13 @@ function carriedOn(offerId = 'of_1'): ConversationEvent[] {
 }
 
 function open(
-  options: { muted?: string[]; route?: string; integrations?: Integration[]; skill?: Skill } = {},
+  options: {
+    muted?: string[];
+    route?: string;
+    integrations?: Integration[];
+    skill?: Skill;
+    extra?: Record<string, (body: unknown) => unknown>;
+  } = {},
 ) {
   let list: IntegrationsList = {
     catalog: [linear],
@@ -156,6 +162,7 @@ function open(
         .mutedSuggestions;
       return appState({ preferences: { ...appState().preferences, mutedSuggestions: muted } });
     },
+    ...options.extra,
   });
   const popup = { closed: false, location: { href: '' }, focus: vi.fn(), close: vi.fn() };
   vi.stubGlobal(
@@ -243,6 +250,87 @@ describe('offers in the chat (ADR 0060)', () => {
     await waitFor(() => expect(accepted(calls)).toHaveLength(1));
     // The address is tidied.
     await waitFor(() => expect(where()).toBe('/c/c1'));
+  });
+
+  it('a Conch app you switched off turns on right here, and the chat carries on (ADR 0061)', async () => {
+    const tally = (enabled: boolean): Integration => ({
+      id: 'capp_tally',
+      conchApp: 'tally',
+      name: 'Tally',
+      server: 'app_tally',
+      transport: { type: 'host', how: 'Runs sealed off on this computer' },
+      auth: 'none',
+      enabled,
+      policy: 'ask-writes',
+      health: enabled ? { state: 'ok', checkedAt: 2 } : { state: 'off', action: 'turn-on' },
+      tools: [],
+      values: {},
+      secrets: [],
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const { calls, push } = open({
+      integrations: [tally(false)],
+      extra: {
+        'PATCH /api/integrations/capp_tally': () => tally(true),
+        'GET /api/conch-apps': () => ({
+          apps: [
+            {
+              id: 'tally',
+              integrationId: 'capp_tally',
+              manifest: {
+                conch: 1,
+                id: 'tally',
+                name: 'Tally',
+                tagline: 'Counts things',
+                description: '',
+                version: '1.0.0',
+                icon: { glyph: 'calculator', color: 'teal' },
+                kind: 'personal',
+                pages: [],
+                reaches: [],
+                settings: [],
+                instructions: '',
+                examples: [],
+              },
+              tools: [],
+              source: { kind: 'made' },
+              signature: { state: 'unsigned' },
+              hash: 'h',
+              addedAt: 1,
+              updatedAt: 1,
+            },
+          ],
+        }),
+      },
+    });
+    await waitFor(() => expect(FakeSocket.last).toBeDefined());
+    push(
+      turn(
+        offer({
+          target: 'capp_tally',
+          name: 'Tally',
+          description: 'Count things for you.',
+          why: undefined,
+          color: undefined,
+        }),
+      ),
+    );
+    const card = await screen.findByRole('group', { name: 'Tally is off' });
+    expect(within(card).queryByRole('button', { name: /Connect/ })).toBeNull();
+    await userEvent.click(within(card).getByRole('button', { name: 'Turn on Tally' }));
+    await waitFor(() =>
+      expect(calls).toContainEqual(
+        expect.objectContaining({
+          method: 'PATCH',
+          path: '/api/integrations/capp_tally',
+          body: { enabled: true },
+        }),
+      ),
+    );
+    // No catalog dialog: it's on, so the chat carries on, once.
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(accepted(calls)).toHaveLength(1));
   });
 
   it('connected elsewhere, it waits for one press to carry on', async () => {

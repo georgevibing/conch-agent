@@ -20,12 +20,14 @@ export function updatesBusy(status: UpdatesStatus | undefined): boolean {
   );
 }
 
-/** How many updates wait: Conch's own counts as one, each program as one. */
+/** How many updates wait: Conch's own counts as one, each program and each app as one. */
 export function updatesWaiting(status: UpdatesStatus | undefined): number {
   if (!status) return 0;
   return (
     (status.conch.behind > 0 ? 1 : 0) +
-    status.programs.filter((program) => program.available).length
+    status.programs.filter((program) => program.available).length +
+    // Apps you added with a newer version (ADR 0061): each counts as one.
+    (status.apps?.length ?? 0)
   );
 }
 

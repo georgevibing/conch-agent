@@ -289,8 +289,74 @@ describe('CommunityApps', () => {
   });
 });
 
+describe('AppPreview of an earlier version', () => {
+  it('says so, and never calls it new', () => {
+    renderNacre(
+      <AppPreview
+        state="ready"
+        looking="a file"
+        apps={[
+          {
+            ...plant,
+            installed: '1.2.0',
+            changes: { from: '1.2.0', to: '1.0.0' },
+            words: { ...plant.words, changes: ['No longer: Weekly report'] },
+          },
+        ]}
+        onAdd={() => {}}
+      />,
+    );
+    expect(screen.getByText('You have a newer version, 1.2.0.')).toBeInTheDocument();
+    expect(screen.getByText('How 1.0.0 is different')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Use Plant diary 1.0.0' })).toHaveTextContent(
+      'Use this version',
+    );
+  });
+});
+
+describe('AppPreview warnings', () => {
+  it('says plainly when it replaces an app from another maker', async () => {
+    const { container } = renderNacre(
+      <AppPreview
+        state="ready"
+        looking="github.com/eve/plant-diary"
+        apps={[{ ...plant, warnings: [{ message: 'It replaces the Plant diary you have.' }] }]}
+        onAdd={() => {}}
+      />,
+    );
+    expect(screen.getByText('Before you add it')).toBeInTheDocument();
+    expect(screen.getByText('It replaces the Plant diary you have.')).toBeInTheDocument();
+    await expectAccessible(container);
+  });
+});
+
 describe('ShareSteps', () => {
   const base = { name: 'Plant diary', appId: 'plant-diary' };
+
+  it('for an app not made here: where it came from, and the file, never Publish', async () => {
+    const onSaveFile = vi.fn();
+    const { container, rerender } = renderNacre(
+      <ShareSteps
+        {...base}
+        state={{ state: 'idle' }}
+        onPublish={() => {}}
+        onSaveFile={onSaveFile}
+        elsewhere={{ url: 'https://github.com/ada/plant-diary' }}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Publish on GitHub' })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'https://github.com/ada/plant-diary (opens in a new tab)' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Conch doesn’t publish it/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Save as a file' }));
+    expect(onSaveFile).toHaveBeenCalledOnce();
+    await expectAccessible(container);
+    rerender(
+      <ShareSteps {...base} state={{ state: 'idle' }} onSaveFile={onSaveFile} elsewhere={{}} />,
+    );
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
 
   it('offers both ways to share, each with a sentence', async () => {
     const onPublish = vi.fn();

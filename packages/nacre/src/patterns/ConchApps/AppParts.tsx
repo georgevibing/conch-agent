@@ -144,20 +144,22 @@ export interface AppChangesProps extends Omit<ComponentProps<'section'>, 'childr
   changes: AppChangesView;
   /** `describeChanges`: one sentence each, new reach first. */
   words: readonly string[];
+  /** In place of “What’s new in 1.2.0” (going back to an earlier one isn't new). */
+  title?: string;
 }
 
 /**
  * What an update changes, before **Update** is pressed (ADR 0061): new reach
  * first and marked, calmly, since it's what someone should look at twice.
  */
-export function AppChanges({ changes, words, className, ...props }: AppChangesProps) {
+export function AppChanges({ changes, words, title, className, ...props }: AppChangesProps) {
   const titleId = useId();
   // `describeChanges` says new reach first, then a tool that now makes changes.
   const marked = (changes.reachesAdded?.length ? 1 : 0) + (changes.toolsNowChange?.length ? 1 : 0);
   return (
     <section aria-labelledby={titleId} className={cx(styles.changes, className)} {...props}>
       <p id={titleId} className={styles.sectionLabel}>
-        What’s new in {changes.to}
+        {title ?? `What’s new in ${changes.to}`}
       </p>
       {words.length ? (
         <ul className={styles.changeList}>

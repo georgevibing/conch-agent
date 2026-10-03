@@ -1,4 +1,4 @@
-import { CircleCheck, ExternalLink, FileArchive, RotateCw, Upload } from 'lucide-react';
+import { CircleCheck, ExternalLink, FileArchive, Link2, RotateCw, Upload } from 'lucide-react';
 import { useId, type ComponentProps, type ReactNode } from 'react';
 
 import { Button } from '../../components/Button';
@@ -30,6 +30,12 @@ export interface ShareStepsProps extends Omit<ComponentProps<'section'>, 'childr
    */
   getIt?: ReactNode;
   onInstall?: () => void;
+  /**
+   * It wasn't made here: only its maker can publish it, and the file
+   * carries their signature, not yours. `url` is where it was added from
+   * (a GitHub repository or a link), offered to pass on instead.
+   */
+  elsewhere?: { url?: string };
 }
 
 /**
@@ -48,11 +54,75 @@ export function ShareSteps({
   saving,
   getIt,
   onInstall,
+  elsewhere,
   className,
   ...props
 }: ShareStepsProps) {
   const titleId = useId();
   let body: ReactNode;
+  if (elsewhere) {
+    const url = isWebLink(elsewhere.url) ? elsewhere.url : undefined;
+    return (
+      <section
+        aria-labelledby={titleId}
+        className={cx(styles.share, className)}
+        data-state="elsewhere"
+        {...props}
+      >
+        <p id={titleId} className={styles.title}>
+          Share {name}
+        </p>
+        <div className={styles.ways}>
+          {url && (
+            <div className={styles.way}>
+              <span className={styles.wayIcon} aria-hidden>
+                <Link2 />
+              </span>
+              <div className={styles.wayText}>
+                <p className={styles.wayTitle}>Where you got it</p>
+                <p className={styles.wayAbout}>
+                  Anyone with Conch can add {name} from here, and get its maker’s updates.
+                </p>
+                <div className={styles.address}>
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className={styles.link}
+                    aria-label={`${url} (opens in a new tab)`}
+                  >
+                    {url.replace(/^https:\/\//, '')}
+                    <ExternalLink aria-hidden />
+                  </a>
+                  <CopyButton value={url} label="Copy the address" />
+                </div>
+              </div>
+            </div>
+          )}
+          <div className={styles.way}>
+            <span className={styles.wayIcon} aria-hidden>
+              <FileArchive />
+            </span>
+            <div className={styles.wayText}>
+              <p className={styles.wayTitle}>As a file</p>
+              <p className={styles.wayAbout}>
+                <span className={styles.file}>{appId}.conchapp</span>, to send any way you like.
+                It’s added by dropping it on Apps.
+              </p>
+            </div>
+            {onSaveFile && (
+              <Button size="sm" variant="surface" onClick={onSaveFile} loading={saving}>
+                Save as a file
+              </Button>
+            )}
+          </div>
+        </div>
+        <p className={styles.fine}>
+          It wasn’t made here, so Conch doesn’t publish it. The file keeps its maker’s signature.
+        </p>
+      </section>
+    );
+  }
   switch (state.state) {
     case 'idle':
       body = (

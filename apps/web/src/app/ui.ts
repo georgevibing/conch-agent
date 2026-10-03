@@ -1,6 +1,7 @@
 import type { TurnOptions } from '@conch/protocol';
 import { create } from 'zustand';
 
+import type { PageOwner } from '../features/conchapps/api';
 import { leaveSettings, showSettings, type SettingsMove } from '../features/settings/navigate';
 import type { SettingsTab } from '../features/settings/paths';
 
@@ -8,6 +9,13 @@ export type { SettingsTab };
 
 /** Which composer picker is open (so `/model` and `/mode` can open them). */
 export type Picker = 'model' | 'mode' | null;
+
+/** A Conch app's page open beside a chat (ADR 0061): a draft's while it's being made, or an app's. */
+export interface AppPageOpen {
+  conversationId: string;
+  owner: PageOwner;
+  pageId: string;
+}
 
 /** Find-in-chat, open for one conversation. */
 export interface FindState {
@@ -97,6 +105,10 @@ interface UiState {
   artifactWidth: number;
   openArtifact(conversationId: string, artifactId: string, version?: number): void;
   closeArtifact(): void;
+  /** A Conch app's page beside a chat (ADR 0061); one panel at a time, like the others. */
+  appPageOpen: AppPageOpen | null;
+  openAppPage(open: AppPageOpen): void;
+  closeAppPage(): void;
   /** Open this one straight into editing by hand (⌘K's "Edit …", ADR 0046). */
   artifactEditRequest?: string;
   setArtifactWidth(width: number): void;
@@ -201,7 +213,8 @@ export const useUi = create<UiState>((set) => ({
   browserDismissed: {},
   browserWidth: storedWidth(),
   // One panel beside the chat at a time: the browser or something made.
-  openBrowser: (browserFor) => set({ browserFor, artifactOpen: null, paletteOpen: false }),
+  openBrowser: (browserFor) =>
+    set({ browserFor, artifactOpen: null, appPageOpen: null, paletteOpen: false }),
   closeBrowser: () =>
     set((s) =>
       s.browserFor
@@ -217,9 +230,14 @@ export const useUi = create<UiState>((set) => ({
   openArtifact: (conversationId, artifactId, version) =>
     set({
       artifactOpen: { conversationId, artifactId, version },
+      appPageOpen: null,
       browserFor: null,
       paletteOpen: false,
     }),
+  appPageOpen: null,
+  openAppPage: (appPageOpen) =>
+    set({ appPageOpen, artifactOpen: null, browserFor: null, paletteOpen: false }),
+  closeAppPage: () => set({ appPageOpen: null }),
   closeArtifact: () =>
     set((s) =>
       s.artifactOpen

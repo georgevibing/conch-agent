@@ -1,4 +1,5 @@
 import {
+  AppMaker,
   Button,
   Callout,
   Dialog,
@@ -6,16 +7,18 @@ import {
   IconButton,
   Input,
   PasswordInput,
-  SegmentedControl,
   Stack,
+  Tabs,
   Text,
 } from '@conch/nacre';
-import { Globe, KeyRound, Plus, SquareTerminal, X } from 'lucide-react';
+import { Globe, KeyRound, Link2, Plus, Sparkles, SquareTerminal, X } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 
 import { useVerify } from '../auth/useVerify';
 import { useAuth } from '../auth/useAuth';
+import { FromLink, type LinkInput } from '../conchapps/FromLink';
+import { useStartChat } from '../conchapps/useStartChat';
 import { integrationsApi } from './api';
 import styles from './Integrations.module.css';
 import { errorText, useAssistantName } from './queries';
@@ -48,21 +51,55 @@ export function splitCommand(line: string): string[] {
   return out;
 }
 
-type Mode = 'http' | 'stdio';
+/** The dialog's tabs: make one, add one someone shared, or connect an MCP app. */
+export type AddTab = 'describe' | 'link' | 'http' | 'stdio';
+
+/** What the dialog opens with: words to build from, or a link or a file to look at. */
+export interface AddStart {
+  describe?: string;
+  link?: LinkInput;
+}
+
+const LEADS: Record<AddTab, string> = {
+  describe: 'Say what you want in your own words, and Conch makes it into an app.',
+  link: 'Add an app someone shared: from GitHub, a link, or the file they sent you.',
+  http: 'Connect any app that speaks MCP, the open standard AI assistants use for tools. Its maker’s instructions tell you what to put here.',
+  stdio:
+    'Connect any app that speaks MCP, the open standard AI assistants use for tools. Its maker’s instructions tell you what to put here.',
+};
 
 /**
- * Anything that isn't in the catalog: an address (Conch works out whether
- * it needs a sign-in) or a program to run. Programs run as you, so they ask
- * you to confirm it's you and start out asking before every action.
+ * **Add your own** (ADR 0061, ADR 0009). It opens on **Describe it**: say
+ * what it should do and **Build it** starts a chat that makes it. **From a
+ * link** adds an app someone shared. Anything else that speaks MCP is **By
+ * address** (Conch works out whether it needs a sign-in) or **Run a
+ * program**; programs run as you, so they ask you to confirm it's you and
+ * start out asking before every action.
  */
 export function CustomDialog({
   open,
   onOpenChange,
+  tab = 'describe',
+  start,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Where it opens: Describe it, unless something else was asked for. */
+  tab?: AddTab;
+  start?: AddStart;
 }) {
-  const [mode, setMode] = useState<Mode>('http');
+  const [mode, setMode] = useState<AddTab>(tab);
+  const [wish, setWish] = useState(start?.describe ?? '');
+  // Each time it opens, it opens where it was asked to, with what it was given.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (open) {
+      setMode(tab);
+      setWish(start?.describe ?? '');
+    }
+  }
+  const startChat = useStartChat();
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [token, setToken] = useState('');
@@ -91,8 +128,16 @@ export function CustomDialog({
     void navigate(`/apps/${id}`);
   };
 
+  /** **Build it**: a new chat that makes it, opened at once. */
+  const build = (text: string) => {
+    onOpenChange(false);
+    reset();
+    startChat(`Make me an app: ${text}`);
+  };
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (mode !== 'http' && mode !== 'stdio') return;
     setError(undefined);
     setBusy(true);
     try {
@@ -147,35 +192,63 @@ export function CustomDialog({
         if (!next) reset();
       }}
     >
-      <Dialog.Content size="md">
+      <Dialog.Content
+        size="lg"
+        onOpenAutoFocus={(event) => {
+          // Straight into the box it opened on: what it should do, or where it is.
+          const root = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+          const box =
+            mode === 'describe'
+              ? root?.querySelector<HTMLElement>('textarea')
+              : mode === 'link'
+                ? root?.querySelector<HTMLElement>('input[type="url"]')
+                : undefined;
+          if (!box) return;
+          event.preventDefault();
+          box.focus();
+        }}
+      >
         <Dialog.Header>
           <Dialog.Title>Add your own</Dialog.Title>
-          <Dialog.Description>
-            Connect any app that speaks MCP, the open standard AI assistants use for tools. Its
-            maker’s instructions tell you what to put here.
-          </Dialog.Description>
+          <Dialog.Description>{LEADS[mode]}</Dialog.Description>
         </Dialog.Header>
         <Dialog.Body>
-          <form id="custom-integration" onSubmit={submit} className={styles.tokenForm} noValidate>
-            <SegmentedControl
-              block
-              value={mode}
-              onValueChange={(v) => {
-                setMode(v as Mode);
-                setError(undefined);
-              }}
-              aria-label="How it connects"
-            >
-              <SegmentedControl.Item value="http" icon={<Globe />}>
+          <Tabs
+            size="sm"
+            value={mode}
+            onValueChange={(v) => {
+              setMode(v as AddTab);
+              setError(undefined);
+            }}
+          >
+            <Tabs.List aria-label="How to add it">
+              <Tabs.Trigger value="describe" icon={<Sparkles />}>
+                Describe it
+              </Tabs.Trigger>
+              <Tabs.Trigger value="link" icon={<Link2 />}>
+                From a link
+              </Tabs.Trigger>
+              <Tabs.Trigger value="http" icon={<Globe />}>
                 By address
-              </SegmentedControl.Item>
-              <SegmentedControl.Item value="stdio" icon={<SquareTerminal />}>
+              </Tabs.Trigger>
+              <Tabs.Trigger value="stdio" icon={<SquareTerminal />}>
                 Run a program
-              </SegmentedControl.Item>
-            </SegmentedControl>
-
-            {mode === 'http' ? (
-              <>
+              </Tabs.Trigger>
+            </Tabs.List>
+            <Tabs.Content value="describe">
+              <AppMaker value={wish} onValueChange={setWish} onBuild={build} />
+            </Tabs.Content>
+            <Tabs.Content value="link">
+              <FromLink
+                start={start?.link}
+                onAdded={() => {
+                  onOpenChange(false);
+                  reset();
+                }}
+              />
+            </Tabs.Content>
+            <Tabs.Content value="http">
+              <form id="custom-http" onSubmit={submit} className={styles.tokenForm} noValidate>
                 <Field required invalid={Boolean(error)}>
                   <Field.Label>Address</Field.Label>
                   <Input
@@ -213,9 +286,10 @@ export function CustomDialog({
                     leading={<KeyRound />}
                   />
                 </Field>
-              </>
-            ) : (
-              <>
+              </form>
+            </Tabs.Content>
+            <Tabs.Content value="stdio">
+              <form id="custom-stdio" onSubmit={submit} className={styles.tokenForm} noValidate>
                 <Callout tone="warning" title="This runs a program on your computer">
                   It runs as you and can do anything you can. Only add programs from people you
                   trust. {assistant} will ask before using each of its tools until you decide
@@ -291,23 +365,25 @@ export function CustomDialog({
                     Values are kept like passwords: on this computer only, never shown again.
                   </Text>
                 </Stack>
-              </>
-            )}
-          </form>
+              </form>
+            </Tabs.Content>
+          </Tabs>
         </Dialog.Body>
-        <Dialog.Footer>
-          <Dialog.Close asChild>
-            <Button variant="ghost">Cancel</Button>
-          </Dialog.Close>
-          <Button
-            type="submit"
-            form="custom-integration"
-            loading={busy}
-            disabled={mode === 'http' ? !url.trim() : !command.trim()}
-          >
-            Add
-          </Button>
-        </Dialog.Footer>
+        {(mode === 'http' || mode === 'stdio') && (
+          <Dialog.Footer>
+            <Dialog.Close asChild>
+              <Button variant="ghost">Cancel</Button>
+            </Dialog.Close>
+            <Button
+              type="submit"
+              form={`custom-${mode}`}
+              loading={busy}
+              disabled={mode === 'http' ? !url.trim() : !command.trim()}
+            >
+              Add
+            </Button>
+          </Dialog.Footer>
+        )}
         {dialog}
       </Dialog.Content>
     </Dialog.Root>

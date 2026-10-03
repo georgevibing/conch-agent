@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 
 import { useChannels } from '../channels/queries';
+import { ConchAppDetail } from '../conchapps/ConchAppDetail';
 import { useVault } from '../passwords/queries';
 import { AppAbilitiesSection } from './AppAbilitiesSection';
 import { describeApp, isManager, joinApps, managerItem, type AppItem } from './apps';
@@ -83,6 +84,9 @@ export function AppDetailView({ appId }: { appId: string }) {
     </>
   );
 
+  // An app you made or added (ADR 0061): its own page.
+  if (item?.integration?.conchApp)
+    return <ConchAppDetail appId={item.integration.conchApp} item={item} />;
   if (item?.integration)
     return withDialog(
       <IntegrationDetailView integrationId={item.integration.id} item={item} onSetUp={setUp} />,

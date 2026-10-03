@@ -784,6 +784,20 @@ export class MockEngine implements Engine {
         );
         return;
       }
+      // Using an app you added (ADR 0061): its own tool, as any model would call it.
+      const tally = `app_${TALLY_ID}__count`;
+      if (/\bcount one more\b/i.test(input.prompt) && maker(tally)) {
+        const counted = yield* hostTool(tally, { by: 1 });
+        const said = (() => {
+          try {
+            return String((JSON.parse(counted) as { text?: unknown }).text ?? counted);
+          } catch {
+            return counted;
+          }
+        })();
+        yield* speak(/\d/.test(said) ? `Counted. ${said}` : said);
+        return;
+      }
       const wanted = /\bis there an app (?:for|that) (.+?)[.?!]*$/i.exec(input.prompt.trim())?.[1];
       if (wanted && maker('app_find')) {
         const found = yield* hostTool('app_find', { query: wanted });
