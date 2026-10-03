@@ -209,16 +209,18 @@ async function ownAddress(deps: SetupDeps, args: Args, asking: boolean): Promise
   } else if (report.pointing !== 'here') {
     ui.say(report.message);
     ui.blank();
-    ui.box(
-      [
-        ...(mine ? [ui.dim(`This server is at ${mine}.`)] : []),
-        ...report.advice.map(
-          (r) => `${ui.bold(r.type.padEnd(5))} ${ui.accent(r.host.padEnd(12))} ${r.value}`,
-        ),
-      ],
-      { title: 'Add this record where you bought your domain', tone: 'accent' },
-    );
-    ui.hint('It’s under DNS, or DNS records, at most providers. Conch keeps looking by itself.');
+    if (report.advice.length)
+      ui.box(
+        [
+          ...(mine ? [ui.dim(`This server is at ${mine}.`)] : []),
+          ...report.advice.map(
+            (r) => `${ui.bold(r.type.padEnd(5))} ${ui.accent(r.host.padEnd(12))} ${r.value}`,
+          ),
+        ],
+        { title: 'Add this record where you bought your domain', tone: 'accent' },
+      );
+    if (report.advice.length)
+      ui.hint('It’s under DNS, or DNS records, at most providers. Conch keeps looking by itself.');
     ui.blank();
     if (!asking) {
       ui.hint(`Once it’s there: ${deps.conch(`setup --domain ${name}`)}`);
