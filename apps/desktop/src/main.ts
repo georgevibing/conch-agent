@@ -36,7 +36,7 @@ else {
 
 function main(): void {
   // Windows names the app's notifications and taskbar entry by this.
-  app.setAppUserModelId('io.github.giotiskl.conch');
+  app.setAppUserModelId('io.github.georgevibing.conch');
   const at = places({
     packaged: app.isPackaged,
     resourcesPath: process.resourcesPath,

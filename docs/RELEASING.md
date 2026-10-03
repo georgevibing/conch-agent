@@ -93,7 +93,7 @@ Each one is opened once on its runner to check it starts. Then the workflow make
 GitHub Release from the tag if `pnpm release` couldn't (no `gh` here), attaches the
 files and the update feeds (`latest.yml`, `latest-mac.yml`, `latest-linux*.yml`), and
 records where each file came from (`gh attestation verify <file> --repo
-giotiskl/conch-agent`).
+georgevibing/conch-agent`).
 
 - **Installed apps update from these releases.** They read the repository's public
   releases, so the repository must be public for them to find one.

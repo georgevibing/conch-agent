@@ -20,7 +20,7 @@ describe('the desktop app and its gateway', () => {
 
   it('only downloads a release from GitHub', () => {
     expect(
-      ReleaseFeed.safeParse('https://github.com/giotiskl/conch-agent/releases/download/v0.3.0')
+      ReleaseFeed.safeParse('https://github.com/georgevibing/conch-agent/releases/download/v0.3.0')
         .success,
     ).toBe(true);
     for (const feed of [

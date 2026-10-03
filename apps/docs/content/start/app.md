@@ -26,7 +26,7 @@ A computer is careful with apps from the internet.
 - **macOS** may say it can't check Conch for malicious software. Open **System Settings → Privacy & Security**, find the line about Conch near the bottom, and press **Open Anyway**. It asks once.
 - **Windows** may show **Windows protected your PC**. Press **More info**, then **Run anyway**. It asks once.
 
-Each file on the release page also has a record of the build that made it, from the release's own tag. With the [GitHub CLI](https://cli.github.com), `gh attestation verify <file> --repo giotiskl/conch-agent` checks it.
+Each file on the release page also has a record of the build that made it, from the release's own tag. With the [GitHub CLI](https://cli.github.com), `gh attestation verify <file> --repo georgevibing/conch-agent` checks it.
 
 ## The window and the menu bar
 

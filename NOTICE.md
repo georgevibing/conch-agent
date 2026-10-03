@@ -8,6 +8,13 @@ lists them. A few have terms worth knowing:
   [Anthropic's terms](https://code.claude.com/docs/en/legal-and-compliance), not
   an open-source licence.
 - **libsignal** (GPL-3.0) comes with Baileys, which the WhatsApp channel uses.
+  The desktop app's installers carry it with the rest of the gateway's
+  dependencies; its source is at
+  [github.com/WhiskeySockets/libsignal-node](https://github.com/WhiskeySockets/libsignal-node),
+  and Conch's is this repository.
+- The **desktop app** is built on [Electron](https://www.electronjs.org) (MIT)
+  and carries [Node.js](https://nodejs.org) (MIT, with the licences of the
+  components it bundles).
 
 Included in this repository:
 

@@ -56,7 +56,7 @@ function fakeUpdater(version: string, fail?: Error) {
 }
 
 describe('getting a new version', () => {
-  const feed = 'https://github.com/giotiskl/conch-agent/releases/download/v0.3.0';
+  const feed = 'https://github.com/georgevibing/conch-agent/releases/download/v0.3.0';
 
   it('downloads it, says how far along, stops the gateway, then lets the installer in', async () => {
     const sent: AppToGateway[] = [];

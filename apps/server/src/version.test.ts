@@ -5,7 +5,7 @@ import { githubRepository, REPOSITORY, SERVER_VERSION } from './version';
 describe('where Conch is published', () => {
   it('reads the root package.json', () => {
     expect(SERVER_VERSION).toMatch(/^\d+\.\d+\.\d+/);
-    expect(REPOSITORY).toEqual({ owner: 'giotiskl', repo: 'conch-agent' });
+    expect(REPOSITORY).toEqual({ owner: 'georgevibing', repo: 'conch-agent' });
   });
 
   it('understands the ways npm lets a repository be written, and nothing else', () => {

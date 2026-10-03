@@ -1,6 +1,7 @@
 {
   "name": "@conch/desktop",
   "private": true,
+  "license": "MIT",
   "description": "Conch as an app for macOS, Windows and Linux: a window on the gateway it carries (ADR 0054).",
   "type": "module",
   "main": "dist/main.cjs",

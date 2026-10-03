@@ -12,8 +12,8 @@ import { Setup } from '../setup/needs';
 import { AppReleases, feedFile } from './app';
 import { UpdatesService } from './service';
 
-const REPO = { owner: 'giotiskl', repo: 'conch-agent' };
-const BASE = 'https://github.com/giotiskl/conch-agent/releases';
+const REPO = { owner: 'georgevibing', repo: 'conch-agent' };
+const BASE = 'https://github.com/georgevibing/conch-agent/releases';
 
 /** A release as GitHub's API lists it. */
 function release(
@@ -111,7 +111,9 @@ describe('finding the app’s releases', () => {
     });
     expect(asked).toEqual([]);
     const stable = await releases.check({ channel: 'stable' });
-    expect(asked[0]).toBe('https://api.github.com/repos/giotiskl/conch-agent/releases?per_page=30');
+    expect(asked[0]).toBe(
+      'https://api.github.com/repos/georgevibing/conch-agent/releases?per_page=30',
+    );
     expect(stable.offers.map((o) => o.version)).toEqual(['0.3.0']);
     expect(stable.offers[0]).toMatchObject({
       feed: `${BASE}/download/v0.3.0`,

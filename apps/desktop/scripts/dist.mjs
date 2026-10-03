@@ -65,9 +65,9 @@ const builderArch = builder.Arch[archName];
 
 /** @type {import('electron-builder').Configuration} */
 const config = {
-  appId: 'io.github.giotiskl.conch',
+  appId: 'io.github.georgevibing.conch',
   productName: 'Conch',
-  copyright: 'Conch',
+  copyright: 'Copyright © 2026 George Kal',
   directories: { output: join(here, 'out'), buildResources: join(here, 'build') },
   // The app's own code is one bundled file: no node_modules inside the app.
   files: ['dist/**/*', '!dist/**/*.map', 'package.json'],

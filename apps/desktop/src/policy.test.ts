@@ -31,8 +31,8 @@ describe('where the window may go', () => {
   });
 
   it('hands only web and mail links to the person’s apps', () => {
-    expect(externalUrl('https://github.com/giotiskl/conch-agent')).toBe(
-      'https://github.com/giotiskl/conch-agent',
+    expect(externalUrl('https://github.com/georgevibing/conch-agent')).toBe(
+      'https://github.com/georgevibing/conch-agent',
     );
     expect(externalUrl('mailto:me@example.com')).toBe('mailto:me@example.com');
     for (const url of [
