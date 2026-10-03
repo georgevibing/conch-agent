@@ -4,7 +4,7 @@
     /* Never wider than the chat: the day strip slides instead. */
     grid-template-columns: minmax(0, 1fr);
     inline-size: 100%;
-    max-inline-size: 36rem;
+    max-inline-size: var(--nc-chat-card-width);
   }
 
   /* Answered: the card's rows close to nothing while it fades; the line takes its place. */
@@ -33,13 +33,11 @@
     flex-direction: column;
     gap: var(--nc-space-3);
     min-block-size: 0;
-    padding: var(--nc-space-3) var(--nc-space-3-5) var(--nc-space-3-5);
-    border-radius: var(--nc-radius-lg);
+    padding: var(--nc-chat-card-pad);
+    border-radius: var(--nc-chat-card-radius);
     corner-shape: var(--nc-corner-shape);
-    background: var(--nc-surface);
-    box-shadow:
-      var(--nc-glaze-edge),
-      inset 0 0 0 1px var(--nc-border-subtle);
+    background: var(--nc-chat-card-surface);
+    box-shadow: var(--nc-chat-card-shadow);
     animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
   }
 
@@ -61,15 +59,15 @@
   .header {
     display: flex;
     align-items: flex-start;
-    gap: var(--nc-space-2-5);
+    gap: var(--nc-space-3);
   }
 
   .mark {
     display: grid;
     flex: none;
     place-items: center;
-    inline-size: 1.75rem;
-    block-size: 1.75rem;
+    inline-size: var(--nc-chat-card-mark);
+    block-size: var(--nc-chat-card-mark);
     border-radius: var(--nc-radius-full);
     background: var(--nc-accent-3);
     color: var(--nc-accent-11);
@@ -562,7 +560,7 @@
     row-gap: 0.125rem;
     margin: 0;
     padding-inline: var(--nc-space-1);
-    font-size: var(--nc-text-sm);
+    font-size: var(--nc-chat-note-size);
     line-height: var(--nc-leading-snug);
     color: var(--nc-text-muted);
     animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) both;
@@ -581,8 +579,8 @@
   .lineIcon {
     flex: none;
     align-self: center;
-    inline-size: 0.875rem;
-    block-size: 0.875rem;
+    inline-size: var(--nc-chat-note-icon);
+    block-size: var(--nc-chat-note-icon);
     color: var(--nc-text-subtle);
   }
 

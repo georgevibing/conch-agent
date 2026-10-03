@@ -1,6 +1,6 @@
 @layer nacre.components {
   .root {
-    --tc-radius: var(--nc-radius-md);
+    --tc-radius: var(--nc-chat-row-radius);
     --tc-border: var(--nc-border-subtle);
     --success: light-dark(
       oklch(0.55 0.13 var(--nc-success-h)),
@@ -37,7 +37,7 @@
     align-items: center;
     gap: var(--nc-space-2-5);
     inline-size: 100%;
-    min-block-size: 2.5rem;
+    min-block-size: var(--nc-chat-row-height);
     margin: 0;
     padding: 0 var(--nc-space-3);
     border: 0;
