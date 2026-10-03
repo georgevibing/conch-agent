@@ -90,6 +90,8 @@ const scenarios = {
   'channels-linked': { port: 4364, env: { CONCH_MOCK_STATE: 'ready' } },
   // iMessage and email (ADR 0044): a pretend Messages (a real chat.db) and a pretend IMAP/SMTP.
   'channels-mail': { port: 4365, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Routines that start when something happens (ADR 0056): Gmail with the pretend mail service.
+  'when-routines': { port: 4341, env: { CONCH_MOCK_STATE: 'ready' } },
   // Teams, Matrix and WeChat, and the public door (ADR 0045), against their pretend apps.
   'channels-work': { port: 4366, env: { CONCH_MOCK_STATE: 'ready' } },
   // Safe hands: checking after reading, the timeline, skills read before they're used.

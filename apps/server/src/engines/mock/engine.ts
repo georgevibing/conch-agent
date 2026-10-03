@@ -1165,7 +1165,7 @@ export class MockEngine implements Engine {
       const createRoutine = input.tools.find((t) => t.name === 'create_routine');
       // “Tell me when Anna replies” (ADR 0056): a routine that starts when her email arrives.
       const waitingOn =
-        /\b(?:tell|let) me (?:know )?when ([A-Z][\p{L}]+(?: [A-Z][\p{L}]+)?) (?:replies|emails|writes)/u.exec(
+        /\b(?:[Tt]ell|[Ll]et) me (?:know )?when ([A-Z][\p{L}]+(?: [A-Z][\p{L}]+)?) (?:replies|emails|writes)/u.exec(
           input.prompt,
         )?.[1];
       if (createRoutine && waitingOn) {

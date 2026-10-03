@@ -904,20 +904,55 @@ function matches(m: Stored, seq: number, folder: Folder, criteria: Token[]): boo
 
 /**
  * Gmail's search box, roughly: every word must be in the message, and
- * `from:`, `to:` and `subject:` look in that header only.
+ * `from:`, `to:` and `subject:` look in that header only. Also what a
+ * When-routine asks (ADR 0056): `"phrases"`, `-` for not, `(a OR b)`,
+ * `after:` (a date or epoch seconds) and `from:me`.
  */
 function gmailSearch(m: Stored, query: string): boolean {
   const text = m.raw.toString('utf8').toLowerCase();
   const body = decodedBody(m.raw).toLowerCase();
-  return query
-    .split(/\s+/)
-    .filter(Boolean)
-    .every((word) => {
-      const field = /^(from|to|subject):(.+)$/.exec(word);
-      if (field?.[1] && field[2]) return headerOf(m.raw, field[1]).includes(field[2]);
-      if (/^(in|is|label|newer_than|older_than):/.test(word)) return true;
-      return text.includes(word) || body.includes(word);
-    });
+  const tokens = [...query.matchAll(/\(|\)|-?(?:[a-z_]+:)?(?:"[^"]*"|[^\s()"]+)/gi)].map(
+    (t) => t[0],
+  );
+  const atom = (raw: string): boolean => {
+    if (raw.startsWith('-')) return !atom(raw.slice(1));
+    const field = /^([a-z_]+):(.+)$/i.exec(raw);
+    const value = (field?.[2] ?? raw).replace(/^"|"$/g, '').toLowerCase();
+    const key = field?.[1]?.toLowerCase();
+    if (key === 'from' && value === 'me') return headerOf(m.raw, 'from').includes(MockMail.ADDRESS);
+    if (key === 'from' || key === 'to' || key === 'subject')
+      return headerOf(m.raw, key).includes(value);
+    if (key === 'after') {
+      const at = /^\d+$/.test(value)
+        ? Number(value) * 1000
+        : Date.parse(value.replaceAll('/', '-'));
+      return m.date.getTime() >= at;
+    }
+    if (key === 'in') return value !== 'chats';
+    if (key && /^(is|label|newer_than|older_than)$/.test(key)) return true;
+    return text.includes(value) || body.includes(value);
+  };
+  let at = 0;
+  const all = (): boolean => {
+    let result = true;
+    while (at < tokens.length && tokens[at] !== ')') {
+      let any = one();
+      while (tokens[at]?.toUpperCase() === 'OR') {
+        at++;
+        any = one() || any;
+      }
+      result = any && result;
+    }
+    return result;
+  };
+  const one = (): boolean => {
+    const token = tokens[at++] ?? '';
+    if (token !== '(') return atom(token);
+    const inside = all();
+    at++;
+    return inside;
+  };
+  return all();
 }
 
 /** The base64 parts of a message, decoded, for searching. */
