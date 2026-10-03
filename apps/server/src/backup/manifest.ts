@@ -237,6 +237,17 @@ export const RULES: readonly BackupRule[] = [
   { match: 'commands/*.md', class: 'kept', group: 'commands', why: 'Your slash commands.' },
   { match: 'routines/*.json', class: 'kept', group: 'routines', why: 'Your routines.' },
   {
+    match: 'routines/when/*.seen.json',
+    class: 'derived',
+    why: 'What a routine that starts when something happens has already seen. A restore starts watching from then, rather than replaying everything since (ADR 0056).',
+  },
+  {
+    match: 'routines/when/*.json',
+    class: 'kept',
+    group: 'routines',
+    why: 'What starts each routine that starts when something happens: an email, a meeting, a page, a folder (ADR 0056).',
+  },
+  {
     match: 'routines/*.runs.jsonl',
     class: 'kept',
     group: 'routines',
@@ -391,6 +402,12 @@ export const RULES: readonly BackupRule[] = [
     class: 'secret',
     group: 'secrets',
     why: 'Your bots’ keys, and your email’s app password.',
+  },
+  {
+    match: 'routines.secrets.json',
+    class: 'secret',
+    group: 'secrets',
+    why: 'The secrets other apps sign their messages to your routines with (ADR 0056).',
   },
   {
     match: 'whatsapp.secrets.json',

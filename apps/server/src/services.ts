@@ -13,7 +13,7 @@ import type {
 import { Activity } from './activity/service';
 import { importCheck } from './import/doctor';
 import { ImportService } from './import/service';
-import { LiveDataAccess } from './artifacts/live';
+import { fetchLive, LiveDataAccess } from './artifacts/live';
 import { ArtifactService } from './artifacts/service';
 import { ArtifactStore } from './artifacts/store';
 import { tasksCheck } from './tasks/doctor';
@@ -122,6 +122,17 @@ import { RoutineSpend } from './routines/spend';
 import { PAST_CHATS_PROMPT, pastChatTools, withOthers, type ChatFacts } from './search/past';
 import { SearchService } from './search/service';
 import { RoutineStore } from './routines/store';
+import { WhenRoutines } from './routines/triggers';
+import { calendarSource } from './routines/triggers/calendar';
+import { folderSource } from './routines/triggers/folder';
+import { routineSource, taskSource } from './routines/triggers/finished';
+import { calendarAccess, gmailAccess, mailPeople } from './routines/triggers/google';
+import { HookSecrets, hookSource } from './routines/triggers/hook';
+import { mailSource } from './routines/triggers/mail';
+import { judgeWith } from './routines/triggers/onlyif';
+import { OwnWrites } from './routines/triggers/own';
+import { pageSource } from './routines/triggers/page';
+import { routinesWatchCheck } from './routines/triggers/doctor';
 import { SettingsStore } from './settings/store';
 import { SkillService } from './skills/service';
 import { externalRoots, SkillStore } from './skills/store';
@@ -650,7 +661,9 @@ export class Services {
       emit: (event) => this.broadcast.emit(event),
       onHeal: (message) => void this.healed.note('routines', message),
       spend: this.routineSpend,
+      when: this.#when(config, heal),
     });
+    this.doctor.register(routinesWatchCheck(this.routines));
     this.tasks = new TaskService({
       store: new TaskStore(config.CONCH_HOME, heal),
       conversations: this.conversations,
@@ -986,6 +999,85 @@ export class Services {
   }
 
   /**
+   * When… (ADR 0056): what can start a routine, each through the part of
+   * Conch that already reaches it. Built before the routines, so it reaches
+   * the door, the tasks and the routines themselves only when it looks.
+   */
+  #when(config: Config, heal: Heal): WhenRoutines {
+    const ownWrites = new OwnWrites();
+    this.broadcast.on((event) => ownWrites.onEvent(event));
+    const subscribe = (listener: (event: ServerEvent) => void) => this.broadcast.on(listener);
+    const routineOf = async (conversationId: string) => {
+      const origin = (await this.conversations.detail(conversationId).catch(() => undefined))
+        ?.conversation.origin;
+      return origin?.kind === 'routine' ? origin.routineId : undefined;
+    };
+    const secrets = new HookSecrets(config.CONCH_HOME);
+    return new WhenRoutines({
+      routinesDir: join(config.CONCH_HOME, 'routines'),
+      secrets,
+      heal,
+      onHeal: (message) => void this.healed.note('routines', message),
+      hookUrl: (hookId) => this.door.hookUrl(hookId),
+      judge: judgeWith(() => cheapModel(this.providers.engine())),
+      // What an only-if check spends counts toward routines' spending (ADR 0057).
+      spend: {
+        allow: async (routineId) =>
+          (
+            await this.routineSpend
+              .allow(routineId, this.providers.engine())
+              .catch(() => ({ ok: true }))
+          ).ok,
+        record: (routineId, usage, model) =>
+          void this.routineSpend
+            .record(routineId, usage, {
+              engine: this.providers.engine(),
+              ...(model && { model }),
+            })
+            .catch(() => undefined),
+      },
+      sources: {
+        mail: mailSource(gmailAccess(this.google, this.googleApps)),
+        calendar: calendarSource(calendarAccess(this.google, this.googleApps)),
+        // Through the live-data guard (ADR 0046): never this computer, your network or Conch.
+        page: pageSource((url, hosts) =>
+          fetchLive(
+            url,
+            { local: false, gatewayPort: config.CONCH_PORT, hosts },
+            { maxBytes: 3_000_000, timeoutMs: 20_000 },
+          ),
+        ),
+        folder: folderSource({
+          home: config.CONCH_HOME,
+          forbidden: () => [
+            ...protectedPaths(config.CONCH_HOME),
+            ...secretPlaces().map((p) => p.path),
+          ],
+          ownWrite: (path) => ownWrites.has(path),
+          running: (routineId) => this.routines.busy(routineId),
+        }),
+        task: taskSource({ subscribe, routineOf }),
+        routine: routineSource({
+          subscribe,
+          routineOf,
+          follows: (id) => this.routines.follows(id),
+          exists: async (id) => Boolean(await this.routines.detail(id).catch(() => undefined)),
+          title: (id) => this.routines.titleOf(id),
+        }),
+        hook: hookSource({
+          secrets,
+          door: {
+            mount: (hookId, handler) => this.door.mount(hookId, undefined, handler),
+            url: (hookId) => this.door.hookUrl(hookId),
+            ready: () => this.door.status().state === 'ready',
+            onChange: (listener) => this.door.onChange(() => listener()),
+          },
+        }),
+      },
+    });
+  }
+
+  /**
    * Always on. The mock engine's is pretend, so tests and `pnpm dev:mock`
    * never add anything to this computer's login items.
    */
@@ -1161,6 +1253,31 @@ export class Services {
     const verb =
       parts.length > 1 || routines > 1 ? 'only work' : routines === 1 ? 'only runs' : 'only works';
     return `${list} ${verb} while Conch is running.`;
+  }
+
+  #people?: {
+    at: number;
+    value: Promise<{ people: { address: string; name?: string }[]; note?: string }>;
+  };
+
+  /**
+   * People you've written to lately, for picking whose mail starts a routine
+   * (ADR 0056). Read from Sent at most every ten minutes.
+   */
+  mailPeople() {
+    if (this.#people && Date.now() - this.#people.at < 10 * 60_000) return this.#people.value;
+    const value = mailPeople(this.google, this.googleApps)
+      .then((people) =>
+        people.length
+          ? { people }
+          : { people, note: 'No one you’ve written to lately. Type an address instead.' },
+      )
+      .catch(() => ({
+        people: [],
+        note: 'Connect Gmail to pick from people you write to, or type an address.',
+      }));
+    this.#people = { at: Date.now(), value };
+    return value;
   }
 
   /** Come home: what Conch already has, and where things go when they come over. */

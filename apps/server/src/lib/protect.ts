@@ -17,6 +17,10 @@ export function protectedPaths(home: string): string[] {
     join(home, 'google.secrets.json'),
     join(home, 'slack.secrets.json'),
     join(home, 'channels.secrets.json'),
+    // The secrets other apps sign their messages to routines with (ADR 0056).
+    join(home, 'routines.secrets.json'),
+    // What starts a routine: the assistant drafts these through Conch, never by hand.
+    join(home, 'routines', 'when'),
     // A linked WhatsApp or Signal: whoever has these reads and sends your messages (ADR 0043).
     join(home, 'whatsapp.secrets.json'),
     join(home, 'signal'),

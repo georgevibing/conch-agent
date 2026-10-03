@@ -116,6 +116,35 @@ export async function useConch(g: Gateway) {
     if (run && !['running', 'needs-you'].includes(run.status)) break;
     await new Promise((r) => setTimeout(r, 20));
   }
+  // Routines that start when something happens (ADR 0056): what starts them, what
+  // the pulse has seen, and another app's secret.
+  const after = await ok(
+    await app.inject({
+      method: 'POST',
+      url: '/api/routines',
+      payload: {
+        title: 'After the briefing',
+        prompt: 'Tell me what it said.',
+        when: { kind: 'routine', routineId: String(routine.id) },
+        timezone: 'Europe/Berlin',
+      },
+    }),
+  );
+  const shop = await ok(
+    await app.inject({
+      method: 'POST',
+      url: '/api/routines',
+      payload: {
+        title: 'From my shop',
+        prompt: 'Tell me about the order.',
+        when: { kind: 'hook' },
+        timezone: 'Europe/Berlin',
+      },
+    }),
+  );
+  await ok(await app.inject({ method: 'POST', url: `/api/routines/${String(shop.id)}/secret` }));
+  await services.routines.lookAgain();
+  void after;
   // A task in the background (ADR 0033): its list, and its own chat.
   const task = await ok(
     await app.inject({ method: 'POST', url: '/api/tasks', payload: { text: 'Tidy the notes.' } }),

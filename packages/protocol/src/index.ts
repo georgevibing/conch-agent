@@ -60,6 +60,7 @@ export * from './doctor';
 export * from './phone';
 export * from './providers';
 export * from './routines';
+export * from './triggers';
 export * from './safety';
 export * from './search';
 export * from './past-chats';

@@ -42,7 +42,9 @@ function ActionButton({ action }: { action: DoctorAction }) {
                     ? '/tasks'
                     : action.place === 'skills'
                       ? `/skills${action.focus ? `/${encodeURIComponent(action.focus)}` : ''}`
-                      : undefined;
+                      : action.place === 'routines'
+                        ? `/routines${action.focus ? `/${encodeURIComponent(action.focus)}` : ''}`
+                        : undefined;
         if (!page) return openSettings(action.place as SettingsTab, action.focus);
         window.dispatchEvent(new CustomEvent('conch:navigate', { detail: page }));
       }}

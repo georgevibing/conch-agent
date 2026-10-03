@@ -5,7 +5,13 @@
  */
 import { z } from 'zod';
 
-export const PickPurpose = z.enum(['keepassxc-database', 'keepassxc-keyfile', 'workspace']);
+export const PickPurpose = z.enum([
+  'keepassxc-database',
+  'keepassxc-keyfile',
+  'workspace',
+  /** A folder a routine watches for changes (ADR 0056). */
+  'watch-folder',
+]);
 export type PickPurpose = z.infer<typeof PickPurpose>;
 
 export const PickBody = z.object({ purpose: PickPurpose });

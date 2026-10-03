@@ -117,6 +117,10 @@ export const BackupPower = z.discriminatedUnion('kind', [
     /** USD a month; `null`: no limit. */
     limitUsd: z.number().positive().nullable(),
   }),
+  /** A routine that starts when something happens, and may act on it without asking (ADR 0056). */
+  z.object({ kind: z.literal('routine-acts-on-events'), name: PowerText }),
+  /** Another app can start a routine through the public address (ADR 0056). */
+  z.object({ kind: z.literal('routine-address'), name: PowerText }),
   /** Sites the browser acts on without asking. */
   z.object({
     kind: z.literal('browser-sites'),

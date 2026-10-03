@@ -119,7 +119,8 @@ export class ChannelDoorService {
   #app?: FastifyInstance;
   #listening?: Promise<void>;
   #port?: number;
-  #routes = new Map<string, { kind: ChannelKind; handler: HookHandler }>();
+  /** `kind` is the chat app's; a routine's address (ADR 0056) has none. */
+  #routes = new Map<string, { kind?: ChannelKind; handler: HookHandler }>();
   #counts = new Map<string, { minute: number; count: number }>();
   #file?: DoorFile;
   #state: DoorView = { state: 'off', apps: [] };
@@ -146,7 +147,7 @@ export class ChannelDoorService {
   // ── Addresses ──────────────────────────────────────────────────────────
 
   /** Serve `handler` at `/hooks/<hookId>`. Returns what takes it away again. */
-  mount(hookId: string, kind: ChannelKind, handler: HookHandler): () => void {
+  mount(hookId: string, kind: ChannelKind | undefined, handler: HookHandler): () => void {
     this.#routes.set(hookId, { kind, handler });
     void this.#listen().catch((error: unknown) =>
       this.#set({ state: 'error', message: (error as Error).message }),
@@ -197,7 +198,9 @@ export class ChannelDoorService {
   }
 
   #apps() {
-    const apps = [...new Set([...this.#routes.values()].map((r) => r.kind))].sort();
+    const apps = [
+      ...new Set([...this.#routes.values()].flatMap((r) => (r.kind ? [r.kind] : []))),
+    ].sort();
     if (apps.join() !== this.#state.apps.join()) this.#set({ ...this.#state, apps });
   }
 

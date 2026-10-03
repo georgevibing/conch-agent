@@ -66,6 +66,9 @@ function bursts(text: string): { text: string; pause: number }[] {
   return out;
 }
 
+/** Where a routine's own instruction ends and what happened begins (ADR 0056, `triggers/brief.ts`). */
+const EVENT_RULE = '\n---\n';
+
 const STOPWORDS = new Set(
   'the and for you your can could would should please with that this what how are about from into have just like need want me my our'.split(
     ' ',
@@ -351,6 +354,21 @@ export class MockEngine implements Engine {
         usage: { inputTokens: 300, outputTokens: 40, costUsd: 0.0004 },
       };
     }
+    // “Only if…” (ADR 0056): yes when the condition's words are in the event; "garbled" answers nonsense.
+    if (/whether one event matches a condition/.test(input.system)) {
+      const condition = /^Condition: only if (.*)$/m.exec(input.prompt)?.[1] ?? '';
+      if (/garbled/i.test(condition)) return { text: 'Well, it depends on many things.' };
+      const fence = /^The event is between the two (\S+) lines\.$/m.exec(input.prompt)?.[1] ?? '';
+      const event = input.prompt.split(fence)[2]?.toLowerCase() ?? '';
+      const words = condition
+        .toLowerCase()
+        .split(/[^\p{L}\p{N}]+/u)
+        .filter((w) => w.length > 3 && !['about', 'it’s', "it's", 'from', 'with'].includes(w));
+      return {
+        text: words.some((w) => event.includes(w)) ? 'yes' : 'no',
+        usage: { inputTokens: 200, outputTokens: 1, costUsd: 0.0001 },
+      };
+    }
     // The memory tidy-up (ADR 0032): where you live, said in a chat, updates or adds a memory.
     if (/tidy the long-term memory/.test(input.system)) {
       const memories = [...input.prompt.matchAll(/^\[(m_[\w]+)\] \((\w+)\) (.+)$/gm)].map((m) => ({
@@ -528,7 +546,9 @@ export class MockEngine implements Engine {
         await wait(chunk.pause);
       }
 
-      const text = input.prompt.toLowerCase();
+      // A run something started (ADR 0056) answers its own instruction, not the words that came in.
+      const [instruction = '', happenedText] = input.prompt.split(EVENT_RULE);
+      const text = instruction.toLowerCase();
       const rememberMatch = /remember (?:that )?(.+)/i.exec(input.prompt);
       if (rememberMatch?.[1] && !chatOnly) {
         const toolUseId = newId('tool');
@@ -1143,6 +1163,31 @@ export class MockEngine implements Engine {
 
       // Routines: draft one when asked for something recurring; report outcomes on runs.
       const createRoutine = input.tools.find((t) => t.name === 'create_routine');
+      // “Tell me when Anna replies” (ADR 0056): a routine that starts when her email arrives.
+      const waitingOn =
+        /\b(?:tell|let) me (?:know )?when ([A-Z][\p{L}]+(?: [A-Z][\p{L}]+)?) (?:replies|emails|writes)/u.exec(
+          input.prompt,
+        )?.[1];
+      if (createRoutine && waitingOn) {
+        const toolUseId = newId('tool');
+        const args = {
+          title: `When ${waitingOn} replies`,
+          summary: `Tells you as soon as ${waitingOn} writes, with what it says.`,
+          prompt: `Tell me in one or two lines what ${waitingOn}’s email says and whether it needs an answer from me.`,
+          when: { kind: 'mail', from: [{ name: waitingOn }] },
+        };
+        yield { type: 'tool-start', toolUseId, name: 'mcp__conch__create_routine', input: args };
+        const output = hostToolText(await createRoutine.run(args as never));
+        yield { type: 'tool-end', toolUseId, status: 'success', output };
+        const confirm = `I’ll tell you when ${waitingOn} writes. Turn it on from the card; it costs nothing until then.`;
+        for (const chunk of confirm.match(/.{1,6}/gs) ?? []) {
+          await wait(12);
+          yield { type: 'text', messageId, delta: chunk };
+        }
+        yield { type: 'message-done', messageId };
+        yield { type: 'done', outcome: 'success' };
+        return;
+      }
       if (
         createRoutine &&
         /\b(every (morning|day|weekday|week)|each (morning|day)|remind me)\b/i.test(text)
@@ -1249,10 +1294,14 @@ export class MockEngine implements Engine {
         return;
       }
       if (report) {
+        // A run something started (ADR 0056): it says what happened.
+        const happened = happenedText && /^\[1\] (.+)$/m.exec(happenedText)?.[1];
         const nothing = /nothing/i.test(text);
         const brief = nothing
           ? 'Nothing new since last time.'
-          : 'Good morning! You have **3 meetings** today and rain is expected after 4pm.';
+          : happened
+            ? `About ${happened}: it’s worth a look.`
+            : 'Good morning! You have **3 meetings** today and rain is expected after 4pm.';
         for (const chunk of brief.match(/.{1,6}/gs) ?? []) {
           await wait(12);
           yield { type: 'text', messageId, delta: chunk };
@@ -1262,7 +1311,9 @@ export class MockEngine implements Engine {
           status: nothing ? 'nothing-to-do' : 'done',
           summary: nothing
             ? 'Nothing new to report'
-            : 'Sent your briefing: 3 meetings and rain after 4pm',
+            : happened
+              ? `Told you about ${happened}`.slice(0, 200)
+              : 'Sent your briefing: 3 meetings and rain after 4pm',
         } as never);
         yield {
           type: 'done',

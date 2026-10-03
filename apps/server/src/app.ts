@@ -33,6 +33,9 @@ import {
   ReleaseTurnBody,
   SchedulePreviewBody,
   UpdateRoutineBody,
+  WhenPreviewBody,
+  MailPeople,
+  HookSecret,
   SaveCommandBody,
   SearchPreviewQuery,
   SearchQuery,
@@ -598,6 +601,22 @@ export async function buildApp(services: Services) {
   app.post<{ Params: { id: string } }>('/api/routines/:id/run', async (request, reply) => {
     try {
       return await services.routines.runNow(request.params.id);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  // When… (ADR 0056): how a trigger reads, the people you mail with, another app's secret.
+  app.post('/api/routines/when/preview', async (request, reply) => {
+    const body = parse(WhenPreviewBody, request.body, reply);
+    if (!body) return;
+    return services.routines.previewWhen(body.when, body.onlyIf);
+  });
+  app.get('/api/routines/people', async () => MailPeople.parse(await services.mailPeople()));
+  app.post<{ Params: { id: string } }>('/api/routines/:id/secret', async (request, reply) => {
+    try {
+      // Shown once, here: never stored where the page can read it again.
+      const secret = await services.routines.newHookSecret(request.params.id);
+      return reply.header('cache-control', 'no-store').send(HookSecret.parse({ secret }));
     } catch (error) {
       return sendError(reply, error);
     }

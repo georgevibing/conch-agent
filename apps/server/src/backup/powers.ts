@@ -26,7 +26,8 @@ export function previewReads(path: string): boolean {
     path === 'skills.trust.json' ||
     path === 'artifacts/access.json' ||
     path === 'routine-spend.json' ||
-    /^routines\/[^/]+(?<!\.runs)\.json$/.test(path)
+    /^routines\/[^/]+(?<!\.runs)\.json$/.test(path) ||
+    /^routines\/when\/[^/]+(?<!\.seen)\.json$/.test(path)
   );
 }
 
@@ -140,8 +141,15 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
   for (const path of files.filter((f) => /^routines\/[^/]+(?<!\.runs)\.json$/.test(f)).sort()) {
     const routine = json(read, path);
     // A draft waits for you to turn it on; a paused one doesn't run.
-    if (routine?.trust === 'full' && routine.status !== 'draft' && routine.status !== 'paused')
+    const on = routine?.status !== 'draft' && routine?.status !== 'paused';
+    // When… (ADR 0056): what starts it is in a file of its own.
+    const when = record(json(read, path.replace(/^routines\//, 'routines/when/'))?.when);
+    if (on && when && routine && routine.trust !== 'ask')
+      powers.push({ kind: 'routine-acts-on-events', name: text(routine.title, 'A routine') });
+    else if (routine?.trust === 'full' && on)
       powers.push({ kind: 'routine-never-asks', name: text(routine.title, 'A routine') });
+    if (on && when?.kind === 'hook')
+      powers.push({ kind: 'routine-address', name: text(routine?.title, 'A routine') });
   }
 
   // Routines allowed to spend more than Conch would by itself (ADR 0057).

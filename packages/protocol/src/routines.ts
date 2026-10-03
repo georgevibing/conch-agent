@@ -8,6 +8,7 @@
 import { z } from 'zod';
 
 import { EngineId, TurnOptions, Usage } from './common';
+import { OnlyIf, RunEvent, Trigger, WatchState } from './triggers';
 
 export const Weekday = z.enum(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
 export type Weekday = z.infer<typeof Weekday>;
@@ -148,7 +149,8 @@ export type RoutineSpendingBody = z.infer<typeof RoutineSpendingBody>;
 export const RoutineRun = z.object({
   id: z.string(),
   routineId: z.string(),
-  trigger: z.enum(['schedule', 'manual', 'catch-up']),
+  /** `event`: something happened (a When-routine, ADR 0056). */
+  trigger: z.enum(['schedule', 'manual', 'catch-up', 'event']),
   status: RunStatus,
   scheduledFor: z.number().optional(),
   startedAt: z.number(),
@@ -168,6 +170,8 @@ export const RoutineRun = z.object({
   cost: RunCost.optional(),
   /** A spending guard decided how it ended (ADR 0057): see `SpendGuard`. */
   guard: SpendGuard.optional(),
+  /** What happened, for a run a When-routine started (ADR 0056). */
+  event: RunEvent.optional(),
 });
 export type RoutineRun = z.infer<typeof RoutineRun>;
 
@@ -216,6 +220,13 @@ export const Routine = z.object({
   nextRunAt: z.number().optional(),
   lastRun: RoutineRun.optional(),
   runCount: z.number().int().nonnegative().default(0),
+  // When… (ADR 0056): a routine that starts because something happened. Its
+  // `schedule` is then a placeholder, and `scheduleText` describes the trigger.
+  when: Trigger.optional(),
+  /** "Only if it’s about the invoice", checked before a run wakes the assistant. */
+  onlyIf: OnlyIf.optional(),
+  /** How its source is doing (computed). */
+  watch: WatchState.optional(),
 });
 export type Routine = z.infer<typeof Routine>;
 
@@ -235,19 +246,34 @@ const editable = {
   runLimitUsd: z.number().positive().max(1000).nullable(),
 };
 
-export const CreateRoutineBody = z.object({
-  ...editable,
-  summary: editable.summary.default(''),
-  trust: editable.trust.default('ask'),
-  catchUp: editable.catchUp.default(true),
-  options: editable.options.default({}),
-  runLimitUsd: editable.runLimitUsd.optional(),
-  status: z.enum(['active', 'paused', 'draft']).default('active'),
-});
+export const CreateRoutineBody = z
+  .object({
+    ...editable,
+    summary: editable.summary.default(''),
+    trust: editable.trust.default('ask'),
+    catchUp: editable.catchUp.default(true),
+    options: editable.options.default({}),
+    runLimitUsd: editable.runLimitUsd.optional(),
+    status: z.enum(['active', 'paused', 'draft']).default('active'),
+    // When… (ADR 0056): a trigger instead of a schedule.
+    schedule: Schedule.optional(),
+    when: Trigger.optional(),
+    onlyIf: OnlyIf.optional(),
+  })
+  .refine((body) => body.schedule || body.when, {
+    error: 'Say when it should run: a time, or something that happens.',
+    path: ['schedule'],
+  });
 export type CreateRoutineBody = z.infer<typeof CreateRoutineBody>;
 
 export const UpdateRoutineBody = z
-  .object({ ...editable, status: z.enum(['active', 'paused']) })
+  .object({
+    ...editable,
+    status: z.enum(['active', 'paused']),
+    // When… (ADR 0056). `null` makes it a time routine again; an empty `onlyIf` clears it.
+    when: Trigger.nullable(),
+    onlyIf: OnlyIf,
+  })
   .partial();
 export type UpdateRoutineBody = z.infer<typeof UpdateRoutineBody>;
 

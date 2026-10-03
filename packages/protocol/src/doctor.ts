@@ -46,6 +46,8 @@ export const DoctorPlace = z.enum([
   'memory',
   'tasks',
   'skills',
+  /** Routines (and one routine, by `focus`): ADR 0056. */
+  'routines',
 ]);
 export type DoctorPlace = z.infer<typeof DoctorPlace>;
 
