@@ -6,14 +6,14 @@ import type { AddressService } from './service';
 import { AddressError, normaliseName } from './store';
 
 /**
- * Your own address (ADR 0064), from Settings and from `conch setup`.
+ * Your own address (ADR 0064), from Settings: a signed-in person. Turning it
+ * on, changing it, turning it off and moving it here all need a fresh "confirm
+ * it's you", and a device that's let in (or this computer): an address lets
+ * the internet reach Conch.
  *
- * - `/api/address…`: a signed-in person. Turning it on, changing it, turning it
- *   off and moving it here all need a fresh "confirm it's you", and a device
- *   that's let in (or this computer): an address lets the internet reach Conch.
- * - `/api/here/address…`: a program on this computer with its key (`conch
- *   setup`, `conch address`), checked in `security.ts` (`HERE_API`). Having the
- *   terminal is the proof, as it is for `conch reset`.
+ * `conch setup` and `conch address` don't come here: they write
+ * `address.json` themselves and read `address/status.json`, as `conch devices`
+ * writes access.json (`AddressService.watch`). No key goes over the port.
  *
  * Setting a name answers at once with `checking`; what follows (the reach
  * check, the certificate) arrives as `address.changed` events and in `GET`.
@@ -113,6 +113,4 @@ export function registerAddressRoutes(
   };
 
   routes('/api/address', owner);
-  // The key was checked before the route ran (HERE_API); having it is the proof.
-  routes('/api/here/address', async () => true);
 }

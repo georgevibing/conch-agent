@@ -36,8 +36,25 @@ const AddressFile = z.object({
   since: z.number().optional(),
   /** The id of the computer it was set on (`address/machine`). */
   setOn: z.string().max(64).optional(),
+  /**
+   * Something `conch address` asked of the running Conch: it acts on each once. Writing
+   * this file is the proof it's the person, as it is for `access.json`.
+   */
+  ask: z.object({ action: z.literal('renew'), at: z.number() }).optional(),
 });
 export type AddressFile = z.infer<typeof AddressFile>;
+
+/**
+ * What the running Conch says about the address, for `conch setup` and `conch address`:
+ * the status, and which change (`since`) and ask (`ask`) it has taken up.
+ */
+const StatusFile = z.object({
+  at: z.number(),
+  since: z.number().optional(),
+  ask: z.number().optional(),
+  status: z.unknown(),
+});
+export type StatusFile = z.infer<typeof StatusFile>;
 
 /** How the last try at a certificate went, so a restart doesn't hammer Let's Encrypt. */
 const AddressState = z.object({
@@ -174,6 +191,22 @@ export class AddressStore {
 
   async saveAccountKey(jwk: Record<string, unknown>): Promise<void> {
     await writeJson(join(this.dir, 'account.jwk'), jwk);
+  }
+
+  /** What the running Conch last said (undefined before it ever has). */
+  async status(): Promise<StatusFile | undefined> {
+    try {
+      const parsed = StatusFile.safeParse(
+        JSON.parse(await readFile(join(this.dir, 'status.json'), 'utf8')),
+      );
+      return parsed.success ? parsed.data : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  async saveStatus(file: Omit<StatusFile, 'at'>): Promise<void> {
+    await writeJson(join(this.dir, 'status.json'), { ...file, at: Date.now() });
   }
 
   async state(): Promise<AddressState> {

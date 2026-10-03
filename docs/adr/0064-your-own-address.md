@@ -84,7 +84,11 @@ the same link. **Just this computer** changes nothing.
 - **The address** lives in `~/.conch/address.json`: the name, when it was set, and the
   computer it was set on. It's a setting the person chooses, not an environment variable, so
   `conch address`, Settings and the installer all change the same thing and the background
-  service needs nothing passed to it.
+  service needs nothing passed to it. The CLI changes it by writing the file, as `conch devices`
+  writes `access.json`; the gateway notices within a second, acts once, and answers in
+  `address/status.json`. Being able to write in `~/.conch` is the proof it's the person; no key
+  travels over the port, where something else could be listening while Conch is down (ADR 0063).
+  Both files are protected paths, out of the assistant's reach.
 - **Two listeners** beside the gateway's own loopback one:
   - `:443` (`CONCH_HTTPS_PORT`), TLS 1.2+, the certificate for that name only. Requests and
     WebSocket upgrades are handed to the gateway's own Fastify server, so every guard in
@@ -131,8 +135,8 @@ Conch never runs as root. Where binding below 1024 needs a privilege:
 A Conch that nobody has claimed (sign-in is still `none`) can make **a hello link**:
 `https://<name>/#hello=<code>`.
 
-- Made only with proof of this computer: `conch hello` (or `conch setup`, which runs it) in a
-  terminal on it, or a local request with ADR 0063's proof. Never from another device.
+- Made only in a terminal on this computer: `conch hello` (or `conch setup`, which runs it)
+  writes it into `access.json` itself. Never from another device, and never over the port.
 - 32 random bytes, kept only as a SHA-256, single use, valid for an hour, at most five at once.
   Like `#pair=` (ADR 0027), the code rides in the fragment, which never reaches a server log,
   and the web app removes it from the address bar before anything else runs.

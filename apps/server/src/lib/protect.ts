@@ -28,6 +28,10 @@ export function protectedPaths(home: string): string[] {
     join(home, 'channels'),
     // Whether the public door is open: the agent mustn't open it.
     join(home, 'door.json'),
+    // An address of your own lets the internet reach Conch, and its folder holds the
+    // certificate's private key and the ACME account key (ADR 0064).
+    join(home, 'address.json'),
+    join(home, 'address'),
     join(home, 'access.json'),
     // What proves a browser or a program is on this computer (ADR 0063): this computer's key,
     // the one-time files that open Conch, and the menu bar helper's token. With either, the

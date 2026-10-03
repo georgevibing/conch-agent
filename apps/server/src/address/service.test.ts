@@ -20,7 +20,8 @@ beforeEach(async () => {
   home = await mkdtemp(join(tmpdir(), 'conch-address-service-'));
 });
 afterEach(async () => {
-  await rm(home, { recursive: true, force: true });
+  // status.json may still be being written by a test that didn’t stop its service.
+  await rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
 });
 
 function fakeListeners(fail?: { http?: AddressProblemError; https?: AddressProblemError }) {
@@ -346,5 +347,57 @@ describe('what review found (ADR 0064)', () => {
     expect(service.status().state).toBe('off');
     expect((await store.read()).name).toBeUndefined();
     expect(acme.orders()).toBe(0);
+  });
+});
+
+describe('conch setup and conch address, through the files (ADR 0063, 0064)', () => {
+  const until = async (check: () => Promise<boolean> | boolean) => {
+    for (let i = 0; i < 200 && !(await check()); i++)
+      await new Promise((resolve) => setTimeout(resolve, 10));
+  };
+
+  it('takes up an address the CLI wrote, and says so in status.json', async () => {
+    const { service, store } = await setup();
+    await service.start();
+    service.watch(10);
+    const since = Date.now();
+    // The CLI: another process, writing the same file.
+    const cli = new AddressStore(home);
+    await cli.write({ version: 1, name: NAME, since, setOn: await cli.machine() });
+    await until(async () => {
+      const said = await cli.status();
+      return said?.since === since && (said.status as { state?: string }).state === 'ready';
+    });
+    expect(service.status()).toMatchObject({ state: 'ready', name: NAME });
+    const said = await cli.status();
+    expect(said).toMatchObject({ since, status: { state: 'ready', name: NAME } });
+    expect(await store.certificate()).toBeDefined();
+    await service.stop();
+  });
+
+  it('turns off when the CLI empties the file, and renews when it asks', async () => {
+    const { service, acme, store } = await setup();
+    await service.set(NAME);
+    service.watch(10);
+    const cli = new AddressStore(home);
+    const at = Date.now();
+    await cli.write({ ...(await cli.read()), ask: { action: 'renew', at } });
+    await until(() => acme.orders() === 2);
+    expect(acme.orders()).toBe(2);
+    await until(async () => (await cli.status())?.ask === at);
+    await cli.write({ version: 1 });
+    await until(() => service.status().state === 'off');
+    expect(service.status().state).toBe('off');
+    expect(await store.certificate()).toBeUndefined();
+    await service.stop();
+  });
+
+  it('never acts again on a change it made itself', async () => {
+    const { service, acme } = await setup();
+    await service.set(NAME);
+    service.watch(10);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(acme.orders()).toBe(1);
+    await service.stop();
   });
 });

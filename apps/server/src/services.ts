@@ -1837,6 +1837,8 @@ export class Services {
   async serveAddress(gateway: HttpServer): Promise<void> {
     this.#gateway = gateway;
     await this.address.start();
+    // conch setup and conch address change it by writing its file (ADR 0063, 0064).
+    this.address.watch();
   }
 
   async stop() {

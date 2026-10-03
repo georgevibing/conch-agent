@@ -9,7 +9,7 @@ import { buildApp } from '../app';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 import { PretendAuthenticator } from '../test/authenticator';
-import { onThisComputer } from '../test/here';
+import { NOT_HERE, onThisComputer } from '../test/here';
 
 /**
  * The hello link (ADR 0064) and passkeys at the gateway (ADR 0065), through a
@@ -288,7 +288,7 @@ describe('passkeys, signed in', () => {
           host: HOST,
           'x-forwarded-for': '198.51.100.66',
           'x-forwarded-proto': 'https',
-          'x-conch-here': '',
+          [NOT_HERE]: '1',
           authorization: `Bearer ${key}`,
         },
         payload,

@@ -8,7 +8,7 @@
  * voice `cli/words.ts` describes: warm, a little playful, always exact.
  */
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { hostname, userInfo } from 'node:os';
 import { join } from 'node:path';
 
@@ -17,7 +17,6 @@ import { AddressStatus, checkPassword, suggestPassword } from '@conch/protocol';
 import { ensurePrivateNode, lowPortsAllowed, setcapCommand } from './address/runtime';
 import { dnsReport } from './address/service';
 import { AddressStore } from './address/store';
-import { HERE_HEADER, hereKeyFile } from './auth/here';
 import { setup as setupWizard } from './cli/setup';
 
 import { checkup, secureHome, workspaceRules } from './auth/checkup';
@@ -104,11 +103,11 @@ async function addresses(): Promise<string[]> {
  * it isn't running, the address it keeps a certificate for.
  */
 async function ownAddress(): Promise<string | undefined> {
-  const live = await addressApi.status().catch(() => undefined);
-  if (live) return live.state === 'ready' ? live.name : undefined;
-  const saved = new AddressStore(config.CONCH_HOME);
-  const name = (await saved.read().catch(() => undefined))?.name;
-  return name && (await saved.certificate()) ? name : undefined;
+  const said = await addressApi.status().catch(() => undefined);
+  if (said?.state === 'ready') return said.name;
+  // Conch isn't running (or hasn't said yet): the address it keeps a certificate for.
+  const name = (await addressFiles.read().catch(() => undefined))?.name;
+  return name && (await addressFiles.certificate()) ? name : undefined;
 }
 
 /** A one-time link in a card, with a QR code when it fits. */
@@ -611,29 +610,52 @@ async function waitFor(check: () => Promise<boolean>, ms: number): Promise<boole
 }
 
 /**
- * Ask the running Conch about its address, as a program on this computer:
- * with the key only this account can read (ADR 0063), never a sign-in.
+ * The running Conch's address, through files only this account can write, as
+ * `conch devices` changes access.json: `address.json` says what's wanted, and
+ * Conch answers in `address/status.json` (`AddressService.watch`). Nothing goes
+ * over the port, where something else might be listening while Conch is down.
  */
-async function hereApi(method: 'GET' | 'PUT' | 'DELETE' | 'POST', path: string, body?: object) {
-  const key = readFileSync(hereKeyFile(config.CONCH_HOME), 'utf8').trim();
-  const port = (await runningGateway(config.CONCH_HOME))?.port ?? config.CONCH_PORT;
-  const response = await fetch(`${askUrl(config.CONCH_HOST, port)}/api/here${path}`, {
-    method,
-    headers: { [HERE_HEADER]: key, ...(body && { 'content-type': 'application/json' }) },
-    ...(body && { body: JSON.stringify(body) }),
-    signal: AbortSignal.timeout(20_000),
-  });
-  const json = (await response.json().catch(() => ({}))) as { message?: string };
-  if (!response.ok) throw new Error(json.message ?? `Conch said ${response.status}.`);
-  return json;
+const addressFiles = new AddressStore(config.CONCH_HOME);
+
+/** Wait for the running Conch to take a change up, and say where it stands. */
+async function taken(
+  up: (file: NonNullable<Awaited<ReturnType<AddressStore['status']>>>) => boolean,
+): Promise<AddressStatus> {
+  const until = Date.now() + 15_000;
+  while (Date.now() < until) {
+    const file = await addressFiles.status();
+    if (file && up(file)) return AddressStatus.parse(file.status);
+    await pause(250);
+  }
+  throw new Error(
+    `Conch didn’t take that up. Is it running? Start it with ${conch('background on')}, then try again.`,
+  );
 }
 
 const addressApi = {
-  status: async () => AddressStatus.parse(await hereApi('GET', '/address')),
-  set: async (name: string) => AddressStatus.parse(await hereApi('PUT', '/address', { name })),
-  remove: async () => AddressStatus.parse(await hereApi('DELETE', '/address')),
-  renew: async () => AddressStatus.parse(await hereApi('POST', '/address/renew')),
-  here: async () => AddressStatus.parse(await hereApi('POST', '/address/here')),
+  status: async (): Promise<AddressStatus> => {
+    const file = await addressFiles.status();
+    return file ? AddressStatus.parse(file.status) : { state: 'off' };
+  },
+  set: async (name: string) => {
+    const since = Date.now();
+    await addressFiles.write({ version: 1, name, since, setOn: await addressFiles.machine() });
+    return taken((file) => file.since === since);
+  },
+  remove: async () => {
+    await addressFiles.write({ version: 1 });
+    return taken((file) => AddressStatus.parse(file.status).state === 'off');
+  },
+  renew: async () => {
+    const at = Date.now();
+    await addressFiles.write({ ...(await addressFiles.read()), ask: { action: 'renew', at } });
+    return taken((file) => file.ask === at);
+  },
+  here: async () => {
+    const file = await addressFiles.read();
+    await addressFiles.write({ ...file, setOn: await addressFiles.machine() });
+    return taken((now) => AddressStatus.parse(now.status).problem?.kind !== 'another-computer');
+  },
 };
 
 /** Run something as the administrator, the person at the keyboard typing their password. */
@@ -768,7 +790,7 @@ async function address() {
     process.argv.splice(3, process.argv.length, '--domain', name);
     return setup();
   }
-  if (!existsSync(hereKeyFile(config.CONCH_HOME)) || !(await answering())) {
+  if (!(await answering())) {
     ui.error('Conch isn’t running right now.');
     ui.hint(`Start it with ${conch('background on')}, then try again.`);
     process.exitCode = 1;

@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app';
 import { loadConfig } from '../config';
 import { Services } from '../services';
-import { onThisComputer } from '../test/here';
+import { NOT_HERE, onThisComputer } from '../test/here';
 import type { AddressStatus } from './service';
 
 /**
@@ -58,7 +58,7 @@ const remote = (app: App, cookie?: string, extra: Record<string, string> = {}) =
         host: 'conch.example',
         'x-forwarded-for': '203.0.113.20',
         'x-forwarded-proto': 'https',
-        'x-conch-here': '',
+        [NOT_HERE]: '1',
         ...(cookie && { cookie }),
         ...extra,
       },
@@ -124,7 +124,7 @@ describe('your address, from Settings', () => {
         host: 'conch.example',
         'x-forwarded-for': '203.0.113.20',
         'x-forwarded-proto': 'https',
-        'x-conch-here': '',
+        [NOT_HERE]: '1',
         authorization: `Bearer ${key}`,
       },
     });
@@ -134,25 +134,15 @@ describe('your address, from Settings', () => {
 });
 
 describe('your address, from the terminal', () => {
-  it('answers conch setup with this computer’s key, and nobody without it', async () => {
+  it('has no door on the port: conch setup writes the file instead (ADR 0063)', async () => {
     const { app, set } = await setup();
-    const ok = await app.inject({
+    const res = await app.inject({
       method: 'PUT',
       url: '/api/here/address',
       payload: { name: 'conch.example.com' },
     });
-    expect(ok.statusCode).toBe(200);
-    expect(set).toHaveBeenCalledWith('conch.example.com');
-    const without = await app.inject({
-      method: 'PUT',
-      url: '/api/here/address',
-      headers: { 'x-conch-here': '' },
-      payload: { name: 'conch.example.com' },
-    });
-    expect(without.statusCode).toBe(401);
-    // Through a proxy, even the right key doesn't count (ADR 0063).
-    const proxied = await remote(app).put('/api/here/address', { name: 'conch.example.com' });
-    expect(proxied.statusCode).toBe(401);
+    expect(res.statusCode).toBe(404);
+    expect(set).not.toHaveBeenCalled();
   });
 });
 
@@ -169,7 +159,7 @@ describe('the hello link, checked from outside', () => {
           host: 'conch.example',
           'x-forwarded-for': '203.0.113.20',
           'x-forwarded-proto': 'https',
-          'x-conch-here': '',
+          [NOT_HERE]: '1',
         },
         payload: body,
       });

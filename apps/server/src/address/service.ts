@@ -44,7 +44,7 @@ import { AddressListeners, type ListenerOptions } from './listeners';
 import { AddressProblemError, type AddressProblem } from './problems';
 import { checkReach, type ReachResult } from './reach';
 import { isPrivateNode, setcapCommand } from './runtime';
-import { AddressStore, normaliseName, type StoredCertificate } from './store';
+import { AddressStore, normaliseName, type AddressFile, type StoredCertificate } from './store';
 
 export type AddressState = 'off' | 'checking' | 'getting-certificate' | 'ready' | 'problem';
 
@@ -175,6 +175,11 @@ export class AddressService {
   #listeners?: ListenersLike;
   #cancel?: () => void;
   #busy?: Promise<AddressStatus>;
+  /** The address file as Conch last wrote or acted on it: a change it didn't make is a person's. */
+  #applied?: AddressFile;
+  #watcher?: ReturnType<typeof setInterval>;
+  /** status.json is written one at a time, the newest last. */
+  #saving: Promise<void> = Promise.resolve();
   #watchers = new Set<(status: AddressStatus) => void>();
   #acme?: AcmeLike;
   readonly #now: () => number;
@@ -207,19 +212,79 @@ export class AddressService {
   async start(): Promise<AddressStatus> {
     return this.#single(async () => {
       const file = await this.store.read();
-      if (!file.name) return this.#set({ state: 'off' });
-      const machine = await this.store.machine();
-      if (file.setOn && file.setOn !== machine)
-        return this.#set({
-          state: 'problem',
-          name: file.name,
-          problem: {
-            kind: 'another-computer',
-            message: `${file.name} was set up on another computer. Point it at this one, then turn it on here.`,
-          },
-        });
-      if (!file.setOn) await this.store.write({ ...file, setOn: machine });
-      return this.#bring(file.name, false);
+      this.#applied = file;
+      return this.#begin(file, false);
+    });
+  }
+
+  /**
+   * What the file says, brought up: off, waiting for a person on another
+   * computer (a restored backup), or answering at the name.
+   */
+  async #begin(file: AddressFile, force: boolean): Promise<AddressStatus> {
+    if (!file.name) return this.#set({ state: 'off' });
+    const machine = await this.store.machine();
+    if (file.setOn && file.setOn !== machine)
+      return this.#set({
+        state: 'problem',
+        name: file.name,
+        problem: {
+          kind: 'another-computer',
+          message: `${file.name} was set up on another computer. Point it at this one, then turn it on here.`,
+        },
+      });
+    if (!file.setOn) await this.#write({ ...file, setOn: machine });
+    return this.#bring(file.name, force);
+  }
+
+  /** Write the address file, remembering it as Conch's own change. */
+  async #write(file: AddressFile): Promise<void> {
+    await this.store.write(file);
+    this.#applied = file;
+  }
+
+  /**
+   * `conch setup` and `conch address` change the address by writing its file,
+   * as `conch devices` writes access.json: being able to write in ~/.conch is
+   * the proof it's the person, and no key ever goes over the port (ADR 0063).
+   * Conch looks now and then, and acts once on whatever changed.
+   */
+  watch(everyMs = 750): void {
+    this.#watcher ??= setInterval(() => void this.#look().catch(() => undefined), everyMs);
+    this.#watcher.unref?.();
+  }
+
+  async #look(): Promise<void> {
+    // A change under way writes the file itself: look again once it's done.
+    if (this.#busy) return;
+    const file = await this.store.read();
+    const before = this.#applied;
+    const key = (f: AddressFile | undefined) =>
+      JSON.stringify([f?.name ?? null, f?.since ?? null, f?.setOn ?? null, f?.ask?.at ?? null]);
+    if (key(file) === key(before)) return;
+    this.#applied = file;
+    if (!file.name) {
+      void this.#single(async () => {
+        this.#cancel?.();
+        await this.#listeners?.stop();
+        this.#listeners = undefined;
+        await this.store.clear();
+        return this.#set({ state: 'off' });
+      });
+      return;
+    }
+    if (file.ask && file.ask.at !== before?.ask?.at && file.name === before?.name) {
+      void this.renew();
+      return;
+    }
+    const name = file.name;
+    this.#set({ state: 'checking', name, url: this.#url(name) });
+    void this.#single(async () => {
+      if (before?.name !== name) {
+        await this.#listeners?.stop();
+        this.#listeners = undefined;
+      } else await this.store.saveState({ failures: 0 });
+      return this.#begin(file, true);
     });
   }
 
@@ -234,7 +299,7 @@ export class AddressService {
         await this.#listeners?.stop();
         this.#listeners = undefined;
       } else await this.store.saveState({ failures: 0 });
-      await this.store.write({
+      await this.#write({
         version: 1,
         name,
         since: this.#now(),
@@ -251,7 +316,7 @@ export class AddressService {
     return this.#single(async () => {
       const file = await this.store.read();
       if (!file.name) return this.#set({ state: 'off' });
-      await this.store.write({ ...file, setOn: await this.store.machine() });
+      await this.#write({ ...file, setOn: await this.store.machine() });
       await this.store.saveState({ failures: 0 });
       return this.#bring(file.name, true);
     });
@@ -264,6 +329,7 @@ export class AddressService {
       await this.#listeners?.stop();
       this.#listeners = undefined;
       await this.store.clear();
+      this.#applied = { version: 1 };
       return this.#set({ state: 'off' });
     });
   }
@@ -294,9 +360,13 @@ export class AddressService {
   }
 
   async stop(): Promise<void> {
+    clearInterval(this.#watcher);
+    this.#watcher = undefined;
     this.#cancel?.();
     await this.#listeners?.stop();
     this.#listeners = undefined;
+    // What it last said reaches status.json before it goes.
+    await this.#saving;
   }
 
   /** Where a name points, and what to add when it doesn't point here. */
@@ -352,6 +422,15 @@ export class AddressService {
   #set(status: AddressStatus): AddressStatus {
     this.#status = status;
     for (const watcher of this.#watchers) watcher(this.status());
+    this.#saving = this.#saving
+      .then(() =>
+        this.store.saveStatus({
+          status: this.status(),
+          ...(this.#applied?.since !== undefined && { since: this.#applied.since }),
+          ...(this.#applied?.ask && { ask: this.#applied.ask.at }),
+        }),
+      )
+      .catch(() => undefined);
     return this.status();
   }
 
