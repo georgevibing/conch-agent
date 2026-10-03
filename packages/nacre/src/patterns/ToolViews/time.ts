@@ -83,12 +83,20 @@ export function dayName(key: string, options: WhenOptions = {}): string {
   );
 }
 
-/** "Fri 3 Oct" (with the year when it isn't this year's). */
-export function dayDate(key: string, options: WhenOptions = {}): string {
+/**
+ * "Fri 3 Oct" (with the year when it isn't this year's). Beside a name that
+ * is already the weekday ("Friday"), `weekday: false` says the date alone,
+ * "9 Oct", so the day is named once.
+ */
+export function dayDate(
+  key: string,
+  options: WhenOptions = {},
+  { weekday = true }: { weekday?: boolean } = {},
+): string {
   const thisYear = dayKey(options.now ?? Date.now(), options.timeZone).slice(0, 4);
   // The parts in the locale's order, without its commas: "Fri 3 Oct", "Fri Oct 3".
   return new Intl.DateTimeFormat(options.locale, {
-    weekday: 'short',
+    ...(weekday && { weekday: 'short' as const }),
     day: 'numeric',
     month: 'short',
     ...(key.slice(0, 4) !== thisYear && { year: 'numeric' }),

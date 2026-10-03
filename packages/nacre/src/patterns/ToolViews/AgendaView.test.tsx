@@ -37,7 +37,7 @@ describe('AgendaView', () => {
     expect(screen.getByRole('region', { name: 'Calendar, 3 events' })).toBeInTheDocument();
     const today = screen.getByRole('region', { name: 'Today, Sat 3 Oct' });
     const tomorrow = screen.getByRole('region', { name: 'Tomorrow, Sun 4 Oct' });
-    const monday = screen.getByRole('region', { name: 'Monday, Mon 5 Oct' });
+    const monday = screen.getByRole('region', { name: 'Monday, 5 Oct' });
     // The all-day event covers Saturday and Sunday (its end is exclusive), in a band.
     expect(within(today).getByRole('list', { name: 'All day' })).toHaveTextContent('Offsite');
     expect(within(tomorrow).getByRole('list', { name: 'All day' })).toHaveTextContent('Offsite');

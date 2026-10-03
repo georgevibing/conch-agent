@@ -256,7 +256,10 @@ export function AgendaView({
       {shown.map((d) => {
         const isToday = d.key === today;
         const name = dayName(d.key, options);
-        const date = dayDate(d.key, options);
+        // "Today Sat 3 Oct", but "Friday 9 Oct": the weekday is said once.
+        const date = dayDate(d.key, options, {
+          weekday: Math.abs(daysBetween(today, d.key)) <= 1,
+        });
         // Where now falls among today's events: before the first one still to start.
         const nowAt = isToday && d.timed.length ? d.timed.findIndex((e) => startOf(e) > now) : -2;
         return (
