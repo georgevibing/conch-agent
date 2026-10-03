@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 
 import type {
+  ConchAppOffer,
   Attachment,
   BrowserPermission,
   Memory,
@@ -1879,6 +1880,17 @@ export class ConversationManager {
     if (dismissed) return;
     this.#append(live, { type: 'integration.suggestion.dismissed', catalogId });
     // A running turn saves the log when it ends; writing it now as well could race.
+    if (!live.abort) await this.#persist(live);
+  }
+
+  /**
+   * A Conch app's card changed outside a turn (ADR 0061): added, updated,
+   * put away or failed, from the person's press on it. Like `dismissOffer`,
+   * a running turn saves the log when it ends.
+   */
+  async noteAppOffer(id: string, offer: ConchAppOffer): Promise<void> {
+    const live = await this.#get(id);
+    this.#append(live, { type: 'conch-app.offer', offer });
     if (!live.abort) await this.#persist(live);
   }
 

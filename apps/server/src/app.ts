@@ -75,6 +75,7 @@ import { registerVoiceRoutes } from './voice/routes';
 import { registerSafetyRoutes } from './conversations/safety-routes';
 import { registerUndoRoutes } from './undo/routes';
 import { registerArtifactRoutes } from './artifacts/routes';
+import { registerConchAppRoutes } from './conchapps/routes';
 import { registerTaskRoutes } from './tasks/routes';
 import { registerQuestionRoutes } from './questions/routes';
 import { registerFirstJobRoutes } from './onboarding/first-job';
@@ -661,6 +662,11 @@ export async function buildApp(services: Services) {
       return sendError(reply, error);
     }
   };
+  // Apps you make, share and add (ADR 0061): adding someone else's asks that it's you.
+  registerConchAppRoutes(app, services.conchApps, {
+    verifyRequired,
+    emit: (event) => services.broadcast.emit(event),
+  });
   app.get('/api/integrations', () => services.integrations.list());
   app.get<{ Querystring: { refresh?: string } }>('/api/integrations/external', (request) =>
     services.integrations.external(request.query.refresh === '1'),

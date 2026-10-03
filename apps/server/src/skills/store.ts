@@ -40,6 +40,10 @@ export interface SkillRoot {
   dir: string;
   /** How many folder levels hold skills (OpenClaw and Hermes allow a category level). */
   depth: 1 | 2;
+  /** How a skill found here starts, until it's changed in Conch (unset: Off). */
+  mode?: 'auto' | 'manual';
+  /** Its skills' ids start with this rather than the source (one per Conch app). */
+  idPrefix?: string;
 }
 
 /** Bigger than any sensible skill; a larger file isn't read. */
@@ -51,6 +55,7 @@ const FILES_LISTED_MAX = 40;
 
 export const SOURCE_LABELS: Record<SkillSource, string> = {
   conch: 'Conch',
+  app: 'Conch apps',
   agents: 'Shared agent skills',
   claude: 'Claude Code',
   openclaw: 'OpenClaw',
@@ -164,10 +169,17 @@ export class SkillStore {
 
   readonly #modesPath: string;
 
+  /**
+   * Folders that come and go: each Conch app's own skills (ADR 0061), read
+   * where the app keeps them, never written.
+   */
+  appRoots: () => SkillRoot[] = () => [];
+
   get roots(): SkillRoot[] {
     return [
       { source: 'conch', label: SOURCE_LABELS.conch, dir: this.dir, depth: 1 },
       ...this.external,
+      ...this.appRoots(),
     ];
   }
 
@@ -204,12 +216,20 @@ export class SkillStore {
         ids.add(skill.id);
         count++;
       }
+      // An app's skills are one source, listed once there are some.
+      if (root.source === 'app' && !count) continue;
       const same = sources.find((s) => s.id === root.source);
       if (same) {
         same.count += count;
         same.found ||= found;
       } else {
-        sources.push({ id: root.source, label: root.label, path: root.dir, found, count });
+        sources.push({
+          id: root.source,
+          label: root.source === 'app' ? SOURCE_LABELS.app : root.label,
+          path: root.dir,
+          found,
+          count,
+        });
       }
     }
     skills.sort(
@@ -565,14 +585,22 @@ export class SkillStore {
     const fileMode = readFlag(parsed.front, 'disable-model-invocation') ? 'manual' : 'auto';
 
     const id = uniqueId(
-      root.source === 'conch' ? folderName : `${root.source}_${folderName}`,
+      root.source === 'conch' ? folderName : `${root.idPrefix ?? root.source}_${folderName}`,
       taken,
     );
     if (!id) return undefined;
     const { modes, pins, acks } = choices;
     const chosen = modes[id];
     // Skills found in other apps start Off: a folder appearing on disk mustn't start steering chats.
-    let mode = chosen ?? (root.source === 'conch' ? fileMode : 'off');
+    let mode =
+      chosen ??
+      (root.source === 'conch'
+        ? fileMode
+        : root.mode === 'auto'
+          ? fileMode
+          : root.mode === 'manual'
+            ? 'manual'
+            : 'off');
     // Read through before it steers anything, and held to what you turned on (ADR 0028).
     const review = await this.#review(folder);
     const pin = pins[id];
