@@ -62,7 +62,7 @@ import {
   type AppRuntime,
   SourceError,
 } from './types';
-import { plainLine } from './words';
+import { plainLine, safeSchema } from './words';
 import { type DraftInfo, Workshop, WorkshopError } from './workshop';
 
 export class ConchAppError extends Error {
@@ -121,6 +121,13 @@ interface Package {
 
 /** A tool as a card shows it: no schema, which only the model needs. */
 const cardTool = ({ input: _input, ...tool }: ConchAppTool): ConchAppTool => tool;
+
+/** A tool as an app's record keeps it: its input schema rebuilt from the allowlist (`safeSchema`). */
+const storedTool = (tool: ConchAppTool): ConchAppTool => {
+  const { input: raw, ...rest } = tool;
+  const input = safeSchema(raw);
+  return input ? { ...rest, input } : rest;
+};
 
 /** What changed from one version to the next, new reach first. */
 export function changesOf(
@@ -461,7 +468,7 @@ export class ConchAppService {
     try {
       const tools = await (await this.runtimeFor(id)).list();
       await this.store.patch(id, (record) => {
-        record.tools = tools;
+        record.tools = tools.map(storedTool);
       });
     } catch (error) {
       if (!this.#failures.has(id)) this.#fail(app.id, error);
@@ -965,7 +972,7 @@ export class ConchAppService {
     const secrets = { ...kept, ...input.settings.secret };
     if (Object.values(secrets).some(Boolean)) await this.store.setSecrets(id, secrets);
     const now = this.#now();
-    const tools = input.tools;
+    const tools = input.tools.map(storedTool);
     const record: AppRecord = existing
       ? {
           ...existing,
@@ -1037,7 +1044,7 @@ export class ConchAppService {
     try {
       const listed = await (await this.runtimeFor(id)).list();
       await this.store.patch(id, (app) => {
-        app.tools = listed;
+        app.tools = listed.map(storedTool);
       });
     } catch (error) {
       this.#fail(id, error);
