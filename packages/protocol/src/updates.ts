@@ -89,7 +89,14 @@ export const ConchUpdate = z.object({
    * Why one press can't update it (local changes, no upstream, a merge
    * needed), and the exact command to run by hand.
    */
-  blocked: z.object({ reason: z.string(), command: z.string().optional() }).optional(),
+  blocked: z
+    .object({
+      reason: z.string(),
+      command: z.string().optional(),
+      /** Where to download it, when the app can't replace itself (ADR 0054). */
+      download: z.string().url().optional(),
+    })
+    .optional(),
   /** An update running now. */
   running: UpdateProgress.extend({ phase: ConchUpdateStep }).optional(),
   /** The folder moved on since Conch started: it's ready once Conch starts again. */

@@ -58,6 +58,8 @@ export const BackgroundRunning = z.enum([
   'background',
   /** In a Terminal window (`pnpm start`): closing it stops Conch. */
   'window',
+  /** The desktop app (ADR 0054): closing its window keeps Conch running in the menu bar. */
+  'app',
   /** A development server (`pnpm dev`): Always on is for the real thing. */
   'dev',
 ]);

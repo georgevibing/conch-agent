@@ -54,6 +54,7 @@ export * from './linking';
 export * from './local';
 export * from './memory';
 export * from './common';
+export * from './desktop';
 export * from './doctor';
 export * from './phone';
 export * from './providers';
