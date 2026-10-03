@@ -52,6 +52,17 @@
     }
   }
 
+  /* Straight inside the dialog, without a Header, the title and description
+     still get its room: the same edges, the same gap between them. */
+  .content > .title,
+  .content > .description {
+    padding-inline: var(--nc-space-5);
+  }
+
+  .content > .title + .description {
+    margin-block-start: var(--nc-space-1-5);
+  }
+
   .header {
     display: flex;
     flex-direction: column;

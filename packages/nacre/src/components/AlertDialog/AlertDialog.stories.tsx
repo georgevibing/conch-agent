@@ -112,3 +112,25 @@ export const Tones: Story = {
     </div>
   ),
 };
+
+/** Title and description straight inside, without a Header: the same room and gap. */
+export const WithoutHeader: Story = {
+  render: () => (
+    <AlertDialog.Root defaultOpen>
+      <AlertDialog.Trigger asChild>
+        <Button variant="surface">Disconnect Codex</Button>
+      </AlertDialog.Trigger>
+      <AlertDialog.Content tone="danger">
+        <AlertDialog.Title>Disconnect Codex?</AlertDialog.Title>
+        <AlertDialog.Description>
+          Conch disconnects its own account. Your sign-ins in other apps are not changed. You can
+          reconnect any time.
+        </AlertDialog.Description>
+        <AlertDialog.Footer>
+          <AlertDialog.Cancel variant="ghost">Keep it</AlertDialog.Cancel>
+          <AlertDialog.Action>Disconnect</AlertDialog.Action>
+        </AlertDialog.Footer>
+      </AlertDialog.Content>
+    </AlertDialog.Root>
+  ),
+};

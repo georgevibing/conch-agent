@@ -23,7 +23,7 @@ import {
   type HandshakePhase,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Trash2 } from 'lucide-react';
 import { useEffect, useEffectEvent, useId, useRef, useState, type FormEvent } from 'react';
 
 import { api } from '../../api/client';
@@ -516,12 +516,14 @@ function ServerSettings({ provider }: { provider: Provider }) {
         </Stack>
       </form>
       <AlertDialog.Root open={removing} onOpenChange={setRemoving}>
-        <AlertDialog.Content tone="danger">
-          <AlertDialog.Title>Remove {server.name}?</AlertDialog.Title>
-          <AlertDialog.Description>
-            Conch forgets this server and its key. Chats that used it carry on with your default
-            provider. You can add it again any time.
-          </AlertDialog.Description>
+        <AlertDialog.Content tone="danger" icon={<Trash2 />}>
+          <AlertDialog.Header>
+            <AlertDialog.Title>Remove {server.name}?</AlertDialog.Title>
+            <AlertDialog.Description>
+              Conch forgets this server and its key. Chats that used it carry on with your default
+              provider. You can add it again any time.
+            </AlertDialog.Description>
+          </AlertDialog.Header>
           <AlertDialog.Footer>
             <AlertDialog.Cancel asChild>
               <Button variant="ghost">Keep it</Button>

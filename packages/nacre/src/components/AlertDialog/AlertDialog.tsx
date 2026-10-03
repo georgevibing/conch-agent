@@ -49,7 +49,12 @@ function AlertDialogTitle({
   className,
   ...props
 }: ComponentProps<typeof AlertDialogPrimitive.Title>) {
-  return <AlertDialogPrimitive.Title className={cx(dialogStyles.title, className)} {...props} />;
+  return (
+    <AlertDialogPrimitive.Title
+      className={cx(dialogStyles.title, styles.title, className)}
+      {...props}
+    />
+  );
 }
 
 function AlertDialogDescription({
@@ -58,7 +63,7 @@ function AlertDialogDescription({
 }: ComponentProps<typeof AlertDialogPrimitive.Description>) {
   return (
     <AlertDialogPrimitive.Description
-      className={cx(dialogStyles.description, className)}
+      className={cx(dialogStyles.description, styles.description, className)}
       {...props}
     />
   );

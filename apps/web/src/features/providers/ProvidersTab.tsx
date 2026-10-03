@@ -9,6 +9,7 @@ import {
   Stack,
   Text,
 } from '@conch/nacre';
+import { KeyRound, Trash2, Unplug } from 'lucide-react';
 import { useId, useState } from 'react';
 import { useLocation } from 'react-router';
 
@@ -221,23 +222,30 @@ export function ProvidersTab() {
         open={Boolean(removing)}
         onOpenChange={(next) => !next && setRemoving(undefined)}
       >
-        <AlertDialog.Content tone="danger">
-          <AlertDialog.Title>
-            {removing?.server
-              ? `Remove ${removing.name}?`
-              : removing?.disconnectable
-                ? `Disconnect ${removing.name}?`
-                : `Remove the ${removing?.name} key?`}
-          </AlertDialog.Title>
-          <AlertDialog.Description>
-            {removing?.server
-              ? 'Conch forgets this server and its key. Chats that used it carry on with your default provider. You can add it again any time.'
-              : removing?.disconnectable
-                ? 'Conch disconnects its own account. Your sign-ins in other apps are not changed. You can reconnect any time.'
-                : removing?.key?.source === '1password'
-                  ? 'Conch forgets where to find it. The key itself stays in 1Password.'
-                  : 'Conch forgets it. You can paste it again any time.'}
-          </AlertDialog.Description>
+        <AlertDialog.Content
+          tone="danger"
+          icon={
+            removing?.server ? <Trash2 /> : removing?.disconnectable ? <Unplug /> : <KeyRound />
+          }
+        >
+          <AlertDialog.Header>
+            <AlertDialog.Title>
+              {removing?.server
+                ? `Remove ${removing.name}?`
+                : removing?.disconnectable
+                  ? `Disconnect ${removing.name}?`
+                  : `Remove the ${removing?.name} key?`}
+            </AlertDialog.Title>
+            <AlertDialog.Description>
+              {removing?.server
+                ? 'Conch forgets this server and its key. Chats that used it carry on with your default provider. You can add it again any time.'
+                : removing?.disconnectable
+                  ? 'Conch disconnects its own account. Your sign-ins in other apps are not changed. You can reconnect any time.'
+                  : removing?.key?.source === '1password'
+                    ? 'Conch forgets where to find it. The key itself stays in 1Password.'
+                    : 'Conch forgets it. You can paste it again any time.'}
+            </AlertDialog.Description>
+          </AlertDialog.Header>
           <AlertDialog.Footer>
             <AlertDialog.Cancel asChild>
               <Button variant="ghost">Keep it</Button>
