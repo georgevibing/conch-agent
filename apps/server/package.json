@@ -23,6 +23,8 @@
     "@huggingface/transformers": "4.3.0",
     "@matrix-org/matrix-sdk-crypto-wasm": "^18.9.0",
     "@modelcontextprotocol/sdk": "^1.31.0",
+    "@peculiar/x509": "^2.1.0",
+    "@simplewebauthn/server": "^14.0.3",
     "@whiskeysockets/baileys": "7.0.0-rc14",
     "croner": "^10.0.1",
     "cronstrue": "^3.27.0",
