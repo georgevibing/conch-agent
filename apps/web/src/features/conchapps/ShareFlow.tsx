@@ -1,4 +1,4 @@
-import type { ConchAppSource, PublishState } from '@conch/protocol';
+import { madeHere, type ConchAppSource, type PublishState } from '@conch/protocol';
 import { ShareSteps, toast } from '@conch/nacre';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useEffectEvent, useRef, useState, type ComponentProps } from 'react';
@@ -13,6 +13,7 @@ import { conchAppKeys, usePublishState } from './queries';
 
 /** Where an app came from, to pass on: a GitHub repository or the link it was added from. */
 export function originOf(source: ConchAppSource): string | undefined {
+  if (source.kind === 'made') return source.basedOn ? originOf(source.basedOn.source) : undefined;
   if (source.kind === 'github') return source.url;
   if (source.kind === 'link') return source.url;
   return undefined;
@@ -39,7 +40,8 @@ export function ShareFlow({
   const client = useQueryClient();
   const auth = useAuth();
   const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
-  const mine = !source || source.kind === 'made';
+  // Only what was made here, with nothing from outside in it, is yours to publish.
+  const mine = !source || madeHere(source);
   const { data } = usePublishState(appId, mine);
   const [failed, setFailed] = useState<string>();
   const [saving, setSaving] = useState(false);

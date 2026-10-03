@@ -308,7 +308,7 @@ describe('AppPreview warnings', () => {
 describe('ShareSteps', () => {
   const base = { name: 'Plant diary', appId: 'plant-diary' };
 
-  it('for an app someone else made: where it came from, and the file, never Publish', async () => {
+  it('for an app not made here: where it came from, and the file, never Publish', async () => {
     const onSaveFile = vi.fn();
     const { container, rerender } = renderNacre(
       <ShareSteps
@@ -323,7 +323,7 @@ describe('ShareSteps', () => {
     expect(
       screen.getByRole('link', { name: 'https://github.com/ada/plant-diary (opens in a new tab)' }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/only they can publish it/)).toBeInTheDocument();
+    expect(screen.getByText(/Conch doesn’t publish it/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Save as a file' }));
     expect(onSaveFile).toHaveBeenCalledOnce();
     await expectAccessible(container);

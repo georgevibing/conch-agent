@@ -1,7 +1,12 @@
-import { appSourceLine, type CatalogEntry, type Channel, type ConchApp } from '@conch/protocol';
+import {
+  appSourceLine,
+  madeHere,
+  type CatalogEntry,
+  type Channel,
+  type ConchApp,
+} from '@conch/protocol';
 import {
   AppMadeBadge,
-  Badge,
   Button,
   CommunityApps,
   DropOverlay,
@@ -359,11 +364,22 @@ export function AppsView() {
                       color={item.color}
                       {...(conch && {
                         app: conch.manifest.icon,
-                        badge: <SourceBadge app={conch} />,
+                        ...(madeHere(conch.source)
+                          ? { badge: <AppMadeBadge kind="made" /> }
+                          : conch.source.kind === 'github' && {
+                              badge: <AppMadeBadge kind="community" />,
+                            }),
                       })}
                       state={card.state}
                       message={card.message}
-                      meta={card.meta}
+                      meta={
+                        // Who it's from, in a few words, before its quiet facts (ADR 0061).
+                        conch && !madeHere(conch.source)
+                          ? [appSourceLine(conch.source, conch.signature), card.meta]
+                              .filter(Boolean)
+                              .join(' · ')
+                          : card.meta
+                      }
                       enabled={card.enabled}
                       action={
                         card.fix
@@ -478,7 +494,7 @@ export function AppsView() {
                   variant="catalog"
                   name={`Make “${query.trim()}” with Conch`}
                   app={{ glyph: 'sparkles', color: 'violet' }}
-                  tagline="Conch builds it in a chat, and adds it when you say so."
+                  tagline="Conch builds it for you in a chat."
                   onOpen={() => addYourOwn('describe', { describe: query.trim() })}
                 />
               </li>
@@ -608,18 +624,5 @@ export function AppsView() {
       />
       {dialog}
     </Page>
-  );
-}
-
-/**
- * Who a Conch app is from, beside its name (ADR 0061): **Made by you**, or
- * where it came from in a few words ("From github.com/ada/plant-diary").
- */
-function SourceBadge({ app }: { app: ConchApp }) {
-  if (app.source.kind === 'made') return <AppMadeBadge kind="made" />;
-  return (
-    <Badge size="sm" tone="neutral" icon={<Globe />}>
-      {appSourceLine(app.source, app.signature)}
-    </Badge>
   );
 }

@@ -31,7 +31,7 @@ export interface ShareStepsProps extends Omit<ComponentProps<'section'>, 'childr
   getIt?: ReactNode;
   onInstall?: () => void;
   /**
-   * Someone else made it: only its maker can publish it, and the file
+   * It wasn't made here: only its maker can publish it, and the file
    * carries their signature, not yours. `url` is where it was added from
    * (a GitHub repository or a link), offered to pass on instead.
    */
@@ -118,7 +118,7 @@ export function ShareSteps({
           </div>
         </div>
         <p className={styles.fine}>
-          Someone else made it, so only they can publish it. It keeps its maker’s signature.
+          It wasn’t made here, so Conch doesn’t publish it. The file keeps its maker’s signature.
         </p>
       </section>
     );
