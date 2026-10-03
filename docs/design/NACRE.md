@@ -269,6 +269,37 @@ place.
 - **The seam.** A horizontal `ResizeHandle` (`axis="y"`) sits on the drawer's top
   edge, so dragging it or using the arrow keys resizes the terminal.
 
+### Conch apps (made, shared, added)
+
+An app someone made should sit among Notion and GitHub as one of them
+(ADR 0061), and adding one should feel like a small celebration, never a
+form.
+
+- **The icon** (`AppIcon`). One of Lucide's glyphs on one of thirteen colours
+  (`--nc-app-*`), drawn as an integration's logo is: the same tile, corners,
+  glaze and status dot. White on most colours, a deep glyph of the same hue on
+  amber, yellow and lime. Nothing is fetched. `IntegrationCard` takes `app`
+  for it and `badge` for **Made by you** (`AppMadeBadge`).
+- **What it can do** (`AppAbilityList`). One plain line each, in the
+  protocol's own words (`appAbilities`), so the card, the app's page, the
+  preview and the assistant's prompt say the same thing. What it reaches wears
+  the accent; what it can't touch is said a shade quieter, as reassurance. An
+  update's new reach comes first, on a calm amber wash (`AppChanges`).
+- **The card** (`AppOffer`). Under the reply, never a dialog: icon, name, the
+  assistant's one sentence, what it can do, its tools folded under a count,
+  who it's from, and below a hairline, your part — the settings only you type
+  (secrets masked, **Get it** beside the field) and **Add to my apps**.
+  Added, the icon lands on the bouncy spring while one ring of pearl light
+  passes out from it, and its examples wait as chips. Overtaken or declined,
+  it folds to one quiet line.
+- **Describe it** (`AppMaker`). The question in the display serif, one big
+  box whose hint takes turns through things people really want, and idea
+  chips. With reduced motion the hint holds still.
+- **The page kit** (`pagekit.css`). Pages an app ships get the tokens and a
+  classless base in a layer of their own, so plain HTML looks like Conch, and
+  the page's own styles still win. Squircle corners, the accent and light or
+  dark follow the person; nothing else is assumed.
+
 ## Interaction checklist (every interactive component)
 
 - [ ] Hover: subtle fill/shadow change, Lustre where appropriate, `@media (hover: hover)` only
