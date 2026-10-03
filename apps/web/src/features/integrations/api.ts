@@ -17,13 +17,35 @@ const Ok = z.object({ ok: z.boolean() });
 /** Where the service's sign-in page opens: a small window, or this tab if popups are blocked. */
 export type SignInDisplay = 'popup' | 'tab';
 
+/**
+ * Signing in from a chat's offer (ADR 0055): in a tab (a phone), the way
+ * back is that chat, which takes the offer by itself when it opens.
+ */
+export interface SignInReturn {
+  conversationId: string;
+  offerId: string;
+}
+
+const signInQuery = (display: SignInDisplay, back?: SignInReturn) =>
+  new URLSearchParams({
+    display,
+    ...(display === 'tab' && back && { chat: back.conversationId, offer: back.offerId }),
+  }).toString();
+
 export const integrationsApi = {
   list: () => request(IntegrationsList, '/api/integrations'),
   external: (refresh = false) =>
     request(ExternalList, `/api/integrations/external${refresh ? '?refresh=1' : ''}`),
   get: (id: string) => request(Integration, `/api/integrations/${id}`),
-  create: (body: z.input<typeof CreateIntegrationBody>, display: SignInDisplay = 'popup') =>
-    request(IntegrationResult, `/api/integrations?display=${display}`, { method: 'POST', body }),
+  create: (
+    body: z.input<typeof CreateIntegrationBody>,
+    display: SignInDisplay = 'popup',
+    back?: SignInReturn,
+  ) =>
+    request(IntegrationResult, `/api/integrations?${signInQuery(display, back)}`, {
+      method: 'POST',
+      body,
+    }),
   /** Bring a server a provider set up by itself into Conch (it may ask to sign in). */
   adopt: (body: AdoptIntegrationBody, display: SignInDisplay = 'popup') =>
     request(IntegrationResult, `/api/integrations/adopt?display=${display}`, {
@@ -33,8 +55,8 @@ export const integrationsApi = {
   update: (id: string, body: UpdateIntegrationBody) =>
     request(Integration, `/api/integrations/${id}`, { method: 'PATCH', body }),
   remove: (id: string) => request(Ok, `/api/integrations/${id}`, { method: 'DELETE' }),
-  connect: (id: string, display: SignInDisplay = 'popup') =>
-    request(IntegrationResult, `/api/integrations/${id}/connect?display=${display}`, {
+  connect: (id: string, display: SignInDisplay = 'popup', back?: SignInReturn) =>
+    request(IntegrationResult, `/api/integrations/${id}/connect?${signInQuery(display, back)}`, {
       method: 'POST',
       body: {},
     }),

@@ -77,6 +77,8 @@ const scenarios = {
   suggest: { port: 4383, env: { CONCH_MOCK_STATE: 'ready' } },
   // Replies to send next (ADR 0055): the assistant's under a table, Conch's own, none after reading.
   replies: { port: 4352, env: { CONCH_MOCK_STATE: 'ready' } },
+  // The chat knows Conch (ADR 0055): the assistant offers an app or a skill, and the chat carries on.
+  offers: { port: 4354, env: { CONCH_MOCK_STATE: 'ready' } },
   // A model that can only chat (ADR 0050): a message that needs an app offers one that can.
   'chat-only': { port: 4358, env: { CONCH_MOCK_STATE: 'ready' } },
   // Questions answered with a tap (ADR 0055): tapped, typed, skipped, and a reload while one waits.

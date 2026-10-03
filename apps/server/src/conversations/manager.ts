@@ -4,6 +4,7 @@ import type {
   Attachment,
   BrowserPermission,
   Memory,
+  Offer,
   VaultPermission,
   ConversationEvent,
   ConversationEventInput,
@@ -55,6 +56,7 @@ import { TurnReplies } from '../replies/turn';
 type SkillNeed = ReturnType<typeof needs>;
 import { generateTitle } from './title';
 import { unansweredOnRestart, type QuestionDesk } from '../questions/desk';
+import { type CarryOn, OfferDesk, offerState, openOffers } from '../offers/desk';
 
 /**
  * Why a turn failed, for engines that don't say: the key's in a locked
@@ -384,6 +386,9 @@ export class ConversationManager {
   /** Messages waiting for the internet, by conversation. */
   #held = new Map<string, Held>();
   #live = new Map<string, Live>();
+  /** Offers taken whose carrying on is waiting for the reply before it (ADR 0055). */
+  #carrying = new Set<string>();
+  #cueDesk?: Pick<OfferDesk, 'cue'>;
 
   constructor(
     private readonly deps: {
@@ -446,6 +451,8 @@ export class ConversationManager {
       sandbox?: (workspace: string) => { allowWrite: string[]; denyRead: string[] } | undefined;
       /** Undo (ADR 0030): keeps what each turn changes, so it can be put back. */
       undo?: UndoService;
+      /** Every offer goes through here (ADR 0055); without it, cue offers only. */
+      offers?: Pick<OfferDesk, 'cue'>;
       /** What a skill may do while it's in use (ADR 0031), by its id. */
       skillPermissions?: (
         skillId: string,
@@ -636,6 +643,10 @@ export class ConversationManager {
     // Anything still waiting for the internet goes along with this message.
     const waiting = this.#held.get(live.record.id) ?? heldFromLog(live.events);
     this.#held.delete(live.record.id);
+    // A newer message overtakes an offer nobody answered (ADR 0055).
+    for (const offerId of openOffers(live.events))
+      if (!this.#carrying.has(offerId))
+        this.#append(live, { type: 'offer.resolved', offerId, outcome: 'expired' });
     this.#append(live, {
       type: 'user.message',
       messageId: input.clientMessageId,
@@ -1353,10 +1364,9 @@ export class ConversationManager {
         // Scoped workflows use Conch host tools only. Even MCP initialization
         // can start a program; source notes must not trigger unrelated apps.
         extras?.toolAllowed ? undefined : integrations?.forTurn(said).catch(() => undefined),
-        this.#offers(live, engine, settings.preferences.mutedSuggestions),
+        this.#offers(live, engine),
       ]);
-      for (const offer of apps.offers)
-        this.#append(live, { type: 'integration.suggestion', ...offer });
+      for (const offer of apps.offers) this.#append(live, { type: 'offer', offer });
       for (const issue of loaded?.issues ?? []) appendIssue(issue);
       // Engines that can't run MCP servers get the tools through Conch instead.
       const bridged =
@@ -1642,28 +1652,93 @@ export class ConversationManager {
   /**
    * The apps this turn is about that aren't connected, and which of them to
    * offer: read from the words the person typed (not a pasted file or a
-   * skill's instructions), each offered at most once per conversation, never
-   * one they muted, and never in an unattended run — nobody is there to press
-   * the button, though the assistant is still told what it can't see.
+   * skill's instructions), through the one place every offer goes (ADR 0055).
+   * Never in an unattended run — nobody is there to press the button, though
+   * the assistant is still told what it can't see.
    */
-  async #offers(
-    live: Live,
-    engine: Engine,
-    muted: readonly string[],
-  ): Promise<{ offers: IntegrationSuggestionInput[]; unseen: string[] }> {
-    const none = { offers: [], unseen: [] };
+  async #offers(live: Live, engine: Engine): Promise<{ offers: Offer[]; unseen: string[] }> {
+    const desk = this.deps.offers ?? (this.#cueDesk ??= this.#defaultDesk());
+    return desk
+      .cue({ events: live.events, engine, unattended: Boolean(live.extras || live.record.origin) })
+      .catch(() => ({ offers: [], unseen: [] }));
+  }
+
+  #defaultDesk(): Pick<OfferDesk, 'cue'> {
     const integrations = this.deps.integrations;
-    if (!integrations?.suggest) return none;
-    const typed = live.events.findLast((e) => e.type === 'user.message')?.text;
-    if (!typed?.trim()) return none;
-    const offered = live.events.flatMap((e) =>
-      e.type === 'integration.suggestion' ? [e.catalogId] : [],
-    );
-    const found = await integrations
-      .suggest(typed, engine, new Set([...muted, ...offered]))
-      .catch(() => none);
-    const unattended = Boolean(live.extras || live.record.origin);
-    return unattended ? { offers: [], unseen: found.unseen } : found;
+    return new OfferDesk({
+      muted: async () => (await this.deps.settings.get()).preferences.mutedSuggestions,
+      ...(integrations?.suggest && {
+        suggest: (text, engine, skip) =>
+          integrations.suggest?.(text, engine, skip) ?? Promise.resolve({ offers: [], unseen: [] }),
+      }),
+    });
+  }
+
+  /**
+   * Carry the chat on once an offer was taken (ADR 0055): the app is
+   * connected or the skill is on (`OfferDesk.accept` checked), so the request
+   * runs again, with no new message of yours. Once, however many devices or
+   * retries press it; after the reply that's running, if one is.
+   */
+  async carryOn(
+    id: string,
+    offerId: string,
+    turn: CarryOn,
+  ): Promise<'started' | 'queued' | 'done'> {
+    const live = await this.#get(id);
+    const state = offerState(live.events, offerId);
+    if (state === 'missing')
+      throw new ConversationError('not-found', 'That wasn’t offered in this conversation.');
+    if (state === 'accepted' || this.#carrying.has(offerId)) return 'done';
+    if (state !== 'open') throw new ConversationError('not-found', 'That offer was put away.');
+    this.#carrying.add(offerId);
+    if (!live.abort) {
+      await this.#carryNow(live, offerId, turn);
+      return 'started';
+    }
+    // A reply is running: this goes the moment it ends, before anything else can start.
+    const off = this.events.on((event) => {
+      if (
+        event.type !== 'conversation.event' ||
+        event.event.conversationId !== id ||
+        event.event.type !== 'status' ||
+        live.abort
+      )
+        return;
+      off();
+      void this.#carryNow(live, offerId, turn).catch(() => this.#carrying.delete(offerId));
+    });
+    return 'queued';
+  }
+
+  async #carryNow(live: Live, offerId: string, turn: CarryOn) {
+    try {
+      if (offerState(live.events, offerId) !== 'open') return;
+      this.#append(live, { type: 'offer.resolved', offerId, outcome: 'accepted' });
+      if (turn.skill) this.#append(live, { type: 'skill.used', ...turn.skill, by: 'user' });
+      if (!turn.prompt) {
+        await this.#persist(live);
+        return;
+      }
+      this.#claim(live);
+      this.#setStatus(live, 'running');
+      await this.#persist(live);
+      void this.#answer(live, this.deps.engine(live.record.options.engine), turn.prompt, []);
+    } finally {
+      this.#carrying.delete(offerId);
+    }
+  }
+
+  /** “Not now” on an offer (ADR 0055): put away for the rest of this conversation. */
+  async dismissOffer(id: string, offerId: string) {
+    const live = await this.#get(id);
+    const state = offerState(live.events, offerId);
+    if (state === 'missing')
+      throw new ConversationError('not-found', 'That wasn’t offered in this conversation.');
+    if (state !== 'open' || this.#carrying.has(offerId)) return;
+    this.#append(live, { type: 'offer.resolved', offerId, outcome: 'dismissed' });
+    // A running turn saves the log when it ends; writing it now as well could race.
+    if (!live.abort) await this.#persist(live);
   }
 
   /** “Not now”: put an offer away for the rest of this conversation. */

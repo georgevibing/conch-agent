@@ -51,6 +51,25 @@ export type Offer = z.infer<typeof Offer>;
 export const OfferOutcome = z.enum(['accepted', 'dismissed', 'expired']);
 export type OfferOutcome = z.infer<typeof OfferOutcome>;
 
+/**
+ * Taking an offer (`POST /api/conversations/:id/offers/:offerId/accept`).
+ * An app was connected by then, so there's nothing to say. A skill is turned
+ * on for good (`on`: **Turn on**, **Always**) or used for this request only
+ * (`once`: **Use it**); either way the request runs with it.
+ */
+export const AcceptOfferBody = z.object({ skill: z.enum(['on', 'once']).optional() }).strict();
+export type AcceptOfferBody = z.infer<typeof AcceptOfferBody>;
+
+/** “Not now” on an offer: nothing more to say. */
+export const DismissOfferBody = z.object({}).strict();
+export type DismissOfferBody = z.infer<typeof DismissOfferBody>;
+
+/** A skill in “Don’t suggest” (`preferences.mutedSuggestions`), beside apps' catalog ids. */
+export const MutedSkill = z
+  .string()
+  .regex(/^skill:[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/, 'Unknown skill.');
+export type MutedSkill = z.infer<typeof MutedSkill>;
+
 // ── Questions ───────────────────────────────────────────────────────────────
 
 export const QuestionOption = z.object({

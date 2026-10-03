@@ -36,7 +36,13 @@ import { type Bridge, openBridge } from './bridge';
 import { needFor, nodeFallback } from './commands';
 import { cuedApps } from './cues';
 import { checkEndpoint, EndpointError, guardedFetch, type Reach, reachOf } from './net';
-import { type FlowDisplay, NeedsAuthError, OAuthFlows, TransientAuthError } from './oauth';
+import {
+  type FlowDisplay,
+  NeedsAuthError,
+  OAuthFlows,
+  type SignInReturn,
+  TransientAuthError,
+} from './oauth';
 import { probe as realProbe, type ProbeResult, scrub } from './probe';
 import { IntegrationStore, type IntegrationSecrets, type StoredIntegration } from './store';
 
@@ -204,6 +210,8 @@ function publicView(item: StoredIntegration): Integration {
 export interface SignIn {
   redirectUrl: string;
   display: FlowDisplay;
+  /** Signing in from a chat's offer, in this tab: the chat to open again, and the offer to take. */
+  returnTo?: SignInReturn;
 }
 
 interface ProbeOptions {
@@ -1021,6 +1029,7 @@ export class IntegrationService {
         serverUrl: item.transport.url,
         redirectUrl: signIn.redirectUrl,
         display: signIn.display,
+        ...(signIn.returnTo && { returnTo: signIn.returnTo }),
         reach,
       });
       const updated = await this.#setHealth(id, {
@@ -1396,6 +1405,34 @@ export class IntegrationService {
       [...CATALOG.values()].filter((item) => !item.retired),
     );
     if (!cued.length) return none;
+    // Not knowing what the provider has would risk telling it it can't see an app it can.
+    const open = await this.connectable(engine, cued);
+    if (!open?.length) return none;
+    const suggestions: IntegrationSuggestion[] = open.map((item) => ({
+      catalogId: item.id,
+      name: item.name,
+      description: item.description,
+      ...(item.color && { color: item.color }),
+    }));
+    return {
+      offers: suggestions.filter((s) => !skip.has(s.catalogId)).slice(0, MAX_SUGGESTIONS),
+      unseen: suggestions.map((s) => s.name),
+    };
+  }
+
+  /**
+   * The catalog apps the person could connect now, for the provider
+   * answering (ADR 0055's map): not retired, not connected in Conch in any
+   * state (or added by hand), and not one the provider reaches by itself.
+   * `undefined` when the provider can't say in time, so nothing is offered
+   * that it might already have. In catalog order; `among` narrows it.
+   */
+  async connectable(
+    engine: Engine,
+    among: readonly ResolvedCatalogItem[] = [...CATALOG.values()],
+  ): Promise<ResolvedCatalogItem[] | undefined> {
+    const candidates = among.filter((item) => !item.retired);
+    if (!candidates.length) return [];
     const mine = new Set(
       (await this.store.all()).flatMap((i) => {
         const id =
@@ -1406,23 +1443,32 @@ export class IntegrationService {
     );
     // Connected (in any state) means not offered again, like every other app.
     for (const id of await this.#hostedIds()) mine.add(id);
-    const open = cued.filter((item) => !mine.has(item.id));
-    if (!open.length) return none;
-    // Not knowing what the provider has would risk telling it it can't see an app it can.
+    const open = candidates.filter((item) => !mine.has(item.id));
+    if (!open.length) return [];
     const reached = await this.#reachedBy(engine);
-    if (!reached) return none;
-    const suggestions: IntegrationSuggestion[] = open
-      .filter((item) => !reached.has(item.id))
-      .map((item) => ({
-        catalogId: item.id,
-        name: item.name,
-        description: item.description,
-        ...(item.color && { color: item.color }),
-      }));
-    return {
-      offers: suggestions.filter((s) => !skip.has(s.catalogId)).slice(0, MAX_SUGGESTIONS),
-      unseen: suggestions.map((s) => s.name),
-    };
+    if (!reached) return undefined;
+    return open.filter((item) => !reached.has(item.id));
+  }
+
+  /**
+   * Whether an app from the catalog is connected in Conch and working now:
+   * what carrying on after an offer checks first (ADR 0055).
+   */
+  async connected(catalogId: string): Promise<boolean> {
+    for (const item of await this.store.all()) {
+      const id =
+        item.catalogId ??
+        matchCatalog(item.name, item.transport.type === 'http' ? item.transport.url : undefined);
+      if (id === catalogId && item.enabled && ['ok', 'warning'].includes(item.health.state))
+        return true;
+    }
+    const hosted = (await this.deps.hosted?.list().catch(() => [])) ?? [];
+    return hosted.some(
+      (item) =>
+        (item.catalogId ?? item.id) === catalogId &&
+        item.enabled !== false &&
+        ['ok', 'warning'].includes(item.health.state),
+    );
   }
 
   /**

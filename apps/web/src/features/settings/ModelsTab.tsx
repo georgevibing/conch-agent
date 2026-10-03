@@ -8,6 +8,7 @@ import {
   RadioGroup,
   SegmentedControl,
   Skeleton,
+  SkillIcon,
   Stack,
   Switch,
   Text,
@@ -16,6 +17,7 @@ import { useState } from 'react';
 
 import { useAppState, useModels, useUpdateSettings } from '../../api/queries';
 import { useIntegrations } from '../integrations/queries';
+import { useSkills } from '../skills/queries';
 import { availableModes, effortOptions, pickerProviders } from '../models/catalog';
 import { findModel, modelKey, parseModelKey } from '../models/useTurnOptions';
 import { fuzzyMatch } from '../search/fuzzy';
@@ -206,8 +208,8 @@ const titleCase = (id: string) =>
     .join(' ');
 
 /**
- * Apps you asked the chat never to offer (“Don’t suggest Linear”), each with
- * a way to change your mind.
+ * Apps and skills you asked the chat never to offer (“Don’t suggest Linear”),
+ * each with a way to change your mind. Skills are kept as `skill:<id>`.
  */
 function MutedSuggestions({
   assistant,
@@ -219,26 +221,35 @@ function MutedSuggestions({
   onChange: (muted: string[]) => void;
 }) {
   const { data } = useIntegrations();
+  const { data: skills } = useSkills();
   return (
     <Section
-      title="Offers to connect apps"
-      description={`When you ask about an app that isn’t connected, ${assistant} offers to connect it right in the chat.`}
+      title="Offers in the chat"
+      description={`When an app that isn’t connected or a skill that’s off would help, ${assistant} offers it right in the chat.`}
     >
       {muted.length ? (
-        <ul className={styles.commandList} aria-label="Apps not suggested">
+        <ul className={styles.commandList} aria-label="Not suggested">
           {muted.map((id) => {
-            const entry = data?.catalog.find((c) => c.id === id);
-            const name = entry?.name ?? titleCase(id);
+            const skillId = id.startsWith('skill:') ? id.slice('skill:'.length) : undefined;
+            const skill = skillId ? skills?.skills.find((s) => s.id === skillId) : undefined;
+            const entry = skillId ? undefined : data?.catalog.find((c) => c.id === id);
+            const name = skillId
+              ? (skill?.title ?? titleCase(skillId))
+              : (entry?.name ?? titleCase(id));
             return (
               <li key={id} className={styles.commandRow}>
                 <Stack direction="row" gap={3} align="center" className={styles.commandText}>
-                  <IntegrationLogo
-                    brand={id}
-                    name={name}
-                    color={entry?.color}
-                    size="sm"
-                    decorative
-                  />
+                  {skillId ? (
+                    <SkillIcon name={skill?.name ?? skillId} title={name} size="md" />
+                  ) : (
+                    <IntegrationLogo
+                      brand={id}
+                      name={name}
+                      color={entry?.color}
+                      size="sm"
+                      decorative
+                    />
+                  )}
                   <Stack gap={0.5}>
                     <Text size="sm" weight="medium">
                       {name}
@@ -262,7 +273,7 @@ function MutedSuggestions({
         </ul>
       ) : (
         <Text size="sm" tone="muted">
-          On for every app. Choose “Don’t suggest” on one in a chat, and it shows up here.
+          On for every app and skill. Choose “Don’t suggest” on one in a chat, and it shows up here.
         </Text>
       )}
     </Section>

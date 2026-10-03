@@ -1001,6 +1001,45 @@ export class MockEngine implements Engine {
             };
       }
 
+      // The chat knows Conch (ADR 0055): what's on my plate, with nothing connected,
+      // offers an app from the map; planning the week offers a skill that's off.
+      // Once it's on, the chat carries on by itself and the scripts below answer.
+      const map = /## What Conch can turn on\n[\s\S]*?(?=\n## |$)/.exec(input.systemAppend)?.[0];
+      const offerable = (kind: 'app' | 'skill') =>
+        [...(map ?? '').matchAll(new RegExp(`^- ${kind} \`([^\`]+)\`: ([^(—\\n]+)`, 'gm'))].map(
+          (m) => ({ id: m[1] ?? '', name: (m[2] ?? '').trim() }),
+        );
+      const usingSkill = /<skill name="[^"]*" title="([^"]*)"[\s\S]*asked you to use the/.exec(
+        input.prompt,
+      )?.[1];
+      if (usingSkill && /\bplan my week\b/i.test(text)) {
+        yield* speak(
+          `Here’s your week, planned with “${usingSkill}”: Monday is for the hard thing.`,
+        );
+        return;
+      }
+      const canOffer = input.tools.some((t) => t.name === 'offer');
+      const plate = /\bon my plate\b/i.test(text)
+        ? offerable('app').find((a) => a.id === 'linear')
+        : undefined;
+      const week = /\bplan my week\b/i.test(text) ? offerable('skill')[0] : undefined;
+      const offering = plate ?? week;
+      if (canOffer && offering) {
+        yield* hostTool('offer', {
+          kind: plate ? 'app' : 'skill',
+          target: offering.id,
+          why: plate
+            ? 'Your Linear issues would show what’s on your plate.'
+            : `The “${offering.name}” skill plans a week the way you like it.`,
+        });
+        yield* speak(
+          plate
+            ? 'I can’t see your issues yet, so I won’t guess at them. Connect Linear and I’ll look.'
+            : `I can sketch a plan now, but your “${offering.name}” skill does it the way you like. Turn it on and I’ll use it.`,
+        );
+        return;
+      }
+
       // Integrations (bridged, like a plain model API): mention one by name and
       // the mock really calls its tools through Conch — searching, or writing if asked.
       const servers = [

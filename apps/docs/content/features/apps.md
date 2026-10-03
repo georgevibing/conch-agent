@@ -44,9 +44,17 @@ Gmail, Google Calendar, Google Drive and Slack are apps like the others: press t
 
 ## Or connect from a chat
 
-Ask about an app that isn't connected ("what's assigned to me in Linear?") and a small card appears under the reply, with one button: **Connect Linear**. Connect it right there, then press **Ask again** to send your question once more.
+When an app that isn't connected would answer what you asked, your assistant offers it under the reply. You don't have to name the app: ask "what's on my plate this week?" and it may offer Linear or Google Calendar, saying why in a sentence. Naming one ("what's assigned to me in Linear?") offers it too.
 
-**Not now** puts the card away. **Don't suggest Linear** stops the offers for that app. To get them back, open **Settings → Models** and press **Suggest again**.
+Press **Connect** and connect it right there. Once it's connected, the chat carries on by itself: a quiet line says **Connected Linear · carrying on**, and the answer follows. There's nothing to ask again. Under that answer, **Also try** shows a couple of things the app can do; a tap sends exactly those words.
+
+On a phone, signing in opens the app's page in the same tab. When you're done it brings you back to the chat, which carries on the same way.
+
+- **Not now** puts the card away for this chat.
+- **Don't suggest**, under **⋯** on the card, stops the offers for that app everywhere. To get them back, open **Settings → Models** and press **Suggest again**.
+- Send another message instead, and the offer folds to a small line. The chat won't carry on from it.
+
+Only one offer shows under a reply, and the same app isn't offered twice in a chat. Your assistant never offers anything after the chat has read a web page or an email, or when nobody's there to press it, such as in a routine.
 
 ## When a model can only chat
 

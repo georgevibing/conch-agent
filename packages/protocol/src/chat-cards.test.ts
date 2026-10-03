@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { Offer, Question, QuestionField, ToolView } from './chat-cards';
-import { ConversationEvent } from './index';
+import { AcceptOfferBody, Offer, Question, QuestionField, ToolView } from './chat-cards';
+import { ConversationEvent, UpdateSettingsBody } from './index';
 
 const at = { conversationId: 'c1', seq: 1, at: 0 };
 
@@ -84,5 +84,21 @@ describe('chat cards (ADR 0055)', () => {
     expect(
       ConversationEvent.safeParse({ ...at, type: 'replies', replies: [], by: 'assistant' }).success,
     ).toBe(false);
+  });
+
+  it('takes an offer with nothing to say for an app, and on or once for a skill', () => {
+    expect(AcceptOfferBody.safeParse({}).success).toBe(true);
+    expect(AcceptOfferBody.parse({ skill: 'once' }).skill).toBe('once');
+    expect(AcceptOfferBody.safeParse({ skill: 'always' }).success).toBe(false);
+    expect(AcceptOfferBody.safeParse({ skill: 'on', extra: 1 }).success).toBe(false);
+  });
+
+  it('mutes skills beside apps, and nothing that looks like a path', () => {
+    const muted = (ids: string[]) =>
+      UpdateSettingsBody.safeParse({ preferences: { mutedSuggestions: ids } });
+    expect(muted(['linear', 'skill:weekly-review', 'skill:claude_pdf']).success).toBe(true);
+    expect(muted(['skill:../etc']).success).toBe(false);
+    expect(muted(['skill:']).success).toBe(false);
+    expect(muted(['tool:linear']).success).toBe(false);
   });
 });

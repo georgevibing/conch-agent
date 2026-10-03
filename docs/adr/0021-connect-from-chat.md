@@ -65,5 +65,6 @@ ends with Ask again, which resends the question that brought the offer up).
 - A cold provider (Claude Code's server list isn't cached yet) delays a matching
   turn by up to 2.5 s once; the look carries on in the background and the next
   message benefits.
-- On phones the sign-in goes in the same tab and comes back to the integration's
-  page, not the chat. Returning to the chat is follow-up work.
+- On phones the sign-in goes in the same tab. Since [ADR 0055](./0055-the-chat-knows-conch.md)
+  it comes back to the chat with the offer, which is taken by itself, and the
+  chat carries on.

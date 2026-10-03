@@ -22,7 +22,9 @@ async function ask(page: Page, text: string) {
   await page.keyboard.press('Enter');
 }
 
-test('ask about Linear, connect it without leaving the chat, and ask again', async ({ page }) => {
+test('ask about Linear, connect it without leaving the chat, and it carries on', async ({
+  page,
+}) => {
   await page.goto('/');
   await ask(page, 'what’s assigned to me in Linear this week?');
 
@@ -41,24 +43,21 @@ test('ask about Linear, connect it without leaving the chat, and ask again', asy
   await dialog.getByRole('button', { name: 'Continue with Linear' }).click();
   const popup = await popupOpened;
   await popup.getByRole('button', { name: 'Allow' }).click();
-  const connected = page.getByRole('dialog', { name: 'Linear is connected' });
-  await expect(connected).toBeVisible();
   await popup.waitForEvent('close', { timeout: 5000 }).catch(() => undefined);
   expect(page.url()).toBe(chat);
 
-  // Ask again: the same question, and this time the answer uses Linear.
-  await connected.getByRole('button', { name: 'Ask again' }).click();
+  // Connected: the dialog closes, and the chat carries on with the same question by itself.
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.getByText('I found 3 results')).toBeVisible();
-  await expect(page.getByText('what’s assigned to me in Linear this week?')).toHaveCount(2);
-  // The offer settles: connected, nothing left to press.
-  const settled = page.getByRole('group', { name: 'Linear is connected' });
-  await expect(settled).toBeVisible();
-  await expect(settled.getByRole('button')).toHaveCount(0);
+  await expect(page.getByText('I found 3 results')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText('what’s assigned to me in Linear this week?')).toHaveCount(1);
+  // The offer settles into a quiet line, nothing left to press.
+  const settled = page.getByRole('status').filter({ hasText: 'Connected Linear' });
+  await expect(settled).toContainText('carrying on');
+  await expect(page.getByRole('group', { name: /Linear isn’t connected/ })).toHaveCount(0);
 
   // It's part of the conversation's log: a reload shows the same.
   await page.reload();
-  await expect(page.getByRole('group', { name: 'Linear is connected' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Connected Linear' })).toBeVisible();
   await expect(page.getByText('I found 3 results')).toBeVisible();
 });
 
@@ -85,7 +84,8 @@ test('“Not now” is for this chat; “Don’t suggest” is for good, until y
   await ask(page, 'find my Canva designs for the bake sale');
   const canva = page.getByRole('group', { name: 'Canva isn’t connected yet' });
   await expect(canva).toBeVisible();
-  await canva.getByRole('button', { name: 'Don’t suggest Canva' }).click();
+  await canva.getByRole('button', { name: 'More' }).click();
+  await page.getByRole('menuitem', { name: 'Don’t suggest Canva' }).click();
   await expect(page.getByText('Conch won’t suggest Canva again.')).toBeVisible();
 
   // Anywhere else too.
@@ -97,8 +97,8 @@ test('“Not now” is for this chat; “Don’t suggest” is for good, until y
   // Settings lists it, with a way back.
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('tab', { name: 'Models' }).click();
-  const muted = page.getByRole('list', { name: 'Apps not suggested' });
+  const muted = page.getByRole('list', { name: 'Not suggested' });
   await expect(muted.getByText('Canva')).toBeVisible();
   await muted.getByRole('button', { name: 'Suggest Canva again' }).click();
-  await expect(page.getByText('On for every app.')).toBeVisible();
+  await expect(page.getByText('On for every app and skill.', { exact: false })).toBeVisible();
 });

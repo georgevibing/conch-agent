@@ -61,9 +61,20 @@ function watchedFetch(base: Fetch): { fetch: Fetch; trouble: () => string | unde
 /** Where the sign-in page was opened: a popup closes itself afterwards, a tab goes back. */
 export type FlowDisplay = 'popup' | 'tab';
 
+/**
+ * Signed in from a chat's offer, in the same tab (a phone): the chat to open
+ * again, and the offer it takes by itself once it's back (ADR 0055). Ids only,
+ * checked as ids, so the way back is always a chat of this Conch.
+ */
+export interface SignInReturn {
+  conversationId: string;
+  offerId: string;
+}
+
 interface Pending {
   integrationId: string;
   display: FlowDisplay;
+  returnTo?: SignInReturn;
   serverUrl: string;
   redirectUrl: string;
   reach: Reach;
@@ -205,6 +216,7 @@ export class OAuthFlows {
     redirectUrl: string;
     reach: Reach;
     display: FlowDisplay;
+    returnTo?: SignInReturn;
   }): Promise<URL> {
     this.#sweep();
     const state = randomBytes(32).toString('base64url');
@@ -243,9 +255,17 @@ export class OAuthFlows {
   }
 
   /** Which integration a sign-in is for (without using it up). */
-  pendingFor(state: string): { integrationId: string; display: FlowDisplay } | undefined {
+  pendingFor(
+    state: string,
+  ): { integrationId: string; display: FlowDisplay; returnTo?: SignInReturn } | undefined {
     const flow = this.#pending.get(state);
-    return flow && { integrationId: flow.integrationId, display: flow.display };
+    return (
+      flow && {
+        integrationId: flow.integrationId,
+        display: flow.display,
+        ...(flow.returnTo && { returnTo: flow.returnTo }),
+      }
+    );
   }
 
   cancel(integrationId: string) {
@@ -257,7 +277,7 @@ export class OAuthFlows {
   async finish(
     state: string,
     code: string,
-  ): Promise<{ integrationId: string; display: FlowDisplay }> {
+  ): Promise<{ integrationId: string; display: FlowDisplay; returnTo?: SignInReturn }> {
     const flow = this.#pending.get(state);
     // Single use, whatever happens next: a replayed redirect finds nothing.
     this.#pending.delete(state);
@@ -273,7 +293,11 @@ export class OAuthFlows {
       authorizationCode: code,
       fetchFn: this.fetchFor(flow.reach),
     });
-    return { integrationId: flow.integrationId, display: flow.display };
+    return {
+      integrationId: flow.integrationId,
+      display: flow.display,
+      ...(flow.returnTo && { returnTo: flow.returnTo }),
+    };
   }
 
   /**
