@@ -14,6 +14,7 @@ export * from './CommandMenu';
 export * from './ModelPicker';
 export * from './ModelSwitch';
 export * from './ReplyChips';
+export * from './PlanChecklist';
 export * from './ModePicker';
 export * from './Routines';
 export * from './Safety';
