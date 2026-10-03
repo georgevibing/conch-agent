@@ -5,6 +5,8 @@ import { Button } from '../../components/Button';
 import { Stack } from '../../components/Stack';
 import { Diff } from '../Diff';
 import { sampleDiff, sampleTestOutput } from '../fixtures';
+import { FileList } from '../ToolViews';
+import { files } from '../ToolViews/fixtures';
 import { ToolCall, type ToolCallStatus } from './ToolCall';
 
 const meta = {
@@ -83,6 +85,18 @@ export const States: Story = {
       />
     </Stack>
   ),
+};
+
+/** What it found, drawn under the row and open; the raw output stays behind the chevron. */
+export const WithAView: Story = {
+  args: {
+    name: 'mcp__conch__google_drive_search',
+    summary: 'launch',
+    input: undefined,
+    output: '{"files":[…]}',
+    duration: 640,
+    view: <FileList files={files(Date.now()).slice(0, 3)} />,
+  },
 };
 
 export const FileEdit: Story = {

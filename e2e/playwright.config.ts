@@ -79,6 +79,8 @@ const scenarios = {
   replies: { port: 4352, env: { CONCH_MOCK_STATE: 'ready' } },
   // The chat knows Conch (ADR 0060): the assistant offers an app or a skill, and the chat carries on.
   offers: { port: 4354, env: { CONCH_MOCK_STATE: 'ready' } },
+  // The plan, ticking itself off (ADR 0060): a plan that ticks and folds, and plan mode's Start.
+  plans: { port: 4347, env: { CONCH_MOCK_STATE: 'ready' } },
   // A model that can only chat (ADR 0050): a message that needs an app offers one that can.
   'chat-only': { port: 4358, env: { CONCH_MOCK_STATE: 'ready' } },
   // Questions answered with a tap (ADR 0060): tapped, typed, skipped, and a reload while one waits.
@@ -113,6 +115,8 @@ const scenarios = {
   },
   // Show me: things made beside the chat, sealed pages, pinned apps (ADR 0034).
   'show-me': { port: 4371, env: { CONCH_MOCK_STATE: 'ready' } },
+  // What a tool found, drawn as it is (ADR 0060): the mock's pretend calendar, mail, files and Slack.
+  views: { port: 4353, env: { CONCH_MOCK_STATE: 'ready' } },
   // Edit by hand and live data (ADR 0046), against a pretend data site on a port the system picks.
   canvas: {
     port: 4360,

@@ -4,14 +4,39 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
+    <!--
+      Nacre's layers, in order, before any stylesheet: the build splits the styles into
+      files, and the first one to name a layer would otherwise decide where it goes.
+      Kept equal to packages/nacre/src/styles/index.css by src/site/head.test.ts.
+    -->
+    <style>
+      @layer nacre.tokens, nacre.base, nacre.lustre, nacre.components, nacre.utilities;
+    </style>
+    <script>
+      // A look chosen with the sun/moon button shows from the first paint, not after the code arrives.
+      try {
+        const mode = JSON.parse(localStorage.getItem('conch.docs.theme') || '{}').mode;
+        if (mode === 'light' || mode === 'dark')
+          document.documentElement.setAttribute('data-nacre-mode', mode);
+      } catch {}
+    </script>
+    <!-- Each page's own title, description, address and preview: written here by scripts/prerender.mjs. -->
+    <!--head-->
+    <title>Conch · a calm home for your AI agents</title>
     <meta
       name="description"
       content="Conch is a calm home for your AI agents, on your own computer. It drives Claude Code, Codex, a local model and more from one place. Open source."
     />
+    <!--/head-->
+    <meta name="author" content="George Kal" />
+    <meta name="application-name" content="Conch" />
+    <meta name="apple-mobile-web-app-title" content="Conch" />
     <link rel="icon" href="%BASE_URL%favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="%BASE_URL%favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="apple-touch-icon" href="%BASE_URL%apple-touch-icon.png" />
+    <link rel="sitemap" type="application/xml" href="%BASE_URL%sitemap.xml" />
     <meta name="theme-color" content="#fbf9f7" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#13100e" media="(prefers-color-scheme: dark)" />
-    <title>Conch · a calm home for your AI agents</title>
   </head>
   <body>
     <div id="root"></div>

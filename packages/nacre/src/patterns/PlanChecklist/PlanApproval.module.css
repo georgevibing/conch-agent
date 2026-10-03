@@ -1,0 +1,276 @@
+@layer nacre.components {
+  /* ── Asking: the plan, whole, and two buttons ───────────────────────── */
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    min-inline-size: 0;
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+    animation: nc-surface-in var(--nc-duration-slow) var(--nc-ease-out) both;
+  }
+
+  .header {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-3);
+  }
+
+  .mark {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 2rem;
+    block-size: 2rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-3);
+    color: var(--nc-accent-11);
+  }
+
+  .mark > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .words {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-inline-size: 0;
+    padding-block-start: 0.125rem;
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+  }
+
+  .sub {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+  }
+
+  /* The plan itself: on a sunken sheet, like a page handed over. */
+  .plan {
+    position: relative;
+    min-inline-size: 0;
+    padding: var(--nc-space-3) var(--nc-space-4);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    font-size: var(--nc-text-sm);
+    overflow-wrap: anywhere;
+  }
+
+  .plan[data-capped] {
+    max-block-size: 20rem;
+    overflow: hidden;
+  }
+
+  /* A long plan fades out at the foot until it's opened whole. */
+  .plan[data-long] {
+    mask-image: linear-gradient(180deg, black calc(100% - 4rem), transparent);
+  }
+
+  .whole {
+    appearance: none;
+    align-self: flex-start;
+    margin-block-start: calc(var(--nc-space-2) * -1);
+    padding: var(--nc-space-0-5) var(--nc-space-1-5);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    background: transparent;
+    color: var(--nc-accent-11);
+    font: inherit;
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    cursor: pointer;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .whole:hover {
+      background: var(--nc-wash-1);
+    }
+  }
+
+  .whole:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    list-style: none;
+  }
+
+  .step {
+    --pc-marker: 1rem;
+
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2-5);
+    line-height: var(--nc-leading-snug);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--nc-space-2);
+  }
+
+  /* ── Settled: a quiet line that opens to the plan again ───────────── */
+  .settled {
+    min-inline-size: 0;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-1);
+    animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) both;
+  }
+
+  .fold {
+    --nc-rim-hover: 0.5;
+    --nc-sheen-hover: 0.12;
+    --nc-sheen-size: 160px;
+
+    appearance: none;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    inline-size: 100%;
+    min-block-size: 2.5rem;
+    margin: 0;
+    padding: 0 var(--nc-space-3);
+    border: 0;
+    border-radius: inherit;
+    corner-shape: inherit;
+    background: transparent;
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    text-align: start;
+    cursor: pointer;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .fold:hover {
+      background-color: var(--nc-wash-1);
+    }
+  }
+
+  .fold:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .settled[data-state='open'] > .fold {
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+  }
+
+  .settledIcon {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: var(--nc-text-muted);
+  }
+
+  .settledIcon > svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  .settled[data-state-plan='started'] .settledIcon {
+    border-radius: 50%;
+    background: light-dark(
+      oklch(0.55 0.13 var(--nc-success-h)),
+      oklch(0.76 0.13 var(--nc-success-h))
+    );
+    color: var(--nc-surface);
+  }
+
+  .settled[data-state-plan='started'] .settledIcon > svg {
+    inline-size: 0.625rem;
+    block-size: 0.625rem;
+    stroke-width: 3;
+  }
+
+  .foldText {
+    flex: 1;
+    min-inline-size: 0;
+    color: var(--nc-text-muted);
+  }
+
+  .chevron {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    flex-shrink: 0;
+    color: var(--nc-text-subtle);
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .settled[data-state='open'] .chevron {
+    transform: rotate(90deg);
+  }
+
+  .content {
+    overflow: hidden;
+  }
+
+  .content[data-state='open'] {
+    animation: pa-expand var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .content[data-state='closed'] {
+    animation: pa-collapse var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .foldBody {
+    padding: var(--nc-space-3);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  @keyframes pa-expand {
+    from {
+      block-size: 0;
+      opacity: 0;
+    }
+    to {
+      block-size: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+  }
+
+  @keyframes pa-collapse {
+    from {
+      block-size: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+    to {
+      block-size: 0;
+      opacity: 0;
+    }
+  }
+}

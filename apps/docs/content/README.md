@@ -17,15 +17,15 @@ order: 1
 ---
 ```
 
-| Key           | What it does                                                                         |
-| ------------- | ------------------------------------------------------------------------------------ |
-| `title`       | The page's heading. Leave it out with `source`, `provider` or `channel`.             |
-| `description` | The sentence under the title, on cards and in search.                                |
-| `order`       | Its place in the section, lowest first.                                              |
-| `nav`         | A shorter name for the sidebar.                                                      |
-| `source`      | Show this file from the repository instead (`docs/SECURITY.md`). No body.            |
-| `provider`    | The provider this page is about (`claude-code`): title and facts come from the code. |
-| `channel`     | The same, for a channel (`telegram`).                                                |
+| Key           | What it does                                                                                |
+| ------------- | ------------------------------------------------------------------------------------------- |
+| `title`       | The page's heading. Leave it out with `source`, `provider` or `channel`.                    |
+| `description` | The sentence under the title, on cards, in search and in search engines (≤ 160 characters). |
+| `order`       | Its place in the section, lowest first.                                                     |
+| `nav`         | A shorter name for the sidebar.                                                             |
+| `source`      | Show this file from the repository instead (`docs/SECURITY.md`). No body.                   |
+| `provider`    | The provider this page is about (`claude-code`): title and facts come from the code.        |
+| `channel`     | The same, for a channel (`telegram`).                                                       |
 
 ## Say it once, and let the code say what it knows
 

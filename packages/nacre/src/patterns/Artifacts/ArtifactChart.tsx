@@ -19,6 +19,8 @@ export interface ArtifactChartProps extends Omit<ComponentProps<'figure'>, 'chil
   height?: number;
   /** Start on the table instead of the picture. */
   defaultView?: 'chart' | 'table';
+  /** A small picture of it, as a chat card shows it: no title and no switch to the table. */
+  compact?: boolean;
 }
 
 const PAD = { top: 12, right: 16, bottom: 28, left: 48 };
@@ -83,10 +85,12 @@ export function ArtifactChart({
   chart,
   height = 260,
   defaultView = 'chart',
+  compact,
   className,
   ...props
 }: ArtifactChartProps) {
-  const [view, setView] = useState(defaultView);
+  const [chosen, setView] = useState(defaultView);
+  const view = compact ? 'chart' : chosen;
   const [tip, setTip] = useState<Tip>();
   const { ref, width } = useWidth();
   const titleId = useId();
@@ -129,26 +133,29 @@ export function ArtifactChart({
   return (
     <figure
       className={cx(styles.chart, className)}
-      aria-labelledby={chart.title ? titleId : undefined}
+      aria-labelledby={chart.title && !compact ? titleId : undefined}
+      data-compact={compact || undefined}
       {...props}
     >
-      <div className={styles.chartHead}>
-        {chart.title && (
-          <figcaption id={titleId} className={styles.chartTitle}>
-            {chart.title}
-          </figcaption>
-        )}
-        <SegmentedControl
-          size="sm"
-          value={view}
-          onValueChange={(v) => setView(v as 'chart' | 'table')}
-          aria-label="Show as"
-          className={styles.chartViews}
-        >
-          <SegmentedControl.Item value="chart">Chart</SegmentedControl.Item>
-          <SegmentedControl.Item value="table">Table</SegmentedControl.Item>
-        </SegmentedControl>
-      </div>
+      {!compact && (
+        <div className={styles.chartHead}>
+          {chart.title && (
+            <figcaption id={titleId} className={styles.chartTitle}>
+              {chart.title}
+            </figcaption>
+          )}
+          <SegmentedControl
+            size="sm"
+            value={view}
+            onValueChange={(v) => setView(v as 'chart' | 'table')}
+            aria-label="Show as"
+            className={styles.chartViews}
+          >
+            <SegmentedControl.Item value="chart">Chart</SegmentedControl.Item>
+            <SegmentedControl.Item value="table">Table</SegmentedControl.Item>
+          </SegmentedControl>
+        </div>
+      )}
       {(multi || pie) && view === 'chart' && (
         <ul className={styles.legend} aria-label="Legend">
           {(pie ? chart.labels : chart.series.map((s) => s.name)).map((name, i) => (

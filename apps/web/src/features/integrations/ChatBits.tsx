@@ -47,8 +47,15 @@ export function useToolLabel() {
   return (toolName: string) => {
     const match = /^mcp__([a-z0-9_-]+?)__(.+)$/.exec(toolName);
     if (!match) return undefined;
-    const integration = data?.integrations.find((i) => i.server === match[1]);
-    if (!integration) return undefined;
+    // Conch's own apps (Google, Slack) run as Conch's tools: found by the tool's name.
+    const integration =
+      match[1] === 'conch'
+        ? data?.integrations.find((i) => i.tools.some((t) => t.name === match[2]))
+        : data?.integrations.find((i) => i.server === match[1]);
+    if (!integration)
+      return match[1] === 'conch'
+        ? { title: humanizeTool(match[2] ?? ''), leading: undefined }
+        : undefined;
     const tool = integration.tools.find((t) => t.name === match[2]);
     const entry = data?.catalog.find((c) => c.id === integration.catalogId);
     const prefix = new RegExp(`^${integration.server.replace(/[-_]\d+$/, '')}[-_]`, 'i');

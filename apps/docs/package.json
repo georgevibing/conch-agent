@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "vite --open",
-    "build": "tsc -p tsconfig.json && tsc -p tsconfig.reference.json && vite build",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.reference.json && vite build && vite build --ssr src/prerender.tsx --outDir dist/.prerender --emptyOutDir && node scripts/prerender.mjs",
     "preview": "vite preview --open",
     "reference": "node --import tsx reference/print.ts",
     "lint": "eslint .",

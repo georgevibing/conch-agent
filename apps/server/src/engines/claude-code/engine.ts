@@ -11,6 +11,7 @@ import type {
   LoginMethod,
   LoginState,
   PermissionMode,
+  ToolView,
 } from '@conch/protocol';
 
 import type { ProviderKeys } from '../../providers/keys';
@@ -60,6 +61,19 @@ function sdkContent(result: string | HostToolResult) {
   ];
 }
 
+/**
+ * The tool call Claude Code says a host tool is answering, from the MCP
+ * request's `_meta['claudecode/toolUseId']`, so what the tool found for the
+ * person (its view) can join the tool's row (ADR 0060).
+ */
+export function toolUseIdOf(extra: unknown): string | undefined {
+  if (!extra || typeof extra !== 'object') return undefined;
+  const meta = (extra as { _meta?: unknown })._meta;
+  if (!meta || typeof meta !== 'object') return undefined;
+  const id = (meta as Record<string, unknown>)['claudecode/toolUseId'];
+  return typeof id === 'string' && id.length > 0 && id.length <= 200 ? id : undefined;
+}
+
 /** Claude Code's config scopes, in Conch's words. */
 function sourceOf(source?: string): EngineMcpStatus['source'] {
   switch (source) {
@@ -94,6 +108,8 @@ export class ClaudeCodeEngine implements Engine {
   readonly smallModel = 'haiku';
   /** It loads `~/.claude/skills` by itself, whatever Conch says. */
   readonly skillSources = ['claude'] as const;
+  /** It keeps its own plan (its todos or tasks), translated into Conch's checklist. */
+  readonly plans = 'native' as const;
   /**
    * Claude Code runs MCP servers itself, and loads the connectors from your
    * Claude account by itself. Conch brings the ones it can connect into
@@ -449,6 +465,8 @@ export class ClaudeCodeEngine implements Engine {
     const onAbort = () => abort.abort();
     input.signal.addEventListener('abort', onAbort, { once: true });
 
+    // What host tools found for the person, by tool call, until their row closes.
+    const views = new Map<string, ToolView>();
     const conch = createSdkMcpServer({
       name: 'conch',
       version: '1.0.0',
@@ -457,7 +475,13 @@ export class ClaudeCodeEngine implements Engine {
           t.name,
           t.description,
           t.input,
-          async (args) => ({ content: sdkContent(await t.run(args)) }),
+          async (args, extra) => {
+            const result = await t.run(args);
+            const id = toolUseIdOf(extra);
+            if (id && typeof result !== 'string' && result.view) views.set(id, result.view);
+            // The model gets the text (and pictures); the view is never sent to it.
+            return { content: sdkContent(result) };
+          },
           { alwaysLoad: t.alwaysLoad, searchHint: t.searchHint },
         ),
       ),
@@ -595,6 +619,13 @@ export class ClaudeCodeEngine implements Engine {
               signal,
             );
             if (decision === 'deny') {
+              // "Keep planning": the plan isn't wrong, it isn't finished.
+              if (toolName === 'ExitPlanMode')
+                return {
+                  behavior: 'deny',
+                  message:
+                    'The person chose Keep planning: stay in plan mode and don’t start the work yet. Ask what they’d like changed, or refine the plan and present it again.',
+                };
               return { behavior: 'deny', message: 'The user declined this action.' };
             }
             // "Always allow" lasts for this conversation only (the manager
@@ -637,6 +668,12 @@ export class ClaudeCodeEngine implements Engine {
         }
         for (const event of translator.translate(message)) {
           if (event.type === 'done') finished = true;
+          const view = event.type === 'tool-end' ? views.get(event.toolUseId) : undefined;
+          if (view && event.type === 'tool-end') {
+            views.delete(event.toolUseId);
+            yield event.status === 'success' ? { ...event, view } : event;
+            continue;
+          }
           yield event;
         }
       }

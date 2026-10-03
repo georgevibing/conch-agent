@@ -17,7 +17,7 @@ import {
   TextLink,
 } from '@conch/nacre';
 import { ArrowRight, ArrowUpRight } from 'lucide-react';
-import { useEffect, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import reference from 'virtual:conch-reference';
 
@@ -25,12 +25,15 @@ import { DownloadApp } from '../embeds/download';
 import { HowItWorks } from '../embeds/how';
 import { InstallCommand } from '../embeds/install';
 import { AUTHOR, REPO_URL } from '../site/config';
+import { LANDING_HEAD, useHead } from '../site/head';
 import {
   ApprovalDemo,
   BrowserDemo,
   ChartDemo,
   ChatDemo,
   HealedDemo,
+  KnowsDemo,
+  MakerDemo,
   MemoryDemo,
   PhoneDemo,
   ProvidersDemo,
@@ -49,6 +52,8 @@ export const LANDING_LINKS = {
   providers: '/providers',
   channels: '/channels',
   apps: '/features/apps',
+  chats: '/features/chats',
+  makeApps: '/features/make-apps',
   decisions: '/project/decisions',
   nacre: '/project/nacre',
 } as const;
@@ -99,9 +104,7 @@ function Band({
  * it is read from the code, and it claims nothing Conch can't show.
  */
 export function Landing() {
-  useEffect(() => {
-    document.title = 'Conch · a calm home for your AI agents';
-  }, []);
+  useHead(LANDING_HEAD);
 
   return (
     <main id="content" className={styles.landing}>
@@ -183,6 +186,60 @@ export function Landing() {
           <p>
             Connect as many as you like. Each adds its models to the same list, and a chat can move
             from one to another without losing its thread.
+          </p>
+        </Scene>
+
+        <Scene
+          flip
+          kicker="In the chat"
+          title={
+            <>
+              It knows what it can do. <em>Just ask.</em>
+            </>
+          }
+          stage={<KnowsDemo />}
+          points={[
+            'What it finds is shown as it is: your calendar, your email, your files, your messages.',
+            'Questions come with answers to tap, and its plan ticks itself off as it goes.',
+            'Under a reply, what you might say next is one tap away.',
+            'It never turns anything on by itself.',
+          ]}
+          action={
+            <TextLink arrow="forward" asChild>
+              <Link to={LANDING_LINKS.chats}>What a chat can do</Link>
+            </TextLink>
+          }
+        >
+          <p>
+            When what you ask needs an app or a skill that isn’t on yet, the card to turn it on is
+            right under the reply. Once it’s on, the chat carries on by itself. There’s nothing to
+            ask again.
+          </p>
+        </Scene>
+
+        <Scene
+          kicker="Make it yours"
+          title={
+            <>
+              Ask for an app. <em>It builds one.</em>
+            </>
+          }
+          stage={<MakerDemo />}
+          points={[
+            'Every model you use can use it, and its page looks like Conch, in light and dark.',
+            'It runs sealed off: its own notes, and only the websites its card names.',
+            'Nothing is added until you press the button.',
+            'Share it on GitHub in one press, or add one someone else made from a link.',
+          ]}
+          action={
+            <TextLink arrow="forward" asChild>
+              <Link to={LANDING_LINKS.makeApps}>Make an app</Link>
+            </TextLink>
+          }
+        >
+          <p>
+            When nothing you have does what you need, say what you want in your own words. Conch
+            writes the app, checks it, tries every part of it and shows it to you as a card.
           </p>
         </Scene>
 

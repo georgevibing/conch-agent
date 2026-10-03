@@ -15,6 +15,11 @@ export interface MenuActions {
 
 /** The pearl, at the size this computer's menu bar or tray draws. */
 function trayPicture(resources: string) {
+  // Windows takes the size for the screen's scale from the icon's own pictures.
+  if (process.platform === 'win32') {
+    const icon = nativeImage.createFromPath(join(resources, 'tray.ico'));
+    if (!icon.isEmpty()) return icon;
+  }
   const picture = nativeImage.createFromPath(join(resources, 'tray.png'));
   const size = process.platform === 'darwin' ? 18 : process.platform === 'win32' ? 16 : 22;
   return picture.isEmpty()

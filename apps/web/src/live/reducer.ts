@@ -23,12 +23,15 @@ import type {
   TaskKind,
   TaskStatus,
   ToolStatus,
+  ToolView,
   TurnOptions,
   TurnProblem,
+  PlanStep,
   Usage,
 } from '@conch/protocol';
 
 import { latestReplies, type LatestReplies } from '../features/replies/latest';
+import { foldPlan } from '../features/plans/fold';
 
 /** Everything the transcript renders, folded from the append-only event log. */
 export type TranscriptItem =
@@ -67,6 +70,8 @@ export type TranscriptItem =
       output?: string;
       durationMs?: number;
       startedAt: number;
+      /** What it found, drawn under its row (ADR 0060). */
+      view?: ToolView;
     }
   | {
       kind: 'permission';
@@ -183,7 +188,7 @@ export type TranscriptItem =
   | {
       /**
        * An offer to turn on what a request is missing, an app or a skill (ADR
-       * 0055). Taken, it moves to where the chat carried on from.
+       * 0060). Taken, it moves to where the chat carried on from.
        */
       kind: 'offer';
       /** The offer's id. */
@@ -255,6 +260,12 @@ export type TranscriptItem =
       to: EngineId;
       reason: 'offline' | 'limit';
       message: string;
+    }
+  | {
+      /** The assistant's plan for one turn (ADR 0060): kept current in place, folded once it ends. */
+      kind: 'plan';
+      id: string;
+      steps: PlanStep[];
     }
   | {
       kind: 'turn-end';
@@ -463,6 +474,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         status: event.status,
         output: event.output,
         durationMs: event.durationMs,
+        ...(event.view && { view: event.view }),
       }));
       return updated ? { ...base, items: updated } : base;
     }
@@ -773,7 +785,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
     case 'replies':
       return base;
     case 'plan':
-      return base;
+      return { ...base, items: foldPlan(items, event) };
     // Drawn by the chat's app cards (ADR 0061).
     case 'conch-app.offer':
     case 'conch-app.share':

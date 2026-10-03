@@ -1,0 +1,99 @@
+/**
+ * What a tool found, drawn as it is (ADR 0060 §7). Conch's own tools (Google,
+ * Slack) may return a `view` beside the text the model reads. Host tools
+ * otherwise draw no row of their own, so one that found something to show
+ * gets a row when it finishes, carrying its view.
+ *
+ * Everything in a view came from outside: it's checked against `ToolView`
+ * before it's logged, links that aren't web links are dropped, and a saved
+ * password that turns up in it is redacted like any tool output.
+ */
+import { ToolView, type ConversationEventInput, type ToolStatus } from '@conch/protocol';
+
+/** The most rows each kind may carry, as the protocol caps them. */
+const CAPS: Record<ToolView['kind'], number> = { agenda: 60, mail: 30, files: 30, messages: 30 };
+
+/** A web link worth opening: `http(s)`, parseable, and with no sign-in tucked into it. */
+function webUrl(value: string): string | undefined {
+  const url = value.trim();
+  if (!/^https?:\/\//i.test(url)) return undefined;
+  try {
+    const parsed = new URL(url);
+    if (parsed.username || parsed.password) return undefined;
+    return url;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A view as it may be logged and drawn, or nothing when it isn't one. */
+export function cleanView(view: unknown, redact?: (text: string) => string): ToolView | undefined {
+  if (!view || typeof view !== 'object' || Array.isArray(view)) return undefined;
+  const scrub = (value: unknown, key?: string): unknown => {
+    if (typeof value === 'string') {
+      if (key === 'url') return webUrl(value);
+      return redact && key !== 'kind' ? redact(value) : value;
+    }
+    if (Array.isArray(value)) return value.map((v) => scrub(v));
+    if (value && typeof value === 'object')
+      return Object.fromEntries(
+        Object.entries(value).flatMap(([k, v]) => {
+          const kept = scrub(v, k);
+          return kept === undefined ? [] : [[k, kept]];
+        }),
+      );
+    return value;
+  };
+  const scrubbed = scrub(view) as { kind?: unknown; items?: unknown };
+  const cap = typeof scrubbed.kind === 'string' ? CAPS[scrubbed.kind as ToolView['kind']] : 0;
+  if (cap && Array.isArray(scrubbed.items)) scrubbed.items = scrubbed.items.slice(0, cap);
+  const parsed = ToolView.safeParse(scrubbed);
+  return parsed.success ? parsed.data : undefined;
+}
+
+/**
+ * Conch's own tool calls in one turn. They stay out of the transcript (memory
+ * and the rest show through their own events) unless they found something to
+ * show: then the call gets its row, with its view, when it finishes.
+ */
+export class HostToolRows {
+  readonly #open = new Map<string, { name: string; input: unknown; at: number }>();
+
+  constructor(
+    private readonly redact?: (text: string) => string,
+    private readonly now: () => number = Date.now,
+  ) {}
+
+  start(call: { toolUseId: string; name: string; input: unknown }): void {
+    this.#open.set(call.toolUseId, { name: call.name, input: call.input, at: this.now() });
+  }
+
+  owns(toolUseId: string): boolean {
+    return this.#open.has(toolUseId);
+  }
+
+  /** The events that draw it, if it found something to show; none otherwise. */
+  end(call: {
+    toolUseId: string;
+    status: ToolStatus;
+    output?: string;
+    view?: unknown;
+  }): ConversationEventInput[] {
+    const open = this.#open.get(call.toolUseId);
+    this.#open.delete(call.toolUseId);
+    if (!open || call.status !== 'success') return [];
+    const view = cleanView(call.view, this.redact);
+    if (!view) return [];
+    return [
+      { type: 'tool.started', toolUseId: call.toolUseId, name: open.name, input: open.input },
+      {
+        type: 'tool.finished',
+        toolUseId: call.toolUseId,
+        status: call.status,
+        output: call.output,
+        durationMs: Math.max(0, this.now() - open.at),
+        view,
+      },
+    ];
+  }
+}

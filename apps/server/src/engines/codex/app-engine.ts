@@ -7,13 +7,16 @@ import {
   type EngineStatus,
   type LoginMethod,
   type LoginState,
+  type PlanStep,
   type Usage,
   type TurnProblem,
+  type ToolView,
 } from '@conch/protocol';
 import { z } from 'zod';
 
 import { sandboxSupport } from '../../conversations/sandbox';
 import { newId } from '../../lib/ids';
+import { cleanPlan, stepStatus } from '../../plans/steps';
 import { run } from '../../lib/proc';
 import type { ProviderKeys } from '../../providers/keys';
 import type { SettingsStore } from '../../settings/store';
@@ -62,6 +65,20 @@ export function codexProblem(info: unknown): TurnProblem | undefined {
     return 'unavailable';
   return undefined;
 }
+/**
+ * Codex's plan (`turn/plan/updated`: its `update_plan` tool), as Conch's
+ * checklist (ADR 0060). Each update is the whole plan.
+ */
+export function codexPlan(plan: unknown): PlanStep[] | undefined {
+  if (!Array.isArray(plan)) return undefined;
+  return cleanPlan(
+    plan.flatMap((entry) => {
+      const { step, status } = (entry ?? {}) as { step?: unknown; status?: unknown };
+      const state = stepStatus(status);
+      return typeof step === 'string' && state ? [{ title: step, status: state }] : [];
+    }),
+  );
+}
 const object = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -94,6 +111,8 @@ export class CodexEngine implements Engine {
   readonly conversationHistory = true;
   readonly integrations = { mode: 'bridge' as const };
   readonly hostTools = true;
+  /** Its plan updates (`turn/plan/updated`) are drawn as Conch's checklist. */
+  readonly plans = 'native' as const;
   readonly attachments = { images: true, files: true };
   readonly #home: CodexHome;
   #status?: EngineStatus;
@@ -444,12 +463,14 @@ export class CodexEngine implements Engine {
                   });
                   let text = 'This tool is not enabled in this conversation.';
                   let isError = true;
+                  let view: ToolView | undefined;
                   try {
                     if (tool) {
                       signal.throwIfAborted();
                       const result = await tool.run(call.arguments, call.callId);
                       text = result.text;
                       isError = result.isError;
+                      view = result.isError ? undefined : result.view;
                     }
                   } catch {
                     text = signal.aborted
@@ -461,6 +482,7 @@ export class CodexEngine implements Engine {
                     toolUseId: call.callId,
                     status: isError ? 'error' : 'success',
                     output: text,
+                    ...(view && { view }),
                   });
                   if (!signal.aborted)
                     rpc.send({
@@ -494,6 +516,10 @@ export class CodexEngine implements Engine {
               emit({ type: 'thinking', messageId: String(p.itemId), delta: p.delta });
             if (message.method === 'item/completed' && object(p.item).type === 'agentMessage')
               emit({ type: 'message-done', messageId: String(object(p.item).id) });
+            if (message.method === 'turn/plan/updated') {
+              const steps = codexPlan(p.plan);
+              if (steps) emit({ type: 'plan', steps });
+            }
             if (message.method === 'thread/tokenUsage/updated') {
               const total = z
                 .object({

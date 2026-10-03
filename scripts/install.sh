@@ -1,7 +1,9 @@
 #!/bin/sh
 # Conch, installed with one line (ADR 0026):
 #
-#   curl -fsSL https://raw.githubusercontent.com/georgevibing/conch-agent/main/scripts/install.sh | sh
+#   curl -fsSL https://conchagent.com/install.sh | sh
+#
+# (the same file as scripts/install.sh on GitHub, served by the website)
 #
 # It gets what Conch needs (Node.js and Git, when they're missing), puts
 # Conch in its own folder, builds it, keeps it running in the background,

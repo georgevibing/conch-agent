@@ -158,6 +158,18 @@ picture), turn red with a Retry when they fail, and wear a small amber dot when
 the chosen model can't use them. `AttachmentPreview` is the closer look;
 `DropOverlay` dims the chat and gathers a pearl halo while files are dragged over.
 
+### What a tool found (chat)
+
+A tool's results are drawn under its row, inside the same surface, the way the
+app itself would show them: `AgendaView` (days, a time column, a slim rail in
+the calendar's colour, all-day bands, **Free**, a line for now), `MailList`,
+`FileList` (a glyph tinted by kind, as attachments are) and `ChatMessages`.
+Rows are as dense as the tool row, six at first with **Show all**. Everything is
+plain text from outside, and only web links open, in a new tab. A row's next
+step is quiet (Reply waits for the pointer) and only ever fills the composer.
+An artifact's card shows a small, inert picture of a chart, table, diagram or
+picture above its line; pressing anywhere still opens it.
+
 ### The browser (chat)
 
 The browser panel shows someone else's page, so Nacre stays out of its way. The page

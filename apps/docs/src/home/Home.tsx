@@ -10,7 +10,7 @@ import {
   Sparkles,
   Wand2,
 } from 'lucide-react';
-import { useEffect, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import reference from 'virtual:conch-reference';
 
@@ -18,6 +18,7 @@ import { ChannelGrid } from '../embeds/channels';
 import { InstallCommand } from '../embeds/install';
 import { ProviderGrid } from '../embeds/providers';
 import { SECTIONS } from '../site/config';
+import { DOCS_HEAD, useHead } from '../site/head';
 import { pagesIn } from '../site/pages';
 import styles from './Home.module.css';
 
@@ -50,9 +51,7 @@ function Band({ title, lede, children }: { title: string; lede: string; children
 
 /** The documentation's own front page: where everything is, and where to start. */
 export function Home() {
-  useEffect(() => {
-    document.title = 'Conch documentation';
-  }, []);
+  useHead(DOCS_HEAD);
   const first = pagesIn('start')[0];
 
   return (

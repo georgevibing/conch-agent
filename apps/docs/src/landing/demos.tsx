@@ -5,6 +5,8 @@
  * say is true of the product; the chats and names in them are made up.
  */
 import {
+  AgendaView,
+  AppOffer,
   ArtifactChart,
   Badge,
   BrowserApproval,
@@ -17,6 +19,8 @@ import {
   MemoryItem,
   MemoryList,
   Message,
+  OfferAlsoTry,
+  OfferCard,
   RoutedNote,
   RoutineCard,
   Stage,
@@ -29,7 +33,9 @@ import {
   ToolCall,
   useInView,
   type HandsetMessage,
+  type OfferCardState,
 } from '@conch/nacre';
+import { appAbilities, appSourceLine } from '@conch/protocol';
 import { Mail } from 'lucide-react';
 import reference from 'virtual:conch-reference';
 
@@ -170,6 +176,327 @@ export function ChatDemo() {
         {/* The window is as tall as the whole chat from the start: it fills, it never grows. */}
         <Steady align="end" holds={[<Transcript key="end" at={CHAT.end} />]}>
           <Transcript at={at} />
+        </Steady>
+      </Stage>
+    </div>
+  );
+}
+
+// ── The chat knows Conch: it offers the app it's missing, then carries on ───
+
+const KNOWS = {
+  ask: 500,
+  think: 1_300,
+  reply: 2_100,
+  replyDone: 3_300,
+  offer: 3_700,
+  press: 6_200,
+  taken: 6_900,
+  tool: 7_500,
+  toolDone: 8_700,
+  answer: 9_100,
+  answerDone: 11_300,
+  also: 11_700,
+  end: 17_000,
+} as const;
+
+const calendar = reference.integrations.find((app) => app.id === 'google-calendar');
+const CALENDAR = calendar?.name ?? 'Google Calendar';
+
+const KNOWS_REPLY = 'I can’t see your calendar yet, so I won’t guess.';
+const KNOWS_ANSWER = 'Yes. You’re free from 12 until the budget sync at 3.';
+
+/** A made-up Friday, read in one place and one locale, so every visitor sees the same day. */
+const FRIDAY = {
+  now: Date.parse('2026-10-07T10:20:00Z'),
+  from: '2026-10-09T00:00:00Z',
+  to: '2026-10-10T00:00:00Z',
+  timeZone: 'UTC',
+  locale: 'en-GB',
+  events: [
+    {
+      title: 'Design review',
+      start: '2026-10-09T10:30:00Z',
+      end: '2026-10-09T11:30:00Z',
+      location: 'Room 4',
+      color: '#7986cb',
+    },
+    {
+      title: 'Budget sync',
+      start: '2026-10-09T15:00:00Z',
+      end: '2026-10-09T15:45:00Z',
+      call: true,
+      color: '#33b679',
+    },
+  ],
+};
+
+/** The chat as it stands at one moment: asked, offered, connected, carried on. */
+function Knows({ at }: { at: number }) {
+  const offer: OfferCardState = at >= KNOWS.taken ? 'accepted' : 'suggested';
+  return (
+    <div className={styles.chat}>
+      {at >= KNOWS.ask && <Message from="user">Can I fit a haircut in on Friday?</Message>}
+      {at >= KNOWS.think && (
+        <Message
+          from="assistant"
+          author="Conch"
+          status={at < KNOWS.replyDone ? 'streaming' : 'complete'}
+        >
+          {at < KNOWS.reply ? (
+            <ThinkingIndicator size="sm" label="Thinking" />
+          ) : (
+            <StreamingText
+              as="p"
+              text={arrived(KNOWS_REPLY, at, KNOWS.reply, KNOWS.replyDone)}
+              streaming={at < KNOWS.replyDone}
+            />
+          )}
+        </Message>
+      )}
+      {at >= KNOWS.offer && (
+        <OfferCard
+          className={styles.offer}
+          kind="app"
+          name={CALENDAR}
+          brand="google-calendar"
+          color={calendar?.color}
+          description={calendar?.description ?? ''}
+          why="Friday is in your calendar, so I could see what’s already booked."
+          state={offer}
+          busy={at >= KNOWS.press && at < KNOWS.taken}
+          onTake={noop}
+          onNotNow={noop}
+          onMute={noop}
+        />
+      )}
+      {at >= KNOWS.tool && (
+        <Message
+          from="assistant"
+          author="Conch"
+          status={at < KNOWS.answerDone ? 'streaming' : 'complete'}
+        >
+          <div className={styles.reply}>
+            <ToolCall
+              name="Read your calendar"
+              leading={
+                <span className={styles.toolApp}>
+                  <IntegrationLogo
+                    brand="google-calendar"
+                    name={CALENDAR}
+                    color={calendar?.color}
+                    size="xs"
+                    decorative
+                  />
+                  <span>{CALENDAR}</span>
+                </span>
+              }
+              status={at < KNOWS.toolDone ? 'running' : 'success'}
+              duration={1_200}
+              view={
+                at >= KNOWS.toolDone && (
+                  <AgendaView
+                    events={FRIDAY.events}
+                    from={FRIDAY.from}
+                    to={FRIDAY.to}
+                    now={FRIDAY.now}
+                    timeZone={FRIDAY.timeZone}
+                    locale={FRIDAY.locale}
+                  />
+                )
+              }
+            />
+            {at >= KNOWS.answer && (
+              <StreamingText
+                as="p"
+                text={arrived(KNOWS_ANSWER, at, KNOWS.answer, KNOWS.answerDone)}
+                streaming={at < KNOWS.answerDone}
+              />
+            )}
+          </div>
+        </Message>
+      )}
+      {at >= KNOWS.also && (
+        <OfferAlsoTry className={styles.offer} examples={calendar?.examples ?? []} onPick={noop} />
+      )}
+    </div>
+  );
+}
+
+export function KnowsDemo() {
+  const [ref, inView] = useInView<HTMLDivElement>({ once: false, margin: '0px' });
+  const at = useClock(KNOWS.end, inView);
+  const working =
+    (at >= KNOWS.think && at < KNOWS.replyDone) || (at >= KNOWS.tool && at < KNOWS.answerDone);
+
+  return (
+    <div ref={ref}>
+      <Stage
+        label={`Asked about Friday, Conch offers to connect ${CALENDAR} under its reply; once it’s connected, the chat carries on by itself and shows the day as it is`}
+        alive={working || (at >= KNOWS.offer && at < KNOWS.taken)}
+        align="end"
+      >
+        {/* As tall as the whole chat from the start: it fills, it never grows. */}
+        <Steady align="end" holds={[<Knows key="end" at={KNOWS.end} />]}>
+          <Knows at={at} />
+        </Steady>
+      </Stage>
+    </div>
+  );
+}
+
+// ── Make it yours: ask for an app, and Conch builds it, checks it, offers it ─
+
+const MAKE = {
+  ask: 500,
+  think: 1_300,
+  write: 2_000,
+  writeDone: 3_400,
+  check: 3_600,
+  checkDone: 4_600,
+  tried: 4_800,
+  triedDone: 5_600,
+  reply: 5_900,
+  replyDone: 7_300,
+  offer: 7_600,
+  press: 10_400,
+  added: 11_100,
+  end: 17_500,
+} as const;
+
+const MAKE_ASK = 'Make me something that remembers when I water my plants.';
+const MAKE_REPLY = 'I made Plant diary. Tell me when you water one, or tap it off on its page.';
+
+/** The app the scene makes: written as the maker's tools would write it. */
+const PLANT_DIARY = {
+  manifest: {
+    conch: 1 as const,
+    id: 'plant-diary',
+    name: 'Plant diary',
+    tagline: 'Remembers when you water your plants',
+    description: 'Logs each watering and says which plants are due.',
+    version: '1.0.0',
+    icon: { glyph: 'sprout' as const, color: 'green' as const },
+    kind: 'home' as const,
+    tools: 'tools.mjs',
+    pages: [{ id: 'main', title: 'Plants', file: 'pages/main.html' }],
+    reaches: [],
+    settings: [],
+    instructions: '',
+    examples: [
+      'I watered the fern',
+      'Which plants need water?',
+      'When did I last water the cactus?',
+    ],
+  },
+  tools: [
+    {
+      name: 'log_watering',
+      title: 'Log watering',
+      description: 'Records that a plant was watered.',
+      changes: true,
+    },
+    {
+      name: 'due',
+      title: 'Plants due',
+      description: 'Says which plants are due for water.',
+      changes: false,
+    },
+  ],
+};
+
+const PLANT_WORDS = {
+  abilities: appAbilities(PLANT_DIARY.manifest, PLANT_DIARY.tools),
+  from: appSourceLine({ kind: 'made' }, { state: 'unsigned' }),
+};
+
+/** The chat as it stands at one moment: asked, built, checked, offered, added. */
+function Make({ at }: { at: number }) {
+  const state = at >= MAKE.added ? 'added' : 'ready';
+  return (
+    <div className={styles.chat}>
+      {at >= MAKE.ask && <Message from="user">{MAKE_ASK}</Message>}
+      {at >= MAKE.think && (
+        <Message
+          from="assistant"
+          author="Conch"
+          status={at < MAKE.replyDone ? 'streaming' : 'complete'}
+        >
+          {at < MAKE.write ? (
+            <ThinkingIndicator size="sm" label="Thinking" />
+          ) : (
+            <div className={styles.reply}>
+              <ToolCall
+                name="Writing Plant diary"
+                status={at < MAKE.writeDone ? 'running' : 'success'}
+                duration={1_400}
+              />
+              {at >= MAKE.check && (
+                <ToolCall
+                  name="Checking it"
+                  status={at < MAKE.checkDone ? 'running' : 'success'}
+                  duration={1_000}
+                />
+              )}
+              {at >= MAKE.tried && (
+                <ToolCall
+                  name="Trying Log watering and Plants due"
+                  status={at < MAKE.triedDone ? 'running' : 'success'}
+                  duration={800}
+                />
+              )}
+              {at >= MAKE.reply && (
+                <StreamingText
+                  as="p"
+                  text={arrived(MAKE_REPLY, at, MAKE.reply, MAKE.replyDone)}
+                  streaming={at < MAKE.replyDone}
+                />
+              )}
+            </div>
+          )}
+        </Message>
+      )}
+      {at >= MAKE.offer && (
+        <AppOffer
+          className={styles.offer}
+          action="add"
+          manifest={PLANT_DIARY.manifest}
+          tools={PLANT_DIARY.tools}
+          source={{ kind: 'made' }}
+          signature={{ state: 'unsigned' }}
+          summary="Plant diary logs each watering and says which plants are due."
+          state={state}
+          busy={at >= MAKE.press && at < MAKE.added}
+          words={PLANT_WORDS}
+          onAdd={noop}
+          onOpenPage={noop}
+          onNotNow={noop}
+          onTry={noop}
+          onOpenApp={noop}
+        />
+      )}
+    </div>
+  );
+}
+
+export function MakerDemo() {
+  const [ref, inView] = useInView<HTMLDivElement>({ once: false, margin: '0px' });
+  const at = useClock(MAKE.end, inView);
+  const working = at >= MAKE.think && at < MAKE.replyDone;
+
+  return (
+    <div ref={ref}>
+      <Stage
+        label="Asked for something that remembers when the plants were watered, Conch writes Plant diary, checks it, tries it, and offers it as a card; pressed, it's in your apps"
+        alive={working || (at >= MAKE.offer && at < MAKE.added)}
+        align="end"
+      >
+        {/* As tall as the whole chat from the start: it fills, it never grows. */}
+        <Steady
+          align="end"
+          holds={[<Make key="ready" at={MAKE.press - 1} />, <Make key="end" at={MAKE.end} />]}
+        >
+          <Make at={at} />
         </Steady>
       </Stage>
     </div>

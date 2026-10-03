@@ -1,6 +1,8 @@
 # Conch, installed with one line on Windows (ADR 0026):
 #
-#   irm https://raw.githubusercontent.com/georgevibing/conch-agent/main/scripts/install.ps1 | iex
+#   irm https://conchagent.com/install.ps1 | iex
+#
+# (the same file as scripts/install.ps1 on GitHub, served by the website)
 #
 # It gets what Conch needs (Node.js and Git, when they're missing) into your
 # own folders, builds Conch, keeps it running in the background, adds it to
