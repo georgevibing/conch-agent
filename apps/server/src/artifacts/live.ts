@@ -241,13 +241,45 @@ export interface Reach {
 
 export type Resolve = (hostname: string) => Promise<{ address: string; family: number }[]>;
 
-const systemResolve: Resolve = async (hostname) =>
+export const systemResolve: Resolve = async (hostname) =>
   (await dnsLookup(hostname, { all: true, verbatim: true })).map((r) => ({
     address: r.address,
     family: r.family,
   }));
 
 class Refused extends Error {}
+
+/**
+ * A `lookup` for `node:http(s)` that checks every address a name resolves
+ * to at the moment of connecting, so the address checked is the address
+ * dialled (no rebinding between the two). `why` says why an address is
+ * refused; `refused` hears it, so the caller can say it instead of a
+ * socket error. Shared by live data and Conch apps' `app.fetch`.
+ */
+export function guardedLookup(
+  resolve: Resolve,
+  why: (address: string) => string | undefined,
+  refused: (why: string) => void,
+): LookupFunction {
+  return (hostname, lookupOptions, callback) => {
+    resolve(hostname).then(
+      (found) => {
+        const no = found.length
+          ? found.map((f) => why(f.address)).find(Boolean)
+          : `Couldn’t find ${hostname}.`;
+        if (no) {
+          refused(no);
+          return callback(new Refused(no), '', 0);
+        }
+        const first = found[0] as { address: string; family: number };
+        if ((lookupOptions as { all?: boolean }).all)
+          return (callback as unknown as (e: null, a: typeof found) => void)(null, found);
+        callback(null, first.address, first.family);
+      },
+      () => callback(new Error(`Couldn’t find ${hostname}.`), '', 0),
+    );
+  };
+}
 
 const portOf = (url: URL) => Number(url.port) || (url.protocol === 'https:' ? 443 : 80);
 
@@ -305,24 +337,13 @@ export async function fetchLive(
     }
     const target = url;
     let refused: string | undefined;
-    const lookup: LookupFunction = (hostname, lookupOptions, callback) => {
-      resolve(hostname).then(
-        (found) => {
-          const why = found.length
-            ? found.map((f) => refusal(f.address, target, reach)).find(Boolean)
-            : `Couldn’t find ${hostname}.`;
-          if (why) {
-            refused = why;
-            return callback(new Refused(why), '', 0);
-          }
-          const first = found[0] as { address: string; family: number };
-          if ((lookupOptions as { all?: boolean }).all)
-            return (callback as unknown as (e: null, a: typeof found) => void)(null, found);
-          callback(null, first.address, first.family);
-        },
-        () => callback(new Error(`Couldn’t find ${hostname}.`), '', 0),
-      );
-    };
+    const lookup = guardedLookup(
+      resolve,
+      (address) => refusal(address, target, reach),
+      (why) => {
+        refused = why;
+      },
+    );
     let response: IncomingMessage;
     try {
       response = await new Promise<IncomingMessage>((done, failed) => {

@@ -67,10 +67,28 @@ export interface AppCallOutcome {
   json?: unknown;
 }
 
+/**
+ * A tool exactly as the module defined it, before it's held to the
+ * protocol's shape: what the quality bar reads to say what's wrong with it.
+ */
+export interface AppToolDefinition {
+  name: string;
+  title: string | null;
+  description: string | null;
+  /** Its input schema, as JSON (`'unreadable'` when it isn't JSON). */
+  input: unknown;
+  /** `null` when the module didn't say. */
+  changes: boolean | null;
+  /** It has a `run` function. */
+  runs: boolean;
+}
+
 /** One app's tools, running sealed off in a Node process of their own. */
 export interface AppRuntime {
   /** The tools the module exports, as the runtime read them (starts it if needed). */
   list(): Promise<ConchAppTool[]>;
+  /** The tools as the module defined them, unchecked (starts it if needed). */
+  definitions?(): Promise<AppToolDefinition[]>;
   call(tool: string, input: Record<string, unknown>, signal?: AbortSignal): Promise<AppCallOutcome>;
   /** Whether a process is running now. */
   readonly running: boolean;
@@ -101,6 +119,9 @@ export interface CheckOptions {
   tried?: readonly string[];
   /** Only the safety half: for a package someone else made (no `tried` needed). */
   safetyOnly?: boolean;
+  /** The vault's redactor (`VaultService.redactor()`): a file it would change holds a secret. */
+  redact?: (text: string) => string;
+  now?: () => number;
 }
 
 export type CheckApp = (files: AppFiles, options: CheckOptions) => Promise<ConchAppCheck>;
