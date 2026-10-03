@@ -137,7 +137,6 @@ function Detail({
   const waiting = awaitsSignIn(integration);
   const offer = waiting && integration.health.state !== 'error';
   const label = fixLabel(integration);
-  const prefix = new RegExp(`^${integration.server.replace(/[-_]\d+$/, '')}[-_]`, 'i');
 
   useEffect(() => {
     document.title = `${integration.name} · Conch`;
@@ -264,62 +263,7 @@ function Detail({
         }
       />
 
-      <section className={styles.section} aria-labelledby="int-policy">
-        <Heading level={2} id="int-policy" size="md">
-          When {assistant} uses {integration.name}
-        </Heading>
-        <SegmentedControl
-          value={integration.policy}
-          onValueChange={(v) => setPolicy(v as IntegrationPolicy)}
-          aria-labelledby="int-policy"
-          className={styles.policy}
-        >
-          <SegmentedControl.Item value="ask">Ask every time</SegmentedControl.Item>
-          <SegmentedControl.Item value="ask-writes">Ask before changes</SegmentedControl.Item>
-          <SegmentedControl.Item value="trust">Don’t ask</SegmentedControl.Item>
-        </SegmentedControl>
-        <Text
-          size="sm"
-          tone={integration.policy === 'trust' ? 'default' : 'muted'}
-          className={styles.policyHelp}
-        >
-          {policyHelp[integration.policy](integration.name, assistant)}
-          {integration.tools.some((t) => t.alwaysAsks) &&
-            (slack
-              ? ' Sending a message always asks, whatever you choose here.'
-              : ' Saving a draft always asks, whatever you choose here, and nothing is ever sent.')}
-        </Text>
-      </section>
-
-      <section className={styles.section} aria-labelledby="int-tools">
-        <Stack gap={0.5}>
-          <Heading level={2} id="int-tools" size="md">
-            Each tool
-          </Heading>
-          <Text size="sm" tone="muted">
-            Choose for each one, or turn off what you don’t need — {assistant} stays more focused
-            with fewer tools.
-          </Text>
-        </Stack>
-        {integration.tools.length ? (
-          <ToolPermissionList
-            policy={integration.policy}
-            tools={integration.tools.map((t) => ({
-              ...t,
-              title: t.title ?? humanizeTool(t.name.replace(prefix, '')),
-            }))}
-            onChange={(tool, policy) =>
-              update.mutate({ id: integration.id, patch: { tools: { [tool]: policy } } })
-            }
-          />
-        ) : (
-          <Text size="sm" tone="subtle">
-            {health.state === 'ok' || health.state === 'warning'
-              ? 'It doesn’t offer anything yet.'
-              : 'Its tools show up here once it’s connected.'}
-          </Text>
-        )}
-      </section>
+      <PolicyAndTools integration={integration} onPolicy={setPolicy} />
 
       {entry && (health.state === 'ok' || health.state === 'warning') && integration.enabled && (
         <section className={styles.section}>
@@ -413,6 +357,85 @@ function Detail({
       </AlertDialog.Root>
       {dialog}
     </Page>
+  );
+}
+
+/**
+ * When the assistant may use an app without asking, and each of its tools'
+ * Allow · Ask · Off. Every app's page has them, Conch apps included.
+ */
+export function PolicyAndTools({
+  integration,
+  onPolicy,
+}: {
+  integration: Integration;
+  /** Changing it asks that it's you: the page that shows this has the dialog. */
+  onPolicy: (policy: IntegrationPolicy) => void;
+}) {
+  const update = useUpdateIntegration();
+  const assistant = useAssistantName();
+  const slack = integration.id === 'slack';
+  const { health } = integration;
+  const prefix = new RegExp(`^${integration.server.replace(/[-_]\d+$/, '')}[-_]+`, 'i');
+  return (
+    <>
+      <section className={styles.section} aria-labelledby="int-policy">
+        <Heading level={2} id="int-policy" size="md">
+          When {assistant} uses {integration.name}
+        </Heading>
+        <SegmentedControl
+          value={integration.policy}
+          onValueChange={(v) => onPolicy(v as IntegrationPolicy)}
+          aria-labelledby="int-policy"
+          className={styles.policy}
+        >
+          <SegmentedControl.Item value="ask">Ask every time</SegmentedControl.Item>
+          <SegmentedControl.Item value="ask-writes">Ask before changes</SegmentedControl.Item>
+          <SegmentedControl.Item value="trust">Don’t ask</SegmentedControl.Item>
+        </SegmentedControl>
+        <Text
+          size="sm"
+          tone={integration.policy === 'trust' ? 'default' : 'muted'}
+          className={styles.policyHelp}
+        >
+          {policyHelp[integration.policy](integration.name, assistant)}
+          {integration.tools.some((t) => t.alwaysAsks) &&
+            (slack
+              ? ' Sending a message always asks, whatever you choose here.'
+              : ' Saving a draft always asks, whatever you choose here, and nothing is ever sent.')}
+        </Text>
+      </section>
+
+      <section className={styles.section} aria-labelledby="int-tools">
+        <Stack gap={0.5}>
+          <Heading level={2} id="int-tools" size="md">
+            Each tool
+          </Heading>
+          <Text size="sm" tone="muted">
+            Choose for each one, or turn off what you don’t need — {assistant} stays more focused
+            with fewer tools.
+          </Text>
+        </Stack>
+        {integration.tools.length ? (
+          <ToolPermissionList
+            policy={integration.policy}
+            tools={integration.tools.map((t) => ({
+              ...t,
+              title: t.title || humanizeTool(t.name.replace(prefix, '')),
+            }))}
+            onChange={(tool, policy) =>
+              update.mutate({ id: integration.id, patch: { tools: { [tool]: policy } } })
+            }
+          />
+        ) : (
+          <Text size="sm" tone="subtle">
+            {health.state === 'ok' || health.state === 'warning'
+              ? 'It doesn’t offer anything yet.'
+              : 'Its tools show up here once it’s connected.'}
+          </Text>
+        )}
+      </section>
+    </>
   );
 }
 

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useUi } from '../../app/ui';
 import type { ConversationView } from '../../live/reducer';
 import styles from '../browser/BrowserDock.module.css';
+import { AppPagePanel } from '../conchapps/AppPage';
 import { ArtifactView } from './ArtifactView';
 
 const MIN_WIDTH = 360;
@@ -25,6 +26,9 @@ export function ArtifactDock({
   const open = useUi((s) =>
     s.artifactOpen?.conversationId === conversationId ? s.artifactOpen : null,
   );
+  // A Conch app's page beside the chat (ADR 0061) takes the same place.
+  const appPage = useUi((s) => s.appPageOpen?.conversationId === conversationId);
+  const closeAppPage = useUi((s) => s.closeAppPage);
   const openArtifact = useUi((s) => s.openArtifact);
   const closeArtifact = useUi((s) => s.closeArtifact);
   const width = useUi((s) => s.artifactWidth);
@@ -56,20 +60,32 @@ export function ArtifactDock({
     return () => observer.disconnect();
   }, []);
 
-  const panel = open && (
-    <ArtifactView
-      key={`${open.artifactId}:${open.version ?? 'latest'}`}
-      artifactId={open.artifactId}
-      version={open.version}
-      onClose={closeArtifact}
-    />
+  const panel = appPage ? (
+    <AppPagePanel conversationId={conversationId} />
+  ) : (
+    open && (
+      <ArtifactView
+        key={`${open.artifactId}:${open.version ?? 'latest'}`}
+        artifactId={open.artifactId}
+        version={open.version}
+        onClose={closeArtifact}
+      />
+    )
   );
+  const shownPanel = Boolean(open) || appPage;
 
   if (narrow) {
     return (
       <>
         {children}
-        <Sheet.Root open={Boolean(open)} onOpenChange={(next) => !next && closeArtifact()}>
+        <Sheet.Root
+          open={shownPanel}
+          onOpenChange={(next) => {
+            if (next) return;
+            closeArtifact();
+            closeAppPage();
+          }}
+        >
           <Sheet.Content
             side="right"
             size="lg"
@@ -89,7 +105,7 @@ export function ArtifactDock({
   return (
     <div ref={row} className={styles.row}>
       <div className={styles.chat}>{children}</div>
-      {open && (
+      {shownPanel && (
         <>
           <ResizeHandle
             label="Resize the panel"

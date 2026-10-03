@@ -5,6 +5,8 @@ import type {
   ArtifactKind,
   Attachment,
   ChangedFile,
+  ConchAppOffer,
+  ConchAppShareCard,
   PastChatSeen,
   TaintSource,
   VaultPermission,
@@ -203,6 +205,25 @@ export type TranscriptItem =
       legacy?: boolean;
       /** The message that brought it up. */
       askedIn?: string;
+    }
+  | {
+      /**
+       * An app the assistant made or found, offered to add (ADR 0061). The
+       * newest event for its `offerId` replaces it where it is: added,
+       * updated, declined, stale.
+       */
+      kind: 'conch-app-offer';
+      /** The offer's id. */
+      id: string;
+      offer: ConchAppOffer;
+      at: number;
+    }
+  | {
+      /** "Put it on GitHub": the share buttons, for the person to press (ADR 0061). */
+      kind: 'conch-app-share';
+      id: string;
+      share: ConchAppShareCard;
+      at: number;
     }
   | {
       kind: 'skill';
@@ -786,10 +807,29 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
       return base;
     case 'plan':
       return { ...base, items: foldPlan(items, event) };
-    // Drawn by the chat's app cards (ADR 0061).
-    case 'conch-app.offer':
+    // Apps you make and add (ADR 0061): the newest word on a card wins, where it is.
+    case 'conch-app.offer': {
+      const updated = updateItem(items, 'conch-app-offer', event.offer.offerId, (item) => ({
+        ...item,
+        offer: event.offer,
+      }));
+      if (updated) return { ...base, items: updated };
+      return {
+        ...base,
+        items: [
+          ...items,
+          { kind: 'conch-app-offer', id: event.offer.offerId, offer: event.offer, at: event.at },
+        ],
+      };
+    }
     case 'conch-app.share':
-      return base;
+      return {
+        ...base,
+        items: [
+          ...items,
+          { kind: 'conch-app-share', id: `share-${event.seq}`, share: event.share, at: event.at },
+        ],
+      };
     case 'skill.used':
       return {
         ...base,

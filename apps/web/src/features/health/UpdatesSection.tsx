@@ -1,4 +1,9 @@
-import type { ConchUpdate, ProgramUpdate, ReleaseNotes as Notes } from '@conch/protocol';
+import type {
+  AppUpdateNotice,
+  ConchUpdate,
+  ProgramUpdate,
+  ReleaseNotes as Notes,
+} from '@conch/protocol';
 import {
   Badge,
   Button,
@@ -17,9 +22,18 @@ import {
   type SoftwareUpdateProps,
 } from '@conch/nacre';
 import { ArrowUpRight, Download, RefreshCw, RotateCcw, Undo2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
+import { go } from '../../app/navigation';
 import { useUi } from '../../app/ui';
+import { useAuth } from '../auth/useAuth';
+import { useVerify } from '../auth/useVerify';
+import { conchAppsApi } from '../conchapps/api';
+import { putConchApp } from '../conchapps/queries';
+import { conchAppPath } from '../conchapps/words';
+import { errorText } from '../integrations/queries';
+import { updateKeys } from '../updates/api';
 import { relativeTime } from '../../lib/time';
 import { Section } from '../settings/Section';
 import { followRestart, updatesWaiting, useUpdateActions, useUpdates } from '../updates/queries';
@@ -456,6 +470,8 @@ export function UpdatesSection() {
           </Stack>
         )}
 
+        {status.apps && status.apps.length > 0 && <AppUpdates apps={status.apps} />}
+
         {actions.error && (
           <Callout tone="danger" live="polite">
             {actions.error}
@@ -500,6 +516,7 @@ export function UpdatesHeadline() {
   const waiting = [
     ...(status.conch.behind > 0 ? ['Conch'] : []),
     ...status.programs.filter((p) => p.available).map((p) => p.name),
+    ...(status.apps ?? []).map((a) => a.name),
   ];
   return (
     <Stack direction="row" align="center" gap={2} wrap>
@@ -509,6 +526,91 @@ export function UpdatesHeadline() {
       <Text as="span" size="sm" tone="muted">
         for {names(waiting)}
       </Text>
+    </Stack>
+  );
+}
+
+/**
+ * Apps you added from GitHub with a newer version (ADR 0061). Nothing
+ * updates by itself: one signed by the key you added it with, reaching
+ * nowhere new, is one press; anything else opens its page, where what
+ * changed is shown first.
+ */
+function AppUpdates({ apps }: { apps: AppUpdateNotice[] }) {
+  const client = useQueryClient();
+  const auth = useAuth();
+  const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
+  const [busy, setBusy] = useState<string>();
+  const [error, setError] = useState<string>();
+  // Going to its page leaves Settings.
+  const page = (notice: AppUpdateNotice) => void go(conchAppPath(notice.appId));
+
+  const update = async (notice: AppUpdateNotice) => {
+    setBusy(notice.appId);
+    setError(undefined);
+    try {
+      await guard(async () => {
+        const found = await conchAppsApi.updatePreview(notice.appId);
+        // Not the version this row named: its page shows what it is first.
+        if (found.manifest.version !== notice.latest) return page(notice);
+        const updated = await conchAppsApi.applyUpdate(notice.appId, found.hash);
+        putConchApp(client, updated);
+        void client.invalidateQueries({ queryKey: updateKeys.status });
+      });
+    } catch (e) {
+      setError(errorText(e, `${notice.name} didn’t update. Nothing changed.`));
+    } finally {
+      setBusy(undefined);
+    }
+  };
+
+  return (
+    <Stack gap={2}>
+      <Heading level={4} size="sm" weight="medium">
+        Apps you added
+      </Heading>
+      <ProgramUpdates aria-label="Apps you added">
+        {apps.map((notice) => {
+          const quiet = notice.sameSigner && !notice.reachesAdded.length;
+          return (
+            <ProgramUpdates.Item
+              key={notice.appId}
+              name={notice.name}
+              version={notice.installed}
+              state="available"
+              message={
+                notice.reachesAdded.length
+                  ? `Version ${notice.latest} also reaches ${notice.reachesAdded.join(', ')}. Look at what changed first.`
+                  : notice.sameSigner
+                    ? undefined
+                    : `Version ${notice.latest} is signed with another key. Look at what changed first.`
+              }
+              action={
+                quiet ? (
+                  <Button
+                    size="sm"
+                    variant="soft"
+                    loading={busy === notice.appId}
+                    onClick={() => void update(notice)}
+                  >
+                    Update to {notice.latest}
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="soft" onClick={() => page(notice)}>
+                    See what changed
+                  </Button>
+                )
+              }
+            />
+          );
+        })}
+      </ProgramUpdates>
+      {error && (
+        <Callout tone="danger" live="polite">
+          {error}
+        </Callout>
+      )}
+      {dialog}
     </Stack>
   );
 }
