@@ -518,7 +518,7 @@ function randomBytes(n: number): Uint8Array {
 }
 
 /**
- * A strong password in the style of Apple's suggestions: `k7mbqe-x3tnzr-wd8pha`.
+ * A strong password in three groups of six: `k7mbqe-x3tnzr-wd8pha`.
  * 18 random symbols = 90 bits, easy to type on a phone, lowercase only.
  */
 export function suggestPassword(): string {

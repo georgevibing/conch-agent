@@ -13,9 +13,9 @@ starting again. People who have never opened a terminal can't be told to
 copy a hidden folder, and a copy of it would carry cookies, caches and
 half-written files that don't belong on another machine.
 
-A phone gets this right: it backs itself up every night without being asked,
-says “Backed up · Last backup today at 03:12”, and a restore shows what
-comes back before it does anything.
+Backups should work the way people already expect: made every night without
+being asked, saying “Backed up · Last backup today at 03:12”, and a restore
+that shows what comes back before it does anything.
 
 ## Decision
 

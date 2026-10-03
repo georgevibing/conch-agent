@@ -1,7 +1,7 @@
 import { vaultSourceName } from '@conch/nacre';
 import type { VaultItemSummary, VaultItemType, VaultProblem, VaultSourceId } from '@conch/protocol';
 
-/** What the list shows. One at a time, like Apple Passwords' sidebar. */
+/** What the list shows. One filter at a time, chosen in the sidebar. */
 export type VaultFilter =
   | { kind: 'all' }
   | { kind: 'favorites' }

@@ -63,7 +63,7 @@ describe('AppAbilities', () => {
     await expectAccessible(container);
   });
 
-  it('waits while it changes, offers its one more thing when on, and can’t change while the app is off', async () => {
+  it('waits while it changes, offers its extra action when on, and can’t change while the app is off', async () => {
     const onAction = vi.fn();
     const onChange = vi.fn();
     renderNacre(

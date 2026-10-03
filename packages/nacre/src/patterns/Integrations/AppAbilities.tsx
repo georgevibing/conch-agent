@@ -30,7 +30,7 @@ export interface AppAbility {
   note?: ReactNode;
   /** The note needs looking at (a key stopped working): said in words and colour. */
   attention?: boolean;
-  /** One more thing to do with it when on ("Who can talk to it"). */
+  /** An extra action offered while it is on ("Who can talk to it"). */
   action?: { label: string; onClick: () => void };
 }
 

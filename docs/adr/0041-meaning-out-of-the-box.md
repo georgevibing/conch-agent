@@ -152,7 +152,7 @@ So: MiniLM `floor` 0.3, `same` 0.5; multilingual `floor` 0.35, `same` 0.6; Ollam
 
 ### Measured
 
-On the development Mac (Apple silicon, shared with six other jobs): downloading
+On a laptop that was busy with other work at the same time: downloading
 all-MiniLM-L6-v2 through `OnDeviceModel.get` took 3.2 s and the multilingual one
 11.4 s; loading takes about 80 ms and 400 ms in place. **Indexing 1,000 memories
 took 1.6 s** with MiniLM in its own process, in the test that measures it

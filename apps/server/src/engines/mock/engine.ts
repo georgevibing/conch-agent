@@ -725,7 +725,7 @@ export class MockEngine implements Engine {
         const before = await readFile(noteFile, 'utf8').catch(() => '');
         const content = writes
           ? `# Note\n\n${(writes[1] ?? '').trim() || 'Remember the milk.'}\n`
-          : `${before}\nOne more thing, added later.\n`;
+          : `${before}\nA line added later.\n`;
         const toolName = writes ? 'Write' : 'Edit';
         const args = writes
           ? { file_path: noteFile, content }

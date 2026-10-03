@@ -46,8 +46,8 @@ password rules follow **NIST SP 800-63B-4**:
   sequence checks and a check against the username;
 - there is no forced rotation.
 
-A **Suggest a strong one** button makes an Apple-style `xxxxxx-xxxxxx-xxxxxx`
-(90 bits, easy to type on a phone). A strength meter explains any rejection in
+A **Suggest a strong one** button makes a `xxxxxx-xxxxxx-xxxxxx` password
+(three groups of six, 90 bits, easy to type on a phone). A strength meter explains any rejection in
 words.
 
 ### "No sign-in" is still safe

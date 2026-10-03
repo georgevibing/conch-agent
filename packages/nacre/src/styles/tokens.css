@@ -532,8 +532,8 @@
     color-scheme: dark;
   }
 
-  /* Continuous (squircle) corners where supported — an Apple-grade detail
-     that makes every radius feel softer without looking bigger. */
+  /* Continuous (squircle) corners where supported: every radius feels
+     softer without looking bigger. */
   @supports (corner-shape: squircle) {
     :root,
     [data-nacre-theme] {

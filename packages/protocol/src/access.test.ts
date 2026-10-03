@@ -54,7 +54,7 @@ describe('password policy', () => {
 });
 
 describe('generators', () => {
-  it('suggests unique Apple-style passwords that pass the policy', () => {
+  it('suggests unique three-part passwords that pass the policy', () => {
     const seen = new Set<string>();
     for (let i = 0; i < 200; i++) {
       const password = suggestPassword();
