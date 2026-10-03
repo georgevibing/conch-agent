@@ -50,6 +50,7 @@ import { CONCH_POWER_MESSAGE, runsConchPower } from '../lib/protect';
 import { didWhat } from '../activity/service';
 import { changedFiles, type UndoService } from '../undo/service';
 import { shownPath } from '../undo/tracker';
+import { TurnReplies } from '../replies/turn';
 
 type SkillNeed = ReturnType<typeof needs>;
 import { generateTitle } from './title';
@@ -980,6 +981,9 @@ export class ConversationManager {
     let heldProblem: TurnProblem | undefined;
     let next: TurnRoute | undefined;
     const extras = live.extras;
+    // Replies to send next (ADR 0055): the assistant's tool now, the chips as the turn ends.
+    const turnSeq = live.seq;
+    const replies = new TurnReplies({ engine, unattended: Boolean(extras || live.record.origin) });
     let finalText = '';
     let finalMessageId: string | undefined;
 
@@ -1076,6 +1080,7 @@ export class ConversationManager {
             },
           }) ?? [])),
       ...(extras?.tools ?? []),
+      ...replies.tools,
     );
     // Scoped tasks may use the common connector/artifact tools, never the rest
     // of the normal chat's powers. Guards enforce this again at execution time.
@@ -1540,6 +1545,18 @@ export class ConversationManager {
         );
         next = after;
       }
+      // A finished reply ends with what you might say next, when that helps (ADR 0055).
+      const picked = next
+        ? undefined
+        : await replies
+            .finish({
+              outcome,
+              turn: live.events.filter((e) => e.seq >= turnSeq),
+              tainted: this.#tainted(live).length > 0,
+              model: answeredWith ?? resolved.model,
+            })
+            .catch(() => undefined);
+      if (picked) this.#append(live, { type: 'replies', ...picked }, tail);
       // Everything up to here is part of this provider's session now.
       const own = live.record.sessions?.[engine.id];
       if (own)
