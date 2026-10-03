@@ -49,6 +49,7 @@ export * from './access';
 export * from './apps';
 export * from './artifacts';
 export * from './chat-cards';
+export * from './questions';
 export * from './attachments';
 export * from './background';
 export * from './backups';
