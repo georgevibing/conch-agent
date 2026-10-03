@@ -178,7 +178,12 @@ export function ChatDemo() {
 
 // ── Every provider: the one answering changes, the list doesn't ─────────────
 
-const TURN = 2_400;
+const TURN = 1_800;
+const GROUP_WORDS = [
+  ['subscription', 'Your plans'],
+  ['local', 'On this computer'],
+  ['key', 'Pay as you go'],
+] as const;
 
 export function ProvidersDemo() {
   const [ref, inView] = useInView<HTMLDivElement>({ once: false, margin: '0px' });
@@ -186,6 +191,7 @@ export function ProvidersDemo() {
   const at = useClock(TURN * all.length, inView);
   // Standing still, the first one answers.
   const speaking = Math.floor(at / TURN) % all.length;
+  const now = all[speaking];
 
   return (
     <div ref={ref}>
@@ -198,30 +204,53 @@ export function ProvidersDemo() {
         }
         bare
       >
-        <ul className={styles.providers}>
-          {all.map((p, index) => (
-            <li key={p.id} data-speaking={index === speaking || undefined}>
-              <IntegrationLogo brand={p.id} name={p.name} color={p.color} size="sm" decorative />
-              <span className={styles.providerWords}>
-                <Text as="span" weight="medium">
-                  {p.name}
-                </Text>
-                <Text as="span" size="sm" tone="muted">
-                  {p.tagline}
-                </Text>
-              </span>
-              {index === speaking ? (
-                <Badge size="sm" tone="accent" dot="pulse">
-                  Answering
-                </Badge>
-              ) : (
-                <Badge size="sm" tone="neutral">
-                  Ready
-                </Badge>
-              )}
-            </li>
+        <div className={styles.providers}>
+          {/* The one answering: one line that never changes height. */}
+          <div className={styles.speaker} aria-hidden>
+            <IntegrationLogo
+              brand={now?.id}
+              name={now?.name ?? ''}
+              color={now?.color}
+              size="md"
+              decorative
+            />
+            <span className={styles.providerWords}>
+              <Text as="span" weight="medium">
+                {now?.name}
+              </Text>
+              <Text as="span" size="sm" tone="muted">
+                {now?.tagline}
+              </Text>
+            </span>
+            <Badge size="sm" tone="accent" dot="pulse">
+              Answering
+            </Badge>
+          </div>
+          {/* Every other one, ready: its mark, by what connecting takes. */}
+          {GROUP_WORDS.map(([group, words]) => (
+            <div key={group} className={styles.providerGroup}>
+              <Text as="p" size="xs" tone="subtle">
+                {words}
+              </Text>
+              <ul className={styles.marks}>
+                {all.map((p, index) =>
+                  p.group === group ? (
+                    <li key={p.id} data-speaking={index === speaking || undefined}>
+                      <IntegrationLogo
+                        brand={p.id}
+                        name={p.name}
+                        color={p.color}
+                        size="sm"
+                        decorative
+                      />
+                      <span className="nc-visually-hidden">{p.name}</span>
+                    </li>
+                  ) : null,
+                )}
+              </ul>
+            </div>
           ))}
-        </ul>
+        </div>
       </Stage>
     </div>
   );

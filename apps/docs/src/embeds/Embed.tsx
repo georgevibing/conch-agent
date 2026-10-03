@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { AppsGallery } from './apps';
 import { ChannelFacts, ChannelGrid, ChannelScene } from './channels';
 import { InstallCommand } from './install';
-import { ProviderFacts, ProviderGrid, ProviderMatrix } from './providers';
+import { ProviderFacts, ProviderGrid, ProviderMatrix, ServerFacts } from './providers';
 import {
   CliReference,
   EffortList,
@@ -46,6 +46,7 @@ const EMBEDS: Record<string, EmbedView> = {
   'provider-matrix': ProviderMatrix,
   providers: ProviderGrid,
   routes: RoutesReference,
+  'server-facts': ServerFacts,
   section: ({ args }) => <SectionCards id={args[0] ?? ''} />,
   slash: SlashReference,
   socket: ({ args }) => <SocketReference kind={args[0] ?? ''} />,

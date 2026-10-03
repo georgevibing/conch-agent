@@ -103,8 +103,11 @@ function build(): { pages: Page[]; byFile: Map<string, Page> } {
       nav: meta.nav ?? title,
       description:
         meta.description ?? provider?.tagline ?? channel?.tagline ?? firstParagraph(body),
-      // A provider or channel keeps the place the code gives it, unless the page says otherwise.
-      order: Number(meta.order ?? (provider || channel ? 100 + place(meta) : 100)),
+      // A provider or channel keeps the place the code gives it, unless the page says otherwise;
+      // `after: lm-studio` puts a page straight after that provider's.
+      order: meta.after
+        ? 100.5 + place({ provider: meta.after })
+        : Number(meta.order ?? (provider || channel ? 100 + place(meta) : 100)),
       body,
       headings: pageHeadings(body),
       file: meta.source ?? file,

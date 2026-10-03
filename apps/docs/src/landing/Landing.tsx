@@ -56,6 +56,8 @@ const channels = reference.channels.filter((channel) => channel.available);
 const local = reference.providers.find((provider) => provider.can.offline);
 /** The providers that are agents on this computer: they work with your files. */
 const agents = reference.providers.filter((provider) => provider.can.files).map((p) => p.name);
+/** The plans people already pay for, connected with their own sign-in. */
+const plans = reference.providers.filter((p) => p.group === 'subscription').map((p) => p.name);
 
 /** A list of names as a sentence would say it: "a, b and c". */
 function sentence(names: string[]): string {
@@ -120,7 +122,7 @@ export function Landing() {
               <em>On your own computer.</em>
             </>
           }
-          lede={`Conch drives ${agents.join(', ')}, a model on this machine and more, all at once, from one place. It sets itself up, fixes what breaks, and asks only when it matters.`}
+          lede={`Conch drives ${sentence(agents)}, a model on this machine and the keys you have, all at once, from one place. It sets itself up, fixes what breaks, and asks only when it matters.`}
           actions={
             <>
               <InstallCommand typed />
@@ -165,8 +167,9 @@ export function Landing() {
           }
           stage={<ProvidersDemo />}
           points={[
-            'Claude Code and Codex bring your files and your commands.',
+            `The plans you already pay for: ${sentence(plans)}.`,
             `${local?.name ?? 'A model on this computer'} is private, free and works offline.`,
+            'Paste any key, and Conch knows whose it is.',
             'Offline, or at a usage limit, the one you chose carries on.',
           ]}
           action={

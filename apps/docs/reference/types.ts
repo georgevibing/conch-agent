@@ -14,6 +14,10 @@ export interface ProviderRef {
   description: string;
   /** `program`: something installed on this computer. `key`: a key you paste. */
   connect: 'program' | 'key';
+  /** Where it sits: a plan you have, this computer, or pay as you go. */
+  group: 'subscription' | 'key' | 'local' | 'server';
+  /** A few honest words when it costs nothing to start. */
+  free?: string;
   highlights: string[];
   limits: string[];
   experimental: boolean;
@@ -155,6 +159,15 @@ export interface Reference {
   version: string;
   protocolVersion: number;
   providers: ProviderRef[];
+  /** A server you add yourself, as the idea (each one you add is its own provider). */
+  server: {
+    name: string;
+    tagline: string;
+    description: string;
+    highlights: string[];
+    limits: string[];
+    color: string;
+  };
   channels: ChannelRef[];
   integrations: IntegrationRef[];
   cli: CliRef[];

@@ -20,24 +20,108 @@ export function providerLogo(provider: ProviderRef) {
   );
 }
 
-/** Every provider Conch drives, each a link to its page. */
+const GROUPS: { id: ProviderRef['group']; title: string; lead: string }[] = [
+  {
+    id: 'subscription',
+    title: 'Your plans',
+    lead: 'A plan you already pay for, signed in with its own program.',
+  },
+  { id: 'local', title: 'On this computer', lead: 'Private, free, and answers with no internet.' },
+  {
+    id: 'key',
+    title: 'Pay as you go',
+    lead: 'A key you paste. Conch knows whose it is by its shape.',
+  },
+];
+
+/** Every provider Conch drives, by what connecting takes, each a link to its page. */
 export function ProviderGrid() {
   return (
-    <div className={styles.grid}>
-      {reference.providers.map((provider, index) => (
-        <LinkCard
-          key={provider.id}
-          index={index}
-          icon={providerLogo(provider)}
-          title={provider.name}
-          meta={provider.experimental ? 'Early support' : undefined}
-          description={provider.tagline}
-          asChild
-        >
-          <Link to={`/providers/${provider.id}`} />
-        </LinkCard>
-      ))}
+    <div className={styles.stack}>
+      {GROUPS.map((group) => {
+        const providers = reference.providers.filter((p) => p.group === group.id);
+        return (
+          <section key={group.id} aria-label={group.title} className={styles.stack}>
+            <Text as="p" size="sm" tone="muted">
+              <strong>{group.title}.</strong> {group.lead}
+            </Text>
+            <div className={styles.grid}>
+              {providers.map((provider, index) => (
+                <LinkCard
+                  key={provider.id}
+                  index={index}
+                  icon={providerLogo(provider)}
+                  title={provider.name}
+                  meta={provider.experimental ? 'Early support' : provider.free}
+                  description={provider.tagline}
+                  asChild
+                >
+                  <Link to={`/providers/${provider.id}`} />
+                </LinkCard>
+              ))}
+              {group.id === 'local' && (
+                <LinkCard
+                  index={providers.length}
+                  icon={
+                    <IntegrationLogo
+                      brand="server"
+                      name={reference.server.name}
+                      color={reference.server.color}
+                      decorative
+                    />
+                  }
+                  title={reference.server.name}
+                  description={reference.server.tagline}
+                  asChild
+                >
+                  <Link to="/providers/servers" />
+                </LinkCard>
+              )}
+            </div>
+          </section>
+        );
+      })}
     </div>
+  );
+}
+
+/** A server you add yourself, as the idea: what it is, what it's good at, what to know. */
+export function ServerFacts() {
+  const server = reference.server;
+  return (
+    <Surface
+      as="section"
+      variant="flat"
+      radius="xl"
+      padding={5}
+      className={styles.facts}
+      aria-label={`${server.name} at a glance`}
+    >
+      <div className={styles.factsHead}>
+        <IntegrationLogo
+          brand="server"
+          name={server.name}
+          color={server.color}
+          size="lg"
+          decorative
+        />
+        <Text size="lg">{server.description}</Text>
+      </div>
+      <ul className={styles.chips} aria-label="Good at">
+        {server.highlights.map((highlight) => (
+          <li key={highlight}>
+            <Badge tone="neutral">{highlight}</Badge>
+          </li>
+        ))}
+      </ul>
+      <Callout tone="neutral" title="Worth knowing first">
+        <ul className={styles.plainList}>
+          {server.limits.map((limit) => (
+            <li key={limit}>{limit}</li>
+          ))}
+        </ul>
+      </Callout>
+    </Surface>
   );
 }
 
@@ -83,7 +167,9 @@ export function ProviderMatrix() {
 }
 
 function connectsWith(provider: ProviderRef): string {
-  if (provider.connect === 'program') return 'A program on this computer';
+  if (provider.group === 'local') return 'A program on this computer';
+  if (provider.connect === 'program')
+    return 'Your own sign-in, through its program on this computer';
   return provider.key?.canSignIn
     ? 'A key you paste, or a sign-in that makes one'
     : 'A key you paste';
@@ -110,7 +196,8 @@ export function ProviderFacts({ id }: { id: string }) {
       'Also brings',
       `The connectors of ${provider.can.account}; Conch brings in the ones it can connect, for every model`,
     ]);
-  if (provider.key) facts.push(['A key looks like', provider.key.placeholder]);
+  if (provider.key?.placeholder) facts.push(['A key looks like', provider.key.placeholder]);
+  if (provider.free) facts.push(['To start', provider.free]);
 
   return (
     <Surface

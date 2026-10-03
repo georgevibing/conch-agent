@@ -25,15 +25,10 @@ import { RULES } from '../../server/src/backup/manifest';
 import { CHANNEL_CATALOG } from '../../server/src/channels/catalog';
 import { CLI_COMMANDS } from '../../server/src/cliCommands';
 import { Env, ENV_ABOUT } from '../../server/src/config';
-import { anthropicApiVariant } from '../../server/src/engines/api/anthropic';
-import { ApiEngine } from '../../server/src/engines/api/engine';
-import { ollamaVariant } from '../../server/src/engines/api/ollama';
-import { openrouterVariant } from '../../server/src/engines/api/openrouter';
-import { ClaudeCodeEngine } from '../../server/src/engines/claude-code/engine';
-import { CodexEngine } from '../../server/src/engines/codex/engine';
+import { builtInEngines } from '../../server/src/engines/registry';
 import type { Engine } from '../../server/src/engines/types';
 import { publicCatalog } from '../../server/src/integrations/catalog';
-import { PROVIDER_COPY, PROVIDER_ORDER } from '../../server/src/providers/catalog';
+import { PROVIDER_COPY, PROVIDER_ORDER, SERVER_COPY } from '../../server/src/providers/catalog';
 import { ProviderKeys } from '../../server/src/providers/keys';
 import { SettingsStore } from '../../server/src/settings/store';
 import { KNOWN_NEEDS } from '../../server/src/setup/known';
@@ -76,14 +71,8 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
 function engines(home: string): Map<string, Engine> {
   const settings = new SettingsStore(home);
   const keys = new ProviderKeys(settings);
-  const list: Engine[] = [
-    new ClaudeCodeEngine(settings, keys, undefined, () => undefined),
-    new CodexEngine(settings, keys, undefined),
-    new ApiEngine(ollamaVariant({} as never, { home }), settings, keys),
-    new ApiEngine(openrouterVariant({ home }), settings, keys),
-    new ApiEngine(anthropicApiVariant({ home }), settings, keys),
-  ];
-  return new Map(list.map((engine) => [engine.id, engine]));
+  // The same registry `Services` builds from, so a new provider is in the docs by itself.
+  return builtInEngines({ settings, keys, home, local: {} as never });
 }
 
 function providers(): ProviderRef[] {
@@ -101,6 +90,8 @@ function providers(): ProviderRef[] {
           tagline: copy.tagline,
           description: copy.description,
           connect: copy.connect === 'key' ? 'key' : 'program',
+          group: copy.group,
+          ...(copy.free && { free: copy.free }),
           highlights: copy.highlights,
           limits: copy.limits ?? [],
           experimental: copy.experimental ?? false,
@@ -306,6 +297,14 @@ export function buildReference(): Reference {
     version: SERVER_VERSION,
     protocolVersion: PROTOCOL_VERSION,
     providers: providers(),
+    server: {
+      name: SERVER_COPY.name,
+      tagline: SERVER_COPY.tagline,
+      description: SERVER_COPY.description,
+      highlights: [...SERVER_COPY.highlights],
+      limits: [...SERVER_COPY.limits],
+      color: SERVER_COPY.color,
+    },
     channels: CHANNEL_CATALOG.map(({ id, name, tagline, color, minutes, available }) => ({
       id,
       name,

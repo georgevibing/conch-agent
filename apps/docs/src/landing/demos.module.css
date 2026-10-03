@@ -30,22 +30,55 @@
 .providers {
   display: flex;
   flex-direction: column;
-  margin: 0;
-  padding: var(--nc-space-2);
-  list-style: none;
+  gap: var(--nc-space-4);
+  padding: var(--nc-space-4);
 }
 
-.providers > li {
+.speaker {
   display: flex;
   align-items: center;
   gap: var(--nc-space-3);
   padding: var(--nc-space-3);
   border-radius: var(--nc-radius-lg);
-  transition: background-color var(--nc-duration-slow) var(--nc-ease-out);
+  background: var(--nc-wash-2);
 }
 
-.providers > li[data-speaking] {
-  background: var(--nc-wash-2);
+.providerGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-2);
+}
+
+.marks {
+  display: flex;
+  flex-wrap: wrap;
+  /* Snug enough that the longest group stays on one line in a wide window. */
+  gap: var(--nc-space-2) var(--nc-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.marks > li {
+  display: grid;
+  padding: 3px;
+  border-radius: var(--nc-radius-md);
+  box-shadow: 0 0 0 2px transparent;
+  transition:
+    box-shadow var(--nc-duration-slow) var(--nc-ease-out),
+    transform var(--nc-spring-soft-duration) var(--nc-spring-soft);
+}
+
+/* The one answering wears the ring; nothing moves around it. */
+.marks > li[data-speaking] {
+  box-shadow: 0 0 0 2px var(--nc-accent-9);
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marks > li {
+    transition: none;
+  }
 }
 
 .providerWords {

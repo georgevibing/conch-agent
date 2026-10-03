@@ -23,10 +23,21 @@ Providers differ. Conch never pretends otherwise: a feature a provider can't do 
 
 ## Connecting one
 
-Open **Settings → Providers**. Each provider is one card with one button.
+Open **Settings → Providers**. Yours are on top. The rest wait below as tiles, sorted by what connecting takes, and you can find one by name or by what it's good at.
 
-- **A program on this computer.** Conch finds it where it really lives. If it's missing, **Install** gets it, with the command shown; then **Sign in** runs the program's own sign-in.
-- **A key.** Paste it, and Conch checks it before keeping it. "Saved" means it works.
+- **Your plans.** Claude Code, Codex, GitHub Copilot, Gemini CLI and Grok use a plan you already pay for, through the provider's own program on this computer. If it's missing, **Install** gets it, with the command shown; then you sign in with the program's own sign-in. Conch never sees its credentials.
+- **On this computer.** A model on this computer, through Ollama or LM Studio, or a [server you run yourself](servers.md).
+- **Pay as you go.** Paste a key and Conch checks it before keeping it. "Saved" means it works.
+
+## Have a key? Paste it anywhere
+
+Paste a key anywhere on **Settings → Providers**. Conch knows whose it is from its shape (`gsk_` is Groq, `xai-` is xAI) and checks it with that provider straight away. Plenty of keys start `sk-`; for those, Conch asks whose it is rather than send it to the wrong company.
+
+A company with regions (Kimi, Z.ai, MiniMax, Qwen) is tried at each of its own addresses, and Conch remembers the one that took your key.
+
+## Found on this computer
+
+Conch looks for what's already here: a provider's key in this computer's settings (`OPENAI_API_KEY`), or a model server running on its usual port. Each is offered under **Found on this computer**, ready in one press. Nothing is used until you press it, and a key is never shown.
 
 ## Where keys live
 
