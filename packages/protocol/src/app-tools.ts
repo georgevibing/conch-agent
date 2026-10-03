@@ -8,8 +8,8 @@
 import { z } from 'zod';
 
 import type { ToolView } from './chat-cards';
-import { type GoogleAppId } from './google';
-import { SlackToolName } from './slack';
+import type { GoogleAppId } from './google';
+import type { SlackToolName } from './slack';
 
 /** Every tool of Conch's own Google apps (ADR 0048), by its own name. */
 export const GoogleToolName = z.enum([
