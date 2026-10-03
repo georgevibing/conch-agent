@@ -8,6 +8,9 @@
  *                request is refused until sign-in is set up.
  * - `password` — a username and password (NIST SP 800-63B-4 rules below).
  * - `key`      — one or more long random access keys, revocable per device.
+ * - `passkey`  — passkeys only: Touch ID, Windows Hello, Face ID (ADR 0065).
+ *
+ * Passkeys can also sit beside a password or keys: then either way works.
  *
  * The password policy and generator live here so the web app, the gateway and
  * the `pnpm conch` CLI all agree on what is acceptable.
@@ -16,7 +19,7 @@ import { z } from 'zod';
 
 // ── Wire schemas ────────────────────────────────────────────────────────────
 
-export const AccessMethod = z.enum(['none', 'password', 'key']);
+export const AccessMethod = z.enum(['none', 'password', 'key', 'passkey']);
 export type AccessMethod = z.infer<typeof AccessMethod>;
 
 /** How far Conch listens: this computer only, or the network too. */
@@ -49,6 +52,8 @@ export const AuthStatus = z.object({
   locked: z.boolean().optional(),
   /** Signed in, but this device is waiting to be approved (see `DeviceRequest`). */
   approval: WaitingApproval.optional(),
+  /** A passkey made for this address can sign in here (ADR 0065). */
+  passkeys: z.boolean().optional(),
   /**
    * Sign-in is off, and this looks like the computer running Conch, but this
    * browser hasn't been opened from Conch yet (ADR 0063): open it from your apps.
@@ -85,6 +90,122 @@ export type HereLink = z.infer<typeof HereLink>;
 /** The web app hands in the code it took from `#here=` (`POST /api/here`). */
 export const HereRedeemBody = z.object({ code: z.string().trim().min(1).max(128) }).strict();
 
+// ── Passkeys (ADR 0065) ─────────────────────────────────────────────────────
+//
+// What the browser's WebAuthn calls return, as JSON (`@simplewebauthn/browser`
+// on the web app's side). The gateway checks every byte with
+// `@simplewebauthn/server`; these only bound the shapes and sizes.
+
+const B64 = z
+  .string()
+  .max(16_384)
+  .regex(/^[A-Za-z0-9_-]*={0,2}$/, 'Not base64url.');
+const Transports = z.array(z.string().max(32)).max(8).optional();
+
+export const PasskeyRegistration = z.object({
+  id: B64,
+  rawId: B64,
+  type: z.literal('public-key'),
+  response: z.object({
+    clientDataJSON: B64,
+    attestationObject: B64,
+    authenticatorData: B64.optional(),
+    transports: Transports,
+    publicKeyAlgorithm: z.number().optional(),
+    publicKey: B64.optional(),
+  }),
+  authenticatorAttachment: z.enum(['platform', 'cross-platform']).optional(),
+  clientExtensionResults: z.record(z.string(), z.unknown()).default({}),
+});
+export type PasskeyRegistration = z.infer<typeof PasskeyRegistration>;
+
+export const PasskeyAssertion = z.object({
+  id: B64,
+  rawId: B64,
+  type: z.literal('public-key'),
+  response: z.object({
+    clientDataJSON: B64,
+    authenticatorData: B64,
+    signature: B64,
+    userHandle: B64.optional(),
+  }),
+  authenticatorAttachment: z.enum(['platform', 'cross-platform']).optional(),
+  clientExtensionResults: z.record(z.string(), z.unknown()).default({}),
+});
+export type PasskeyAssertion = z.infer<typeof PasskeyAssertion>;
+
+/** What a passkey challenge is for: it can only be answered for that. */
+export const PasskeyPurpose = z.enum(['sign-in', 'add', 'verify', 'hello']);
+export type PasskeyPurpose = z.infer<typeof PasskeyPurpose>;
+
+/** Ask the gateway for a challenge. `hello` carries the link's code (ADR 0064). */
+export const PasskeyOptionsBody = z.discriminatedUnion('purpose', [
+  z.object({ purpose: z.literal('sign-in') }),
+  z.object({ purpose: z.literal('add') }),
+  z.object({ purpose: z.literal('verify') }),
+  z.object({ purpose: z.literal('hello'), code: z.string().trim().min(1).max(512) }),
+]);
+export type PasskeyOptionsBody = z.infer<typeof PasskeyOptionsBody>;
+
+/**
+ * The WebAuthn options for the browser, as JSON, handed untouched to
+ * `navigator.credentials` (through `@simplewebauthn/browser`).
+ */
+export const PasskeyOptions = z.object({ options: z.record(z.string(), z.unknown()) });
+export type PasskeyOptions = z.infer<typeof PasskeyOptions>;
+
+export const PasskeyInfo = z.object({
+  id: z.string(),
+  /** What a person recognises: "iCloud Keychain", "Windows Hello", or the device's name. */
+  name: z.string(),
+  /** The address it's for (its relying party): it works there only. */
+  rpId: z.string(),
+  createdAt: z.number(),
+  lastUsedAt: z.number().optional(),
+  /** Kept in a password manager that syncs it to the person's other devices. */
+  synced: z.boolean(),
+  /** Usable at the address this page is open at. */
+  here: z.boolean(),
+});
+export type PasskeyInfo = z.infer<typeof PasskeyInfo>;
+
+export const AddPasskeyBody = z.object({ response: PasskeyRegistration }).strict();
+export const RenamePasskeyBody = z.object({ name: z.string().trim().min(1).max(64) }).strict();
+
+// ── The hello link: a new Conch is made yours (ADR 0064) ────────────────────
+
+export const HelloCheckBody = z.object({ code: z.string().trim().min(1).max(512) }).strict();
+
+/** What the page opened from `#hello=` learns before it asks anything. */
+export const HelloCheck = z.object({
+  ok: z.boolean(),
+  /** Why it can't be used: used or run out, or this Conch is already someone's. */
+  reason: z.enum(['expired', 'claimed']).optional(),
+  expiresAt: z.number().optional(),
+  /** Where Conch is, so the person knows which Conch this is. */
+  address: z.string(),
+  /** This computer's account name, to fill in the username for a password. */
+  suggestedUsername: z.string(),
+  /** Passkeys can be made at this address. */
+  passkeys: z.boolean(),
+});
+export type HelloCheck = z.infer<typeof HelloCheck>;
+
+export const HelloFinishBody = z.discriminatedUnion('with', [
+  z.object({
+    with: z.literal('passkey'),
+    code: z.string().trim().min(1).max(512),
+    response: PasskeyRegistration,
+  }),
+  z.object({
+    with: z.literal('password'),
+    code: z.string().trim().min(1).max(512),
+    username: z.string().trim().min(1).max(64),
+    password: z.string().min(1).max(256),
+  }),
+]);
+export type HelloFinishBody = z.infer<typeof HelloFinishBody>;
+
 export const PASSWORD_MIN = 15;
 export const PASSWORD_MAX = 256;
 export const USERNAME_MAX = 64;
@@ -97,11 +218,16 @@ export const SignInBody = z.discriminatedUnion('with', [
   }),
   z.object({ with: z.literal('key'), key: z.string().trim().min(1).max(512) }),
   z.object({ with: z.literal('pairing'), code: z.string().trim().min(1).max(512) }),
+  z.object({ with: z.literal('passkey'), response: PasskeyAssertion }),
 ]);
 export type SignInBody = z.infer<typeof SignInBody>;
 
-/** Re-enter your password or key before a sensitive change ("sudo mode"). */
-export const VerifyBody = z.object({ secret: z.string().min(1).max(512) });
+/** Re-enter your password or key, or use a passkey, before a sensitive change ("sudo mode"). */
+export const VerifyBody = z.union([
+  z.object({ secret: z.string().min(1).max(512) }).strict(),
+  z.object({ passkey: PasskeyAssertion }).strict(),
+]);
+export type VerifyBody = z.infer<typeof VerifyBody>;
 
 export const SetPasswordBody = z.object({
   username: z.string().trim().min(1).max(USERNAME_MAX),
@@ -135,7 +261,7 @@ export function isStaleKey(
 export const CreatedKey = z.object({ key: z.string(), info: AccessKeyInfo });
 export type CreatedKey = z.infer<typeof CreatedKey>;
 
-export const SignInVia = z.enum(['password', 'key', 'pairing', 'setup']);
+export const SignInVia = z.enum(['password', 'key', 'pairing', 'setup', 'passkey', 'hello']);
 export type SignInVia = z.infer<typeof SignInVia>;
 
 export const SessionInfo = z.object({
@@ -175,6 +301,12 @@ export const ApprovedHow = z.enum([
   'link',
   /** It was signed in when approval was turned on. */
   'already-signed-in',
+  /** It signed in with a passkey, which is the device and the person at once (ADR 0065). */
+  'passkey',
+  /** It opened the hello link that made Conch the person's own (ADR 0064). */
+  'hello',
+  /** Another approved device let it in, after confirming it's the person (ADR 0065). */
+  'device',
 ]);
 export type ApprovedHow = z.infer<typeof ApprovedHow>;
 
@@ -225,6 +357,8 @@ export const DeviceInfo = z.object({
   approved: z.boolean(),
   approvedAt: z.number().optional(),
   approvedHow: ApprovedHow.optional(),
+  /** The device that approved it, when another one did. */
+  approvedBy: z.string().optional(),
   /** Signed in now (has a session that hasn't ended). */
   signedIn: z.boolean(),
   /** How it last signed in. */
@@ -245,10 +379,15 @@ export function isStaleDevice(device: { lastSeenAt: number }, now = Date.now()):
 export const DeviceApproval = z.object({
   on: z.boolean(),
   /**
-   * This page is on the computer running Conch, so it may approve devices
-   * and turn approval off. Elsewhere, only the terminal there can.
+   * This page is on the computer running Conch, so it may turn approval off.
+   * Elsewhere, only the terminal there can.
    */
   here: z.boolean(),
+  /**
+   * This page may let a waiting device in: it's on this computer, or it's an
+   * approved device (which confirms it's you first, ADR 0065).
+   */
+  canApprove: z.boolean(),
 });
 export type DeviceApproval = z.infer<typeof DeviceApproval>;
 
@@ -277,6 +416,10 @@ export const CheckupPlace = z.enum([
   'devices',
   /** Settings › Security › Live data in pages: the sites pages may read (ADR 0046). */
   'live-data',
+  /** Settings › Security › Passkeys (ADR 0065). */
+  'passkeys',
+  /** Settings › Security › Your address: a domain of your own, over HTTPS (ADR 0064). */
+  'address',
 ]);
 export type CheckupPlace = z.infer<typeof CheckupPlace>;
 
@@ -337,6 +480,9 @@ export const AccessSettings = z.object({
   /** Your account name on this computer, to pre-fill the username. */
   suggestedUsername: z.string(),
   keys: z.array(AccessKeyInfo),
+  passkeys: z.array(PasskeyInfo),
+  /** Passkeys can be made at the address this page is open at (an HTTPS name, or localhost). */
+  passkeysHere: z.boolean(),
   sessions: z.array(SessionInfo),
   devices: z.array(DeviceInfo),
   /** Devices waiting for approval, newest first. */
