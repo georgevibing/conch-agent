@@ -515,7 +515,7 @@ function Detail({
             checked={keepData}
             onCheckedChange={(v) => setKeepData(v === true)}
             label={`Keep what it saved (${keptInWords(app.dataBytes)})`}
-            description="If you add it again, it carries on where it was."
+            description="If you add it again from the same place, it carries on where it was."
           />
           <AlertDialog.Footer>
             <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>

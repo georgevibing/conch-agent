@@ -1,4 +1,4 @@
-import type { ConchAppPreview } from '@conch/protocol';
+import { APP_LIMITS, type ConchAppPreview } from '@conch/protocol';
 import { AppPreview, Button, Field, Input, Text, type AppPreviewApp } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { FileArchive, Link2 } from 'lucide-react';
@@ -40,8 +40,6 @@ export function lookingAt(link: string): string {
 /** Looks like something to look at: an address, or `owner/repo`. */
 const looksLikeLink = (text: string) =>
   /^(https?:\/\/\S+|github\.com\/\S+|[\w.-]+\/[\w.-]+)$/i.test(text.trim());
-
-const isConchFile = (file: File) => /\.conchapp$/i.test(file.name);
 
 /**
  * **From a link** (ADR 0061): a GitHub address or a `.conchapp` link — or
@@ -99,11 +97,13 @@ export function FromLink({
 
   const lookAtFile = (file: File) => {
     setLink('');
-    if (!isConchFile(file)) {
+    // What's in it is for the gateway to say (a mail app may have renamed it); a file far
+    // bigger than any app never makes the trip.
+    if (file.size > APP_LIMITS.download) {
       setLooking({
         state: 'failed',
         looking: file.name,
-        message: 'That isn’t a Conch app. Choose a file that ends in .conchapp.',
+        message: `That file is too big to be a Conch app: they’re ${APP_LIMITS.download / 1024 / 1024} MB at most.`,
         again: () => fileInput.current?.click(),
       });
       return;
