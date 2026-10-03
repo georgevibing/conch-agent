@@ -166,6 +166,17 @@ if (choice.busy !== undefined) {
 }
 console.warn(`\n  🐚  Conch is listening at ${url}\n`);
 
+// Your own address (ADR 0064): the HTTPS listener hands its requests to this one. Getting a
+// certificate can take a while, so nothing here waits for it.
+void services
+  .serveAddress(app.server)
+  .then(() => {
+    const address = services.address.status();
+    if (address.state === 'ready' && address.url) console.warn(`  🐚  And at ${address.url}\n`);
+    else if (address.problem) console.warn(`  ⚠️   ${address.problem.message}\n`);
+  })
+  .catch((error: unknown) => console.error('[address]', error));
+
 // Say out loud anything that makes this setup unsafe.
 const findings = checkup({
   config,

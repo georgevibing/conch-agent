@@ -107,7 +107,7 @@ export const ENV_ABOUT: Record<keyof Config, EnvAbout> = {
   },
   CONCH_HOME: {
     about:
-      'Where Conch keeps everything it writes. Use the same value for Conch and for pnpm conch.',
+      'Where Conch keeps everything it writes. Use the same value for Conch and for the conch command.',
     unset: '~/.conch',
   },
   CONCH_ENGINE: {

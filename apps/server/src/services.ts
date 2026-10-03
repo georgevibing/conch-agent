@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { Server as HttpServer } from 'node:http';
 import { join, resolve, sep } from 'node:path';
 
 import type {
@@ -55,6 +56,8 @@ import { BackupService } from './backup/service';
 import { BrowserService } from './browser/service';
 import { adapterFor, type ChannelEndpoints, slackCheckFor } from './channels/adapters';
 import { ChannelDoorService, doorCheck } from './channels/door';
+import { addressCheck } from './address/doctor';
+import { AddressService } from './address/service';
 import { ChatDb, imessageSetup, MESSAGES_DB, openForImessage } from './channels/imessage';
 import { MockMail } from './channels/mock/email';
 import { MockMessages } from './channels/mock/imessage';
@@ -159,6 +162,7 @@ import { UsageService } from './usage/service';
 import { REPOSITORY, SERVER_VERSION } from './version';
 import { theApp } from './desktop/app';
 import { AppReleases } from './updates/app';
+import { cliName } from './cli/command';
 
 export { SERVER_VERSION };
 
@@ -294,6 +298,10 @@ export class Services {
   readonly mockWeChat?: MockWeChat;
   /** The public door, for the channels that only deliver to a web address (ADR 0045). */
   readonly door: ChannelDoorService;
+  /** Your own address, over HTTPS by Conch itself (ADR 0064). Started by main.ts, never by tests. */
+  readonly address: AddressService;
+  /** The gateway's own server, once it listens: where the address hands its requests. */
+  #gateway?: HttpServer;
   #login?: { handle: LoginHandle; state: LoginState };
   #channelStore?: ChannelStore;
   #sweeper?: NodeJS.Timeout;
@@ -1007,6 +1015,25 @@ export class Services {
     this.broadcast.on((event) => this.channels.onEvent(event));
     door.onChange((now) => this.broadcast.emit({ type: 'channel.door', door: now }));
     this.doctor.register(doorCheck(door));
+    this.address = new AddressService({
+      home: config.CONCH_HOME,
+      config,
+      gateway: () => {
+        if (!this.#gateway) throw new Error('Conch isn’t listening yet.');
+        return this.#gateway;
+      },
+      // Teams and WeChat reach the door at https://<name>/conch/… too, never the gateway.
+      door: () => {
+        const local = door.local;
+        return local ? Number(new URL(local).port) : undefined;
+      },
+      heal,
+    });
+    this.address.onChange((now) => {
+      this.gate.hosts.setOwnAddress(this.address.name());
+      this.broadcast.emit({ type: 'address.changed', address: now });
+    });
+    this.doctor.register(addressCheck(this.address));
     this.background = this.#background(config);
     this.push = this.#push(config);
     this.broadcast.on((event) => void this.push.onEvent(event).catch(() => undefined));
@@ -1302,7 +1329,9 @@ export class Services {
           }),
       handover: () =>
         stopSoon(
-          '🐚  Conch now runs in the background, so you can close this window.\n    It starts by itself when you log in. To stop it: pnpm conch quit',
+          '🐚  Conch now runs in the background, so you can close this window.\n    It starts by itself when you log in. To stop it: ' +
+            cliName() +
+            ' quit',
         ),
       heal: (message) => void this.healed.note('gateway', message),
     });
@@ -1739,7 +1768,7 @@ export class Services {
         reveal: () =>
           Promise.reject(
             new Error(
-              'Your signing key never leaves this computer. Share your public key instead: pnpm conch skills key',
+              `Your signing key never leaves this computer. Share your public key instead: ${cliName()} skills key`,
             ),
           ),
       });
@@ -1797,7 +1826,14 @@ export class Services {
     this.backups.start();
   }
 
+  /** The gateway listens: Conch answers at its own address too, if it has one (ADR 0064). */
+  async serveAddress(gateway: HttpServer): Promise<void> {
+    this.#gateway = gateway;
+    await this.address.start();
+  }
+
   async stop() {
+    void this.address.stop();
     this.googleApps.stop();
     void this.conchApps.stop();
     this.slack.stop();

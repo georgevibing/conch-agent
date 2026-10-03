@@ -103,6 +103,30 @@ export interface AddressServiceDeps {
   heal?: Heal;
 }
 
+/**
+ * Where a name points, and the records to add when it doesn't point here yet.
+ * Needs no gateway: `conch setup` asks it before Conch answers on the name.
+ */
+export async function dnsReport(
+  raw: string,
+  deps: { mine?: () => Promise<Mine>; lookup?: (name: string) => Promise<Found> } = {},
+): Promise<DnsReport> {
+  const name = normaliseName(raw);
+  const [mine, found] = await Promise.all([
+    (deps.mine ?? publicAddresses)(),
+    (deps.lookup ?? lookupName)(name),
+  ]);
+  const verdict = pointing(found, mine);
+  return {
+    name,
+    mine,
+    found,
+    pointing: verdict,
+    message: explainPointing(name, verdict, found),
+    advice: verdict === 'here' ? [] : recordAdvice(name, mine),
+  };
+}
+
 /** Look at the certificate at least this often, for the authority's advice. */
 const CHECK_EVERY_MS = 12 * 60 * 60 * 1000;
 const HOUR = 60 * 60 * 1000;
@@ -271,20 +295,10 @@ export class AddressService {
 
   /** Where a name points, and what to add when it doesn't point here. */
   async dns(raw: string): Promise<DnsReport> {
-    const name = normaliseName(raw);
-    const [mine, found] = await Promise.all([
-      (this.deps.mine ?? publicAddresses)(),
-      (this.deps.lookup ?? lookupName)(name),
-    ]);
-    const verdict = pointing(found, mine);
-    return {
-      name,
-      mine,
-      found,
-      pointing: verdict,
-      message: explainPointing(name, verdict, found),
-      advice: verdict === 'here' ? [] : recordAdvice(name, mine),
-    };
+    return dnsReport(raw, {
+      ...(this.deps.mine && { mine: this.deps.mine }),
+      ...(this.deps.lookup && { lookup: this.deps.lookup }),
+    });
   }
 
   // ── Inside ─────────────────────────────────────────────────────────────

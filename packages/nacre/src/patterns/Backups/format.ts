@@ -39,7 +39,8 @@ export type BackupPowerInfo =
   | { kind: 'trusted-publishers'; names: string[]; more?: number }
   | { kind: 'conch-apps'; names: string[]; more?: number }
   | { kind: 'page-data-sites'; sites: string[]; more?: number }
-  | { kind: 'provider-servers'; servers: string[]; more?: number };
+  | { kind: 'provider-servers'; servers: string[]; more?: number }
+  | { kind: 'own-address'; name: string };
 
 /** What it is (“Files”, “The browser”), when the words need one. */
 export interface PowerWords {
@@ -131,6 +132,11 @@ export function powerWords(power: BackupPowerInfo): PowerWords {
       return {
         subject: power.name,
         text: `Lets ${named(power.people, power.more)} talk to your assistant`,
+      };
+    case 'own-address':
+      return {
+        subject: 'Your address',
+        text: `Answers at ${power.name} from anywhere, once you turn it on on this computer`,
       };
   }
 }
