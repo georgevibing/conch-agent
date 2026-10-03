@@ -99,6 +99,11 @@
   Microsoft Teams, Matrix and WeChat.
 - **Your phone.** An installable app over a private Tailscale address, with
   notifications and voice.
+- **Your own address.** On a server, Conch answers at `conch.yourname.com` with
+  its own certificate. One line installs it; a link opened on your laptop makes it
+  yours.
+- **Touch ID, Windows Hello, Face ID.** Sign in with what your device already has.
+  New devices wait for your OK, which you give from one you already use.
 - **Your desktop.** Conch for macOS, Windows and Linux: its own window, the pearl
   in the menu bar, and each new release one press away.
 
@@ -143,9 +148,15 @@ irm https://raw.githubusercontent.com/georgevibing/conch-agent/main/scripts/inst
 
 The installer gets Node.js and Git if they're missing, builds Conch, keeps it
 running in the background and opens it. Conch then helps you connect a provider.
-Run the same line again to update. Add `--uninstall` to remove it, or `--server`
-for a computer that stays on (no browser; it prints a QR code to sign in your
-phone).
+Run the same line again to update. Add `--uninstall` to remove it.
+
+**On a server** (or any computer with no screen), add `--server`. Over SSH it does
+this by itself. It asks how you'll reach Conch: at an address of your own, privately
+with Tailscale, or only from that computer. For an address, it shows the DNS record
+to add, gets the certificate, and ends with a link you open on your own computer to
+make Conch yours. [On a server](./apps/docs/content/start/server.md) walks through it.
+
+The installer also adds `conch` to your terminal: `conch help` lists what it can do.
 
 From a checkout (Node 24 or newer):
 
@@ -160,8 +171,8 @@ pnpm start        # builds and opens http://localhost:4317
 > an SSH server. Out of the box only this computer can open it, in a browser Conch opened itself. Read
 > [docs/SECURITY.md](./docs/SECURITY.md) before you put it on a network.
 
-**On your phone:** choose a password in **Settings → Security**, press **Add a
-device**, and scan the QR code. Conch sets up the private address for you.
+**On your phone:** in **Settings → Security**, press **Add a device** and scan the
+QR code. Conch sets up the private address for you.
 
 ## Questions
 
@@ -232,7 +243,7 @@ pnpm storybook    # the Nacre design system on :6006
 pnpm check        # format, lint, types and tests: must pass before every commit
 pnpm e2e          # Playwright journeys against the gateway and the mock provider
 pnpm desktop:dev  # the desktop app on the repository, with hot reload
-pnpm conch help   # the command line: status, password, devices, import …
+pnpm conch help   # the command line (conch, once installed): setup, status, devices …
 ```
 
 Configuration comes from the environment;

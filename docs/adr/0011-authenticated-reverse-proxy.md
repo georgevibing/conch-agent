@@ -2,6 +2,8 @@
 
 - Status: accepted
 - Date: 2026-09-29
+- Amended by: [ADR 0064](./0064-your-own-address.md) (Conch can serve an address of
+  its own over HTTPS itself; this proxy is the way for people who already run one)
 
 ## Decision
 

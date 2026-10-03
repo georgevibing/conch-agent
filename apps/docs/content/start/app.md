@@ -59,4 +59,4 @@ The window says what happened, in a sentence, with **Try again**. **Show what it
 Your things stay in `~/.conch`. Delete that folder too if you want them gone.
 
 > [!NOTE]
-> The `pnpm conch` commands belong to the one-line install and to checkouts. Everything they do is also in the app's **Settings**.
+> The `conch` command comes with the one-line install (in a checkout, it's `pnpm conch`). Everything it does is also in the app's **Settings**.

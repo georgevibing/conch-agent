@@ -11,7 +11,7 @@ This is the app's own API, at protocol version 7 today. It moves with the app, s
 curl -H "Authorization: Bearer conch_…" http://localhost:4317/api/state
 ```
 
-Make the key with `pnpm conch key`. Changes that grant trust also need a password or key from the last ten minutes.
+Make the key with `conch key`. Changes that grant trust also need a password or key from the last ten minutes.
 
 ## Over HTTP
 

@@ -1006,8 +1006,11 @@ Treat it like an SSH server. Full design: [ADR 0008](./docs/adr/0008-access-and-
 user guide: [docs/SECURITY.md](./docs/SECURITY.md).
 
 - **Who gets in** (`apps/server/src/security.ts`, `auth/`). The owner chooses
-  _password_ (scrypt, NIST SP 800-63B-4 rules), _access keys_ (`conch_…`, 256-bit,
-  hashed, revocable) or _no sign-in_. With no sign-in, only this computer, proven, is let in
+  _passkeys_ (WebAuthn: discoverable, user verification required, checked with
+  `@simplewebauthn/server`; ADR 0065), _password_ (scrypt, NIST SP 800-63B-4 rules),
+  _access keys_ (`conch_…`, 256-bit, hashed, revocable) or _no sign-in_. Passkeys can
+  sit beside a password. Their challenges live in the gateway's memory for five
+  minutes, single use, bound to their purpose, session or hello code, and the address. With no sign-in, only this computer, proven, is let in
   (ADR 0063). The request must look local: a loopback socket **and** a loopback `Host`
   **and** no proxy headers (`Gatekeeper.looksLocal`). It must also carry the cookie made with the key in
   `~/.conch/here/key`, `conch_here_<port>` (`Gatekeeper.isLocal`); the key itself never leaves
@@ -1023,23 +1026,41 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
   live hashed in `~/.conch/access.json` (0600). A damaged `access.json` never reads
   as "no sign-in": sign-in locks (this computer included) until `pnpm conch reset`,
   keeping a copy. Only unreadable sessions and pairing codes are dropped.
+- **Making a new Conch yours** (ADR 0064): while sign-in is `none`, `conch hello` (with
+  this computer's terminal, never another device) makes a one-time, one-hour link,
+  `/#hello=…`, kept as a SHA-256. Opening it sets a passkey or a password, turns device
+  approval on, approves that browser and uses every hello link up, in one write to
+  `access.json`. The public check of a code says nothing about this computer to a guess.
 - **Sessions:** a fresh random cookie per sign-in (`HttpOnly; SameSite=Strict`,
   `__Host-…; Secure` over HTTPS), expiring after 30 days or 7 idle days, listed and
   revocable per device. Revoking one closes its WebSocket at once. Sensitive changes
-  need a password or key from the last 10 minutes. Failed sign-ins back off per
-  address and globally, and local sign-in is never locked out.
+  need a passkey, password or key from the last 10 minutes (a passkey-only Conch has no
+  secret to type, so only a passkey confirms it). Failed sign-ins back off per address
+  and globally, and local sign-in is never locked out.
 - **Devices:** each browser has a long-lived `HttpOnly` device cookie (hashed),
   so devices are listed across sign-ins. With **Approve new devices** on, a new
   device from elsewhere waits after the right password or key, holding a
-  waiting session that can do nothing, until it's approved on this computer:
-  `pnpm conch devices approve <code>`, or Settings there. Remote devices can
-  turn devices down but never approve one or switch approval off. A key used
-  by a script from elsewhere is approved once, as that key. Open sockets are
+  waiting session that can do nothing, until it's approved: on this computer
+  (`conch devices approve <code>`, or Settings there), or from another device that is
+  itself approved and confirmed it's the person in the last 10 minutes (ADR 0065). A
+  passkey sign-in approves its own device. Only this computer switches approval off,
+  and a waiting device can never approve. A key used by a script from elsewhere is
+  approved once, as that key. Open sockets are
   checked against `access.json` every 2 s, so the terminal's changes apply at
   once ([ADR 0024](./docs/adr/0024-approve-new-devices.md)).
 - **Pairing:** one-time, 10-minute codes, passed in the URL _fragment_
-  (`/#pair=…`) as a QR code. `pnpm conch` covers every operation from the host,
-  including recovery (`pnpm conch reset`).
+  (`/#pair=…`) as a QR code. `conch` covers every operation from the host,
+  including recovery (`conch reset`, then `conch hello` on a server).
+- **Your own address** (`apps/server/src/address/`, ADR 0064): Conch gets and renews a
+  Let's Encrypt certificate itself (RFC 8555 with `jose` and `@peculiar/x509`, renewal by
+  RFC 9773 or at a third of the lifetime), and listens on 443 and 80 beside the loopback
+  gateway. The 443 listener hands every request and upgrade to the gateway's own Fastify
+  server, so every guard here applies unchanged and the socket's address is the client's;
+  80 answers only ACME challenges and Conch's reachability check, and redirects the rest.
+  `/conch/…` goes to the public door's listener, never the gateway. On Linux the capability
+  to bind them goes to Conch's own copy of Node only (`setcap cap_net_bind_service`). Only
+  the owner, on a device that's let in and just confirmed it, or this computer's terminal,
+  changes the address; a restored backup opens nothing on another computer.
 - **Browser guards:**
   - `Host` allowlist (DNS rebinding), with loopback names, `CONCH_ALLOWED_HOSTS`,
     this machine's own addresses when listening on the network, and its Tailscale
@@ -1072,6 +1093,9 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
     never sees secret fields: you type them after a handoff.
   - the agent has no way into your terminals, and a shell's environment has no
     `CONCH_*` variables.
+  - the agent's shell can't run the `conch` commands that change who may sign in or
+    where Conch is reached (`hello`, `setup`, `address`, `phone`, `reset`, `devices approve`…;
+    `lib/protect.ts`), however they're spelled;
   - the agent can't let anyone talk to it from a chat app: connecting a bot,
     letting someone in and making a hello link are routes that need a person
     (and, from another device, a recent password or key). Channels answer

@@ -1,5 +1,10 @@
 # Authenticated HTTPS reverse proxy
 
+> [!TIP]
+> Conch can answer at an address of your own by itself, with its own certificate and
+> nothing else to run: `conch setup`, or [On a server](../apps/docs/content/start/server.md).
+> This page is for when another program already answers on ports 80 and 443.
+
 Keep Conch on loopback and authenticate independently at the proxy and in Conch.
 
 ## Configuration
@@ -18,7 +23,7 @@ export CONCH_OPEN=0
 Allowed hosts are comma-separated hostnames without schemes, ports or paths.
 `CONCH_ALLOW_REMOTE=1` is unnecessary behind a local reverse proxy.
 
-1. Before publication, run `pnpm conch key "My browser"` in a private terminal
+1. Before publication, run `conch key "My browser"` in a private terminal
    with this same `CONCH_HOME`. Save the one-time key in a password manager.
    Do not run it through captured logs, put the key in a URL, or set `CONCH_TOKEN`.
 2. Run `pnpm --filter @conch/web build`.
@@ -61,8 +66,8 @@ The browser gets a Secure, HttpOnly, host-only `__Host-conch_session` cookie.
 Revoke using **Settings → Security → Access keys**, or a private host terminal:
 
 ```sh
-pnpm conch keys
-pnpm conch revoke <key-id>
+conch keys
+conch revoke <key-id>
 ```
 
 Use the same `CONCH_HOME` as the service. UI revocation immediately closes that

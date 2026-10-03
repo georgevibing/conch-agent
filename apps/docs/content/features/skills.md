@@ -51,7 +51,7 @@ A skill is instructions your assistant follows with your powers, so Conch treats
 - **A change turns it off.** If another app's skill changes after you turned it on, it's off again until you look at what it says now.
 - **A signature says who made it.** Open a signed skill and press **Trust this publisher…** once. From then on that publisher's skills say **Verified**, and their signed updates stay on. A skill changed after it was signed can't be turned on.
 
-To sign skills you share, see `pnpm conch skills sign` in the [command line reference](../reference/cli.md). Your signing key is locked with this computer's own key, so it only opens here. A passphrase-locked [backup](../care/backups.md) carries it to a new computer.
+To sign skills you share, see `conch skills sign` in the [command line reference](../reference/cli.md). Your signing key is locked with this computer's own key, so it only opens here. A passphrase-locked [backup](../care/backups.md) carries it to a new computer.
 
 ## Stop holding a chat to a skill
 

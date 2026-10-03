@@ -5,6 +5,7 @@
  * say is true of the product; the chats and names in them are made up.
  */
 import {
+  AddressStatus,
   AgendaView,
   AppOffer,
   ArtifactChart,
@@ -21,6 +22,7 @@ import {
   Message,
   OfferAlsoTry,
   OfferCard,
+  PasskeyButton,
   RoutedNote,
   RoutineCard,
   Stage,
@@ -931,5 +933,57 @@ export function HealedDemo() {
       notes={HEALED.map((message, i) => ({ at: i, message }))}
       formatTime={(at) => WHEN[at] ?? ''}
     />
+  );
+}
+
+// ── Your own address: getting its certificate, then answering with a lock ───
+
+const ADDRESS = { ready: 3_200, end: 7_600 } as const;
+
+export function AddressDemo() {
+  const [ref, inView] = useInView<HTMLDivElement>({ once: false, margin: '0px' });
+  // Standing still, it shows the address answering: that is the point of the picture.
+  const at = useClock(ADDRESS.end, inView, ADDRESS.end);
+  const card = (ready: boolean) => (
+    <AddressStatus
+      state={ready ? 'ready' : 'getting'}
+      address="conch.yourname.com"
+      until="in three months"
+      progress="Getting a certificate from Let’s Encrypt…"
+    />
+  );
+  return (
+    <div ref={ref}>
+      <Stage
+        label="Conch gets its own certificate, then answers at conch.yourname.com"
+        alive={at < ADDRESS.ready}
+      >
+        <Steady holds={[card(false), card(true)]}>{card(at >= ADDRESS.ready)}</Steady>
+      </Stage>
+    </div>
+  );
+}
+
+// ── Sign in with a touch: the button names what the device has ──────────────
+
+const TOUCH = ['mac', 'windows', 'ios'] as const;
+const TOUCH_STEP = 2_000;
+
+export function PasskeyDemo() {
+  const [ref, inView] = useInView<HTMLDivElement>({ once: false, margin: '0px' });
+  const at = useClock(TOUCH_STEP * TOUCH.length, inView, 0);
+  const platform = TOUCH[Math.min(TOUCH.length - 1, Math.floor(at / TOUCH_STEP))] ?? 'mac';
+  return (
+    <div ref={ref}>
+      <Stage label="The sign-in button says Use Touch ID on a Mac, Use Windows Hello on a PC and Use Face ID on an iPhone">
+        <Steady
+          holds={TOUCH.map((p) => (
+            <PasskeyButton key={p} platform={p} action="sign-in" />
+          ))}
+        >
+          <PasskeyButton platform={platform} action="sign-in" />
+        </Steady>
+      </Stage>
+    </div>
   );
 }

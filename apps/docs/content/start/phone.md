@@ -7,13 +7,13 @@ order: 3
 ## Sign your phone in
 
 1. Install [Tailscale](https://tailscale.com/download) on your computer and your phone, and sign in to both. It's free, and nothing is opened to the internet.
-2. In Conch, choose a password in **Settings → Security**.
+2. In Conch, choose how you sign in, in **Settings → Security**: a passkey (Touch ID, Windows Hello) or a password.
 3. Press **Add a device**. Conch turns on its secure address with one press, then shows a QR code.
 4. Point your phone's camera at it. Your phone is signed in.
 
 The code works once, for ten minutes. Whoever opens it is signed in, so don't share it.
 
-Prefer the terminal? `pnpm conch phone` turns the address on, and `pnpm conch pair` shows the code.
+Prefer the terminal? `conch phone` turns the address on, and `conch pair` shows the code.
 
 ## Make it an app
 

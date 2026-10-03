@@ -53,6 +53,6 @@ A Mac and Windows stop what you run when you log out. Stay logged in and lock th
 
 ## Good to know
 
-- Prefer the terminal? `pnpm conch background`, `quit`, `shortcut` and `tray` do the same. See [the command line](../reference/cli.md).
+- Prefer the terminal? `conch background`, `quit`, `shortcut` and `tray` do the same. See [the command line](../reference/cli.md).
 - [Repair everything](./health.md) checks Always on, and updates how Conch starts if something moved.
 - Restoring [a backup](./backups.md) never turns Always on on. You switch it on yourself, on each computer.

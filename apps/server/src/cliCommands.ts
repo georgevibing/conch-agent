@@ -171,7 +171,7 @@ export const CLI_COMMANDS = [
   {
     name: 'reset',
     usage: 'reset',
-    summary: 'Locked out? Turn sign-in off and start again',
+    summary: 'Forgot your password or lost a passkey? Start again',
     group: 'Signing in',
     detail:
       'The way back in: having this terminal is the proof that it’s you. Forgets the password, every access key and every passkey, signs every device out and leaves Conch open to this computer only (on a server, conch hello then makes it yours again). Every browser on this computer opens Conch from your apps once more. Asks you to type “reset” first.',

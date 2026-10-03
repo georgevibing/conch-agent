@@ -27,6 +27,7 @@ import { InstallCommand } from '../embeds/install';
 import { AUTHOR, REPO_URL } from '../site/config';
 import { LANDING_HEAD, useHead } from '../site/head';
 import {
+  AddressDemo,
   ApprovalDemo,
   BrowserDemo,
   ChartDemo,
@@ -35,6 +36,7 @@ import {
   KnowsDemo,
   MakerDemo,
   MemoryDemo,
+  PasskeyDemo,
   PhoneDemo,
   ProvidersDemo,
   RoutineDemo,
@@ -389,8 +391,26 @@ export function Landing() {
               <HealedDemo />
             </Bento.Tile>
             <Bento.Tile
-              span={6}
+              span={3}
               index={6}
+              title="Your own address"
+              text="On a server, one line installs Conch and asks a few questions. It gets its own certificate, and a link you open on your laptop makes it yours."
+              picture="Conch gets its own certificate, then answers at conch.yourname.com"
+            >
+              <AddressDemo />
+            </Bento.Tile>
+            <Bento.Tile
+              span={3}
+              index={7}
+              title="Sign in with a touch"
+              text="Touch ID, Windows Hello or Face ID, named for the device you’re on. A new device waits for your OK, given from one you already use."
+              picture="The sign-in button names what your device has"
+            >
+              <PasskeyDemo />
+            </Bento.Tile>
+            <Bento.Tile
+              span={6}
+              index={8}
               title={`${reference.integrations.length} apps, for every model`}
               text="Connect one from a gallery and it works with whichever provider answers. No JSON to edit, and its sign-in stays fresh."
               picture="The apps in Conch’s gallery"
@@ -439,7 +459,7 @@ export function Landing() {
             <Bento.Tile
               span={2}
               title="It runs where you work"
-              text="An app for macOS, Linux and Windows, or one line in a terminal. Nothing to install first."
+              text="An app for macOS, Linux and Windows, or one line in a terminal, on your computer or a server. Nothing to install first."
               picture="The systems Conch runs on: macOS, Linux and Windows"
             >
               <div className={styles.systems}>
