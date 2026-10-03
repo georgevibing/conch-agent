@@ -20,7 +20,7 @@ import { useLiveData } from './live';
 /** A picture as an image: inside an <img>, an SVG can't run code or fetch anything. */
 const svgImage = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 
-function Picture({ svg, title }: { svg: string; title: string }) {
+export function Picture({ svg, title }: { svg: string; title: string }) {
   return <img className={styles.picture} src={svgImage(svg)} alt={title} />;
 }
 
@@ -28,7 +28,16 @@ function Picture({ svg, title }: { svg: string; title: string }) {
  * A Mermaid diagram, drawn here (the library loads only when one is shown) at
  * its strictest: no scripts, no HTML labels, no links. Shown as a picture.
  */
-function Diagram({ code, title }: { code: string; title: string }) {
+export function Diagram({
+  code,
+  title,
+  quiet,
+}: {
+  code: string;
+  title: string;
+  /** A glance (a chat card): nothing at all when it doesn't draw. */
+  quiet?: boolean;
+}) {
   const { resolvedMode } = useNacreTheme();
   const id = `m${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const [result, setResult] = useState<{ code: string; svg?: string; error?: string }>();
@@ -56,6 +65,7 @@ function Diagram({ code, title }: { code: string; title: string }) {
     };
   }, [code, id, resolvedMode]);
   if (!result || result.code !== code) return <Skeleton className={styles.loading} />;
+  if ((result.error || !result.svg) && quiet) return null;
   if (result.error || !result.svg)
     return (
       <Callout tone="warning" title="This diagram didn’t draw">

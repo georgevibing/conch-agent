@@ -113,6 +113,54 @@ describe('Show me', () => {
     expect(useUi.getState().artifactOpen).toBeNull();
   });
 
+  it('a card shows a small picture of a chart or a table, only to look at (ADR 0055)', async () => {
+    const table = artifact({
+      kind: 'table',
+      title: 'Budget',
+      versions: [{ n: 1, at: 1, size: 10 }],
+    });
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/artifacts': () => ({ artifacts: [table] }),
+      [`GET /api/artifacts/${table.id}`]: () => table,
+      [`GET /api/artifacts/${table.id}/versions/1`]: () => ({
+        artifactId: table.id,
+        n: 1,
+        content: 'Item,Cost\nRent,1200\nFood,400',
+      }),
+    });
+    const old = log(
+      { type: 'user.message', messageId: 'u1', text: 'Make me a budget' },
+      {
+        type: 'artifact',
+        artifactId: 'a_1',
+        title: 'Budget',
+        kind: 'table',
+        version: 1,
+        action: 'created',
+      },
+    ).map((e) => ({ ...e, at: 1000 }));
+    const view = reduceAll(old);
+    const { container } = renderApp(
+      <Transcript
+        view={view}
+        conversationId="c1"
+        pending={[]}
+        name="Conch"
+        onRespond={() => {}}
+        onRetry={() => {}}
+      />,
+    );
+    const card = await screen.findByRole('button', { name: /Budget.*Table · made for you/ });
+    await waitFor(() => expect(container.querySelector('[inert]')).toHaveTextContent('Rent'));
+    // Seen, not used: its rows aren't buttons or a scrolling region, and the card still opens.
+    expect(screen.queryByRole('button', { name: /Cost/ })).toBeNull();
+    await userEvent.click(card);
+    expect(useUi.getState().artifactOpen).toMatchObject({ artifactId: 'a_1' });
+    expect(calls.filter((c) => c.path.endsWith('/versions/1'))).toHaveLength(1);
+  });
+
   it('history replayed when a chat opens does not open the panel', () => {
     routes();
     const old = made.map((e) => ({ ...e, at: 1000 }));
