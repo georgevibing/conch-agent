@@ -188,8 +188,16 @@
     gap: var(--nc-space-2);
   }
 
+  /* Its own width beside the filters; the whole row when they wrap onto a phone. */
   .search {
-    inline-size: 12rem;
+    flex: 1 1 12rem;
+    max-inline-size: 16rem;
+  }
+
+  @media (width < 40rem) {
+    .search {
+      max-inline-size: none;
+    }
   }
 
   .noMatch {

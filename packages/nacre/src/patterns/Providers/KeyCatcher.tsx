@@ -102,7 +102,11 @@ export function KeyCatcher({
       setPhase({
         kind: 'failed',
         who,
-        message: error instanceof Error && error.message ? error.message : 'That key didn’t work.',
+        // The provider's own sentence names it ("Groq refused your key."); without one, say who.
+        message:
+          error instanceof Error && error.message
+            ? error.message
+            : `${who.name} didn’t take that key.`,
       });
     }
   };
@@ -236,9 +240,7 @@ export function KeyCatcher({
           )}
           {phase.kind === 'failed' && (
             <p className={styles.line} data-tone="danger">
-              <span>
-                {phase.who.name} didn’t take it. {phase.message}
-              </span>
+              <span>{phase.message}</span>
             </p>
           )}
           {phase.kind === 'choose' && (

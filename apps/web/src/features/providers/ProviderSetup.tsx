@@ -7,7 +7,7 @@ import { FoundHere, KeyPaste } from './FoundHere';
 import { ProviderGallery } from './ProviderGallery';
 import styles from './Providers.module.css';
 import { useCheckProvider, useProviders, useUseProvider } from './queries';
-import { brandOf, isYours } from './words';
+import { brandOf, isYours, setupLabel } from './words';
 
 /** Ready first, then the ones you could finish setting up. */
 function order(a: Provider, b: Provider) {
@@ -34,7 +34,7 @@ export function ProviderSetup({ onReady }: ProviderSetupProps) {
 
   const providers = data?.providers ?? [];
   const ready = providers.find((provider) => provider.active && provider.status.state === 'ready');
-  const yours = providers.filter((p) => isYours(p) && p.group !== 'server').sort(order);
+  const yours = providers.filter(isYours).sort(order);
   const rest = providers.filter((p) => !isYours(p) && !p.hidden);
 
   // Carry on by yourself once a provider is connected and in use — but never
@@ -95,12 +95,7 @@ export function ProviderSetup({ onReady }: ProviderSetupProps) {
                               loading: busy,
                             }
                         : {
-                            label:
-                              provider.status.state === 'not-installed'
-                                ? 'How to install'
-                                : provider.connect === 'key'
-                                  ? 'Add a key'
-                                  : 'Sign in',
+                            label: setupLabel(provider),
                             onClick: () => setConnecting(provider.id),
                           }
                     }

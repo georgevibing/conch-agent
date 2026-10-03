@@ -208,6 +208,11 @@ const PROVIDERS: ProviderCopy[] = [
     asksFirst: true,
     color: '#4F46E5',
     homepage: 'https://lmstudio.ai',
+    // Only when LM Studio's server is set to require one.
+    keyForm: key({
+      label: 'LM Studio key',
+      help: 'Only if “Require Authentication” is on in LM Studio → Developer → Server Settings. Create one under Manage Tokens.',
+    }),
   },
 
   // ── Pay as you go, with a key ─────────────────────────────────────────────

@@ -98,15 +98,28 @@ describe('KeyCatcher', () => {
 
   it('says what the provider said when it refuses', async () => {
     const onConnect = vi.fn(async () => {
-      throw new Error('Groq refused your key. Add a new one in Settings.');
+      throw new Error('Groq refused your key. Check that you copied all of it.');
     });
     renderNacre(<KeyCatcher recognise={recognise} onConnect={onConnect} />);
 
     paste(screen.getByLabelText('Paste a key'), GROQ_KEY);
 
     expect(
-      await screen.findByText(/Groq didn’t take it. Groq refused your key/),
+      await screen.findByText('Groq refused your key. Check that you copied all of it.'),
     ).toBeInTheDocument();
+  });
+
+  it('says who didn’t take it when the provider gave no reason', async () => {
+    renderNacre(
+      <KeyCatcher
+        recognise={recognise}
+        onConnect={async () => {
+          throw new Error('');
+        }}
+      />,
+    );
+    paste(screen.getByLabelText('Paste a key'), GROQ_KEY);
+    expect(await screen.findByText('Groq didn’t take that key.')).toBeInTheDocument();
   });
 
   it('takes a key pasted anywhere on the page, but not one pasted into another field', async () => {

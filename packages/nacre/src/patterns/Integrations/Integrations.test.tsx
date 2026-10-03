@@ -30,6 +30,19 @@ describe('IntegrationLogo', () => {
     await expectAccessible(container);
   });
 
+  it('leaves words like “AI” out of a monogram', () => {
+    renderNacre(
+      <>
+        <IntegrationLogo name="Together AI" />
+        <IntegrationLogo name="Hugging Face" />
+        <IntegrationLogo name="AI Studio" />
+      </>,
+    );
+    expect(screen.getByRole('img', { name: 'Together AI' })).toHaveTextContent(/^T$/);
+    expect(screen.getByRole('img', { name: 'Hugging Face' })).toHaveTextContent('HF');
+    expect(screen.getByRole('img', { name: 'AI Studio' })).toHaveTextContent(/^S$/);
+  });
+
   it('hides itself when decorative', () => {
     renderNacre(<IntegrationLogo brand="github" name="GitHub" decorative />);
     expect(screen.queryByRole('img')).toBeNull();

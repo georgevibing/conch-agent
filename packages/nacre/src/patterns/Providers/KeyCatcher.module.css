@@ -95,13 +95,21 @@
     min-inline-size: 0;
   }
 
-  /* What happened: one line, never a jump — it holds a line's height while empty. */
+  /* What happened. */
   .outcome {
     min-block-size: 0;
   }
 
+  /*
+   * Empty, it takes no room but stays in the accessibility tree: a live region
+   * that's only added with its words in it may never be read out.
+   */
   .outcome:empty {
-    display: none;
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
 
   .line,

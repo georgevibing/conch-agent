@@ -49,6 +49,22 @@ function halfwayHere({ local, status }: Provider): boolean {
   return !(status.state === 'not-installed' && status.fix?.kind === 'install');
 }
 
+/**
+ * The button on a provider that isn't working yet: what pressing it does,
+ * the same in first run and in Settings.
+ */
+export function setupLabel(provider: Provider): string {
+  const { state, fix } = provider.status;
+  // Ollama's own page starts it when it's stuck; any other program here can only be looked at again.
+  if (provider.local && (state !== 'error' || provider.id === 'ollama')) return 'Set up';
+  if (fix?.kind === 'install') return 'Install';
+  if (fix?.kind === 'update') return 'Update';
+  if (state === 'not-installed') return 'How to install';
+  if (state === 'error') return 'Try again';
+  if (provider.connect === 'key') return 'Add a key';
+  return 'Sign in';
+}
+
 /** The note under a tile: what it costs to start, or where it runs. */
 export function noteOf(provider: Provider): string | undefined {
   if (provider.free) return provider.free;

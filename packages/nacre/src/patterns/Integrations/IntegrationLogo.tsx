@@ -45,10 +45,15 @@ function hueOf(name: string): number {
 /** Letters for brands whose name doesn't make a good monogram ("xAI API" isn't "XA"). */
 const letters: Record<string, string> = { xai: 'x', grok: 'x' };
 
+/** Words that say what a thing is, not whose: "Together AI" is a T, not a TA. */
+const GENERIC = new Set(['ai', 'api']);
+
 function monogram(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
+  const all = name.trim().split(/\s+/).filter(Boolean);
+  const named = all.filter((word) => !GENERIC.has(word.toLowerCase()));
+  const words = named.length ? named : all;
   const letters =
-    words.length > 1 ? `${words[0]?.[0] ?? ''}${words[1]?.[0] ?? ''}` : name.slice(0, 1);
+    words.length > 1 ? `${words[0]?.[0] ?? ''}${words[1]?.[0] ?? ''}` : (words[0]?.[0] ?? '');
   return letters.toUpperCase() || '?';
 }
 

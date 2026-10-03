@@ -195,7 +195,8 @@ export async function send(options: {
     }
     throw new ApiError(
       'network',
-      local
+      // A server on this computer that's down isn't your connection's fault.
+      local || isLoopbackUrl(url)
         ? `${label} isn’t answering on this computer.`
         : `Conch couldn’t reach ${label}. Check your connection.`,
       { retryable: true },

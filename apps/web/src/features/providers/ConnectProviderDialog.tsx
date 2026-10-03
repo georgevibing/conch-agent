@@ -36,6 +36,7 @@ import styles from './Providers.module.css';
 import {
   errorText,
   useCheckProvider,
+  useClearProviderKey,
   useRemoveServer,
   useSetProviderKey,
   useUpdateServer,
@@ -121,6 +122,23 @@ function Install({ provider }: { provider: Provider }) {
 }
 
 /** A program that signs itself in: Conch starts it and watches the phases. */
+/** Look again, after doing what the message said. */
+function TryAgain({ provider }: { provider: Provider }) {
+  const check = useCheckProvider();
+  return (
+    <div>
+      <Button
+        variant="surface"
+        size="sm"
+        loading={check.isPending}
+        onClick={() => check.mutate(provider.id)}
+      >
+        Try again
+      </Button>
+    </div>
+  );
+}
+
 function SignInProgram({ provider }: { provider: Provider }) {
   const login = useLiveStore((s) => s.login);
   const setLogin = useLiveStore((s) => s.setLogin);
@@ -256,6 +274,7 @@ function KeyForm({
 }) {
   const form = provider.keyForm;
   const setKey = useSetProviderKey();
+  const clearKey = useClearProviderKey();
   const signIn = useProviderSignIn();
   const [value, setValue] = useState('');
   const [source, setSource] = useState<SecretSource>(provider.key?.source ?? 'conch');
@@ -310,6 +329,8 @@ function KeyForm({
   const steps = !provider.key && form.url && !provider.server;
 
   const typed = value.trim();
+  // A server's key, or LM Studio's: only there when that server asks for one.
+  const optionalKey = Boolean(provider.server) || provider.local;
   const looksWrong =
     source === 'conch' && form.pattern && typed.length > 3 && !new RegExp(form.pattern).test(typed);
   // Keeping it in 1Password needs the `op` command: Conch offers to get it
@@ -394,16 +415,27 @@ function KeyForm({
             />
           )}
           {locked && <OpenOnePassword />}
-          <div>
+          <Stack direction="row" gap={2} wrap>
             <Button
               type="submit"
               variant="surface"
               loading={setKey.isPending}
-              disabled={typed.length < 8 || Boolean(looksWrong)}
+              // A server's own key can be short (LiteLLM's `sk-1234`); a company's never is.
+              disabled={typed.length < (optionalKey ? 1 : 8) || Boolean(looksWrong)}
             >
               {provider.key ? 'Replace key' : 'Connect'}
             </Button>
-          </div>
+            {optionalKey && provider.key && (
+              <Button
+                type="button"
+                variant="ghost"
+                loading={clearKey.isPending}
+                onClick={() => clearKey.mutate(provider.id)}
+              >
+                Remove key
+              </Button>
+            )}
+          </Stack>
         </Stack>
       </form>
     </Stack>
@@ -664,10 +696,20 @@ function ProviderBody({
         </>
       ) : state === 'ready' ? (
         <Connected provider={provider} />
+      ) : state === 'not-installed' && !fix && provider.local ? (
+        // Here already, waiting on something only it can do (a model to download).
+        <Stack gap={3} align="start">
+          <Text>{provider.status.message}</Text>
+          <TryAgain provider={provider} />
+        </Stack>
       ) : state === 'not-installed' ? (
         <Install provider={provider} />
-      ) : provider.connect === 'key' ? (
+      ) : provider.connect === 'key' ||
+        (provider.local && provider.keyForm && state === 'signed-out') ? (
         <KeyForm provider={provider} onePassword={onePassword} />
+      ) : provider.local ? (
+        // A program on this computer that isn't answering: nothing to sign in to.
+        <TryAgain provider={provider} />
       ) : (
         <SignInProgram provider={provider} />
       )}

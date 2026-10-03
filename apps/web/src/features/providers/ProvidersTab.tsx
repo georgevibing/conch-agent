@@ -27,7 +27,7 @@ import {
   useRemoveServer,
   useUseProvider,
 } from './queries';
-import { brandOf, isYours, SERVER_TILE } from './words';
+import { brandOf, isYours, SERVER_TILE, setupLabel } from './words';
 
 /** Quiet facts for a connected provider: who you are, and what Conch is running. */
 function metaOf(provider: Provider): string {
@@ -169,20 +169,7 @@ export function ProvidersTab() {
                                   loading: busy,
                                 }
                               : {
-                                  label: provider.local
-                                    ? 'Set up'
-                                    : provider.status.fix?.kind === 'install'
-                                      ? 'Install'
-                                      : provider.status.fix?.kind === 'update'
-                                        ? 'Update'
-                                        : provider.status.state === 'not-installed'
-                                          ? 'How to install'
-                                          : provider.status.state === 'error'
-                                            ? 'Try again'
-                                            : provider.status.state === 'signed-out' &&
-                                                provider.connect === 'program'
-                                              ? 'Sign in'
-                                              : 'Connect',
+                                  label: setupLabel(provider),
                                   onClick: () => setConnecting(provider.id),
                                 }
                         }

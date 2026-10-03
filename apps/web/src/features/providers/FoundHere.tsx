@@ -1,5 +1,13 @@
 import { recogniseKey, type Found, type Provider } from '@conch/protocol';
-import { Heading, IntegrationCard, KeyCatcher, Stack, Text, type KeyCandidate } from '@conch/nacre';
+import {
+  Heading,
+  IntegrationCard,
+  KeyCatcher,
+  Stack,
+  Text,
+  toast,
+  type KeyCandidate,
+} from '@conch/nacre';
 import { useId } from 'react';
 
 import styles from './Providers.module.css';
@@ -36,7 +44,13 @@ export function FoundHere({ found }: { found: Found[] }) {
               tagline={item.detail}
               action={{
                 label: item.kind === 'key' ? 'Use this key' : 'Add',
-                onClick: () => use.mutate(item.id),
+                onClick: () =>
+                  use.mutate(item.id, {
+                    onSuccess: () =>
+                      toast.success(
+                        `${item.name} is ${item.kind === 'key' ? 'connected' : 'added'}. Its models are in the picker.`,
+                      ),
+                  }),
                 loading: use.isPending && use.variables === item.id,
               }}
             />
