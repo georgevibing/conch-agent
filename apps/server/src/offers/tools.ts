@@ -40,7 +40,7 @@ export function offerTools(
   }> = {
     name: 'offer',
     description: [
-      'Offer the person one app to connect or one skill to turn on, from “What Conch can turn on”, when it would clearly do what they asked. They get a card under your reply; nothing is turned on unless they press it.',
+      'Offer the person one app to connect or one skill to turn on, from “What Conch can turn on”, when it would clearly do what they asked. They get a card under your reply; nothing is turned on unless they press it. An app that isn’t connected has no tools to search for: call this instead.',
       '`kind` is `app` or `skill`, `target` its id from that list, `why` one short sentence in your own voice on how it helps with this request.',
       'Answer what you can first, and don’t explain how to set it up: the card does that. When it’s on, the chat carries on with the request by itself.',
     ].join(' '),
@@ -49,6 +49,9 @@ export function offerTools(
       target: z.string().min(1).max(128),
       why: z.string().max(400).optional(),
     },
+    // The map tells the model to call `offer`: it must be there, not waiting to be searched for.
+    alwaysLoad: true,
+    searchHint: 'offer to connect an app or turn on a skill the person needs',
     run: async ({ kind, target, why }) => {
       const result = await desk.propose({
         conversationId: ctx.conversationId,

@@ -167,10 +167,20 @@ export class OfferDesk {
     const map = await this.deps.map?.(engine).catch(() => undefined);
     if (!map) return '';
     const muted = new Set(await this.deps.muted().catch((): readonly string[] => []));
-    return mapSection({
-      apps: map.apps.filter((a) => !muted.has(mutedKey('app', a.id))),
-      skills: map.skills.filter((s) => !muted.has(mutedKey('skill', s.id))),
-    });
+    // What the person just named is listed first, so the budget never cuts it.
+    const said = conversationId
+      ? ((await this.deps.chat?.events(conversationId).catch(() => undefined))?.findLast(
+          (e) => e.type === 'user.message',
+        )?.text ?? '')
+      : '';
+    return mapSection(
+      {
+        apps: map.apps.filter((a) => !muted.has(mutedKey('app', a.id))),
+        skills: map.skills.filter((s) => !muted.has(mutedKey('skill', s.id))),
+      },
+      undefined,
+      said,
+    );
   }
 
   /**

@@ -14,7 +14,7 @@ import { plainLine, quoted } from './words';
 import type { ConchAppService } from './service';
 
 export const MAKING_APPS = `## Making apps
-When the person wants an ability nothing they have offers (keep a diary, track something, read a site's data), offer to make them a Conch app, or look for one first with \`app_find\`.
+When the person wants an ability nothing they have offers (keep a diary, track something, read a site's data), offer to make them a Conch app, or look for one first with \`app_find\`. If an app or skill under ## What Conch can turn on already does it, offer that instead.
 Read \`app_guide\` before you build or change one. Build first, and ask only what you can't sensibly assume.
 Always \`app_check\` and \`app_try\` every tool before \`app_present\`.
 The person adds it from the card \`app_present\` (or \`app_get\`) puts under your reply. Never say it's added, installed or ready to use before the card says so.
