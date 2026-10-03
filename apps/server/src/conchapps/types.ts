@@ -172,5 +172,11 @@ export interface Publisher {
    * Start or carry on: finds `gh` (or says what to install), signs in with
    * GitHub's device flow, then makes or updates the repository from `dir`.
    */
-  publish(app: { id: string; dir: string; manifest: ConchAppManifest }): Promise<PublishState>;
+  publish(app: {
+    id: string;
+    dir: string;
+    manifest: ConchAppManifest;
+    /** Its tools as the runtime listed them, for the README it writes when the app has none. */
+    tools?: readonly ConchAppTool[];
+  }): Promise<PublishState>;
 }
