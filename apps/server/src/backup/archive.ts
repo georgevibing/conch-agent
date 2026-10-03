@@ -188,6 +188,16 @@ export interface ReadLimits {
   roomBytes?: number;
 }
 
+/**
+ * What else a reader may pass over, for archives that aren't backups (a
+ * Conch app from GitHub, ADR 0061): `git archive` writes a pax global header
+ * (the commit) and an entry for every folder. Neither is ever unpacked.
+ */
+export interface ReadOptions {
+  skipFolders?: boolean;
+  skipGlobalHeaders?: boolean;
+}
+
 export const NO_ROOM =
   'There isn’t enough free space on this computer to restore this backup. Free up some space, then try again.';
 
@@ -200,6 +210,7 @@ export async function readTar(
   source: AsyncIterable<Buffer>,
   visit: (entry: TarEntry) => Visit | Promise<Visit>,
   limits: ReadLimits = {},
+  options: ReadOptions = {},
 ): Promise<void> {
   const maxUnpacked = limits.maxUnpackedBytes ?? BACKUP_LIMITS.maxUnpackedBytes;
   const maxFile = limits.maxFileBytes ?? BACKUP_LIMITS.maxFileBytes;
@@ -236,6 +247,17 @@ export async function readTar(
       state = { kind: 'pax', remaining: size, pad: padding(size) };
       pax = { data: [], remaining: size };
       if (size === 0) state = { kind: 'header' };
+      return undefined;
+    }
+    if (type === 'g' && options.skipGlobalHeaders) {
+      if (size > MAX_PAX) throw new BackupError('damaged', DAMAGED);
+      state = size ? { kind: 'skip', remaining: size + padding(size) } : { kind: 'header' };
+      return undefined;
+    }
+    if (type === '5' && options.skipFolders) {
+      nextName = undefined;
+      if (++files > maxFiles) throw new BackupError('too-big', 'This backup holds too many files.');
+      state = size ? { kind: 'skip', remaining: size + padding(size) } : { kind: 'header' };
       return undefined;
     }
     if (type === '1' || type === '2')
