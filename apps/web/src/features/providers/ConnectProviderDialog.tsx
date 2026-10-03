@@ -1,5 +1,7 @@
 import type { Provider, ProvidersList, SecretSource } from '@conch/protocol';
 import {
+  AlertDialog,
+  Badge,
   Button,
   Callout,
   Collapsible,
@@ -14,7 +16,9 @@ import {
   SignInCode,
   Spinner,
   Stack,
+  Steps,
   Text,
+  looksLikeKey,
   toast,
   type HandshakePhase,
 } from '@conch/nacre';
@@ -32,11 +36,14 @@ import styles from './Providers.module.css';
 import {
   errorText,
   useCheckProvider,
+  useRemoveServer,
   useSetProviderKey,
+  useUpdateServer,
   useUseProvider,
   useWatchProvider,
 } from './queries';
 import { useProviderSignIn } from './useProviderSignIn';
+import { brandOf } from './words';
 
 function phaseOf(provider: Provider, busy: boolean): HandshakePhase {
   if (provider.status.state === 'ready') return 'connected';
@@ -254,19 +261,51 @@ function KeyForm({
   const [source, setSource] = useState<SecretSource>(provider.key?.source ?? 'conch');
   const [error, setError] = useState<string>();
 
-  if (!form) return null;
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
+  const save = async (key: string) => {
     setError(undefined);
     try {
-      await setKey.mutateAsync({ id: provider.id, value: value.trim() });
+      await setKey.mutateAsync({ id: provider.id, value: key.trim() });
       setValue('');
       toast.success(`${provider.name} is connected.`);
     } catch (e) {
       setError(errorText(e, 'That key didn’t work.'));
     }
   };
+  const latest = useRef(save);
+  latest.current = save;
+
+  // A key pasted anywhere on the page lands here and is checked straight away,
+  // the way a chat app's setup takes its bot key.
+  const pattern = form?.pattern;
+  useEffect(() => {
+    if (source !== 'conch') return;
+    const onPaste = (event: ClipboardEvent) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)
+      )
+        return;
+      const text = event.clipboardData?.getData('text/plain').trim() ?? '';
+      if (!looksLikeKey(text) || (pattern && !new RegExp(pattern).test(text))) return;
+      event.preventDefault();
+      setValue(text);
+      void latest.current(text);
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, [source, pattern]);
+
+  if (!form) return null;
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    await save(value);
+  };
+  // The provider's own sign-in (Ollama's app), offered before the key.
+  const programSignIn = provider.status.canSignIn && !form.canSignIn && provider.status.state !== 'ready';
+  // Where to get a key, as steps — for a service that has a page for it.
+  const steps = !provider.key && form.url && !provider.server;
 
   const typed = value.trim();
   const looksWrong =
@@ -281,6 +320,36 @@ function KeyForm({
 
   return (
     <Stack gap={5}>
+      {programSignIn && (
+        <Stack gap={4}>
+          <SignInProgram provider={provider} />
+          <Heading level={4} size="xs" tone="subtle">
+            Or use a key
+          </Heading>
+        </Stack>
+      )}
+      {steps && (
+        <Steps aria-label={`Get a ${provider.name} key`}>
+          <Steps.Step>
+            <Stack direction="row" gap={3} align="center" wrap>
+              <Text>Open {provider.name}’s key page.</Text>
+              <Button asChild variant="surface" size="sm">
+                <a href={form.url} target="_blank" rel="noreferrer">
+                  Open {hostOf(form.url ?? '')} <ExternalLink aria-hidden className={styles.linkIcon} />
+                </a>
+              </Button>
+            </Stack>
+          </Steps.Step>
+          <Steps.Step>
+            <Text>
+              Create a key{provider.free ? ` (${provider.free.toLowerCase()})` : ''}, and copy it.
+            </Text>
+          </Steps.Step>
+          <Steps.Step>
+            <Text>Paste it below, or anywhere on this page. Conch checks it straight away.</Text>
+          </Steps.Step>
+        </Steps>
+      )}
       {form.canSignIn && (
         <Stack gap={2}>
           <Button size="lg" onClick={() => void signIn(provider)}>
@@ -308,7 +377,7 @@ function KeyForm({
             }}
             placeholder={form.placeholder}
             help={form.help}
-            url={form.url}
+            url={steps ? undefined : form.url}
             error={error ?? (looksWrong ? form.patternHint : undefined)}
             onePassword={opFix ? { ...onePassword, installCommand: undefined } : onePassword}
             saved={provider.key}
@@ -334,6 +403,97 @@ function KeyForm({
           </div>
         </Stack>
       </form>
+    </Stack>
+  );
+}
+
+/** `platform.openai.com`, for a button that says where it goes. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host.replace(/^www\./, '');
+  } catch {
+    return 'the page';
+  }
+}
+
+/** A server you added: what it's called, where it is, and taking it away. */
+function ServerSettings({ provider }: { provider: Provider }) {
+  const server = provider.server;
+  const update = useUpdateServer();
+  const remove = useRemoveServer();
+  const [name, setName] = useState(server?.name ?? '');
+  const [url, setUrl] = useState(server?.url ?? '');
+  const [error, setError] = useState<string>();
+  const [removing, setRemoving] = useState(false);
+  if (!server) return null;
+  const changed = name.trim() !== server.name || url.trim() !== server.url;
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    setError(undefined);
+    try {
+      await update.mutateAsync({
+        id: provider.id,
+        body: {
+          ...(name.trim() !== server.name && { name: name.trim() }),
+          ...(url.trim() !== server.url && { url: url.trim() }),
+        },
+      });
+      toast.success('Saved.');
+    } catch (e) {
+      setError(errorText(e, 'That didn’t save.'));
+    }
+  };
+  return (
+    <Stack gap={5}>
+      <form onSubmit={save}>
+        <Stack gap={4}>
+          <Field>
+            <Field.Label>Name</Field.Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} />
+          </Field>
+          <Field invalid={Boolean(error)}>
+            <Field.Label>Address</Field.Label>
+            <Input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              spellCheck={false}
+              invalid={Boolean(error)}
+            />
+            {error ? (
+              <Field.Error>{error}</Field.Error>
+            ) : (
+              <Field.Description>Conch looks at a new address before using it.</Field.Description>
+            )}
+          </Field>
+          <Stack direction="row" gap={2} wrap>
+            <Button type="submit" variant="surface" disabled={!changed || !name.trim()} loading={update.isPending}>
+              Save
+            </Button>
+            <Button type="button" variant="ghost" tone="danger" onClick={() => setRemoving(true)}>
+              Remove this server
+            </Button>
+          </Stack>
+        </Stack>
+      </form>
+      <AlertDialog.Root open={removing} onOpenChange={setRemoving}>
+        <AlertDialog.Content tone="danger">
+          <AlertDialog.Title>Remove {server.name}?</AlertDialog.Title>
+          <AlertDialog.Description>
+            Conch forgets this server and its key. Chats that used it carry on with your default
+            provider. You can add it again any time.
+          </AlertDialog.Description>
+          <AlertDialog.Footer>
+            <AlertDialog.Cancel asChild>
+              <Button variant="ghost">Keep it</Button>
+            </AlertDialog.Cancel>
+            <AlertDialog.Action asChild>
+              <Button tone="danger" onClick={() => remove.mutate(provider.id)}>
+                Remove
+              </Button>
+            </AlertDialog.Action>
+          </AlertDialog.Footer>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
     </Stack>
   );
 }
@@ -482,7 +642,13 @@ function ProviderBody({
           <GetIt needId={fix.need} kind="update" name={provider.name} />
         </Callout>
       )}
-      {state === 'ready' ? (
+      {provider.server ? (
+        <>
+          {state === 'ready' && <Connected provider={provider} />}
+          <ServerSettings key={provider.server.url + provider.server.name} provider={provider} />
+          <KeyForm provider={provider} onePassword={onePassword} />
+        </>
+      ) : state === 'ready' ? (
         <Connected provider={provider} />
       ) : state === 'not-installed' ? (
         <Install provider={provider} />
@@ -534,7 +700,7 @@ export function ProviderDetail({
       <Stack gap={3} className={styles.detailHeader}>
         <IntegrationHandshake
           name={provider.name}
-          brand={provider.status.engine}
+          brand={brandOf(provider)}
           color={provider.color}
           phase={phaseOf(provider, false)}
         />
@@ -542,6 +708,9 @@ export function ProviderDetail({
           {titleOf(provider)}
         </Heading>
         <Text tone="muted">{provider.description}</Text>
+        {provider.free && provider.status.state !== 'ready' && (
+          <Badge tone="success">{provider.free}</Badge>
+        )}
       </Stack>
       <ProviderBody provider={provider} onePassword={onePassword} />
     </section>
@@ -592,7 +761,7 @@ export function ConnectProviderDialog({
             <Dialog.Header>
               <IntegrationHandshake
                 name={provider.name}
-                brand={provider.status.engine}
+                brand={brandOf(provider)}
                 color={provider.color}
                 phase={phaseOf(provider, false)}
               />

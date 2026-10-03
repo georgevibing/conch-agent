@@ -42,6 +42,9 @@ function hueOf(name: string): number {
   return hash % 360;
 }
 
+/** Letters for brands whose name doesn't make a good monogram ("xAI API" isn't "XA"). */
+const letters: Record<string, string> = { xai: 'x', grok: 'x' };
+
 function monogram(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean);
   const letters =
@@ -106,7 +109,7 @@ export function IntegrationLogo({
         </span>
       ) : (
         <span className={styles.monogram} aria-hidden>
-          {monogram(name)}
+          {(brand && letters[brand]) ?? monogram(name)}
         </span>
       )}
       {status && <span className={styles.dot} data-state={status} aria-hidden />}

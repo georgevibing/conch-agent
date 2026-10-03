@@ -42,7 +42,7 @@ export function environmentKeys(
         kind: 'key',
         provider: id,
         name: copy.name,
-        detail: `${variable} on this computer · ends ${tail(value)}`,
+        detail: `${variable} · ends ${tail(value)}`,
         brand: id,
         ...(copy.color && { color: copy.color }),
         key: { provider: id, variable },

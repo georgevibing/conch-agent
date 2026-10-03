@@ -120,3 +120,79 @@
     align-items: flex-start;
   }
 }
+
+@layer nacre.components {
+  /* The page in sections, as the Apps page has it: a quiet heading, then its cards or tiles. */
+  .section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+  }
+
+  .cards,
+  .tiles {
+    display: grid;
+    align-items: stretch;
+    gap: var(--nc-space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .cards {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  }
+
+  .tiles {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 14.5rem), 1fr));
+  }
+
+  .cards > li,
+  .tiles > li {
+    display: grid;
+  }
+
+  .yours {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .kinds {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-5);
+  }
+
+  .kind {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+  }
+
+  .catalogHeader {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-3);
+  }
+
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .search {
+    inline-size: 12rem;
+  }
+
+  .noMatch {
+    padding-block: var(--nc-space-4);
+  }
+}

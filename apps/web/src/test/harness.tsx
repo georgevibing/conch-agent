@@ -73,6 +73,9 @@ export function provider(patch: Partial<Provider> = {}): Provider {
     install: baseEngine.install,
     experimental: false,
     hidden: false,
+    group: 'subscription',
+    featured: false,
+    connectedBefore: false,
     ...patch,
   };
 }
@@ -129,6 +132,8 @@ export const baseProviders: ProvidersList = {
       },
     }),
   ],
+  found: [],
+  serverPresets: [],
   onePassword: {
     available: false,
     message: 'Install the 1Password command line tool to keep keys in 1Password.',

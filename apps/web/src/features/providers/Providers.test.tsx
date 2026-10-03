@@ -24,6 +24,12 @@ function render() {
   return renderApp(<ProvidersTab />, { route: '/' });
 }
 
+/** A provider not set up yet is a tile in the gallery: open it. */
+async function openTile(name: string) {
+  const tile = await screen.findByRole('article', { name });
+  await userEvent.click(within(tile).getByRole('button', { name }));
+}
+
 describe('Providers settings', () => {
   it('shows every provider, which is the default, and what each one needs', async () => {
     mockFetch(routes());
@@ -34,13 +40,26 @@ describe('Providers settings', () => {
     expect(claude).toHaveTextContent('Claude Max · you@example.com');
     expect(within(claude).getByRole('button', { name: 'Check again' })).toBeInTheDocument();
 
-    const codex = screen.getByRole('article', { name: 'Codex' });
-    expect(codex).toHaveTextContent('Early support');
-    expect(codex).toHaveTextContent('Codex isn’t on this computer yet.');
-    expect(within(codex).getByRole('button', { name: 'How to install' })).toBeInTheDocument();
+    // The ones not set up yet wait in the gallery, as tiles, sorted by what connecting takes.
+    const gallery = screen.getByRole('region', { name: 'Add a provider' });
+    expect(within(gallery).getByRole('article', { name: 'Codex' })).toHaveTextContent(
+      'OpenAI’s coding agent',
+    );
+    expect(within(gallery).getByRole('article', { name: 'OpenRouter' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Your providers' })).toBeInTheDocument();
+  });
 
-    const openrouter = screen.getByRole('article', { name: 'OpenRouter' });
-    expect(within(openrouter).getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+  it('finds a provider by what it’s good at, and offers to add a server when nothing matches', async () => {
+    mockFetch(routes());
+    render();
+    const search = await screen.findByRole('searchbox', { name: 'Find a provider' });
+    await userEvent.type(search, 'coding');
+    expect(screen.getByRole('article', { name: 'Codex' })).toBeInTheDocument();
+    expect(screen.queryByRole('article', { name: 'OpenRouter' })).toBeNull();
+    await userEvent.clear(search);
+    await userEvent.type(search, 'zzz');
+    expect(screen.getByText('Nothing called “zzz” here yet.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add it as a server' })).toBeInTheDocument();
   });
 
   it('installs a provider’s program with one button, showing its progress', async () => {
@@ -87,8 +106,7 @@ describe('Providers settings', () => {
       }),
     );
     render();
-    const card = await screen.findByRole('article', { name: 'Codex' });
-    await userEvent.click(within(card).getByRole('button', { name: 'Install' }));
+    await openTile('Codex');
     await userEvent.click(await screen.findByRole('button', { name: 'Install Codex' }));
     expect(
       await screen.findByRole('progressbar', { name: 'Downloading Codex · 30%' }),
@@ -126,8 +144,7 @@ describe('Providers settings', () => {
       }),
     );
     render();
-    const card = await screen.findByRole('article', { name: 'OpenRouter' });
-    await userEvent.click(within(card).getByRole('button', { name: 'Connect' }));
+    await openTile('OpenRouter');
     const dialog = await screen.findByRole('region', { name: /^Connect / });
     await userEvent.click(within(dialog).getByRole('radio', { name: '1Password' }));
     expect(
@@ -196,8 +213,7 @@ describe('Providers settings', () => {
     );
     render();
 
-    const card = await screen.findByRole('article', { name: 'OpenRouter' });
-    await userEvent.click(within(card).getByRole('button', { name: 'Connect' }));
+    await openTile('OpenRouter');
     const dialog = await screen.findByRole('region', { name: /^Connect / });
     expect(within(dialog).getByRole('heading', { name: 'Connect OpenRouter' })).toBeInTheDocument();
     // It can make a key for you, so that's offered first.
@@ -229,8 +245,7 @@ describe('Providers settings', () => {
     mockFetch(routes());
     render();
 
-    const card = await screen.findByRole('article', { name: 'OpenRouter' });
-    await userEvent.click(within(card).getByRole('button', { name: 'Connect' }));
+    await openTile('OpenRouter');
     const dialog = await screen.findByRole('region', { name: /^Connect / });
     await userEvent.click(within(dialog).getByRole('radio', { name: '1Password' }));
     expect(
@@ -245,8 +260,7 @@ describe('Providers settings', () => {
     mockFetch(routes());
     render();
 
-    const card = await screen.findByRole('article', { name: 'Codex' });
-    await userEvent.click(within(card).getByRole('button', { name: 'How to install' }));
+    await openTile('Codex');
     const dialog = await screen.findByRole('region', { name: /^Connect / });
     expect(within(dialog).getByText('npm install -g @openai/codex')).toBeInTheDocument();
     expect(within(dialog).getByText('Waiting for Codex…')).toBeInTheDocument();
@@ -291,6 +305,7 @@ describe('ChatGPT subscription connection', () => {
       connect: 'program',
       signInLabel: 'Sign in with your ChatGPT subscription',
       signInHelp: 'No API key needed. Conch keeps a separate encrypted connection.',
+      ready: false,
       status: { ...provider().status, engine: 'codex-cli', label: 'Codex', state: 'signed-out' },
     });
     const calls = mockFetch(
@@ -300,11 +315,7 @@ describe('ChatGPT subscription connection', () => {
       }),
     );
     render();
-    await userEvent.click(
-      within(await screen.findByRole('article', { name: 'Codex' })).getByRole('button', {
-        name: 'Connect',
-      }),
-    );
+    await openTile('Codex');
     expect(await screen.findByText(/No API key needed/)).toBeInTheDocument();
     await userEvent.click(
       screen.getByRole('button', { name: 'Sign in with your ChatGPT subscription' }),
@@ -348,7 +359,7 @@ describe('ChatGPT subscription connection', () => {
     render();
     await userEvent.click(
       within(await screen.findByRole('article', { name: 'Claude Code' })).getByRole('button', {
-        name: 'Connect',
+        name: 'Sign in',
       }),
     );
     await userEvent.click(await screen.findByRole('button', { name: /Sign in to Claude Code/ }));

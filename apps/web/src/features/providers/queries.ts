@@ -1,4 +1,10 @@
-import type { EngineId, Provider, ProvidersList } from '@conch/protocol';
+import type {
+  AddServerBody,
+  EngineId,
+  Provider,
+  ProvidersList,
+  UpdateServerBody,
+} from '@conch/protocol';
 import { toast } from '@conch/nacre';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
@@ -89,6 +95,42 @@ export function useClearProviderKey() {
     mutationFn: (id: EngineId) => providersApi.clearKey(id),
     onSuccess: (list) => applyList(client, list),
     onError: (error) => toast.error(errorText(error, 'Couldn’t remove the key.')),
+  });
+}
+
+export function useAddServer() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AddServerBody) => providersApi.addServer(body),
+    onSuccess: ({ list }) => applyList(client, list),
+  });
+}
+
+export function useUpdateServer() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: UpdateServerBody }) =>
+      providersApi.updateServer(id, body),
+    onSuccess: (list) => applyList(client, list),
+  });
+}
+
+export function useRemoveServer() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => providersApi.removeServer(id),
+    onSuccess: (list) => applyList(client, list),
+    onError: (error) => toast.error(errorText(error, 'Couldn’t remove that server.')),
+  });
+}
+
+/** Use a key or a server found on this computer. */
+export function useFound() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => providersApi.useFound(id),
+    onSuccess: (list) => applyList(client, list),
+    onError: (error) => toast.error(errorText(error, 'That didn’t work.')),
   });
 }
 

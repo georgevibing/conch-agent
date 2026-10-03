@@ -135,7 +135,7 @@ describe('what Conch finds on this computer', () => {
     const { providers } = await harness({ env: { GROQ_API_KEY: 'gsk_0123456789abcdefghij' } });
     const list = await providers.list();
     expect(list.found).toEqual([
-      expect.objectContaining({ kind: 'key', provider: 'groq', detail: 'GROQ_API_KEY on this computer · ends ghij' }),
+      expect.objectContaining({ kind: 'key', provider: 'groq', detail: 'GROQ_API_KEY · ends ghij' }),
       expect.objectContaining({ kind: 'server', name: 'llama.cpp', url: 'http://127.0.0.1:8080/v1' }),
     ]);
     // The key itself never travels to the page.

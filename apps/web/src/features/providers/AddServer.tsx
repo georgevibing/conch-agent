@@ -1,0 +1,249 @@
+import type { Found, ServerPreset, ServerProbe } from '@conch/protocol';
+import {
+  Button,
+  Field,
+  Heading,
+  Input,
+  IntegrationCard,
+  IntegrationHandshake,
+  PasswordInput,
+  Stack,
+  Text,
+  toast,
+} from '@conch/nacre';
+import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+
+import { providersApi } from './api';
+import { FoundHere } from './FoundHere';
+import styles from './Providers.module.css';
+import { errorText, useAddServer } from './queries';
+import { SERVER_TILE } from './words';
+
+/** Long enough to stop typing; short enough to feel live. */
+const LOOK_AFTER_MS = 600;
+
+/** What the address line says, from what Conch found there. */
+function probeWords(probe: ServerProbe): string {
+  if (probe.ok) {
+    const what = probe.kind ? `${probe.kind}, with` : 'A chat server, with';
+    return `${what} ${probe.models ?? 0} model${probe.models === 1 ? '' : 's'}. Ready to add.`;
+  }
+  return probe.message ?? 'Nothing answered there.';
+}
+
+export interface AddServerProps {
+  presets: ServerPreset[];
+  /** Servers already running on this computer, to add in one press. */
+  found: Found[];
+  onBack: () => void;
+  /** Added: open its page. */
+  onAdded: (id: string) => void;
+  /** Open another provider's page (Ollama and LM Studio have their own). */
+  onOpen?: (id: string) => void;
+}
+
+/** Servers that are better connected through their own card. */
+const OWN_CARDS: Record<string, string> = { Ollama: 'ollama', 'LM Studio': 'lm-studio' };
+
+/**
+ * Add a server you run yourself, or a service with an OpenAI-compatible
+ * address. Conch looks at the address as you type it and says what it found —
+ * "llama.cpp, with 3 models" — so "Add" only appears once it will work.
+ */
+export function AddServer({ presets, found, onBack, onAdded, onOpen }: AddServerProps) {
+  const titleId = useId();
+  const backRef = useRef<HTMLButtonElement>(null);
+  const [url, setUrl] = useState('');
+  const [name, setName] = useState('');
+  const [key, setKey] = useState('');
+  const [preset, setPreset] = useState<ServerPreset>();
+  const [probe, setProbe] = useState<ServerProbe>();
+  const [looking, setLooking] = useState(false);
+  const add = useAddServer();
+  const asked = useRef(0);
+
+  useEffect(() => {
+    backRef.current?.focus({ preventScroll: true, focusVisible: false } as FocusOptions);
+  }, []);
+
+  // Look at the address as it's typed, the latest answer winning.
+  useEffect(() => {
+    const typed = url.trim();
+    setProbe(undefined);
+    if (typed.length < 4) {
+      setLooking(false);
+      return;
+    }
+    const ask = ++asked.current;
+    setLooking(true);
+    const timer = setTimeout(() => {
+      providersApi
+        .probeServer(typed, key.trim() || undefined)
+        .then((answer) => {
+          if (ask === asked.current) setProbe(answer);
+        })
+        .catch(() => {
+          if (ask === asked.current) setProbe({ ok: false, message: 'Conch couldn’t look there.' });
+        })
+        .finally(() => {
+          if (ask === asked.current) setLooking(false);
+        });
+    }, LOOK_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [url, key]);
+
+  const choose = (next: ServerPreset) => {
+    setPreset(next);
+    setUrl(next.url);
+    setName(next.name);
+  };
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    try {
+      const { id } = await add.mutateAsync({
+        url: url.trim(),
+        ...(name.trim() && { name: name.trim() }),
+        ...(key.trim() && { key: key.trim() }),
+      });
+      toast.success(`${name.trim() || probe?.kind || 'Your server'} is connected. Its models are in the picker.`);
+      onAdded(id);
+    } catch (error) {
+      setProbe({ ok: false, message: errorText(error, 'That server couldn’t be added.') });
+    }
+  };
+
+  const wantsKey = probe?.needsKey || (preset && !preset.local);
+  const problem = probe && !probe.ok ? probeWords(probe) : undefined;
+
+  return (
+    <section aria-labelledby={titleId} className={styles.detail}>
+      <Button
+        ref={backRef}
+        variant="ghost"
+        size="sm"
+        leadingIcon={<ArrowLeft />}
+        onClick={onBack}
+        className={styles.back}
+      >
+        Providers
+      </Button>
+      <Stack gap={3} className={styles.detailHeader}>
+        <IntegrationHandshake
+          name={SERVER_TILE.name}
+          brand="server"
+          phase={probe?.ok ? 'connected' : looking ? 'waiting' : 'idle'}
+        />
+        <Heading level={3} size="xl" id={titleId}>
+          Add a server
+        </Heading>
+        <Text tone="muted">{SERVER_TILE.description}</Text>
+      </Stack>
+
+      <FoundHere found={found} />
+
+      <form onSubmit={submit}>
+        <Stack gap={4}>
+          <Field invalid={Boolean(problem && !probe?.needsKey)}>
+            <Field.Label>Address</Field.Label>
+            <Input
+              value={url}
+              onChange={(e) => {
+                setUrl(e.target.value);
+                setPreset(undefined);
+              }}
+              placeholder="localhost:8080, or https://…"
+              autoComplete="off"
+              spellCheck={false}
+              invalid={Boolean(problem && !probe?.needsKey)}
+            />
+            {problem && probe?.needsKey ? (
+              <Field.Description aria-live="polite">{problem}</Field.Description>
+            ) : problem ? (
+              <Field.Error>{problem}</Field.Error>
+            ) : (
+              <Field.Description aria-live="polite">
+                {looking
+                  ? 'Looking…'
+                  : probe?.ok
+                    ? probeWords(probe)
+                    : 'Where the server answers. Plain http works on this computer and your own network.'}
+              </Field.Description>
+            )}
+          </Field>
+          {probe?.kind && OWN_CARDS[probe.kind] && onOpen && (
+            <div>
+              <Button type="button" variant="surface" size="sm" onClick={() => onOpen(OWN_CARDS[probe.kind ?? ''] ?? '')}>
+                Open {probe.kind}
+              </Button>
+            </div>
+          )}
+          <Field>
+            <Field.Label>Name</Field.Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={probe?.kind ?? 'The GPU box'}
+              maxLength={60}
+            />
+            <Field.Description>What it’s called in the picker.</Field.Description>
+          </Field>
+          <Field>
+            <Field.Label>{wantsKey ? 'Key' : 'Key, if it asks for one'}</Field.Label>
+            <PasswordInput
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <Field.Description>
+              Sent to this server and nowhere else, and kept like every key in Conch.
+              {preset?.keyUrl && (
+                <>
+                  {' '}
+                  <a href={preset.keyUrl} target="_blank" rel="noreferrer">
+                    Get a {preset.name} key <ExternalLink aria-hidden size={12} />
+                  </a>
+                </>
+              )}
+            </Field.Description>
+          </Field>
+          <div>
+            <Button
+              type="submit"
+              loading={add.isPending}
+              disabled={!probe?.ok && !(probe?.needsKey && key.trim())}
+            >
+              Add server
+            </Button>
+          </div>
+        </Stack>
+      </form>
+
+      <section aria-labelledby={`${titleId}-start`} className={styles.section}>
+        <Heading level={4} size="xs" tone="subtle" id={`${titleId}-start`}>
+          Start from one people often use
+        </Heading>
+        <ul className={styles.tiles}>
+          {presets.map((p, index) => (
+            <li key={p.id}>
+              <IntegrationCard
+                variant="catalog"
+                index={index}
+                name={p.name}
+                brand={p.local ? 'server' : p.id}
+                color={p.color}
+                tagline={p.tagline}
+                local={p.local}
+                note={p.local ? 'On your computer' : 'Needs its key'}
+                connected={preset?.id === p.id}
+                onOpen={() => choose(p)}
+              />
+            </li>
+          ))}
+        </ul>
+      </section>
+    </section>
+  );
+}

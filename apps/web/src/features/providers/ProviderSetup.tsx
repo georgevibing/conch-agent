@@ -3,13 +3,15 @@ import { Button, Callout, ProviderCard, Skeleton, Stack, Text } from '@conch/nac
 import { useEffect, useRef, useState } from 'react';
 
 import { ConnectProviderDialog } from './ConnectProviderDialog';
+import { FoundHere, KeyPaste } from './FoundHere';
+import { ProviderGallery } from './ProviderGallery';
 import styles from './Providers.module.css';
 import { useCheckProvider, useProviders, useUseProvider } from './queries';
+import { brandOf, isYours } from './words';
 
-/** Ready first, then the ones you could set up, then what isn't here. */
+/** Ready first, then the ones you could finish setting up. */
 function order(a: Provider, b: Provider) {
-  const rank = (p: Provider) =>
-    p.active ? 0 : p.status.state === 'ready' ? 1 : p.status.state === 'not-installed' ? 3 : 2;
+  const rank = (p: Provider) => (p.active ? 0 : p.status.state === 'ready' ? 1 : 2);
   return rank(a) - rank(b);
 }
 
@@ -19,9 +21,10 @@ export interface ProviderSetupProps {
 }
 
 /**
- * First-run provider setup: everything Conch can run on, what state each one is
- * in, and one button each. Someone who already has Claude Code signed in sees
- * that in a second and is carried onward; anyone else picks what suits them.
+ * First-run provider setup. What's already here — Claude Code signed in, a key
+ * in this computer's settings, a model server running — shows first, ready in
+ * a press; a key pasted anywhere is recognised; and the gallery opens on the
+ * few most people pick, with every other provider one press away.
  */
 export function ProviderSetup({ onReady }: ProviderSetupProps) {
   const { data, isPending } = useProviders();
@@ -31,6 +34,8 @@ export function ProviderSetup({ onReady }: ProviderSetupProps) {
 
   const providers = data?.providers ?? [];
   const ready = providers.find((provider) => provider.active && provider.status.state === 'ready');
+  const yours = providers.filter((p) => isYours(p) && p.group !== 'server').sort(order);
+  const rest = providers.filter((p) => !isYours(p) && !p.hidden);
 
   // Carry on by yourself once a provider is connected and in use — but never
   // while a setup dialog is open in front of you. The dialog closes itself when
@@ -46,56 +51,76 @@ export function ProviderSetup({ onReady }: ProviderSetupProps) {
   }, [ready, onReady, connecting]);
 
   return (
-    <Stack gap={4}>
+    <Stack gap={5}>
+      {data?.pinned && (
+        <Callout tone="info" title="Fixed for this run">
+          {data.pinned}
+        </Callout>
+      )}
+
       {isPending ? (
         <>
           <Skeleton shape="block" height="7rem" />
           <Skeleton shape="block" height="7rem" />
         </>
       ) : (
-        [...providers].sort(order).map((provider, index) => {
-          const isReady = provider.status.state === 'ready';
-          const busy =
-            (use.isPending && use.variables === provider.id) ||
-            (check.isPending && check.variables === provider.id);
-          return (
-            <ProviderCard
-              key={provider.id}
-              index={index}
-              name={provider.name}
-              brand={provider.status.engine}
-              color={provider.color}
-              tagline={provider.tagline}
-              state={provider.status.state}
-              active={provider.active}
-              experimental={provider.experimental}
-              meta={provider.status.auth?.description}
-              message={isReady ? undefined : provider.status.message}
-              highlights={provider.highlights}
-              action={
-                isReady
-                  ? provider.active
-                    ? undefined
-                    : { label: 'Use this', onClick: () => use.mutate(provider.id), loading: busy }
-                  : {
-                      label:
-                        provider.status.state === 'not-installed'
-                          ? 'How to install'
-                          : provider.connect === 'key'
-                            ? 'Add a key'
-                            : 'Sign in',
-                      onClick: () => setConnecting(provider.id),
+        yours.length > 0 && (
+          <ul className={styles.yours} aria-label="Ready on this computer">
+            {yours.map((provider, index) => {
+              const isReady = provider.status.state === 'ready';
+              const busy =
+                (use.isPending && use.variables === provider.id) ||
+                (check.isPending && check.variables === provider.id);
+              return (
+                <li key={provider.id}>
+                  <ProviderCard
+                    index={index}
+                    name={provider.name}
+                    brand={brandOf(provider)}
+                    color={provider.color}
+                    tagline={provider.tagline}
+                    state={provider.status.state}
+                    active={provider.active}
+                    experimental={provider.experimental}
+                    meta={provider.status.auth?.description}
+                    message={isReady ? undefined : provider.status.message}
+                    highlights={provider.highlights}
+                    action={
+                      isReady
+                        ? provider.active
+                          ? undefined
+                          : {
+                              label: 'Use this',
+                              onClick: () => use.mutate(provider.id),
+                              loading: busy,
+                            }
+                        : {
+                            label:
+                              provider.status.state === 'not-installed'
+                                ? 'How to install'
+                                : provider.connect === 'key'
+                                  ? 'Add a key'
+                                  : 'Sign in',
+                            onClick: () => setConnecting(provider.id),
+                          }
                     }
-              }
-            />
-          );
-        })
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        )
       )}
 
-      {data?.pinned && (
-        <Callout tone="info" title="Fixed for this run">
-          {data.pinned}
-        </Callout>
+      {!data?.pinned && !isPending && <KeyPaste providers={providers} />}
+      {!data?.pinned && <FoundHere found={data?.found ?? []} />}
+      {!data?.pinned && !isPending && rest.length > 0 && (
+        <ProviderGallery
+          providers={rest}
+          featuredFirst
+          title={yours.length ? 'Or connect another' : 'Choose what powers me'}
+          onOpen={setConnecting}
+        />
       )}
 
       {ready && onReady && (

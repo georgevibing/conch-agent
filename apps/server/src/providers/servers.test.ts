@@ -161,8 +161,8 @@ describe('keys already in the environment', () => {
   it('offers a key shaped like its provider’s, by its variable and last four, never the value', () => {
     const found = environmentKeys(new Set(), env);
     expect(found.map((f) => [f.provider, f.detail])).toEqual([
-      ['xai', 'XAI_API_KEY on this computer · ends wxyz'],
-      ['groq', 'GROQ_API_KEY on this computer · ends mnop'],
+      ['xai', 'XAI_API_KEY · ends wxyz'],
+      ['groq', 'GROQ_API_KEY · ends mnop'],
     ]);
     expect(JSON.stringify(found.map(({ key: _key, ...f }) => f))).not.toContain('gsk_0123456789');
   });

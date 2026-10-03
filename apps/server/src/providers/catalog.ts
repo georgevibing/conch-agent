@@ -90,7 +90,7 @@ const PROVIDERS: ProviderCopy[] = [
   {
     id: 'codex-cli',
     name: 'Codex',
-    tagline: 'Your ChatGPT subscription, connected',
+    tagline: 'Use your ChatGPT plan',
     signInLabel: 'Sign in with your ChatGPT subscription',
     signInHelp:
       'No API key needed. Conch keeps a separate, encrypted connection. Existing Codex and other apps stay signed in as they are. Your plan’s models and limits apply.',
@@ -109,7 +109,7 @@ const PROVIDERS: ProviderCopy[] = [
   {
     id: 'copilot',
     name: 'GitHub Copilot',
-    tagline: 'Your Copilot plan, connected',
+    tagline: 'Use your Copilot plan',
     signInLabel: 'Sign in with GitHub',
     signInHelp:
       'GitHub shows a short code to confirm it’s you. Every Copilot plan works, including Copilot Free; your plan’s models and limits apply. No key is needed.',
@@ -132,7 +132,7 @@ const PROVIDERS: ProviderCopy[] = [
   {
     id: 'gemini-cli',
     name: 'Gemini CLI',
-    tagline: 'Your Google account, connected',
+    tagline: 'Use your Google account',
     signInLabel: 'Sign in with Google',
     signInHelp:
       'Google’s sign-in page opens in a browser on the computer Conch runs on. Finish there and this updates by itself. No key and no card are needed.',
@@ -155,7 +155,7 @@ const PROVIDERS: ProviderCopy[] = [
   {
     id: 'grok',
     name: 'Grok',
-    tagline: 'Your Grok plan, connected',
+    tagline: 'Use your Grok plan',
     signInLabel: 'Sign in with X',
     signInHelp:
       'xAI shows a short code to confirm it’s you. Your SuperGrok or X Premium+ plan’s usage applies, shared with your other Grok apps.',
