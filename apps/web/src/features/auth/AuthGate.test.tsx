@@ -142,4 +142,46 @@ describe('AuthGate on the computer running Conch (ADR 0063)', () => {
     expect(screen.getByText('pnpm conch open')).toBeInTheDocument();
     expect(screen.queryByText('The app')).toBeNull();
   });
+
+  it('opens the page that makes a new Conch yours from a hello link, and keeps the code out of the address', async () => {
+    window.history.replaceState(null, '', '/#hello=the-code');
+    const sent: { path: string; body?: unknown }[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = new URL(input, 'http://localhost');
+        sent.push({
+          path: url.pathname + url.search,
+          body: init?.body && JSON.parse(String(init.body)),
+        });
+        if (url.pathname === '/api/auth/hello')
+          return json({
+            ok: true,
+            expiresAt: Date.now() + 3_600_000,
+            address: 'conch.example.com',
+            suggestedUsername: 'george',
+            passkeys: true,
+          });
+        if (url.pathname === '/api/auth')
+          return json({ method: 'none', signedIn: false, setupRequired: true, secure: true });
+        return new Response('{}', { status: 404 });
+      }),
+    );
+    const { AuthGate } = await import('./AuthGate');
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <NacreProvider scope="local">
+        <QueryClientProvider client={client}>
+          <AuthGate>
+            <p>The app</p>
+          </AuthGate>
+        </QueryClientProvider>
+      </NacreProvider>,
+    );
+    expect(await screen.findByRole('heading', { name: 'Make Conch yours' })).toBeInTheDocument();
+    expect(window.location.hash).toBe('');
+    expect(sent.find((r) => r.path === '/api/auth/hello')?.body).toEqual({ code: 'the-code' });
+    expect(sent.every((r) => !r.path.includes('the-code'))).toBe(true);
+    expect(screen.queryByText('The app')).toBeNull();
+  });
 });

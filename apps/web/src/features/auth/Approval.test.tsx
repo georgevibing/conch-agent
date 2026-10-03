@@ -66,10 +66,12 @@ const settings = (patch: Partial<AccessSettings> = {}): AccessSettings => ({
   username: 'ada',
   suggestedUsername: 'ada',
   keys: [],
+  passkeys: [],
+  passkeysHere: false,
   sessions: [],
   devices: [device()],
   requests: [],
-  approval: { on: false, here: true },
+  approval: { on: false, here: true, canApprove: true },
   checkup: [],
   exposure: 'local',
   port: 4317,
@@ -89,7 +91,7 @@ describe('a device waiting for approval', () => {
     );
     expect(await screen.findByRole('heading', { name: 'Approve this device' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: /Approval code K 7 M/ })).toBeInTheDocument();
-    expect(screen.getByText('pnpm conch devices approve K7M-Q2X')).toBeInTheDocument();
+    expect(screen.getByText('conch devices approve K7M-Q2X')).toBeInTheDocument();
     expect(screen.queryByText('The app')).toBeNull();
 
     // Approved in the terminal: the next check lets it in, with a moment to say so.
@@ -148,7 +150,8 @@ describe('Settings → Security → Devices', () => {
     const calls = mockFetch({
       'GET /api/access': () => settings(),
       'GET /api/auth': () => status({ signedIn: true }),
-      'PUT /api/access/approval': () => settings({ approval: { on: true, here: true } }),
+      'PUT /api/access/approval': () =>
+        settings({ approval: { on: true, here: true, canApprove: true } }),
     });
     renderApp(<SecurityTab />);
     const toggle = await screen.findByRole('switch', { name: 'Approve new devices' });
@@ -163,7 +166,7 @@ describe('Settings → Security → Devices', () => {
   it('asks before turning it off, and elsewhere says where to do it', async () => {
     const user = userEvent.setup();
     const calls = mockFetch({
-      'GET /api/access': () => settings({ approval: { on: true, here: true } }),
+      'GET /api/access': () => settings({ approval: { on: true, here: true, canApprove: true } }),
       'GET /api/auth': () => status({ signedIn: true }),
       'PUT /api/access/approval': () => settings(),
     });
@@ -177,12 +180,12 @@ describe('Settings → Security → Devices', () => {
     unmount();
 
     mockFetch({
-      'GET /api/access': () => settings({ approval: { on: true, here: false } }),
+      'GET /api/access': () => settings({ approval: { on: true, here: false, canApprove: false } }),
       'GET /api/auth': () => status({ signedIn: true }),
     });
     renderApp(<SecurityTab />);
     expect(await screen.findByRole('switch', { name: 'Approve new devices' })).toBeDisabled();
-    expect(screen.getByText('pnpm conch devices off')).toBeInTheDocument();
+    expect(screen.getByText('conch devices off')).toBeInTheDocument();
   });
 
   it('approves a waiting device on this computer', async () => {
@@ -191,7 +194,7 @@ describe('Settings → Security → Devices', () => {
     const calls = mockFetch({
       'GET /api/access': () =>
         settings({
-          approval: { on: true, here: true },
+          approval: { on: true, here: true, canApprove: true },
           requests: approved ? [] : [request()],
           devices: approved
             ? [
@@ -210,7 +213,7 @@ describe('Settings → Security → Devices', () => {
       'POST /api/access/requests/K7M-Q2X/approve': () => {
         approved = true;
         return settings({
-          approval: { on: true, here: true },
+          approval: { on: true, here: true, canApprove: true },
           devices: [
             device(),
             device({
@@ -244,15 +247,18 @@ describe('Settings → Security → Devices', () => {
     const user = userEvent.setup();
     const calls = mockFetch({
       'GET /api/access': () =>
-        settings({ approval: { on: true, here: false }, requests: [request()] }),
+        settings({ approval: { on: true, here: false, canApprove: false }, requests: [request()] }),
       'GET /api/auth': () => status({ signedIn: true }),
       'DELETE /api/access/requests/K7M-Q2X': () =>
-        settings({ approval: { on: true, here: false }, requests: [request({ rejected: true })] }),
+        settings({
+          approval: { on: true, here: false, canApprove: false },
+          requests: [request({ rejected: true })],
+        }),
     });
     renderApp(<SecurityTab />);
     const list = await screen.findByRole('list', { name: 'Waiting for your approval' });
     expect(within(list).queryByRole('button', { name: /^Approve/ })).toBeNull();
-    expect(within(list).getByText('pnpm conch devices approve K7M-Q2X')).toBeInTheDocument();
+    expect(within(list).getByText('conch devices approve K7M-Q2X')).toBeInTheDocument();
     await user.click(within(list).getByRole('button', { name: /Turn down Safari on iPhone/ }));
     await waitFor(() =>
       expect(
@@ -273,15 +279,18 @@ describe('Settings → Security → Devices', () => {
     });
     const calls = mockFetch({
       'GET /api/access': () =>
-        settings({ approval: { on: true, here: true }, devices: [device(), phone] }),
+        settings({
+          approval: { on: true, here: true, canApprove: true },
+          devices: [device(), phone],
+        }),
       'GET /api/auth': () => status({ signedIn: true }),
       'POST /api/access/devices/dev_phone/sign-out': () =>
         settings({
-          approval: { on: true, here: true },
+          approval: { on: true, here: true, canApprove: true },
           devices: [device(), { ...phone, signedIn: false }],
         }),
       'DELETE /api/access/devices/dev_phone': () =>
-        settings({ approval: { on: true, here: true }, devices: [device()] }),
+        settings({ approval: { on: true, here: true, canApprove: true }, devices: [device()] }),
     });
     renderApp(<SecurityTab />);
     const list = await screen.findByRole('list', { name: 'Devices' });

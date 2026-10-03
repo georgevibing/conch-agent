@@ -58,6 +58,7 @@ import {
   Wrench,
   House,
   Zap,
+  FingerprintPattern,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -69,7 +70,7 @@ import { ARCHIVE_PATH, isChat, useArchive } from '../archive/useArchive';
 import { COME_HOME_FOCUS } from '../import/api';
 import { doctorApi } from '../health/api';
 import { LIVE_DATA_FOCUS } from '../artifacts/LiveDataSection';
-import { DEVICES_FOCUS } from '../auth/focus';
+import { DEVICES_FOCUS, PASSKEYS_FOCUS } from '../auth/focus';
 import { FALLBACK_FOCUS } from '../settings/FallbackSection';
 import { ROUTINES_SPEND_FOCUS } from '../routines/SpendingSection';
 import { APP_WORDS, APPS } from '../channels/describe';
@@ -217,6 +218,14 @@ const settingsPlaces: {
     keywords:
       'live data pages apps sites fetch fresh numbers weather prices api allowed allow revoke take back read from network',
     icon: <Globe />,
+  },
+  {
+    tab: 'security',
+    focus: PASSKEYS_FOCUS,
+    label: 'Passkeys',
+    keywords:
+      'passkey passkeys touch id windows hello face id fingerprint biometric sign in without password webauthn',
+    icon: <FingerprintPattern />,
   },
   {
     tab: 'security',

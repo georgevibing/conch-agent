@@ -1,9 +1,10 @@
 import { DeviceApproval, Pearl } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { ApiError, api } from '../../api/client';
 import styles from './Auth.module.css';
+import { HelloScreen } from './HelloScreen';
 import { SignIn } from './SignIn';
 import { WaitingForApproval } from './WaitingForApproval';
 import { applySignedIn } from './signedIn';
@@ -20,7 +21,12 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const client = useQueryClient();
   const auth = useAuth();
   const [linkError, setLinkError] = useState<string>();
-  const [pairing, setPairing] = useState(Boolean(linkCredential));
+  // The link that makes a new Conch yours (ADR 0064) has its own page.
+  const [hello, setHello] = useState(
+    linkCredential?.with === 'hello' ? linkCredential.code : undefined,
+  );
+  const leaveHello = useCallback(() => setHello(undefined), []);
+  const [pairing, setPairing] = useState(Boolean(linkCredential) && !hello);
   const [opening] = useState(linkCredential?.with === 'here');
   // Whether this device was waiting for approval, so what comes next can say what happened.
   const approval = auth.data?.approval;
@@ -50,7 +56,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     const credential = linkCredential;
     linkCredential = undefined;
-    if (!credential) return;
+    if (!credential || credential.with === 'hello') return;
     // From a launcher on this computer (ADR 0063): this browser becomes this computer.
     const done =
       credential.with === 'here'
@@ -69,6 +75,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       .finally(() => setPairing(false));
   }, [client]);
 
+  if (hello) return <HelloScreen code={hello} onLeave={leaveHello} />;
   if (pairing || auth.isPending) {
     return (
       <div className={styles.center} aria-busy>
@@ -90,7 +97,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
   // Can't reach the gateway at all: let the app show its "not running" screen.
   if (auth.isError) return children;
-  if (approval) return <WaitingForApproval approval={approval} onLeave={() => setLeaving(true)} />;
+  if (approval)
+    return (
+      <WaitingForApproval
+        approval={approval}
+        passkeys={Boolean(auth.data.passkeys)}
+        onLeave={() => setLeaving(true)}
+      />
+    );
   if (!auth.data.signedIn) {
     const notice = linkError ?? waitNotice;
     return <SignIn key={notice} status={auth.data} notice={notice} />;

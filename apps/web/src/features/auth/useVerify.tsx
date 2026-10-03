@@ -1,17 +1,28 @@
 import type { AccessMethod } from '@conch/protocol';
-import { Button, Callout, Dialog, Field, PasswordInput, Stack } from '@conch/nacre';
-import { useQueryClient } from '@tanstack/react-query';
+import {
+  Button,
+  Callout,
+  Dialog,
+  Field,
+  PasskeyButton,
+  PasswordInput,
+  Separator,
+  Stack,
+} from '@conch/nacre';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState, type FormEvent } from 'react';
 
 import { ApiError, api } from '../../api/client';
 import { keys } from '../../api/queries';
 import { useAutoFocus } from '../../lib/useAutoFocus';
+import { askPasskey, passkeyProblem } from './passkey';
+import { usePasskeyPlatform } from './usePasskeyPlatform';
 
 type Task = () => Promise<unknown>;
 
 /**
- * "Sudo mode": sensitive changes need your password or key from the last
- * ten minutes. `guard(task)` runs the task; if the gateway asks you to
+ * "Sudo mode": sensitive changes need your password, key or passkey (ADR
+ * 0065) from the last ten minutes. `guard(task)` runs the task; if the gateway asks you to
  * confirm, a dialog does, and the task runs again once you have.
  */
 export function useVerify(method: AccessMethod) {
@@ -76,11 +87,42 @@ function VerifyDialog({
   onVerified: () => Promise<void>;
   onCancel: () => void;
 }) {
+  const client = useQueryClient();
   const [secret, setSecret] = useState('');
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const ref = useAutoFocus<HTMLInputElement>();
   const what = method === 'key' ? 'access key' : 'password';
+  const { platform } = usePasskeyPlatform();
+  // Whether a passkey for this address can confirm it: Settings knows (already loaded there).
+  const access = useQuery({
+    queryKey: keys.access,
+    queryFn: api.access,
+    staleTime: 10_000,
+    enabled: open && method !== 'none',
+  });
+  const onlyPasskeys = method === 'passkey';
+  const withPasskey =
+    platform !== undefined && (access.data?.passkeys.some((p) => p.here) ?? onlyPasskeys);
+  const [touching, setTouching] = useState(false);
+
+  const confirmWithPasskey = async () => {
+    setTouching(true);
+    setError(undefined);
+    try {
+      client.setQueryData(keys.access, await api.verifyWithPasskey(await askPasskey('verify')));
+      await onVerified();
+    } catch (err) {
+      const apiError = err instanceof ApiError ? err : undefined;
+      setError(
+        apiError?.code === 'rate-limited'
+          ? `Too many tries. Wait ${apiError.retryAfter ?? 60} seconds.`
+          : (apiError?.message ?? passkeyProblem(err)),
+      );
+    } finally {
+      setTouching(false);
+    }
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -118,21 +160,39 @@ function VerifyDialog({
           <Dialog.Header>
             <Dialog.Title>Confirm it’s you</Dialog.Title>
             <Dialog.Description>
-              Enter your {what} to make this change. You won’t be asked again for ten minutes.
+              {onlyPasskeys
+                ? 'Use your passkey to make this change.'
+                : withPasskey
+                  ? `Use your passkey or your ${what} to make this change.`
+                  : `Enter your ${what} to make this change.`}{' '}
+              You won’t be asked again for ten minutes.
             </Dialog.Description>
           </Dialog.Header>
           <Dialog.Body>
             <Stack gap={3}>
-              <Field invalid={Boolean(error)}>
-                <Field.Label>{method === 'key' ? 'Access key' : 'Password'}</Field.Label>
-                <PasswordInput
-                  ref={ref}
-                  autoComplete={method === 'key' ? 'off' : 'current-password'}
-                  value={secret}
-                  onChange={(e) => setSecret(e.target.value)}
-                  required
+              {withPasskey && platform && (
+                <PasskeyButton
+                  platform={platform}
+                  action="confirm"
+                  block
+                  type="button"
+                  loading={touching}
+                  onClick={() => void confirmWithPasskey()}
                 />
-              </Field>
+              )}
+              {withPasskey && !onlyPasskeys && <Separator label="or" />}
+              {!onlyPasskeys && (
+                <Field invalid={Boolean(error)}>
+                  <Field.Label>{method === 'key' ? 'Access key' : 'Password'}</Field.Label>
+                  <PasswordInput
+                    ref={withPasskey ? undefined : ref}
+                    autoComplete={method === 'key' ? 'off' : 'current-password'}
+                    value={secret}
+                    onChange={(e) => setSecret(e.target.value)}
+                    required
+                  />
+                </Field>
+              )}
               {error && (
                 <Callout tone="danger" live="assertive">
                   {error}
@@ -144,9 +204,11 @@ function VerifyDialog({
             <Dialog.Close asChild>
               <Button variant="ghost">Cancel</Button>
             </Dialog.Close>
-            <Button type="submit" loading={busy} disabled={!secret}>
-              Confirm
-            </Button>
+            {!onlyPasskeys && (
+              <Button type="submit" loading={busy} disabled={!secret}>
+                Confirm
+              </Button>
+            )}
           </Dialog.Footer>
         </form>
       </Dialog.Content>

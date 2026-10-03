@@ -5,7 +5,13 @@ import {
   type CheckupAction,
   CheckupFixResult,
   CreatedKey,
+  HelloCheck,
+  type HelloFinishBody,
   PairingCode,
+  type PasskeyAssertion,
+  PasskeyOptions,
+  type PasskeyOptionsBody,
+  type PasskeyRegistration,
   type SignInBody,
   Capabilities,
   CompactResult,
@@ -86,6 +92,34 @@ export const api = {
   access: () => request(AccessSettings, '/api/access'),
   verify: (secret: string) =>
     request(AccessSettings, '/api/access/verify', { method: 'POST', body: { secret } }),
+  /** Confirm it's you with a passkey: Touch ID, Windows Hello, Face ID (ADR 0065). */
+  verifyWithPasskey: (passkey: PasskeyAssertion) =>
+    request(AccessSettings, '/api/access/verify', { method: 'POST', body: { passkey } }),
+  /** A passkey challenge: signing in and the hello link are public, the rest need a sign-in. */
+  passkeyOptions: (body: PasskeyOptionsBody) =>
+    request(
+      PasskeyOptions,
+      body.purpose === 'sign-in' || body.purpose === 'hello'
+        ? '/api/auth/passkey'
+        : '/api/access/passkeys/options',
+      { method: 'POST', body },
+    ),
+  addPasskey: (response: PasskeyRegistration) =>
+    request(AccessSettings, '/api/access/passkeys', { method: 'POST', body: { response } }),
+  renamePasskey: (id: string, name: string) =>
+    request(AccessSettings, `/api/access/passkeys/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: { name },
+    }),
+  removePasskey: (id: string) =>
+    request(AccessSettings, `/api/access/passkeys/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  /** The hello link (ADR 0064): is it still good, and use it. */
+  checkHello: (code: string) =>
+    request(HelloCheck, '/api/auth/hello', { method: 'POST', body: { code } }),
+  finishHello: (body: HelloFinishBody) =>
+    request(AuthStatus, '/api/auth/hello/finish', { method: 'POST', body }),
   setPassword: (username: string, password: string) =>
     request(AccessSettings, '/api/access/password', {
       method: 'PUT',
@@ -108,7 +142,7 @@ export const api = {
   /** Approve new devices: on from any signed-in device, off only on this computer. */
   setApproval: (on: boolean) =>
     request(AccessSettings, '/api/access/approval', { method: 'PUT', body: { on } }),
-  /** Only on the computer running Conch. */
+  /** On the computer running Conch, or an approved device that just confirmed it's you (ADR 0065). */
   approveDevice: (code: string) =>
     request(AccessSettings, `/api/access/requests/${encodeURIComponent(code)}/approve`, {
       method: 'POST',

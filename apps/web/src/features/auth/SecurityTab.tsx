@@ -25,6 +25,7 @@ import {
   Field,
   IconButton,
   Input,
+  PasskeyList,
   PasswordInput,
   QRCode,
   RadioGroup,
@@ -52,6 +53,7 @@ import {
   Terminal,
   Trash2,
   Wifi,
+  FingerprintPattern,
 } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 
@@ -60,9 +62,11 @@ import { keys } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { relativeTime } from '../../lib/time';
 import { Section } from '../settings/Section';
-import { DEVICES_FOCUS } from './focus';
+import { DEVICES_FOCUS, PASSKEYS_FOCUS } from './focus';
 import styles from './Security.module.css';
+import { createPasskey, passkeyProblem } from './passkey';
 import { applySignedIn } from './signedIn';
+import { usePasskeyPlatform } from './usePasskeyPlatform';
 import { useCountdown } from './useCountdown';
 import { useVerify } from './useVerify';
 import { PhoneSetup } from '../phone/PhoneSetup';
@@ -107,6 +111,12 @@ function reveal(section: HTMLElement | null, target: HTMLElement | null | undefi
 // ── Sign-in method ─────────────────────────────────────────────────────────
 
 const methods: { value: AccessMethod; label: string; description: string; icon: ReactNode }[] = [
+  {
+    value: 'passkey',
+    label: 'Passkeys only',
+    description: 'Touch ID, Windows Hello or Face ID. Nothing to remember, nothing to type.',
+    icon: <FingerprintPattern />,
+  },
   {
     value: 'password',
     label: 'Password',
@@ -436,7 +446,9 @@ function SignInSection({
       description={
         access.method === 'none'
           ? 'Right now anyone using this computer can open Conch. Choose a way to sign in — you’ll need it to use Conch on your phone, too.'
-          : 'Every device, including this one, has to sign in.'
+          : access.passkeys.length && access.method !== 'passkey'
+            ? 'Every device, including this one, has to sign in. Your passkeys work too.'
+            : 'Every device, including this one, has to sign in.'
       }
     >
       <Stack gap={5}>
@@ -452,6 +464,8 @@ function SignInSection({
         >
           {methods
             .filter((m) => m.value !== 'none' || access.method !== 'none')
+            // Passkeys only is what you have when your passkeys are the way in; you add them below.
+            .filter((m) => m.value !== 'passkey' || access.method === 'passkey')
             .map((m) => (
               <RadioGroup.Item
                 key={m.value}
@@ -493,8 +507,140 @@ function SignInSection({
           </Stack>
         )}
 
+        {choice === 'passkey' && (
+          <Text size="sm" tone="muted">
+            Your passkeys are the way in. Add one for each device in Passkeys, or choose a password
+            here to have both.
+          </Text>
+        )}
+
         {choice === 'none' && access.method !== 'none' && <TurnOff guard={guard} />}
       </Stack>
+    </Section>
+  );
+}
+
+// ── Passkeys (ADR 0065) ─────────────────────────────────────────────────────
+
+/** "Added 3 days ago · last used just now · synced". */
+function passkeyMeta(p: AccessSettings['passkeys'][number]): string {
+  return [
+    `Added ${relativeTime(p.createdAt)}`,
+    p.lastUsedAt ? `last used ${relativeTime(p.lastUsedAt)}` : 'not used yet',
+    p.synced && 'synced to your other devices',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function PasskeysSection({
+  access,
+  guard,
+  focus,
+}: {
+  access: AccessSettings;
+  guard: Guard;
+  focus?: Focus;
+}) {
+  const apply = useApply();
+  const { platform } = usePasskeyPlatform();
+  const [adding, setAdding] = useState(false);
+  const [busy, setBusy] = useState<string>();
+  const [removing, setRemoving] = useState<{ id: string; name: string }>();
+  const ref = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (focus?.place !== 'passkeys') return;
+    focus.done();
+    const section = ref.current;
+    reveal(section, section?.querySelector<HTMLElement>('button'));
+  }, [focus]);
+
+  const add = async () => {
+    setAdding(true);
+    // A new way in needs a fresh "confirm it's you": ask before the browser's prompt, not after.
+    let confirmFirst = !access.verified;
+    try {
+      const done = await guard(async () => {
+        if (confirmFirst) {
+          confirmFirst = false;
+          throw new ApiError(403, 'verify-required', 'Confirm it’s you to make this change.');
+        }
+        apply(await api.addPasskey(await createPasskey({ purpose: 'add' })));
+      });
+      if (done) toast.success('Passkey added. Next time, signing in is a touch.');
+    } catch (error) {
+      const problem = error instanceof ApiError ? error.message : passkeyProblem(error);
+      if (problem) toast.error(problem);
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const keep =
+    access.method === 'passkey' && access.passkeys.length === 1
+      ? 'It’s your only way in. Add another passkey or a password first.'
+      : undefined;
+
+  return (
+    <Section
+      ref={ref}
+      title="Passkeys"
+      description={
+        access.passkeysHere
+          ? 'Sign in with the fingerprint, face or PIN you already use on each device. Nothing to remember, and nothing a fake page can steal.'
+          : 'Passkeys work at Conch’s secure address (https://…) or on this computer. Open Conch there to add one.'
+      }
+    >
+      <PasskeyList
+        passkeys={access.passkeys.map((p) => ({
+          id: p.id,
+          name: p.name,
+          site: p.rpId,
+          meta: passkeyMeta(p),
+          here: p.here,
+          ...(keep && { keep }),
+        }))}
+        {...(access.passkeysHere && platform && { platform })}
+        adding={adding}
+        busy={busy}
+        onAdd={() => void add()}
+        onRename={(passkey, name) => {
+          setBusy(passkey.id);
+          void api
+            .renamePasskey(passkey.id, name)
+            .then(apply)
+            .catch(fail)
+            .finally(() => setBusy(undefined));
+        }}
+        onRemove={(passkey) => setRemoving(passkey)}
+      />
+      <AlertDialog.Root open={Boolean(removing)} onOpenChange={(o) => !o && setRemoving(undefined)}>
+        <AlertDialog.Content>
+          <AlertDialog.Title>Remove {removing?.name}?</AlertDialog.Title>
+          <AlertDialog.Description>
+            It won’t sign in to Conch any more, and any device signed in with it is signed out.
+          </AlertDialog.Description>
+          <AlertDialog.Footer>
+            <AlertDialog.Cancel>Keep it</AlertDialog.Cancel>
+            <AlertDialog.Action
+              onClick={() => {
+                const passkey = removing;
+                if (!passkey) return;
+                setBusy(passkey.id);
+                void guard(async () => {
+                  apply(await api.removePasskey(passkey.id));
+                  toast.success(`Removed ${passkey.name}`);
+                })
+                  .catch(fail)
+                  .finally(() => setBusy(undefined));
+              }}
+            >
+              Remove
+            </AlertDialog.Action>
+          </AlertDialog.Footer>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
     </Section>
   );
 }
@@ -506,6 +652,8 @@ const via: Record<SessionInfo['via'], string> = {
   key: 'Signed in with an access key',
   pairing: 'Added with a sign-in link',
   setup: 'Set up sign-in',
+  passkey: 'Signed in with a passkey',
+  hello: 'Signed in when Conch was made yours',
 };
 
 /** ⌘K, Notifications and Repair everything open Add a device by this name. */
@@ -633,6 +781,9 @@ const approvedHow: Record<NonNullable<DeviceInfo['approvedHow']>, string> = {
   settings: 'approved in Settings',
   link: 'added with a sign-in link',
   'already-signed-in': 'approved when approval was turned on',
+  passkey: 'let in by its passkey',
+  hello: 'set Conch up',
+  device: 'approved from another device',
 };
 
 function deviceMeta(d: DeviceInfo, approval: boolean): string {
@@ -643,7 +794,11 @@ function deviceMeta(d: DeviceInfo, approval: boolean): string {
         ? `${d.script ? 'Used' : 'Signed in'} · active ${relativeTime(d.lastSeenAt)}`
         : `Signed out · last seen ${relativeTime(d.lastSeenAt)}`,
     !d.current && d.via && !approval && via[d.via].replace('Signed in with', 'with'),
-    approval && d.approvedHow && approvedHow[d.approvedHow],
+    approval &&
+      d.approvedHow &&
+      (d.approvedHow === 'device' && d.approvedBy
+        ? `approved from ${d.approvedBy}`
+        : approvedHow[d.approvedHow]),
     !d.current && d.address && `from ${d.address}`,
   ];
   return parts.filter(Boolean).join(' · ');
@@ -695,14 +850,14 @@ function ApprovalSwitch({ access, guard }: { access: AccessSettings; guard: Guar
         label="Approve new devices"
         description={
           on
-            ? 'A new device has to be approved on this computer after it signs in, even with the right password or key.'
-            : 'Extra protection: someone who learns your password or key still can’t get in until you approve their device on this computer.'
+            ? 'A new device has to be approved after it signs in, even with the right password or key: on a device you’re already signed in on, or on this computer. A passkey lets its own device in.'
+            : 'Extra protection: someone who learns your password or key still can’t get in until you approve their device from one of yours.'
         }
       />
       {on && !here && (
         <Text size="xs" tone="muted" className={styles.approvalNote}>
-          To turn this off, use the computer running Conch, or run{' '}
-          <code>pnpm conch devices off</code> there.
+          To turn this off, use the computer running Conch, or run <code>conch devices off</code>{' '}
+          there.
         </Text>
       )}
       <AlertDialog.Root open={confirmOff} onOpenChange={setConfirmOff}>
@@ -794,7 +949,9 @@ function DevicesSection({
               meta: requestMeta(r),
               rejected: r.rejected,
             }))}
-            canApprove={access.approval.here}
+            canApprove={access.approval.canApprove}
+            hint="Approve it on a device that’s already let in, or on the computer running Conch:"
+            commandFor={(code) => `conch devices approve ${code}`}
             busy={busy}
             onApprove={(r) => void approve(r.code, r.device)}
             onReject={(r) => reject(r.code, r.device)}
@@ -1035,6 +1192,14 @@ export function SecurityTab() {
   const settingsFocus = useUi((s) => s.settingsFocus);
   const loaded = Boolean(access.data);
   const { focusOn } = fix;
+  // Your address (ADR 0064) has no section of its own here yet: its fixes start at the top.
+  const top = useRef<HTMLElement>(null);
+  const addressFocus = fix.focus?.place === 'address' ? fix.focus : undefined;
+  useEffect(() => {
+    if (!addressFocus) return;
+    addressFocus.done();
+    reveal(top.current, undefined);
+  }, [addressFocus]);
   useEffect(() => {
     if (settingsFocus !== DEVICES_FOCUS || !loaded) return;
     useUi.setState({ settingsFocus: undefined });
@@ -1044,6 +1209,11 @@ export function SecurityTab() {
     if (settingsFocus !== LIVE_DATA_FOCUS || !loaded) return;
     useUi.setState({ settingsFocus: undefined });
     focusOn('live-data');
+  }, [settingsFocus, loaded, focusOn]);
+  useEffect(() => {
+    if (settingsFocus !== PASSKEYS_FOCUS || !loaded) return;
+    useUi.setState({ settingsFocus: undefined });
+    focusOn('passkeys');
   }, [settingsFocus, loaded, focusOn]);
 
   // "Add your phone" with no sign-in yet: a phone signs in with a password, so
@@ -1093,18 +1263,20 @@ export function SecurityTab() {
 
   return (
     <Stack gap={8}>
-      <Section title="Security" description="Keep Conch — and this computer — safe.">
+      <Section ref={top} title="Security" description="Keep Conch — and this computer — safe.">
         <SecurityCheckup items={items} />
       </Section>
       <SafetySection />
       <LiveDataSection focus={fix.focus} />
+      <PasskeysSection access={data} guard={guard} focus={fix.focus} />
       <SignInSection access={data} guard={guard} focus={fix.focus} />
       {data.method !== 'none' && <DevicesSection access={data} guard={guard} focus={fix.focus} />}
       <ReachSection access={data} focus={fix.focus} />
       {dialog}
       <Text size="xs" tone="subtle" className={styles.footnote}>
-        <Laptop aria-hidden /> Forgot your password? On this computer, run{' '}
-        <code>pnpm conch reset</code> in the Conch folder.
+        <Laptop aria-hidden /> Locked out? On the computer running Conch, run{' '}
+        <code>conch reset</code>, then <code>conch hello</code> for a link that makes it yours
+        again.
       </Text>
     </Stack>
   );

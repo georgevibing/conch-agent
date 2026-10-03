@@ -388,6 +388,30 @@ describe('Palette search', () => {
     act(() => useUi.setState({ settingsFocus: undefined }));
   });
 
+  it('finds passkeys by the names people know, straight into Settings → Security → Passkeys', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    const { where } = renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    for (const words of ['fingerprint', 'face id', 'windows hello', 'passkey', 'touch id']) {
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(await screen.findByRole('option', { name: /Settings: Passkeys/ })).toBeInTheDocument();
+    }
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
+        at: '/settings/security',
+        focus: 'passkeys',
+      }),
+    );
+    act(() => useUi.setState({ settingsFocus: undefined }));
+  });
+
   it('finds the working folder in General by the words people use', async () => {
     const user = userEvent.setup();
     mockFetch({

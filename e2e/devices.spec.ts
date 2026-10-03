@@ -113,7 +113,9 @@ test('a new device waits after the right password until it’s approved', async 
   await signIn(phone.page);
   await expect(phone.page.getByRole('heading', { name: 'Approve this device' })).toBeVisible();
   const phoneCode = await codeOn(phone.page);
-  await expect(phone.page.getByText(`pnpm conch devices approve ${phoneCode}`)).toBeVisible();
+  await expect(
+    phone.page.getByText(`conch devices approve ${phoneCode}`, { exact: true }),
+  ).toBeVisible();
   await shot(phone.page, 'devices-1-phone-waiting.png');
   // Waiting isn't signed in: the API still says no.
   expect((await phone.page.request.get('/api/state')).status()).toBe(401);
@@ -150,7 +152,7 @@ test('a new device waits after the right password until it’s approved', async 
   const remoteToggle = phone.page.getByRole('switch', { name: 'Approve new devices' });
   await expect(remoteToggle).toBeChecked();
   await expect(remoteToggle).toBeDisabled();
-  await expect(phone.page.getByText('pnpm conch devices off')).toBeVisible();
+  await expect(phone.page.getByText('conch devices off', { exact: true })).toBeVisible();
   await shot(phone.page, 'devices-3-phone-settings.png');
 
   // ── Someone else with the password: turned down in the terminal, and told so.

@@ -83,6 +83,14 @@ const thisComputerHome = (process.env.CONCH_E2E_THIS_COMPUTER_HOME ??= mkdtempSy
   join(tmpdir(), 'conch-e2e-this-computer-'),
 ));
 
+/**
+ * The `passkeys` journey (ADR 0064, 0065) makes a hello link in its gateway's home, as
+ * `conch hello` does, and starts again from scratch with `conch reset`'s own store call.
+ */
+const passkeysHome = (process.env.CONCH_E2E_PASSKEYS_HOME ??= mkdtempSync(
+  join(tmpdir(), 'conch-e2e-passkeys-'),
+));
+
 /** The `trust` journey puts a signed skill where its gateway looks, and changes it. */
 const trustHome = (process.env.CONCH_E2E_TRUST_HOME ??= mkdtempSync(
   join(tmpdir(), 'conch-e2e-trust-'),
@@ -206,6 +214,8 @@ const scenarios = {
   },
   // Approving new devices: "other devices" arrive through a pretend proxy (X-Forwarded-For).
   devices: { port: 4381, env: { CONCH_MOCK_STATE: 'ready', CONCH_HOME: devicesHome } },
+  // The hello link and passkeys (ADR 0064, 0065), with Chrome's virtual authenticator.
+  passkeys: { port: 4346, env: { CONCH_MOCK_STATE: 'ready', CONCH_HOME: passkeysHome } },
   // "This computer", proven (ADR 0063): a browser Conch didn't open, and one it did (the real way).
   'this-computer': {
     port: 4348,
