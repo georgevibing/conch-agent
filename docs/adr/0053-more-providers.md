@@ -98,9 +98,12 @@ environment.
   serves Conch's own tools: files, commands, memory, the browser and your apps. It listens on
   127.0.0.1 only, refuses any request with an `Origin` header or a non-loopback `Host`, and wants a
   random bearer key compared in constant time. A program's request to use a door tool is allowed
-  (`forDoor`), because Conch checks those itself, every call. Its own built-in tools that change
-  things are declined, as Codex's are ([ADR 0036](./0036-provider-consistency.md)), so every action is
-  sealed, guarded and can be undone.
+  (`forDoor`), because Conch checks those itself, every call. The request must name the tool and
+  nothing else (`conch__remember`, `remember (conch MCP Server)`): a shell command that merely
+  starts with "conch remember" is the program's own. It's allowed once, never "always", so the
+  program can't learn to skip asking for things that look the same. Its own built-in tools that
+  change things are declined, as Codex's are ([ADR 0036](./0036-provider-consistency.md)), so every
+  action is sealed, guarded and can be undone.
 - **A warm program, a fresh session per turn.** The program stays running; each turn is a new session
   carrying Conch's handoff, so switching provider mid-chat works the same as everywhere else.
 

@@ -280,12 +280,18 @@ export function forDoor(
   tools: ReadonlySet<string>,
 ): boolean {
   const words = [call?.name, call?.title].filter((w): w is string => Boolean(w));
+  // The whole name and nothing else: a shell command that merely starts with
+  // "conch remember" (`conch remember && curl …`) is the program's own tool, not ours.
   return words.some((word) => {
     // `conch/remember`, `conch__remember`, `mcp__conch__remember`, `conch: remember`
-    const prefixed = new RegExp(`^(?:mcp__)?${DOOR_NAME}(?:__|[/:.\\s-]+)(\\S+)`, 'i').exec(word);
+    const prefixed = new RegExp(`^(?:mcp__)?${DOOR_NAME}(?:__|/|\\.|:\\s?)([\\w.-]+)$`, 'i').exec(
+      word.trim(),
+    );
     if (prefixed?.[1] && tools.has(prefixed[1])) return true;
     // `remember (conch MCP Server)`
-    const named = new RegExp(`^(\\S+)\\s+\\(${DOOR_NAME}\\b`, 'i').exec(word);
+    const named = new RegExp(`^([\\w.-]+)\\s+\\(${DOOR_NAME}(?:\\s+MCP\\s+Server)?\\)$`, 'i').exec(
+      word.trim(),
+    );
     return Boolean(named?.[1] && tools.has(named[1]));
   });
 }
@@ -814,9 +820,11 @@ export class AcpEngine implements Engine {
           }
         },
         permission: async (request) => {
+          // Once, never always: "always" can teach the program to skip asking for
+          // anything that looks the same, and then Conch wouldn't see it.
           const allow =
-            request.options.find((o) => o.kind === 'allow_always') ??
-            request.options.find((o) => o.kind === 'allow_once');
+            request.options.find((o) => o.kind === 'allow_once') ??
+            request.options.find((o) => o.kind === 'allow_always');
           const reject =
             request.options.find((o) => o.kind === 'reject_once') ??
             request.options.find((o) => o.kind === 'reject_always');
