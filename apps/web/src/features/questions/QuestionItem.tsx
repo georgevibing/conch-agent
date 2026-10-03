@@ -53,7 +53,7 @@ export function QuestionItem({
   const answer = item.answer !== undefined ? item.answer : sent;
   const state = answer === undefined ? 'open' : answer === null ? 'skipped' : 'answered';
   return (
-    <div className={styles.aside}>
+    <div className={`${styles.aside} ${styles.question}`}>
       <QuestionCard
         question={item.question}
         state={state}

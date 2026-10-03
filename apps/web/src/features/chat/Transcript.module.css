@@ -42,6 +42,11 @@
     }
   }
 
+  /* A question sits close under the words that asked it (ADR 0055), like an offer. */
+  .question {
+    margin-block-start: calc(var(--nc-space-3) * -1);
+  }
+
   .user[data-pending] {
     opacity: 0.72;
   }
