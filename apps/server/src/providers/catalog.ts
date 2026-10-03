@@ -405,7 +405,7 @@ const PROVIDERS: ProviderCopy[] = [
     name: 'Groq',
     tagline: 'Open models, instantly fast',
     description:
-      'Open models answered remarkably fast — great when speed matters more than the very top quality. Conch runs the conversation and lends it your integrations.',
+      'Open models with very fast answers — good when speed matters most. Conch runs the conversation and lends it your integrations.',
     connect: 'key',
     group: 'key',
     free: 'Free tier',
@@ -428,12 +428,12 @@ const PROVIDERS: ProviderCopy[] = [
   {
     id: 'cerebras',
     name: 'Cerebras',
-    tagline: 'The fastest open models',
+    tagline: 'Very fast open models',
     description:
-      'Among the fastest answers anywhere, from a small set of open models — trial credit to start, then pay as you go. Conch lends it your integrations.',
+      'Very fast answers from a small set of open models — trial credit to start, then pay as you go. Conch lends it your integrations.',
     connect: 'key',
     group: 'key',
-    highlights: ['Fastest answers', 'Open models', 'Uses your integrations'],
+    highlights: ['Very fast', 'Open models', 'Uses your integrations'],
     limits: [API_LIMIT],
     asksFirst: true,
     keyForm: key({

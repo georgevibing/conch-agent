@@ -1,6 +1,6 @@
 ---
 title: How Conch works
-description: A small program on your computer, the app it serves, and the assistants it drives. Nothing of yours lives anywhere else.
+description: A small program on your computer, the app it serves, and the assistants it drives. Conch keeps no copy of your things anywhere else.
 order: 4
 ---
 
@@ -11,6 +11,8 @@ order: 4
 Your chats, memories, skills and settings are plain files in one folder, `~/.conch`. There is no Conch account and no telemetry.
 
 Two things leave your computer, and only when you ask: what you say to the provider you chose, and what your assistant does in an app you connected. Choose the [model on this computer](../providers/ollama.md), and not even that.
+
+Conch itself only looks things up: once a day it looks for new versions of itself and of the programs it uses (`CONCH_UPDATE_CHECKS=off` stops that), and every few minutes it reaches a few well-known addresses to tell whether you're online. Neither carries anything of yours.
 
 ## The provider answers. Conch does the rest.
 

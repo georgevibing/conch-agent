@@ -86,12 +86,12 @@ capable than the big cloud ones, and what they're good for.
 Conch only suggests models that call tools, checked against Ollama's library
 and registry manifests in September 2026:
 
-| Memory (as the OS reports it) | Suggested           | Download | Why                                                                           |
-| ----------------------------- | ------------------- | -------- | ----------------------------------------------------------------------------- |
-| under 7 GiB                   | `qwen3.5:2b-q4_K_M` | 1.9 GB   | tools and vision in under 2 GB (`qwen3:1.7b` on Ollama < 0.17.1)              |
-| 7–14 GiB ("8 GB")             | `qwen3:4b-instruct` | 2.5 GB   | fast, no thinking, good tool calls (BFCL 35.7%)                               |
-| 14–40 GiB ("16 GB"+)          | `qwen3.5:9b`        | 6.6 GB   | best small model at tool calls (vendor BFCL 66.1); `qwen3:8b` on older Ollama |
-| 40 GiB+                       | `qwen3.6:35b-a3b`   | 22.6 GB  | mixture of experts, near cloud quality; needs Ollama ≥ 0.30.0                 |
+| Memory (as the OS reports it) | Suggested           | Download | Why                                                                              |
+| ----------------------------- | ------------------- | -------- | -------------------------------------------------------------------------------- |
+| under 7 GiB                   | `qwen3.5:2b-q4_K_M` | 1.9 GB   | tools and vision in under 2 GB (`qwen3:1.7b` on Ollama < 0.17.1)                 |
+| 7–14 GiB ("8 GB")             | `qwen3:4b-instruct` | 2.5 GB   | fast, no thinking, good tool calls (BFCL 35.7%)                                  |
+| 14–40 GiB ("16 GB"+)          | `qwen3.5:9b`        | 6.6 GB   | strong at tool calls for its size (vendor BFCL 66.1); `qwen3:8b` on older Ollama |
+| 40 GiB+                       | `qwen3.6:35b-a3b`   | 22.6 GB  | mixture of experts, near cloud quality; needs Ollama ≥ 0.30.0                    |
 
 Alternatives on the list: `qwen3:1.7b`, `llama3.2:3b`, `qwen3.5:4b`,
 `qwen3:8b`, `gpt-oss:20b`. Gemma 3 isn't offered (no tools in Ollama); Gemma 4

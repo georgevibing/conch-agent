@@ -12,7 +12,7 @@ Or paste the key anywhere on **Settings → Providers**. Conch knows whose key i
 
 ## What you get
 
-Open models answered remarkably fast, with a free tier to start. Good when speed matters more than the very top quality, and for voice.
+Open models with very fast answers, and a free tier to start. Good when speed matters most, and for voice.
 
 Conch runs the conversation itself: it keeps the thread, hands the model the tools of your [apps](../features/apps.md), and asks you before anything changes. [Memory](../features/memory.md), [skills](../features/skills.md) and the [browser](../features/browser.md) all work with models that can call tools.
 

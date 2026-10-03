@@ -157,7 +157,7 @@ export function Landing() {
             value={reference.integrations.length}
             label="apps it can use for you"
           />
-          <Facts.Item index={3} value="0" label="accounts to make, and nothing phones home" />
+          <Facts.Item index={3} value="0" label="accounts to make, and no telemetry" />
         </Facts>
 
         <Scene
@@ -362,11 +362,12 @@ export function Landing() {
         </Band>
 
         <Band
-          title="Nothing of yours lives anywhere else"
+          title="Kept on your own computer"
           lede={
             <>
               A small program on your computer, the app it serves, and the providers you connect.
-              Chats, memories, skills and settings are plain files in <code>~/.conch</code>.
+              Chats, memories, skills and settings are plain files in <code>~/.conch</code>, and
+              Conch keeps no copy anywhere else.
             </>
           }
         >

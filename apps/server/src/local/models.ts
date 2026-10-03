@@ -78,7 +78,7 @@ export const LOCAL_CATALOG: readonly CatalogModel[] = [
     name: 'qwen3.5:9b',
     label: 'Qwen3.5 9B',
     sizeBytes: 6_594_474_711,
-    blurb: 'The best small model at using tools today, and it looks at pictures.',
+    blurb: 'Strong at using tools for its size, and it looks at pictures.',
     tools: true,
     minVersion: '0.17.1',
   },

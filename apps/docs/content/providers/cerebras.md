@@ -12,7 +12,7 @@ Or paste the key anywhere on **Settings → Providers**. Conch knows whose key i
 
 ## What you get
 
-Among the fastest answers anywhere, from a small set of open models. Trial credit to start, then pay as you go.
+Very fast answers from a small set of open models. Trial credit to start, then pay as you go.
 
 Conch runs the conversation itself: it keeps the thread, hands the model the tools of your [apps](../features/apps.md), and asks you before anything changes. [Memory](../features/memory.md), [skills](../features/skills.md) and the [browser](../features/browser.md) all work with models that can call tools.
 
