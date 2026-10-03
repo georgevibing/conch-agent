@@ -13,6 +13,7 @@ import { Button } from '../../components/Button';
 import { DropdownMenu } from '../../components/DropdownMenu';
 import { IconButton } from '../../components/IconButton';
 import { cx } from '../../utils/cx';
+import { AppIcon, type AppIconLook } from '../ConchApps/AppIcon';
 import { IntegrationLogo } from '../Integrations/IntegrationLogo';
 import { SkillIcon } from '../Skills/SkillIcon';
 import { type SkillCapabilityName, SkillPermissionList } from '../Skills/SkillPermissionList';
@@ -47,6 +48,11 @@ export interface OfferCardProps extends Omit<ComponentProps<'div'>, 'children'> 
   brand?: string;
   /** An app's brand colour. */
   color?: string;
+  /**
+   * A Conch app you have that's switched off (ADR 0061): its own icon, and
+   * **Turn on** instead of Connect.
+   */
+  app?: AppIconLook;
   /** What it lets the assistant do: the catalog's or the skill's own line. */
   description: string;
   /** Why it helps with this request, in the assistant's words. */
@@ -96,6 +102,7 @@ export function OfferCard({
   name,
   brand,
   color,
+  app,
   description,
   why,
   skillMode = 'off',
@@ -156,7 +163,9 @@ export function OfferCard({
   const leaving = state === 'dismissed';
 
   const mark = (size: 'xs' | 'sm') =>
-    skill ? (
+    app && !skill ? (
+      <AppIcon glyph={app.glyph} color={app.color} size={size} />
+    ) : skill ? (
       <SkillIcon
         name={brand ?? name}
         title={name}
@@ -173,23 +182,27 @@ export function OfferCard({
       : state === 'ready'
         ? skill
           ? `“${name}” is on`
-          : `${name} is connected`
+          : app
+            ? `${name} is on`
+            : `${name} is connected`
         : skill
           ? manual
             ? `“${name}” waits to be asked`
             : `The “${name}” skill is off`
-          : `${name} isn’t connected yet`;
+          : app
+            ? `${name} is off`
+            : `${name} isn’t connected yet`;
   const message =
     state === 'connecting'
       ? 'Finish signing in, and the chat carries on by itself.'
       : state === 'ready'
         ? 'Carry on with what you asked?'
         : (why ??
-          (skill
+          (skill || app
             ? `${manual ? 'Use it' : 'Turn it on'} and ${assistant} can ${lowerFirst(description)}`
             : `Connect it and ${assistant} can ${lowerFirst(description)}`));
 
-  const takeLabel = skill ? (manual ? 'Use it' : 'Turn on') : 'Connect';
+  const takeLabel = skill ? (manual ? 'Use it' : 'Turn on') : app ? 'Turn on' : 'Connect';
 
   const more = onMute && (
     <DropdownMenu.Root>
@@ -310,7 +323,7 @@ export function OfferCard({
           </span>
         </span>
         <span className={styles.lineText}>
-          {skill ? (taken === 'once' ? 'Using ' : 'Turned on ') : 'Connected '}
+          {skill ? (taken === 'once' ? 'Using ' : 'Turned on ') : app ? 'Turned on ' : 'Connected '}
           <strong className={styles.lineName}>{name}</strong>
           <span className={styles.dot} aria-hidden>
             ·
@@ -322,7 +335,7 @@ export function OfferCard({
       <div role="note" className={styles.line} data-state={state}>
         <span className={styles.lineMark}>{mark('xs')}</span>
         <span className={styles.lineText}>
-          {skill ? 'Offered the ' : 'Offered to connect '}
+          {skill ? 'Offered the ' : app ? 'Offered to turn on ' : 'Offered to connect '}
           <strong className={styles.lineName}>{name}</strong>
           {skill ? ' skill' : ''}
         </span>
