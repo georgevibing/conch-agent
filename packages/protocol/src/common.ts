@@ -89,6 +89,11 @@ export type TurnOptions = z.infer<typeof TurnOptions>;
 export const Usage = z.object({
   inputTokens: z.number().int().nonnegative(),
   outputTokens: z.number().int().nonnegative(),
+  /**
+   * Of `inputTokens`, how many the provider read from its cache, which it
+   * bills at a fraction of the price. Absent when it doesn't say.
+   */
+  cachedInputTokens: z.number().int().nonnegative().optional(),
   costUsd: z.number().nonnegative().optional(),
   durationMs: z.number().nonnegative().optional(),
 });
@@ -108,5 +113,10 @@ export const TurnProblem = z.enum([
   'limit',
   /** The key lives in 1Password, which is locked. */
   'key-locked',
+  /**
+   * More than the model can read at once, even after Conch summarised the
+   * chat's start and tried again (ADR 0055): a model with a bigger window helps.
+   */
+  'too-long',
 ]);
 export type TurnProblem = z.infer<typeof TurnProblem>;

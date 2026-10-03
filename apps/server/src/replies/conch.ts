@@ -1,5 +1,5 @@
 /**
- * Conch's own replies to send next (ADR 0055 §5), read from the finished reply
+ * Conch's own replies to send next (ADR 0060 §5), read from the finished reply
  * itself: a table of numbers gets “Show it as a chart”. They need no model and
  * work with every provider, so they're also what a chat-only model gets.
  *

@@ -1,4 +1,4 @@
-import { MessageList, SkillHoldEnded } from '@conch/nacre';
+import { MessageList, SkillHoldEnded, SummaryDivider } from '@conch/nacre';
 import { useState, type ReactNode, type Ref } from 'react';
 
 import { isTurnStart, type ConversationView, type TranscriptItem } from '../../live/reducer';
@@ -23,6 +23,7 @@ import { IntegrationIssue } from '../integrations/ChatBits';
 import { OfferAlsoTryItem, OfferItem } from '../offers/OfferItem';
 import { NeedsAppsItem } from './NeedsApps';
 import { QuestionItem } from '../questions/QuestionItem';
+import { PastChatsItem } from './PastChatsItem';
 import { HeldItem, RoutedItem } from './OfflineBits';
 import { ArtifactChatCard } from '../artifacts/ArtifactChatCard';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
@@ -55,7 +56,7 @@ export interface TranscriptProps {
   onSend?: (text: string) => void;
   /** Give the message box focus back (something that had it went away). */
   focusComposer?: () => void;
-  /** Send a reply chip's words (ADR 0055), as the message box would. */
+  /** Send a reply chip's words (ADR 0060), as the message box would. */
   onReply?: (text: string) => void;
 }
 
@@ -128,7 +129,7 @@ function placeSuggestions(items: TranscriptItem[], holdLast: boolean): Transcrip
 function timeOf(item: TranscriptItem): number | undefined {
   if (item.kind === 'user') return item.at;
   if (item.kind === 'assistant' || item.kind === 'tool') return item.startedAt;
-  if (item.kind === 'browser' || item.kind === 'artifact') return item.at;
+  if (item.kind === 'browser' || item.kind === 'artifact' || item.kind === 'looked') return item.at;
   return undefined;
 }
 
@@ -175,7 +176,13 @@ export function Transcript({
   // mustn't count as "something arrived" — the wait stays until there's something to see.
   // Offers wait for the reply, so they don't count either.
   const last = items
-    .filter((i) => !(i.kind === 'assistant' && !i.text && !i.thinking) && !heldOffer(i))
+    .filter(
+      (i) =>
+        !(i.kind === 'assistant' && !i.text && !i.thinking) &&
+        !heldOffer(i) &&
+        // The line where the model's memory starts is a note on history, not news.
+        i.kind !== 'summary',
+    )
     .at(-1);
   const lastErrorId = [...items].reverse().find((i) => i.kind === 'turn-end')?.id;
   // The first time a chat reads something from outside says what changes; the rest are brief.
@@ -220,6 +227,7 @@ export function Transcript({
     !placeholder &&
     ((last?.kind === 'tool' && last.status !== 'running' && last.status !== 'pending') ||
       last?.kind === 'memory' ||
+      last?.kind === 'looked' ||
       last?.kind === 'files' ||
       last?.kind === 'skill' ||
       last?.kind === 'skill-ended' ||
@@ -315,6 +323,7 @@ export function Transcript({
               />
             )}
             {block.item?.kind === 'memory' && <MemoryPill item={block.item} />}
+            {block.item?.kind === 'looked' && <PastChatsItem item={block.item} name={name} />}
             {block.item?.kind === 'skill' && (
               <SkillUsedLine item={block.item} carriedFrom={taskChat ? 'chat' : 'helper'} />
             )}
@@ -345,6 +354,13 @@ export function Transcript({
               <HeldItem item={block.item} conversationId={conversationId} />
             )}
             {block.item?.kind === 'routed' && <RoutedItem item={block.item} />}
+            {block.item?.kind === 'summary' && (
+              <SummaryDivider
+                model={block.item.model}
+                summary={block.item.summary}
+                className={styles.summary}
+              />
+            )}
             {block.item?.kind === 'needs-apps' && (
               <NeedsAppsItem item={block.item} conversationId={conversationId} />
             )}

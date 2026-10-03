@@ -2,26 +2,36 @@ import type { Routine } from '@conch/protocol';
 import {
   Button,
   EmptyState,
+  formatMoney,
   Heading,
   Page,
   Pearl,
   RoutineCard,
+  RoutinesPaused,
   Skeleton,
   Stack,
   Text,
 } from '@conch/nacre';
-import { Bell, Plus } from 'lucide-react';
+import { Bell, Plus, Wallet } from 'lucide-react';
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 
-import { routineIcon } from './icon';
+import { useUi } from '../../app/ui';
+import { ROUTINES_SPEND_FOCUS } from './SpendingSection';
+
+import { routineIcon, WAITING_TEXT, watchProblem } from './icon';
 import { NewRoutine } from './NewRoutine';
-import { useRoutines, useUpdateRoutine } from './queries';
+import { RoutineEditor } from './RoutineEditor';
+import { useKeepPaused, useRoutines, useRoutineSpending, useUpdateRoutine } from './queries';
 import styles from './Routines.module.css';
 
 function needsYou(r: Routine) {
   return (
-    r.status === 'active' && (r.lastRun?.status === 'needs-you' || r.lastRun?.status === 'failed')
+    r.status === 'active' &&
+    (r.lastRun?.status === 'needs-you' ||
+      r.lastRun?.status === 'failed' ||
+      // A routine that starts when something happens, and can't look (ADR 0056).
+      r.watch?.state === 'needs-you')
   );
 }
 
@@ -65,6 +75,19 @@ export function RoutinesView() {
   const update = useUpdateRoutine();
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
+  const { data: spending } = useRoutineSpending();
+  const keepPaused = useKeepPaused();
+  const openSettings = useUi((s) => s.openSettings);
+  const raiseLimit = () => openSettings('usage', ROUTINES_SPEND_FOCUS);
+  // Say what routines spend only once there's something to say.
+  const spends = Boolean(
+    spending && (spending.monthUsd > 0 || routines?.some((r) => r.spend?.billing === 'metered')),
+  );
+  // ⌘K's “New routine that starts when…” opens the editor at When… (ADR 0056).
+  const location = useLocation();
+  const startWhen = (location.state as { create?: string } | null)?.create === 'when';
+  const setStartWhen = (on: boolean) =>
+    !on && void navigate('/routines', { replace: true, state: null });
 
   const card = (r: Routine) => (
     <li key={r.id}>
@@ -72,9 +95,12 @@ export function RoutinesView() {
         title={r.title}
         summary={r.summary}
         scheduleText={r.scheduleText}
+        {...(r.when && { waitingText: WAITING_TEXT })}
+        {...(watchProblem(r) && { problem: watchProblem(r) })}
         status={r.status}
         nextRunAt={r.nextRunAt}
-        icon={routineIcon(r.schedule)}
+        icon={routineIcon(r.schedule, r.when)}
+        cost={r.spend?.text ? { text: r.spend.text, billing: r.spend.billing } : undefined}
         lastRun={
           r.lastRun && {
             status: r.lastRun.status,
@@ -100,7 +126,7 @@ export function RoutinesView() {
           <Heading level={1} display size="4xl">
             Routines
           </Heading>
-          <Text tone="muted">Things Conch does for you, on a schedule.</Text>
+          <Text tone="muted">Things Conch does for you, at a time or when something happens.</Text>
         </Stack>
         {/* When there are none yet, the empty state's button is the only call to action. */}
         {Boolean(routines?.length) && (
@@ -109,6 +135,16 @@ export function RoutinesView() {
           </Button>
         )}
       </header>
+
+      {spending?.paused && !spending.paused.dismissed && (
+        <RoutinesPaused
+          monthUsd={spending.monthUsd}
+          until={spending.paused.until}
+          onRaise={raiseLimit}
+          onKeepPaused={() => keepPaused.mutate()}
+          busy={keepPaused.isPending}
+        />
+      )}
 
       {isPending ? (
         <Stack gap={3}>
@@ -120,7 +156,7 @@ export function RoutinesView() {
           size="lg"
           icon={<Pearl size="lg" label={null} />}
           title="Nothing scheduled yet"
-          description="Ask Conch to do something regularly — a morning briefing, a weekly tidy-up, a reminder — and it’ll take care of it on its own."
+          description="Ask Conch to do something regularly, or when something happens — a morning briefing, a brief before each meeting, telling you when someone replies — and it’ll take care of it on its own."
           actions={
             <Button leadingIcon={<Plus />} onClick={() => setCreating(true)}>
               Create your first routine
@@ -158,12 +194,33 @@ export function RoutinesView() {
       <footer className={styles.pageFooter}>
         <Text size="xs" tone="subtle">
           Routines run on this computer while Conch is open. If it’s closed, they catch up when
-          you’re back.
+          you’re back, and email and meetings from while it was closed still count. Changes to
+          folders don’t.
+          {spends && spending && (
+            <>
+              {' '}
+              {spending.limitUsd === null
+                ? `They’ve spent ${formatMoney(spending.monthUsd)} this month.`
+                : `They’ve spent ${formatMoney(spending.monthUsd)} of this month’s ${formatMoney(spending.limitUsd)}.`}
+            </>
+          )}
         </Text>
+        {spends && (
+          <Button variant="ghost" size="sm" leadingIcon={<Wallet />} onClick={raiseLimit}>
+            Spending limit
+          </Button>
+        )}
         <NotifyButton />
       </footer>
 
       <NewRoutine open={creating} onOpenChange={setCreating} />
+      {startWhen && (
+        <RoutineEditor
+          open
+          draft={{ when: { kind: 'mail', from: [], words: [] } }}
+          onOpenChange={(o) => !o && setStartWhen(false)}
+        />
+      )}
     </Page>
   );
 }

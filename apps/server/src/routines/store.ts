@@ -12,6 +12,11 @@ export const StoredRoutine = Routine.omit({
   nextRunAt: true,
   lastRun: true,
   runCount: true,
+  spend: true,
+  // When… lives in its own file (`routines/when/`, ADR 0056), never in the routine's.
+  when: true,
+  onlyIf: true,
+  watch: true,
 }).extend({
   /** The scheduled time most recently handled (run, skipped or missed). */
   lastScheduledFor: z.number().optional(),

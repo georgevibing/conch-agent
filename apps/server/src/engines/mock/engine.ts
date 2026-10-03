@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { newId } from '../../lib/ids';
 import { installHints } from '../claude-code/detect';
 import { friendlyError } from '../claude-code/translate';
-import { severityFor } from '@conch/protocol';
+import { readPastChatRead, readPastChatsFound, severityFor } from '@conch/protocol';
 
 import { Emitter } from '../../lib/emitter';
 import { hostToolText } from '../types';
@@ -20,6 +20,7 @@ import type {
   Completion,
   CompletionInput,
   Engine,
+  EngineContext,
   EngineEvent,
   EngineIntegrations,
   EngineMcpStatus,
@@ -65,6 +66,9 @@ function bursts(text: string): { text: string; pause: number }[] {
   return out;
 }
 
+/** Where a routine's own instruction ends and what happened begins (ADR 0056, `triggers/brief.ts`). */
+const EVENT_RULE = '\n---\n';
+
 const STOPWORDS = new Set(
   'the and for you your can could would should please with that this what how are about from into have just like need want me my our'.split(
     ' ',
@@ -98,6 +102,25 @@ export class MockEngine implements Engine {
   };
   /** Sees images, can't open files: the degraded file path gets exercised too. */
   readonly attachments = { images: true, files: false };
+  /**
+   * Long chats are fitted by Conch, as for a model API (ADR 0055): `/compact`
+   * gives a scripted summary, so the divider and its words can be seen and tested.
+   */
+  readonly context: EngineContext = {
+    compact: async ({ focus }) => ({
+      summary: [
+        'What the person wants',
+        '- A plan for the garden, planted by May.',
+        'Decided or done',
+        '- Tomatoes along the south fence; no peppers this year.',
+        ...(focus ? ['Facts to keep', `- ${focus}`] : []),
+        'Still open',
+        '- Which compost to buy.',
+      ].join('\n'),
+      turns: 3,
+      model: 'Mock model',
+    }),
+  };
   #state: EngineState;
   #signedOutOnce = false;
   #speed: number;
@@ -331,6 +354,21 @@ export class MockEngine implements Engine {
         usage: { inputTokens: 300, outputTokens: 40, costUsd: 0.0004 },
       };
     }
+    // “Only if…” (ADR 0056): yes when the condition's words are in the event; "garbled" answers nonsense.
+    if (/whether one event matches a condition/.test(input.system)) {
+      const condition = /^Condition: only if (.*)$/m.exec(input.prompt)?.[1] ?? '';
+      if (/garbled/i.test(condition)) return { text: 'Well, it depends on many things.' };
+      const fence = /^The event is between the two (\S+) lines\.$/m.exec(input.prompt)?.[1] ?? '';
+      const event = input.prompt.split(fence)[2]?.toLowerCase() ?? '';
+      const words = condition
+        .toLowerCase()
+        .split(/[^\p{L}\p{N}]+/u)
+        .filter((w) => w.length > 3 && !['about', 'it’s', "it's", 'from', 'with'].includes(w));
+      return {
+        text: words.some((w) => event.includes(w)) ? 'yes' : 'no',
+        usage: { inputTokens: 200, outputTokens: 1, costUsd: 0.0001 },
+      };
+    }
     // The memory tidy-up (ADR 0032): where you live, said in a chat, updates or adds a memory.
     if (/tidy the long-term memory/.test(input.system)) {
       const memories = [...input.prompt.matchAll(/^\[(m_[\w]+)\] \((\w+)\) (.+)$/gm)].map((m) => ({
@@ -371,6 +409,27 @@ export class MockEngine implements Engine {
       return {
         text: JSON.stringify(reply),
         usage: { inputTokens: 400, outputTokens: 60, costUsd: 0.0005 },
+      };
+    }
+    // A skill from how a piece of work went (ADR 0058): steps that generalise what was done.
+    if (/piece of work an assistant just finished/.test(input.system)) {
+      const asked = /<asked>([^<]+)<\/asked>/.exec(input.prompt)?.[1]?.trim() ?? '';
+      if (/learn-fail/i.test(asked)) return { text: 'Sure! Here is a skill for that.' };
+      return {
+        text: JSON.stringify({
+          worth: true,
+          title: 'Release notes',
+          description:
+            'Writes release notes from the commits since the last tag. Use when asked for release notes.',
+          instructions: [
+            '1. Find the last release tag with `git describe --tags --abbrev=0`.',
+            '2. List the commits since that tag with `git log --format=%s <tag>..HEAD`.',
+            '3. Group them into features and fixes, in plain words.',
+            '4. Fill in the project’s release notes template, and ask which version it is if that isn’t clear.',
+            'If there’s no changelog tool installed, don’t install one: git has everything needed.',
+          ].join('\n'),
+        }),
+        usage: { inputTokens: 600, outputTokens: 120, costUsd: 0.0008 },
       };
     }
     // A skill from something you keep asking for (ADR 0032).
@@ -431,6 +490,26 @@ export class MockEngine implements Engine {
     this.#spend();
     try {
       yield { type: 'session', resumeId: input.resumeId ?? newId('mock-session'), model: 'mock' };
+      // Scripted for tests and demos: a chat grown past the model's window (ADR 0055).
+      const long = /pretend (?:this|the) chat is long/i.test(input.prompt)
+        ? await this.context.compact({ resumeId: 'mock', signal: input.signal })
+        : undefined;
+      if (long)
+        yield {
+          type: 'compacted',
+          ...long,
+          ...(input.seq !== undefined && { fromSeq: input.seq }),
+        };
+      if (/pretend (?:this|the) chat is too long/i.test(input.prompt)) {
+        yield {
+          type: 'done',
+          outcome: 'error',
+          error:
+            'This chat is longer than the model can read at once, even with its start summarised. Pick a model with a bigger window, or start a new chat.',
+          problem: 'too-long',
+        };
+        return;
+      }
       if (chatOnly)
         yield {
           type: 'notice',
@@ -467,7 +546,9 @@ export class MockEngine implements Engine {
         await wait(chunk.pause);
       }
 
-      const text = input.prompt.toLowerCase();
+      // A run something started (ADR 0056) answers its own instruction, not the words that came in.
+      const [instruction = '', happenedText] = input.prompt.split(EVENT_RULE);
+      const text = instruction.toLowerCase();
       const rememberMatch = /remember (?:that )?(.+)/i.exec(input.prompt);
       if (rememberMatch?.[1] && !chatOnly) {
         const toolUseId = newId('tool');
@@ -497,6 +578,35 @@ export class MockEngine implements Engine {
         yield { type: 'done', outcome: 'success' } as const;
       };
 
+      // Earlier chats (ADR 0059): find the line, then read around it.
+      const lookBack =
+        /\b(?:look through|search) (?:my|our) (?:earlier |past |old )?chats for (.+?)[.?!]*$/i.exec(
+          input.prompt.trim(),
+        );
+      if (lookBack?.[1]) {
+        if (!input.tools.some((t) => t.name === 'search_chats')) {
+          yield* speak('I can’t look through your earlier chats from here.');
+          return;
+        }
+        const found = readPastChatsFound(
+          yield* hostTool('search_chats', { query: lookBack[1].replace(/^["“]|["”]$/g, '') }),
+        );
+        const best = found?.chats[0];
+        const line = best?.lines[0];
+        const read =
+          best && line
+            ? readPastChatRead(
+                yield* hostTool('read_chat', { chat: best.chat, message: line.message }),
+              )
+            : undefined;
+        const said = read?.lines.find((l) => l.message === line?.message) ?? line;
+        yield* speak(
+          best && said
+            ? `In “${best.title}”, ${said.who === 'you' ? 'you said' : said.who === 'them' ? 'someone else said' : 'I said'}: “${said.text}”`
+            : `I couldn’t find ${lookBack[1]} in your earlier chats.`,
+        );
+        return;
+      }
       // Gmail as an app (ADR 0048): the Google apps' own tools, whichever way it's signed in.
       const gmail = /\bsearch my gmail for (.+?)[.?!]*$/i.exec(input.prompt.trim());
       if (gmail?.[1]) {
@@ -567,7 +677,7 @@ export class MockEngine implements Engine {
         );
         return;
       }
-      // A question with answers to tap (ADR 0055): "book a call with Ada" asks when and how.
+      // A question with answers to tap (ADR 0060): "book a call with Ada" asks when and how.
       if (
         /\bbook a call with ada\b/i.test(input.prompt) &&
         input.tools.some((t) => t.name === 'ask')
@@ -976,6 +1086,35 @@ export class MockEngine implements Engine {
         };
       }
 
+      // Work that takes many steps, after two false starts (ADR 0058: Save how I did this).
+      if (!chatOnly && /\bthe long way\b/i.test(input.prompt)) {
+        const steps = [
+          'changelog --since last-tag',
+          'npx changelog --since last-tag',
+          'git describe --tags --abbrev=0',
+          'git log --oneline v1.2.0..HEAD',
+          'git log --format=%s v1.2.0..HEAD',
+          'grep -c feat notes/commits.txt',
+          'grep -c fix notes/commits.txt',
+          'cat notes/RELEASE_TEMPLATE.md',
+          'wc -l notes/draft.md',
+          'git diff --stat v1.2.0..HEAD',
+          'npm run lint:notes',
+          'cat notes/draft.md',
+        ];
+        for (const [i, command] of steps.entries()) {
+          const toolUseId = newId('tool');
+          yield { type: 'tool-start', toolUseId, name: 'Bash', input: { command } };
+          await wait(40);
+          yield {
+            type: 'tool-end',
+            toolUseId,
+            status: i < 2 ? 'error' : 'success',
+            output: i < 2 ? 'command not found: changelog' : 'ok',
+          };
+        }
+      }
+
       if (!chatOnly && /\b(run|list|files?|test)\b/.test(text)) {
         const toolUseId = newId('tool');
         const command = /test/.test(text) ? 'npm test' : 'ls -la';
@@ -1001,7 +1140,7 @@ export class MockEngine implements Engine {
             };
       }
 
-      // The chat knows Conch (ADR 0055): what's on my plate, with nothing connected,
+      // The chat knows Conch (ADR 0060): what's on my plate, with nothing connected,
       // offers an app from the map; planning the week offers a skill that's off.
       // Once it's on, the chat carries on by itself and the scripts below answer.
       const map = /## What Conch can turn on\n[\s\S]*?(?=\n## |$)/.exec(input.systemAppend)?.[0];
@@ -1118,6 +1257,31 @@ export class MockEngine implements Engine {
 
       // Routines: draft one when asked for something recurring; report outcomes on runs.
       const createRoutine = input.tools.find((t) => t.name === 'create_routine');
+      // “Tell me when Anna replies” (ADR 0056): a routine that starts when her email arrives.
+      const waitingOn =
+        /\b(?:[Tt]ell|[Ll]et) me (?:know )?when ([A-Z][\p{L}]+(?: [A-Z][\p{L}]+)?) (?:replies|emails|writes)/u.exec(
+          input.prompt,
+        )?.[1];
+      if (createRoutine && waitingOn) {
+        const toolUseId = newId('tool');
+        const args = {
+          title: `When ${waitingOn} replies`,
+          summary: `Tells you as soon as ${waitingOn} writes, with what it says.`,
+          prompt: `Tell me in one or two lines what ${waitingOn}’s email says and whether it needs an answer from me.`,
+          when: { kind: 'mail', from: [{ name: waitingOn }] },
+        };
+        yield { type: 'tool-start', toolUseId, name: 'mcp__conch__create_routine', input: args };
+        const output = hostToolText(await createRoutine.run(args as never));
+        yield { type: 'tool-end', toolUseId, status: 'success', output };
+        const confirm = `I’ll tell you when ${waitingOn} writes. Turn it on from the card; it costs nothing until then.`;
+        for (const chunk of confirm.match(/.{1,6}/gs) ?? []) {
+          await wait(12);
+          yield { type: 'text', messageId, delta: chunk };
+        }
+        yield { type: 'message-done', messageId };
+        yield { type: 'done', outcome: 'success' };
+        return;
+      }
       if (
         createRoutine &&
         /\b(every (morning|day|weekday|week)|each (morning|day)|remind me)\b/i.test(text)
@@ -1205,11 +1369,33 @@ export class MockEngine implements Engine {
       }
 
       const report = input.tools.find((t) => t.name === 'report_outcome');
+      // A routine that never stops looking: each step re-sends its whole context,
+      // as a real tool loop does, until its spending limit stops it (ADR 0057).
+      if (report && /\bkeep digging\b/i.test(text)) {
+        const step = { inputTokens: 72_000, outputTokens: 400, costUsd: 0.4 };
+        for (let i = 1; i <= 60; i++) {
+          await wait(20);
+          yield {
+            type: 'usage',
+            usage: {
+              inputTokens: step.inputTokens * i,
+              outputTokens: step.outputTokens * i,
+              costUsd: Number((step.costUsd * i).toFixed(4)),
+            },
+          };
+        }
+        yield { type: 'done', outcome: 'success' };
+        return;
+      }
       if (report) {
+        // A run something started (ADR 0056): it says what happened.
+        const happened = happenedText && /^\[1\] (.+)$/m.exec(happenedText)?.[1];
         const nothing = /nothing/i.test(text);
         const brief = nothing
           ? 'Nothing new since last time.'
-          : 'Good morning! You have **3 meetings** today and rain is expected after 4pm.';
+          : happened
+            ? `About ${happened}: it’s worth a look.`
+            : 'Good morning! You have **3 meetings** today and rain is expected after 4pm.';
         for (const chunk of brief.match(/.{1,6}/gs) ?? []) {
           await wait(12);
           yield { type: 'text', messageId, delta: chunk };
@@ -1219,7 +1405,9 @@ export class MockEngine implements Engine {
           status: nothing ? 'nothing-to-do' : 'done',
           summary: nothing
             ? 'Nothing new to report'
-            : 'Sent your briefing: 3 meetings and rain after 4pm',
+            : happened
+              ? `Told you about ${happened}`.slice(0, 200)
+              : 'Sent your briefing: 3 meetings and rain after 4pm',
         } as never);
         yield {
           type: 'done',
@@ -1229,7 +1417,7 @@ export class MockEngine implements Engine {
         return;
       }
 
-      // Replies to send next (ADR 0055): the assistant offers some under a table; a
+      // Replies to send next (ADR 0060): the assistant offers some under a table; a
       // table on its own gets Conch's chart chip; after reading a page, none of its own.
       const repliesScript = /\b(sales by month|team sizes|summari[sz]e the news)\b/i.exec(
         said,

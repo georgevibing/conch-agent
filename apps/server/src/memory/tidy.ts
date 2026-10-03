@@ -38,6 +38,12 @@ const TidyFile = z.object({
   lastAt: z.number().optional(),
   /** Chats changed after this were read by the last tidy-up. */
   readUntil: z.number().optional(),
+  /**
+   * What was learned from one chat just before its start was summarised (ADR
+   * 0055): by chat, the time of the last message read. The tidy-up doesn't
+   * read those again.
+   */
+  learned: z.record(z.string(), z.number()).optional(),
   runs: z.array(TidyRun).default([]),
 });
 type TidyFile = z.infer<typeof TidyFile>;
@@ -179,9 +185,24 @@ export function parseReply(text: string): z.infer<typeof Reply> | undefined {
   }
 }
 
+/** What learning from what you said may change, and where it writes down what it did. */
+interface Learning {
+  memories: Memory[];
+  said: Said[];
+  autoMemory: boolean;
+  touched: Set<string>;
+  changes: TidyChange[];
+}
+
+/** "This chat read …" as the reason a change waits: "Learned in a chat that read …". */
+function learnedIn(untrusted: string): string {
+  return `Learned in a chat that ${untrusted.replace(/^This chat /, '').replace(/, which could be trying to steer me\.$/, '')}.`;
+}
+
 export class MemoryTidy {
   #file?: Promise<TidyFile>;
   #running?: Promise<TidyRun>;
+  #learning?: Promise<TidyRun | undefined>;
   #timer?: NodeJS.Timeout;
 
   constructor(private readonly deps: TidyDeps) {}
@@ -232,8 +253,10 @@ export class MemoryTidy {
     const { autoMemory } = await this.deps.settings();
     const memories = (await store.list()).filter((m) => !m.pending);
     const since = file.readUntil ?? this.#now - 3 * 24 * HOUR;
-    const said = await this.deps.said(since).catch(() => []);
-    const fromChat = new Map(said.map((s) => [s.conversationId, s]));
+    // What was learned from a chat before it was summarised isn't read twice.
+    const said = (await this.deps.said(since).catch(() => [])).filter(
+      (s) => s.at > (file.learned?.[s.conversationId] ?? Number.NEGATIVE_INFINITY),
+    );
     const changes: TidyChange[] = [];
     const byId = new Map(memories.map((m) => [m.id, m]));
     const touched = new Set<string>();
@@ -285,15 +308,42 @@ export class MemoryTidy {
     for (const group of repeats(memories.filter((m) => !touched.has(m.id))))
       await merge(group, group[0]?.content ?? '', 'They said the same thing.');
 
+    await this.#learnFrom(reply, { memories, said, autoMemory, touched, changes });
+
+    const run: TidyRun = {
+      id: newId('tr'),
+      at: this.#now,
+      trigger,
+      model: Boolean(model),
+      changes,
+      ...(problem && { problem }),
+    };
+    file.lastAt = run.at;
+    file.readUntil = Math.max(since, ...said.map((s) => s.at), run.at - 1);
+    // Anything learned from a chat before this is covered by `readUntil` now.
+    const readUntil = file.readUntil;
+    if (file.learned)
+      file.learned = Object.fromEntries(
+        Object.entries(file.learned).filter(([, at]) => at > readUntil),
+      );
+    file.runs = [run, ...file.runs];
+    await this.#save(file);
+    return run;
+  }
+
+  /** Updates and new memories from a reply, by the rules: what came from an untrusted chat waits. */
+  async #learnFrom(reply: z.infer<typeof Reply> | undefined, learning: Learning) {
+    const { store } = this.deps;
+    const { memories, said, autoMemory, touched, changes } = learning;
+    const byId = new Map(memories.map((m) => [m.id, m]));
+    const fromChat = new Map(said.map((s) => [s.conversationId, s]));
     for (const u of reply?.update ?? []) {
       const current = byId.get(u.id);
       if (!current || touched.has(u.id) || current.content === u.content.trim()) continue;
       touched.add(u.id);
       const untrusted = u.from
         ? fromChat.get(u.from)?.untrusted
-        : said.some((s) => s.untrusted)
-          ? said.find((s) => s.untrusted)?.untrusted
-          : undefined;
+        : said.find((s) => s.untrusted)?.untrusted;
       const proposed = {
         ...current,
         content: u.content.trim(),
@@ -308,7 +358,7 @@ export class MemoryTidy {
           before: [current],
           after: proposed,
           state: 'pending',
-          untrusted: `Learned in a chat that ${untrusted.replace(/^This chat /, '').replace(/, which could be trying to steer me\.$/, '')}.`,
+          untrusted: learnedIn(untrusted),
         });
         continue;
       }
@@ -323,13 +373,17 @@ export class MemoryTidy {
       });
     }
 
+    // Memories waiting for an OK count too: the same thing isn't proposed twice.
+    const known = await store.list();
     for (const a of reply?.add ?? []) {
       const content = a.content.trim();
-      if (memories.some((m) => overlap(m.content, content) >= 0.7)) continue;
-      const chat = a.from ? fromChat.get(a.from) : undefined;
-      const untrusted = chat?.untrusted
-        ? `Learned in a chat that ${chat.untrusted.replace(/^This chat /, '').replace(/, which could be trying to steer me\.$/, '')}.`
-        : undefined;
+      if (known.some((m) => overlap(m.content, content) >= 0.7)) continue;
+      const chat = a.from
+        ? fromChat.get(a.from)
+        : said.length && said.every((s) => s.conversationId === said[0]?.conversationId)
+          ? said[0]
+          : undefined;
+      const untrusted = chat?.untrusted ? learnedIn(chat.untrusted) : undefined;
       const waits = Boolean(untrusted) || !autoMemory;
       const after = await store.add({
         content,
@@ -342,6 +396,7 @@ export class MemoryTidy {
             untrusted ?? 'Remember things automatically is off, so this waits for your OK.',
         }),
       });
+      known.push(after);
       changes.push({
         id: newId('tc'),
         kind: 'added',
@@ -352,17 +407,67 @@ export class MemoryTidy {
         ...(untrusted && { untrusted }),
       });
     }
+  }
 
+  /**
+   * Learn from one chat just before its start is summarised away (ADR 0055):
+   * what you said there that no tidy-up has read yet, by the same rules — your
+   * own words, a chat that read something untrusted waits for your OK, and
+   * nothing is merged here (that's the nightly's job). It's a run with cards
+   * and Undo like any other, and the tidy-up won't read those words again.
+   * Without a model, or with an answer it can't read, nothing is marked read:
+   * the chat keeps every word, and the next tidy-up still has them.
+   */
+  learn(conversationId: string, said: readonly Said[]): Promise<TidyRun | undefined> {
+    const after = Promise.all([
+      this.#learning?.catch(() => undefined),
+      this.#running?.catch(() => undefined),
+    ]);
+    const next = after.then(() => this.#learnChat(conversationId, said));
+    this.#learning = next;
+    return next;
+  }
+
+  async #learnChat(conversationId: string, all: readonly Said[]): Promise<TidyRun | undefined> {
+    const file = await this.#read();
+    const seen = Math.max(
+      file.readUntil ?? Number.NEGATIVE_INFINITY,
+      file.learned?.[conversationId] ?? Number.NEGATIVE_INFINITY,
+    );
+    const said = all.filter((s) => s.conversationId === conversationId && s.at > seen);
+    if (!said.length) return undefined;
+    const model = await this.deps.model().catch(() => undefined);
+    if (!model) return undefined;
+    const { autoMemory } = await this.deps.settings();
+    const memories = (await this.deps.store.list()).filter((m) => !m.pending);
+    let reply: z.infer<typeof Reply> | undefined;
+    try {
+      const answer = await model.complete({
+        system: SYSTEM,
+        prompt: prompt(memories, said),
+        model: model.model,
+        signal: AbortSignal.timeout(90_000),
+      });
+      reply = parseReply(answer.text);
+    } catch {
+      return undefined;
+    }
+    if (!reply) return undefined;
+    const changes: TidyChange[] = [];
+    await this.#learnFrom(reply, { memories, said, autoMemory, touched: new Set(), changes });
+    file.learned = { ...file.learned, [conversationId]: Math.max(...said.map((s) => s.at)) };
+    if (!changes.length) {
+      await this.#save(file);
+      return undefined;
+    }
     const run: TidyRun = {
       id: newId('tr'),
       at: this.#now,
-      trigger,
-      model: Boolean(model),
+      trigger: 'now',
+      model: true,
       changes,
-      ...(problem && { problem }),
+      chat: conversationId,
     };
-    file.lastAt = run.at;
-    file.readUntil = Math.max(since, ...said.map((s) => s.at), run.at - 1);
     file.runs = [run, ...file.runs];
     await this.#save(file);
     return run;

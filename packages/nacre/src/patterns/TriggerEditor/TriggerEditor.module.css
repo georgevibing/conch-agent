@@ -1,0 +1,194 @@
+@layer nacre.components {
+  .editor {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-4);
+    min-inline-size: 0;
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .headIcon {
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: var(--nc-text-accent);
+  }
+
+  .label {
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: -0.006em;
+  }
+
+  /* Two columns of choices where there's room, one on a phone. */
+  .choices {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+    gap: var(--nc-space-2);
+  }
+
+  .advanced {
+    grid-column: 1 / -1;
+  }
+
+  .advancedTrigger {
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-muted);
+  }
+
+  .details {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border);
+  }
+
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--nc-space-3);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+  }
+
+  /* Side by side only within a row: in the column they keep their own height. */
+  .row > .field {
+    flex: 1 1 10rem;
+  }
+
+  .row > .grow,
+  .row > .field.grow {
+    flex: 1 1 14rem;
+  }
+
+  .fieldLabel {
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-muted);
+  }
+
+  .optional {
+    font-weight: var(--nc-weight-regular);
+    color: var(--nc-text-subtle);
+  }
+
+  .note {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-subtle);
+  }
+
+  /* ── People you write to ───────────────────────────────────────────── */
+  .people {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1-5);
+  }
+
+  .person {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    min-block-size: 2rem;
+    padding-inline: var(--nc-space-3);
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface);
+    color: var(--nc-text-muted);
+    box-shadow: inset 0 0 0 1px var(--nc-border);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      box-shadow var(--nc-duration-base) var(--nc-ease-out),
+      transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  @media (hover: hover) {
+    .person:hover:not([data-on]) {
+      color: var(--nc-text);
+      box-shadow: inset 0 0 0 1px var(--nc-border-strong);
+    }
+  }
+
+  .person:active {
+    transform: scale(0.96);
+    transition-duration: var(--nc-duration-instant);
+  }
+
+  .person[data-on] {
+    background: var(--nc-accent-3);
+    color: var(--nc-accent-11);
+    box-shadow: inset 0 0 0 1px var(--nc-accent-7);
+  }
+
+  .person:focus-visible,
+  .remove:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .remove {
+    appearance: none;
+    display: grid;
+    place-items: center;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    margin-inline-end: calc(var(--nc-space-1) * -1);
+    padding: 0;
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .remove svg {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  /* ── The sentence ──────────────────────────────────────────────────── */
+  .preview {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .preview[data-loading] {
+    opacity: 0.6;
+  }
+
+  .previewText {
+    margin: 0;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .free {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-accent);
+  }
+}

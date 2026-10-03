@@ -1,0 +1,15 @@
+@layer nacre.components {
+  .gauge {
+    min-inline-size: 0;
+  }
+
+  .paused {
+    min-inline-size: 0;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-2);
+  }
+}

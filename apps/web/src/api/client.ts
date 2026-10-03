@@ -8,6 +8,7 @@ import {
   PairingCode,
   type SignInBody,
   Capabilities,
+  CompactResult,
   ConversationSummary,
   CustomCommand,
   EngineStatus,
@@ -194,6 +195,12 @@ export const api = {
       `/api/conversations/${encodeURIComponent(id)}/skills/${encodeURIComponent(skillId)}/stop-holding`,
       { method: 'POST', body: {} },
     ),
+  /** `/compact [focus]`: summarise the start of a long chat now (ADR 0055). */
+  compactConversation: (id: string, focus?: string) =>
+    request(CompactResult, `/api/conversations/${encodeURIComponent(id)}/compact`, {
+      method: 'POST',
+      body: focus ? { focus } : {},
+    }),
   /** “Not now” on an offer to connect an app, for the rest of this conversation. */
   dismissSuggestion: (id: string, catalogId: string) =>
     request(

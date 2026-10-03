@@ -1,5 +1,5 @@
 /**
- * Questions answered with a tap (ADR 0055 §4). The assistant asks with the
+ * Questions answered with a tap (ADR 0060 §4). The assistant asks with the
  * `ask` tool; the chat shows a `Question` card and waits for you. The answer
  * comes from the card (`POST …/questions/:questionId/answer`), or from
  * whatever you type in the message box while it waits. Skipping, stopping

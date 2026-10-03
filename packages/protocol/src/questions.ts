@@ -1,5 +1,5 @@
 /**
- * Reading a `Question`'s answer (ADR 0055): what each kind of field takes,
+ * Reading a `Question`'s answer (ADR 0060): what each kind of field takes,
  * and how an answer reads as a sentence. The gateway checks every answer
  * with these and writes its `text` itself, so the chat says what was really
  * chosen; the web uses the same words to fold the card before the gateway

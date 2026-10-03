@@ -1,5 +1,5 @@
 /**
- * Which replies to send next a turn ends with (ADR 0055 §5), if any. The
+ * Which replies to send next a turn ends with (ADR 0060 §5), if any. The
  * conversation manager asks once, as a turn finishes; everything it needs to
  * know is here, so the manager only hands over the turn.
  */

@@ -37,10 +37,13 @@ export const powers: BackupPowerInfo[] = [
   { kind: 'tools-never-ask', name: 'Calendar', tools: ['Delete an event', 'Send an invite'] },
   { kind: 'chats-never-ask' },
   { kind: 'routine-never-asks', name: 'Nightly tidy' },
+  { kind: 'routine-acts-on-events', name: 'Sort new downloads' },
+  { kind: 'routine-address', name: 'Shop orders' },
   { kind: 'browser-sites', sites: ['bank.example', 'shop.example'] },
   { kind: 'browser-local' },
   { kind: 'terminal-remote' },
   { kind: 'channel-people', name: 'Ada’s Conch on Telegram', people: ['Ada', 'Sam'] },
+  { kind: 'routines-spend', limitUsd: 60 },
 ];
 
 /** What most people's own backups say: one local program they added. */

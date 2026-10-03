@@ -18,7 +18,7 @@ const Ok = z.object({ ok: z.boolean() });
 export type SignInDisplay = 'popup' | 'tab';
 
 /**
- * Signing in from a chat's offer (ADR 0055): in a tab (a phone), the way
+ * Signing in from a chat's offer (ADR 0060): in a tab (a phone), the way
  * back is that chat, which takes the offer by itself when it opens.
  */
 export interface SignInReturn {

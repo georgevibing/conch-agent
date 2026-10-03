@@ -170,7 +170,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'A question the assistant asks in the middle of a reply (ADR 0055), answered with a tap instead of a typed paragraph: options, a day and a time, a number, a few words. It sits in the flow of the chat — never a modal — and wears the pearl rim, barely, while it waits for you. A single choice goes the moment you tap it; anything more has one **Send**. **Skip** is always there, quietly, and the assistant carries on with its best guess. Once answered it folds to one line: the question, muted, and what you said. Keys: 1–6 pick, arrows move, Enter sends. Dates and times never use the browser’s own pickers: a strip of the coming days, a calendar for the rest, and a few times to tap.',
+          'A question the assistant asks in the middle of a reply (ADR 0060), answered with a tap instead of a typed paragraph: options, a day and a time, a number, a few words. It sits in the flow of the chat — never a modal — and wears the pearl rim, barely, while it waits for you. A single choice goes the moment you tap it; anything more has one **Send**. **Skip** is always there, quietly, and the assistant carries on with its best guess. Once answered it folds to one line: the question, muted, and what you said. Keys: 1–6 pick, arrows move, Enter sends. Dates and times never use the browser’s own pickers: a strip of the coming days, a calendar for the rest, and a few times to tap.',
       },
     },
   },

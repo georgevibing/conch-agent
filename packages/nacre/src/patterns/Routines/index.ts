@@ -8,5 +8,8 @@ export type {
   RunTrigger,
   SchedulePreviewValue,
   ScheduleValue,
+  TriggerKind,
+  TriggerPreviewValue,
+  TriggerValue,
   Weekday,
 } from './types';

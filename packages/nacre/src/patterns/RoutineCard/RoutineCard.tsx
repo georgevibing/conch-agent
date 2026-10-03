@@ -1,4 +1,16 @@
-import { CalendarClock, Check, Pause, Repeat, Sparkles, X } from 'lucide-react';
+import {
+  CalendarClock,
+  Check,
+  Coins,
+  Gauge,
+  Laptop,
+  Pause,
+  Repeat,
+  Sparkles,
+  TriangleAlert,
+  X,
+  Zap,
+} from 'lucide-react';
 import { useId, type ComponentProps, type ReactNode } from 'react';
 
 import { Button } from '../../components/Button';
@@ -17,20 +29,47 @@ export interface RoutineCardLastRun {
   outcome?: string;
 }
 
+/** What a routine costs, in Conch's own words (“About $1.20 a month”). */
+export interface RoutineCardCost {
+  text: string;
+  /** How it's paid for: picks the icon. */
+  billing?: 'free' | 'plan' | 'metered';
+}
+
+const costIcons = {
+  free: <Laptop aria-hidden />,
+  plan: <Gauge aria-hidden />,
+  metered: <Coins aria-hidden />,
+};
+
 export interface RoutineCardProps extends Omit<ComponentProps<'article'>, 'title' | 'onToggle'> {
   title: string;
   summary: string;
-  /** Plain-language schedule, e.g. "Weekdays at 7:30 AM". */
+  /** Plain-language schedule, e.g. "Weekdays at 7:30 AM", or what starts it: "When Anna Smith emails you". */
   scheduleText: string;
+  /**
+   * For a routine that starts when something happens (ADR 0056): said instead of
+   * the next run, e.g. "Free until something happens".
+   */
+  waitingText?: string;
+  /** Its source can't look right now, in a sentence (signed out, a folder gone). */
+  problem?: string;
   status: RoutineCardStatus;
   nextRunAt?: number;
   lastRun?: RoutineCardLastRun;
+  /** What it costs, shown beside its schedule. */
+  cost?: RoutineCardCost;
   icon?: ReactNode;
   /** `list` for the Routines page, `proposal` for the inline card Claude drafts in a chat. */
   variant?: 'list' | 'proposal';
   onOpen?: () => void;
   onToggle?: (active: boolean) => void;
   onActivate?: () => void;
+  /**
+   * The proposal's first button, when turning it on needs one more choice
+   * first (“Choose who”). “Turn on” by default.
+   */
+  activateLabel?: string;
   onTryNow?: () => void;
   onEdit?: () => void;
   onDismiss?: () => void;
@@ -82,14 +121,18 @@ export function RoutineCard({
   title,
   summary,
   scheduleText,
+  waitingText,
+  problem,
   status,
   nextRunAt,
   lastRun,
+  cost,
   icon,
   variant = 'list',
   onOpen,
   onToggle,
   onActivate,
+  activateLabel = 'Turn on',
   onTryNow,
   onEdit,
   onDismiss,
@@ -152,16 +195,25 @@ export function RoutineCard({
             {summary && status !== 'deleted' && <p className={styles.summary}>{summary}</p>}
             {status !== 'deleted' && (
               <p className={styles.schedule}>
-                <CalendarClock aria-hidden />
+                {waitingText ? <Zap aria-hidden /> : <CalendarClock aria-hidden />}
                 <span>
                   {scheduleText}
-                  {nextText && status !== 'paused' && (
+                  {waitingText && status !== 'paused' && (
+                    <span className={styles.dim}> · {waitingText}</span>
+                  )}
+                  {!waitingText && nextText && status !== 'paused' && (
                     <span className={styles.dim}>
                       {' '}
                       · {status === 'draft' ? 'first run' : 'next'} {nextText}
                     </span>
                   )}
                 </span>
+              </p>
+            )}
+            {cost && status !== 'deleted' && (
+              <p className={cx(styles.schedule, styles.costLine)} data-cost={cost.billing}>
+                {costIcons[cost.billing ?? 'metered']}
+                <span>{cost.text}</span>
               </p>
             )}
           </div>
@@ -174,8 +226,13 @@ export function RoutineCard({
 
         {!settled && (
           <div className={styles.actions}>
-            <Button size="sm" onClick={onActivate} loading={busy} leadingIcon={<Check />}>
-              Turn on
+            <Button
+              size="sm"
+              onClick={onActivate}
+              loading={busy}
+              leadingIcon={activateLabel === 'Turn on' ? <Check /> : undefined}
+            >
+              {activateLabel}
             </Button>
             {onTryNow && (
               <Button size="sm" variant="surface" onClick={onTryNow} disabled={busy}>
@@ -200,13 +257,15 @@ export function RoutineCard({
   }
 
   const active = status === 'active';
-  const needsAttention = lastRun && attention.has(lastRun.status);
+  const needsAttention = (lastRun && attention.has(lastRun.status)) || (active && problem);
   return (
     <article
       aria-labelledby={titleId}
       data-variant="list"
       data-status={status}
-      data-attention={needsAttention ? lastRun.status : undefined}
+      data-attention={
+        active && problem ? 'needs-you' : needsAttention ? lastRun?.status : undefined
+      }
       data-lustre=""
       className={cx(styles.card, className)}
       {...props}
@@ -223,9 +282,15 @@ export function RoutineCard({
         {summary && <p className={cx(styles.summary, styles.clamp)}>{summary}</p>}
         <p className={styles.meta}>
           <span className={styles.chip}>
-            <CalendarClock aria-hidden />
+            {waitingText ? <Zap aria-hidden /> : <CalendarClock aria-hidden />}
             {scheduleText}
           </span>
+          {cost && (
+            <span className={styles.chip} data-cost={cost.billing}>
+              {costIcons[cost.billing ?? 'metered']}
+              {cost.text}
+            </span>
+          )}
           <span className={styles.dim}>
             {status === 'paused'
               ? 'Paused'
@@ -233,11 +298,19 @@ export function RoutineCard({
                 ? 'Finished'
                 : status === 'draft'
                   ? 'Not turned on yet'
-                  : nextText
-                    ? `Next run ${nextText}`
-                    : null}
+                  : waitingText
+                    ? waitingText
+                    : nextText
+                      ? `Next run ${nextText}`
+                      : null}
           </span>
         </p>
+        {active && problem && (
+          <p className={styles.problem}>
+            <TriangleAlert aria-hidden />
+            <span>{problem}</span>
+          </p>
+        )}
         {lastRun && <LastRunLine run={lastRun} now={now} locale={locale} timeZone={timeZone} />}
       </div>
       {onToggle && status !== 'completed' && (

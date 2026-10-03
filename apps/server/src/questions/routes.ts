@@ -6,7 +6,7 @@ import { QuestionError, type QuestionDesk } from './desk';
 const STATUS = { 'not-found': 404, answered: 409, invalid: 400 } as const;
 
 /**
- * The answer to a question the assistant asked (ADR 0055 §4), from the card
+ * The answer to a question the assistant asked (ADR 0060 §4), from the card
  * on any device. `null` skips it. Under `/api`, behind the gateway's host,
  * origin and sign-in checks; the answer is checked against the question's
  * fields before the assistant sees it.

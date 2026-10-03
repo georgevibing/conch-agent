@@ -19,25 +19,46 @@ export interface ChatSource {
   events(id: string): Promise<ConversationEvent[]>;
 }
 
+/**
+ * What you said in one chat, from `since` and before `beforeSeq`, by the
+ * rules every learning pass keeps: never a routine's run (it starts with its
+ * own instruction, not something you just said), never a chat with someone
+ * else in it on a chat app (their words aren't yours), and a chat that read
+ * something untrusted says so, so what's learned there waits for your OK.
+ */
+export function chatWords(
+  chat: { id: string; origin?: { kind: string } },
+  events: readonly ConversationEvent[],
+  options: { since: number; beforeSeq?: number },
+): Said[] {
+  if (chat.origin?.kind === 'routine') return [];
+  const taint: TaintSource[] = events.flatMap((e) => (e.type === 'taint' ? [e.source] : []));
+  if (taint.some((t) => t.kind === 'person')) return [];
+  const untrusted = taint.length ? describeTaint(taint) : undefined;
+  const out: Said[] = [];
+  for (const e of events)
+    if (
+      e.type === 'user.message' &&
+      e.at >= options.since &&
+      (options.beforeSeq === undefined || e.seq < options.beforeSeq) &&
+      e.text.trim()
+    )
+      out.push({
+        conversationId: chat.id,
+        text: e.text,
+        at: e.at,
+        ...(untrusted && { untrusted }),
+      });
+  return out;
+}
+
 /** What you said in chats changed since `since`; chats that read something untrusted say so. */
 export async function yourWords(chats: ChatSource, since: number): Promise<Said[]> {
   const out: Said[] = [];
   for (const chat of await chats.list()) {
-    // A routine's run starts with its own instruction, not something you just said.
     if (chat.updatedAt < since || chat.origin?.kind === 'routine') continue;
     const events = await chats.events(chat.id).catch(() => []);
-    const taint: TaintSource[] = events.flatMap((e) => (e.type === 'taint' ? [e.source] : []));
-    // Someone else on a chat app: their words aren't yours.
-    if (taint.some((t) => t.kind === 'person')) continue;
-    const untrusted = taint.length ? describeTaint(taint) : undefined;
-    for (const e of events)
-      if (e.type === 'user.message' && e.at >= since && e.text.trim())
-        out.push({
-          conversationId: chat.id,
-          text: e.text,
-          at: e.at,
-          ...(untrusted && { untrusted }),
-        });
+    out.push(...chatWords(chat, events, { since }));
   }
   return out;
 }

@@ -180,6 +180,9 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           void client.invalidateQueries({ queryKey: skillKeys.all });
           void client.invalidateQueries({ queryKey: skillKeys.publishers });
           break;
+        case 'skills.offered':
+          void client.invalidateQueries({ queryKey: skillKeys.fromWork });
+          break;
         case 'vault.changed':
           void client.invalidateQueries({ queryKey: vaultKeys.all });
           break;
@@ -255,6 +258,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         case 'routine.changed':
         case 'routine.deleted':
         case 'routine.run':
+        case 'routines.spending':
           // LiveProvider sits outside the router; the Shell performs navigations.
           applyRoutineEvent(client, event, (to) =>
             window.dispatchEvent(new CustomEvent('conch:navigate', { detail: to })),

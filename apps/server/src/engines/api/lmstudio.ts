@@ -189,7 +189,17 @@ export function lmStudioVariant(deps: LmStudioDeps = {}): ApiVariant {
       return list;
     },
     // LM Studio gives every model tool use, natively or through its own prompt.
-    facts: () => ({ tools: true }),
+    // A loaded model reads only what it was loaded with, often far less than it could.
+    facts: (entry) => {
+      const instance = Array.isArray(entry.loaded_instances)
+        ? (entry.loaded_instances[0] as { config?: { context_length?: unknown } } | undefined)
+        : undefined;
+      const loadedWith = instance?.config?.context_length ?? entry.loaded_context_length;
+      return {
+        tools: true,
+        ...(typeof loadedWith === 'number' && loadedWith > 0 && { context: loadedWith }),
+      };
+    },
   };
 
   class LmStudioWire extends OpenAiWire {

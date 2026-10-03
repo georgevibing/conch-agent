@@ -19,9 +19,11 @@ import type {
   PushStatus,
   PushSubscriptionJson,
   PushTopic,
+  RoutineSpending,
   ServerEvent,
 } from '@conch/protocol';
 
+import { pausedWords } from '../routines/spend';
 import type { PushStore, Subscription } from './store';
 import { sendPush, type Fetcher } from './webpush';
 
@@ -252,6 +254,18 @@ export class PushService {
     });
   }
 
+  /** Routines reached this month's limit (ADR 0057): said once, by `RoutineSpend`. */
+  async routinesPaused(spending: RoutineSpending): Promise<void> {
+    const { title, body } = pausedWords(spending);
+    await this.notify('routines', {
+      title,
+      body,
+      quiet: 'Your routines are paused for the rest of the month.',
+      url: '/routines',
+      tag: 'routines-paused',
+    });
+  }
+
   /** Conch's live stream, turned into the notifications that matter. */
   async onEvent(event: ServerEvent): Promise<void> {
     if (event.type === 'task.changed') {
@@ -326,7 +340,7 @@ export class PushService {
       });
       return;
     }
-    // A question with answers to tap (ADR 0055): waiting for you, like an OK.
+    // A question with answers to tap (ADR 0060): waiting for you, like an OK.
     if (e.type === 'question') {
       const name = await this.deps.persona();
       const chat = await this.deps.conversation(e.conversationId);

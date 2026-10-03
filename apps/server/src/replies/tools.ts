@@ -1,5 +1,5 @@
 /**
- * Replies to send next (ADR 0055 §5): the assistant's own chips. It offers up
+ * Replies to send next (ADR 0060 §5): the assistant's own chips. It offers up
  * to three things the person might well say next, in their words; Conch shows
  * them under the reply once it's done, and a tap sends the words as they read.
  */

@@ -1,5 +1,5 @@
 /**
- * The chat knows Conch (ADR 0055). What the assistant can put in a chat
+ * The chat knows Conch (ADR 0060). What the assistant can put in a chat
  * besides words: an offer to turn on what it lacks, a question with answers
  * to tap, replies to send next, a plan that ticks itself off, and a view of
  * what a tool found. Each is a log event, so it replays on every device.

@@ -1,6 +1,6 @@
 import type { ConversationEvent, ReplySuggestion } from '@conch/protocol';
 
-/** The replies to send next under the latest reply (ADR 0055), while they still belong there. */
+/** The replies to send next under the latest reply (ADR 0060), while they still belong there. */
 export interface LatestReplies {
   /** The `replies` event's seq: one set of chips, once. */
   seq: number;

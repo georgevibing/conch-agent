@@ -130,7 +130,7 @@ const finished = (manager: ConversationManager, id: string) =>
     return conversation.status === 'idle' || conversation.status === 'error' ? true : undefined;
   });
 
-describe('ask: questions answered with a tap (ADR 0055)', () => {
+describe('ask: questions answered with a tap (ADR 0060)', () => {
   it('shows the question, waits for you, and hands the answer on in words the chat shows', async () => {
     const { manager, engine, questions } = await setup();
     const { id, question } = await asked(manager);

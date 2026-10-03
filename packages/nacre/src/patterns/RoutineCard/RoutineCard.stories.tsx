@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { FolderInput, PersonStanding, Sunrise } from 'lucide-react';
+import { CalendarClock, FolderInput, Globe, Mail, PersonStanding, Sunrise } from 'lucide-react';
 import { useState } from 'react';
 
 import { Stack } from '../../components/Stack';
@@ -37,6 +37,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {
   args: {
+    cost: { text: 'About $14 a month', billing: 'metered' },
     lastRun: {
       status: 'succeeded',
       at: now - 2 * hour,
@@ -63,6 +64,7 @@ export const List: Story = {
           status={states.a ? 'active' : 'paused'}
           nextRunAt={now + 16 * hour}
           icon={<Sunrise />}
+          cost={{ text: 'About $14 a month', billing: 'metered' }}
           lastRun={{
             status: 'succeeded',
             at: now - 2 * hour,
@@ -78,6 +80,7 @@ export const List: Story = {
           status={states.b ? 'active' : 'paused'}
           nextRunAt={now + 3 * 24 * hour}
           icon={<FolderInput />}
+          cost={{ text: 'About 3% of your Claude Max limit a run', billing: 'plan' }}
           lastRun={{
             status: 'needs-you',
             at: now - 20 * 60_000,
@@ -93,6 +96,7 @@ export const List: Story = {
           status={states.c ? 'active' : 'paused'}
           nextRunAt={now + 90 * 60_000}
           icon={<PersonStanding />}
+          cost={{ text: 'Free on this computer', billing: 'free' }}
           lastRun={{
             status: 'nothing-to-do',
             at: now - 26 * hour,
@@ -135,6 +139,7 @@ export const Proposal: Story = {
           status={status}
           nextRunAt={now + 16 * hour}
           icon={<Sunrise />}
+          cost={{ text: 'Roughly $18 a month', billing: 'metered' }}
           busy={busy}
           onActivate={() => {
             setBusy(true);
@@ -178,6 +183,65 @@ export const ProposalStates: Story = {
           onOpen={() => {}}
         />
       ))}
+    </Stack>
+  ),
+};
+
+/** Routines that start when something happens (ADR 0056): free until it does. */
+export const WhenSomethingHappens: Story = {
+  render: () => (
+    <Stack gap={3} style={{ maxInlineSize: '40rem' }}>
+      <RoutineCard
+        variant="proposal"
+        title="When Anna replies"
+        summary="Tells you as soon as Anna writes, with what it says."
+        scheduleText="When Anna Smith emails you"
+        waitingText="Free until something happens"
+        status="draft"
+        icon={<Mail />}
+        onActivate={() => {}}
+        onTryNow={() => {}}
+        onEdit={() => {}}
+        onDismiss={() => {}}
+      />
+      <RoutineCard
+        variant="proposal"
+        title="When they reply"
+        summary="Tells you as soon as someone you’re waiting on writes back."
+        scheduleText="When an email arrives"
+        waitingText="Free until something happens"
+        status="draft"
+        icon={<Mail />}
+        activateLabel="Choose who"
+        onActivate={() => {}}
+        onDismiss={() => {}}
+      />
+      <RoutineCard
+        title="Meeting brief"
+        summary="A short brief on who you’re meeting and what it’s about."
+        scheduleText="15 minutes before each meeting with other people"
+        waitingText="Free until something happens"
+        status="active"
+        icon={<CalendarClock />}
+        lastRun={{
+          status: 'succeeded',
+          at: now - 2 * hour,
+          outcome: 'Briefed you on the design review with Bo and Kai.',
+        }}
+        onOpen={() => {}}
+        onToggle={() => {}}
+      />
+      <RoutineCard
+        title="Price watch"
+        summary="Tells you when the pricing page changes."
+        scheduleText="When example.com/pricing changes"
+        waitingText="Free until something happens"
+        status="active"
+        icon={<Globe />}
+        problem="example.com hasn’t answered since yesterday. Conch keeps trying."
+        onOpen={() => {}}
+        onToggle={() => {}}
+      />
     </Stack>
   ),
 };

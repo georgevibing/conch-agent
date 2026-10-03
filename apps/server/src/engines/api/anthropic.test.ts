@@ -108,6 +108,8 @@ describe('Anthropic models', () => {
       label: 'Claude Opus 5',
       // `max_input_tokens` is the context window — there is no `context_window`.
       description: '200k context',
+      // …and what Conch fits a long chat into (ADR 0055).
+      context: 200_000,
       efforts: ['low', 'medium', 'high', 'xhigh'],
       supportsFastMode: false,
       supportsAutoMode: false,
@@ -255,7 +257,7 @@ describe('an Anthropic turn', () => {
       stop: 'tools',
       // input is the final count from message_start (cache reads included);
       // output is the last, cumulative message_delta.
-      usage: { inputTokens: 600, outputTokens: 42 },
+      usage: { inputTokens: 600, cachedInputTokens: 100, outputTokens: 42 },
       toolCalls: [
         { id: 'toolu_01', name: 'mcp__conch__remember', argumentsJson: '{"content":"tea"}' },
       ],

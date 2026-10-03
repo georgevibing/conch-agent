@@ -76,6 +76,61 @@ describe('Translator', () => {
     ]);
   });
 
+  it('says what the turn has used so far, sub-agents and the cache included (ADR 0057)', () => {
+    const t = new Translator();
+    const usage = (input: number, cached: number, output: number) => ({
+      input_tokens: input,
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: cached,
+      output_tokens: output,
+    });
+    const first = t.translate(
+      m({
+        type: 'assistant',
+        parent_tool_use_id: null,
+        message: { id: 'a', content: [], usage: usage(100, 20_000, 50) },
+      }),
+    );
+    expect(first.at(-1)).toEqual({
+      type: 'usage',
+      usage: { inputTokens: 20_100, outputTokens: 50, cachedInputTokens: 20_000 },
+    });
+    // The same request arriving as a second message counts once.
+    t.translate(
+      m({
+        type: 'assistant',
+        parent_tool_use_id: null,
+        message: { id: 'a', content: [], usage: usage(100, 20_000, 80) },
+      }),
+    );
+    const inner = t.translate(
+      m({
+        type: 'assistant',
+        parent_tool_use_id: 'task',
+        message: { id: 'b', content: [{ type: 'text', text: 'inner' }], usage: usage(1000, 0, 10) },
+      }),
+    );
+    expect(inner).toEqual([
+      {
+        type: 'usage',
+        usage: { inputTokens: 21_100, outputTokens: 90, cachedInputTokens: 20_000 },
+      },
+    ]);
+    const [done] = t.translate(
+      m({
+        type: 'result',
+        subtype: 'success',
+        is_error: false,
+        usage: usage(1100, 20_000, 90),
+        total_cost_usd: 0.05,
+        duration_ms: 10,
+      }),
+    );
+    expect(done).toMatchObject({
+      usage: { inputTokens: 21_100, cachedInputTokens: 20_000, outputTokens: 90, costUsd: 0.05 },
+    });
+  });
+
   it('falls back to full assistant text when nothing streamed', () => {
     const out = new Translator().translate(
       m({

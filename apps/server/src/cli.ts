@@ -44,6 +44,7 @@ import { PROVIDER_COPY } from './providers/catalog';
 import { SettingsStore } from './settings/store';
 import { skillsCommand } from './skills/cli';
 import { SkillTrust } from './skills/trust';
+import { SkillUsage } from './skills/usage';
 import { deviceSealer, registerSealer } from './lib/sealed';
 import { deviceKeyFor, keystoreMode } from './vault/keystore';
 
@@ -400,6 +401,7 @@ async function importFrom() {
   const settings = new SettingsStore(config.CONCH_HOME, heal);
   const memory = new MemoryStore(join(config.CONCH_HOME, 'memory'));
   const skills = new SkillStore(config.CONCH_HOME);
+  const usage = new SkillUsage(config.CONCH_HOME, heal);
   const routineStore = new RoutineStore(join(config.CONCH_HOME, 'routines'), heal);
   // The CLI only ever adds drafts: no runs, so nothing needs a provider here.
   const routines = new RoutineService({
@@ -419,7 +421,12 @@ async function importFrom() {
         // Conch's own: another app's skills are only read in place, and go with it.
         names: async () =>
           (await skills.list()).skills.filter((s) => s.source === 'conch').map((s) => s.name),
-        adopt: (folder, base) => skills.adopt(folder, base),
+        // Brought in by Conch: the tidy shelf may offer it back one day (ADR 0058).
+        adopt: async (folder, base) => {
+          const skill = await skills.adopt(folder, base);
+          await usage.note(skill.id, 'imported').catch(() => undefined);
+          return skill;
+        },
         remove: (id) => skills.remove(id),
       },
       routines: {

@@ -17,6 +17,7 @@ import {
   CreateSkillBody,
   DescribeSkillBody,
   DraftSkillBody,
+  TidyShelfBody,
   Id,
   LoginCodeBody,
   type Health,
@@ -28,10 +29,15 @@ import {
   AddServerBody,
   UpdateServerBody,
   UpdateConversationBody,
+  CompactBody,
+  type CompactResult,
   ServerId,
   ReleaseTurnBody,
   SchedulePreviewBody,
   UpdateRoutineBody,
+  WhenPreviewBody,
+  MailPeople,
+  HookSecret,
   SaveCommandBody,
   SearchPreviewQuery,
   SearchQuery,
@@ -42,6 +48,7 @@ import {
   UpdateSettingsBody,
   UpdateSkillBody,
   UsageBudgetBody,
+  RoutineSpendingBody,
   UpdatesSettingsBody,
   type ServerEvent,
 } from '@conch/protocol';
@@ -202,6 +209,7 @@ export async function buildApp(services: Services) {
     index: services.memoryIndex,
     tidy: services.tidy,
     suggester: services.suggester,
+    learner: services.learner,
     getMeaningModel: (languages) =>
       services.onDevice.get(languages, () => services.meaningLanded()),
     meaningState: () => services.onDevice.status(),
@@ -560,6 +568,19 @@ export async function buildApp(services: Services) {
     if (!body) return;
     return preview(body.schedule, body.timezone);
   });
+  // What routines spend (ADR 0057). Changing the limit is a person's choice
+  // here; no tool the agent has can reach it.
+  app.get('/api/routines/spending', () => services.routines.spending());
+  app.put('/api/routines/spending', async (request, reply) => {
+    const body = parse(RoutineSpendingBody, request.body, reply);
+    if (!body) return;
+    await services.routineSpend.setLimit(body.limitUsd);
+    return services.routines.spending();
+  });
+  app.post('/api/routines/spending/keep-paused', async () => {
+    await services.routineSpend.keepPaused();
+    return services.routines.spending();
+  });
   app.post('/api/routines', async (request, reply) => {
     const body = parse(CreateRoutineBody, request.body, reply);
     if (!body) return;
@@ -596,6 +617,22 @@ export async function buildApp(services: Services) {
   app.post<{ Params: { id: string } }>('/api/routines/:id/run', async (request, reply) => {
     try {
       return await services.routines.runNow(request.params.id);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  // When… (ADR 0056): how a trigger reads, the people you mail with, another app's secret.
+  app.post('/api/routines/when/preview', async (request, reply) => {
+    const body = parse(WhenPreviewBody, request.body, reply);
+    if (!body) return;
+    return services.routines.previewWhen(body.when, body.onlyIf);
+  });
+  app.get('/api/routines/people', async () => MailPeople.parse(await services.mailPeople()));
+  app.post<{ Params: { id: string } }>('/api/routines/:id/secret', async (request, reply) => {
+    try {
+      // Shown once, here: never stored where the page can read it again.
+      const secret = await services.routines.newHookSecret(request.params.id);
+      return reply.header('cache-control', 'no-store').send(HookSecret.parse({ secret }));
     } catch (error) {
       return sendError(reply, error);
     }
@@ -791,6 +828,15 @@ export async function buildApp(services: Services) {
     if (!body) return;
     return guarded(reply, () => services.skills.create(body));
   });
+  // A tidy shelf (ADR 0058): what's sat unused, and your answer. Only ever turns skills off.
+  app.get('/api/skills/suggestions/shelf', () => services.skills.shelf());
+  app.post('/api/skills/suggestions/shelf', async (request, reply) => {
+    const body = parse(TidyShelfBody, request.body, reply);
+    if (!body) return;
+    return guarded(reply, async () => ({
+      changed: await services.skills.tidyShelf(body.action, body.ids),
+    }));
+  });
   // Whose signed skills you trust (ADR 0031). Trusting is a lasting power, like sudo.
   app.get('/api/skills/publishers', async () => ({
     publishers: await services.skills.publishers(),
@@ -893,7 +939,7 @@ export async function buildApp(services: Services) {
     ) => {
       // Apps (ADR 0052); `/integrations/done` is the sign-in window's own page.
       if (!flow) return reply.redirect(`/apps?result=${result}`, 303);
-      // Back to the chat it was offered in, which carries on by itself (ADR 0055).
+      // Back to the chat it was offered in, which carries on by itself (ADR 0060).
       if (flow.display === 'tab' && flow.returnTo) {
         const { conversationId, offerId } = flow.returnTo;
         return reply.redirect(
@@ -1015,6 +1061,20 @@ export async function buildApp(services: Services) {
       return sendError(reply, error);
     }
   });
+  /** `/compact`: summarise the start of a long chat now (ADR 0055). */
+  app.post<{ Params: { id: string } }>('/api/conversations/:id/compact', async (request, reply) => {
+    const body = parse(CompactBody, request.body ?? {}, reply);
+    if (!body) return;
+    try {
+      const result: CompactResult = await services.conversations.compact(
+        request.params.id,
+        body.focus || undefined,
+      );
+      return result;
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
   // Tests and demos (mock mode only): pretend the internet is gone, or back.
   if (services.config.CONCH_ENGINE === 'mock')
     app.post<{ Body: { online?: unknown } }>('/api/mock/network', (request) => {
@@ -1052,7 +1112,7 @@ export async function buildApp(services: Services) {
       }
     },
   );
-  // Taking an offer (ADR 0055): what was offered must be on now; then the chat carries on, once.
+  // Taking an offer (ADR 0060): what was offered must be on now; then the chat carries on, once.
   app.post<{ Params: { id: string; offerId: string } }>(
     '/api/conversations/:id/offers/:offerId/accept',
     async (request, reply) => {

@@ -29,6 +29,9 @@ export type BackupPowerInfo =
   | { kind: 'tools-never-ask'; name: string; tools: string[]; more?: number }
   | { kind: 'chats-never-ask' }
   | { kind: 'routine-never-asks'; name: string }
+  | { kind: 'routines-spend'; limitUsd: number | null }
+  | { kind: 'routine-acts-on-events'; name: string }
+  | { kind: 'routine-address'; name: string }
   | { kind: 'browser-sites'; sites: string[]; more?: number }
   | { kind: 'browser-local' }
   | { kind: 'terminal-remote' }
@@ -75,6 +78,24 @@ export function powerWords(power: BackupPowerInfo): PowerWords {
       return {
         subject: power.name,
         text: 'Runs by itself, and lets Conch act without asking you first',
+      };
+    case 'routines-spend':
+      return {
+        subject: 'Routines',
+        text:
+          power.limitUsd === null
+            ? 'Spend money without a monthly limit'
+            : `Spend up to $${power.limitUsd.toLocaleString('en-US')} a month without asking`,
+      };
+    case 'routine-acts-on-events':
+      return {
+        subject: power.name,
+        text: 'Starts when something happens, and lets Conch act on it without asking you first',
+      };
+    case 'routine-address':
+      return {
+        subject: power.name,
+        text: 'Has an address other apps can use to start it',
       };
     case 'browser-sites':
       return {

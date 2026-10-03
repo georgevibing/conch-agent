@@ -19,7 +19,7 @@ import { type SkillCapabilityName, SkillPermissionList } from '../Skills/SkillPe
 import styles from './OfferCard.module.css';
 
 /**
- * Where an offer is (ADR 0055):
+ * Where an offer is (ADR 0060):
  * - `suggested`: the card, with one button;
  * - `connecting`: an app is signing in;
  * - `review`: a skill shows what it may do before it's turned on;
@@ -85,7 +85,7 @@ const LEAVE_MS = 650;
 const FOLDED = new Set<OfferCardState>(['accepted', 'muted', 'expired']);
 
 /**
- * An offer to turn on the one thing a request is missing (ADR 0055), under
+ * An offer to turn on the one thing a request is missing (ADR 0060), under
  * the reply that needed it: an app to connect, or a skill that's off. One
  * small, calm card with one obvious button; every way out is right there.
  * Taken, it folds into a quiet line (“Connected Google Calendar · carrying

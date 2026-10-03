@@ -1,4 +1,21 @@
 @layer nacre.components {
+  /* A When-routine whose source can't look (ADR 0056): one line, in words. */
+  .problem {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    color: light-dark(oklch(0.5 0.12 var(--nc-warning-h)), oklch(0.82 0.12 var(--nc-warning-h)));
+  }
+
+  .problem svg {
+    flex: none;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    margin-block-start: 0.1rem;
+  }
+
   /* ── Shared ────────────────────────────────────────────────────────── */
   .iconTile {
     display: grid;
@@ -339,6 +356,13 @@
     block-size: 0.875rem;
     margin-block-start: 0.2em;
     color: var(--nc-text-accent);
+  }
+
+  /* What it costs: a quieter line under the schedule. */
+  .costLine {
+    margin-block-start: 0;
+    color: var(--nc-text-muted);
+    font-weight: var(--nc-weight-regular);
   }
 
   .schedule .dim {

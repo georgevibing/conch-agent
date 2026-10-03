@@ -99,7 +99,8 @@ src/
     codex/                    Codex app-server, its device sign-in and dynamic tools (ADR 0036)
     acp/                      Copilot, Gemini CLI, Grok over the Agent Client Protocol; the door (ADR 0053)
     api/                      key-based APIs: one OpenAI-style reader and adapter, a preset per
-                              company (presets.ts), Anthropic, Ollama, LM Studio, servers
+                              company (presets.ts), Anthropic, Ollama, LM Studio, servers;
+                              session.ts keeps the transcript, context.ts fits it to the window (ADR 0055)
     mock/                     scripted engine for UI work and E2E tests
   providers/                  the words for each engine, connecting them, switching, keys
   secrets/                    where a key lives: this computer, or 1Password (`op read`)
@@ -119,7 +120,7 @@ src/
   import/                     Come home: OpenClaw and Hermes read-only, a plan, a ledger for Undo (ADR 0035)
   artifacts/                  things made beside the chat: store, tools, fenced blocks, the sealed frame (ADR 0034); edits, drafts, live data (`live.ts`, ADR 0046)
   tasks/                      background tasks and helpers side by side (`delegate`), queue, worktrees (ADR 0033)
-  questions/                  `ask`: a question answered with a tap, the one waiting per chat, its answer route (ADR 0055)
+  questions/                  `ask`: a question answered with a tap, the one waiting per chat, its answer route (ADR 0060)
   doctor/                     Repair everything: every part's `DoctorCheck`, run at once (`doctor.report`)
   network/watch.ts            online or not (`network.status`); offline routing (ADR 0023)
   lib/path.ts                 the PATH as it is now (Windows registry), refreshed before lookups
@@ -146,8 +147,19 @@ src/
   Each engine keeps its own session in `ConversationRecord.sessions[engine]` with the
   last event it saw; when a conversation moves to another provider, that provider
   resumes its own session and is handed the transcript it missed
-  (`conversations/handoff.ts`, newest first within 60,000 characters). `turn.completed`
-  says which provider and model answered.
+  (`conversations/handoff.ts`, newest first within 60,000 characters, with the chat's
+  latest summary for what that leaves out). `turn.completed` says which provider and
+  model answered.
+- **Long chats** ([ADR 0055](./docs/adr/0055-long-chats-on-every-model.md)). An engine
+  that keeps the transcript itself declares `Engine.context`: the model APIs fit each
+  request into the model's window (`ModelInfo.context`, `engines/api/context.ts`),
+  folding the oldest turns down to half the budget into a summary written by the
+  provider's cheapest model, carried in front of the first kept message. It says so
+  with a `compacted` event (where the kept turns start, from `TurnInput.seq`); the
+  conversation logs `context.compacted` (the chat's quiet line, Nacre
+  `SummaryDivider`) and learns what the person said before it (`MemoryTidy.learn`).
+  A "too long" refusal folds harder and goes again once, by itself, before it becomes
+  the `too-long` problem. `/compact` is `POST /api/conversations/:id/compact`.
 - **Slash commands.** Four sources, resolved in this order: Conch's own commands
   (`/model`, `/effort`, `/mode`, `/fast`, `/new`, `/remember`, `/skills`, … — handled
   in the web app, never sent to the model), your commands
@@ -174,7 +186,25 @@ src/
   and runs executed as ordinary conversations via `ConversationManager.start()` with a
   `report_outcome` tool. Chats get `create_routine` / `list_routines` /
   `update_routine` / `delete_routine`; drafts only run once the user turns them on.
-  See [ADR 0006](./docs/adr/0006-routines.md).
+  See [ADR 0006](./docs/adr/0006-routines.md). `RoutineSpend` (`routines/spend.ts`)
+  prices every run (the provider's figure, else `usage/prices.ts`), stops one past
+  three times its usual (engines report `usage` mid-turn), pauses runs that cost money
+  at a monthly limit, and holds runs while a plan window is 80% used; event-started
+  runs and pre-run checks go through the same `allow` / `record`. See
+  [ADR 0057](./docs/adr/0057-routines-cant-run-up-a-bill.md).
+- **When… routines** (`routines/triggers/`, ADR 0056): a routine starts at a time or
+  when something happens. `pulse.ts` beats every 15 s and asks each source, with no
+  model call, whether anything new happened: `mail.ts` (Gmail's search, either sign-in),
+  `calendar.ts` (Google Calendar, decided every beat), `page.ts` (readable text through
+  `artifacts/live.ts`'s guard, confirmed on a second read), `folder.ts` (`fs.watch`,
+  settled, never protected places), `finished.ts` (tasks, other routines' runs, loops
+  refused) and `hook.ts` (an address on the public door, Standard Webhooks or GitHub
+  HMAC). Each thing once (`routines/when/<id>.seen.json`), bursts into one run, four
+  runs an hour; `onlyif.ts` asks the cheapest model before waking the agent;
+  `RoutineService.fire` starts the run tainted, with what happened fenced as data in
+  its first message (`brief.ts`). The trigger lives in `routines/when/<id>.json`; the
+  routine's own file keeps a placeholder schedule an older Conch never runs.
+  `doctor.ts` joins Repair everything.
 - **Integrations** (`integrations/`): MCP servers the user connects from a catalog
   (one-click OAuth, tokens, local programs) or adds by address/command. The service
   keeps health (probe → plain-language state + one fix action), refreshes tokens
@@ -201,10 +231,10 @@ src/
   [ADR 0037](./docs/adr/0037-direct-google-accounts.md).
   Outbound requests pass the SSRF guard (`integrations/net.ts`). See
   [ADR 0009](./docs/adr/0009-integrations.md).
-- **Connect from the chat** ([ADR 0021](./docs/adr/0021-connect-from-chat.md), [ADR 0055](./docs/adr/0055-the-chat-knows-conch.md)). Every offer goes through `OfferDesk` (`offers/desk.ts`). Before a turn, `IntegrationService.suggest` reads the person's words for catalog `cues` (`integrations/cues.ts`) and the desk logs at most one `offer` (`by: 'cue'`); the prompt says the app isn't connected (`notConnectedPrompt`). Providers with host tools also get the map, `## What Conch can turn on` (`offers/map.ts`: apps not connected and skills Off or When I ask, 2,400 characters at most), and the `offer` tool (`offers/tools.ts`, not in unattended runs). The desk drops an offer that isn't in the map, is muted (`preferences.mutedSuggestions`, skills as `skill:<id>`), was offered in the chat before, is the second this turn, comes from the assistant after the chat read something untrusted, or has nobody to press it.
+- **Connect from the chat** ([ADR 0021](./docs/adr/0021-connect-from-chat.md), [ADR 0060](./docs/adr/0060-the-chat-knows-conch.md)). Every offer goes through `OfferDesk` (`offers/desk.ts`). Before a turn, `IntegrationService.suggest` reads the person's words for catalog `cues` (`integrations/cues.ts`) and the desk logs at most one `offer` (`by: 'cue'`); the prompt says the app isn't connected (`notConnectedPrompt`). Providers with host tools also get the map, `## What Conch can turn on` (`offers/map.ts`: apps not connected and skills Off or When I ask, 2,400 characters at most), and the `offer` tool (`offers/tools.ts`, not in unattended runs). The desk drops an offer that isn't in the map, is muted (`preferences.mutedSuggestions`, skills as `skill:<id>`), was offered in the chat before, is the second this turn, comes from the assistant after the chat read something untrusted, or has nobody to press it.
   `POST /api/conversations/:id/offers/:offerId/accept` checks the app is connected or the skill on (`skill: 'on' | 'once'` turns it on or expands it once) and calls `ConversationManager.carryOn`: `offer.resolved accepted`, then a turn whose prompt repeats `resume.request`, the person's own words, with no new `user.message`. It runs once across devices and retries, and waits for a reply that's running. A newer message logs `offer.resolved expired`; **Not now** is `…/dismiss`. In a tab (phones), the OAuth flow carries `chat` and `offer` (`SignInReturn`), and `/oauth/callback` goes back to `/c/:id?offer=…`, where the web takes the offer by itself.
   The web draws Nacre `OfferCard` (`features/offers/OfferItem.tsx`) under the reply, with the connect dialog in place; a taken offer folds to a quiet line where the chat carried on, with `OfferAlsoTry` (the catalog's `examples`) under the answer. Older logs' `integration.suggestion` events are drawn as the same card.
-- **Replies to send next** ([ADR 0055](./docs/adr/0055-the-chat-knows-conch.md) §5, `replies/`). Each attended turn on a provider with Conch's tools gets the host tool `suggest_replies` (`replies/tools.ts`: one to three, trimmed, deduped, filler dropped; the last call wins). As a turn finishes, `TurnReplies.finish` (`replies/turn.ts`) picks one `replies` event, logged after `turn.completed`: the assistant's when the chat has no `taint`, else Conch's own rules over the turn's text (`replies/conch.ts`, an ordered `RULES` list: a Markdown table with a numeric column gets “Show it as a chart”, offered only to a model that can use tools), else none. Nothing for a turn that didn't succeed, an unattended run (`extras` or an `origin`), or while something in the turn still waits for the person (`waitingOnYou`: an open offer, question, approval, handoff, drafted routine, app issue). The web folds it into `ConversationView.replies` (`features/replies/latest.ts`), cleared by any newer event but the closing bookkeeping (`status: idle`, `title`, `options`, `notice`), and `NextReplies` draws Nacre `ReplyChips` under the reply while idle; a press sends through the composer's path with the draft kept.
+- **Replies to send next** ([ADR 0060](./docs/adr/0060-the-chat-knows-conch.md) §5, `replies/`). Each attended turn on a provider with Conch's tools gets the host tool `suggest_replies` (`replies/tools.ts`: one to three, trimmed, deduped, filler dropped; the last call wins). As a turn finishes, `TurnReplies.finish` (`replies/turn.ts`) picks one `replies` event, logged after `turn.completed`: the assistant's when the chat has no `taint`, else Conch's own rules over the turn's text (`replies/conch.ts`, an ordered `RULES` list: a Markdown table with a numeric column gets “Show it as a chart”, offered only to a model that can use tools), else none. Nothing for a turn that didn't succeed, an unattended run (`extras` or an `origin`), or while something in the turn still waits for the person (`waitingOnYou`: an open offer, question, approval, handoff, drafted routine, app issue). The web folds it into `ConversationView.replies` (`features/replies/latest.ts`), cleared by any newer event but the closing bookkeeping (`status: idle`, `title`, `options`, `notice`), and `NextReplies` draws Nacre `ReplyChips` under the reply while idle; a press sends through the composer's path with the draft kept.
 - **Setup** (`setup/`): what a feature needs from this computer (an app, a program)
   and getting it. A need finds itself where it really lives (`PATH`, Windows app
   aliases, macOS app bundles), installs itself through winget/Homebrew with
@@ -355,6 +385,20 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   skill to review. Routes: `/api/memories/{search,export,:id/keep}`,
   `/api/memory/{index,index/model,tidy}`, `/api/skills/suggestions`.
 
+- **Skills from what worked** ([ADR 0058](./docs/adr/0058-skills-from-what-worked.md)).
+  `SkillLearner` (`skills/learn.ts`) listens to the broadcast: a turn that ended well, a
+  task `verified`, a routine's run `succeeded`. `assess` reads the chat's log as turns
+  and decides whether the last one ended a piece of work worth keeping (a verdict, your
+  thanks, or a long run of steps; failures, a skill already in use and someone else's
+  words rule it out). The provider that answered the chat (else one on this computer)
+  drafts it with its cheapest model; `checkDraft` reads the reply like a skill
+  (`scanText`, secrets, the vault's redactor, replayed specifics; stricter after
+  reading). `permissionsOf` declares only what the successful steps needed. Offers live
+  in `skill-learned.json`, once per chat (or routine), and `skills.offered` tells the web.
+  `SkillUsage` (`skills/usage.ts`) counts every `skill.used` and remembers which skills
+  Conch put on the shelf; `SkillService.shelf`/`tidyShelf` offer the ones unused for 60
+  days and only ever turn them off. Routes: `/api/skills/suggestions/{work,shelf}`.
+
 - **Hand it off** ([ADR 0033](./docs/adr/0033-hand-it-off.md)). `TaskService` runs each
   task as a conversation with origin `task` (as routines do), at most 3 background and 4
   helpers at once, the rest `queued`. A task reports with `report_result`; its status,
@@ -366,7 +410,7 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   budget it refuses. A restart marks running tasks `interrupted` (one-press retry); a limit
   carries on once on `limitFallback`. Push topic `tasks`; doctor check `tasks`.
 
-- **Questions** ([ADR 0055](./docs/adr/0055-the-chat-knows-conch.md) §4). The host tool `ask`
+- **Questions** ([ADR 0060](./docs/adr/0060-the-chat-knows-conch.md) §4). The host tool `ask`
   (`questions/tools.ts`; not offered when `ToolContext.unattended`: routines, tasks, chats
   from a chat app) hands a `Question` to `QuestionDesk`, which logs `question`, sets the
   chat `awaiting-permission` (saved at once) and waits. `POST …/questions/:questionId/answer`
@@ -641,9 +685,15 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   set aside (`search.db.broken-<time>`) and rebuilt from the logs while results say
   `catchingUp`. That happens once per run: a second failure answers 503 until a
   person presses Repair (`POST /api/search/repair`), never a loop.
+  The assistant reads the same index through `search_chats` and `read_chat`
+  (`search/past.ts`, registered with Conch's other tools in `Services`): never in a
+  chat with someone else's words in it, never for routine runs or tasks; what it
+  brings back from a tainted chat taints the chat asking; Passwords' redactor and
+  `scrubSecrets` run over every word; each look is a `chats.looked` event. See
+  [ADR 0059 — Looking through earlier chats](./docs/adr/0059-looking-through-earlier-chats.md).
 - Local data lives in `~/.conch/` (`CONCH_HOME`): `settings.json`, `secrets.json`
   (the API key and a key per provider, or a 1Password reference to one),
-  `memory/*.md` (+ derived `memory-index.db`, `memory-tidy.json`, `models/`; `skill-suggestions.json`), `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `search.db`,
+  `memory/*.md` (+ derived `memory-index.db`, `memory-tidy.json`, `models/`; `skill-suggestions.json`, `skill-learned.json`, `skill-usage.json`), `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`, `routines/when/*.json`; derived `routines/when/*.seen.json`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `search.db`,
   `integrations.json` + `integrations.secrets.json`, `skills/<name>/SKILL.md` +
   `skills.json` (modes for skills Conch doesn't own), `local.json` (the local model chosen, the last download speed), `api-sessions/<id>.json` (the
   transcript a plain model API needs, since it keeps no session of its own),
@@ -939,8 +989,11 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
     nosniff, no-referrer, COOP/CORP and no-store on the API.
 - **Agent containment:**
   - `CONCH_*` variables never reach the agent;
-  - the agent can draft routines but can't enable them or grant trust, and
-    rewriting an active routine pauses it;
+  - the agent can draft routines but can't enable them, grant trust or raise what
+    they may spend, and rewriting an active routine (or what starts it) pauses it;
+  - a run something started (ADR 0056) is tainted from its first message, with
+    what happened fenced as data; a page is only ever read through the live-data
+    guard, and another app's address takes signed, fresh, unrepeated deliveries;
   - unattended runs get no routine tools, and their permission prompts expire;
   - "Always allow" lasts for the conversation only and is never written to
     Claude Code's settings;

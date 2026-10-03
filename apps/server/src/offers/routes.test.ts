@@ -40,7 +40,7 @@ const said = (events: readonly ConversationEvent[]) =>
     .flatMap((e) => (e.type === 'assistant.delta' && e.kind === 'text' ? [e.delta] : []))
     .join('');
 
-describe('offers over HTTP (ADR 0055)', () => {
+describe('offers over HTTP (ADR 0060)', () => {
   it('the assistant offers Linear; connecting it on a phone comes back to the chat, which carries on once', async () => {
     const { app, services } = await setup();
     const sent = await services.conversations.send({

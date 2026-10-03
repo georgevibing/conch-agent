@@ -5,7 +5,7 @@ import type { ToolContext } from '../conversations/manager';
 import type { HostTool } from '../engines/types';
 import type { QuestionDesk } from './desk';
 
-/** When to ask, in the assistant's own instructions (ADR 0055 §4). */
+/** When to ask, in the assistant's own instructions (ADR 0060 §4). */
 export const QUESTIONS_PROMPT = [
   '## Asking the user',
   'When you need the user’s choice to go on, ask with the `ask` tool: they answer with a tap, and your reply carries on with the answer. Ask only when the answer changes what happens next and you can’t reasonably work it out yourself. Never ask to confirm what was already clear. Never write the options as a numbered list in your reply instead.',

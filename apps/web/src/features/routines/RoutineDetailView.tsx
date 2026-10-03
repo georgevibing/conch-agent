@@ -18,16 +18,21 @@ import {
   Surface,
   Switch,
   Text,
+  toast,
+  WatchStatus,
 } from '@conch/nacre';
 import { ArrowLeft, Copy, MessageSquare, MoreHorizontal, Pencil, Play, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 
-import { useUi } from '../../app/ui';
+import { useUi, type SettingsTab } from '../../app/ui';
+import { routinesApi } from './api';
 import { routineIcon } from './icon';
 import { useDeleteRoutine, useRoutine, useRunRoutine, useUpdateRoutine } from './queries';
 import { RoutineEditor } from './RoutineEditor';
 import styles from './Routines.module.css';
+import { moreRoom, runCostText, runLimitText } from './spendWords';
+import { ROUTINES_SPEND_FOCUS } from './SpendingSection';
 import { useSchedulePreview } from './useSchedulePreview';
 import { AlwaysOnHint } from '../background/AlwaysOnHint';
 
@@ -41,6 +46,7 @@ function statusLine(routine: Routine, now: number) {
   if (routine.status === 'draft') return 'Not on yet';
   if (routine.status === 'paused') return 'Paused';
   if (routine.status === 'completed') return 'Finished';
+  if (routine.when) return 'Free until something happens';
   return routine.nextRunAt
     ? `Next run ${formatWhen(routine.nextRunAt, { now }).replace(/^./, (c) => c.toLowerCase())}`
     : 'On';
@@ -70,6 +76,41 @@ function NextRuns({ routine }: { routine: Routine }) {
       </Text>
       <AlwaysOnHint what="This routine runs" />
     </Surface>
+  );
+}
+
+/** How a routine that starts when something happens is doing (ADR 0056). */
+function Watching({ routine }: { routine: Routine }) {
+  const openSettings = useUi((s) => s.openSettings);
+  const navigate = useNavigate();
+  const watch = routine.watch;
+  if (!watch || !routine.when) return null;
+  const fix = watch.fix;
+  // A page of its own, not part of Settings: go there in the app.
+  const open = (place: string, focus?: string) => {
+    if (place === 'integrations') return void navigate(focus ? `/apps/${focus}` : '/apps');
+    if (place === 'channels') return void navigate('/apps?show=talk');
+    openSettings(place as SettingsTab, focus);
+  };
+  return (
+    <WatchStatus
+      state={watch.state}
+      text={routine.scheduleText}
+      {...(routine.onlyIf && { onlyIf: routine.onlyIf })}
+      {...(watch.message && { message: watch.message })}
+      {...(fix && { action: { label: fix.label, onClick: () => open(fix.place, fix.focus) } })}
+      noticed={watch.noticed}
+      woke={watch.woke}
+      passed={watch.passed}
+      waiting={watch.waiting}
+      {...(watch.lastNoticedAt && { lastNoticedAt: watch.lastNoticedAt })}
+      {...(watch.address && { address: watch.address })}
+      {...(watch.signed !== undefined && { signed: watch.signed })}
+      {...(routine.when.kind === 'hook' && {
+        onNewSecret: async () => (await routinesApi.newSecret(routine.id)).secret,
+      })}
+      footer={<AlwaysOnHint what="This routine notices things" />}
+    />
   );
 }
 
@@ -108,7 +149,9 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
   }
 
   const { routine, runs } = data;
-  const running = runs[0]?.status === 'running' || runs[0]?.status === 'needs-you';
+  // Needing you mid-run (a question) is still running; a run that ended asking for a look isn't.
+  const running =
+    runs[0]?.status === 'running' || (runs[0]?.status === 'needs-you' && !runs[0].finishedAt);
   const openRun = (id: string) => {
     const r = runs.find((x) => x.id === id);
     if (r?.conversationId) void navigate(`/c/${r.conversationId}`);
@@ -121,7 +164,27 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
     outcome: r.outcome,
     error: r.error,
     durationMs: r.finishedAt ? r.finishedAt - r.startedAt : undefined,
+    cost: runCostText(r.cost),
+    ...(r.event && {
+      event: { label: r.event.label, ...(r.event.link && { link: r.event.link }) },
+    }),
   }));
+  const latest = runs[0];
+  const spend = routine.spend;
+  const limitText = runLimitText(spend?.runLimit);
+  /** “Let it use more”: a person's choice, for this routine only. */
+  const letItUseMore = () => {
+    const usd = moreRoom(spend?.runLimit, latest?.cost?.usd);
+    update.mutate(
+      { id: routine.id, patch: { runLimitUsd: usd } },
+      {
+        onSuccess: () =>
+          toast.success(`Each run of “${routine.title}” may now use up to $${usd}`, {
+            description: 'You can change it in Edit.',
+          }),
+      },
+    );
+  };
 
   return (
     <Page gap={6}>
@@ -131,7 +194,7 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
 
       <header className={styles.detailHeader}>
         <span className={styles.detailIcon} aria-hidden>
-          {routineIcon(routine.schedule)}
+          {routineIcon(routine.schedule, routine.when)}
         </span>
         <Stack gap={1} className={styles.detailTitle}>
           <Heading level={1} size="2xl">
@@ -140,6 +203,7 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
           {routine.summary && <Text tone="muted">{routine.summary}</Text>}
           <Text size="sm" tone="subtle">
             {routine.scheduleText} · {statusLine(routine, now)}
+            {spend?.text && ` · ${spend.text}`}
           </Text>
         </Stack>
         <Stack direction="row" gap={2} align="center" className={styles.detailActions}>
@@ -159,7 +223,7 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
             disabled={running}
             onClick={() => run.mutate(routine.id)}
           >
-            {running ? 'Running…' : 'Run now'}
+            {running ? 'Running…' : routine.when ? 'Try it now' : 'Run now'}
           </Button>
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
@@ -228,7 +292,39 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
           {runs[0].error}
         </Callout>
       )}
-      {runs[0]?.status === 'needs-you' && (
+      {latest?.guard === 'run' && latest.status === 'needs-you' && (
+        <Callout
+          tone="warning"
+          title="Stopped at its limit"
+          action={
+            <Button size="sm" onClick={letItUseMore} loading={update.isPending}>
+              Let it use more
+            </Button>
+          }
+        >
+          {latest.outcome}
+        </Callout>
+      )}
+      {latest?.guard === 'month' && (
+        <Callout
+          tone="info"
+          title="Paused for the rest of the month"
+          action={
+            <Button size="sm" onClick={() => openSettings('usage', ROUTINES_SPEND_FOCUS)}>
+              Raise the limit
+            </Button>
+          }
+        >
+          {latest.outcome}
+        </Callout>
+      )}
+      {latest?.guard === 'plan-room' && (
+        // It goes by itself once there's room: nothing to do.
+        <Callout tone="info" title="Leaving room for your own chats">
+          {latest.outcome}
+        </Callout>
+      )}
+      {runs[0]?.status === 'needs-you' && !runs[0].guard && (
         <Callout
           tone="warning"
           title={running ? 'Waiting for you' : 'Worth a look'}
@@ -265,7 +361,7 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
           />
         </section>
         <aside className={styles.side}>
-          <NextRuns routine={routine} />
+          {routine.when ? <Watching routine={routine} /> : <NextRuns routine={routine} />}
           <Collapsible>
             <Collapsible.Trigger className={styles.detailsTrigger}>Details</Collapsible.Trigger>
             <Collapsible.Content>
@@ -278,22 +374,43 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
                     {routine.prompt}
                   </Text>
                 </Stack>
+                {(spend?.text || limitText) && (
+                  <Stack gap={1}>
+                    <Text size="xs" weight="medium" tone="subtle">
+                      What it costs
+                    </Text>
+                    {spend?.text && (
+                      <Text size="sm">
+                        {spend.text}
+                        {spend.basis === 'estimate' && ', a guess until it has run'}
+                      </Text>
+                    )}
+                    {limitText && (
+                      <Text size="sm" tone="muted">
+                        A run stops if it uses more than {limitText}
+                        {spend?.runLimit?.custom ? ' (you set this)' : ''}.
+                      </Text>
+                    )}
+                  </Stack>
+                )}
                 <Stack gap={1}>
                   <Text size="xs" weight="medium" tone="subtle">
                     Permissions
                   </Text>
                   <Text size="sm">{trustLabels[routine.trust]}</Text>
                 </Stack>
-                <Stack gap={1}>
-                  <Text size="xs" weight="medium" tone="subtle">
-                    If Conch was off
-                  </Text>
-                  <Text size="sm">
-                    {routine.catchUp
-                      ? 'Catches up once when Conch is back'
-                      : 'Skips the missed time'}
-                  </Text>
-                </Stack>
+                {!routine.when && (
+                  <Stack gap={1}>
+                    <Text size="xs" weight="medium" tone="subtle">
+                      If Conch was off
+                    </Text>
+                    <Text size="sm">
+                      {routine.catchUp
+                        ? 'Catches up once when Conch is back'
+                        : 'Skips the missed time'}
+                    </Text>
+                  </Stack>
+                )}
                 <Stack gap={1}>
                   <Text size="xs" weight="medium" tone="subtle">
                     Made by
@@ -311,12 +428,18 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
                       title: routine.title,
                       summary: routine.summary,
                       prompt: routine.prompt,
-                      schedule: routine.schedule,
+                      ...(routine.when
+                        ? {
+                            when: routine.when,
+                            ...(routine.onlyIf && { onlyIf: routine.onlyIf }),
+                          }
+                        : { schedule: routine.schedule }),
                       timezone: routine.timezone,
                       status: routine.status,
                       trust: routine.trust,
                       catchUp: routine.catchUp,
                       options: routine.options,
+                      ...(routine.runLimitUsd && { runLimitUsd: routine.runLimitUsd }),
                     },
                     null,
                     2,

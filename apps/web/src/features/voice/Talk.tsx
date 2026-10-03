@@ -144,7 +144,7 @@ export function Talk({
   const follow = (view: ConversationView) => {
     const t = turn.current;
     if (!t) return;
-    // A question with answers to tap (ADR 0055): read it out, and what's said back answers it.
+    // A question with answers to tap (ADR 0060): read it out, and what's said back answers it.
     const question = view.status === 'awaiting-permission' ? pendingQuestion(view) : undefined;
     if (question && !pendingPermission(view)) {
       if (asked.current === question.id) return;

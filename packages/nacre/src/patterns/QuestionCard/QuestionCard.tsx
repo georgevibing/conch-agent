@@ -206,7 +206,7 @@ function useKeys(ref: RefObject<HTMLElement | null>, onKey: (event: KeyboardEven
 }
 
 /**
- * A question the assistant asks in the middle of a reply (ADR 0055), answered
+ * A question the assistant asks in the middle of a reply (ADR 0060), answered
  * with a tap instead of a typed paragraph: options, a day and a time, a number,
  * a few words. It sits in the flow of the chat, calm, and wears the pearl rim
  * while it waits for you. A single choice goes the moment you tap it; anything

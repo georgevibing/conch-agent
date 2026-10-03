@@ -6,6 +6,7 @@
 import { z } from 'zod';
 
 import { Memory } from './memory';
+import { SkillAppName, SkillCapability, SkillCommandPrefix } from './skills';
 
 /** How memory is searched right now. */
 export const MemoryIndexStatus = z.object({
@@ -80,6 +81,11 @@ export const TidyRun = z.object({
   at: z.number(),
   /** `nightly` while you slept, `now` when you asked. */
   trigger: z.enum(['nightly', 'now']),
+  /**
+   * Learned from one chat just before its start was summarised (ADR 0055):
+   * its id. Such a run only reads what you said there.
+   */
+  chat: z.string().optional(),
   /** Whether a model helped (it can only merge exact repeats without one). */
   model: z.boolean(),
   changes: z.array(TidyChange),
@@ -103,12 +109,30 @@ export const TidyAnswerBody = z.object({
   answer: z.enum(['keep', 'undo', 'dismiss']),
 });
 
-/** Something you keep asking for, which could be a skill. */
+/**
+ * What a drafted skill says it may do (ADR 0031): only what the steps it was
+ * learned from needed (ADR 0058).
+ */
+export const SkillDraftPermissions = z.object({
+  capabilities: z.array(SkillCapability).max(7),
+  /** Only these programs, when every command was one of a few. */
+  commands: z.array(SkillCommandPrefix).max(12).optional(),
+  /** Only these apps (integration servers). */
+  apps: z.array(SkillAppName).max(12).optional(),
+  /** The list in plain words, as the skill's page will say it. */
+  words: z.array(z.string().max(200)).max(7).optional(),
+});
+export type SkillDraftPermissions = z.infer<typeof SkillDraftPermissions>;
+
+/**
+ * Something that could be a skill: what you keep asking for (`habit`, ADR
+ * 0032), or how a piece of work went well in one chat (`work`, ADR 0058).
+ */
 export const SkillSuggestion = z.object({
   id: z.string(),
   /** “Weekly summary of my calendar”. */
   title: z.string().max(80),
-  /** How many times, in how many chats. */
+  /** How many times, in how many chats (1 for work in one chat). */
   times: z.number().int().positive(),
   /** What you said, a few of them, newest first. */
   examples: z.array(z.object({ text: z.string(), conversationId: z.string(), at: z.number() })),
@@ -117,12 +141,54 @@ export const SkillSuggestion = z.object({
     title: z.string(),
     description: z.string(),
     instructions: z.string(),
+    /** What it would say it may do: only what the work needed. */
+    permissions: SkillDraftPermissions.optional(),
   }),
+  /** Where it came from. */
+  from: z.enum(['habit', 'work']).default('habit'),
+  /** For `work`: the chat it was learned in, and when the work in it ended. */
+  chat: z
+    .object({ conversationId: z.string(), title: z.string().max(200), endedAt: z.number() })
+    .optional(),
+  /** For `work`: how many steps it took. */
+  steps: z.number().int().nonnegative().optional(),
+  /** Learned in a chat that read something from outside (ADR 0028): what, in a sentence. */
+  untrusted: z.string().max(300).optional(),
 });
 export type SkillSuggestion = z.infer<typeof SkillSuggestion>;
 
 export const SkillSuggestions = z.object({ suggestions: z.array(SkillSuggestion) });
 export type SkillSuggestions = z.infer<typeof SkillSuggestions>;
+
+/**
+ * A tidy shelf (ADR 0058): skills Conch put on your shelf — suggested,
+ * learned or brought in — that haven't been used in a long while. Only an
+ * offer: nothing is turned off until you press.
+ */
+export const ShelfSkill = z.object({
+  id: z.string(),
+  name: z.string(),
+  title: z.string(),
+  /** When it was last used; unset when it never was. */
+  lastUsedAt: z.number().optional(),
+  /** Since when it's been on the shelf without use. */
+  idleSince: z.number(),
+});
+export type ShelfSkill = z.infer<typeof ShelfSkill>;
+
+export const SkillShelf = z.object({
+  stale: z.array(ShelfSkill),
+  /** How long counts as a long while, in days. */
+  days: z.number().int().positive(),
+});
+export type SkillShelf = z.infer<typeof SkillShelf>;
+
+/** Turn them off, or keep them (asked again after another long while). */
+export const TidyShelfBody = z.object({
+  action: z.enum(['off', 'keep']),
+  ids: z.array(z.string().min(1).max(128)).min(1).max(50),
+});
+export type TidyShelfBody = z.infer<typeof TidyShelfBody>;
 
 export const DismissSuggestionBody = z.object({
   id: z.string(),

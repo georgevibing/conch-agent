@@ -334,6 +334,13 @@ describe('Palette search', () => {
       await screen.findByRole('option', { name: /When a provider can’t answer/ }),
     ).toBeInTheDocument();
 
+    // What routines may spend (ADR 0057): Settings → Usage, where the limit is.
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'routine spending');
+    expect(
+      await screen.findByRole('option', { name: /What routines may spend/ }),
+    ).toBeInTheDocument();
+
     // Keywords count by whole-word prefix, not scattered letters.
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'forget');
@@ -478,6 +485,35 @@ describe('Palette search', () => {
     );
     expect(useUi.getState().stopHolding).toEqual({ conversationId: 'c7', skillId: 'quick-setup' });
     act(() => useUi.setState({ stopHolding: undefined }));
+  });
+
+  it('summarises the start of the open chat by name, as /compact does (ADR 0055)', async () => {
+    const user = userEvent.setup();
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'POST /api/conversations/c7/compact': () => ({
+        compacted: true,
+        message: 'GPT-5 mini now reads a summary of the earlier messages.',
+      }),
+    });
+    renderApp(
+      <Routes>
+        <Route path="/c/:conversationId" element={<Palette />} />
+      </Routes>,
+      { route: '/c/c7' },
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'compact');
+    await user.click(
+      await screen.findByRole('option', { name: /Summarise the start of this chat/ }),
+    );
+    await waitFor(() =>
+      expect(
+        calls.some((c) => c.method === 'POST' && c.path === '/api/conversations/c7/compact'),
+      ).toBe(true),
+    );
   });
 
   it('edits a thing made in a chat by hand, and finds what pages may read (ADR 0046)', async () => {
@@ -809,6 +845,144 @@ describe('Palette search', () => {
     await user.type(screen.getByRole('combobox'), 'publishers you trust');
     await user.keyboard('{Enter}');
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/skills'));
+  });
+
+  it('finds skills that are off by the words people use, archived among them (ADR 0058)', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    renderApp(
+      <>
+        <Palette />
+        <Where />
+      </>,
+    );
+    act(() => useUi.getState().setPalette(true));
+    for (const words of ['archived skills', 'unused skills', 'skills off']) {
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /Skills that are off/ }),
+      ).toBeInTheDocument();
+    }
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/skills?show=off'));
+  });
+
+  it('saves how the open chat’s work was done, only in a chat that earned it (ADR 0058)', async () => {
+    const user = userEvent.setup();
+    const offer = {
+      id: 'ws_1',
+      title: 'Release notes',
+      times: 1,
+      examples: [{ text: 'Release notes for 1.3', conversationId: 'c4', at: 1 }],
+      draft: {
+        title: 'Release notes',
+        description: 'Writes release notes. Use when asked for release notes.',
+        instructions: '1. Find the last tag.\n2. List the commits since it.',
+        permissions: {
+          capabilities: ['commands'],
+          commands: ['git'],
+          words: ['run commands (only `git`)'],
+        },
+      },
+      from: 'work',
+      chat: { conversationId: 'c4', title: 'Release notes for 1.3', endedAt: 1 },
+      steps: 12,
+    };
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'GET /api/skills/suggestions/work': () => ({ suggestions: [offer] }),
+    });
+    renderApp(
+      <Routes>
+        <Route
+          path="/c/:conversationId"
+          element={
+            <>
+              <Palette />
+              <Where />
+            </>
+          }
+        />
+        <Route path="/skills/new" element={<Where />} />
+      </Routes>,
+      { route: '/c/c5' },
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'save how');
+    // Another chat's offer isn't this chat's.
+    await waitFor(() =>
+      expect(screen.queryByRole('option', { name: /Save how I did this/ })).toBeNull(),
+    );
+  });
+
+  it('opens the draft from the chat that earned it', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'GET /api/skills/suggestions/work': () => ({
+        suggestions: [
+          {
+            id: 'ws_1',
+            title: 'Release notes',
+            times: 1,
+            examples: [],
+            draft: {
+              title: 'Release notes',
+              description: 'Writes release notes. Use when asked for release notes.',
+              instructions: '1. Find the last tag.\n2. List the commits since it.',
+            },
+            from: 'work',
+            chat: { conversationId: 'c4', title: 'Release notes for 1.3', endedAt: 1 },
+            steps: 12,
+          },
+        ],
+      }),
+    });
+    renderApp(
+      <Routes>
+        <Route path="/c/:conversationId" element={<Palette />} />
+        <Route path="/skills/new" element={<Where />} />
+      </Routes>,
+      { route: '/c/c4' },
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'learn the steps');
+    await user.click(await screen.findByRole('option', { name: /Save how I did this as a skill/ }));
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/skills/new'));
+  });
+
+  it('starts a routine that starts when something happens, by the words people use', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    renderApp(
+      <>
+        <Palette />
+        <Where />
+      </>,
+    );
+    act(() => useUi.getState().setPalette(true));
+    for (const words of ['tell me when', 'watch a page', 'email arrives', 'webhook']) {
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /New routine that starts when/ }),
+      ).toBeInTheDocument();
+    }
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/routines'));
   });
 
   it('finds notifications and adding a phone by the words people use', async () => {

@@ -27,6 +27,7 @@ export type BuiltinAction =
   | 'fast'
   | 'mode'
   | 'new'
+  | 'compact'
   | 'remember'
   | 'routines'
   | 'skills'
@@ -63,6 +64,13 @@ export const builtins: Builtin[] = [
     aliases: ['trust', 'permissions'],
   },
   { name: 'new', action: 'new', description: 'Start a new chat', aliases: ['clear'] },
+  {
+    name: 'compact',
+    action: 'compact',
+    description: 'Summarise the start of a long chat, so the model reads less',
+    argumentHint: '[what to keep]',
+    aliases: ['summarise', 'summarize'],
+  },
   {
     name: 'remember',
     action: 'remember',

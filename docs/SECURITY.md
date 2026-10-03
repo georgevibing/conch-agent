@@ -325,6 +325,12 @@ it doesn't try: once a chat has read something from outside, anything that could
 send your things somewhere or change this computer **asks you first**, in every
 mode (Full trust included), and the question says why. Reading on is free.
 
+Your assistant can look through your earlier chats. When what it finds comes
+from a chat that read something from outside, or has someone else's words, this
+chat counts as having read it too, and the question names that chat. Someone you
+let in on a chat app can't look through your chats at all, and nothing your
+assistant brings back from them carries a password or a key.
+
 Commands also run **sealed**: they can change your work folder and the caches
 installs use, and can't read your SSH keys, cloud sign-ins, keychains or
 browsers' saved passwords. A command that needs out asks first.

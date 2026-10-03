@@ -21,7 +21,7 @@ const DROPPED: Record<OfferDrop, (name: string) => string> = {
 };
 
 /**
- * `offer` (ADR 0055 §2): the assistant proposes one app or skill from the
+ * `offer` (ADR 0060 §2): the assistant proposes one app or skill from the
  * map, and the person decides. It never turns anything on.
  */
 export function offerTools(

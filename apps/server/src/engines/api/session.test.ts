@@ -1,11 +1,16 @@
-import { mkdtemp, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { MAX_TURNS, sessionsDir, startsTurn, TranscriptStore, trim } from './session';
+import { MAX_MESSAGES, sessionsDir, startsTurn, TranscriptStore, trim } from './session';
 import type { WireMessage } from './types';
+
+const turn = (n: number): WireMessage[] => [
+  { role: 'user', content: `question ${n}` },
+  { role: 'assistant', content: `answer ${n}` },
+];
 
 async function store(): Promise<{ store: TranscriptStore; dir: string }> {
   const home = await mkdtemp(join(tmpdir(), 'conch-api-'));
@@ -78,11 +83,6 @@ describe('the transcript on disk', () => {
 });
 
 describe('trimming a long transcript', () => {
-  const turn = (n: number): WireMessage[] => [
-    { role: 'user', content: `question ${n}` },
-    { role: 'assistant', content: `answer ${n}` },
-  ];
-
   it('knows where a turn begins', () => {
     expect(startsTurn({ role: 'user', content: 'hi' })).toBe(true);
     expect(startsTurn({ role: 'assistant', content: 'hi' })).toBe(false);
@@ -102,25 +102,26 @@ describe('trimming a long transcript', () => {
     ).toBe(true);
   });
 
-  it('drops the oldest whole turns once there are too many', () => {
-    const messages = Array.from({ length: MAX_TURNS + 5 }, (_, i) => turn(i)).flat();
+  it('keeps a safety net on the file: past the message cap, the oldest whole turns go', () => {
+    const turns = MAX_MESSAGES / 2 + 5;
+    const messages = Array.from({ length: turns }, (_, i) => turn(i)).flat();
     const kept = trim(messages);
 
-    expect(kept.length).toBe(MAX_TURNS * 2);
+    expect(kept.length).toBe(MAX_MESSAGES);
     expect(kept[0]).toEqual({ role: 'user', content: 'question 5' });
-    expect(kept.at(-1)).toEqual({ role: 'assistant', content: `answer ${MAX_TURNS + 4}` });
+    expect(kept.at(-1)).toEqual({ role: 'assistant', content: `answer ${turns - 1}` });
   });
 
   it('drops by size too, and always leaves a user turn at the front', () => {
     const big = (n: number): WireMessage[] => [
       { role: 'user', content: `q${n}` },
-      { role: 'assistant', content: 'x'.repeat(50_000) },
-      { role: 'tool', tool_call_id: `t${n}`, content: 'y'.repeat(50_000) },
+      { role: 'assistant', content: 'x'.repeat(2_000_000) },
+      { role: 'tool', tool_call_id: `t${n}`, content: 'y'.repeat(2_000_000) },
     ];
-    const messages = Array.from({ length: 8 }, (_, i) => big(i)).flat();
+    const messages = Array.from({ length: 6 }, (_, i) => big(i)).flat();
     const kept = trim(messages);
 
-    expect(JSON.stringify(kept).length).toBeLessThanOrEqual(400_000);
+    expect(JSON.stringify(kept).length).toBeLessThanOrEqual(16_000_000);
     expect(startsTurn(kept[0] as WireMessage)).toBe(true);
   });
 
@@ -129,13 +130,69 @@ describe('trimming a long transcript', () => {
     expect(trim(messages)).toEqual(messages);
   });
 
-  it('writes back only what it kept', async () => {
+  it('writes back only what it kept, with each turn’s place still lined up', async () => {
     const { store: sessions } = await store();
     const id = TranscriptStore.newId();
-    const messages = Array.from({ length: MAX_TURNS + 3 }, (_, i) => turn(i)).flat();
+    const turns = MAX_MESSAGES / 2 + 3;
+    const messages = Array.from({ length: turns }, (_, i) => turn(i)).flat();
+    const seqs = Array.from({ length: turns }, (_, i) => i * 10);
 
-    const written = await sessions.save(id, { provider: 'openrouter', messages });
-    expect(written.length).toBe(MAX_TURNS * 2);
-    expect(await sessions.load(id, 'openrouter')).toEqual(written);
+    const written = await sessions.save(id, { provider: 'openrouter', messages, seqs });
+    expect(written.length).toBe(MAX_MESSAGES);
+    const back = await sessions.open(id, 'openrouter');
+    expect(back.messages).toEqual(written);
+    expect(back.seqs[0]).toBe(30);
+    expect(back.seqs).toHaveLength(MAX_MESSAGES / 2);
+  });
+});
+
+describe('the summary kept with the transcript (ADR 0055)', () => {
+  it('saves and reads back the summary, the turns’ places and the estimate’s correction', async () => {
+    const { store: sessions } = await store();
+    const id = TranscriptStore.newId();
+    const messages: WireMessage[] = [
+      { role: 'user', content: 'and then?' },
+      { role: 'assistant', content: 'then this' },
+    ];
+    await sessions.save(id, {
+      provider: 'openrouter',
+      messages,
+      summary: { text: 'Earlier: a garden plan.', turns: 4, at: 1 },
+      seqs: [42],
+      factor: 1.3,
+    });
+
+    expect(await sessions.open(id, 'openrouter')).toEqual({
+      messages,
+      summary: { text: 'Earlier: a garden plan.', turns: 4, at: 1 },
+      seqs: [42],
+      factor: 1.3,
+    });
+  });
+
+  it('reads a file written before summaries existed as places unknown, not wrong', async () => {
+    const { store: sessions, dir } = await store();
+    const id = TranscriptStore.newId();
+    const file = {
+      version: 1,
+      provider: 'openrouter',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [...turn(1), ...turn(2)],
+    };
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, `${id}.json`), JSON.stringify(file));
+
+    const back = await sessions.open(id, 'openrouter');
+    expect(back.messages).toHaveLength(4);
+    expect(back.seqs).toEqual([null, null]);
+    expect(back.summary).toBeUndefined();
+  });
+
+  it('never trusts places that don’t line up with the turns', async () => {
+    const { store: sessions } = await store();
+    const id = TranscriptStore.newId();
+    await sessions.save(id, { provider: 'openrouter', messages: [...turn(1)], seqs: [1, 2, 3] });
+    expect((await sessions.open(id, 'openrouter')).seqs).toEqual([null]);
   });
 });

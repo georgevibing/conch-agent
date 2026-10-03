@@ -56,6 +56,25 @@ export class Translator {
   #current?: string;
   #error?: string;
   #problem?: TurnProblem;
+  /** Each model request's tokens (by message id: one request can arrive as several messages). */
+  #used = new Map<string, { input: number; cached: number; output: number }>();
+
+  /** The turn so far, sub-agents included: they spend too. */
+  #total() {
+    let input = 0;
+    let cached = 0;
+    let output = 0;
+    for (const u of this.#used.values()) {
+      input += u.input;
+      cached += u.cached;
+      output += u.output;
+    }
+    return {
+      inputTokens: input,
+      outputTokens: output,
+      ...(cached > 0 && { cachedInputTokens: cached }),
+    };
+  }
 
   translate(msg: SDKMessage): EngineEvent[] {
     switch (msg.type) {
@@ -106,7 +125,26 @@ export class Translator {
       }
 
       case 'assistant': {
-        if (msg.parent_tool_use_id) return [];
+        const used = msg.message.usage as
+          | {
+              input_tokens?: number | null;
+              output_tokens?: number | null;
+              cache_creation_input_tokens?: number | null;
+              cache_read_input_tokens?: number | null;
+            }
+          | undefined;
+        let progress: EngineEvent | undefined;
+        if (used && !msg.error) {
+          const cached = used.cache_read_input_tokens ?? 0;
+          this.#used.set(msg.message.id, {
+            input: (used.input_tokens ?? 0) + (used.cache_creation_input_tokens ?? 0) + cached,
+            cached,
+            output: used.output_tokens ?? 0,
+          });
+          // A running total, so an unattended run can stop at its limit (ADR 0057).
+          progress = { type: 'usage', usage: this.#total() };
+        }
+        if (msg.parent_tool_use_id) return progress ? [progress] : [];
         const out: EngineEvent[] = [];
         if (msg.error) {
           // The CLI also renders the raw API error as assistant text; show our friendly one instead.
@@ -132,6 +170,7 @@ export class Translator {
           this.#streamed.add(id);
           out.push({ type: 'message-done', messageId: id });
         }
+        if (progress) out.push(progress);
         return out;
       }
 
@@ -154,8 +193,12 @@ export class Translator {
       }
 
       case 'result': {
+        // Cache reads and writes are input the model saw, like every other engine counts it.
+        const cached = msg.usage.cache_read_input_tokens ?? 0;
         const usage = {
-          inputTokens: msg.usage.input_tokens ?? 0,
+          inputTokens:
+            (msg.usage.input_tokens ?? 0) + (msg.usage.cache_creation_input_tokens ?? 0) + cached,
+          ...(cached > 0 && { cachedInputTokens: cached }),
           outputTokens: msg.usage.output_tokens ?? 0,
           costUsd: msg.total_cost_usd,
           durationMs: msg.duration_ms,

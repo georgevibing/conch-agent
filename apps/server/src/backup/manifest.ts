@@ -41,7 +41,7 @@ export interface BackupRule {
    * Restored by merging with what's here rather than replacing it (and never
    * removed when the backup has none): `usage` keeps money already spent.
    */
-  merge?: 'usage' | 'tasks';
+  merge?: 'usage' | 'tasks' | 'routine-spend';
   /** Why, in one line (the ADR quotes these). */
   why: string;
 }
@@ -214,6 +214,13 @@ export const RULES: readonly BackupRule[] = [
     merge: 'usage',
     why: 'Your budget, and what you spent (chats you deleted included, so it can’t be rebuilt). Merged on restore: money already spent stays counted.',
   },
+  {
+    match: 'routine-spend.json',
+    class: 'kept',
+    group: 'routines',
+    merge: 'routine-spend',
+    why: 'What your routines spent each month, and the monthly limit you chose (ADR 0057). Merged on restore: money already spent stays counted.',
+  },
   { match: 'memory/*.md', class: 'kept', group: 'memory', why: 'Your memories, one file each.' },
   {
     match: 'artifacts/access.json',
@@ -230,6 +237,17 @@ export const RULES: readonly BackupRule[] = [
   { match: 'commands/*.md', class: 'kept', group: 'commands', why: 'Your slash commands.' },
   { match: 'routines/*.json', class: 'kept', group: 'routines', why: 'Your routines.' },
   {
+    match: 'routines/when/*.seen.json',
+    class: 'derived',
+    why: 'What a routine that starts when something happens has already seen. A restore starts watching from then, rather than replaying everything since (ADR 0056).',
+  },
+  {
+    match: 'routines/when/*.json',
+    class: 'kept',
+    group: 'routines',
+    why: 'What starts each routine that starts when something happens: an email, a meeting, a page, a folder (ADR 0056).',
+  },
+  {
     match: 'routines/*.runs.jsonl',
     class: 'kept',
     group: 'routines',
@@ -241,6 +259,18 @@ export const RULES: readonly BackupRule[] = [
     class: 'kept',
     group: 'skills',
     why: 'Skill suggestions you turned down, and a line of what each was about, so they stay down.',
+  },
+  {
+    match: 'skill-learned.json',
+    class: 'kept',
+    group: 'skills',
+    why: 'Skills Conch offered from work that went well in your chats, which chats it already looked at, and the offers you turned down.',
+  },
+  {
+    match: 'skill-usage.json',
+    class: 'kept',
+    group: 'skills',
+    why: 'When each skill was last used, and which ones Conch suggested or brought in, so the tidy shelf only ever offers those.',
   },
   {
     match: 'skills.trust.json',
@@ -372,6 +402,12 @@ export const RULES: readonly BackupRule[] = [
     class: 'secret',
     group: 'secrets',
     why: 'Your bots’ keys, and your email’s app password.',
+  },
+  {
+    match: 'routines.secrets.json',
+    class: 'secret',
+    group: 'secrets',
+    why: 'The secrets other apps sign their messages to your routines with (ADR 0056).',
   },
   {
     match: 'whatsapp.secrets.json',

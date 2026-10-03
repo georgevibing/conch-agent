@@ -71,7 +71,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The one thing a request is missing, offered right under the reply that needed it (ADR 0055): an app to connect, or a skill that’s off. It says why in the assistant’s own words, with one button — **Connect**, **Turn on** or **Use it** — a quiet **Not now**, and **Don’t suggest** tucked in the overflow. A skill opens in place to show what it may do before it’s on. Taken, the card folds into a quiet line, “Connected Google Calendar · carrying on”, its check drawing itself once, and the chat carries on by itself. A newer message overtakes an unanswered offer, which shrinks to a small line. Nothing about it moves once it has arrived, and with reduced motion it simply changes.',
+          'The one thing a request is missing, offered right under the reply that needed it (ADR 0060): an app to connect, or a skill that’s off. It says why in the assistant’s own words, with one button — **Connect**, **Turn on** or **Use it** — a quiet **Not now**, and **Don’t suggest** tucked in the overflow. A skill opens in place to show what it may do before it’s on. Taken, the card folds into a quiet line, “Connected Google Calendar · carrying on”, its check drawing itself once, and the chat carries on by itself. A newer message overtakes an unanswered offer, which shrinks to a small line. Nothing about it moves once it has arrived, and with reduced motion it simply changes.',
       },
     },
   },

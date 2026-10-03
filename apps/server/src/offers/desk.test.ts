@@ -120,7 +120,7 @@ const propose = (d: OfferDesk, input: Partial<Parameters<OfferDesk['propose']>[0
     ...input,
   });
 
-describe('the offer desk: what the assistant may offer (ADR 0055)', () => {
+describe('the offer desk: what the assistant may offer (ADR 0060)', () => {
   it('shows one from the map, in its own words, carrying on with the person’s request', async () => {
     const { desk: d } = desk([asked('what’s on this week?')]);
     const result = await propose(d);

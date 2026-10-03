@@ -15,6 +15,7 @@ import { z } from 'zod';
 
 import { BACKUP_EXTENSION } from '@conch/protocol';
 
+import { mergeRoutineSpend } from '../routines/spend';
 import { mergeTaskLedgers } from '../tasks/store';
 import { safeJoin, writeFileAtomic, writeJson } from '../lib/fs';
 import { writeBackup } from './format';
@@ -142,6 +143,11 @@ export async function applyPlan(home: string, plan: Plan): Promise<void> {
         to,
         JSON.parse(mergeTaskLedgers(current, await readFile(from)).toString('utf8')),
       );
+      continue;
+    }
+    if (rule.merge === 'routine-spend') {
+      const current = await readFile(to).catch(() => undefined);
+      await writeJson(to, mergeRoutineSpend(current, await readFile(from)));
       continue;
     }
     if (rule.merge === 'usage') {

@@ -1,4 +1,10 @@
-import type { Routine, RoutineDetail, RoutineRun, ServerEvent } from '@conch/protocol';
+import type {
+  Routine,
+  RoutineDetail,
+  RoutineRun,
+  RoutineSpending,
+  ServerEvent,
+} from '@conch/protocol';
 import { toast } from '@conch/nacre';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
@@ -8,6 +14,7 @@ import { routinesApi } from './api';
 export const routineKeys = {
   all: ['routines'] as const,
   detail: (id: string) => ['routines', id] as const,
+  spending: ['routines-spending'] as const,
 };
 
 export function useRoutines() {
@@ -20,6 +27,39 @@ export function useRoutine(id: string | undefined) {
     queryFn: () => routinesApi.detail(id ?? ''),
     enabled: Boolean(id),
   });
+}
+
+/** What routines spent this month, live (ADR 0057). */
+export function useRoutineSpending() {
+  return useQuery({
+    queryKey: routineKeys.spending,
+    queryFn: routinesApi.spending,
+    staleTime: 60_000,
+  });
+}
+
+function useSpendingMutation<T>(fn: (arg: T) => Promise<RoutineSpending>) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: (spending) => {
+      client.setQueryData(routineKeys.spending, spending);
+      // What each routine may do follows the limit.
+      void client.invalidateQueries({ queryKey: routineKeys.all });
+    },
+    onError: (error) =>
+      toast.error(error instanceof ApiError ? error.message : 'Couldn’t change the limit.'),
+  });
+}
+
+/** A person sets the monthly limit for routines; `null` turns it off. */
+export function useSetSpendingLimit() {
+  return useSpendingMutation((limitUsd: number | null) => routinesApi.setSpendingLimit(limitUsd));
+}
+
+/** “Keep paused”: the card goes away until next month. */
+export function useKeepPaused() {
+  return useSpendingMutation(() => routinesApi.keepPaused());
 }
 
 /** Merge a routine into every cached view of it. */
@@ -59,9 +99,13 @@ const finished = new Set(['succeeded', 'nothing-to-do', 'failed', 'needs-you', '
  */
 export function applyRoutineEvent(
   client: QueryClient,
-  event: Extract<ServerEvent, { type: `routine.${string}` }>,
+  event: Extract<ServerEvent, { type: `routine.${string}` | 'routines.spending' }>,
   navigate?: (to: string) => void,
 ) {
+  if (event.type === 'routines.spending') {
+    client.setQueryData(routineKeys.spending, event.spending);
+    return;
+  }
   if (event.type === 'routine.changed') return putRoutine(client, event.routine);
   if (event.type === 'routine.deleted') {
     client.setQueryData<Routine[]>(routineKeys.all, (list) =>
@@ -163,7 +207,10 @@ export function useDeleteRoutine() {
                 title: routine.title,
                 summary: routine.summary,
                 prompt: routine.prompt,
-                schedule: routine.schedule,
+                // A routine that started when something happened comes back the same way.
+                ...(routine.when
+                  ? { when: routine.when, ...(routine.onlyIf && { onlyIf: routine.onlyIf }) }
+                  : { schedule: routine.schedule }),
                 timezone: routine.timezone,
                 trust: routine.trust,
                 catchUp: routine.catchUp,

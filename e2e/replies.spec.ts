@@ -3,7 +3,7 @@ import { expect, type Page, test } from '@playwright/test';
 import { openConch, say } from './app';
 
 /**
- * Replies to send next (ADR 0055). The mock engine answers “sales by month”
+ * Replies to send next (ADR 0060). The mock engine answers “sales by month”
  * with a table and offers three replies of its own, “team sizes” with a table
  * and nothing else (so Conch's own chart chip shows), and “summarize the news”
  * after reading a page (so the assistant's replies aren't shown).

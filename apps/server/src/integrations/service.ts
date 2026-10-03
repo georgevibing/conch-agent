@@ -1422,7 +1422,7 @@ export class IntegrationService {
 
   /**
    * The catalog apps the person could connect now, for the provider
-   * answering (ADR 0055's map): not retired, not connected in Conch in any
+   * answering (ADR 0060's map): not retired, not connected in Conch in any
    * state (or added by hand), and not one the provider reaches by itself.
    * `undefined` when the provider can't say in time, so nothing is offered
    * that it might already have. In catalog order; `among` narrows it.
@@ -1452,7 +1452,7 @@ export class IntegrationService {
 
   /**
    * Whether an app from the catalog is connected in Conch and working now:
-   * what carrying on after an offer checks first (ADR 0055).
+   * what carrying on after an offer checks first (ADR 0060).
    */
   async connected(catalogId: string): Promise<boolean> {
     for (const item of await this.store.all()) {

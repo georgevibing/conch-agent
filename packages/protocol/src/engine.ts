@@ -122,6 +122,11 @@ export const ModelInfo = z.object({
   images: z.boolean().optional(),
   /** Provider-declared function calling support; false means chat only. */
   tools: z.boolean().optional(),
+  /**
+   * How many tokens it reads at once (its context window), when the provider
+   * says — for a model on this computer, the window Conch runs it with.
+   */
+  context: z.number().int().positive().optional(),
 });
 export type ModelInfo = z.infer<typeof ModelInfo>;
 

@@ -52,7 +52,7 @@ async function asked() {
   return screen.findByRole('group', { name: 'Conch asks: How would you like to talk?' });
 }
 
-describe('a question in the chat (ADR 0055)', () => {
+describe('a question in the chat (ADR 0060)', () => {
   it('answers with a tap, folds at once, and the message box says it can answer too', async () => {
     const calls = mockFetch({
       'GET /api/state': () => appState(),

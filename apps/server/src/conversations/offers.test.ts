@@ -112,7 +112,7 @@ async function chat() {
 
 const carry = { prompt: 'Linear is connected now. Carry on with: what’s on my plate?' };
 
-describe('carrying on after an offer is taken (ADR 0055)', () => {
+describe('carrying on after an offer is taken (ADR 0060)', () => {
   it('starts a turn with the request again, and no new message of yours', async () => {
     const { manager, engine, events, idle, say } = await chat();
     const id = await say('what’s on my plate?', undefined, offer('of_1'));

@@ -360,6 +360,13 @@ describe('a turn against the real OpenRouter wire', () => {
     expect(done.usage).toMatchObject({ inputTokens: 240, outputTokens: 29 });
     expect(done.usage?.costUsd).toBeCloseTo(0.0014, 6);
     expect(events.filter((e) => e.type === 'done').length).toBe(1);
+    // Before the tool runs, what the turn has used so far (ADR 0057).
+    const progress = events.filter((e) => e.type === 'usage');
+    expect(progress).toHaveLength(1);
+    expect(events.indexOf(progress[0] as EngineEvent)).toBeLessThan(
+      events.findIndex((e) => e.type === 'tool-start'),
+    );
+    expect(progress[0]).toMatchObject({ usage: { inputTokens: 100 } });
 
     // Tools go on the second request too, with the result appended.
     const second = fetch.calls.at(-1)?.body as Record<string, unknown>;
@@ -425,7 +432,7 @@ describe('a turn against the real OpenRouter wire', () => {
     ['rate-limit', 'limit'],
     ['overloaded', 'unavailable'],
     ['network', 'unavailable'],
-    ['context', undefined],
+    ['context', 'too-long'],
   ] as const)('says a %s failure is %s, so the chat knows who can help', async (kind, problem) => {
     const wire = stubWire({
       stream: () =>

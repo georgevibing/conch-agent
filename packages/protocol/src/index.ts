@@ -34,10 +34,11 @@ import {
 } from './common';
 import { DoctorReport } from './doctor';
 import { Memory, MemoryKind } from './memory';
+import { PastChatsLooked } from './past-chats';
 import { EngineStatus, LoginState } from './engine';
 import { HealNote } from './healed';
 import { CatalogId, Integration } from './integrations';
-import { Routine, RoutineRun } from './routines';
+import { Routine, RoutineRun, RoutineSpending } from './routines';
 import { VaultPermission, VaultRequest } from './vault';
 import { VoiceStatus } from './phone';
 import { ChangedFile } from './undo';
@@ -71,8 +72,10 @@ export * from './doctor';
 export * from './phone';
 export * from './providers';
 export * from './routines';
+export * from './triggers';
 export * from './safety';
 export * from './search';
+export * from './past-chats';
 export * from './setup';
 export * from './skills';
 export * from './holds';
@@ -130,7 +133,7 @@ export const Profile = z.object({
 });
 export type Profile = z.infer<typeof Profile>;
 
-/** Catalog ids, and skills as `skill:<id>` (ADR 0055), each once. */
+/** Catalog ids, and skills as `skill:<id>` (ADR 0060), each once. */
 const MutedSuggestions = z
   .array(z.union([CatalogId, MutedSkill]))
   .max(100)
@@ -344,6 +347,23 @@ export const UpdateConversationBody = z
   });
 export type UpdateConversationBody = z.infer<typeof UpdateConversationBody>;
 
+/** `/compact [focus]`: summarise the start of a chat now (ADR 0055). */
+export const CompactBody = z
+  .object({
+    /** What the summary should keep above all, in the person's words. */
+    focus: z.string().trim().max(500).optional(),
+  })
+  .strict();
+export type CompactBody = z.infer<typeof CompactBody>;
+
+export const CompactResult = z.object({
+  /** Whether anything was summarised (a short chat has nothing to fold). */
+  compacted: z.boolean(),
+  /** One sentence to show: what happened, or why nothing did. */
+  message: z.string(),
+});
+export type CompactResult = z.infer<typeof CompactResult>;
+
 export const ToolStatus = z.enum(['pending', 'running', 'success', 'error']);
 export type ToolStatus = z.infer<typeof ToolStatus>;
 
@@ -389,7 +409,7 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     status: ToolStatus,
     output: z.string().optional(),
     durationMs: z.number().nonnegative().optional(),
-    /** What it found, drawn as it is (an agenda, emails, files): ADR 0055. */
+    /** What it found, drawn as it is (an agenda, emails, files): ADR 0060. */
     view: ToolView.optional(),
   }),
   z.object({
@@ -430,6 +450,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
   }),
   /** The chat read something from outside: from here on, sending and changing ask first (ADR 0028). */
   z.object({ ...logged, type: z.literal('taint'), source: TaintSource }),
+  /** The assistant looked through your other chats (ADR 0059): for what, and where it found it. */
+  z.object({ ...logged, type: z.literal('chats.looked'), ...PastChatsLooked.shape }),
   /**
    * The assistant created, changed or deleted files (ADR 0030): what, and the
    * change set that puts them back. `toolUseId` when one tool call did it;
@@ -554,6 +576,27 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     /** The best model you already set up that can; absent when there's none. */
     switchTo: AppsModel.optional(),
   }),
+  /**
+   * A long chat no longer fits what the model reads at once, so the start of
+   * it was folded into a summary (ADR 0055). From `before` (a message's id)
+   * on, the model reads the chat word for word; before it, only `summary`.
+   * The latest one is the one that counts. The person keeps every message.
+   */
+  z.object({
+    ...logged,
+    type: z.literal('context.compacted'),
+    /** What the model keeps from the earlier messages. Empty when none could be written. */
+    summary: z.string().max(40_000),
+    /** The first message the model still reads in full. */
+    before: z.string().optional(),
+    engine: EngineId,
+    /** The model's name, as the picker shows it. */
+    model: z.string().optional(),
+    /** How many earlier turns the summary stands for, in all. */
+    turns: z.number().int().nonnegative(),
+    /** You asked for it (`/compact`), rather than the chat growing past the window. */
+    asked: z.boolean().optional(),
+  }),
   /** This turn was answered by another provider than the chat's, and why. */
   z.object({
     ...logged,
@@ -611,7 +654,7 @@ export const ConversationEvent = z.discriminatedUnion('type', [
   }),
   /**
    * An offer to turn on what this request is missing, an app or a skill
-   * (ADR 0055). Replaces `integration.suggestion`, which older logs still hold.
+   * (ADR 0060). Replaces `integration.suggestion`, which older logs still hold.
    */
   z.object({ ...logged, type: z.literal('offer'), offer: Offer }),
   /** The offer was taken (and the chat carries on), put away, or overtaken. */
@@ -724,10 +767,14 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('routine.changed'), routine: Routine }),
   z.object({ type: z.literal('routine.deleted'), routineId: z.string() }),
   z.object({ type: z.literal('routine.run'), run: RoutineRun }),
+  /** What routines spent this month changed, or they paused at its limit (ADR 0057). */
+  z.object({ type: z.literal('routines.spending'), spending: RoutineSpending }),
   z.object({ type: z.literal('integration.changed'), integration: Integration }),
   z.object({ type: z.literal('integration.deleted'), integrationId: z.string() }),
   /** A skill was added, changed or removed (here, or in one of the folders Conch reads). */
   z.object({ type: z.literal('skills.changed') }),
+  /** Work that went well in this chat could be a skill (ADR 0058): refetch what's offered. */
+  z.object({ type: z.literal('skills.offered'), conversationId: z.string() }),
   /** Passwords changed (an item, a source unlocked or locked): refetch them. */
   z.object({ type: z.literal('vault.changed') }),
   /** Remaining usage changed (a turn finished, a window reset, the provider warned). */

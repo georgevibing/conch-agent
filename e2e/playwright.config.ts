@@ -75,13 +75,13 @@ const scenarios = {
   attachments: { port: 4389, env: { CONCH_MOCK_STATE: 'ready' } },
   passwords: { port: 4386, env: { CONCH_MOCK_STATE: 'ready' } },
   suggest: { port: 4383, env: { CONCH_MOCK_STATE: 'ready' } },
-  // Replies to send next (ADR 0055): the assistant's under a table, Conch's own, none after reading.
+  // Replies to send next (ADR 0060): the assistant's under a table, Conch's own, none after reading.
   replies: { port: 4352, env: { CONCH_MOCK_STATE: 'ready' } },
-  // The chat knows Conch (ADR 0055): the assistant offers an app or a skill, and the chat carries on.
+  // The chat knows Conch (ADR 0060): the assistant offers an app or a skill, and the chat carries on.
   offers: { port: 4354, env: { CONCH_MOCK_STATE: 'ready' } },
   // A model that can only chat (ADR 0050): a message that needs an app offers one that can.
   'chat-only': { port: 4358, env: { CONCH_MOCK_STATE: 'ready' } },
-  // Questions answered with a tap (ADR 0055): tapped, typed, skipped, and a reload while one waits.
+  // Questions answered with a tap (ADR 0060): tapped, typed, skipped, and a reload while one waits.
   questions: { port: 4377, env: { CONCH_MOCK_STATE: 'ready' } },
   // Every app with every model (ADR 0049): Slack as Conch's own, and what a provider set up
   // coming in by itself (the mock provider has Sentry in its account).
@@ -96,6 +96,8 @@ const scenarios = {
   'channels-linked': { port: 4364, env: { CONCH_MOCK_STATE: 'ready' } },
   // iMessage and email (ADR 0044): a pretend Messages (a real chat.db) and a pretend IMAP/SMTP.
   'channels-mail': { port: 4365, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Routines that start when something happens (ADR 0056): Gmail with the pretend mail service.
+  'when-routines': { port: 4341, env: { CONCH_MOCK_STATE: 'ready' } },
   // Teams, Matrix and WeChat, and the public door (ADR 0045), against their pretend apps.
   'channels-work': { port: 4366, env: { CONCH_MOCK_STATE: 'ready' } },
   // Safe hands: checking after reading, the timeline, skills read before they're used.

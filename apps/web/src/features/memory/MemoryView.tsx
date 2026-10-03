@@ -61,6 +61,8 @@ function title(run: TidyRun) {
   const n = run.changes.length;
   if (!n) return 'Nothing needed tidying';
   const memories = n === 1 ? '1 memory' : `${n} memories`;
+  // Learned from a long chat just before its start was summarised (ADR 0055).
+  if (run.chat) return `Conch learned ${memories} from a long chat before summarising it`;
   return run.trigger === 'nightly'
     ? `Conch tidied ${memories} while you slept`
     : `Conch tidied ${memories}`;

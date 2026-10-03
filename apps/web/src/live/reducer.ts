@@ -5,6 +5,7 @@ import type {
   ArtifactKind,
   Attachment,
   ChangedFile,
+  PastChatSeen,
   TaintSource,
   VaultPermission,
   VaultRequest,
@@ -83,7 +84,7 @@ export type TranscriptItem =
     }
   | {
       /**
-       * A question with answers to tap (ADR 0055): the reply waits for it.
+       * A question with answers to tap (ADR 0060): the reply waits for it.
        * `answer` is absent while it waits, `null` once skipped (or stopped).
        */
       kind: 'question';
@@ -129,6 +130,16 @@ export type TranscriptItem =
       action: 'saved' | 'forgotten';
       /** Waits for an OK: learned in a chat that read something untrusted (ADR 0032). */
       pending?: boolean;
+    }
+  | {
+      /** It looked through your other chats (ADR 0059): for what, with a link to each place. */
+      kind: 'looked';
+      id: string;
+      action: 'search' | 'read';
+      query?: string;
+      close?: boolean;
+      chats: PastChatSeen[];
+      at: number;
     }
   | {
       /** Something the assistant made (ADR 0034): a card that opens it beside the chat. */
@@ -225,6 +236,18 @@ export type TranscriptItem =
       settled?: 'switched' | 'answered';
     }
   | {
+      /**
+       * Where the model's word-for-word memory of a long chat starts (ADR 0055):
+       * what's above was folded into `summary`. Only the latest one is kept.
+       */
+      kind: 'summary';
+      id: string;
+      summary: string;
+      engine: EngineId;
+      model?: string;
+      turns: number;
+    }
+  | {
       /** Another provider answered for this chat's own: offline, or at a usage limit. */
       kind: 'routed';
       id: string;
@@ -259,7 +282,7 @@ export interface ConversationView {
   options?: TurnOptions;
   /** The skills this chat is held to (ADR 0047), as the gateway reads them from the same log. */
   holds?: readonly SkillHold[];
-  /** Replies to send next under the latest reply (ADR 0055); gone once anything newer arrives. */
+  /** Replies to send next under the latest reply (ADR 0060); gone once anything newer arrives. */
   replies?: LatestReplies;
 }
 
@@ -270,7 +293,7 @@ export const legacyOfferId = (catalogId: string) => `legacy-${catalogId}`;
 
 /**
  * Where a turn begins: a message of yours, or an offer you took (the chat
- * carries on with no new message, ADR 0055).
+ * carries on with no new message, ADR 0060).
  */
 export const isTurnStart = (item: TranscriptItem) =>
   item.kind === 'user' || (item.kind === 'offer' && item.resolution === 'accepted');
@@ -523,6 +546,22 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
           },
         ],
       };
+    case 'chats.looked':
+      return {
+        ...base,
+        items: [
+          ...items,
+          {
+            kind: 'looked',
+            id: event.lookId,
+            action: event.action,
+            ...(event.query !== undefined && { query: event.query }),
+            ...(event.close && { close: true }),
+            chats: event.chats,
+            at: event.at,
+          },
+        ],
+      };
     case 'memory.forgotten':
       return {
         ...base,
@@ -575,6 +614,25 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
           ...kept,
           { kind: 'held', id: `held-${event.seq}`, at: event.at, count: Math.max(1, count) },
         ],
+      };
+    }
+    case 'context.compacted': {
+      // One line, where the model's memory starts now: the new one replaces any before it.
+      const kept = items.filter((i) => i.kind !== 'summary');
+      const at = event.before
+        ? kept.findIndex((i) => i.kind === 'user' && i.id === event.before)
+        : kept.findLastIndex((i) => i.kind === 'user');
+      const line: TranscriptItem = {
+        kind: 'summary',
+        id: `summary-${event.seq}`,
+        summary: event.summary,
+        engine: event.engine,
+        ...(event.model && { model: event.model }),
+        turns: event.turns,
+      };
+      return {
+        ...base,
+        items: at === -1 ? [...kept, line] : [...kept.slice(0, at), line, ...kept.slice(at)],
       };
     }
     case 'turn.routed': {
@@ -651,7 +709,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         ],
       };
     }
-    // The chat knows Conch (ADR 0055).
+    // The chat knows Conch (ADR 0060).
     case 'offer':
       return addOffer(base, items, { offer: event.offer });
     case 'offer.resolved': {
@@ -867,7 +925,7 @@ export function lastUserMessage(
   return undefined;
 }
 
-/** A question waiting for your answer (ADR 0055), if the chat has one. */
+/** A question waiting for your answer (ADR 0060), if the chat has one. */
 export function pendingQuestion(view: ConversationView) {
   const last = view.items.findLast((i) => i.kind === 'question');
   return last?.kind === 'question' && last.answer === undefined ? last : undefined;

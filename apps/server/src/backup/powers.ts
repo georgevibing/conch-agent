@@ -13,6 +13,8 @@
  */
 import { POWER_TEXT_MAX, type BackupPower } from '@conch/protocol';
 
+import { DEFAULT_MONTHLY_USD } from '../routines/spend';
+
 /** The files the preview reads (routine files, not their run history). */
 export function previewReads(path: string): boolean {
   return (
@@ -23,7 +25,9 @@ export function previewReads(path: string): boolean {
     path === 'channels.json' ||
     path === 'skills.trust.json' ||
     path === 'artifacts/access.json' ||
-    /^routines\/[^/]+(?<!\.runs)\.json$/.test(path)
+    path === 'routine-spend.json' ||
+    /^routines\/[^/]+(?<!\.runs)\.json$/.test(path) ||
+    /^routines\/when\/[^/]+(?<!\.seen)\.json$/.test(path)
   );
 }
 
@@ -137,9 +141,22 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
   for (const path of files.filter((f) => /^routines\/[^/]+(?<!\.runs)\.json$/.test(f)).sort()) {
     const routine = json(read, path);
     // A draft waits for you to turn it on; a paused one doesn't run.
-    if (routine?.trust === 'full' && routine.status !== 'draft' && routine.status !== 'paused')
+    const on = routine?.status !== 'draft' && routine?.status !== 'paused';
+    // When… (ADR 0056): what starts it is in a file of its own.
+    const when = record(json(read, path.replace(/^routines\//, 'routines/when/'))?.when);
+    if (on && when && routine && routine.trust !== 'ask')
+      powers.push({ kind: 'routine-acts-on-events', name: text(routine.title, 'A routine') });
+    else if (routine?.trust === 'full' && on)
       powers.push({ kind: 'routine-never-asks', name: text(routine.title, 'A routine') });
+    if (on && when?.kind === 'hook')
+      powers.push({ kind: 'routine-address', name: text(routine?.title, 'A routine') });
   }
+
+  // Routines allowed to spend more than Conch would by itself (ADR 0057).
+  const spend = json(read, 'routine-spend.json');
+  const limit = spend?.limit;
+  if (limit === null || (typeof limit === 'number' && limit > DEFAULT_MONTHLY_USD))
+    powers.push({ kind: 'routines-spend', limitUsd: typeof limit === 'number' ? limit : null });
 
   const browser = json(read, 'browser.json');
   const sites = (Array.isArray(browser?.sites) ? browser.sites : [])

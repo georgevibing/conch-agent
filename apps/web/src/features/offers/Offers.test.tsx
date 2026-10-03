@@ -173,7 +173,7 @@ function open(
 const accepted = (calls: { method: string; path: string }[]) =>
   calls.filter((c) => c.method === 'POST' && c.path === '/api/conversations/c1/offers/of_1/accept');
 
-describe('offers in the chat (ADR 0055)', () => {
+describe('offers in the chat (ADR 0060)', () => {
   it('offers Linear under the reply, connects in place, and the chat carries on by itself', async () => {
     const { calls, popup, push } = open();
     await waitFor(() => expect(FakeSocket.last).toBeDefined());

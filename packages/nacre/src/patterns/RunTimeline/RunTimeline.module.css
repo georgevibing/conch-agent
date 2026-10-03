@@ -33,6 +33,41 @@
     position: relative;
   }
 
+  /* What started a run, where it is (an email, a page): under the row, beside its text. */
+  .eventLink {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    max-inline-size: 100%;
+    margin-block-start: calc(var(--nc-space-1) * -1);
+    margin-inline-start: calc(4.5rem + 0.75rem + var(--nc-space-2) * 3);
+    margin-block-end: var(--nc-space-1);
+    overflow: hidden;
+    border-radius: var(--nc-radius-sm);
+    color: var(--nc-text-accent);
+    font-size: var(--nc-text-xs);
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .eventLink svg {
+    flex: none;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  @media (hover: hover) {
+    .eventLink:hover {
+      text-decoration: underline;
+    }
+  }
+
+  .eventLink:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
   .row {
     appearance: none;
     display: grid;

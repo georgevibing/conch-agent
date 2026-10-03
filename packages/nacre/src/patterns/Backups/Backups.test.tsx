@@ -67,9 +67,14 @@ describe('BackupPowers', () => {
     expect(items[3]).toHaveTextContent('New chatsLet Conch act without asking you first');
     expect(items[4]).toHaveTextContent('Nightly tidyRuns by itself');
     expect(items[5]).toHaveTextContent(
+      'Sort new downloadsStarts when something happens, and lets Conch act on it without asking you first',
+    );
+    expect(items[6]).toHaveTextContent('Shop ordersHas an address other apps can use to start it');
+    expect(items[7]).toHaveTextContent(
       'Acts on “bank.example” and “shop.example” without asking you first',
     );
-    expect(items[7]).toHaveTextContent('Other devices can open a terminal on this computer');
+    expect(items[9]).toHaveTextContent('Other devices can open a terminal on this computer');
+    expect(items.at(-1)).toHaveTextContent('RoutinesSpend up to $60 a month without asking');
     expect(screen.getByText('And 2 more.')).toBeInTheDocument();
     expect(screen.getByText('Restore it only if you set these up yourself.')).toBeInTheDocument();
     await expectAccessible(container);

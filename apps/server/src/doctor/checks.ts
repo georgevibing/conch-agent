@@ -11,6 +11,7 @@ import { awaitsSignIn, type DoctorItem, type Provider } from '@conch/protocol';
 import { CHANNEL_NAMES } from '../channels/catalog';
 import { sandboxSupport } from '../conversations/sandbox';
 import { secureHome } from '../auth/checkup';
+import { pausedWords } from '../routines/spend';
 import type { Services } from '../services';
 import type { DoctorCheck } from './service';
 
@@ -397,6 +398,29 @@ export function routinesCheck(services: Services): DoctorCheck {
           action: { kind: 'open', label: `Sign in to ${label}`, place: 'providers', focus: engine },
         });
       }
+      // Paused at this month's limit (ADR 0057): only a person can raise it.
+      const spending = await services.routines.spending().catch(() => undefined);
+      if (spending?.paused)
+        items.push({
+          id: 'routines:spending',
+          group: 'Routines',
+          title: 'Routines’ monthly limit',
+          state: 'needs-you',
+          message: pausedWords(spending).body.replace(/ You can raise the limit in Conch\.$/, ''),
+          action: { kind: 'open', label: 'Raise the limit', place: 'usage', focus: 'routines' },
+        });
+      const waiting = services.routines.waitingForRoom().length;
+      if (waiting)
+        items.push({
+          id: 'routines:room',
+          group: 'Routines',
+          title: 'Routines',
+          state: 'ok',
+          message:
+            waiting === 1
+              ? 'A routine is waiting for your plan to have room, so your own chats come first.'
+              : `${waiting} routines are waiting for your plan to have room, so your own chats come first.`,
+        });
       return items;
     },
   };

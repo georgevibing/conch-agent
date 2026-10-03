@@ -34,7 +34,7 @@ async function connectLinear(page: Page) {
   const popup = await popupOpened;
   await popup.getByRole('button', { name: 'Allow' }).click();
   await popup.waitForEvent('close', { timeout: 5000 }).catch(() => undefined);
-  // Connected: the dialog closes and the chat carries on by itself (ADR 0055).
+  // Connected: the dialog closes and the chat carries on by itself (ADR 0060).
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByText('I found 3 results')).toBeVisible({ timeout: 20_000 });
 }

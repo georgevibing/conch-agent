@@ -208,6 +208,23 @@ export function entriesOf(
           memory: { id: e.memory.id, content: e.memory.content, action: 'saved' },
         });
         break;
+      // Looking back through your other chats, like what it remembers (ADR 0059).
+      case 'chats.looked': {
+        const [first] = e.chats;
+        out.push({
+          ...base,
+          id: `${chat.id}:${e.seq}`,
+          at: e.at,
+          kind: 'memory',
+          title:
+            e.action === 'search'
+              ? `Looked through your chats for “${(e.query ?? '').slice(0, 120)}”`
+              : `Read your chat “${(first?.title ?? 'an earlier chat').slice(0, 120)}”`,
+          status: 'done',
+          anchor: e.lookId,
+        });
+        break;
+      }
       case 'memory.forgotten':
         out.push({
           ...base,

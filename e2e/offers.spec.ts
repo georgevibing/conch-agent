@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { openConch, say } from './app';
 
 /**
- * The chat knows Conch (ADR 0055). Asked something an app or a skill that
+ * The chat knows Conch (ADR 0060). Asked something an app or a skill that
  * isn't on would answer, the assistant offers it under its reply; taking the
  * offer carries the chat on by itself, with no second question. In mock mode
  * Linear is the pretend vendor (real OAuth, a consent page, real MCP), and

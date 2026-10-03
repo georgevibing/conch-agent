@@ -7,6 +7,7 @@ import {
   SkillMode,
   SkillName,
   type Skill,
+  type SkillCapability,
   type SkillDetail,
   type SkillProblemKind,
   type SkillReview,
@@ -18,7 +19,7 @@ import { z } from 'zod';
 import { Mutex, safeJoin, writeFileAtomic, writeJson } from '../lib/fs';
 import { readStore, type Heal } from '../lib/recover';
 import { humanize, slugify } from './draft';
-import { readPermissions } from './permissions';
+import { permissionsValue, readPermissions } from './permissions';
 import { folderSignature, scanSkill } from './scan';
 import { checkSignature, SIG_FILE } from './signing';
 import type { SkillTrust } from './trust';
@@ -292,6 +293,8 @@ export class SkillStore {
     description: string;
     instructions: string;
     mode: 'auto' | 'manual' | 'off';
+    /** What it says it may do (ADR 0031); unset says nothing. */
+    permissions?: { capabilities: SkillCapability[]; commands?: string[]; apps?: string[] };
   }): Promise<LoadedSkill> {
     return this.#mutex.run(async () => {
       const name = SkillName.parse(input.name);
@@ -302,6 +305,7 @@ export class SkillStore {
         ['name', name],
         ['description', input.description],
         ['disable-model-invocation', input.mode === 'manual' ? true : undefined],
+        ['permissions', input.permissions ? permissionsValue(input.permissions) : undefined],
       ]);
       await writeFileAtomic(
         join(folder, 'SKILL.md'),

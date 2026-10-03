@@ -12,6 +12,7 @@ import {
 import {
   Archive,
   ArchiveRestore,
+  CirclePause,
   BadgeCheck,
   BatteryMedium,
   Folder,
@@ -42,6 +43,7 @@ import {
   QrCode,
   RefreshCw,
   Repeat,
+  Route as RouteIcon,
   ShieldCheck,
   Sparkles,
   Undo2,
@@ -49,9 +51,11 @@ import {
   SquareSlash,
   User,
   WandSparkles,
+  Wallet,
   WifiOff,
   Wrench,
   House,
+  Zap,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -65,6 +69,7 @@ import { doctorApi } from '../health/api';
 import { LIVE_DATA_FOCUS } from '../artifacts/LiveDataSection';
 import { DEVICES_FOCUS } from '../auth/focus';
 import { FALLBACK_FOCUS } from '../settings/FallbackSection';
+import { ROUTINES_SPEND_FOCUS } from '../routines/SpendingSection';
 import { APP_WORDS, APPS } from '../channels/describe';
 import { useChannels } from '../channels/queries';
 import { isManager } from '../integrations/apps';
@@ -78,7 +83,8 @@ import { useArtifacts } from '../artifacts/queries';
 import { useRoutines } from '../routines/queries';
 import { taskKeys } from '../tasks/queries';
 import { fuzzyFilter, type FuzzyMatch } from '../search/fuzzy';
-import { useSkills } from '../skills/queries';
+import { useSkills, useWorkSuggestions } from '../skills/queries';
+import { draftFrom } from '../skills/SkillSuggestions';
 import { useLiveStore } from '../../live/store';
 import { useTerminalStatus } from '../terminal/queries';
 import { undoLast } from '../undo/UndoHost';
@@ -143,6 +149,14 @@ const settingsPlaces: {
   },
   { tab: 'commands', label: 'Commands', keywords: 'slash prompts', icon: <SquareSlash /> },
   { tab: 'usage', label: 'Usage', keywords: 'limits spend budget plan', icon: <BatteryMedium /> },
+  {
+    tab: 'usage',
+    focus: ROUTINES_SPEND_FOCUS,
+    label: 'What routines may spend',
+    keywords:
+      'routines routine spending spend limit monthly month cost costs money bill budget cap paused pause raise unattended',
+    icon: <Wallet />,
+  },
   {
     tab: 'health',
     label: 'Health',
@@ -277,6 +291,8 @@ export function useFindables(query: string, conversationId: string | undefined):
   const newTerminal = useUi((s) => s.newTerminal);
   const turn = useTurnOptions(conversationId);
   const { data: skills } = useSkills();
+  // Save how I did this (ADR 0058): the open chat's offer, when it earned one.
+  const { data: fromWork } = useWorkSuggestions();
   const { data: integrations } = useIntegrations();
   const { data: routines } = useRoutines();
   const { data: artifacts } = useArtifacts();
@@ -292,6 +308,9 @@ export function useFindables(query: string, conversationId: string | undefined):
   const { data: conversations } = useConversations();
   const { archive, unarchive } = useArchive();
   const here = conversations?.find((c) => c.id === conversationId);
+  const offerHere = conversationId
+    ? fromWork?.suggestions.find((s) => s.chat?.conversationId === conversationId)
+    : undefined;
   const q = query.trim();
   if (!q) return [];
 
@@ -734,12 +753,42 @@ export function useFindables(query: string, conversationId: string | undefined):
       icon: <Plus />,
       run: () => void navigate('/skills/new'),
     },
+    ...(offerHere
+      ? [
+          {
+            id: 'save-how',
+            label: 'Save how I did this as a skill',
+            keywords:
+              'save how i did this as a skill learn keep remember the steps workflow procedure recipe what worked make skill from chat',
+            icon: <RouteIcon />,
+            run: () => void navigate('/skills/new', { state: draftFrom(offerHere) }),
+          },
+        ]
+      : []),
+    {
+      // What the tidy shelf turns off (ADR 0058): kept, backed up, never offered.
+      id: 'skills-off',
+      label: 'Skills that are off',
+      keywords:
+        'skills off turned off disabled archived archive unused stale tidy shelf put away hidden restore bring back',
+      icon: <CirclePause />,
+      run: () => void navigate('/skills?show=off'),
+    },
     {
       id: 'routines',
       label: 'Routines',
       keywords: 'schedule cron',
       icon: <Repeat />,
       run: () => void navigate('/routines'),
+    },
+    {
+      // When… (ADR 0056): a routine that starts from what happens, not a time.
+      id: 'new-when-routine',
+      label: 'New routine that starts when…',
+      keywords:
+        'when something happens tell me let me know watch notify alert email arrives replies meeting calendar page changes website folder file task finishes webhook trigger heartbeat monitor',
+      icon: <Zap />,
+      run: () => void navigate('/routines', { state: { create: 'when' } }),
     },
     {
       // What used to be the Channels page: a filter of Apps now (ADR 0052).

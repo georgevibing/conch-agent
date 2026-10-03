@@ -28,7 +28,7 @@ const turn: ConversationEventInput[] = [
   { type: 'status', status: 'idle' },
 ];
 
-describe('replies to send next in the log (ADR 0055)', () => {
+describe('replies to send next in the log (ADR 0060)', () => {
   it('belong to the latest reply, through the chat closing the turn', () => {
     const view = reduceAll(log(...turn, { type: 'title', title: 'The invite' }));
     expect(view.replies).toMatchObject({

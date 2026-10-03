@@ -14,7 +14,7 @@ const Ok = z.object({ ok: z.boolean() });
 const path = (conversationId: string, offerId: string, what: 'accept' | 'dismiss') =>
   `/api/conversations/${encodeURIComponent(conversationId)}/offers/${encodeURIComponent(offerId)}/${what}`;
 
-/** Offers in a chat (ADR 0055). */
+/** Offers in a chat (ADR 0060). */
 export const offersApi = {
   /** It's on now: the chat carries on with the request, once. */
   accept: (conversationId: string, offerId: string, body: AcceptOfferBody = {}) =>

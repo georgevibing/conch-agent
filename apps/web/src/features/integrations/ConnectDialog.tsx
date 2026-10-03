@@ -121,7 +121,7 @@ function StandardConnectDialog({
   inChat?: boolean;
   /** Send the chat's question again (closes the dialog first). */
   onAskAgain?: () => void;
-  /** Opened from a chat's offer: signing in in this tab comes back to that chat (ADR 0055). */
+  /** Opened from a chat's offer: signing in in this tab comes back to that chat (ADR 0060). */
   back?: SignInReturn;
   /** Where focus goes when it closes (the button that opened it may be gone by then). */
   onCloseAutoFocus?: (event: Event) => void;

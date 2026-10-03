@@ -23,15 +23,22 @@ what breaks, and asks only for approvals that matter.
   OpenRouter, Anthropic, OpenAI, Google, Mistral, DeepSeek and more.
 - **Apps, skills and routines for every model.** Gmail, Google Calendar and
   Drive, Slack, GitHub, Notion, Linear and more from one gallery, plus Agent Skills
-  (`SKILL.md`) and routines that run on a schedule you read in plain words. When
-  one that isn't on would help, the chat offers it, and carries on once it's on.
+  (`SKILL.md`) and routines that run at a time you read in plain words, or when
+  something happens (an email, a meeting, a page that changed), free until it does.
+  When one that isn't on would help, the chat offers it, and carries on once it's on.
+- **Skills from what worked.** After the assistant works something out, one press
+  keeps how it did it as a skill. Nothing is saved or turned on until you say so.
 - **Memory you can read.** Memories are Markdown files you can edit or delete,
-  and search finds any line in months of chats.
+  and search finds any line in months of chats. Your assistant can look through
+  them too: "like last time" finds the chat it means.
 - **Questions you answer with a tap.** When the assistant needs your choice, it
   asks with options, days or a number to tap, and the reply carries on.
 - **A tidy list, nothing lost.** Archive a chat to take it out of your list
   without deleting it. It stays searchable, waits under **Archived**, and comes
   back by itself when you write in it or it needs you.
+- **Long chats on any model.** When a chat outgrows what a model reads at once,
+  its start becomes a summary you can open, and what you said there is learned
+  first. Nothing to set.
 - **A browser and a terminal.** The assistant uses a browser you can watch and
   take over, and a real shell is a keystroke away.
 - **Reach it from your chat apps.** Telegram, Discord, Slack, WhatsApp, Signal,
@@ -46,6 +53,9 @@ what breaks, and asks only for approvals that matter.
 - **Show me.** Charts, pages and documents open beside the chat, sealed off from
   your data, with every version kept.
 - **Hand it off.** Send work to the background and keep chatting.
+- **Routines that can't run up a bill.** Each routine says what it costs. A run
+  that does far more than usual stops, routines pause at a monthly limit you set,
+  and on a plan they leave room for your own chats.
 - **Offline and at a limit.** A message waits until you're back online, or the
   model on this computer answers. At a usage limit, the provider you picked takes
   over.

@@ -7,7 +7,7 @@ import styles from './NextReplies.module.css';
 const CLOCK_SLACK_MS = 1500;
 
 /**
- * Replies to send next (ADR 0055), under the latest reply while the chat is
+ * Replies to send next (ADR 0060), under the latest reply while the chat is
  * idle. A tap sends the words as the message box would, and they go as soon
  * as anything newer is in the chat: a message from any device, a new turn.
  */

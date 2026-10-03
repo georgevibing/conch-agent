@@ -2,7 +2,7 @@
  * A Conch that's been used for a while, in a temp home: settings, a memory
  * (searchable by meaning, with its model), a command, a routine that ran, a skill, an integration with its token, a
  * chat with an attachment, a model API's transcript, the browser's and
- * terminal's settings, a note the assistant wrote (and Undo's copy), a budget, a password, a provider key,
+ * terminal's settings, a note the assistant wrote (and Undo's copy), a budget, a limit on what routines spend, a password, a provider key,
  * a linked WhatsApp and Signal, and a backup.
  * Everything is written by the real services, the way using Conch writes it.
  * The backup tests use it to check nothing Conch writes is left unclassified.
@@ -116,6 +116,35 @@ export async function useConch(g: Gateway) {
     if (run && !['running', 'needs-you'].includes(run.status)) break;
     await new Promise((r) => setTimeout(r, 20));
   }
+  // Routines that start when something happens (ADR 0056): what starts them, what
+  // the pulse has seen, and another app's secret.
+  const after = await ok(
+    await app.inject({
+      method: 'POST',
+      url: '/api/routines',
+      payload: {
+        title: 'After the briefing',
+        prompt: 'Tell me what it said.',
+        when: { kind: 'routine', routineId: String(routine.id) },
+        timezone: 'Europe/Berlin',
+      },
+    }),
+  );
+  const shop = await ok(
+    await app.inject({
+      method: 'POST',
+      url: '/api/routines',
+      payload: {
+        title: 'From my shop',
+        prompt: 'Tell me about the order.',
+        when: { kind: 'hook' },
+        timezone: 'Europe/Berlin',
+      },
+    }),
+  );
+  await ok(await app.inject({ method: 'POST', url: `/api/routines/${String(shop.id)}/secret` }));
+  await services.routines.lookAgain();
+  void after;
   // A task in the background (ADR 0033): its list, and its own chat.
   const task = await ok(
     await app.inject({ method: 'POST', url: '/api/tasks', payload: { text: 'Tidy the notes.' } }),
@@ -163,6 +192,9 @@ export async function useConch(g: Gateway) {
     await app.inject({ method: 'PATCH', url: '/api/terminal/settings', payload: { fontSize: 15 } }),
   );
   await ok(await app.inject({ method: 'PUT', url: '/api/usage/budget', payload: { budget: 25 } }));
+  await ok(
+    await app.inject({ method: 'PUT', url: '/api/routines/spending', payload: { limitUsd: 30 } }),
+  );
   await services.settings.setProviderSecret('openrouter', {
     source: 'conch',
     value: 'sk-or-v1-0123456789abcdef',
@@ -182,6 +214,12 @@ export async function useConch(g: Gateway) {
   await chat(services, 'And another question about the weather');
   // A file the assistant wrote, which Undo keeps a copy of (ADR 0030).
   await chat(services, 'write a note to water the plants');
+  // Work that took the long way, which Conch offers to keep as a skill (ADR 0058)…
+  const work = await chat(services, 'Do the release notes the long way');
+  const learned = await services.learner.consider(work.id);
+  if (!('offered' in learned)) throw new Error(`no offer: ${learned.why}`);
+  // …and a skill used by name, which the tidy shelf counts.
+  await chat(services, `/${String(skill.name)} for March`);
   // A thumbnail of a page the agent looked at, as the browser keeps them.
   await services.browser.saveShot(convo.id, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
   // What a plain model API keeps to carry a chat on.

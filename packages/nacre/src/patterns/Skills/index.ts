@@ -16,3 +16,7 @@ export { SkillSignatureBadge } from './SkillSignatureBadge';
 export type { SkillSignatureBadgeProps } from './SkillSignatureBadge';
 export { TrustedPublisherList } from './TrustedPublisherList';
 export type { TrustedPublisherEntry, TrustedPublisherListProps } from './TrustedPublisherList';
+export { SkillOffer } from './SkillOffer';
+export type { SkillOfferProps } from './SkillOffer';
+export { SkillShelf } from './SkillShelf';
+export type { SkillShelfEntry, SkillShelfProps } from './SkillShelf';

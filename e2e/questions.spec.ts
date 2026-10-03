@@ -1,7 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 
 /**
- * Questions answered with a tap (ADR 0055 §4). The mock asks when and how to
+ * Questions answered with a tap (ADR 0060 §4). The mock asks when and how to
  * book a call with Ada: a day and time (with a suggestion already chosen) and
  * how to talk. Answered on the card, typed in the message box, skipped, and
  * still there after a reload while it waits.

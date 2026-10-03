@@ -22,16 +22,22 @@ import { newId } from '../../lib/ids';
 import type { ApiProviderId, WireMessage } from './types';
 
 /**
- * How much transcript a turn may carry. Roughly 100k tokens of characters, and
- * a hard message cap so a tool-heavy conversation can't grow without end.
- * Past either, the oldest whole turns are dropped: cheaper and far more
- * predictable than summarising, and the user keeps their scrollback either way
- * (Conch's own event log is the record; this file is only the model's context).
+ * A safety net for the file itself, far past anything the engine keeps: the
+ * engine fits each request to the model's window and summarises what it folds
+ * (`context.ts`, ADR 0055), so this only ever bites on a file from somewhere
+ * else. The person keeps their scrollback either way (Conch's own event log is
+ * the record; this file is only the model's context).
  */
-export const MAX_CHARS = 400_000;
-export const MAX_MESSAGES = 600;
-/** Never send more than this many of the user's turns back. */
-export const MAX_TURNS = 40;
+export const MAX_CHARS = 16_000_000;
+export const MAX_MESSAGES = 4_000;
+
+const Summary = z.object({
+  /** What the model keeps of the turns folded so far. */
+  text: z.string(),
+  /** How many turns it stands for, in all. */
+  turns: z.number().int().nonnegative(),
+  at: z.number(),
+});
 
 const Transcript = z.object({
   version: z.literal(1),
@@ -41,8 +47,33 @@ const Transcript = z.object({
   createdAt: z.number(),
   updatedAt: z.number(),
   messages: z.array(z.record(z.string(), z.unknown())),
+  /**
+   * The start of the chat, summarised (ADR 0055). Added after version 1 was
+   * first written: a version before reads the file without it, as before.
+   */
+  summary: Summary.optional(),
+  /** Where each turn's message sits in the chat's log, one per turn in `messages`. */
+  seqs: z.array(z.number().int().nullable()).optional(),
+  /** The provider's real token count over Conch's estimate, for this chat. */
+  factor: z.number().positive().optional(),
 });
 type Transcript = z.infer<typeof Transcript>;
+
+/** A chat's transcript as the engine works with it. */
+export interface Session {
+  messages: WireMessage[];
+  summary?: { text: string; turns: number; at: number };
+  /** One per turn start in `messages`: its place in the chat's log, when known. */
+  seqs: (number | null)[];
+  factor?: number;
+}
+
+/** How many messages start a turn. */
+function turnsIn(messages: readonly WireMessage[]): number {
+  let n = 0;
+  for (const message of messages) if (startsTurn(message)) n++;
+  return n;
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -66,14 +97,12 @@ export function startsTurn(message: WireMessage): boolean {
  */
 export function trim(messages: WireMessage[]): WireMessage[] {
   const starts = messages.map((m, i) => (startsTurn(m) ? i : -1)).filter((i) => i > 0);
-  const tooBig = (kept: WireMessage[], turns: number) =>
-    kept.length > MAX_MESSAGES || turns > MAX_TURNS || JSON.stringify(kept).length > MAX_CHARS;
+  const tooBig = (kept: WireMessage[]) =>
+    kept.length > MAX_MESSAGES || JSON.stringify(kept).length > MAX_CHARS;
   let kept = messages;
-  let turns = starts.length + 1;
   for (const start of starts) {
-    if (!tooBig(kept, turns)) break;
+    if (!tooBig(kept)) break;
     kept = messages.slice(start);
-    turns -= 1;
   }
   return kept;
 }
@@ -106,24 +135,50 @@ export class TranscriptStore {
    * than a turn that can't start.
    */
   async load(id: string, provider: ApiProviderId): Promise<WireMessage[]> {
+    return (await this.open(id, provider)).messages;
+  }
+
+  /**
+   * The whole session: messages, the summary of what was folded, and where
+   * each turn sits in the chat. Places that don't line up with the turns (a
+   * file a version before wrote) read as unknown rather than wrong.
+   */
+  async open(id: string, provider: ApiProviderId): Promise<Session> {
     let raw: unknown;
     try {
       raw = await readJson(this.#path(id));
     } catch {
-      return [];
+      return { messages: [], seqs: [] };
     }
-    if (raw === undefined) return [];
+    if (raw === undefined) return { messages: [], seqs: [] };
     const parsed = Transcript.safeParse(raw);
-    if (!parsed.success || parsed.data.provider !== provider) return [];
-    return parsed.data.messages;
+    if (!parsed.success || parsed.data.provider !== provider) return { messages: [], seqs: [] };
+    const { messages, summary, seqs, factor } = parsed.data;
+    const turns = turnsIn(messages);
+    return {
+      messages,
+      ...(summary && { summary }),
+      seqs: seqs?.length === turns ? seqs : Array.from({ length: turns }, () => null),
+      ...(factor && { factor }),
+    };
   }
 
-  /** Save the trimmed transcript and hand back exactly what was written. */
+  /** Save the transcript and hand back exactly the messages written. */
   async save(
     id: string,
-    input: { provider: ApiProviderId; model?: string; messages: WireMessage[] },
+    input: {
+      provider: ApiProviderId;
+      model?: string;
+      messages: WireMessage[];
+      summary?: Session['summary'];
+      seqs?: Session['seqs'];
+      factor?: number;
+    },
   ): Promise<WireMessage[]> {
     const messages = trim(input.messages);
+    const dropped = turnsIn(input.messages) - turnsIn(messages);
+    const seqs =
+      input.seqs?.length === turnsIn(input.messages) ? input.seqs.slice(dropped) : undefined;
     await this.#mutex.run(async () => {
       const path = this.#path(id);
       const existing = Transcript.safeParse(await readJson(path));
@@ -135,6 +190,9 @@ export class TranscriptStore {
         createdAt: existing.success ? existing.data.createdAt : now,
         updatedAt: now,
         messages,
+        ...(input.summary && { summary: input.summary }),
+        ...(seqs && { seqs }),
+        ...(input.factor && { factor: input.factor }),
       };
       // `writeJson` is atomic and 0600 — a transcript is as private as a chat.
       await writeJson(path, next);

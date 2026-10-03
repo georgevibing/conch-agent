@@ -111,6 +111,16 @@ export const BackupPower = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('chats-never-ask') }),
   /** A routine that runs by itself, and never asks. */
   z.object({ kind: z.literal('routine-never-asks'), name: PowerText }),
+  /** Routines may spend more each month than Conch's default, or without a limit (ADR 0057). */
+  z.object({
+    kind: z.literal('routines-spend'),
+    /** USD a month; `null`: no limit. */
+    limitUsd: z.number().positive().nullable(),
+  }),
+  /** A routine that starts when something happens, and may act on it without asking (ADR 0056). */
+  z.object({ kind: z.literal('routine-acts-on-events'), name: PowerText }),
+  /** Another app can start a routine through the public address (ADR 0056). */
+  z.object({ kind: z.literal('routine-address'), name: PowerText }),
   /** Sites the browser acts on without asking. */
   z.object({
     kind: z.literal('browser-sites'),

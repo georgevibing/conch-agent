@@ -5,7 +5,7 @@ import { ConversationEvent, UpdateSettingsBody } from './index';
 
 const at = { conversationId: 'c1', seq: 1, at: 0 };
 
-describe('chat cards (ADR 0055)', () => {
+describe('chat cards (ADR 0060)', () => {
   it('reads an offer to connect an app, and one to turn on a skill', () => {
     expect(
       Offer.parse({

@@ -9,7 +9,7 @@ import { browserTimezone } from './api';
 import { routineIcon } from './icon';
 import { RoutineEditor, type RoutineDraft } from './RoutineEditor';
 import styles from './Routines.module.css';
-import { templates } from './templates';
+import { templates, type Template } from './templates';
 
 /**
  * The front door: say what you want in your own words (Conch drafts it in a
@@ -72,7 +72,7 @@ export function NewRoutine({
                   minRows={2}
                   maxRows={6}
                   value={text}
-                  placeholder="Every weekday at 8am, tell me what’s on my calendar and whether I need an umbrella."
+                  placeholder="Every weekday at 8am, tell me what’s on my calendar. Or: tell me when Anna replies."
                   onChange={(e) => setText(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -95,32 +95,51 @@ export function NewRoutine({
                 <Text size="sm" weight="medium" tone="muted">
                   Or start from an idea
                 </Text>
-                <div className={styles.ideas}>
-                  {templates.map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      className={styles.idea}
-                      data-lustre=""
-                      onClick={() => {
-                        onOpenChange(false);
-                        setEditor({ ...t, timezone: browserTimezone() });
-                      }}
+                {/* Routines start at a time, or when something happens (ADR 0056). */}
+                {[
+                  { id: 'every', label: 'Every…', items: templates.filter((t) => !t.when) },
+                  {
+                    id: 'when',
+                    label: 'When…, and free until it happens',
+                    items: templates.filter((t) => t.when),
+                  },
+                ].map((group) => (
+                  <Stack key={group.id} gap={1.5}>
+                    <Text size="xs" tone="subtle" id={`ideas-${group.id}`}>
+                      {group.label}
+                    </Text>
+                    <div
+                      className={styles.ideas}
+                      role="group"
+                      aria-labelledby={`ideas-${group.id}`}
                     >
-                      <span className={styles.ideaIcon} aria-hidden>
-                        {routineIcon(t.schedule)}
-                      </span>
-                      <span className={styles.ideaText}>
-                        <Text as="span" weight="medium" size="sm">
-                          {t.title}
-                        </Text>
-                        <Text as="span" size="xs" tone="muted" truncate={2}>
-                          {t.summary}
-                        </Text>
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                      {group.items.map((t: Template) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          className={styles.idea}
+                          data-lustre=""
+                          onClick={() => {
+                            onOpenChange(false);
+                            setEditor({ ...t, timezone: browserTimezone() });
+                          }}
+                        >
+                          <span className={styles.ideaIcon} aria-hidden>
+                            {routineIcon(t.schedule ?? { type: 'daily', time: '09:00' }, t.when)}
+                          </span>
+                          <span className={styles.ideaText}>
+                            <Text as="span" weight="medium" size="sm">
+                              {t.title}
+                            </Text>
+                            <Text as="span" size="xs" tone="muted" truncate={2}>
+                              {t.summary}
+                            </Text>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </Stack>
+                ))}
               </Stack>
             </Stack>
           </Dialog.Body>

@@ -30,7 +30,7 @@ const call = Question.parse({
 });
 const now = new Date(2026, 9, 3);
 
-describe('answers to a question (ADR 0055)', () => {
+describe('answers to a question (ADR 0060)', () => {
   it('reads as one sentence, in the question’s order', () => {
     const values = { how: 'video', when: '2026-10-09T10:00', people: 3 };
     expect(checkAnswer(call, values)).toEqual({ ok: true, values });

@@ -238,6 +238,7 @@ export class SkillSuggester {
           .slice(0, 3)
           .map(({ text, conversationId, at }) => ({ text, conversationId, at })),
         draft,
+        from: 'habit',
       });
     }
     this.#cache = { at: this.#now, suggestions: out };

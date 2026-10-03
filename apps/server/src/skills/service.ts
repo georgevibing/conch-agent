@@ -8,6 +8,7 @@ import {
   type SkillDraft,
   type SkillMode,
   type SkillPermissions,
+  type SkillShelf,
   type SkillsList,
   type TrustedPublisher,
   type UpdateSkillBody,
@@ -22,6 +23,7 @@ import { withTitle } from './frontmatter';
 import { readPermissions } from './permissions';
 import { publicSkill, SkillError, type LoadedSkill, type SkillStore } from './store';
 import type { SkillTrust } from './trust';
+import { SHELF_DAYS, type SkillUsage } from './usage';
 
 /** What the prompt may spend listing skills; the rest are still usable by name. */
 const PROMPT_BUDGET = 8_000;
@@ -35,6 +37,10 @@ export interface SkillServiceDeps {
   onSpend?: (usage: Usage) => void;
   /** Whose signatures you trust (ADR 0031). */
   trust?: SkillTrust;
+  /** When each skill was last used, and which ones Conch put here (ADR 0058). */
+  usage?: SkillUsage;
+  /** A suggestion was saved as a skill: it's settled (ADR 0058). */
+  suggestionSaved?: (id: string) => Promise<void>;
 }
 
 /**
@@ -147,20 +153,64 @@ export class SkillService {
       description: body.description ?? draft?.description ?? title,
       instructions: body.instructions,
       mode: body.mode,
+      ...(body.permissions && { permissions: body.permissions }),
     });
+    if (body.suggestion) {
+      // Conch put it on your shelf: the tidy-up may offer it back one day (ADR 0058).
+      await this.deps.usage
+        ?.note(skill.id, body.suggestion.startsWith('ws_') ? 'learned' : 'suggested')
+        .catch(() => undefined);
+      await this.deps.suggestionSaved?.(body.suggestion).catch(() => undefined);
+    }
     this.#changed();
     return this.deps.store.detail(skill.id);
   }
 
   async update(id: string, body: UpdateSkillBody): Promise<SkillDetail> {
     const skill = await this.deps.store.update(id, body);
+    if (skill.id !== id) await this.deps.usage?.renamed(id, skill.id).catch(() => undefined);
     this.#changed();
     return this.deps.store.detail(skill.id);
   }
 
   async remove(id: string) {
     await this.deps.store.remove(id);
+    await this.deps.usage?.forget(id).catch(() => undefined);
     this.#changed();
+  }
+
+  /** A skill was used in a chat (a `skill.used` event, however it got there). */
+  used(skillId: string): void {
+    void this.deps.usage?.used(skillId).catch(() => undefined);
+  }
+
+  /**
+   * The tidy shelf (ADR 0058): skills Conch put here that haven't been used
+   * in a long while. Looking changes nothing.
+   */
+  async shelf(): Promise<SkillShelf> {
+    const usage = this.deps.usage;
+    if (!usage) return { stale: [], days: SHELF_DAYS };
+    const { skills } = await this.deps.store.list();
+    return { stale: await usage.stale(skills), days: SHELF_DAYS };
+  }
+
+  /**
+   * Your answer to the shelf: turn them off, or keep them. Only skills that
+   * are still on the shelf now are touched — a skill used since, changed or
+   * gone is left as it is. Turning off is the only change Conch makes, and
+   * only on your press.
+   */
+  async tidyShelf(action: 'off' | 'keep', ids: readonly string[]): Promise<number> {
+    const usage = this.deps.usage;
+    if (!usage) return 0;
+    const { stale } = await this.shelf();
+    const chosen = stale.filter((s) => ids.includes(s.id)).map((s) => s.id);
+    if (!chosen.length) return 0;
+    if (action === 'keep') await usage.keep(chosen);
+    else for (const id of chosen) await this.deps.store.update(id, { mode: 'off' });
+    this.#changed();
+    return chosen.length;
   }
 
   async copy(id: string): Promise<SkillDetail> {
@@ -304,7 +354,7 @@ export class SkillService {
     };
   }
 
-  // ── Offering a skill in the chat (ADR 0055) ─────────────────────────────
+  // ── Offering a skill in the chat (ADR 0060) ─────────────────────────────
 
   /**
    * The skills the assistant may offer to turn on: Off, or set to When I ask,
@@ -345,7 +395,7 @@ export class SkillService {
   }
 
   /**
-   * Run a request with a skill, once (**Use it** on an offer, ADR 0055): its
+   * Run a request with a skill, once (**Use it** on an offer, ADR 0060): its
    * instructions and the request, as `/name request` would. `undefined` when
    * it's off, gone, or can't be read.
    */
@@ -362,7 +412,7 @@ export interface Expanded {
   skill: { skillId: string; name: string; title: string; permissions: SkillPermissions };
 }
 
-/** A skill the chat can offer (ADR 0055). */
+/** A skill the chat can offer (ADR 0060). */
 export interface OfferableSkill {
   id: string;
   name: string;

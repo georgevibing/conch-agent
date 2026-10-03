@@ -1,5 +1,5 @@
 /**
- * The map (ADR 0055 §1): what Conch could turn on that isn't on yet, as a
+ * The map (ADR 0060 §1): what Conch could turn on that isn't on yet, as a
  * short section of each turn's system text, so the assistant can offer the
  * one thing a request is missing even when nobody named it.
  */
@@ -32,7 +32,7 @@ export interface OfferMap {
   skills: MapSkill[];
 }
 
-/** What the map may cost a turn, in characters (ADR 0055). */
+/** What the map may cost a turn, in characters (ADR 0060). */
 export const MAP_BUDGET = 2_400;
 
 const HEADING = '## What Conch can turn on';

@@ -26,7 +26,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Replies to send next, under the latest reply (ADR 0055). Up to three quiet chips, each holding exactly the words it sends — nothing hides behind a label. They come from the assistant (`suggest_replies`) or from Conch itself (“Show it as a chart” under a table of numbers). They rise in one after another once the reply is done (at once with reduced motion), sit back from the reply in tone so the answer stays the thing you read, line up with its words, and wrap onto more lines on a phone. One tab stop; arrow keys move between chips. A press lights the chip for a beat and fades the rest, then sends the words as if typed — the message box keeps whatever you were writing.',
+          'Replies to send next, under the latest reply (ADR 0060). Up to three quiet chips, each holding exactly the words it sends — nothing hides behind a label. They come from the assistant (`suggest_replies`) or from Conch itself (“Show it as a chart” under a table of numbers). They rise in one after another once the reply is done (at once with reduced motion), sit back from the reply in tone so the answer stays the thing you read, line up with its words, and wrap onto more lines on a phone. One tab stop; arrow keys move between chips. A press lights the chip for a beat and fades the rest, then sends the words as if typed — the message box keeps whatever you were writing.',
       },
     },
   },

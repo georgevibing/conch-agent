@@ -13,7 +13,7 @@ import { newId } from '../lib/ids';
 import { mapSection, type OfferMap } from './map';
 
 /**
- * Why an offer wasn't shown (ADR 0055 §2). Each is a rule the chat keeps:
+ * Why an offer wasn't shown (ADR 0060 §2). Each is a rule the chat keeps:
  * nothing it can't turn on, nothing muted, nothing twice, never a pile of
  * cards, nothing a page asked for, and nothing for nobody.
  */
@@ -148,7 +148,7 @@ const HEX = /^#[0-9a-fA-F]{6}$/;
 const cap = (text: string, max: number) => (text.length > max ? text.slice(0, max) : text);
 
 /**
- * Every offer in a chat goes through here (ADR 0055): the ones Conch notices
+ * Every offer in a chat goes through here (ADR 0060): the ones Conch notices
  * in the person's words (`cue`) and the ones the assistant asks for
  * (`propose`). It also takes them: `accept` checks what was offered is on
  * now and carries the chat on; `dismiss` puts one away.
@@ -157,7 +157,7 @@ export class OfferDesk {
   constructor(private readonly deps: OfferDeskDeps) {}
 
   /**
-   * The map's section of the system text (ADR 0055 §1), for a chat someone
+   * The map's section of the system text (ADR 0060 §1), for a chat someone
    * is in. Muted apps and skills are left out, as are routines, tasks and
    * chats from a chat app, which get no `offer` to act on it.
    */
@@ -274,7 +274,7 @@ export class OfferDesk {
   }
 
   /**
-   * The person took an offer (ADR 0055 §3): what was offered must be on now
+   * The person took an offer (ADR 0060 §3): what was offered must be on now
    * (a skill is turned on here, when that's how it was taken), then the chat
    * carries on with the request once, however many devices press it.
    */

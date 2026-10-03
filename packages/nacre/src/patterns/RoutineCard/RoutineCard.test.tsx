@@ -50,6 +50,29 @@ describe('RoutineCard (list)', () => {
     expect(screen.getByText(new RegExp(`yesterday at ${time}$`))).toBeInTheDocument();
   });
 
+  it('says what it costs beside its schedule, on the page and in a chat (ADR 0057)', async () => {
+    const { container, rerender } = renderNacre(
+      <RoutineCard
+        {...base}
+        status="active"
+        cost={{ text: 'About $1.20 a month', billing: 'metered' }}
+        onOpen={() => {}}
+      />,
+    );
+    expect(screen.getByText('About $1.20 a month')).toBeInTheDocument();
+    await expectAccessible(container);
+    rerender(
+      <RoutineCard
+        {...base}
+        variant="proposal"
+        status="draft"
+        cost={{ text: 'Free on this computer', billing: 'free' }}
+        onActivate={() => {}}
+      />,
+    );
+    expect(screen.getByText('Free on this computer')).toBeInTheDocument();
+  });
+
   it('opens from the title and toggles without opening', async () => {
     const onOpen = vi.fn();
     const onToggle = vi.fn();
@@ -121,5 +144,57 @@ describe('RoutineCard (proposal)', () => {
     expect(screen.getByText('Routine on')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Turn on' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open' })).toBeInTheDocument();
+  });
+
+  it('starts when something happens: says it costs nothing until then, and why it can’t look', async () => {
+    const { container } = renderNacre(
+      <RoutineCard
+        {...base}
+        scheduleText="When Anna Smith emails you"
+        waitingText="Free until something happens"
+        problem="Gmail needs you to sign in again."
+        status="active"
+        onOpen={() => {}}
+        onToggle={() => {}}
+      />,
+    );
+    expect(screen.getByText('When Anna Smith emails you')).toBeInTheDocument();
+    expect(screen.getByText('Free until something happens')).toBeInTheDocument();
+    expect(screen.getByText('Gmail needs you to sign in again.')).toBeInTheDocument();
+    expect(screen.getByRole('article')).toHaveAttribute('data-attention', 'needs-you');
+    await expectAccessible(container);
+  });
+
+  it('a drafted When-routine says what starts it instead of a first run', () => {
+    renderNacre(
+      <RoutineCard
+        {...base}
+        variant="proposal"
+        scheduleText="When Anna Smith emails you"
+        waitingText="Free until something happens"
+        status="draft"
+        nextRunAt={now + 3_600_000}
+        onActivate={() => {}}
+      />,
+    );
+    expect(screen.getByText(/· Free until something happens/)).toBeInTheDocument();
+    expect(screen.queryByText(/first run/)).toBeNull();
+  });
+
+  it('asks for the one choice it still needs instead of turning on', async () => {
+    const onActivate = vi.fn();
+    renderNacre(
+      <RoutineCard
+        {...base}
+        variant="proposal"
+        scheduleText="When an email arrives"
+        status="draft"
+        activateLabel="Choose who"
+        onActivate={onActivate}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Choose who' }));
+    expect(onActivate).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Turn on' })).toBeNull();
   });
 });

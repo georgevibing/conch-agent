@@ -13,7 +13,7 @@ import type {
 import { Activity } from './activity/service';
 import { importCheck } from './import/doctor';
 import { ImportService } from './import/service';
-import { LiveDataAccess } from './artifacts/live';
+import { fetchLive, LiveDataAccess } from './artifacts/live';
 import { ArtifactService } from './artifacts/service';
 import { ArtifactStore } from './artifacts/store';
 import { tasksCheck } from './tasks/doctor';
@@ -112,16 +112,31 @@ import { hostedApps } from './integrations/hosted';
 import { IntegrationService } from './integrations/service';
 import { MemoryIndex } from './memory/index';
 import { OnDeviceModel } from './memory/ondevice';
-import { cheapModel, MeaningModel, yourRequests, yourWords } from './memory/learning';
+import { chatWords, cheapModel, MeaningModel, yourRequests, yourWords } from './memory/learning';
 import { registerLearningDoctor } from './memory/doctor';
 import { MemoryStore } from './memory/store';
 import { MemoryTidy } from './memory/tidy';
+import { SkillLearner } from './skills/learn';
 import { SkillSuggester } from './skills/suggest';
+import { SkillUsage, skillUsedIn } from './skills/usage';
 import { RoutineService } from './routines/service';
 import { OfferDesk } from './offers/desk';
 import { offerTools } from './offers/tools';
+import { RoutineSpend } from './routines/spend';
+import { PAST_CHATS_PROMPT, pastChatTools, withOthers, type ChatFacts } from './search/past';
 import { SearchService } from './search/service';
 import { RoutineStore } from './routines/store';
+import { WhenRoutines } from './routines/triggers';
+import { calendarSource } from './routines/triggers/calendar';
+import { folderSource } from './routines/triggers/folder';
+import { routineSource, taskSource } from './routines/triggers/finished';
+import { calendarAccess, gmailAccess, mailPeople } from './routines/triggers/google';
+import { HookSecrets, hookSource } from './routines/triggers/hook';
+import { mailSource } from './routines/triggers/mail';
+import { judgeWith } from './routines/triggers/onlyif';
+import { OwnWrites } from './routines/triggers/own';
+import { pageSource } from './routines/triggers/page';
+import { routinesWatchCheck } from './routines/triggers/doctor';
 import { SettingsStore } from './settings/store';
 import { SkillService } from './skills/service';
 import { externalRoots, SkillStore } from './skills/store';
@@ -181,16 +196,22 @@ export class Services {
   readonly onDevice: OnDeviceModel;
   readonly tidy: MemoryTidy;
   readonly suggester: SkillSuggester;
+  /** Save how I did this: skills offered from work that went well (ADR 0058). */
+  readonly learner: SkillLearner;
+  /** When each skill was last used, for the tidy shelf (ADR 0058). */
+  readonly skillUsage: SkillUsage;
   readonly commands: CommandStore;
   /** Files and long pastes sent with messages (ADR 0017). */
   readonly attachments: AttachmentStore;
   /** Passwords: Conch's own vault and the managers it reads (ADR 0025). */
   readonly vault: VaultService;
   readonly routines: RoutineService;
+  /** What routines spend, and the limits on it (ADR 0057). */
+  readonly routineSpend: RoutineSpend;
   readonly conversations: ConversationManager;
-  /** Questions the assistant asked, waiting for your answer (ADR 0055 §4). */
+  /** Questions the assistant asked, waiting for your answer (ADR 0060 §4). */
   readonly questions = new QuestionDesk();
-  /** Every offer to turn something on in a chat goes through here (ADR 0055). */
+  /** Every offer to turn something on in a chat goes through here (ADR 0060). */
   readonly offers: OfferDesk;
   readonly browser: BrowserService;
   readonly terminal: TerminalService;
@@ -395,6 +416,7 @@ export class Services {
     const skillSources =
       config.CONCH_SKILL_SOURCES ?? (config.CONCH_ENGINE === 'mock' ? 'off' : 'auto');
     this.skillTrust = new SkillTrust(config.CONCH_HOME);
+    this.skillUsage = new SkillUsage(config.CONCH_HOME, heal);
     this.skills = new SkillService({
       store: new SkillStore(
         config.CONCH_HOME,
@@ -407,6 +429,11 @@ export class Services {
       emit: (event) => this.broadcast.emit(event),
       onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
       trust: this.skillTrust,
+      usage: this.skillUsage,
+      // "Save how I did this" saved: the offer is settled (ADR 0058).
+      suggestionSaved: async (id) => {
+        if (this.learner.owns(id)) await this.learner.saved(id);
+      },
     });
     // A signing key written in the clear (an older Conch, a restored backup) is locked now (ADR 0047).
     void this.skillTrust
@@ -585,8 +612,17 @@ export class Services {
               ),
               ...offeredSlackTools(this.slack, ctx),
               ...questionTools(this.questions, ctx),
-              // Offer what this request is missing (ADR 0055): never to nobody.
+              // Offer what this request is missing (ADR 0060): never to nobody.
               ...(ctx.unattended ? [] : offerTools(this.offers, ctx)),
+              // Your earlier chats, never in a chat with someone else in it (ADR 0059).
+              ...pastChatTools(
+                {
+                  search: this.search,
+                  about: (id) => this.#chatFacts(id),
+                  redact: this.vault.redactor(),
+                },
+                ctx,
+              ),
             ],
       context: async (engine, conversationId) =>
         [
@@ -594,7 +630,7 @@ export class Services {
           await this.skills.promptSection(engine).catch(() => ''),
           await this.browser.promptSection(engine).catch(() => ''),
           await this.integrations.promptSection(),
-          // The map, beside the apps: only for providers that can call `offer` (ADR 0055).
+          // The map, beside the apps: only for providers that can call `offer` (ADR 0060).
           engine.hostTools === false
             ? ''
             : await this.offers.section(engine, conversationId).catch(() => ''),
@@ -609,6 +645,7 @@ export class Services {
             .origin
             ? ''
             : QUESTIONS_PROMPT,
+          engine.hostTools === false ? '' : await this.#pastChatsPrompt(conversationId),
         ]
           .filter(Boolean)
           .join('\n\n'),
@@ -647,6 +684,35 @@ export class Services {
       questions: this.questions,
       // A spend that can't be saved is lost, not fatal: an unhandled rejection would stop Conch.
       onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
+      // Before a long chat's start is summarised, what you said there is learned (ADR 0055).
+      learn: async ({ conversationId, origin, events, beforeSeq }) => {
+        await this.tidy.learn(
+          conversationId,
+          chatWords({ id: conversationId, ...(origin && { origin }) }, events, {
+            since: Number.NEGATIVE_INFINITY,
+            beforeSeq,
+          }),
+        );
+      },
+      heal: (message) => void this.healed.note('conversations', message),
+    });
+    // What unattended runs spend, and its guards (ADR 0057).
+    this.routineSpend = new RoutineSpend({
+      home: config.CONCH_HOME,
+      engine: (id) => this.providers.engineFor(id),
+      heal,
+      changed: () =>
+        void this.routines
+          .spending()
+          .then((spending) => {
+            if (spending) this.broadcast.emit({ type: 'routines.spending', spending });
+          })
+          .catch(() => undefined),
+      // Once a month, wherever the person hears from Conch.
+      paused: (spending) => {
+        void this.push.routinesPaused(spending).catch(() => undefined);
+        void this.channels.routinesPaused(spending).catch(() => undefined);
+      },
     });
     this.routines = new RoutineService({
       store: new RoutineStore(join(config.CONCH_HOME, 'routines'), heal),
@@ -654,7 +720,10 @@ export class Services {
       engine: (id) => this.providers.engineFor(id),
       emit: (event) => this.broadcast.emit(event),
       onHeal: (message) => void this.healed.note('routines', message),
+      spend: this.routineSpend,
+      when: this.#when(config, heal),
     });
+    this.doctor.register(routinesWatchCheck(this.routines));
     this.tasks = new TaskService({
       store: new TaskStore(config.CONCH_HOME, heal),
       conversations: this.conversations,
@@ -668,6 +737,44 @@ export class Services {
       },
     });
     this.doctor.register(tasksCheck(this.tasks));
+    // Save how I did this (ADR 0058): work that went well, offered as a skill, never saved by itself.
+    this.learner = new SkillLearner({
+      home: config.CONCH_HOME,
+      chat: async (id) => {
+        const { conversation, events } = await this.conversations.detail(id);
+        return {
+          title: conversation.title,
+          status: conversation.status,
+          events,
+          ...(conversation.origin && { origin: conversation.origin }),
+        };
+      },
+      skills: async () =>
+        (await this.skills.list()).skills.map((s) => ({
+          title: s.title,
+          description: s.description,
+        })),
+      // The provider that answered the chat has seen it already; else one on this computer.
+      model: async (id) => {
+        const engine = id ? this.providers.engineFor(id) : undefined;
+        if (engine?.complete) return cheapModel(engine);
+        const local = (await this.providers.ready().catch(() => [])).find(
+          (e) => e.local && e.complete,
+        );
+        return local ? cheapModel(local) : undefined;
+      },
+      workspace: () => this.settings.workspace(),
+      redact: this.vault.redactor(),
+      emit: (event) => this.broadcast.emit(event),
+      onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
+      heal,
+    });
+    this.broadcast.on((event) => this.learner.onEvent(event));
+    // Every way a skill is used ends in `skill.used`: the tidy shelf counts them all.
+    this.conversations.events.on((event) => {
+      const used = skillUsedIn(event);
+      if (used) this.skills.used(used);
+    });
     this.conversations.events.on((event) => this.broadcast.emit(event));
     // Each task follows its own chat: what it's doing, what it did (ADR 0033).
     this.broadcast.on((event) => this.tasks.onEvent(event));
@@ -952,6 +1059,85 @@ export class Services {
   }
 
   /**
+   * When… (ADR 0056): what can start a routine, each through the part of
+   * Conch that already reaches it. Built before the routines, so it reaches
+   * the door, the tasks and the routines themselves only when it looks.
+   */
+  #when(config: Config, heal: Heal): WhenRoutines {
+    const ownWrites = new OwnWrites();
+    this.broadcast.on((event) => ownWrites.onEvent(event));
+    const subscribe = (listener: (event: ServerEvent) => void) => this.broadcast.on(listener);
+    const routineOf = async (conversationId: string) => {
+      const origin = (await this.conversations.detail(conversationId).catch(() => undefined))
+        ?.conversation.origin;
+      return origin?.kind === 'routine' ? origin.routineId : undefined;
+    };
+    const secrets = new HookSecrets(config.CONCH_HOME);
+    return new WhenRoutines({
+      routinesDir: join(config.CONCH_HOME, 'routines'),
+      secrets,
+      heal,
+      onHeal: (message) => void this.healed.note('routines', message),
+      hookUrl: (hookId) => this.door.hookUrl(hookId),
+      judge: judgeWith(() => cheapModel(this.providers.engine())),
+      // What an only-if check spends counts toward routines' spending (ADR 0057).
+      spend: {
+        allow: async (routineId) =>
+          (
+            await this.routineSpend
+              .allow(routineId, this.providers.engine())
+              .catch(() => ({ ok: true }))
+          ).ok,
+        record: (routineId, usage, model) =>
+          void this.routineSpend
+            .record(routineId, usage, {
+              engine: this.providers.engine(),
+              ...(model && { model }),
+            })
+            .catch(() => undefined),
+      },
+      sources: {
+        mail: mailSource(gmailAccess(this.google, this.googleApps)),
+        calendar: calendarSource(calendarAccess(this.google, this.googleApps)),
+        // Through the live-data guard (ADR 0046): never this computer, your network or Conch.
+        page: pageSource((url, hosts) =>
+          fetchLive(
+            url,
+            { local: false, gatewayPort: config.CONCH_PORT, hosts },
+            { maxBytes: 3_000_000, timeoutMs: 20_000 },
+          ),
+        ),
+        folder: folderSource({
+          home: config.CONCH_HOME,
+          forbidden: () => [
+            ...protectedPaths(config.CONCH_HOME),
+            ...secretPlaces().map((p) => p.path),
+          ],
+          ownWrite: (path) => ownWrites.has(path),
+          running: (routineId) => this.routines.busy(routineId),
+        }),
+        task: taskSource({ subscribe, routineOf }),
+        routine: routineSource({
+          subscribe,
+          routineOf,
+          follows: (id) => this.routines.follows(id),
+          exists: async (id) => Boolean(await this.routines.detail(id).catch(() => undefined)),
+          title: (id) => this.routines.titleOf(id),
+        }),
+        hook: hookSource({
+          secrets,
+          door: {
+            mount: (hookId, handler) => this.door.mount(hookId, undefined, handler),
+            url: (hookId) => this.door.hookUrl(hookId),
+            ready: () => this.door.status().state === 'ready',
+            onChange: (listener) => this.door.onChange(() => listener()),
+          },
+        }),
+      },
+    });
+  }
+
+  /**
    * Always on. The mock engine's is pretend, so tests and `pnpm dev:mock`
    * never add anything to this computer's login items.
    */
@@ -1129,6 +1315,31 @@ export class Services {
     return `${list} ${verb} while Conch is running.`;
   }
 
+  #people?: {
+    at: number;
+    value: Promise<{ people: { address: string; name?: string }[]; note?: string }>;
+  };
+
+  /**
+   * People you've written to lately, for picking whose mail starts a routine
+   * (ADR 0056). Read from Sent at most every ten minutes.
+   */
+  mailPeople() {
+    if (this.#people && Date.now() - this.#people.at < 10 * 60_000) return this.#people.value;
+    const value = mailPeople(this.google, this.googleApps)
+      .then((people) =>
+        people.length
+          ? { people }
+          : { people, note: 'No one you’ve written to lately. Type an address instead.' },
+      )
+      .catch(() => ({
+        people: [],
+        note: 'Connect Gmail to pick from people you write to, or type an address.',
+      }));
+    this.#people = { at: Date.now(), value };
+    return value;
+  }
+
   /** Come home: what Conch already has, and where things go when they come over. */
   #imports(config: Config): ImportService {
     return new ImportService({
@@ -1143,14 +1354,22 @@ export class Services {
             (await this.skills.store.list()).skills
               .filter((s) => s.source === 'conch')
               .map((s) => s.name),
-          adopt: (folder, base) => this.skills.store.adopt(folder, base),
+          // Brought in by Conch: the tidy shelf may offer it back one day (ADR 0058).
+          adopt: async (folder, base) => {
+            const skill = await this.skills.store.adopt(folder, base);
+            await this.skillUsage.note(skill.id, 'imported').catch(() => undefined);
+            return skill;
+          },
           // Another agent's persona (ADR 0042): one of Conch's own skills, off until you turn it on.
-          create: async (input) =>
-            this.skills.store.create({
+          create: async (input) => {
+            const skill = await this.skills.store.create({
               ...input,
               name: await this.skills.store.freeName(input.base),
               mode: 'off',
-            }),
+            });
+            await this.skillUsage.note(skill.id, 'imported').catch(() => undefined);
+            return skill;
+          },
           remove: (id) => this.skills.remove(id),
         },
         routines: {
@@ -1221,6 +1440,31 @@ export class Services {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /** What looking through earlier chats needs to know about one (ADR 0059); undefined once it's gone. */
+  async #chatFacts(id: string): Promise<ChatFacts | undefined> {
+    const found = await this.conversations.detail(id).catch(() => undefined);
+    if (!found) return undefined;
+    const { conversation, events } = found;
+    return {
+      title: conversation.title,
+      ...(conversation.archivedAt !== undefined && { archivedAt: conversation.archivedAt }),
+      ...(conversation.origin && { origin: conversation.origin }),
+      taint: events.flatMap((e) => (e.type === 'taint' ? [e.source] : [])),
+    };
+  }
+
+  /**
+   * How to look back, for the chats that can: not one with someone else's
+   * words in it, nor a routine's run, a task or a page's refresh, which don't
+   * get Conch's tools.
+   */
+  async #pastChatsPrompt(conversationId: string): Promise<string> {
+    const facts = await this.#chatFacts(conversationId);
+    if (!facts || withOthers(facts.taint)) return '';
+    if (facts.origin && facts.origin.kind !== 'channel') return '';
+    return PAST_CHATS_PROMPT;
   }
 
   /**
@@ -1459,6 +1703,7 @@ export class Services {
     this.door.stop();
     this.tailscale.stop();
     this.tidy.stop();
+    this.learner.stop();
     this.memoryIndex.close();
     void this.onDevice.unload();
     void this.mockTelegram?.stop();

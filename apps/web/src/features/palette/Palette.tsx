@@ -21,6 +21,7 @@ import {
   Archive,
   Brain,
   CornerDownRight,
+  FoldVertical,
   Gauge,
   MessageSquare,
   Moon,
@@ -39,6 +40,7 @@ import { useNavigate, useParams } from 'react-router';
 import { useAppState, useConversations } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { relativeTime } from '../../lib/time';
+import { compactChat } from '../chat/compact';
 import { fuzzyFilter } from '../search/fuzzy';
 import { useSearchPreview, useSearchResults } from '../search/useSearch';
 import { useFindables } from './findables';
@@ -256,6 +258,18 @@ export function Palette() {
       shortcut: 'mod+b',
       run: toggleSidebar,
     },
+    // In a chat: fold its start into a summary now, as `/compact` does (ADR 0055).
+    ...(currentId
+      ? [
+          {
+            id: 'compact',
+            label: 'Summarise the start of this chat',
+            icon: <FoldVertical />,
+            keywords: 'compact summarize shorten long chat context window forget',
+            run: () => void compactChat(currentId),
+          },
+        ]
+      : []),
   ];
 
   const titles = useMemo(

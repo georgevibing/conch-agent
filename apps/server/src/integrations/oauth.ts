@@ -63,7 +63,7 @@ export type FlowDisplay = 'popup' | 'tab';
 
 /**
  * Signed in from a chat's offer, in the same tab (a phone): the chat to open
- * again, and the offer it takes by itself once it's back (ADR 0055). Ids only,
+ * again, and the offer it takes by itself once it's back (ADR 0060). Ids only,
  * checked as ids, so the way back is always a chat of this Conch.
  */
 export interface SignInReturn {

@@ -2,7 +2,7 @@ import { RoutineCard } from '@conch/nacre';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
-import { routineIcon } from './icon';
+import { routineIcon, WAITING_TEXT, watchProblem } from './icon';
 import { useRoutines, useRunRoutine, useUpdateRoutine } from './queries';
 import { RoutineEditor } from './RoutineEditor';
 import styles from './Routines.module.css';
@@ -41,10 +41,21 @@ export function RoutineChatCard({
         variant={action === 'proposed' ? 'proposal' : 'list'}
         title={routine.title}
         summary={routine.summary}
-        scheduleText={routine.scheduleText}
+        scheduleText={
+          routine.onlyIf
+            ? `${routine.scheduleText}, only if ${routine.onlyIf}`
+            : routine.scheduleText
+        }
+        {...(routine.when && { waitingText: WAITING_TEXT })}
+        {...(watchProblem(routine) && { problem: watchProblem(routine) })}
         status={routine.status}
         nextRunAt={routine.nextRunAt}
-        icon={routineIcon(routine.schedule)}
+        icon={routineIcon(routine.schedule, routine.when)}
+        cost={
+          routine.spend?.text
+            ? { text: routine.spend.text, billing: routine.spend.billing }
+            : undefined
+        }
         lastRun={
           routine.lastRun && {
             status: routine.lastRun.status,

@@ -17,7 +17,7 @@ function trouble(error: unknown): string | undefined {
 }
 
 /**
- * A question the assistant asked (ADR 0055 §4), answered with a tap. The
+ * A question the assistant asked (ADR 0060 §4), answered with a tap. The
  * card folds as soon as you answer; the answer goes to Conch, which checks
  * it and words it for the chat. If it doesn't arrive, the card opens again
  * and says what to do.

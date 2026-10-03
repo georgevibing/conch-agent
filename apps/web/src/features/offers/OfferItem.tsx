@@ -20,7 +20,7 @@ export const mutedKey = (offer: OfferEntry['offer']) =>
   offer.kind === 'skill' ? `skill:${offer.target}` : offer.target;
 
 /**
- * An offer to turn on what a request is missing (ADR 0055), under the reply
+ * An offer to turn on what a request is missing (ADR 0060), under the reply
  * that needed it. **Connect** opens the connect dialog right here, and once
  * the app is connected the chat carries on by itself; a skill shows what it
  * may do, then turns on (or is used once) and carries on the same way. On a

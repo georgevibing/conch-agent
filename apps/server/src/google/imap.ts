@@ -113,6 +113,34 @@ export class GmailImap {
   }
 
   /**
+   * Who the newest messages matching a search went to, in one sign-in: the
+   * people you write to, for picking whose mail starts a routine (ADR 0056).
+   * Envelopes only, never a message's text.
+   */
+  async recipients(
+    login: GmailLogin,
+    query: string,
+    limit: number,
+  ): Promise<{ address: string; name?: string }[]> {
+    return this.#session(login, async (client) => {
+      await client.mailboxOpen(await this.#folder(client, '\\All'), { readOnly: true });
+      const uids = ((await client.search({ gmraw: query }, { uid: true })) || [])
+        .sort((a, b) => b - a)
+        .slice(0, limit);
+      const out: { address: string; name?: string }[] = [];
+      if (uids.length)
+        for await (const m of client.fetch(
+          uids.join(','),
+          { uid: true, envelope: true },
+          { uid: true },
+        ))
+          for (const to of [...(m.envelope?.to ?? []), ...(m.envelope?.cc ?? [])])
+            if (to.address) out.push({ address: to.address, ...(to.name && { name: to.name }) });
+      return out;
+    });
+  }
+
+  /**
    * Save a draft: APPEND into Drafts, marked as a draft. Never retried. A
    * failure before APPEND went out means nothing was saved; after, Gmail may
    * have it (`DraftUncertain`), and only reading the drafts back can say.

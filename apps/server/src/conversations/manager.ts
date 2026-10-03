@@ -26,6 +26,7 @@ import { honouredMode, skillHolds, type PermissionMode, type SkillHold } from '@
 
 import type {
   BridgedTool,
+  Compacted,
   Engine,
   EngineEvent,
   EngineMcpServer,
@@ -133,6 +134,11 @@ export interface TurnExtras {
   taint?: readonly TaintSource[];
   /** Starts held to the skills the chat it came from was held to (ADR 0047), from there. */
   skills?: readonly (SkillHold & { from: string })[];
+  /**
+   * What the turn has used so far, as the engine reports it (a running total):
+   * a routine stops a run that goes past its limit (ADR 0057).
+   */
+  onUsage?: (usage: Usage, from: { engine: Engine; model?: string }) => void;
 }
 
 export interface TurnResult {
@@ -145,6 +151,9 @@ export interface TurnResult {
   next?: TurnRoute;
   /** Text of the last assistant message in the turn. */
   finalText: string;
+  /** Who answered, and with which model, when known: what it cost depends on it (ADR 0057). */
+  engine?: EngineId;
+  model?: string;
 }
 
 /**
@@ -291,11 +300,18 @@ export interface ToolContext {
    * Tools that would act without asking (a trusted site) ask once instead.
    */
   untrusted?: () => string | undefined;
+  /**
+   * Everything untrusted this chat has read so far (ADR 0028), whether or not
+   * the guard is on: a `person` among them means someone else's words are in it.
+   */
+  taints?: () => readonly TaintSource[];
+  /** A tool brought something untrusted in, beyond what `taintFrom` can tell from its name. */
+  taint?: (source: TaintSource) => void;
   /** A skill in use doesn't say it needs this (ADR 0031): why, in a sentence. */
   restricted?: (capability: SkillCapability, detail?: string) => Promise<string | undefined>;
-  /** Nobody is there to answer: a routine, a task, a chat from a chat app (ADR 0055). */
+  /** Nobody is there to answer: a routine, a task, a chat from a chat app (ADR 0060). */
   unattended?: boolean;
-  /** The chat waits for the person (a question, ADR 0055), or carries on; saved, so a restart knows. */
+  /** The chat waits for the person (a question, ADR 0060), or carries on; saved, so a restart knows. */
   waitingForYou?: (waiting: boolean) => Promise<void>;
 }
 
@@ -386,7 +402,7 @@ export class ConversationManager {
   /** Messages waiting for the internet, by conversation. */
   #held = new Map<string, Held>();
   #live = new Map<string, Live>();
-  /** Offers taken whose carrying on is waiting for the reply before it (ADR 0055). */
+  /** Offers taken whose carrying on is waiting for the reply before it (ADR 0060). */
   #carrying = new Set<string>();
   #cueDesk?: Pick<OfferDesk, 'cue'>;
 
@@ -451,14 +467,27 @@ export class ConversationManager {
       sandbox?: (workspace: string) => { allowWrite: string[]; denyRead: string[] } | undefined;
       /** Undo (ADR 0030): keeps what each turn changes, so it can be put back. */
       undo?: UndoService;
-      /** Every offer goes through here (ADR 0055); without it, cue offers only. */
+      /** Every offer goes through here (ADR 0060); without it, cue offers only. */
       offers?: Pick<OfferDesk, 'cue'>;
       /** What a skill may do while it's in use (ADR 0031), by its id. */
       skillPermissions?: (
         skillId: string,
       ) => Promise<{ title: string; permissions: SkillPermissions } | undefined>;
-      /** Questions waiting for the person's answer (ADR 0055 §4). */
+      /** Questions waiting for the person's answer (ADR 0060 §4). */
       questions?: QuestionDesk;
+      /**
+       * Before the start of a chat is summarised away (ADR 0055): learn what the
+       * person said there, by the tidy-up's rules (ADR 0032). Messages before
+       * `beforeSeq` are the ones the model reads no more.
+       */
+      learn?: (input: {
+        conversationId: string;
+        origin?: ConversationRecord['origin'];
+        events: readonly ConversationEvent[];
+        beforeSeq: number;
+      }) => Promise<void>;
+      /** Say what was fixed on its own (Settings → Health). */
+      heal?: (message: string) => void;
     },
   ) {}
 
@@ -557,7 +586,7 @@ export class ConversationManager {
     untrusted?: TaintSource;
   }) {
     const existing = input.conversationId ? await this.#get(input.conversationId) : undefined;
-    // A question waits (ADR 0055): what's typed answers it, as a message of yours.
+    // A question waits (ADR 0060): what's typed answers it, as a message of yours.
     if (existing?.abort && this.deps.questions?.waiting(existing.record.id))
       return this.#answerTyped(existing, input);
     if (existing?.record.origin?.kind === 'task')
@@ -643,7 +672,7 @@ export class ConversationManager {
     // Anything still waiting for the internet goes along with this message.
     const waiting = this.#held.get(live.record.id) ?? heldFromLog(live.events);
     this.#held.delete(live.record.id);
-    // A newer message overtakes an offer nobody answered (ADR 0055).
+    // A newer message overtakes an offer nobody answered (ADR 0060).
     for (const offerId of openOffers(live.events))
       if (!this.#carrying.has(offerId))
         this.#append(live, { type: 'offer.resolved', offerId, outcome: 'expired' });
@@ -890,7 +919,7 @@ export class ConversationManager {
   }
 
   /**
-   * Words typed while a question waits (ADR 0055) answer it: logged as your
+   * Words typed while a question waits (ADR 0060) answer it: logged as your
    * message, so the chat reads as it happened, and handed to the question.
    */
   #answerTyped(
@@ -1035,7 +1064,7 @@ export class ConversationManager {
     let heldProblem: TurnProblem | undefined;
     let next: TurnRoute | undefined;
     const extras = live.extras;
-    // Replies to send next (ADR 0055): the assistant's tool now, the chips as the turn ends.
+    // Replies to send next (ADR 0060): the assistant's tool now, the chips as the turn ends.
     const turnSeq = live.seq;
     const replies = new TurnReplies({ engine, unattended: Boolean(extras || live.record.origin) });
     let finalText = '';
@@ -1134,6 +1163,8 @@ export class ConversationManager {
               const tainted = settings.preferences.checkAfterReading ? this.#tainted(live) : [];
               return tainted.length ? describeTaint(tainted) : undefined;
             },
+            taints: () => this.#tainted(live),
+            taint: (source) => this.#taint(live, source),
           }) ?? [])),
       ...(extras?.tools ?? []),
       ...replies.tools,
@@ -1404,6 +1435,7 @@ export class ConversationManager {
             ...(readableDirs.length && { readableDirs }),
             ...(this.deps.protectedPaths?.length && { protectedPaths: this.deps.protectedPaths }),
             resumeId: session?.resumeId,
+            seq: asked,
             systemAppend: [
               buildSystemAppend({
                 persona: settings.persona,
@@ -1519,12 +1551,18 @@ export class ConversationManager {
           case 'notice':
             this.#append(live, { type: 'notice', code: event.code, message: event.message });
             break;
+          case 'compacted':
+            this.#compacted(live, engine, event, { fallback: asked, healed: event.healed });
+            break;
           case 'mcp-status':
             // Checking why takes a moment; don't hold up the reply for it.
             void integrations?.turnFailed(event.failed).then(
               (issues) => issues.forEach(appendIssue),
               () => undefined,
             );
+            break;
+          case 'usage':
+            extras?.onUsage?.(event.usage, { engine, model: answeredWith ?? resolved.model });
             break;
           case 'done':
             outcome = event.outcome;
@@ -1537,7 +1575,7 @@ export class ConversationManager {
       outcome = 'error';
       completed = { error: (error as Error).message || 'Something went wrong.' };
     } finally {
-      // A question still waiting can't be answered now: it's skipped (ADR 0055).
+      // A question still waiting can't be answered now: it's skipped (ADR 0060).
       this.deps.questions?.close(live.record.id);
       // Whatever else the turn changed, kept before the turn closes.
       await tracker?.end().catch(() => undefined);
@@ -1602,7 +1640,7 @@ export class ConversationManager {
         );
         next = after;
       }
-      // A finished reply ends with what you might say next, when that helps (ADR 0055).
+      // A finished reply ends with what you might say next, when that helps (ADR 0060).
       const picked = next
         ? undefined
         : await replies
@@ -1646,13 +1684,99 @@ export class ConversationManager {
       ...(heldProblem && { problem: heldProblem }),
       ...(next && { next }),
       finalText,
+      engine: engine.id,
+      ...((answeredWith ?? resolved.model) && { model: answeredWith ?? resolved.model }),
     };
+  }
+
+  /**
+   * The start of the chat was folded into a summary (ADR 0055): a quiet
+   * divider where the model's memory now starts, the person's words there
+   * learned before they're out of view, and a note when it healed a refusal.
+   */
+  #compacted(
+    live: Live,
+    engine: Engine,
+    compacted: Compacted,
+    options: { fallback: number; healed?: boolean; asked?: boolean },
+  ) {
+    const from = compacted.fromSeq ?? options.fallback;
+    const before = live.events.find((e) => e.type === 'user.message' && e.seq >= from);
+    this.#append(live, {
+      type: 'context.compacted',
+      summary: compacted.summary.slice(0, 40_000),
+      ...(before?.type === 'user.message' && { before: before.messageId }),
+      engine: engine.id,
+      ...(compacted.model && { model: compacted.model }),
+      turns: compacted.turns,
+      ...(options.asked && { asked: true }),
+    });
+    if (options.healed)
+      this.deps.heal?.(
+        `A chat had grown longer than ${compacted.model ?? engine.label} reads at once, so Conch summarised its start and sent your message again.`,
+      );
+    void this.deps
+      .learn?.({
+        conversationId: live.record.id,
+        ...(live.record.origin && { origin: live.record.origin }),
+        events: [...live.events],
+        beforeSeq: from,
+      })
+      .catch(() => undefined);
+  }
+
+  /**
+   * `/compact [focus]`: summarise the start of a chat now, for providers whose
+   * transcript Conch keeps (ADR 0055). The rest compact by themselves, so it
+   * says so instead.
+   */
+  async compact(id: string, focus?: string): Promise<{ compacted: boolean; message: string }> {
+    const live = await this.#get(id);
+    if (live.abort) throw new ConversationError('busy', 'Still replying to your last message.');
+    const engine = this.deps.engine(live.record.options.engine ?? live.record.engine);
+    const session = live.record.sessions?.[engine.id];
+    if (!engine.context)
+      return {
+        compacted: false,
+        message: `${engine.label} keeps long chats in its own memory, so there’s nothing for Conch to summarise.`,
+      };
+    if (!session?.resumeId)
+      return { compacted: false, message: 'This chat is short: there’s nothing to summarise yet.' };
+    const abort = this.#claim(live);
+    try {
+      const model = await this.#modelFor(live.record.options, engine.id);
+      const compacted = await engine.context.compact({
+        resumeId: session.resumeId,
+        ...(model && { model }),
+        ...(focus && { focus }),
+        signal: abort.signal,
+      });
+      if (!compacted)
+        return {
+          compacted: false,
+          message: 'This chat is short: there’s nothing to summarise yet.',
+        };
+      const last = live.events.findLast((e) => e.type === 'user.message')?.seq ?? live.seq;
+      this.#compacted(live, engine, compacted, { fallback: last, asked: true });
+      await this.#persist(live);
+      return {
+        compacted: true,
+        message: `${compacted.model ?? engine.label} now reads a summary of the earlier messages.`,
+      };
+    } catch (error) {
+      return {
+        compacted: false,
+        message: error instanceof Error && error.message ? error.message : 'That didn’t work.',
+      };
+    } finally {
+      if (live.abort === abort) live.abort = undefined;
+    }
   }
 
   /**
    * The apps this turn is about that aren't connected, and which of them to
    * offer: read from the words the person typed (not a pasted file or a
-   * skill's instructions), through the one place every offer goes (ADR 0055).
+   * skill's instructions), through the one place every offer goes (ADR 0060).
    * Never in an unattended run — nobody is there to press the button, though
    * the assistant is still told what it can't see.
    */
@@ -1675,7 +1799,7 @@ export class ConversationManager {
   }
 
   /**
-   * Carry the chat on once an offer was taken (ADR 0055): the app is
+   * Carry the chat on once an offer was taken (ADR 0060): the app is
    * connected or the skill is on (`OfferDesk.accept` checked), so the request
    * runs again, with no new message of yours. Once, however many devices or
    * retries press it; after the reply that's running, if one is.
@@ -1729,7 +1853,7 @@ export class ConversationManager {
     }
   }
 
-  /** “Not now” on an offer (ADR 0055): put away for the rest of this conversation. */
+  /** “Not now” on an offer (ADR 0060): put away for the rest of this conversation. */
   async dismissOffer(id: string, offerId: string) {
     const live = await this.#get(id);
     const state = offerState(live.events, offerId);
@@ -1777,6 +1901,8 @@ export class ConversationManager {
       if (input.type === 'tool.finished' && input.output)
         input = { ...input, output: redact(input.output) };
       else if (input.type === 'assistant.delta') input = { ...input, delta: redact(input.delta) };
+      else if (input.type === 'context.compacted')
+        input = { ...input, summary: redact(input.summary) };
     }
     const event = {
       ...input,
