@@ -6,9 +6,9 @@
 ## Context
 
 A personal agent becomes genuinely useful when it does things _without being asked
-each time_: a morning briefing, a weekly tidy-up, a reminder. Existing agents expose
-this as cron expressions in config files: hard for most people to read, easy to get
-wrong, silent when something fails, and blind to the computer having been asleep.
+each time_: a morning briefing, a weekly tidy-up, a reminder. Schedules are often
+cron expressions in config files, which are hard for most people to read, easy to get
+wrong, quiet when a run fails, and unaware that the computer was asleep.
 
 ## Decision
 

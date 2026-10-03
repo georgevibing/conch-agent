@@ -4,7 +4,7 @@ channel: wechat
 
 ## Which way in
 
-A personal WeChat account has no official way to be a bot. Tools that log in as your personal WeChat break its rules, and accounts that use them get banned. So Conch uses Tencent's own two ways in. 个人微信没有官方的机器人接口，所以 Conch 只用腾讯官方的方式。
+A personal WeChat account has no official way to be a bot. Tools that log in as a personal WeChat account go against WeChat's terms, and Tencent can ban accounts that use them. So Conch uses Tencent's own two ways in. 个人微信没有官方的机器人接口，所以 Conch 只用腾讯官方的方式。
 
 - **A WeCom bot (企业微信机器人).** Recommended. Conch connects out to WeCom, so nothing on your computer is opened to the internet. You chat with it in the WeCom app, which is free and signs in with WeChat.
 - **An Official Account (公众号), or its free test account (测试号).** You chat with it in WeChat itself. WeChat delivers its messages to a web address, and its limits apply to answers that take a while.

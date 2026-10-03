@@ -13,19 +13,17 @@ let the assistant sign in for them, and nothing in their backups.
 
 How other agents do it (read in their code, October 2026):
 
-- **Hermes Agent** keeps provider keys in a plain `~/.hermes/.env` (0600). It
-  has a Fernet vault whose key sits in a file right next to it, which its own
-  code admits makes the encryption only protect backups. Good ideas worth
-  copying: the model only sees handles, logins are bound to a site, payment
-  fills ask, and it redacts by exact value.
-- **OpenClaw** keeps secrets in SQLite, and its docs say "not encrypted at
-  rest". Worth copying: its `secrets` tool lets the agent _request_ a value
+- **Hermes Agent** keeps provider keys in `~/.hermes/.env` (0600), and has a
+  Fernet vault with its key file beside it. Ideas worth borrowing: the model
+  only sees handles, logins are bound to a site, payment fills ask, and it
+  redacts by exact value.
+- **OpenClaw** keeps secrets in SQLite. Ideas worth borrowing: its `secrets` tool lets the agent _request_ a value
   through a card (with no way to write one itself), shows the site by host,
   and passes the agent stand-ins rather than keys.
 - **Claude Code** uses the macOS Keychain (a 0600 file elsewhere). **Codex**
   uses an `auth.json` file by default, or the OS keyring.
 
-Conch takes the good parts and closes the gaps:
+Conch builds on these ideas and adds:
 
 - the key lives in the keychain, never next to the vault;
 - names and sites are encrypted too;
@@ -70,8 +68,8 @@ deleted) and three sorts. ↑/↓ move through the list; `/` goes to the search.
 
 With nothing to say, it says the passwords look good.
 
-**Deleting** goes to Recently deleted for 30 days (as Bitwarden, 1Password and
-Apple do), with Undo; emptying it needs a recent sign-in.
+**Deleting** goes to Recently deleted for 30 days, with Undo; emptying it needs
+a recent sign-in.
 
 **Import** recognises Chrome/Edge/Brave, Safari/Apple Passwords, Firefox,
 1Password CSV, Bitwarden CSV and JSON, LastPass, KeePassXC, Proton Pass and

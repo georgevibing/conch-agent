@@ -94,8 +94,8 @@ custom commands, never like tool output:
 
 - **Only a person creates or changes skills.** There is no agent tool that
   writes one (AGENTS.md security rule 7).
-- **Skills found in other apps start Off.** Registries have shipped malicious
-  skills (341 on ClawHub, Feb 2026); a folder appearing on disk must not start
+- **Skills found in other apps start Off.** Public registries have carried
+  malicious skills (ClawHub, reported February 2026); a folder appearing on disk must not start
   steering every chat. You read it in Conch and turn it on.
 - **Paths are closed.** Names match the Agent Skills pattern before they become
   folders, every path goes through `safeJoin`, `use_skill` resolves a file with

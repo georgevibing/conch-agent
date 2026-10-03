@@ -88,7 +88,7 @@ the person's side.
   "And N more" for the rest. A breaking change's line is its `BREAKING
 CHANGE:` footer, which says what to do.
 
-That base is deterministic, and it's already good. **A model can polish it**
+That base is deterministic and needs no model. **A model can polish it**
 (`release/polish.ts`). It uses Claude Code (`claude -p`) if it's installed,
 else the Anthropic API with `ANTHROPIC_API_KEY`. Only commit subjects are
 sent. The answer is JSON, and each line names the groups it came from. It's

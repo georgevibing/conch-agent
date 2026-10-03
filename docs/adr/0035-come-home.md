@@ -36,8 +36,8 @@ in your home folder:
   - `.env`, holding bot tokens and provider keys.
 
 These files are also an attack surface. A memory file is text the
-assistant will believe. A skill from ClawHub may be one of the 341 that
-ClawHavoc planted. A bot token or an API key is a secret. An import that
+assistant will believe. A skill from a public registry may be malicious
+(the ClawHavoc campaign planted such skills on ClawHub). A bot token or an API key is a secret. An import that
 copies all of it silently would import someone else's prompt injection
 along with your keys.
 

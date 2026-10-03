@@ -23,9 +23,9 @@ microphone=()`).
 
 OpenClaw answers this with native iOS and Android apps (voice wake, talk mode,
 push) and about 29 chat channels. Hermes uses its messaging gateway and voice
-in Telegram and Discord. Neither has a phone experience that needs no app store,
-no developer account and no terminal, and both send their voice features to a
-cloud by default.
+in Telegram and Discord. Conch aims for a phone experience that needs no app store,
+no developer account and no terminal, with voice that can stay on your own
+devices.
 
 ## Decision
 

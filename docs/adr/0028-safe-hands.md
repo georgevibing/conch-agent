@@ -16,16 +16,14 @@ what a stranger wrote. Three sources describe the risk:
 - **Greshake et al. (2023):** indirect prompt injection.
 - **Willison's "lethal trifecta":** private data, untrusted content, and a way
   out.
-- **The ClawHavoc campaign against OpenClaw (Feb 2026):** 341 malicious skills
-  out of 2,857, most hiding info-stealers behind "prerequisite" steps.
+- **The ClawHavoc campaign (reported February 2026):** malicious skills
+  uploaded to the ClawHub registry, most hiding info-stealers behind
+  "prerequisite" steps.
 
-The two agents people compare Conch with handle it differently:
-
-- **OpenClaw:** sandboxing is off by default ("tools run on the host"), and
-  prompt injection without a boundary bypass is out of scope in its
-  SECURITY.md.
-- **Hermes:** "the only security boundary against an adversarial LLM is the
-  operating system". Its command scanning fails open.
+Related projects document different trade-offs. OpenClaw runs tools on the host
+unless sandboxing is turned on; Hermes treats the operating system as its
+security boundary. Conch needs a guard that holds in every mode, without a
+sandbox having to be set up first.
 
 **A gap Conch had too.** Conch's only gate on Claude Code's own tools was
 `canUseTool`, and the SDK doesn't call it when a mode allows by itself. This

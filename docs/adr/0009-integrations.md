@@ -13,7 +13,7 @@ complaints about existing ones are consistent (research, Sept 2026):
 - **Setup is JSON editing.** People hand-edit `claude_desktop_config.json` or YAML.
   They fight `npx`/`nvm` paths and get silent failures when a server doesn't start
   (modelcontextprotocol/servers#64, anthropics/claude-code#26073).
-- **OAuth breaks and nobody notices.** Tokens expire silently, refresh races
+- **OAuth fails quietly.** Tokens expire silently, refresh races
   spend a rotating refresh token twice (OpenClaw #26322), and GitHub's remote
   server can't be used with OAuth at all without a registered app
   (claude-code#3433).
@@ -21,7 +21,8 @@ complaints about existing ones are consistent (research, Sept 2026):
   (claude-code#6759).
 - **Security incidents are real.** They include poisoned tool descriptions and
   "rug pulls" (Invariant Labs, 2025), a GitHub issue that made an agent leak
-  private repositories, 341 malicious skills on ClawHub (Feb 2026), and tokens in
+  private repositories, malicious skills uploaded to the ClawHub registry (reported
+  February 2026), and tokens in
   plain config and `ps` listings (OpenClaw #80777, #83880).
 
 ## Decision

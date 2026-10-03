@@ -12,15 +12,14 @@ the assistant asks. Conch usually runs behind a home router with no public
 address, and the person setting it up may never have used a developer
 portal.
 
-How others do it (September 2026; the research, with sources, is summarised
-here):
+How related tools set this up (September 2026):
 
-| Product                     | Setup                                                                                                     | Who may talk                                                                | Known pain                                                                                              |
-| --------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| OpenClaw                    | `openclaw onboard` / `channels add` in a terminal; token pasted, **not checked** until the gateway starts | 8-character pairing code the owner approves with `openclaw pairing approve` | pairing confusion, Telegram 409 from two pollers, a Discord intent error (4014) took down every channel |
-| Hermes Agent                | `hermes gateway setup`; env files; Telegram "Create with QR" through a Nous-hosted manager bot            | allowlists of numeric ids (find yours with @userinfobot) or pairing codes   | "open by default" when the allowlist was empty; hangs connecting; token still held after an update      |
-| Claude Code Channels        | `/plugin install`, `/telegram:configure <token>`, restart with a flag, then a pairing code                | 6-character code approved in the CLI                                        | 409 from zombie pollers; polling gives up after about 36 seconds                                        |
-| n8n, Zapier, Home Assistant | paste the token                                                                                           | n/a                                                                         | n8n needs a public HTTPS webhook, so people end up running tunnels                                      |
+| Product                     | Setup                                                                                            | Who may talk                                                                |
+| --------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| OpenClaw                    | `openclaw onboard` / `channels add` in a terminal; token pasted, checked when the gateway starts | 8-character pairing code the owner approves with `openclaw pairing approve` |
+| Hermes Agent                | `hermes gateway setup`; env files; Telegram "Create with QR" through a Nous-hosted manager bot   | allowlists of numeric ids (find yours with @userinfobot) or pairing codes   |
+| Claude Code Channels        | `/plugin install`, `/telegram:configure <token>`, restart with a flag, then a pairing code       | 6-character code approved in the CLI                                        |
+| n8n, Zapier, Home Assistant | paste the token                                                                                  | n/a                                                                         |
 
 What the platforms allow:
 

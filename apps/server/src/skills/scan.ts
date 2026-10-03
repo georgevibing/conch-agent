@@ -1,8 +1,9 @@
 /**
  * Looking at a skill before it steers anything (ADR 0028). A skill is
  * instructions an assistant follows with your powers, so a hostile one is a
- * hostile program: ClawHub's ClawHavoc (Feb 2026) hid info-stealers behind
- * "prerequisite" steps that told the agent to download and run something.
+ * hostile program: the ClawHavoc campaign (Feb 2026) planted skills on
+ * ClawHub that hid info-stealers behind "prerequisite" steps telling the
+ * agent to download and run something.
  *
  * Conch reads every text file in the folder and says, in plain words, what
  * could hurt you: running something downloaded, reaching for keys and saved

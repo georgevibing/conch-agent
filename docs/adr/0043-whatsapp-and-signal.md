@@ -25,8 +25,8 @@ coming. Neither has a bot you can make in two minutes:
   ones. signal-cli (GPL-3.0, Java, maintained since 2015) is the
   long-standing unofficial client, used by OpenClaw, Hermes and
   signal-cli-rest-api; it links as a device (`sgnl://linkdevice?…` shown as
-  a QR code) and has a JSON-RPC mode for programs. The alternatives are
-  worse: presage (Rust) ships no binary to install; libsignal's Node
+  a QR code) and has a JSON-RPC mode for programs. The alternatives fit
+  less well here: presage (Rust) ships no binary to install; libsignal's Node
   bindings are only the protocol, not the service, storage and
   provisioning around it.
 

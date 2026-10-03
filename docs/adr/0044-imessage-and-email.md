@@ -13,8 +13,8 @@ portal, which is why they're asked for.
 
 How others reach iMessage and email (not re-tested here):
 
-- iMessage bridges either read `chat.db` and send with AppleScript (the approach taken here), run a companion server on the Mac (BlueBubbles), or load a helper into Messages, which on some macOS versions means turning System Integrity Protection off. The last two break with macOS updates and ask people to lower their Mac's security.
-- Email agents usually poll IMAP for any new mail and take the From line as written, or use Gmail's push notifications, which need a public endpoint.
+- iMessage bridges either read `chat.db` and send with AppleScript (the approach taken here), run a companion server on the Mac (BlueBubbles), or load a helper into Messages, which on some macOS versions means turning System Integrity Protection off. Conch avoids anything that needs a separate install or a change to the Mac's security settings.
+- Email agents usually poll IMAP for new mail, or use Gmail's push notifications, which need a public endpoint. Conch also has to believe a sender only when the mail service vouches for it.
 
 What the platforms allow:
 

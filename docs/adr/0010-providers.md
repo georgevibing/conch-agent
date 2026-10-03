@@ -8,7 +8,7 @@
 [ADR 0004](./0004-engines.md) reserved the engine ids and built the `Engine`
 interface, but only Claude Code was ever wired up, and it showed: the Settings
 section was called **Claude Code**, the engine was chosen by an environment
-variable (`CONCH_ENGINE`) nobody sets, and the first-run flow said "let's connect
+variable (`CONCH_ENGINE`) most people never set, and the first-run flow said "let's connect
 to Claude" as if there were nothing else.
 
 What people actually have on their machines (research, Sept 2026) is more varied,

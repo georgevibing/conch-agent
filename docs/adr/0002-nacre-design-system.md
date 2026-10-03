@@ -5,10 +5,9 @@
 
 ## Context
 
-The product's value is largely experiential: a calm, beautiful, fast surface for a
-powerful agent. Off-the-shelf kits (MUI, Chakra, shadcn defaults) look generic, and
-the industry's current signature — frosted glass — is heavy on the GPU, low in
-contrast and already everywhere.
+The product's value is largely experiential: a calm, fast interface for a capable
+agent. Off-the-shelf kits (MUI, Chakra, shadcn defaults) would give Conch a common
+look, and frosted-glass effects cost GPU time and lower text contrast.
 
 ## Decision
 
@@ -28,6 +27,6 @@ Build **Nacre**, our own component library:
 
 ## Consequences
 
-More upfront work than adopting a kit, but full control over craft, a distinctive
-identity, and no fighting library defaults. Every component must ship with stories
+More upfront work than adopting a kit, but full control over the details, a look
+of its own, and no fighting library defaults. Every component must ship with stories
 and axe-checked tests.

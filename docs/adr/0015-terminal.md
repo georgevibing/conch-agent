@@ -10,9 +10,9 @@ check a file, restart something, or run what the assistant suggested. People on 
 phone or a laptop elsewhere have no terminal at all. Every coding agent's desktop app
 (VS Code, Cursor, Zed, Warp) puts one a keystroke away. Web shells (ttyd, Gotty,
 Wetty, code-server) show the risk: a terminal in a browser tab is a remote shell as
-you. Their public incidents are the usual ones:
+you. The risks any web shell has to answer:
 
-- open to the network with no auth (Gotty's default);
+- being open to the network with no auth;
 - cross-site WebSocket hijacking where the socket didn't check `Origin`;
 - sessions that outlive a revoked sign-in;
 - secrets leaking into the child environment.

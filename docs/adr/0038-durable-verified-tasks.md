@@ -56,7 +56,7 @@ job; there is no unsafe “assume failed and resend” button. A backup is histo
 restored jobs require explicit resumption and reconciliation. Missing/corrupt
 provider verification never becomes fabricated evidence.
 
-Independent parent review required read replay to retain actual contents,
+Review required read replay to retain actual contents,
 archive rather than delete deduplication records, and preserve safe revision
 paths from task chats. Regression tests cover those changes, concurrent retry,
 crash after write/before receipt, double retries, scope/consent/account changes,

@@ -19,17 +19,16 @@ opened a terminal. Three things broke it before the first message:
 3. **Opening it again** meant knowing an address, or finding the folder and
    running `pnpm start`.
 
-The two agents people compare Conch with handle this as follows:
+Two related projects handle this as follows:
 
 - **OpenClaw** has a `curl | bash` installer and `openclaw onboard
---install-daemon` (launchd and systemd). It calls itself "terminal-first by
-  design", and a maintainer said "if you can't understand how to run a
-  command line, this is far too dangerous".
+--install-daemon` (launchd and systemd), and describes itself as
+  "terminal-first by design".
 - **Hermes** has a `curl | bash` installer, a gateway "background process",
-  and a desktop app, and its users ask for a lighter client.
+  and a desktop app.
 
-Both expect a terminal for their service commands, and neither turns a running
-window into a background service without losing your place.
+Conch needs the same without a terminal, and has to turn a running window into a
+background service without losing your place.
 
 ## Decision
 

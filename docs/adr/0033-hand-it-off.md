@@ -14,12 +14,10 @@ Today a chat does one thing at a time, and you watch it. Real work doesn't
 look like that. You ask for the README to be tidied while you think about
 something else, or a job falls into three parts that don't need each other.
 
-The agents people compare Conch with handle this differently:
-
-- **OpenClaw:** sub-agents run inside one session. You can't see them, stop
-  one, or answer one, and a crash loses them.
-- **Hermes:** background jobs are shell processes. They don't ask before
-  acting, nobody is told when they finish, and they don't share the guard.
+Related projects take different approaches: OpenClaw runs sub-agents inside one
+session, and Hermes runs background jobs as shell processes. Conch needs tasks
+you can see, stop and answer, that survive a crash, ask before acting the way
+their chat does, say when they finish, and share the guard.
 
 Conch already has the right building block. A routine's run is a real
 conversation (ADR 0006): you can open it, it asks in the open, it's backed up,

@@ -5,8 +5,8 @@
 
 ## Context
 
-ADR 0037 connected Google accounts to Conch directly and ADR 0040 made the
-Google Cloud setup bearable, but Google still wasn't an app on the Integrations
+ADR 0037 connected Google accounts to Conch directly and ADR 0040 guided the
+Google Cloud setup, but Google still wasn't an app on the Integrations
 page. A box at the top asked "What would you like to do with Google?", the
 accounts lived in their own store, so Gmail, Calendar and Drive stayed in the
 gallery after connecting, with no card, switch, per-tool choice, health or

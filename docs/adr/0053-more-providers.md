@@ -92,8 +92,7 @@ environment.
   ids. That is the line the vendors draw. Gemini CLI's terms call "directly accessing the services
   powering Gemini CLI … using third-party software" grounds for suspension. GitHub's API terms and
   xAI's terms only license their documented paths. All three document ACP as the way for other
-  tools to drive their program. Hermes and OpenClaw take the other route through named partner
-  deals; Conch has none and doesn't need one.
+  tools to drive their program. Conch uses only these documented paths.
 - **Conch's tools, through a door.** Each turn opens a loopback MCP server (`engines/acp/door.ts`) that
   serves Conch's own tools: files, commands, memory, the browser and your apps. It listens on
   127.0.0.1 only, refuses any request with an `Origin` header or a non-loopback `Host`, and wants a

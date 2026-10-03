@@ -77,7 +77,7 @@ one at a time, when the panel is narrow or on a phone).
 
 **The editor is CodeMirror 6.**
 
-- **Why it.** It is the only maintained browser editor that is accessible: a
+- **Why it.** It is accessible: a
   labelled `role="textbox"`, screen-reader friendly, keyboard-first. It is
   modular, so only six small languages are loaded: html (with its CSS and JS),
   markdown, json, xml (for svg), and csv and mermaid, which are short
@@ -85,8 +85,8 @@ one at a time, when the panel is narrow or on a phone).
   it takes the same Nacre palette as `CodeBlock` and follows light, dark and
   the accent without rebuilding.
 - **Not Monaco.** It weighs megabytes, needs web workers (the frame's CSP
-  forbids them, and the app's would have to allow them), and handles a phone
-  poorly.
+  forbids them, and the app's would have to allow them), and is built for
+  desktop screens.
 - **Not a plain textarea.** It has no highlighting and no real undo.
 - **It loads when it's needed.** It's a lazy chunk of its own (about 185 KB
   gzipped), loaded the first time an editor opens. If it can't load, a plain
