@@ -43,7 +43,7 @@ import { tasksApi } from '../tasks/api';
 import { TaskBanner } from '../tasks/TaskBanner';
 import { useStartTask } from '../tasks/queries';
 import { ComposerControls } from '../models/ComposerControls';
-import { modeInfo } from '../models/catalog';
+import { modeInfo, modelLabel } from '../models/catalog';
 import { ChatFind } from '../search/ChatFind';
 import { modelKey, useTurnOptions } from '../models/useTurnOptions';
 import { providersApi } from '../providers/api';
@@ -60,6 +60,7 @@ import { ChatHolds } from '../skills/ChatHolds';
 import { SkillOfferInChat } from '../skills/SkillOfferInChat';
 import { Transcript } from './Transcript';
 import type { TurnRecovery } from './TranscriptItems';
+import { biggerWindow } from './bigger';
 import { type Draft, useDraftAttachments } from './useDraftAttachments';
 import { useIntegrations } from '../integrations/queries';
 import { ArtifactDock } from '../artifacts/ArtifactDock';
@@ -157,6 +158,7 @@ function useTurnRecovery(
   send: (text: string, attached: Attachment[]) => void,
 ): TurnRecovery | undefined {
   const openSettings = useUi((s) => s.openSettings);
+  const navigate = useNavigate();
   const client = useQueryClient();
   const { data: providers } = useProviders();
   const { data: app } = useAppState();
@@ -213,8 +215,23 @@ function useTurnRecovery(
       ? lastMessage.text
       : undefined;
   const attached = lastMessage?.attachments ?? [];
+  const bigger =
+    last.problem === 'too-long' ? biggerWindow(turn.catalog, failed, last.model) : undefined;
   return {
     label: name(failed),
+    ...(bigger &&
+      text !== undefined && {
+        bigger: {
+          label: modelLabel(bigger.model.label).label,
+          use: () => {
+            turn.choose(modelKey(bigger.engine, bigger.model.id));
+            send(text, attached);
+          },
+        },
+      }),
+    ...(last.problem === 'too-long' && {
+      newChat: () => void navigate('/', { state: { draft: text ?? '' } }),
+    }),
     waiting: Boolean(waitingFor),
     signIn:
       failed && text !== undefined
@@ -435,7 +452,13 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
     onDrop: ({ files, folders }) => void attachments.addFiles(files, folders),
   });
 
-  const slash = useSlashCommands({ draft, setDraft, send, turn });
+  const slash = useSlashCommands({
+    draft,
+    setDraft,
+    send,
+    turn,
+    ...(conversationId && { conversationId }),
+  });
   const recover = useTurnRecovery(view, turn, send);
   const chosenReady = Boolean(
     turn.catalog?.providers.some((p) => p.engine === turn.options.engine),

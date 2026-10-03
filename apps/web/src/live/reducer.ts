@@ -213,6 +213,18 @@ export type TranscriptItem =
       settled?: 'switched' | 'answered';
     }
   | {
+      /**
+       * Where the model's word-for-word memory of a long chat starts (ADR 0055):
+       * what's above was folded into `summary`. Only the latest one is kept.
+       */
+      kind: 'summary';
+      id: string;
+      summary: string;
+      engine: EngineId;
+      model?: string;
+      turns: number;
+    }
+  | {
       /** Another provider answered for this chat's own: offline, or at a usage limit. */
       kind: 'routed';
       id: string;
@@ -535,6 +547,25 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
           ...kept,
           { kind: 'held', id: `held-${event.seq}`, at: event.at, count: Math.max(1, count) },
         ],
+      };
+    }
+    case 'context.compacted': {
+      // One line, where the model's memory starts now: the new one replaces any before it.
+      const kept = items.filter((i) => i.kind !== 'summary');
+      const at = event.before
+        ? kept.findIndex((i) => i.kind === 'user' && i.id === event.before)
+        : kept.findLastIndex((i) => i.kind === 'user');
+      const line: TranscriptItem = {
+        kind: 'summary',
+        id: `summary-${event.seq}`,
+        summary: event.summary,
+        engine: event.engine,
+        ...(event.model && { model: event.model }),
+        turns: event.turns,
+      };
+      return {
+        ...base,
+        items: at === -1 ? [...kept, line] : [...kept.slice(0, at), line, ...kept.slice(at)],
       };
     }
     case 'turn.routed': {

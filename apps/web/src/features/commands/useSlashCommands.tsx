@@ -3,6 +3,7 @@ import { SkillIcon, toast, useCommandMenu, useNacreTheme } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Brain,
+  FoldVertical,
   Gauge,
   Moon,
   Plus,
@@ -18,6 +19,7 @@ import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
 import { api } from '../../api/client';
+import { compactChat } from '../chat/compact';
 import { keys, useCommands } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { effortLabels, modelLabel, modes } from '../models/catalog';
@@ -38,6 +40,7 @@ const builtinIcons: Partial<Record<BuiltinAction, ReactNode>> = {
   fast: <Zap />,
   mode: <Shield />,
   new: <Plus />,
+  compact: <FoldVertical />,
   remember: <Brain />,
   routines: <Repeat />,
   skills: <WandSparkles />,
@@ -57,8 +60,10 @@ export function useSlashCommands(options: {
   setDraft: (value: string) => void;
   send: (text: string) => void;
   turn: ReturnType<typeof useTurnOptions>;
+  /** The chat this composer belongs to; none yet for a new one. */
+  conversationId?: string;
 }) {
-  const { draft, setDraft, send, turn } = options;
+  const { draft, setDraft, send, turn, conversationId } = options;
   const [dismissed, setDismissed] = useState(false);
   const { data: custom = [] } = useCommands();
   const { data: skillList } = useSkills();
@@ -98,7 +103,8 @@ export function useSlashCommands(options: {
     })),
     // Plain commands first; plugin commands ("plugin:skill") after, so /review beats
     // "some-plugin:code-reviews" when both match.
-    ...[...engineCommands]
+    // Conch's /compact covers the provider's own, and hands it over when it has one.
+    ...[...engineCommands.filter((c) => c.name.toLowerCase() !== 'compact')]
       .sort((a, b) => Number(a.name.includes(':')) - Number(b.name.includes(':')))
       .map((c) => ({
         id: `engine:${c.name}`,
@@ -169,6 +175,15 @@ export function useSlashCommands(options: {
       }
       case 'new':
         return void navigate('/');
+      case 'compact':
+        // A provider that keeps its own memory of the chat (Claude Code) does its own /compact.
+        if (engineCommands.some((c) => c.name.toLowerCase() === 'compact'))
+          return send(args ? `/compact ${args}` : '/compact');
+        if (!conversationId)
+          return toast('Nothing to summarise yet', {
+            description: 'A chat that grows long is summarised by itself.',
+          });
+        return void compactChat(conversationId, args);
       case 'remember':
         if (!args) return setDraft('/remember ');
         return void api.addMemory(args).then((memory) => {

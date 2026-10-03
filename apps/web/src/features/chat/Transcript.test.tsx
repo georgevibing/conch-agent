@@ -35,7 +35,10 @@ function show(view: Partial<ConversationView>) {
   );
 }
 
-function failed(problem: 'signed-out' | 'unavailable' | 'key-locked', recover: TurnRecovery) {
+function failed(
+  problem: 'signed-out' | 'unavailable' | 'key-locked' | 'too-long',
+  recover: TurnRecovery,
+) {
   mockFetch({ 'GET /api/state': () => appState() });
   return renderApp(
     <Transcript
@@ -96,6 +99,63 @@ describe('a turn that failed', () => {
   it('says a provider isn’t answering, in its name', () => {
     failed('unavailable', { label: 'Codex' });
     expect(screen.getByText('Codex isn’t answering right now')).toBeInTheDocument();
+  });
+
+  it('offers a model that reads more at once when a chat is too long even summarised', async () => {
+    const use = vi.fn();
+    failed('too-long', {
+      label: 'Llama 3.2',
+      bigger: { label: 'Gemini 2.5 Flash', use },
+      alternative: { label: 'OpenRouter', use: () => {} },
+      newChat: () => {},
+    });
+    expect(screen.getByText('This chat is more than Llama 3.2 can read at once')).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: 'Use Gemini 2.5 Flash' }));
+    expect(use).toHaveBeenCalledOnce();
+    // One next step, not a choice of providers.
+    expect(screen.queryByRole('button', { name: /Answer with OpenRouter/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Start a new chat' })).toBeNull();
+  });
+
+  it('offers a new chat when no ready model reads more', async () => {
+    const newChat = vi.fn();
+    failed('too-long', { label: 'Llama 3.2', newChat });
+    await userEvent.click(screen.getByRole('button', { name: 'Start a new chat' }));
+    expect(newChat).toHaveBeenCalledOnce();
+  });
+});
+
+describe('a long chat’s summary (ADR 0055)', () => {
+  it('is one quiet line that opens to show what the model keeps', async () => {
+    show({
+      items: [
+        user,
+        {
+          kind: 'summary',
+          id: 'summary-4',
+          summary: 'Decided or done\n- Tomatoes along the fence.',
+          engine: 'openrouter',
+          model: 'GPT-5 mini',
+          turns: 3,
+        },
+        { ...user, id: 'u2', text: 'And the basil?' },
+      ],
+    });
+    const line = screen.getByRole('button', {
+      name: 'Earlier messages are summarised for GPT-5 mini',
+    });
+    expect(screen.queryByText(/Tomatoes along the fence/)).toBeNull();
+    await userEvent.click(line);
+    expect(screen.getByText(/Tomatoes along the fence/)).toBeVisible();
+  });
+
+  it('doesn’t stop the wait showing while the reply is coming', () => {
+    show({
+      status: 'running',
+      turnStartedAt: 1,
+      items: [user, { kind: 'summary', id: 's', summary: 'x', engine: 'openrouter', turns: 1 }],
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Claude is thinking');
   });
 });
 

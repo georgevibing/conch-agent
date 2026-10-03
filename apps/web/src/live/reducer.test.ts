@@ -245,6 +245,65 @@ describe('offline and at a limit (ADR 0023)', () => {
   });
 });
 
+describe('a long chat (ADR 0055)', () => {
+  const compacted = (before: string | undefined, summary = 'They chose tomatoes.') =>
+    ({
+      type: 'context.compacted',
+      summary,
+      ...(before && { before }),
+      engine: 'openrouter',
+      model: 'GPT-5 mini',
+      turns: 2,
+    }) as const;
+
+  it('puts one line where the model’s memory starts, and a newer one replaces it', () => {
+    const view = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'one' },
+        { type: 'user.message', messageId: 'u2', text: 'two' },
+        { type: 'user.message', messageId: 'u3', text: 'three' },
+        compacted('u2'),
+      ),
+    );
+    expect(view.items.map((i) => (i.kind === 'user' ? i.id : i.kind))).toEqual([
+      'u1',
+      'summary',
+      'u2',
+      'u3',
+    ]);
+    expect(view.items[1]).toMatchObject({ summary: 'They chose tomatoes.', model: 'GPT-5 mini' });
+
+    const later = reduce(view, {
+      ...compacted('u3', 'Newer.'),
+      conversationId: 'c1',
+      seq: 9,
+      at: 2000,
+    });
+    expect(later.items.map((i) => (i.kind === 'user' ? i.id : i.kind))).toEqual([
+      'u1',
+      'u2',
+      'summary',
+      'u3',
+    ]);
+    expect(later.items.filter((i) => i.kind === 'summary')).toHaveLength(1);
+  });
+
+  it('goes before the message being answered when it doesn’t say where', () => {
+    const view = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'one' },
+        { type: 'user.message', messageId: 'u2', text: 'two' },
+        compacted(undefined),
+      ),
+    );
+    expect(view.items.map((i) => (i.kind === 'user' ? i.id : i.kind))).toEqual([
+      'u1',
+      'summary',
+      'u2',
+    ]);
+  });
+});
+
 describe('what the chat is held to (ADR 0047)', () => {
   it('folds holds from the log, and says where one ended', () => {
     const view = reduceAll(

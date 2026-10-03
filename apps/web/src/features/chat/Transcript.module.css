@@ -32,6 +32,11 @@
     transition: margin-block-start var(--nc-spring-soft-duration) var(--nc-spring-soft);
   }
 
+  /* Where a long chat's summary starts: a little room either side of the line. */
+  .summary {
+    margin-block: var(--nc-space-2);
+  }
+
   .suggestion[data-state='dismissed'] {
     margin-block-start: calc(var(--nc-space-6) * -1);
   }

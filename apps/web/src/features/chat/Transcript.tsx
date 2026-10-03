@@ -1,4 +1,4 @@
-import { MessageList, SkillHoldEnded } from '@conch/nacre';
+import { MessageList, SkillHoldEnded, SummaryDivider } from '@conch/nacre';
 import { useState, type ReactNode, type Ref } from 'react';
 
 import type { ConversationView, TranscriptItem } from '../../live/reducer';
@@ -166,7 +166,10 @@ export function Transcript({
   const last = items
     .filter(
       (i) =>
-        !(i.kind === 'assistant' && !i.text && !i.thinking) && i.kind !== 'integration-suggestion',
+        !(i.kind === 'assistant' && !i.text && !i.thinking) &&
+        i.kind !== 'integration-suggestion' &&
+        // The line where the model's memory starts is a note on history, not news.
+        i.kind !== 'summary',
     )
     .at(-1);
   const lastErrorId = [...items].reverse().find((i) => i.kind === 'turn-end')?.id;
@@ -319,6 +322,13 @@ export function Transcript({
               <HeldItem item={block.item} conversationId={conversationId} />
             )}
             {block.item?.kind === 'routed' && <RoutedItem item={block.item} />}
+            {block.item?.kind === 'summary' && (
+              <SummaryDivider
+                model={block.item.model}
+                summary={block.item.summary}
+                className={styles.summary}
+              />
+            )}
             {block.item?.kind === 'needs-apps' && (
               <NeedsAppsItem item={block.item} conversationId={conversationId} />
             )}

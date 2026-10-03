@@ -455,6 +455,10 @@ export interface TurnRecovery {
   alternative?: { label: string; use: () => void };
   /** Open 1Password so it can be unlocked. */
   openOnePassword?: () => void;
+  /** A ready model that reads more at once, for a chat too long for this one (ADR 0055). */
+  bigger?: { label: string; use: () => void };
+  /** Carry on in a new chat, the message waiting in its box. */
+  newChat?: () => void;
 }
 
 const problemTitle = (problem: NonNullable<Of<'turn-end'>['problem']>, label: string) =>
@@ -463,6 +467,7 @@ const problemTitle = (problem: NonNullable<Of<'turn-end'>['problem']>, label: st
     unavailable: `${label} isn’t answering right now`,
     limit: `You’ve reached your ${label} limit for now`,
     'key-locked': '1Password is locked',
+    'too-long': `This chat is more than ${label} can read at once`,
   })[problem];
 
 export function TurnEnd({
@@ -502,10 +507,22 @@ export function TurnEnd({
         <Button size="sm" onClick={recover.openOnePassword}>
           Open 1Password
         </Button>
+      ) : problem === 'too-long' && recover.bigger ? (
+        <Button size="sm" onClick={recover.bigger.use}>
+          Use {recover.bigger.label}
+        </Button>
+      ) : problem === 'too-long' && recover.newChat ? (
+        <Button size="sm" onClick={recover.newChat}>
+          Start a new chat
+        </Button>
       ) : undefined;
     return (
       <Callout
-        tone={problem === 'signed-out' || problem === 'key-locked' ? 'warning' : 'danger'}
+        tone={
+          problem === 'signed-out' || problem === 'key-locked' || problem === 'too-long'
+            ? 'warning'
+            : 'danger'
+        }
         title={problemTitle(problem, recover.label)}
       >
         <Stack gap={3}>
@@ -516,7 +533,8 @@ export function TurnEnd({
           </span>
           <Stack direction="row" gap={2} wrap align="center">
             {primary}
-            {other}
+            {/* Another provider's model isn't the answer to a long chat: a bigger window is. */}
+            {problem !== 'too-long' && other}
             {retry}
           </Stack>
         </Stack>

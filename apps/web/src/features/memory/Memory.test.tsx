@@ -136,6 +136,21 @@ describe('What Conch knows about you', () => {
     expect(calls.some((c) => c.path === '/api/memory/index/model')).toBe(false);
   });
 
+  it('says when it learned from a long chat before summarising it (ADR 0055)', async () => {
+    mockFetch(
+      routes({
+        'GET /api/memory/tidy': () =>
+          tidy({ runs: tidy().runs.map((r) => ({ ...r, trigger: 'now', chat: 'c_long' })) }),
+      }),
+    );
+    renderApp(<MemoryView />);
+    expect(
+      await screen.findByRole('region', {
+        name: 'Conch learned 1 memory from a long chat before summarising it',
+      }),
+    ).toHaveTextContent('Now: Lives in Lisbon');
+  });
+
   it('gets the model for meaning on one press, shows progress, then says it understands', async () => {
     let status: MemoryIndexStatus = words;
     const calls = mockFetch(

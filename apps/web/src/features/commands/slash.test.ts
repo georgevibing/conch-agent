@@ -11,7 +11,10 @@ const custom = [
     updatedAt: 0,
   },
 ];
-const engine = [{ name: 'compact', description: 'Summarise', argumentHint: '' }];
+const engine = [
+  { name: 'compact', description: 'Summarise', argumentHint: '' },
+  { name: 'review', description: 'Review the diff', argumentHint: '' },
+];
 
 describe('slash commands', () => {
   it('parses names and arguments', () => {
@@ -38,8 +41,19 @@ describe('slash commands', () => {
       args: 'high',
     });
     expect(resolveSlash('/explain monads', custom, engine)).toMatchObject({ kind: 'custom' });
-    expect(resolveSlash('/compact', custom, engine)).toMatchObject({ kind: 'engine' });
+    expect(resolveSlash('/review', custom, engine)).toMatchObject({ kind: 'engine' });
     expect(resolveSlash('/nope', custom, engine)).toEqual({ kind: 'unknown', name: 'nope' });
+  });
+
+  it('has its own /compact for every provider, which hands over to a provider that has one (ADR 0055)', () => {
+    expect(resolveSlash('/compact the compost', custom, engine)).toMatchObject({
+      kind: 'builtin',
+      builtin: { action: 'compact' },
+      args: 'the compost',
+    });
+    expect(resolveSlash('/summarise', custom, [])).toMatchObject({
+      builtin: { action: 'compact' },
+    });
   });
 
   it('expands templates', () => {
@@ -57,10 +71,10 @@ describe('slash commands', () => {
 
   it('finds your skills after your commands and before the provider’s', () => {
     const skill = {
-      id: 'compact',
-      name: 'compact',
-      title: 'Compact',
-      description: 'Squeezes things.',
+      id: 'review',
+      name: 'review',
+      title: 'Review',
+      description: 'Reads it over.',
       source: 'conch' as const,
       sourceLabel: 'Conch',
       editable: true,
@@ -69,12 +83,12 @@ describe('slash commands', () => {
       files: [],
       updatedAt: 0,
     };
-    expect(resolveSlash('/compact tighter', custom, engine, [skill])).toMatchObject({
+    expect(resolveSlash('/review tighter', custom, engine, [skill])).toMatchObject({
       kind: 'skill',
-      skill: { name: 'compact' },
+      skill: { name: 'review' },
       args: 'tighter',
     });
-    expect(resolveSlash('/compact', custom, engine, [])).toMatchObject({ kind: 'engine' });
+    expect(resolveSlash('/review', custom, engine, [])).toMatchObject({ kind: 'engine' });
     expect(resolveSlash('/explain', custom, engine, [{ ...skill, name: 'explain' }])).toMatchObject(
       {
         kind: 'custom',

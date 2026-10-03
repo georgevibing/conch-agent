@@ -480,6 +480,35 @@ describe('Palette search', () => {
     act(() => useUi.setState({ stopHolding: undefined }));
   });
 
+  it('summarises the start of the open chat by name, as /compact does (ADR 0055)', async () => {
+    const user = userEvent.setup();
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'POST /api/conversations/c7/compact': () => ({
+        compacted: true,
+        message: 'GPT-5 mini now reads a summary of the earlier messages.',
+      }),
+    });
+    renderApp(
+      <Routes>
+        <Route path="/c/:conversationId" element={<Palette />} />
+      </Routes>,
+      { route: '/c/c7' },
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'compact');
+    await user.click(
+      await screen.findByRole('option', { name: /Summarise the start of this chat/ }),
+    );
+    await waitFor(() =>
+      expect(
+        calls.some((c) => c.method === 'POST' && c.path === '/api/conversations/c7/compact'),
+      ).toBe(true),
+    );
+  });
+
   it('edits a thing made in a chat by hand, and finds what pages may read (ADR 0046)', async () => {
     const user = userEvent.setup();
     mockFetch({
