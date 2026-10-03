@@ -74,4 +74,25 @@ describe('handoff', () => {
     expect(text).not.toContain('question 0 ');
     expect(text).toMatch(/\[\d+ earlier messages left out\]/);
   });
+
+  it('carries the chat’s summary for what it leaves out, when there is one (ADR 0055)', () => {
+    seq = 0;
+    const events: ConversationEvent[] = [];
+    for (let i = 0; i < 20; i++) {
+      events.push(user(`question ${i} ${'x'.repeat(40)}`));
+      events.push(...reply(`a${i}`, `answer ${i}`));
+    }
+    events.push({
+      ...base(),
+      type: 'context.compacted',
+      summary: 'They chose tomatoes.',
+      engine: 'openrouter',
+      turns: 10,
+    });
+    const text = handoff(events, { afterSeq: -1, beforeSeq: 1000, maxChars: 400 }) ?? '';
+    expect(text).toMatch(/\[\d+ earlier messages left out\. In short, earlier in this chat:\]/);
+    expect(text).toContain('They chose tomatoes.');
+    // Nothing left out: no summary needed.
+    expect(handoff(events, { afterSeq: 37, beforeSeq: 1000 })).not.toContain('tomatoes');
+  });
 });

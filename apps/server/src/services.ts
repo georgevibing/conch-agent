@@ -110,7 +110,7 @@ import { hostedApps } from './integrations/hosted';
 import { IntegrationService } from './integrations/service';
 import { MemoryIndex } from './memory/index';
 import { OnDeviceModel } from './memory/ondevice';
-import { cheapModel, MeaningModel, yourRequests, yourWords } from './memory/learning';
+import { chatWords, cheapModel, MeaningModel, yourRequests, yourWords } from './memory/learning';
 import { registerLearningDoctor } from './memory/doctor';
 import { MemoryStore } from './memory/store';
 import { MemoryTidy } from './memory/tidy';
@@ -610,6 +610,17 @@ export class Services {
       skillPermissions: (skillId) => this.skills.permissions(skillId),
       // A spend that can't be saved is lost, not fatal: an unhandled rejection would stop Conch.
       onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
+      // Before a long chat's start is summarised, what you said there is learned (ADR 0055).
+      learn: async ({ conversationId, origin, events, beforeSeq }) => {
+        await this.tidy.learn(
+          conversationId,
+          chatWords({ id: conversationId, ...(origin && { origin }) }, events, {
+            since: Number.NEGATIVE_INFINITY,
+            beforeSeq,
+          }),
+        );
+      },
+      heal: (message) => void this.healed.note('conversations', message),
     });
     this.routines = new RoutineService({
       store: new RoutineStore(join(config.CONCH_HOME, 'routines'), heal),

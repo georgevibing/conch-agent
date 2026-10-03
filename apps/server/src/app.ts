@@ -27,6 +27,8 @@ import {
   AddServerBody,
   UpdateServerBody,
   UpdateConversationBody,
+  CompactBody,
+  type CompactResult,
   ServerId,
   ReleaseTurnBody,
   SchedulePreviewBody,
@@ -981,6 +983,20 @@ export async function buildApp(services: Services) {
         : reply
             .code(409)
             .send({ error: 'offline', message: 'You’re still offline. It goes when you’re back.' });
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  /** `/compact`: summarise the start of a long chat now (ADR 0055). */
+  app.post<{ Params: { id: string } }>('/api/conversations/:id/compact', async (request, reply) => {
+    const body = parse(CompactBody, request.body ?? {}, reply);
+    if (!body) return;
+    try {
+      const result: CompactResult = await services.conversations.compact(
+        request.params.id,
+        body.focus || undefined,
+      );
+      return result;
     } catch (error) {
       return sendError(reply, error);
     }

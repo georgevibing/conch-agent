@@ -25,6 +25,7 @@ import { honouredMode, skillHolds, type PermissionMode, type SkillHold } from '@
 
 import type {
   BridgedTool,
+  Compacted,
   Engine,
   EngineEvent,
   EngineMcpServer,
@@ -451,6 +452,19 @@ export class ConversationManager {
       skillPermissions?: (
         skillId: string,
       ) => Promise<{ title: string; permissions: SkillPermissions } | undefined>;
+      /**
+       * Before the start of a chat is summarised away (ADR 0055): learn what the
+       * person said there, by the tidy-up's rules (ADR 0032). Messages before
+       * `beforeSeq` are the ones the model reads no more.
+       */
+      learn?: (input: {
+        conversationId: string;
+        origin?: ConversationRecord['origin'];
+        events: readonly ConversationEvent[];
+        beforeSeq: number;
+      }) => Promise<void>;
+      /** Say what was fixed on its own (Settings → Health). */
+      heal?: (message: string) => void;
     },
   ) {}
 
@@ -1353,6 +1367,7 @@ export class ConversationManager {
             ...(readableDirs.length && { readableDirs }),
             ...(this.deps.protectedPaths?.length && { protectedPaths: this.deps.protectedPaths }),
             resumeId: session?.resumeId,
+            seq: asked,
             systemAppend: [
               buildSystemAppend({
                 persona: settings.persona,
@@ -1467,6 +1482,9 @@ export class ConversationManager {
           }
           case 'notice':
             this.#append(live, { type: 'notice', code: event.code, message: event.message });
+            break;
+          case 'compacted':
+            this.#compacted(live, engine, event, { fallback: asked, healed: event.healed });
             break;
           case 'mcp-status':
             // Checking why takes a moment; don't hold up the reply for it.
@@ -1585,6 +1603,90 @@ export class ConversationManager {
   }
 
   /**
+   * The start of the chat was folded into a summary (ADR 0055): a quiet
+   * divider where the model's memory now starts, the person's words there
+   * learned before they're out of view, and a note when it healed a refusal.
+   */
+  #compacted(
+    live: Live,
+    engine: Engine,
+    compacted: Compacted,
+    options: { fallback: number; healed?: boolean; asked?: boolean },
+  ) {
+    const from = compacted.fromSeq ?? options.fallback;
+    const before = live.events.find((e) => e.type === 'user.message' && e.seq >= from);
+    this.#append(live, {
+      type: 'context.compacted',
+      summary: compacted.summary.slice(0, 40_000),
+      ...(before?.type === 'user.message' && { before: before.messageId }),
+      engine: engine.id,
+      ...(compacted.model && { model: compacted.model }),
+      turns: compacted.turns,
+      ...(options.asked && { asked: true }),
+    });
+    if (options.healed)
+      this.deps.heal?.(
+        `A chat had grown longer than ${compacted.model ?? engine.label} reads at once, so Conch summarised its start and sent your message again.`,
+      );
+    void this.deps
+      .learn?.({
+        conversationId: live.record.id,
+        ...(live.record.origin && { origin: live.record.origin }),
+        events: [...live.events],
+        beforeSeq: from,
+      })
+      .catch(() => undefined);
+  }
+
+  /**
+   * `/compact [focus]`: summarise the start of a chat now, for providers whose
+   * transcript Conch keeps (ADR 0055). The rest compact by themselves, so it
+   * says so instead.
+   */
+  async compact(id: string, focus?: string): Promise<{ compacted: boolean; message: string }> {
+    const live = await this.#get(id);
+    if (live.abort) throw new ConversationError('busy', 'Still replying to your last message.');
+    const engine = this.deps.engine(live.record.options.engine ?? live.record.engine);
+    const session = live.record.sessions?.[engine.id];
+    if (!engine.context)
+      return {
+        compacted: false,
+        message: `${engine.label} keeps long chats in its own memory, so there’s nothing for Conch to summarise.`,
+      };
+    if (!session?.resumeId)
+      return { compacted: false, message: 'This chat is short: there’s nothing to summarise yet.' };
+    const abort = this.#claim(live);
+    try {
+      const model = await this.#modelFor(live.record.options, engine.id);
+      const compacted = await engine.context.compact({
+        resumeId: session.resumeId,
+        ...(model && { model }),
+        ...(focus && { focus }),
+        signal: abort.signal,
+      });
+      if (!compacted)
+        return {
+          compacted: false,
+          message: 'This chat is short: there’s nothing to summarise yet.',
+        };
+      const last = live.events.findLast((e) => e.type === 'user.message')?.seq ?? live.seq;
+      this.#compacted(live, engine, compacted, { fallback: last, asked: true });
+      await this.#persist(live);
+      return {
+        compacted: true,
+        message: `${compacted.model ?? engine.label} now reads a summary of the earlier messages.`,
+      };
+    } catch (error) {
+      return {
+        compacted: false,
+        message: error instanceof Error && error.message ? error.message : 'That didn’t work.',
+      };
+    } finally {
+      if (live.abort === abort) live.abort = undefined;
+    }
+  }
+
+  /**
    * The apps this turn is about that aren't connected, and which of them to
    * offer: read from the words the person typed (not a pasted file or a
    * skill's instructions), each offered at most once per conversation, never
@@ -1647,6 +1749,8 @@ export class ConversationManager {
       if (input.type === 'tool.finished' && input.output)
         input = { ...input, output: redact(input.output) };
       else if (input.type === 'assistant.delta') input = { ...input, delta: redact(input.delta) };
+      else if (input.type === 'context.compacted')
+        input = { ...input, summary: redact(input.summary) };
     }
     const event = {
       ...input,
