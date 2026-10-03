@@ -18,6 +18,11 @@ const tty = { isTTY: true, columns: 100, write: () => true };
 const pipe = { isTTY: false, columns: 100, write: () => true };
 
 describe('detectTerm', () => {
+  it('takes a terminal that says it is 0 columns wide as 80, so nothing is cut to a stub', () => {
+    const silent = { write: () => true, isTTY: true, columns: 0 };
+    expect(detectTerm(silent, {}, 'linux').columns).toBe(80);
+  });
+
   it('is plain text when nobody is looking, or when asked', () => {
     expect(detectTerm(pipe, {}, 'linux').color).toBe('none');
     expect(detectTerm(pipe, {}, 'linux').animate).toBe(false);

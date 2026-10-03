@@ -465,13 +465,13 @@ const backgroundIo: BackgroundIo = {
 };
 
 /** Always on, with `node` to run Conch on (the one running now, unless Conch moves to its own). */
-async function backgroundService(node = process.execPath) {
+async function backgroundService(node = process.execPath, running?: 'background' | 'window') {
   const recorded = await runningGateway(config.CONCH_HOME);
   return new BackgroundService({
     home: config.CONCH_HOME,
     checkout: findRepository(import.meta.dirname, config.CONCH_CHECKOUT),
     // A person at this terminal; a Conch the computer started is left running.
-    running: recorded?.background ? 'background' : 'window',
+    running: running ?? (recorded?.background ? 'background' : 'window'),
     since: Date.now(),
     backend: backendFor(config.CONCH_HOME),
     spec: { node, env: carriedEnv(process.env), path: process.env.PATH ?? '' },
@@ -731,9 +731,14 @@ async function setup() {
           } catch {
             // Already gone.
           }
-          await waitFor(async () => !(await answering()), 20_000);
+          // Gone, record and all: then nothing mistakes it for one still running.
+          await waitFor(
+            async () => !(await answering()) && !(await runningGateway(config.CONCH_HOME)),
+            20_000,
+          );
         }
-        await (await backgroundService(node)).enable();
+        // A fresh start, asked for here: the computer starts it now, on the new Node.
+        await (await backgroundService(node, 'window')).enable();
         return waitFor(answering, 60_000);
       },
       address: { status: addressApi.status, set: addressApi.set },

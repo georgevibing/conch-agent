@@ -97,7 +97,8 @@ export function detectTerm(
     unicode,
     hyperlinks,
     animate: tty && color !== 'none' && !env.CI,
-    columns: Math.max(20, out.columns ?? 80),
+    // A terminal that doesn’t say its width (0, as some ptys and SSH sessions do) is taken as 80.
+    columns: Math.max(20, out.columns || 80),
   };
 }
 
