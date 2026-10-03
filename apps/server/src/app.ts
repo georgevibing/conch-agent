@@ -15,6 +15,7 @@ import {
   CreateSkillBody,
   DescribeSkillBody,
   DraftSkillBody,
+  TidyShelfBody,
   Id,
   LoginCodeBody,
   type Health,
@@ -187,6 +188,7 @@ export async function buildApp(services: Services) {
     index: services.memoryIndex,
     tidy: services.tidy,
     suggester: services.suggester,
+    learner: services.learner,
     getMeaningModel: (languages) =>
       services.onDevice.get(languages, () => services.meaningLanded()),
     meaningState: () => services.onDevice.status(),
@@ -774,6 +776,15 @@ export async function buildApp(services: Services) {
     const body = parse(CreateSkillBody, request.body, reply);
     if (!body) return;
     return guarded(reply, () => services.skills.create(body));
+  });
+  // A tidy shelf (ADR 0058): what's sat unused, and your answer. Only ever turns skills off.
+  app.get('/api/skills/suggestions/shelf', () => services.skills.shelf());
+  app.post('/api/skills/suggestions/shelf', async (request, reply) => {
+    const body = parse(TidyShelfBody, request.body, reply);
+    if (!body) return;
+    return guarded(reply, async () => ({
+      changed: await services.skills.tidyShelf(body.action, body.ids),
+    }));
   });
   // Whose signed skills you trust (ADR 0031). Trusting is a lasting power, like sudo.
   app.get('/api/skills/publishers', async () => ({

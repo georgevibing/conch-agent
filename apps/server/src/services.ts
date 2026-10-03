@@ -114,7 +114,9 @@ import { cheapModel, MeaningModel, yourRequests, yourWords } from './memory/lear
 import { registerLearningDoctor } from './memory/doctor';
 import { MemoryStore } from './memory/store';
 import { MemoryTidy } from './memory/tidy';
+import { SkillLearner } from './skills/learn';
 import { SkillSuggester } from './skills/suggest';
+import { SkillUsage, skillUsedIn } from './skills/usage';
 import { RoutineService } from './routines/service';
 import { PAST_CHATS_PROMPT, pastChatTools, withOthers, type ChatFacts } from './search/past';
 import { SearchService } from './search/service';
@@ -178,6 +180,10 @@ export class Services {
   readonly onDevice: OnDeviceModel;
   readonly tidy: MemoryTidy;
   readonly suggester: SkillSuggester;
+  /** Save how I did this: skills offered from work that went well (ADR 0058). */
+  readonly learner: SkillLearner;
+  /** When each skill was last used, for the tidy shelf (ADR 0058). */
+  readonly skillUsage: SkillUsage;
   readonly commands: CommandStore;
   /** Files and long pastes sent with messages (ADR 0017). */
   readonly attachments: AttachmentStore;
@@ -388,6 +394,7 @@ export class Services {
     const skillSources =
       config.CONCH_SKILL_SOURCES ?? (config.CONCH_ENGINE === 'mock' ? 'off' : 'auto');
     this.skillTrust = new SkillTrust(config.CONCH_HOME);
+    this.skillUsage = new SkillUsage(config.CONCH_HOME, heal);
     this.skills = new SkillService({
       store: new SkillStore(
         config.CONCH_HOME,
@@ -400,6 +407,11 @@ export class Services {
       emit: (event) => this.broadcast.emit(event),
       onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
       trust: this.skillTrust,
+      usage: this.skillUsage,
+      // "Save how I did this" saved: the offer is settled (ADR 0058).
+      suggestionSaved: async (id) => {
+        if (this.learner.owns(id)) await this.learner.saved(id);
+      },
     });
     // A signing key written in the clear (an older Conch, a restored backup) is locked now (ADR 0047).
     void this.skillTrust
@@ -619,6 +631,44 @@ export class Services {
       },
     });
     this.doctor.register(tasksCheck(this.tasks));
+    // Save how I did this (ADR 0058): work that went well, offered as a skill, never saved by itself.
+    this.learner = new SkillLearner({
+      home: config.CONCH_HOME,
+      chat: async (id) => {
+        const { conversation, events } = await this.conversations.detail(id);
+        return {
+          title: conversation.title,
+          status: conversation.status,
+          events,
+          ...(conversation.origin && { origin: conversation.origin }),
+        };
+      },
+      skills: async () =>
+        (await this.skills.list()).skills.map((s) => ({
+          title: s.title,
+          description: s.description,
+        })),
+      // The provider that answered the chat has seen it already; else one on this computer.
+      model: async (id) => {
+        const engine = id ? this.providers.engineFor(id) : undefined;
+        if (engine?.complete) return cheapModel(engine);
+        const local = (await this.providers.ready().catch(() => [])).find(
+          (e) => e.local && e.complete,
+        );
+        return local ? cheapModel(local) : undefined;
+      },
+      workspace: () => this.settings.workspace(),
+      redact: this.vault.redactor(),
+      emit: (event) => this.broadcast.emit(event),
+      onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
+      heal,
+    });
+    this.broadcast.on((event) => this.learner.onEvent(event));
+    // Every way a skill is used ends in `skill.used`: the tidy shelf counts them all.
+    this.conversations.events.on((event) => {
+      const used = skillUsedIn(event);
+      if (used) this.skills.used(used);
+    });
     this.conversations.events.on((event) => this.broadcast.emit(event));
     // Each task follows its own chat: what it's doing, what it did (ADR 0033).
     this.broadcast.on((event) => this.tasks.onEvent(event));
@@ -1094,14 +1144,22 @@ export class Services {
             (await this.skills.store.list()).skills
               .filter((s) => s.source === 'conch')
               .map((s) => s.name),
-          adopt: (folder, base) => this.skills.store.adopt(folder, base),
+          // Brought in by Conch: the tidy shelf may offer it back one day (ADR 0058).
+          adopt: async (folder, base) => {
+            const skill = await this.skills.store.adopt(folder, base);
+            await this.skillUsage.note(skill.id, 'imported').catch(() => undefined);
+            return skill;
+          },
           // Another agent's persona (ADR 0042): one of Conch's own skills, off until you turn it on.
-          create: async (input) =>
-            this.skills.store.create({
+          create: async (input) => {
+            const skill = await this.skills.store.create({
               ...input,
               name: await this.skills.store.freeName(input.base),
               mode: 'off',
-            }),
+            });
+            await this.skillUsage.note(skill.id, 'imported').catch(() => undefined);
+            return skill;
+          },
           remove: (id) => this.skills.remove(id),
         },
         routines: {
@@ -1435,6 +1493,7 @@ export class Services {
     this.door.stop();
     this.tailscale.stop();
     this.tidy.stop();
+    this.learner.stop();
     this.memoryIndex.close();
     void this.onDevice.unload();
     void this.mockTelegram?.stop();

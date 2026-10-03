@@ -243,6 +243,18 @@ export const RULES: readonly BackupRule[] = [
     why: 'Skill suggestions you turned down, and a line of what each was about, so they stay down.',
   },
   {
+    match: 'skill-learned.json',
+    class: 'kept',
+    group: 'skills',
+    why: 'Skills Conch offered from work that went well in your chats, which chats it already looked at, and the offers you turned down.',
+  },
+  {
+    match: 'skill-usage.json',
+    class: 'kept',
+    group: 'skills',
+    why: 'When each skill was last used, and which ones Conch suggested or brought in, so the tidy shelf only ever offers those.',
+  },
+  {
     match: 'skills.trust.json',
     class: 'kept',
     group: 'skills',

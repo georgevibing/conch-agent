@@ -1,6 +1,7 @@
 import { DismissSuggestionBody, GetMeaningBody, TidyAnswerBody } from '@conch/protocol';
 import type { FastifyInstance } from 'fastify';
 
+import type { SkillLearner } from '../skills/learn';
 import type { SkillSuggester } from '../skills/suggest';
 import type { MemoryIndex } from './index';
 import type { MemoryStore } from './store';
@@ -19,6 +20,8 @@ export function registerLearningRoutes(
     index: MemoryIndex;
     tidy: MemoryTidy;
     suggester: SkillSuggester;
+    /** Skills from work that went well (ADR 0058). */
+    learner?: SkillLearner;
     /** Get Conch's own model for meaning (ADR 0041), and how far it got. */
     getMeaningModel: (languages: string[]) => Promise<void>;
     meaningState: () => { getting?: number; problem?: string };
@@ -127,11 +130,17 @@ export function registerLearningRoutes(
   app.get<{ Querystring: { fresh?: string } }>('/api/skills/suggestions', async (request) => ({
     suggestions: await suggester.list({ fresh: request.query.fresh === '1' }),
   }));
+  // Work that went well in a chat (ADR 0058): quick, so a chat can ask after every turn.
+  app.get('/api/skills/suggestions/work', async () => ({
+    suggestions: (await deps.learner?.list()) ?? [],
+  }));
   app.post('/api/skills/suggestions/dismiss', async (request, reply) => {
     const body = DismissSuggestionBody.safeParse(request.body);
     if (!body.success)
       return reply.code(400).send({ error: 'bad-request', message: body.error.issues[0]?.message });
-    await suggester.dismiss(body.data.id, body.data.forever);
+    if (deps.learner?.owns(body.data.id))
+      await deps.learner.dismiss(body.data.id, body.data.forever);
+    else await suggester.dismiss(body.data.id, body.data.forever);
     return { ok: true };
   });
 }

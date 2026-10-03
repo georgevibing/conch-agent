@@ -678,6 +678,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('integration.deleted'), integrationId: z.string() }),
   /** A skill was added, changed or removed (here, or in one of the folders Conch reads). */
   z.object({ type: z.literal('skills.changed') }),
+  /** Work that went well in this chat could be a skill (ADR 0058): refetch what's offered. */
+  z.object({ type: z.literal('skills.offered'), conversationId: z.string() }),
   /** Passwords changed (an item, a source unlocked or locked): refetch them. */
   z.object({ type: z.literal('vault.changed') }),
   /** Remaining usage changed (a turn finished, a window reset, the provider warned). */

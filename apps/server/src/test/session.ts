@@ -182,6 +182,12 @@ export async function useConch(g: Gateway) {
   await chat(services, 'And another question about the weather');
   // A file the assistant wrote, which Undo keeps a copy of (ADR 0030).
   await chat(services, 'write a note to water the plants');
+  // Work that took the long way, which Conch offers to keep as a skill (ADR 0058)…
+  const work = await chat(services, 'Do the release notes the long way');
+  const learned = await services.learner.consider(work.id);
+  if (!('offered' in learned)) throw new Error(`no offer: ${learned.why}`);
+  // …and a skill used by name, which the tidy shelf counts.
+  await chat(services, `/${String(skill.name)} for March`);
   // A thumbnail of a page the agent looked at, as the browser keeps them.
   await services.browser.saveShot(convo.id, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
   // What a plain model API keeps to carry a chat on.

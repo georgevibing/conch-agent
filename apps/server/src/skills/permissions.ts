@@ -117,6 +117,26 @@ export function writePermissions(capabilities: SkillCapability[]): string {
   return ORDER.filter((c) => capabilities.includes(c)).join(', ');
 }
 
+/**
+ * The `permissions:` value for a list with its "only" parts (ADR 0058):
+ * `commands:git, commands:npm, files`. Nothing at all is `none`, which
+ * `readPermissions` reads as declared and empty: it may only read.
+ */
+export function permissionsValue(p: {
+  capabilities: readonly SkillCapability[];
+  commands?: readonly string[];
+  apps?: readonly string[];
+}): string {
+  const parts = ORDER.filter((c) => p.capabilities.includes(c)).flatMap((c) =>
+    c === 'commands' && p.commands?.length
+      ? p.commands.map((command) => `commands:${command}`)
+      : c === 'apps' && p.apps?.length
+        ? p.apps.map((app) => `apps:${app}`)
+        : [c],
+  );
+  return parts.length ? parts.join(', ') : 'none';
+}
+
 const inside = (dir: string, path: string) => {
   const rel = relative(resolve(dir), resolve(dir, path));
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));

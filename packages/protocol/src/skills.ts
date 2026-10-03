@@ -77,6 +77,11 @@ export const SkillCapability = z.enum([
 ]);
 export type SkillCapability = z.infer<typeof SkillCapability>;
 
+/** A program a skill may run (`git`, `npm`): one plain word, nothing a shell would read. */
+export const SkillCommandPrefix = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$/);
+/** An app a skill may use, by its integration server's name (`notion`, `google`). */
+export const SkillAppName = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/);
+
 export const SkillPermissions = z.object({
   /** The skill said (`allowed-tools` or `permissions`); otherwise these are the defaults. */
   declared: z.boolean(),
@@ -258,6 +263,23 @@ export const CreateSkillBody = z.object({
   description: Description.optional(),
   name: SkillName.optional(),
   mode: SkillMode.default('auto'),
+  /**
+   * What it says it may do (ADR 0031), written into its front matter. A
+   * draft Conch wrote from work in a chat says only what that work needed
+   * (ADR 0058). Unset: it says nothing, and gets the usual list.
+   */
+  permissions: z
+    .object({
+      capabilities: z.array(SkillCapability).max(7),
+      commands: z.array(SkillCommandPrefix).max(12).optional(),
+      apps: z.array(SkillAppName).max(12).optional(),
+    })
+    .optional(),
+  /** The suggestion it was saved from (ADR 0032, ADR 0058): it's settled, and Conch knows it put it here. */
+  suggestion: z
+    .string()
+    .regex(/^(?:hs|ws)_[A-Za-z0-9_-]{1,60}$/)
+    .optional(),
 });
 export type CreateSkillBody = z.infer<typeof CreateSkillBody>;
 
