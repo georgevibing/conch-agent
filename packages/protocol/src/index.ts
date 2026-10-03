@@ -80,6 +80,7 @@ export * from './routines';
 export * from './triggers';
 export * from './safety';
 export * from './search';
+export * from './fuzzy';
 export * from './past-chats';
 export * from './setup';
 export * from './skills';

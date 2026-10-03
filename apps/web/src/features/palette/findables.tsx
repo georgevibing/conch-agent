@@ -1,4 +1,11 @@
-import { canUseApps, generatePassword, type TaskList, type TextRange } from '@conch/protocol';
+import {
+  fuzzyFilter,
+  type FuzzyMatch,
+  canUseApps,
+  generatePassword,
+  type TaskList,
+  type TextRange,
+} from '@conch/protocol';
 import {
   AppIcon,
   type AppIconLook,
@@ -88,7 +95,6 @@ import { useConchApps } from '../conchapps/queries';
 import { conchPagePath } from '../conchapps/words';
 import { useRoutines } from '../routines/queries';
 import { taskKeys } from '../tasks/queries';
-import { fuzzyFilter, type FuzzyMatch } from '../search/fuzzy';
 import { useSkills, useWorkSuggestions } from '../skills/queries';
 import { draftFrom } from '../skills/SkillSuggestions';
 import { useLiveStore } from '../../live/store';

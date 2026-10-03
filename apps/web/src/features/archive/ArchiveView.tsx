@@ -1,4 +1,4 @@
-import type { ConversationSummary } from '@conch/protocol';
+import { fuzzyFilter, type ConversationSummary } from '@conch/protocol';
 import {
   type ArchivedChat,
   ArchivedChats,
@@ -24,7 +24,6 @@ import { api } from '../../api/client';
 import { keys, useConversations } from '../../api/queries';
 import { relativeTime } from '../../lib/time';
 import { APPS } from '../channels/describe';
-import { fuzzyFilter } from '../search/fuzzy';
 import { DeleteChat } from './DeleteChat';
 import { archivedChats, useArchive } from './useArchive';
 import styles from './Archive.module.css';

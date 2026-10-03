@@ -1,4 +1,4 @@
-import { foldText, mergeRanges, type TextRange } from '@conch/protocol';
+import { foldText, mergeRanges, type TextRange } from './search';
 
 export interface FuzzyMatch {
   score: number;

@@ -4,7 +4,13 @@
  * newest first. Read from the chats' own logs, so it's always complete and
  * nothing extra is stored; each entry opens the chat where it happened.
  */
-import type { ActivityEntry, ActivityKind, ActivityPage, ConversationEvent } from '@conch/protocol';
+import {
+  fuzzyMatch,
+  type ActivityEntry,
+  type ActivityKind,
+  type ActivityPage,
+  type ConversationEvent,
+} from '@conch/protocol';
 
 import { summarizeToolUse } from '../conversations/summarize';
 
@@ -260,23 +266,37 @@ export function entriesOf(
 export class Activity {
   constructor(private readonly source: ActivitySource) {}
 
-  /** Newest first, `limit` at a time, older than `before`, of one kind or all. */
+  /**
+   * Newest first, `limit` at a time, older than `before`, of one kind or all,
+   * and with `q`, only what matches it loosely (what happened, or the chat it
+   * happened in): across all of history, not just what's been shown.
+   */
   async page(
-    options: { before?: number; kind?: ActivityKind; limit?: number } = {},
+    options: { before?: number; kind?: ActivityKind; limit?: number; q?: string } = {},
   ): Promise<ActivityPage> {
+    const query = options.q?.trim() ?? '';
+    const matches = (entry: ActivityEntry) =>
+      !query ||
+      fuzzyMatch(`${entry.title.replaceAll('`', '')} ${entry.conversation.title}`, query) !== null;
     const limit = Math.min(Math.max(options.limit ?? 60, 1), 200);
     const before = options.before ?? Number.POSITIVE_INFINITY;
     const chats = (await this.source.list()).sort((a, b) => b.updatedAt - a.updatedAt);
     const found: ActivityEntry[] = [];
+    // Stopped before reading every chat: older ones may hold more.
+    let stopped = false;
     for (const chat of chats) {
       // Everything in a chat happened by its last change: once enough is found that's
       // newer than this chat, nothing in it (or older chats) can come first.
       const cutoff =
         found.length >= limit ? (found.sort((a, b) => b.at - a.at)[limit - 1]?.at ?? 0) : 0;
-      if (found.length >= limit && chat.updatedAt < cutoff) break;
+      if (found.length >= limit && chat.updatedAt < cutoff) {
+        stopped = true;
+        break;
+      }
       const entries = entriesOf(chat, await this.source.events(chat.id).catch(() => []));
       for (const entry of entries)
-        if (entry.at < before && (!options.kind || entry.kind === options.kind)) found.push(entry);
+        if (entry.at < before && (!options.kind || entry.kind === options.kind) && matches(entry))
+          found.push(entry);
     }
     found.sort((a, b) => b.at - a.at || b.id.localeCompare(a.id));
     const entries = found.slice(0, limit);
@@ -287,7 +307,7 @@ export class Activity {
           const state = await this.source.undoState(entry.undo.changeSetId).catch(() => undefined);
           entry.undo.state = state ?? 'expired';
         }
-    const more = found.length > limit || chats.some((c) => c.updatedAt < (entries.at(-1)?.at ?? 0));
+    const more = found.length > limit || stopped;
     return { entries, ...(more && entries.length && { next: entries.at(-1)?.at }) };
   }
 }

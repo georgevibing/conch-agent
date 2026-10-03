@@ -1,0 +1,12 @@
+.tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nc-space-3);
+}
+
+/* The search takes the room the filters leave, and gets its own line when there's none. */
+.search {
+  flex: 1 1 14rem;
+  min-inline-size: 0;
+}

@@ -1,4 +1,5 @@
 import {
+  fuzzyFilter,
   excerpt,
   type ConversationSummary,
   type SearchGroup,
@@ -41,7 +42,6 @@ import { useAppState, useConversations } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { relativeTime } from '../../lib/time';
 import { compactChat } from '../chat/compact';
-import { fuzzyFilter } from '../search/fuzzy';
 import { useSearchPreview, useSearchResults } from '../search/useSearch';
 import { useFindables } from './findables';
 import styles from './Palette.module.css';
