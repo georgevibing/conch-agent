@@ -177,6 +177,7 @@ test('WeChat: an Official Account through the public door, checked by WeChat its
 
 test('⌘K finds the new apps by name, and a setup reads on a phone', async ({ page }) => {
   await page.goto('/');
+  await expect(page.getByRole('textbox', { name: /^Message/ })).toBeVisible();
   await page.keyboard.press('ControlOrMeta+k');
   await page.keyboard.type('matrix');
   await expect(page.getByRole('option', { name: /Connect Matrix/ })).toBeVisible();

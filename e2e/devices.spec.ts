@@ -168,7 +168,9 @@ test('a new device waits after the right password until it’s approved', async 
 
   // ── Removing the laptop here sends it back to the start, and it must ask again.
   await page.reload();
-  await openDevices(page);
+  // Settings has an address, so a reload lands back in Security.
+  await expect(page.getByRole('tab', { name: 'Security', selected: true })).toBeVisible();
+  await page.getByRole('heading', { name: 'Devices' }).scrollIntoViewIfNeeded();
   await shot(page, 'devices-5-devices.png');
   const laptopRow = page
     .getByRole('list', { name: 'Devices' })

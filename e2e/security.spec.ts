@@ -105,7 +105,8 @@ test('password sign-in, pairing a phone, and signing a device out', async ({
 
   // ── Back on this computer: three devices, sign the laptop out.
   await page.reload();
-  await openSecurity(page);
+  // Settings has an address, so a reload lands back in Security.
+  await expect(page.getByRole('tab', { name: 'Security', selected: true })).toBeVisible();
   const devices = page.getByRole('list', { name: 'Devices' });
   await expect(devices.getByRole('listitem')).toHaveCount(3);
   await expect(devices).toContainText('Safari on iPhone');
