@@ -429,6 +429,9 @@ export class Services {
         }),
       emit: (event) => this.broadcast.emit(event),
       heal: (message) => void this.healed.note('integrations', message),
+      // Your own keys: a file signed with one is your own app, and keeps what it kept.
+      ownKeys: async () =>
+        new Set((await this.skillTrust.list()).filter((p) => p.you).map((p) => p.fingerprint)),
       chats: {
         events: async (id) => (await this.conversations.detail(id)).events,
         note: (id, offer) => this.conversations.noteAppOffer(id, offer),

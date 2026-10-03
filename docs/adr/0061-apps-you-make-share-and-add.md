@@ -293,7 +293,12 @@ an "always allow" on first use, and its skills start **When I ask**.
   yours starts afresh, and its card says so ("This replaces Weather from another
   maker; its settings, keys and data won't carry over"). Data kept after a
   removal remembers whose it was, in `conch-apps.json` (not in the data folder,
-  which the app can write).
+  which the app can write). Two versions made here are the same hands whatever
+  their chats read (a version made after reading still goes back to **Ask every
+  time**, and the card says when your settings go with one that reaches a new
+  site). Yours is yours wherever it went: an app made here and a file signed
+  with one of your own keys, which only you hold, are the same hands, so your own
+  app saved as a file and added back keeps what it kept.
 - **Only your apps carry your signature.** Saving as a file signs apps made here;
   an app from anyone else is saved as it was added, with its own signature if it
   had one. Publishing an app you didn't make is refused: share the address you

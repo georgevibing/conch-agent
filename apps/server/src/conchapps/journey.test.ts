@@ -54,6 +54,8 @@ async function real() {
       taints: async () => [],
     },
     skillsChanged: () => undefined,
+    ownKeys: async () =>
+      new Set((await trust.list()).filter((p) => p.you).map((p) => p.fingerprint)),
     manualChecks: true,
   });
   services.push(service);
@@ -138,5 +140,33 @@ describe('the whole journey, sealed and real', () => {
     // Its data went with it when it was taken out.
     const fresh = await service.callFromPage({ appId: 'tally' }, 'read_count', {}, false);
     expect(fresh.ok && fresh.text).not.toMatch(/\b3\b/);
+  }, 90_000);
+
+  it('your own app, saved as a file and added back, keeps what it kept', async () => {
+    const { service, chat } = await real();
+    const ctx = chat();
+    const { draft } = await service.newDraft(ctx.conversationId, { name: 'Tally', id: 'tally' });
+    for (const [path, content] of Object.entries(tallyFiles('1.0.0')))
+      await service.write(draft.id, path, content);
+    await service.tryTool(draft.id, 'count', { by: 1 });
+    await service.tryTool(draft.id, 'read_count', {});
+    await service.check(draft.id);
+    const offer = await service.present(ctx, draft.id, 'Tally counts things.');
+    await service.acceptOffer(offer.offerId, { conversationId: ctx.conversationId });
+    await service.callFromPage({ appId: 'tally' }, 'count', { by: 3 }, true);
+
+    const file = await service.exportFile('tally');
+    await service.remove('tally', { keepData: true });
+    const preview = await service.preview({ file: file.bytes.toString('base64'), name: file.name });
+    const found = preview?.apps[0];
+    expect(found?.signature.state).toBe('verified');
+    await service.install({
+      packageId: preview?.packageId ?? '',
+      appId: 'tally',
+      hash: found?.hash ?? '',
+      settings: {},
+    });
+    const kept = await service.callFromPage({ appId: 'tally' }, 'read_count', {}, false);
+    expect(kept.ok && kept.text).toContain('"total": 3');
   }, 90_000);
 });

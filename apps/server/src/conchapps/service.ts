@@ -96,6 +96,8 @@ export interface ConchAppServiceDeps {
   updatesChanged?: () => void;
   /** The system's Open dialog for a `.conchapp` (`PickPurpose` `conch-app`). */
   pick?: () => Promise<string | undefined>;
+  /** Fingerprints of the person's own signing keys: a file signed with one is theirs. */
+  ownKeys?: () => Promise<ReadonlySet<string>>;
   /** Tests: no timers. */
   manualChecks?: boolean;
   now?: () => number;
@@ -190,6 +192,15 @@ const sameSource = (a: ConchAppSource, b: ConchAppSource): boolean => {
   return false;
 };
 
+const NO_KEYS: ReadonlySet<string> = new Set();
+
+/** Made here (not a change to someone else's app), or signed with one of your own keys and holding. */
+const yoursBy = (source: ConchAppSource, signature: SkillSignature, own: ReadonlySet<string>) =>
+  (source.kind === 'made' && !source.basedOn) ||
+  (signature.state !== 'invalid' &&
+    Boolean(signature.fingerprint) &&
+    own.has(signature.fingerprint as string));
+
 /**
  * The same hands: the same source and, for anything not made here, the
  * same signing key. Only then do the person's settings and keys carry over
@@ -199,7 +210,15 @@ const sameSource = (a: ConchAppSource, b: ConchAppSource): boolean => {
 export const sameHands = (
   existing: Pick<AppRecord, 'source' | 'signature'>,
   next: { source: ConchAppSource; signature: SkillSignature },
+  own: ReadonlySet<string> = NO_KEYS,
 ): boolean => {
+  // Yours on both sides: made here, or signed with your own key (which only you hold), so
+  // your own app saved as a file and added back keeps what it kept.
+  if (
+    yoursBy(existing.source, existing.signature, own) &&
+    yoursBy(next.source, next.signature, own)
+  )
+    return true;
   if (!sameSource(existing.source, next.source)) return false;
   if (next.source.kind === 'made') return true;
   const before = existing.signature.fingerprint;
@@ -218,8 +237,9 @@ const yours = (source: ConchAppSource) => source.kind === 'made' && !source.base
 const hands = (
   existing: Pick<AppRecord, 'source' | 'signature'>,
   next: { source: ConchAppSource; signature: SkillSignature },
+  own: ReadonlySet<string>,
 ): { otherMaker: true } | { carriesOver: true } =>
-  sameHands(existing, next) ? { carriesOver: true } : { otherMaker: true };
+  sameHands(existing, next, own) ? { carriesOver: true } : { otherMaker: true };
 
 /** The words a card or a preview shows when an app replaces one from another maker. */
 export const otherMakerWarning = (name: string) =>
@@ -334,6 +354,11 @@ export class ConchAppService {
   }
 
   // ── Reading ─────────────────────────────────────────────────────────────
+
+  /** The person's own signing keys, by fingerprint; none when they can't be read. */
+  async #own(): Promise<ReadonlySet<string>> {
+    return (await this.deps.ownKeys?.().catch(() => undefined)) ?? NO_KEYS;
+  }
 
   async list(): Promise<ConchApp[]> {
     await this.load();
@@ -868,7 +893,7 @@ export class ConchAppService {
       ...(installed && {
         changes: {
           ...changesOf(installed, { manifest, tools: check.tools }),
-          ...hands(installed, { source, signature }),
+          ...hands(installed, { source, signature }, await this.#own()),
         },
       }),
       ...(summary && { summary: summary.slice(0, 300) }),
@@ -952,7 +977,9 @@ export class ConchAppService {
       // What it would replace, as it is now: a card made before another app took its place
       // (or before it went) mustn't replace that one with the card's words.
       const installed = await this.store.get(pkg.manifest.id);
-      const otherNow = installed ? !sameHands(installed, { source, signature }) : false;
+      const otherNow = installed
+        ? !sameHands(installed, { source, signature }, await this.#own())
+        : false;
       const asShown =
         offer.action === (installed ? 'update' : 'add') &&
         Boolean(offer.changes?.otherMaker) === otherNow &&
@@ -1059,7 +1086,7 @@ export class ConchAppService {
     const id = manifest.id;
     const existing = await this.store.get(id);
     // Settings and keys carry over only in the same hands (the same source and signer).
-    const keep = existing ? sameHands(existing, { source, signature }) : false;
+    const keep = existing ? sameHands(existing, { source, signature }, await this.#own()) : false;
     const trusted = keep && !!existing && (madeHere(source) || !madeHere(existing.source));
     const hadSkills = existing ? await this.#hasSkills(id) : false;
     await this.#stop(id);
@@ -1081,6 +1108,7 @@ export class ConchAppService {
               : { state: 'unsigned' },
           },
           { source, signature },
+          await this.#own(),
         );
       if (!same) await this.store.wipeData(id);
       if (owner) await this.store.setKeptData(id, undefined);
@@ -1322,7 +1350,9 @@ export class ConchAppService {
         problems.push({
           message: `${signature.problem ?? 'Its signature doesn’t hold'}: what’s in it isn’t what was signed, so it can’t be added.`,
         });
-      const otherMaker = installed ? !sameHands(installed, { source, signature }) : false;
+      const otherMaker = installed
+        ? !sameHands(installed, { source, signature }, await this.#own())
+        : false;
       return {
         pkg,
         found: {
@@ -1337,7 +1367,7 @@ export class ConchAppService {
             installed: installed.manifest.version,
             changes: {
               ...changesOf(installed, { manifest: pkg.manifest, tools: check.tools }),
-              ...hands(installed, { source, signature }),
+              ...hands(installed, { source, signature }, await this.#own()),
             },
           }),
         },
@@ -1481,6 +1511,7 @@ export class ConchAppService {
     const sameSigner =
       Boolean(app.signature.fingerprint) && signature.fingerprint === app.signature.fingerprint;
     this.#updates.set(app.id, held);
+    const own = await this.#own();
     await this.store.patch(app.id, (record) => {
       record.update = {
         version: held.pkg.manifest.version,
@@ -1490,7 +1521,7 @@ export class ConchAppService {
         // Its tools are known once it's opened; until then, what its manifest says.
         changes: {
           ...changesOf(app, { manifest: held.pkg.manifest, tools: app.tools }),
-          ...hands(app, { source: held.source, signature }),
+          ...hands(app, { source: held.source, signature }, own),
         },
       };
       record.updateHash = held.pkg.hash;
@@ -1597,7 +1628,7 @@ export class ConchAppService {
           source: target.source ?? app.source,
           signature: target.signature ?? app.signature,
         };
-        const keep = sameHands(app, hands);
+        const keep = sameHands(app, hands, await this.#own());
         await this.#stop(id);
         await this.store.restore(id, target.hash);
         if (!keep) {

@@ -103,10 +103,10 @@ test('make Tally, add it, use it, count on its page, save it, remove it and add 
   await found.getByRole('button', { name: 'Add Tally to my apps' }).click();
   await expect(page).toHaveURL(/\/apps\/capp_tally$/);
   await expect(page.getByText(/Signed by .* · 1\.0\.0/)).toBeVisible();
-  // What it counted stays with the app it counted for: this one came back from a file, in
-  // other hands than the one made here, so it starts afresh.
+  // What it counted was kept, and this is your own app (the file carries your signature),
+  // so it carries on where it was.
   await page.getByRole('button', { name: 'Open Tally' }).click();
-  await expect(tally(page).locator('#total')).toHaveText('0');
+  await expect(tally(page).locator('#total')).toHaveText('2');
 });
 
 test('from inside its page, an app can’t fetch, can’t call another app’s tools, and can’t change anything without a press', async ({
