@@ -10,7 +10,6 @@ import {
   Skeleton,
   Stack,
   Text,
-  toast,
   useNacreTheme,
   type AppIconLook,
 } from '@conch/nacre';
@@ -24,6 +23,7 @@ import { conchAppsApi, pageFrameUrl, type PageOwner } from './api';
 import styles from './ConchApps.module.css';
 import { useConchApp } from './queries';
 import { conchAppPath } from './words';
+import { askToOpen } from '../artifacts/openLink';
 
 /** "Count one more" → "count one more": a tool's title inside a sentence. */
 export const inSentence = (title: string) =>
@@ -125,18 +125,6 @@ export function usePageBridge(
     </AlertDialog.Root>
   );
   return { onCall, confirm };
-}
-
-/** A page asked to open a link: you see where to first, and it opens in a tab of its own. */
-function askToOpen(url: string) {
-  const host = new URL(url).host;
-  toast(`Open ${host}?`, {
-    description: url.length > 120 ? `${url.slice(0, 120)}…` : url,
-    action: {
-      label: 'Open',
-      onClick: () => void window.open(url, '_blank', 'noopener,noreferrer'),
-    },
-  });
 }
 
 /** The page itself: sealed, in the person's theme and accent, talking only to its own tools. */

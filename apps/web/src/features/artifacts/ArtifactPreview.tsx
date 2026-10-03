@@ -7,7 +7,6 @@ import {
   LiveDataBar,
   SealedFrame,
   Skeleton,
-  toast,
   useNacreTheme,
 } from '@conch/nacre';
 import { useEffect, useId, useMemo, useState } from 'react';
@@ -16,6 +15,7 @@ import { Markdown } from '../chat/Markdown';
 import { frameUrl } from './api';
 import styles from './Artifacts.module.css';
 import { useLiveData } from './live';
+import { askToOpen } from './openLink';
 
 /** A picture as an image: inside an <img>, an SVG can't run code or fetch anything. */
 const svgImage = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
@@ -73,21 +73,6 @@ export function Diagram({
       </Callout>
     );
   return <Picture svg={result.svg} title={`${title} (diagram)`} />;
-}
-
-/**
- * A page asked to open a link. It never goes by itself: you see where to, and
- * it opens in a tab of its own that knows nothing about Conch.
- */
-function askToOpen(url: string) {
-  const host = new URL(url).host;
-  toast(`Open ${host}?`, {
-    description: url.length > 120 ? `${url.slice(0, 120)}…` : url,
-    action: {
-      label: 'Open',
-      onClick: () => void window.open(url, '_blank', 'noopener,noreferrer'),
-    },
-  });
 }
 
 /**
