@@ -397,7 +397,10 @@ function Drawer() {
                 });
                 return ok ? ticket : undefined;
               }}
-              onState={(state) => setSessionStates((s) => ({ ...s, [id]: state.kind }))}
+              onState={(state) =>
+                // Only when it changed: this runs after every render of the view.
+                setSessionStates((s) => (s[id] === state.kind ? s : { ...s, [id]: state.kind }))
+              }
               onTitle={(title) => setTitles((t) => ({ ...t, [id]: tabTitle({ ...info, title }) }))}
               onOutput={() => {
                 if (id !== current?.id) setActivity((a) => (a[id] ? a : { ...a, [id]: true }));
