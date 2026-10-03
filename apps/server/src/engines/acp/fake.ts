@@ -12,7 +12,9 @@ export interface AgentScript {
   /** What `initialize` answers. */
   initialize?: Record<string, unknown>;
   /** Answer `session/new`: a result, or an error. */
-  session?: (params: Record<string, unknown>) => Record<string, unknown> | { error: { code: number; message: string } };
+  session?: (
+    params: Record<string, unknown>,
+  ) => Record<string, unknown> | { error: { code: number; message: string } };
   /** Play out a prompt: send updates, ask permission, then answer. */
   prompt?: (turn: AgentTurn, params: Record<string, unknown>) => Promise<Record<string, unknown>>;
 }
@@ -93,7 +95,10 @@ export function fakeSpawn(script: AgentScript) {
                 id,
                 result: script.initialize ?? {
                   protocolVersion: 1,
-                  agentCapabilities: { mcpCapabilities: { http: true }, promptCapabilities: { image: true } },
+                  agentCapabilities: {
+                    mcpCapabilities: { http: true },
+                    promptCapabilities: { image: true },
+                  },
                   agentInfo: { name: 'pretend', version: '9.9.9' },
                   authMethods: [{ id: 'agent-login' }],
                 },
@@ -102,13 +107,16 @@ export function fakeSpawn(script: AgentScript) {
               return send({ id, result: {} });
             case 'session/new': {
               const answer = script.session?.(params) ?? { sessionId: `sess_${id}` };
-              return 'error' in answer ? send({ id, error: answer.error }) : send({ id, result: answer });
+              return 'error' in answer
+                ? send({ id, error: answer.error })
+                : send({ id, result: answer });
             }
             case 'session/prompt': {
               const sessionId = String(params.sessionId);
               const turn: AgentTurn = {
                 sessionId,
-                update: (update) => send({ method: 'session/update', params: { sessionId, update } }),
+                update: (update) =>
+                  send({ method: 'session/update', params: { sessionId, update } }),
                 ask: (method, askParams) =>
                   new Promise((resolve) => {
                     const askId = next++;
@@ -122,7 +130,10 @@ export function fakeSpawn(script: AgentScript) {
                 return send({ id, result });
               } catch (error) {
                 // A script throws `{ code, message }` to answer with an error.
-                const { code = -32603, message = 'failed' } = error as { code?: number; message?: string };
+                const { code = -32603, message = 'failed' } = error as {
+                  code?: number;
+                  message?: string;
+                };
                 return send({ id, error: { code, message } });
               }
             }

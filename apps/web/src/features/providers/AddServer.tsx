@@ -58,40 +58,41 @@ export function AddServer({ presets, found, onBack, onAdded, onOpen }: AddServer
   const [name, setName] = useState('');
   const [key, setKey] = useState('');
   const [preset, setPreset] = useState<ServerPreset>();
-  const [probe, setProbe] = useState<ServerProbe>();
-  const [looking, setLooking] = useState(false);
+  /** What Conch found, and for which address and key: an answer to an older question is no answer. */
+  const [answer, setAnswer] = useState<{ ask: string; probe: ServerProbe }>();
   const add = useAddServer();
-  const asked = useRef(0);
+
+  const typed = url.trim();
+  const typedKey = key.trim();
+  const ask = `${typed}\n${typedKey}`;
+  const lookable = typed.length >= 4;
+  const probe = lookable && answer?.ask === ask ? answer.probe : undefined;
+  const looking = lookable && !probe;
 
   useEffect(() => {
     backRef.current?.focus({ preventScroll: true, focusVisible: false } as FocusOptions);
   }, []);
 
-  // Look at the address as it's typed, the latest answer winning.
+  // Look at the address as it's typed, once typing stops; only the latest question is answered.
   useEffect(() => {
-    const typed = url.trim();
-    setProbe(undefined);
-    if (typed.length < 4) {
-      setLooking(false);
-      return;
-    }
-    const ask = ++asked.current;
-    setLooking(true);
+    if (!lookable) return;
+    let current = true;
     const timer = setTimeout(() => {
       providersApi
-        .probeServer(typed, key.trim() || undefined)
-        .then((answer) => {
-          if (ask === asked.current) setProbe(answer);
+        .probeServer(typed, typedKey || undefined)
+        .then((found) => {
+          if (current) setAnswer({ ask, probe: found });
         })
         .catch(() => {
-          if (ask === asked.current) setProbe({ ok: false, message: 'Conch couldn’t look there.' });
-        })
-        .finally(() => {
-          if (ask === asked.current) setLooking(false);
+          if (current)
+            setAnswer({ ask, probe: { ok: false, message: 'Conch couldn’t look there.' } });
         });
     }, LOOK_AFTER_MS);
-    return () => clearTimeout(timer);
-  }, [url, key]);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [ask, lookable, typed, typedKey]);
 
   const choose = (next: ServerPreset) => {
     setPreset(next);
@@ -107,10 +108,15 @@ export function AddServer({ presets, found, onBack, onAdded, onOpen }: AddServer
         ...(name.trim() && { name: name.trim() }),
         ...(key.trim() && { key: key.trim() }),
       });
-      toast.success(`${name.trim() || probe?.kind || 'Your server'} is connected. Its models are in the picker.`);
+      toast.success(
+        `${name.trim() || probe?.kind || 'Your server'} is connected. Its models are in the picker.`,
+      );
       onAdded(id);
     } catch (error) {
-      setProbe({ ok: false, message: errorText(error, 'That server couldn’t be added.') });
+      setAnswer({
+        ask,
+        probe: { ok: false, message: errorText(error, 'That server couldn’t be added.') },
+      });
     }
   };
 
@@ -174,7 +180,12 @@ export function AddServer({ presets, found, onBack, onAdded, onOpen }: AddServer
           </Field>
           {probe?.kind && OWN_CARDS[probe.kind] && onOpen && (
             <div>
-              <Button type="button" variant="surface" size="sm" onClick={() => onOpen(OWN_CARDS[probe.kind ?? ''] ?? '')}>
+              <Button
+                type="button"
+                variant="surface"
+                size="sm"
+                onClick={() => onOpen(OWN_CARDS[probe.kind ?? ''] ?? '')}
+              >
                 Open {probe.kind}
               </Button>
             </div>

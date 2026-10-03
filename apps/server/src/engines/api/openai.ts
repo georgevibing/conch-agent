@@ -170,13 +170,17 @@ const DATED = /-(\d{4}-\d{2}-\d{2}|\d{8}|\d{6}|\d{4})$/;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 const num = (value: unknown) => (typeof value === 'number' && value > 0 ? value : undefined);
-const str = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : undefined);
+const str = (value: unknown) =>
+  typeof value === 'string' && value.trim() ? value.trim() : undefined;
 const bool = (value: unknown) => (typeof value === 'boolean' ? value : undefined);
 const strings = (value: unknown) =>
   Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : undefined;
 
 /** Read the facts every list spells its own way. */
-export function readFacts(entry: Record<string, unknown>, preset?: ChatPreset): ModelFacts | undefined {
+export function readFacts(
+  entry: Record<string, unknown>,
+  preset?: ChatPreset,
+): ModelFacts | undefined {
   const own = preset?.facts?.(entry) ?? {};
   const id = own.id ?? str(entry.id) ?? str(entry.key) ?? str(entry.model) ?? str(entry.name);
   if (!id) return undefined;
@@ -220,12 +224,27 @@ export function readFacts(entry: Record<string, unknown>, preset?: ChatPreset): 
       ? undefined
       : ['chat', 'llm', 'vlm', 'language', 'code', 'text'].includes(type)
         ? true
-        : ['embedding', 'embeddings', 'image', 'moderation', 'rerank', 'audio', 'tts', 'stt', 'transcribe'].includes(type)
+        : [
+              'embedding',
+              'embeddings',
+              'image',
+              'moderation',
+              'rerank',
+              'audio',
+              'tts',
+              'stt',
+              'transcribe',
+            ].includes(type)
           ? false
           : undefined;
   return {
     id,
-    name: own.name ?? str(entry.display_name) ?? str(entry.displayName) ?? str(entry.name) ?? str(spec?.name),
+    name:
+      own.name ??
+      str(entry.display_name) ??
+      str(entry.displayName) ??
+      str(entry.name) ??
+      str(spec?.name),
     context:
       own.context ??
       num(entry.context_length) ??
@@ -240,10 +259,7 @@ export function readFacts(entry: Record<string, unknown>, preset?: ChatPreset): 
     ...(thinking !== undefined && { thinking }),
     ...(efforts && { efforts }),
     created: own.created ?? num(entry.created),
-    chat:
-      own.chat ??
-      (bool(caps?.completion_chat) === false ? false : undefined) ??
-      chatType,
+    chat: own.chat ?? (bool(caps?.completion_chat) === false ? false : undefined) ?? chatType,
     ...(strings(entry.aliases)?.length && { aliases: strings(entry.aliases) }),
     retired:
       own.retired ??
@@ -281,7 +297,10 @@ const BRANDS: Record<string, string> = {
  * "DeepSeek Chat". Only when the provider's list gives no name of its own.
  */
 export function prettyModel(id: string): string {
-  const bare = id.replace(/^models\//, '').replace(/^.*\//, '').replace(/:latest$/, '');
+  const bare = id
+    .replace(/^models\//, '')
+    .replace(/^.*\//, '')
+    .replace(/:latest$/, '');
   const words = bare.split(/[-_\s]+/).filter(Boolean);
   const out: string[] = [];
   for (const [i, word] of words.entries()) {
@@ -293,12 +312,37 @@ export function prettyModel(id: string): string {
     else if (/^\d+(\.\d+)?[bkm]$/i.test(word)) shown = word.toUpperCase();
     else if (isVersion) shown = word;
     else if (i === 0) shown = lower.charAt(0).toUpperCase() + lower.slice(1);
-    else if (['mini', 'nano', 'pro', 'flash', 'lite', 'turbo', 'instruct', 'chat', 'reasoner', 'preview', 'latest', 'fast', 'reasoning', 'coder', 'max', 'plus', 'air', 'large', 'medium', 'small', 'tiny'].includes(lower))
+    else if (
+      [
+        'mini',
+        'nano',
+        'pro',
+        'flash',
+        'lite',
+        'turbo',
+        'instruct',
+        'chat',
+        'reasoner',
+        'preview',
+        'latest',
+        'fast',
+        'reasoning',
+        'coder',
+        'max',
+        'plus',
+        'air',
+        'large',
+        'medium',
+        'small',
+        'tiny',
+      ].includes(lower)
+    )
       shown = /^(mini|nano)$/.test(lower) ? lower : lower.charAt(0).toUpperCase() + lower.slice(1);
     else shown = word;
     // GPT-5, GLM-4.6: the house style joins a short brand to its version.
     const previous = out.at(-1);
-    if (previous && isVersion && /^(GPT|GLM|K)$/.test(previous)) out[out.length - 1] = `${previous}-${shown}`;
+    if (previous && isVersion && /^(GPT|GLM|K)$/.test(previous))
+      out[out.length - 1] = `${previous}-${shown}`;
     else out.push(shown);
   }
   return out.join(' ') || id;
@@ -359,9 +403,13 @@ export function mapChatError(
   const words = `${kind} ${said}`.toLowerCase();
   if (
     status === 401 ||
-    /invalid_api_key|wrong_api_key|authentication|unauthori[sz]ed|invalid_authentication|incorrect_api_key|authorized_error|api_key_invalid|credentials_missing/.test(kind) ||
+    /invalid_api_key|wrong_api_key|authentication|unauthori[sz]ed|invalid_authentication|incorrect_api_key|authorized_error|api_key_invalid|credentials_missing/.test(
+      kind,
+    ) ||
     ((status === 400 || status === 403) &&
-      /api.?key|incorrect api key|token expired|authentication fail|authorization failed|not valid.*key|invalid.*key/.test(words))
+      /api.?key|incorrect api key|token expired|authentication fail|authorization failed|not valid.*key|invalid.*key/.test(
+        words,
+      ))
   )
     return new ApiError(
       'auth',
@@ -369,19 +417,37 @@ export function mapChatError(
     );
   if (
     status === 402 ||
-    /insufficient.?(balance|quota|credit|fund)|credit_balance|exceeded_current_quota|arrearage|freetieronly|payment|billing|spend.?limit|usage_limit_exceeded|\b1113\b|\b1008\b|balance is empty|prepay/.test(words)
+    /insufficient.?(balance|quota|credit|fund)|credit_balance|exceeded_current_quota|arrearage|freetieronly|payment|billing|spend.?limit|usage_limit_exceeded|\b1113\b|\b1008\b|balance is empty|prepay/.test(
+      words,
+    )
   )
     return new ApiError('payment', `Your ${label} credit has run out. Top up to keep going.`);
-  if (/model_not_found|not_found|\b1211\b|does not exist|unknown model|not found|has reached its end of life/.test(words) || status === 404 || status === 410)
-    return new ApiError('not-found', `That model isn’t available at ${label} any more. Pick another one.`);
-  if (/context.?length|too long|maximum context|exceeds? the (context|model)|token limit|\b1261\b|input length|too_many_tokens|reduce the length|token count \+ max_tokens/.test(words))
+  if (
+    /model_not_found|not_found|\b1211\b|does not exist|unknown model|not found|has reached its end of life/.test(
+      words,
+    ) ||
+    status === 404 ||
+    status === 410
+  )
+    return new ApiError(
+      'not-found',
+      `That model isn’t available at ${label} any more. Pick another one.`,
+    );
+  if (
+    /context.?length|too long|maximum context|exceeds? the (context|model)|token limit|\b1261\b|input length|too_many_tokens|reduce the length|token count \+ max_tokens/.test(
+      words,
+    )
+  )
     return new ApiError(
       'context',
       'This conversation is longer than the model can read. Start a new chat, or pick a model with a bigger context.',
     );
   if (/content.?policy|content_filter|safety|sensitive/.test(words))
     return new ApiError('policy', `${label} refused this request under its content policy.`);
-  if (status === 429 || /rate.?limit|too many requests|slow_down|limit_requests|\b1302\b/.test(words))
+  if (
+    status === 429 ||
+    /rate.?limit|too many requests|slow_down|limit_requests|\b1302\b/.test(words)
+  )
     return new ApiError('rate-limit', `${label} is rate-limiting this key.`, {
       retryable: retryAfter !== undefined || /overload/.test(words),
       retryAfterMs: retryAfter ?? 4_000,
@@ -401,9 +467,15 @@ export function mapChatError(
 /** A 400 that only means "this model can't do that": tools, or a thinking level. */
 function refusalOf(error: ChatError | undefined): 'tools' | 'effort' | undefined {
   const words = `${errorKind(error)} ${error?.message ?? ''}`.toLowerCase();
-  if (/(tool|function)/.test(words) && /(not support|unsupported|does not|doesn't|cannot|not available|not enabled)/.test(words))
+  if (
+    /(tool|function)/.test(words) &&
+    /(not support|unsupported|does not|doesn't|cannot|not available|not enabled)/.test(words)
+  )
     return 'tools';
-  if (/(reasoning|thinking|effort)/.test(words) && /(not support|unsupported|invalid|unknown|unrecognized|not allowed)/.test(words))
+  if (
+    /(reasoning|thinking|effort)/.test(words) &&
+    /(not support|unsupported|invalid|unknown|unrecognized|not allowed)/.test(words)
+  )
     return 'effort';
   return undefined;
 }
@@ -468,7 +540,13 @@ export class OpenAiWire implements Wire {
 
   async #fail(response: Response, key?: string): Promise<ApiError> {
     const body = await text(response, this.preset.label).catch(() => '');
-    return mapChatError(response.status, errorIn(body), retryAfterMs(response.headers), this.preset, key);
+    return mapChatError(
+      response.status,
+      errorIn(body),
+      retryAfterMs(response.headers),
+      this.preset,
+      key,
+    );
   }
 
   async #json(response: Response): Promise<unknown> {
@@ -489,7 +567,8 @@ export class OpenAiWire implements Wire {
       base,
       ...(key && { key }),
       ...(signal && { signal }),
-      get: async (url, request) => read(await this.#send(url, 'GET', key, undefined, signal, request)),
+      get: async (url, request) =>
+        read(await this.#send(url, 'GET', key, undefined, signal, request)),
       post: async (url, body, request) =>
         read(await this.#send(url, 'POST', key, body, signal, request)),
       status: async (url, request) => {
@@ -501,7 +580,11 @@ export class OpenAiWire implements Wire {
   }
 
   /** The raw list at one address. */
-  async #list(endpoint: Endpoint, key: string | undefined, signal?: AbortSignal): Promise<unknown[]> {
+  async #list(
+    endpoint: Endpoint,
+    key: string | undefined,
+    signal?: AbortSignal,
+  ): Promise<unknown[]> {
     const context = this.#context(endpoint.base, key, signal);
     if (this.preset.listModels) return this.preset.listModels(context);
     const body = await context.get(`${endpoint.base}${this.preset.modelsPath ?? '/models'}`);
@@ -528,11 +611,13 @@ export class OpenAiWire implements Wire {
       try {
         const context = this.#context(endpoint.base, key, signal);
         if (this.preset.checkKey) await this.preset.checkKey(context);
-        else if (this.preset.checkPath) await context.get(`${endpoint.base}${this.preset.checkPath}`);
+        else if (this.preset.checkPath)
+          await context.get(`${endpoint.base}${this.preset.checkPath}`);
         else this.#remember(endpoint, await this.#list(endpoint, key, signal));
         this.#endpoint = endpoint;
         this.memory?.set(endpoint.id);
-        const where = this.preset.endpoints.length > 1 && endpoint.label ? ` · ${endpoint.label}` : '';
+        const where =
+          this.preset.endpoints.length > 1 && endpoint.label ? ` · ${endpoint.label}` : '';
         return { description: `${this.preset.label}${where}` };
       } catch (error) {
         if (error instanceof ApiError && error.kind === 'auth') {
@@ -646,7 +731,11 @@ export class OpenAiWire implements Wire {
           droppedTools = true;
           continue;
         }
-        if (refusal === 'effort' && !this.#noEffort.has(request.model) && request.effort !== 'auto') {
+        if (
+          refusal === 'effort' &&
+          !this.#noEffort.has(request.model) &&
+          request.effort !== 'auto'
+        ) {
           this.#noEffort.add(request.model);
           continue;
         }
@@ -669,7 +758,13 @@ export class OpenAiWire implements Wire {
     yield* readChatStream(response.body, request.signal, {
       label: this.preset.label,
       fail: (error) =>
-        mapChatError(typeof error.code === 'number' ? error.code : 0, error, undefined, this.preset, request.key),
+        mapChatError(
+          typeof error.code === 'number' ? error.code : 0,
+          error,
+          undefined,
+          this.preset,
+          request.key,
+        ),
       ...(this.preset.replayReasoning && { replayReasoning: this.preset.replayReasoning }),
       ...(this.preset.thinkTags && { thinkTags: true }),
     });

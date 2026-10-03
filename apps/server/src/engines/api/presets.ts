@@ -100,7 +100,8 @@ function ollamaFacts(entry: Record<string, unknown>): Partial<ModelFacts> {
   const info = isRecord(show.model_info) ? show.model_info : {};
   const arch = typeof info['general.architecture'] === 'string' ? info['general.architecture'] : '';
   const context = info[`${arch}.context_length`];
-  const thinking = isRecord(show.thinking) && Array.isArray(show.thinking.values) ? show.thinking.values : [];
+  const thinking =
+    isRecord(show.thinking) && Array.isArray(show.thinking.values) ? show.thinking.values : [];
   return {
     ...(typeof entry.id === 'string' && { id: entry.id }),
     ...(caps.length && {
@@ -232,7 +233,8 @@ export const PRESETS: readonly Preset[] = [
       { id: 'intl', base: 'https://api.moonshot.ai/v1', label: 'International' },
       { id: 'cn', base: 'https://api.moonshot.cn/v1', label: 'China' },
     ],
-    regionHint: '(or it’s from Kimi’s other site: platform.kimi.ai and platform.kimi.com keys don’t mix)',
+    regionHint:
+      '(or it’s from Kimi’s other site: platform.kimi.ai and platform.kimi.com keys don’t mix)',
     // Retired families.
     hide: /^(moonshot-v1|kimi-k2-)/,
     rank: [/k3/, /k2\.\d/],
@@ -262,10 +264,22 @@ export const PRESETS: readonly Preset[] = [
     keyUrl: 'https://modelstudio.console.alibabacloud.com/ap-southeast-1/settings/api-key',
     // Alibaba Cloud's regions; a key only works in the one it was made in.
     endpoints: [
-      { id: 'sg', base: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1', label: 'Singapore' },
-      { id: 'us', base: 'https://dashscope-us.aliyuncs.com/compatible-mode/v1', label: 'United States' },
+      {
+        id: 'sg',
+        base: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+        label: 'Singapore',
+      },
+      {
+        id: 'us',
+        base: 'https://dashscope-us.aliyuncs.com/compatible-mode/v1',
+        label: 'United States',
+      },
       { id: 'cn', base: 'https://dashscope.aliyuncs.com/compatible-mode/v1', label: 'China' },
-      { id: 'hk', base: 'https://cn-hongkong.dashscope.aliyuncs.com/compatible-mode/v1', label: 'Hong Kong' },
+      {
+        id: 'hk',
+        base: 'https://cn-hongkong.dashscope.aliyuncs.com/compatible-mode/v1',
+        label: 'Hong Kong',
+      },
     ],
     regionHint: '(or it was made for a region Conch didn’t try)',
     hide: /(ocr|asr|tts|realtime|wanx|paraformer|cosyvoice|gte-|image|livetranslate|mt-)/i,
@@ -286,7 +300,10 @@ export const PRESETS: readonly Preset[] = [
       const status = await context.status('https://ollama.com/api/usage');
       if (status === 401 || status === 403)
         throw new ApiError('auth', 'Ollama refused your key. Add a new one in Settings.');
-      if (status >= 500) throw new ApiError('overloaded', 'Ollama Cloud is unavailable right now.', { retryable: true });
+      if (status >= 500)
+        throw new ApiError('overloaded', 'Ollama Cloud is unavailable right now.', {
+          retryable: true,
+        });
     },
     rank: [/gpt-oss:120b/, /deepseek/, /kimi/, /glm/, /qwen/],
     small: /(20b|flash|nano|mini)/,

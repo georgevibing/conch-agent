@@ -85,8 +85,11 @@ export function KeyCatcher({
   const inputRef = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState('');
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
+  // The page-wide paste listener stays put; it reads the latest props through this.
   const latest = useRef({ recognise, onConnect });
-  latest.current = { recognise, onConnect };
+  useEffect(() => {
+    latest.current = { recognise, onConnect };
+  });
 
   const connect = async (who: KeyCandidate, key: string) => {
     setPhase({ kind: 'checking', who });

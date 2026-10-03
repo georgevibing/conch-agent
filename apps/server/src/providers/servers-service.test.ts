@@ -14,7 +14,9 @@ import { ProviderService } from './service';
 
 const LLAMA = { object: 'list', data: [{ id: 'qwen3-4b', owned_by: 'llamacpp' }] };
 
-async function harness(options: { env?: NodeJS.ProcessEnv; answers?: (url: string, auth?: string) => Response } = {}) {
+async function harness(
+  options: { env?: NodeJS.ProcessEnv; answers?: (url: string, auth?: string) => Response } = {},
+) {
   const home = await mkdtemp(join(tmpdir(), 'conch-servers-'));
   const settings = new SettingsStore(home);
   const keys = new ProviderKeys(settings);
@@ -22,7 +24,9 @@ async function harness(options: { env?: NodeJS.ProcessEnv; answers?: (url: strin
     (call) =>
       options.answers?.(call.url, call.headers.authorization) ??
       (call.url.startsWith('http://localhost:8080') || call.url.startsWith('http://127.0.0.1:8080')
-        ? new Response(JSON.stringify(LLAMA), { headers: { 'content-type': 'application/json', server: 'llama.cpp' } })
+        ? new Response(JSON.stringify(LLAMA), {
+            headers: { 'content-type': 'application/json', server: 'llama.cpp' },
+          })
         : (() => {
             throw new TypeError('fetch failed');
           })()),
@@ -61,12 +65,16 @@ describe('servers you run yourself', () => {
     expect((await settings.get()).servers).toHaveLength(1);
     // Its models join the picker like any provider's.
     const catalog = await providers.models();
-    expect(catalog.providers.find((p) => p.engine === id)?.models.map((m) => m.id)).toEqual(['qwen3-4b']);
+    expect(catalog.providers.find((p) => p.engine === id)?.models.map((m) => m.id)).toEqual([
+      'qwen3-4b',
+    ]);
   });
 
   it('refuses an address where nothing answers, and keeps nothing', async () => {
     const { providers, settings } = await harness();
-    await expect(providers.addServer({ url: 'localhost:9999' })).rejects.toThrow(/Nothing answered/);
+    await expect(providers.addServer({ url: 'localhost:9999' })).rejects.toThrow(
+      /Nothing answered/,
+    );
     expect((await settings.get()).servers).toEqual([]);
   });
 
@@ -81,12 +89,24 @@ describe('servers you run yourself', () => {
               throw new TypeError('fetch failed');
             })(),
     });
-    await expect(providers.addServer({ url: '10.0.0.5:8000' })).rejects.toThrow('This server asks for a key.');
-    const { id, list } = await providers.addServer({ url: '10.0.0.5:8000', name: 'The GPU box', key: 'vllm-secret-key' });
-    expect(list.providers.find((p) => p.id === id)).toMatchObject({ name: 'The GPU box', ready: true, local: false });
+    await expect(providers.addServer({ url: '10.0.0.5:8000' })).rejects.toThrow(
+      'This server asks for a key.',
+    );
+    const { id, list } = await providers.addServer({
+      url: '10.0.0.5:8000',
+      name: 'The GPU box',
+      key: 'vllm-secret-key',
+    });
+    expect(list.providers.find((p) => p.id === id)).toMatchObject({
+      name: 'The GPU box',
+      ready: true,
+      local: false,
+    });
     expect(await keys.value(id)).toBe('vllm-secret-key');
     expect(
-      fetch.calls.filter((c) => c.headers.authorization).every((c) => c.url.startsWith('http://10.0.0.5:8000/')),
+      fetch.calls
+        .filter((c) => c.headers.authorization)
+        .every((c) => c.url.startsWith('http://10.0.0.5:8000/')),
     ).toBe(true);
   });
 
@@ -122,7 +142,13 @@ describe('servers you run yourself', () => {
       settings,
       keys: new ProviderKeys(settings),
       fetch: again.fetch.fetch,
-      makeServer: (config) => serverEngine(config, { settings, keys: new ProviderKeys(settings), home, fetch: again.fetch.fetch }),
+      makeServer: (config) =>
+        serverEngine(config, {
+          settings,
+          keys: new ProviderKeys(settings),
+          home,
+          fetch: again.fetch.fetch,
+        }),
       emit: () => undefined,
     });
     await fresh.loadServers();
@@ -135,15 +161,25 @@ describe('what Conch finds on this computer', () => {
     const { providers } = await harness({ env: { GROQ_API_KEY: 'gsk_0123456789abcdefghij' } });
     const list = await providers.list();
     expect(list.found).toEqual([
-      expect.objectContaining({ kind: 'key', provider: 'groq', detail: 'GROQ_API_KEY · ends ghij' }),
-      expect.objectContaining({ kind: 'server', name: 'llama.cpp', url: 'http://127.0.0.1:8080/v1' }),
+      expect.objectContaining({
+        kind: 'key',
+        provider: 'groq',
+        detail: 'GROQ_API_KEY · ends ghij',
+      }),
+      expect.objectContaining({
+        kind: 'server',
+        name: 'llama.cpp',
+        url: 'http://127.0.0.1:8080/v1',
+      }),
     ]);
     // The key itself never travels to the page.
     expect(JSON.stringify(list)).not.toContain('gsk_0123456789abcdefghij');
 
     const server = list.found.find((f) => f.kind === 'server');
     const after = await providers.useFound(server?.id ?? '');
-    expect(after.providers.filter((p) => p.group === 'server').map((p) => p.name)).toEqual(['llama.cpp']);
+    expect(after.providers.filter((p) => p.group === 'server').map((p) => p.name)).toEqual([
+      'llama.cpp',
+    ]);
     // Added servers aren't offered again.
     expect(after.found.some((f) => f.kind === 'server')).toBe(false);
   });

@@ -34,9 +34,18 @@ describe('a cloud model’s name through the Ollama app', () => {
 
 describe('the Ollama app’s own sign-in', () => {
   it('reads the account it’s signed in to, or the page that signs it in', async () => {
-    const signedIn = fakeFetch(() => jsonResponse({ name: 'ada', email: 'ada@example.com', plan: 'pro' }));
-    expect(await localAccount(link(signedIn.fetch))).toEqual({ signedIn: true, name: 'ada', plan: 'pro' });
-    expect(signedIn.calls[0]).toMatchObject({ url: 'http://127.0.0.1:11434/api/me', method: 'POST' });
+    const signedIn = fakeFetch(() =>
+      jsonResponse({ name: 'ada', email: 'ada@example.com', plan: 'pro' }),
+    );
+    expect(await localAccount(link(signedIn.fetch))).toEqual({
+      signedIn: true,
+      name: 'ada',
+      plan: 'pro',
+    });
+    expect(signedIn.calls[0]).toMatchObject({
+      url: 'http://127.0.0.1:11434/api/me',
+      method: 'POST',
+    });
 
     const out = fakeFetch(() => jsonResponse({ error: 'unauthorized', signin_url: SIGNIN }, 401));
     expect(await localAccount(link(out.fetch))).toEqual({ signedIn: false, url: SIGNIN });
@@ -50,11 +59,18 @@ describe('the Ollama app’s own sign-in', () => {
     const fetch = fakeFetch((call) => {
       if (call.url.endsWith('/api/me')) return jsonResponse({ name: 'ada', plan: 'pro' });
       if (call.url === 'http://127.0.0.1:11434/v1/chat/completions')
-        return sseResponse(dataFrames(JSON.stringify({ choices: [{ delta: { content: 'Hi' }, finish_reason: 'stop' }] }), '[DONE]'));
+        return sseResponse(
+          dataFrames(
+            JSON.stringify({ choices: [{ delta: { content: 'Hi' }, finish_reason: 'stop' }] }),
+            '[DONE]',
+          ),
+        );
       return new Response('', { status: 404 });
     });
     const variant = ollamaCloudVariant(link(fetch.fetch));
-    expect(await variant.wire.check({ key: '' })).toEqual({ description: 'Through the Ollama app · ada · Pro plan' });
+    expect(await variant.wire.check({ key: '' })).toEqual({
+      description: 'Through the Ollama app · ada · Pro plan',
+    });
     const events: WireEvent[] = [];
     for await (const event of variant.wire.stream({
       key: '',
@@ -75,8 +91,13 @@ describe('the Ollama app’s own sign-in', () => {
   it('asks for a sign-in or a key when neither is there', async () => {
     const fetch = fakeFetch(() => jsonResponse({ signin_url: SIGNIN }, 401));
     const error = await failure(ollamaCloudVariant(link(fetch.fetch)).wire.check({ key: '' }));
-    expect(error).toMatchObject({ kind: 'auth', message: expect.stringContaining('Sign in to Ollama') });
-    const none = await failure(ollamaCloudVariant(link(fetch.fetch, false)).wire.check({ key: '' }));
+    expect(error).toMatchObject({
+      kind: 'auth',
+      message: expect.stringContaining('Sign in to Ollama'),
+    });
+    const none = await failure(
+      ollamaCloudVariant(link(fetch.fetch, false)).wire.check({ key: '' }),
+    );
     expect(none.message).toContain('install the Ollama app');
   });
 

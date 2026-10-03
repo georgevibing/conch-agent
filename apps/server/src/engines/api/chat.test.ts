@@ -36,12 +36,14 @@ describe('reading a streamed chat turn', () => {
       chunk({ content: 'Hello' }),
       '[DONE]',
     ]);
-    expect(events.filter((e) => e.type === 'thinking').map((e) => (e as { delta: string }).delta)).toEqual([
-      'Hmm, ',
-      'let me see. ',
-      'Checking.',
-    ]);
-    expect(events.at(-1)).toMatchObject({ type: 'end', message: { content: 'Hello' }, stop: 'end' });
+    expect(
+      events.filter((e) => e.type === 'thinking').map((e) => (e as { delta: string }).delta),
+    ).toEqual(['Hmm, ', 'let me see. ', 'Checking.']);
+    expect(events.at(-1)).toMatchObject({
+      type: 'end',
+      message: { content: 'Hello' },
+      stop: 'end',
+    });
   });
 
   it('keeps the thinking on the message for a provider that wants it back', async () => {
@@ -56,10 +58,16 @@ describe('reading a streamed chat turn', () => {
 
   it('turns <think> tags into thinking, and keeps them in the message as sent', async () => {
     const events = await read(
-      [chunk({ content: '<thi' }), chunk({ content: 'nk>quietly</th' }), chunk({ content: 'ink>Aloud' })],
+      [
+        chunk({ content: '<thi' }),
+        chunk({ content: 'nk>quietly</th' }),
+        chunk({ content: 'ink>Aloud' }),
+      ],
       { thinkTags: true },
     );
-    expect(events.filter((e) => e.type === 'thinking')).toEqual([{ type: 'thinking', delta: 'quietly' }]);
+    expect(events.filter((e) => e.type === 'thinking')).toEqual([
+      { type: 'thinking', delta: 'quietly' },
+    ]);
     expect(events.filter((e) => e.type === 'text')).toEqual([{ type: 'text', delta: 'Aloud' }]);
     expect(events.at(-1)).toMatchObject({ message: { content: '<think>quietly</think>Aloud' } });
   });
@@ -77,7 +85,9 @@ describe('reading a streamed chat turn', () => {
         ],
       }),
       chunk({ tool_calls: [{ index: 0, function: { arguments: 'tent":"tea"}' } }] }),
-      chunk({ tool_calls: [{ id: 'call_b', function: { name: 'search', arguments: { q: 'x' } } }] }),
+      chunk({
+        tool_calls: [{ id: 'call_b', function: { name: 'search', arguments: { q: 'x' } } }],
+      }),
       JSON.stringify({ choices: [{ delta: {}, finish_reason: 'tool_calls' }] }),
     ]);
     const end = events.at(-1) as Extract<WireEvent, { type: 'end' }>;
@@ -101,16 +111,19 @@ describe('reading a streamed chat turn', () => {
     const events = await read([
       chunk({ content: 'Hi' }, { usage: { prompt_tokens: 3, completion_tokens: 1 } }),
       JSON.stringify({ choices: [], usage: { prompt_tokens: 10, completion_tokens: 2 } }),
-      JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }], x_groq: { usage: { prompt_tokens: 11, completion_tokens: 4 } } }),
+      JSON.stringify({
+        choices: [{ delta: {}, finish_reason: 'stop' }],
+        x_groq: { usage: { prompt_tokens: 11, completion_tokens: 4 } },
+      }),
     ]);
     expect(events.filter((e) => e.type === 'end')).toHaveLength(1);
     expect(events.at(-1)).toMatchObject({ usage: { inputTokens: 11, outputTokens: 4 } });
   });
 
   it('fails in words on an error frame after the 200', async () => {
-    await expect(read([chunk({ content: 'Hi' }), JSON.stringify({ error: { message: 'Overloaded' } })])).rejects.toThrow(
-      'Overloaded',
-    );
+    await expect(
+      read([chunk({ content: 'Hi' }), JSON.stringify({ error: { message: 'Overloaded' } })]),
+    ).rejects.toThrow('Overloaded');
   });
 });
 
@@ -132,13 +145,37 @@ describe('splitting <think> tags', () => {
 
 describe('reading an error body, in every shape providers send', () => {
   it.each([
-    ['OpenAI', '{"error":{"message":"Bad key","type":"invalid_request_error","code":"invalid_api_key"}}', { message: 'Bad key', code: 'invalid_api_key' }],
-    ['Gemini, in an array', '[{"error":{"code":400,"message":"Please pass a valid API key","status":"INVALID_ARGUMENT"}}]', { message: 'Please pass a valid API key', status: 'INVALID_ARGUMENT' }],
-    ['xAI, a string', '{"code":"invalid-argument","error":"Incorrect API key provided."}', { message: 'Incorrect API key provided.', code: 'invalid-argument' }],
+    [
+      'OpenAI',
+      '{"error":{"message":"Bad key","type":"invalid_request_error","code":"invalid_api_key"}}',
+      { message: 'Bad key', code: 'invalid_api_key' },
+    ],
+    [
+      'Gemini, in an array',
+      '[{"error":{"code":400,"message":"Please pass a valid API key","status":"INVALID_ARGUMENT"}}]',
+      { message: 'Please pass a valid API key', status: 'INVALID_ARGUMENT' },
+    ],
+    [
+      'xAI, a string',
+      '{"code":"invalid-argument","error":"Incorrect API key provided."}',
+      { message: 'Incorrect API key provided.', code: 'invalid-argument' },
+    ],
     ['Mistral', '{"detail":"Invalid API Key"}', { message: 'Invalid API Key' }],
-    ['Cerebras, at the top', '{"message":"Wrong API Key","type":"invalid_request_error","code":"wrong_api_key"}', { message: 'Wrong API Key', code: 'wrong_api_key' }],
-    ['NVIDIA problem+json', '{"status":403,"title":"Forbidden","detail":"Authorization failed"}', { message: 'Authorization failed' }],
-    ['MiniMax', '{"type":"error","error":{"type":"authorized_error","message":"login fail (1004)"}}', { message: 'login fail (1004)', type: 'authorized_error' }],
+    [
+      'Cerebras, at the top',
+      '{"message":"Wrong API Key","type":"invalid_request_error","code":"wrong_api_key"}',
+      { message: 'Wrong API Key', code: 'wrong_api_key' },
+    ],
+    [
+      'NVIDIA problem+json',
+      '{"status":403,"title":"Forbidden","detail":"Authorization failed"}',
+      { message: 'Authorization failed' },
+    ],
+    [
+      'MiniMax',
+      '{"type":"error","error":{"type":"authorized_error","message":"login fail (1004)"}}',
+      { message: 'login fail (1004)', type: 'authorized_error' },
+    ],
   ])('%s', (_name, body, expected) => {
     expect(errorIn(body)).toMatchObject(expected);
   });

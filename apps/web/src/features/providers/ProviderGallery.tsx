@@ -1,5 +1,13 @@
 import type { Provider, ProviderGroup } from '@conch/protocol';
-import { Button, Heading, Input, IntegrationCard, SegmentedControl, Stack, Text } from '@conch/nacre';
+import {
+  Button,
+  Heading,
+  Input,
+  IntegrationCard,
+  SegmentedControl,
+  Stack,
+  Text,
+} from '@conch/nacre';
 import { Plus, Search } from 'lucide-react';
 import { useId, useMemo, useState } from 'react';
 
@@ -53,7 +61,10 @@ export function ProviderGallery({
   const serverMatches =
     onAddServer &&
     (filter === 'all' || filter === 'local') &&
-    (!needle || `${SERVER_TILE.name} ${SERVER_TILE.tagline} llama vllm jan litellm server`.toLowerCase().includes(needle));
+    (!needle ||
+      `${SERVER_TILE.name} ${SERVER_TILE.tagline} llama vllm jan litellm server`
+        .toLowerCase()
+        .includes(needle));
 
   const tile = (provider: Provider, index: number) => (
     <li key={provider.id}>
@@ -148,7 +159,11 @@ export function ProviderGallery({
             const withServer = group === 'local' && serverMatches;
             if (!inGroup.length && !withServer) return null;
             return (
-              <section key={group} aria-labelledby={`${headingId}-${group}`} className={styles.kind}>
+              <section
+                key={group}
+                aria-labelledby={`${headingId}-${group}`}
+                className={styles.kind}
+              >
                 <Heading level={4} size="xs" tone="subtle" id={`${headingId}-${group}`}>
                   {GROUP_WORDS[group]}
                 </Heading>

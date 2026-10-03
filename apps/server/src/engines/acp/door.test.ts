@@ -23,7 +23,11 @@ function knock(url: string, headers: Record<string, string>, body = '{}') {
         port: target.port,
         path: target.pathname,
         method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', ...headers },
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          ...headers,
+        },
       },
       (res) => {
         res.resume();

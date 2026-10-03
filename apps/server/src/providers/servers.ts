@@ -307,7 +307,11 @@ export async function probeServer(
         }),
       };
     } catch (error) {
-      if (error instanceof ApiError && error.kind === 'other' && /https|network/i.test(error.message))
+      if (
+        error instanceof ApiError &&
+        error.kind === 'other' &&
+        /https|network/i.test(error.message)
+      )
         return { ok: false, message: error.message };
       // Nothing there, or not a chat server: try the next way of reading the address.
     }
@@ -321,7 +325,8 @@ export async function probeServer(
     };
   return {
     ok: false,
-    message: 'Nothing answered like a chat server there. Check the address, and that the server is running.',
+    message:
+      'Nothing answered like a chat server there. Check the address, and that the server is running.',
   };
 }
 

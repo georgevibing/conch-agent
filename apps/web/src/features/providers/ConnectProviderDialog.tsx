@@ -24,7 +24,7 @@ import {
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useEffectEvent, useId, useRef, useState, type FormEvent } from 'react';
 
 import { api } from '../../api/client';
 import { useLiveStore } from '../../live/store';
@@ -271,8 +271,7 @@ function KeyForm({
       setError(errorText(e, 'That key didn’t work.'));
     }
   };
-  const latest = useRef(save);
-  latest.current = save;
+  const saveFromPaste = useEffectEvent((key: string) => void save(key));
 
   // A key pasted anywhere on the page lands here and is checked straight away,
   // the way a chat app's setup takes its bot key.
@@ -283,14 +282,16 @@ function KeyForm({
       const target = event.target;
       if (
         target instanceof HTMLElement &&
-        (target.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)
+        (target.isContentEditable ||
+          target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement)
       )
         return;
       const text = event.clipboardData?.getData('text/plain').trim() ?? '';
       if (!looksLikeKey(text) || (pattern && !new RegExp(pattern).test(text))) return;
       event.preventDefault();
       setValue(text);
-      void latest.current(text);
+      saveFromPaste(text);
     };
     document.addEventListener('paste', onPaste);
     return () => document.removeEventListener('paste', onPaste);
@@ -303,7 +304,8 @@ function KeyForm({
     await save(value);
   };
   // The provider's own sign-in (Ollama's app), offered before the key.
-  const programSignIn = provider.status.canSignIn && !form.canSignIn && provider.status.state !== 'ready';
+  const programSignIn =
+    provider.status.canSignIn && !form.canSignIn && provider.status.state !== 'ready';
   // Where to get a key, as steps — for a service that has a page for it.
   const steps = !provider.key && form.url && !provider.server;
 
@@ -335,7 +337,8 @@ function KeyForm({
               <Text>Open {provider.name}’s key page.</Text>
               <Button asChild variant="surface" size="sm">
                 <a href={form.url} target="_blank" rel="noreferrer">
-                  Open {hostOf(form.url ?? '')} <ExternalLink aria-hidden className={styles.linkIcon} />
+                  Open {hostOf(form.url ?? '')}{' '}
+                  <ExternalLink aria-hidden className={styles.linkIcon} />
                 </a>
               </Button>
             </Stack>
@@ -466,7 +469,12 @@ function ServerSettings({ provider }: { provider: Provider }) {
             )}
           </Field>
           <Stack direction="row" gap={2} wrap>
-            <Button type="submit" variant="surface" disabled={!changed || !name.trim()} loading={update.isPending}>
+            <Button
+              type="submit"
+              variant="surface"
+              disabled={!changed || !name.trim()}
+              loading={update.isPending}
+            >
               Save
             </Button>
             <Button type="button" variant="ghost" tone="danger" onClick={() => setRemoving(true)}>

@@ -178,11 +178,11 @@ export function ProvidersTab() {
                                         : provider.status.state === 'not-installed'
                                           ? 'How to install'
                                           : provider.status.state === 'error'
-                                          ? 'Try again'
-                                          : provider.status.state === 'signed-out' &&
-                                              provider.connect === 'program'
-                                            ? 'Sign in'
-                                            : 'Connect',
+                                            ? 'Try again'
+                                            : provider.status.state === 'signed-out' &&
+                                                provider.connect === 'program'
+                                              ? 'Sign in'
+                                              : 'Connect',
                                   onClick: () => setConnecting(provider.id),
                                 }
                         }
@@ -264,7 +264,11 @@ export function ProvidersTab() {
                   setRemoving(undefined);
                 }}
               >
-                {removing?.server ? 'Remove' : removing?.disconnectable ? 'Disconnect' : 'Remove key'}
+                {removing?.server
+                  ? 'Remove'
+                  : removing?.disconnectable
+                    ? 'Disconnect'
+                    : 'Remove key'}
               </Button>
             </AlertDialog.Action>
           </AlertDialog.Footer>

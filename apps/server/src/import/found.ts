@@ -91,7 +91,11 @@ export interface FoundKey {
  * plan's key (`kimi-coding`, Z.ai's coding plan) only works in the tools its
  * terms list, so it isn't brought.
  */
-export const KEY_SOURCES: readonly { provider: KeyProvider; names: readonly string[]; env: readonly string[] }[] = [
+export const KEY_SOURCES: readonly {
+  provider: KeyProvider;
+  names: readonly string[];
+  env: readonly string[];
+}[] = [
   { provider: 'anthropic-api', names: ['anthropic'], env: ['ANTHROPIC_API_KEY'] },
   { provider: 'openrouter', names: ['openrouter'], env: ['OPENROUTER_API_KEY'] },
   { provider: 'openai', names: ['openai'], env: ['OPENAI_API_KEY'] },

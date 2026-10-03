@@ -3,7 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { fakeFetch, jsonResponse } from '../engines/api/fake';
 import { isPrivateUrl } from '../local/host';
 import { environmentKeys, foundKeyValue } from './found';
-import { candidates, keyCheckFor, localServers, newServerId, probeServer, reachable } from './servers';
+import {
+  candidates,
+  keyCheckFor,
+  localServers,
+  newServerId,
+  probeServer,
+  reachable,
+} from './servers';
 
 describe('reading an address the way a person types it', () => {
   it.each([
@@ -42,8 +49,12 @@ describe('reading an address the way a person types it', () => {
   });
 
   it('knows which services need a page other than their list to prove a key', () => {
-    expect(keyCheckFor('https://router.huggingface.co/v1')).toBe('https://huggingface.co/api/whoami-v2');
-    expect(keyCheckFor('https://api.venice.ai/api/v1')).toBe('https://api.venice.ai/api/v1/api_keys/rate_limits');
+    expect(keyCheckFor('https://router.huggingface.co/v1')).toBe(
+      'https://huggingface.co/api/whoami-v2',
+    );
+    expect(keyCheckFor('https://api.venice.ai/api/v1')).toBe(
+      'https://api.venice.ai/api/v1/api_keys/rate_limits',
+    );
     expect(keyCheckFor('http://127.0.0.1:8080/v1')).toBeUndefined();
   });
 });
@@ -52,9 +63,12 @@ describe('looking at an address before adding it', () => {
   it('finds the version path, counts the models, and says what the server is', async () => {
     const fetch = fakeFetch((call) => {
       if (call.url === 'http://localhost:8080/v1/models')
-        return new Response(JSON.stringify({ object: 'list', data: [{ id: 'qwen3', owned_by: 'llamacpp' }] }), {
-          headers: { 'content-type': 'application/json', server: 'llama.cpp' },
-        });
+        return new Response(
+          JSON.stringify({ object: 'list', data: [{ id: 'qwen3', owned_by: 'llamacpp' }] }),
+          {
+            headers: { 'content-type': 'application/json', server: 'llama.cpp' },
+          },
+        );
       return new Response('not found', { status: 404 });
     });
     expect(await probeServer(fetch.fetch, 'localhost:8080')).toEqual({
@@ -66,8 +80,15 @@ describe('looking at an address before adding it', () => {
   });
 
   it('reads a bare list (Together) and a server under its own path', async () => {
-    const fetch = fakeFetch(() => jsonResponse([{ id: 'a', type: 'chat' }, { id: 'b', type: 'chat' }]));
-    expect(await probeServer(fetch.fetch, 'https://api.together.ai/v1', 'tgp_v1_key')).toMatchObject({
+    const fetch = fakeFetch(() =>
+      jsonResponse([
+        { id: 'a', type: 'chat' },
+        { id: 'b', type: 'chat' },
+      ]),
+    );
+    expect(
+      await probeServer(fetch.fetch, 'https://api.together.ai/v1', 'tgp_v1_key'),
+    ).toMatchObject({
       ok: true,
       url: 'https://api.together.ai/v1',
       models: 2,
@@ -95,7 +116,9 @@ describe('looking at an address before adding it', () => {
         ? jsonResponse({ error: 'Invalid username or password.' }, 401)
         : jsonResponse({ data: [{ id: 'openai/gpt-oss-120b' }] }),
     );
-    expect(await probeServer(fetch.fetch, 'https://router.huggingface.co/v1', 'hf_bad')).toMatchObject({
+    expect(
+      await probeServer(fetch.fetch, 'https://router.huggingface.co/v1', 'hf_bad'),
+    ).toMatchObject({
       ok: false,
       needsKey: true,
     });
@@ -103,13 +126,23 @@ describe('looking at an address before adding it', () => {
 
   it('sends Ollama and LM Studio to their own cards', async () => {
     const ollama = fakeFetch((call) =>
-      call.url === 'http://127.0.0.1:11434/' ? new Response('Ollama is running') : new Response('', { status: 404 }),
+      call.url === 'http://127.0.0.1:11434/'
+        ? new Response('Ollama is running')
+        : new Response('', { status: 404 }),
     );
-    expect(await probeServer(ollama.fetch, '127.0.0.1:11434')).toMatchObject({ ok: false, kind: 'Ollama' });
+    expect(await probeServer(ollama.fetch, '127.0.0.1:11434')).toMatchObject({
+      ok: false,
+      kind: 'Ollama',
+    });
     const lm = fakeFetch((call) =>
-      call.url.endsWith('/lmstudio-greeting') ? jsonResponse({ lmstudio: true }) : new Response('', { status: 404 }),
+      call.url.endsWith('/lmstudio-greeting')
+        ? jsonResponse({ lmstudio: true })
+        : new Response('', { status: 404 }),
     );
-    expect(await probeServer(lm.fetch, 'localhost:1234')).toMatchObject({ ok: false, kind: 'LM Studio' });
+    expect(await probeServer(lm.fetch, 'localhost:1234')).toMatchObject({
+      ok: false,
+      kind: 'LM Studio',
+    });
   });
 
   it('refuses plain http across the internet before sending anything', async () => {
@@ -136,8 +169,14 @@ describe('servers already running on this computer', () => {
   it('finds them on the usual ports, and names only what says what it is', async () => {
     const fetch = fakeFetch((call) => {
       if (call.url === 'http://127.0.0.1:8000/v1/models')
-        return jsonResponse({ data: [{ id: 'm', owned_by: 'vllm' }, { id: 'n', owned_by: 'vllm' }] });
-      if (call.url === 'http://127.0.0.1:1337/v1/models') return jsonResponse({ data: [{ id: 'j' }] });
+        return jsonResponse({
+          data: [
+            { id: 'm', owned_by: 'vllm' },
+            { id: 'n', owned_by: 'vllm' },
+          ],
+        });
+      if (call.url === 'http://127.0.0.1:1337/v1/models')
+        return jsonResponse({ data: [{ id: 'j' }] });
       throw new TypeError('fetch failed');
     });
     const found = await localServers(fetch.fetch);
@@ -172,7 +211,9 @@ describe('keys already in the environment', () => {
   });
 
   it('reads a found key only from the provider’s own variables', () => {
-    expect(foundKeyValue({ provider: 'groq', variable: 'GROQ_API_KEY' }, env)).toBe(env.GROQ_API_KEY);
+    expect(foundKeyValue({ provider: 'groq', variable: 'GROQ_API_KEY' }, env)).toBe(
+      env.GROQ_API_KEY,
+    );
     expect(foundKeyValue({ provider: 'groq', variable: 'XAI_API_KEY' }, env)).toBeUndefined();
   });
 });

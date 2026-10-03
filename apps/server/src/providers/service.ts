@@ -367,7 +367,8 @@ export class ProviderService {
         'pinned',
       );
     const probe = await this.probeServer(body.url, body.key);
-    if (!probe.ok || !probe.url) throw new ProviderError(probe.message ?? 'Nothing answered there.');
+    if (!probe.ok || !probe.url)
+      throw new ProviderError(probe.message ?? 'Nothing answered there.');
     const taken = new Set(this.#servers.map((s) => s.name.toLowerCase()));
     const wanted = (body.name?.trim() || probe.kind || new URL(probe.url).host).slice(0, 56);
     let name = wanted;
@@ -396,7 +397,8 @@ export class ProviderService {
     if (body.url && body.url !== current.url) {
       const saved = await this.deps.keys.value(id).catch(() => undefined);
       const probe = await this.probeServer(body.url, saved);
-      if (!probe.ok || !probe.url) throw new ProviderError(probe.message ?? 'Nothing answered there.');
+      if (!probe.ok || !probe.url)
+        throw new ProviderError(probe.message ?? 'Nothing answered there.');
       url = probe.url;
       kind = probe.kind;
     }
@@ -421,7 +423,9 @@ export class ProviderService {
     this.deps.engines.delete(id);
     if (this.#active === id) {
       this.#active = undefined;
-      await this.deps.settings.update({ preferences: { engine: 'claude-code' } }).catch(() => undefined);
+      await this.deps.settings
+        .update({ preferences: { engine: 'claude-code' } })
+        .catch(() => undefined);
     }
     this.#found.forget();
     return this.list();

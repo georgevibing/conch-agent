@@ -283,11 +283,19 @@ list.push(
       ],
       linux: npmGlobal('@github/copilot'),
     },
-    ...updatable({ winget: 'GitHub.Copilot', brew: 'copilot-cli', cask: true, npm: '@github/copilot' }),
+    ...updatable({
+      winget: 'GitHub.Copilot',
+      brew: 'copilot-cli',
+      cask: true,
+      npm: '@github/copilot',
+    }),
     download: {
-      win32: 'https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli',
-      darwin: 'https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli',
-      linux: 'https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli',
+      win32:
+        'https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli',
+      darwin:
+        'https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli',
+      linux:
+        'https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli',
     },
   },
   {

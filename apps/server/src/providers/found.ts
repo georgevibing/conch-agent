@@ -85,16 +85,14 @@ export class FoundThings {
       this.#servers = {
         at: Date.now(),
         value: localServers(this.fetchImpl).then((found) =>
-          found.map(
-            (server): Found => ({
-              id: `server-port-${server.port}`,
-              kind: 'server',
-              name: server.kind ?? 'A model server',
-              detail: `Running on this computer, port ${server.port} · ${server.models} model${server.models === 1 ? '' : 's'}`,
-              url: server.url,
-              brand: 'server',
-            }),
-          ),
+          found.map((server): Found => ({
+            id: `server-port-${server.port}`,
+            kind: 'server',
+            name: server.kind ?? 'A model server',
+            detail: `Running on this computer, port ${server.port} · ${server.models} model${server.models === 1 ? '' : 's'}`,
+            url: server.url,
+            brand: 'server',
+          })),
         ),
       };
     const found = await this.#servers.value.catch(() => []);

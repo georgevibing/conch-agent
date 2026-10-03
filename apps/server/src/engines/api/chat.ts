@@ -27,14 +27,14 @@ import { z } from 'zod';
 
 import type { TurnImage } from '../types';
 import { sseEvents } from './sse';
-import {
+import type {
   ApiError,
-  type ToolSpec,
-  type WireEvent,
-  type WireMessage,
-  type WireStop,
-  type WireToolCall,
-  type WireUsage,
+  ToolSpec,
+  WireEvent,
+  WireMessage,
+  WireStop,
+  WireToolCall,
+  WireUsage,
 } from './types';
 import { frame, type ToolResult } from './wire';
 
@@ -278,7 +278,8 @@ export async function* readChatStream(
         order: existing.order,
         id: call.id ?? existing.id,
         name: call.function?.name ?? existing.name,
-        args: existing.args + (typeof piece === 'string' ? piece : piece ? JSON.stringify(piece) : ''),
+        args:
+          existing.args + (typeof piece === 'string' ? piece : piece ? JSON.stringify(piece) : ''),
         extra: call.extra_content ?? existing.extra,
       });
     }

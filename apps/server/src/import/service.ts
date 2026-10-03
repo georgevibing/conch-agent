@@ -774,7 +774,8 @@ export class ImportService {
           if (await t.keys.has(k.provider))
             return `Conch already had a ${keyName(k.provider)} key; it kept it.`;
           await t.keys.set(k.provider, k.value);
-          if (FIRST_KEYS.has(k.provider)) created.keys.push(k.provider as 'anthropic-api' | 'openrouter');
+          if (FIRST_KEYS.has(k.provider))
+            created.keys.push(k.provider as 'anthropic-api' | 'openrouter');
           else created.moreKeys.push(k.provider);
           return undefined;
         });

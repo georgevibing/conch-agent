@@ -65,7 +65,10 @@ export async function lmStudioInstall(home?: string): Promise<string | undefined
     }
   }
   if (platform() === 'darwin') {
-    for (const app of ['/Applications/LM Studio.app', join(homedir(), 'Applications', 'LM Studio.app')])
+    for (const app of [
+      '/Applications/LM Studio.app',
+      join(homedir(), 'Applications', 'LM Studio.app'),
+    ])
       if (presentSync(app)) return app;
   }
   if (platform() === 'win32') {
@@ -163,7 +166,7 @@ export function lmStudioVariant(deps: LmStudioDeps = {}): ApiVariant {
       const v1 = await read('/api/v1/models');
       const list =
         v1 && typeof v1 === 'object' && Array.isArray((v1 as { models?: unknown }).models)
-          ? ((v1 as { models: unknown[] }).models)
+          ? (v1 as { models: unknown[] }).models
           : await (async () => {
               const v0 = await read('/api/v0/models');
               return v0 && typeof v0 === 'object' && Array.isArray((v0 as { data?: unknown }).data)
@@ -234,10 +237,14 @@ export function lmStudioVariant(deps: LmStudioDeps = {}): ApiVariant {
           ...baseStatus,
           state: 'error',
           executablePath: installed,
-          message: 'LM Studio’s server is off. Open LM Studio and turn on its server in the Developer tab.',
+          message:
+            'LM Studio’s server is off. Open LM Studio and turn on its server in the Developer tab.',
         };
     }
-    const probe = await look('/v1/models', key ? { headers: { authorization: `Bearer ${key}` } } : {});
+    const probe = await look(
+      '/v1/models',
+      key ? { headers: { authorization: `Bearer ${key}` } } : {},
+    );
     if (probe?.status === 401 || probe?.status === 403)
       return {
         ...baseStatus,
@@ -271,7 +278,8 @@ export function lmStudioVariant(deps: LmStudioDeps = {}): ApiVariant {
     canSignIn: false,
     keyOptional: true,
     local: true,
-    where: 'You are a model running on this computer, through LM Studio: private, and it works without the internet.',
+    where:
+      'You are a model running on this computer, through LM Studio: private, and it works without the internet.',
     status,
     wire,
     home: deps.home ?? defaultHome(),

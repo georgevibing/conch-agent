@@ -46,7 +46,10 @@ export function serverVariant(config: ServerConfig, deps: ApiDeps = {}): ApiVari
           checkKey: async (context) => {
             const status = await context.status(check);
             if (status === 401 || status === 403)
-              throw new ApiError('auth', `${config.name} refused your key. Add a new one in Settings.`);
+              throw new ApiError(
+                'auth',
+                `${config.name} refused your key. Add a new one in Settings.`,
+              );
           },
         }),
       },

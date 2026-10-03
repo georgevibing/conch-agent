@@ -37,13 +37,27 @@ const deepseek = keyProvider({
   id: 'deepseek',
   name: 'DeepSeek',
   tagline: 'Strong models, tiny prices',
-  keyForm: { label: 'DeepSeek API key', placeholder: '', help: '', pattern: '^sk-', canSignIn: false, recognise: { loose: '^sk-[a-f0-9]{32}$' } },
+  keyForm: {
+    label: 'DeepSeek API key',
+    placeholder: '',
+    help: '',
+    pattern: '^sk-',
+    canSignIn: false,
+    recognise: { loose: '^sk-[a-f0-9]{32}$' },
+  },
 });
 const qwen = keyProvider({
   id: 'qwen',
   name: 'Qwen',
   tagline: 'Qwen models, tiny to frontier',
-  keyForm: { label: 'Qwen key', placeholder: '', help: '', pattern: '^sk-', canSignIn: false, recognise: { distinct: '^sk-ws', loose: '^sk-[a-f0-9]{32}$' } },
+  keyForm: {
+    label: 'Qwen key',
+    placeholder: '',
+    help: '',
+    pattern: '^sk-',
+    canSignIn: false,
+    recognise: { distinct: '^sk-ws', loose: '^sk-[a-f0-9]{32}$' },
+  },
 });
 
 const list = (patch: Partial<ProvidersList> = {}): ProvidersList => ({
@@ -106,7 +120,16 @@ describe('more providers', () => {
       'GET /api/state': () => appState(),
       'GET /api/providers': () =>
         list({
-          found: [{ id: 'env-groq-groq_api_key', kind: 'key', provider: 'groq', name: 'Groq', detail: 'GROQ_API_KEY · ends mnop', brand: 'groq' }],
+          found: [
+            {
+              id: 'env-groq-groq_api_key',
+              kind: 'key',
+              provider: 'groq',
+              name: 'Groq',
+              detail: 'GROQ_API_KEY · ends mnop',
+              brand: 'groq',
+            },
+          ],
         }),
       'POST /api/providers/found/env-groq-groq_api_key/use': () => list(),
     });
@@ -114,7 +137,9 @@ describe('more providers', () => {
     const found = await screen.findByRole('region', { name: 'Found on this computer' });
     expect(found).toHaveTextContent('GROQ_API_KEY · ends mnop');
     await userEvent.click(within(found).getByRole('button', { name: 'Use this key to Groq' }));
-    expect(calls.find((c) => c.method === 'POST')?.path).toBe('/api/providers/found/env-groq-groq_api_key/use');
+    expect(calls.find((c) => c.method === 'POST')?.path).toBe(
+      '/api/providers/found/env-groq-groq_api_key/use',
+    );
   });
 
   it('walks through getting a key, and takes one pasted anywhere on its page', async () => {
@@ -148,12 +173,23 @@ describe('more providers', () => {
         group: 'server',
         brand: 'server',
         active: false,
-        server: { id: 'server-abcdefgh', name: 'llama.cpp', url: 'http://localhost:8080/v1', kind: 'llama.cpp', addedAt: 1 },
+        server: {
+          id: 'server-abcdefgh',
+          name: 'llama.cpp',
+          url: 'http://localhost:8080/v1',
+          kind: 'llama.cpp',
+          addedAt: 1,
+        },
       });
       const calls = mockFetch({
         'GET /api/state': () => appState(),
         'GET /api/providers': () => list(),
-        'POST /api/providers/servers/probe': () => ({ ok: true, url: 'http://localhost:8080/v1', models: 3, kind: 'llama.cpp' }),
+        'POST /api/providers/servers/probe': () => ({
+          ok: true,
+          url: 'http://localhost:8080/v1',
+          models: 3,
+          kind: 'llama.cpp',
+        }),
         'POST /api/providers/servers': () => ({
           id: 'server-abcdefgh',
           list: list({ providers: [...list().providers, server] }),
@@ -163,14 +199,22 @@ describe('more providers', () => {
       renderApp(<ProvidersTab />, { route: '/' });
       const tile = await screen.findByRole('article', { name: 'Another server' });
       await userEvent.click(within(tile).getByRole('button', { name: 'Another server' }));
-      fireEvent.change(await screen.findByLabelText('Address'), { target: { value: 'localhost:8080' } });
+      fireEvent.change(await screen.findByLabelText('Address'), {
+        target: { value: 'localhost:8080' },
+      });
       await act(async () => {
         await vi.advanceTimersByTimeAsync(700);
       });
-      expect(await screen.findByText('llama.cpp, with 3 models. Ready to add.')).toBeInTheDocument();
+      expect(
+        await screen.findByText('llama.cpp, with 3 models. Ready to add.'),
+      ).toBeInTheDocument();
       await userEvent.click(screen.getByRole('button', { name: 'Add server' }));
-      expect(calls.find((c) => c.path === '/api/providers/servers')?.body).toEqual({ url: 'localhost:8080' });
-      expect(await screen.findByRole('heading', { name: 'llama.cpp is connected' })).toBeInTheDocument();
+      expect(calls.find((c) => c.path === '/api/providers/servers')?.body).toEqual({
+        url: 'localhost:8080',
+      });
+      expect(
+        await screen.findByRole('heading', { name: 'llama.cpp is connected' }),
+      ).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }
@@ -185,13 +229,16 @@ describe('more providers', () => {
         'POST /api/providers/servers/probe': () => ({
           ok: false,
           kind: 'Ollama',
-          message: 'That’s Ollama, which has its own card in Providers — connect it there for the most it can do.',
+          message:
+            'That’s Ollama, which has its own card in Providers — connect it there for the most it can do.',
         }),
       });
       renderApp(<ProvidersTab />, { route: '/' });
       const tile = await screen.findByRole('article', { name: 'Another server' });
       await userEvent.click(within(tile).getByRole('button', { name: 'Another server' }));
-      fireEvent.change(await screen.findByLabelText('Address'), { target: { value: 'localhost:11434' } });
+      fireEvent.change(await screen.findByLabelText('Address'), {
+        target: { value: 'localhost:11434' },
+      });
       await act(async () => {
         await vi.advanceTimersByTimeAsync(700);
       });

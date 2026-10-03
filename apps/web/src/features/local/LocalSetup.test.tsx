@@ -158,10 +158,10 @@ describe('A model on this computer', () => {
     });
     render();
 
-    // Not set up is an invitation, not a problem.
+    // Not set up is an invitation, not a problem: a tile in the gallery, saying Conch installs it.
     const card = await screen.findByRole('article', { name: 'On this computer' });
-    expect(card).toHaveTextContent('Ollama runs the model. It isn’t on this computer yet.');
-    const page = await open();
+    expect(card).toHaveTextContent('Private, free, and works offline');
+    const page = await open('On this computer');
     expect(
       within(page).getByRole('heading', { name: 'Run a model on this computer' }),
     ).toBeVisible();

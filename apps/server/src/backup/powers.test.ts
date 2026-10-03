@@ -40,7 +40,12 @@ describe('what in a backup can act for you', () => {
       reader({
         'settings.json': {
           servers: [
-            { id: 'server-abcdefgh', name: 'The GPU box', url: 'http://10.0.0.5:8000/v1', addedAt: 1 },
+            {
+              id: 'server-abcdefgh',
+              name: 'The GPU box',
+              url: 'http://10.0.0.5:8000/v1',
+              addedAt: 1,
+            },
             { id: 'server-ijklmnop', name: '', url: 'https://gateway.example.com/v1', addedAt: 2 },
           ],
         },

@@ -35,8 +35,18 @@ export function isYours(provider: Provider): boolean {
     Boolean(provider.key) ||
     provider.active ||
     provider.connectedBefore ||
-    provider.group === 'server'
+    provider.group === 'server' ||
+    halfwayHere(provider)
   );
+}
+
+/**
+ * A model on this computer whose app is already here — waiting for a model, or
+ * stuck starting — is half set up: it stays in view, saying what's left.
+ */
+function halfwayHere({ local, status }: Provider): boolean {
+  if (!local || status.state === 'checking' || status.state === 'ready') return false;
+  return !(status.state === 'not-installed' && status.fix?.kind === 'install');
 }
 
 /** The note under a tile: what it costs to start, or where it runs. */

@@ -12,11 +12,17 @@ async function lmHome(options: { port?: number; installed?: boolean } = {}) {
   const home = await mkdtemp(join(tmpdir(), 'conch-lms-'));
   await mkdir(join(home, '.internal'), { recursive: true });
   if (options.port)
-    await writeFile(join(home, '.internal', 'http-server-config.json'), JSON.stringify({ port: options.port }));
+    await writeFile(
+      join(home, '.internal', 'http-server-config.json'),
+      JSON.stringify({ port: options.port }),
+    );
   if (options.installed) {
     const app = join(home, 'LM Studio.exe');
     await writeFile(app, '');
-    await writeFile(join(home, '.internal', 'app-install-location.json'), JSON.stringify({ path: app, argv: [], cwd: home }));
+    await writeFile(
+      join(home, '.internal', 'app-install-location.json'),
+      JSON.stringify({ path: app, argv: [], cwd: home }),
+    );
   }
   return home;
 }
@@ -29,9 +35,19 @@ const MODELS = {
       display_name: 'Gemma 4 26B A4B',
       max_context_length: 262144,
       loaded_instances: [{ id: 'google/gemma-4-26b-a4b' }],
-      capabilities: { vision: true, trained_for_tool_use: true, reasoning: { allowed_options: ['off', 'on'] } },
+      capabilities: {
+        vision: true,
+        trained_for_tool_use: true,
+        reasoning: { allowed_options: ['off', 'on'] },
+      },
     },
-    { type: 'llm', key: 'qwen/qwen3-8b', display_name: 'Qwen3 8B', max_context_length: 32768, loaded_instances: [] },
+    {
+      type: 'llm',
+      key: 'qwen/qwen3-8b',
+      display_name: 'Qwen3 8B',
+      max_context_length: 32768,
+      loaded_instances: [],
+    },
     { type: 'embedding', key: 'nomic-embed', display_name: 'Nomic Embed', loaded_instances: [] },
   ],
 };
@@ -47,7 +63,12 @@ function server(port: number, options: { auth?: boolean } = {}) {
     if (url.pathname === '/v1/models') return jsonResponse({ data: [] });
     if (url.pathname === '/v1/chat/completions')
       return sseResponse(
-        dataFrames(JSON.stringify({ choices: [{ delta: { content: 'Hello from LM Studio' }, finish_reason: 'stop' }] }), '[DONE]'),
+        dataFrames(
+          JSON.stringify({
+            choices: [{ delta: { content: 'Hello from LM Studio' }, finish_reason: 'stop' }],
+          }),
+          '[DONE]',
+        ),
       );
     return new Response('', { status: 404 });
   });
@@ -85,7 +106,10 @@ describe('LM Studio as a provider', () => {
 
   it('says a model is loading before a cold one answers', async () => {
     const fetch = server(1234);
-    const variant = lmStudioVariant({ fetch: fetch.fetch, lmHome: await lmHome({ installed: true }) });
+    const variant = lmStudioVariant({
+      fetch: fetch.fetch,
+      lmHome: await lmHome({ installed: true }),
+    });
     await variant.status?.();
     const events: WireEvent[] = [];
     for await (const event of variant.wire.stream({
@@ -98,8 +122,15 @@ describe('LM Studio as a provider', () => {
       signal: new AbortController().signal,
     }))
       events.push(event);
-    expect(events[0]).toMatchObject({ type: 'notice', code: 'loading', message: expect.stringContaining('Qwen3 8B') });
-    expect(events.at(-1)).toMatchObject({ type: 'end', message: { content: 'Hello from LM Studio' } });
+    expect(events[0]).toMatchObject({
+      type: 'notice',
+      code: 'loading',
+      message: expect.stringContaining('Qwen3 8B'),
+    });
+    expect(events.at(-1)).toMatchObject({
+      type: 'end',
+      message: { content: 'Hello from LM Studio' },
+    });
   });
 
   it('starts LM Studio’s server itself when it’s off, and says so quietly', async () => {
@@ -141,7 +172,11 @@ describe('LM Studio as a provider', () => {
     const fetch = fakeFetch(() => {
       throw new TypeError('fetch failed');
     });
-    const variant = lmStudioVariant({ fetch: fetch.fetch, lmHome: await lmHome(), startServer: async () => false });
+    const variant = lmStudioVariant({
+      fetch: fetch.fetch,
+      lmHome: await lmHome(),
+      startServer: async () => false,
+    });
     expect(await variant.status?.()).toMatchObject({
       state: 'not-installed',
       fix: { need: 'lm-studio', kind: 'install' },
@@ -150,8 +185,16 @@ describe('LM Studio as a provider', () => {
 
   it('asks for a key when LM Studio requires one, and uses it once given', async () => {
     const fetch = server(1234, { auth: true });
-    const variant = lmStudioVariant({ fetch: fetch.fetch, lmHome: await lmHome({ installed: true }) });
-    expect(await variant.status?.()).toMatchObject({ state: 'signed-out', message: expect.stringContaining('Manage Tokens') });
-    expect(await variant.status?.('sk-lm-abcdefgh:01234567890123456789')).toMatchObject({ state: 'ready' });
+    const variant = lmStudioVariant({
+      fetch: fetch.fetch,
+      lmHome: await lmHome({ installed: true }),
+    });
+    expect(await variant.status?.()).toMatchObject({
+      state: 'signed-out',
+      message: expect.stringContaining('Manage Tokens'),
+    });
+    expect(await variant.status?.('sk-lm-abcdefgh:01234567890123456789')).toMatchObject({
+      state: 'ready',
+    });
   });
 });

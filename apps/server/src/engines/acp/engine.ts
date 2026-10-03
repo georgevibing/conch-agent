@@ -86,7 +86,11 @@ const SessionStarted = z.object({
     .object({
       currentModelId: z.string().optional(),
       availableModels: z.array(
-        z.object({ modelId: z.string(), name: z.string().optional(), description: z.string().nullish() }),
+        z.object({
+          modelId: z.string(),
+          name: z.string().optional(),
+          description: z.string().nullish(),
+        }),
       ),
     })
     .optional(),
@@ -123,7 +127,9 @@ const PermissionRequest = z.object({
     })
     .passthrough()
     .optional(),
-  options: z.array(z.object({ optionId: z.string(), kind: z.string(), name: z.string().optional() })),
+  options: z.array(
+    z.object({ optionId: z.string(), kind: z.string(), name: z.string().optional() }),
+  ),
 });
 
 /** What starting the program takes: tests give their own pretend agent. */
@@ -277,7 +283,8 @@ export function acpProblem(error: unknown): TurnProblem | undefined {
     if (error.code === ACP_CODES.rateLimited) return 'limit';
   }
   const text = error instanceof Error ? error.message : '';
-  if (/quota|usage limit|rate.?limit|too many requests|credits|allowance/i.test(text)) return 'limit';
+  if (/quota|usage limit|rate.?limit|too many requests|credits|allowance/i.test(text))
+    return 'limit';
   if (/stopped|closed|took too long|couldn’t start|ECONN|network/i.test(text)) return 'unavailable';
   return undefined;
 }
@@ -315,9 +322,10 @@ export class AcpEngine implements Engine {
   // ── The program ───────────────────────────────────────────────────────────
 
   #env(): Record<string, string> {
-    const env = agentEnv(this.agent.env);
-    for (const name of this.agent.dropEnv) delete env[name];
-    return env;
+    const drop = new Set(this.agent.dropEnv);
+    return Object.fromEntries(
+      Object.entries(agentEnv(this.agent.env)).filter(([name]) => !drop.has(name)),
+    );
   }
 
   /** A warm program for this model (only programs that take the model at start keep one each). */
@@ -374,9 +382,7 @@ export class AcpEngine implements Engine {
           PROBE_MS,
         ),
       );
-      const method = this.agent.authenticate?.(
-        (running.info.authMethods ?? []).map((m) => m.id),
-      );
+      const method = this.agent.authenticate?.((running.info.authMethods ?? []).map((m) => m.id));
       if (method) await conn.request('authenticate', { methodId: method }, PROBE_MS);
     } catch (error) {
       conn.close();
@@ -570,7 +576,10 @@ export class AcpEngine implements Engine {
         const status = await this.detect({ force: true });
         if (status.state !== 'ready')
           throw new Error(status.message ?? `${this.label} didn’t confirm the sign-in. Try again.`);
-        emit({ phase: 'done', message: `${this.label} is connected. Your plan’s models and limits apply.` });
+        emit({
+          phase: 'done',
+          message: `${this.label} is connected. Your plan’s models and limits apply.`,
+        });
       })()
         .catch((error: unknown) =>
           emit({
@@ -715,7 +724,8 @@ export class AcpEngine implements Engine {
         status.state === 'signed-out' ? ACP_CODES.authRequired : 0,
       );
     input.signal.throwIfAborted();
-    const model = input.options.model && input.options.model !== 'default' ? input.options.model : undefined;
+    const model =
+      input.options.model && input.options.model !== 'default' ? input.options.model : undefined;
     const running = await this.#program(status.executablePath, model);
     const key = this.agent.modelAtStart ? (model ?? 'default') : '';
     running.busy++;
@@ -846,7 +856,8 @@ export class AcpEngine implements Engine {
         push({
           type: 'notice',
           code: 'length',
-          message: 'The answer was cut short: the model reached the most it can write at once. Ask it to carry on.',
+          message:
+            'The answer was cut short: the model reached the most it can write at once. Ask it to carry on.',
         });
       if (result.stopReason === 'max_turn_requests')
         push({
@@ -855,10 +866,15 @@ export class AcpEngine implements Engine {
           message: `${this.label} stopped after many steps in one turn. Ask it to carry on if it wasn’t finished.`,
         });
       if (result.stopReason === 'refusal')
-        push({ type: 'notice', code: 'refusal', message: `${this.label} declined to answer that.` });
+        push({
+          type: 'notice',
+          code: 'refusal',
+          message: `${this.label} declined to answer that.`,
+        });
       push({
         type: 'done',
-        outcome: result.stopReason === 'cancelled' || input.signal.aborted ? 'interrupted' : 'success',
+        outcome:
+          result.stopReason === 'cancelled' || input.signal.aborted ? 'interrupted' : 'success',
         usage,
       });
     } finally {

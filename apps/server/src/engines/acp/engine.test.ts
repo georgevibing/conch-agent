@@ -68,7 +68,11 @@ const configModels = {
       currentValue: 'gpt-5.1',
       options: [
         { value: 'gpt-5.1', name: 'GPT-5.1' },
-        { group: 'More', name: 'More', options: [{ value: 'claude-sonnet-5', name: 'Claude Sonnet 5' }] },
+        {
+          group: 'More',
+          name: 'More',
+          options: [{ value: 'claude-sonnet-5', name: 'Claude Sonnet 5' }],
+        },
       ],
     },
     {
@@ -108,7 +112,9 @@ describe('an ACP agent’s state', () => {
   });
 
   it('offers to install the program when it isn’t here, and to update an old one', async () => {
-    const missing = new AcpEngine(ACP_AGENTS.copilot, await settings(), { find: async () => undefined });
+    const missing = new AcpEngine(ACP_AGENTS.copilot, await settings(), {
+      find: async () => undefined,
+    });
     expect(await missing.detect()).toMatchObject({
       state: 'not-installed',
       fix: { need: 'copilot', kind: 'install' },
@@ -117,7 +123,10 @@ describe('an ACP agent’s state', () => {
       find: async () => 'C:/fake/copilot.exe',
       version: async () => '1.0.20',
     });
-    expect(await old.detect()).toMatchObject({ state: 'error', fix: { need: 'copilot', kind: 'update' } });
+    expect(await old.detect()).toMatchObject({
+      state: 'error',
+      fix: { need: 'copilot', kind: 'update' },
+    });
   });
 
   it('doesn’t start a program that was never signed in', async () => {
@@ -136,13 +145,22 @@ describe('an ACP agent’s state', () => {
     const offer = offerOf(
       {
         sessionId: 's',
-        models: { currentModelId: 'auto', availableModels: [{ modelId: 'auto', name: 'Auto' }, { modelId: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' }] },
+        models: {
+          currentModelId: 'auto',
+          availableModels: [
+            { modelId: 'auto', name: 'Auto' },
+            { modelId: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
+          ],
+        },
       },
       false,
     );
     expect(offer.how).toBe('legacy');
     expect(offer.models.map((m) => m.id)).toEqual(['auto', 'gemini-2.5-pro']);
-    expect(offerOf({ sessionId: 's' }, true)).toMatchObject({ how: 'start', models: [{ id: 'default', label: 'Default' }] });
+    expect(offerOf({ sessionId: 's' }, true)).toMatchObject({
+      how: 'start',
+      models: [{ id: 'default', label: 'Default' }],
+    });
   });
 });
 
@@ -150,17 +168,34 @@ describe('a turn with an ACP agent', () => {
   it('streams the answer, and hands the conversation over with Conch’s instructions first', async () => {
     const { engine, agents } = await engineWith({
       prompt: async (t) => {
-        t.update({ sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 'Thinking…' } });
-        t.update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Noted: ' } });
+        t.update({
+          sessionUpdate: 'agent_thought_chunk',
+          content: { type: 'text', text: 'Thinking…' },
+        });
+        t.update({
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: 'Noted: ' },
+        });
         t.update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'tea.' } });
         return { stopReason: 'end_turn', usage: { inputTokens: 40, outputTokens: 5 } };
       },
     });
     const events = await collect(engine.runTurn(turn()));
-    expect(events.filter((e) => e.type === 'text').map((e) => (e as { delta: string }).delta).join('')).toBe('Noted: tea.');
+    expect(
+      events
+        .filter((e) => e.type === 'text')
+        .map((e) => (e as { delta: string }).delta)
+        .join(''),
+    ).toBe('Noted: tea.');
     expect(events.some((e) => e.type === 'thinking')).toBe(true);
-    expect(events.at(-1)).toMatchObject({ type: 'done', outcome: 'success', usage: { inputTokens: 40, outputTokens: 5 } });
-    const prompt = agents[0]?.received.find((m) => m.method === 'session/prompt')?.params as { prompt: { text: string }[] };
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      outcome: 'success',
+      usage: { inputTokens: 40, outputTokens: 5 },
+    });
+    const prompt = agents[0]?.received.find((m) => m.method === 'session/prompt')?.params as {
+      prompt: { text: string }[];
+    };
     expect(prompt.prompt[0]?.text).toContain('You are Pearl.');
     expect(prompt.prompt.at(-1)?.text).toBe('Remember I like tea');
     // The session is closed after the turn when the agent can; the program stays warm for the next.
@@ -172,7 +207,11 @@ describe('a turn with an ACP agent', () => {
     let door: { url: string; headers: { name: string; value: string }[] } | undefined;
     const { engine } = await engineWith({
       session: (params) => {
-        const servers = params.mcpServers as { type: string; url: string; headers: { name: string; value: string }[] }[];
+        const servers = params.mcpServers as {
+          type: string;
+          url: string;
+          headers: { name: string; value: string }[];
+        }[];
         door = servers[0];
         return { sessionId: 'sess_door' };
       },
@@ -181,12 +220,17 @@ describe('a turn with an ACP agent', () => {
         const client = new Client({ name: 'pretend-agent', version: '1' });
         await client.connect(
           new StreamableHTTPClientTransport(new URL(door.url), {
-            requestInit: { headers: Object.fromEntries(door.headers.map((h) => [h.name, h.value])) },
+            requestInit: {
+              headers: Object.fromEntries(door.headers.map((h) => [h.name, h.value])),
+            },
           }),
         );
         const { tools } = await client.listTools();
         expect(tools.map((t) => t.name)).toContain('mcp__conch__remember');
-        const result = await client.callTool({ name: 'mcp__conch__remember', arguments: { content: 'likes tea' } });
+        const result = await client.callTool({
+          name: 'mcp__conch__remember',
+          arguments: { content: 'likes tea' },
+        });
         expect(result.content).toEqual([{ type: 'text', text: 'Saved to memory.' }]);
         await client.close();
         return { stopReason: 'end_turn' };
@@ -194,8 +238,14 @@ describe('a turn with an ACP agent', () => {
     });
     const events = await collect(engine.runTurn(turn({ tools: [rememberTool(saved)] })));
     expect(saved).toEqual(['likes tea']);
-    expect(events.find((e) => e.type === 'tool-start')).toMatchObject({ name: 'mcp__conch__remember', input: { content: 'likes tea' } });
-    expect(events.find((e) => e.type === 'tool-end')).toMatchObject({ status: 'success', output: 'Saved to memory.' });
+    expect(events.find((e) => e.type === 'tool-start')).toMatchObject({
+      name: 'mcp__conch__remember',
+      input: { content: 'likes tea' },
+    });
+    expect(events.find((e) => e.type === 'tool-end')).toMatchObject({
+      status: 'success',
+      output: 'Saved to memory.',
+    });
     expect(door?.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp$/);
   });
 
@@ -218,7 +268,12 @@ describe('a turn with an ACP agent', () => {
         answers.push(
           await t.ask('session/request_permission', {
             sessionId: t.sessionId,
-            toolCall: { toolCallId: 'b', title: 'rm -rf build', kind: 'execute', rawInput: { command: 'rm -rf build' } },
+            toolCall: {
+              toolCallId: 'b',
+              title: 'rm -rf build',
+              kind: 'execute',
+              rawInput: { command: 'rm -rf build' },
+            },
             options,
           }),
         );
@@ -233,25 +288,52 @@ describe('a turn with an ACP agent', () => {
   });
 
   it('chooses the model the way the agent takes it: a config option, the older call, or at start', async () => {
-    const { engine, agents } = await engineWith({ session: () => configModels }, { ...ACP_AGENTS.copilot, modelAtStart: false });
-    await collect(engine.runTurn(turn({ options: { effort: 'high', fastMode: false, permissionMode: 'default', model: 'claude-sonnet-5' } })));
-    const sets = agents[0]?.received.filter((m) => m.method === 'session/set_config_option').map((m) => m.params);
+    const { engine, agents } = await engineWith(
+      { session: () => configModels },
+      { ...ACP_AGENTS.copilot, modelAtStart: false },
+    );
+    await collect(
+      engine.runTurn(
+        turn({
+          options: {
+            effort: 'high',
+            fastMode: false,
+            permissionMode: 'default',
+            model: 'claude-sonnet-5',
+          },
+        }),
+      ),
+    );
+    const sets = agents[0]?.received
+      .filter((m) => m.method === 'session/set_config_option')
+      .map((m) => m.params);
     expect(sets).toEqual([
       { sessionId: 'sess_1', configId: 'model', value: 'claude-sonnet-5' },
       { sessionId: 'sess_1', configId: 'reasoning_effort', value: 'high' },
     ]);
 
     const copilot = await engineWith({});
-    await collect(copilot.engine.runTurn(turn({ options: { effort: 'auto', fastMode: false, permissionMode: 'default', model: 'gpt-5.1' } })));
+    await collect(
+      copilot.engine.runTurn(
+        turn({
+          options: { effort: 'auto', fastMode: false, permissionMode: 'default', model: 'gpt-5.1' },
+        }),
+      ),
+    );
     // Copilot takes its model when it starts: a program per model.
-    expect(copilot.agents.at(-1)?.received.some((m) => m.method === 'session/set_config_option')).toBe(false);
+    expect(
+      copilot.agents.at(-1)?.received.some((m) => m.method === 'session/set_config_option'),
+    ).toBe(false);
   });
 
   it('stops when you stop it', async () => {
     const stop = new AbortController();
     const { engine, agents } = await engineWith({
       prompt: async (t) => {
-        t.update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Working' } });
+        t.update({
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: 'Working' },
+        });
         stop.abort();
         await t.cancelled();
         return { stopReason: 'cancelled' };
@@ -315,12 +397,18 @@ describe('words and checks', () => {
 
   it('reads a device sign-in only from the provider’s own pages', () => {
     const hosts = ACP_AGENTS.copilot.login.kind === 'command' ? ACP_AGENTS.copilot.login.hosts : [];
-    expect(deviceSignIn('Open https://github.com/login/device and enter ABCD-1234.', hosts)).toEqual({
+    expect(
+      deviceSignIn('Open https://github.com/login/device and enter ABCD-1234.', hosts),
+    ).toEqual({
       url: 'https://github.com/login/device',
       code: 'ABCD-1234',
     });
-    expect(deviceSignIn('Open https://github.com.evil.example/login and enter ABCD-1234', hosts)).toBeUndefined();
-    expect(deviceSignIn('Open http://github.com/login/device and enter ABCD-1234', hosts)).toBeUndefined();
+    expect(
+      deviceSignIn('Open https://github.com.evil.example/login and enter ABCD-1234', hosts),
+    ).toBeUndefined();
+    expect(
+      deviceSignIn('Open http://github.com/login/device and enter ABCD-1234', hosts),
+    ).toBeUndefined();
   });
 });
 
@@ -356,13 +444,19 @@ describe('signing in', () => {
       spawn: fakeSpawn({}).spawn,
       find: async () => 'C:/fake/copilot.exe',
       spawnLogin: () =>
-        spawn(process.execPath, ['-e', "console.log('open https://github.com/login/device code ZZZZ-YYYY'); process.exit(1)"]),
+        spawn(process.execPath, [
+          '-e',
+          "console.log('open https://github.com/login/device code ZZZZ-YYYY'); process.exit(1)",
+        ]),
     });
     const final = await new Promise<LoginState>((resolve) => {
       engine.login('subscription', (state) => {
         if (['done', 'failed'].includes(state.phase)) resolve(state);
       });
     });
-    expect(final).toMatchObject({ phase: 'failed', message: expect.stringContaining('declined or expired') });
+    expect(final).toMatchObject({
+      phase: 'failed',
+      message: expect.stringContaining('declined or expired'),
+    });
   });
 });
