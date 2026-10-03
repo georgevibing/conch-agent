@@ -126,6 +126,8 @@ export interface FakeParts extends ConchAppParts {
   calls: { app: string; tool: string; input: Record<string, unknown> }[];
   fetches: AppFetchRequest[];
   started: string[];
+  /** Every runtime made, by app and folder, and whether it was stopped. */
+  runtimes: { app: string; appDir: string; stopped: boolean }[];
   options: FakeOptions;
   published: Map<string, PublishState>;
 }
@@ -135,9 +137,12 @@ export function fakeParts(options: FakeOptions = {}): FakeParts {
   const calls: FakeParts['calls'] = [];
   const fetches: AppFetchRequest[] = [];
   const started: string[] = [];
+  const runtimes: FakeParts['runtimes'] = [];
   const published = new Map<string, PublishState>();
 
   const runtime = (o: RuntimeOptions): AppRuntime => {
+    const made = { app: o.manifest.id, appDir: o.appDir, stopped: false };
+    runtimes.push(made);
     let tools: Record<string, ToolDef> | undefined;
     let running = false;
     const dataFile = join(o.dataDir, 'data.json');
@@ -214,6 +219,7 @@ export function fakeParts(options: FakeOptions = {}): FakeParts {
       },
       async stop() {
         running = false;
+        made.stopped = true;
       },
     };
   };
@@ -222,6 +228,7 @@ export function fakeParts(options: FakeOptions = {}): FakeParts {
     calls,
     fetches,
     started,
+    runtimes,
     options,
     published,
     readFiles: fakeRead,

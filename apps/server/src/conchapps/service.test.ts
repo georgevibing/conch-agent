@@ -1384,3 +1384,57 @@ describe('an app made after reading something from outside (ADR 0028)', () => {
     expect(second.source).toMatchObject({ basedOn: { name: 'Weather' } });
   });
 });
+
+describe('one runtime per app, never on files being swapped', () => {
+  it('two callers at once get one runtime', async () => {
+    const h = await harness();
+    const { offer } = await makeTally(h);
+    await h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' });
+    await h.service.stop();
+    h.parts.runtimes.length = 0;
+    const [a, b] = await Promise.all([
+      h.service.runtimeFor('tally'),
+      h.service.runtimeFor('tally'),
+    ]);
+    expect(a).toBe(b);
+    expect(h.parts.runtimes).toHaveLength(1);
+  });
+
+  it('a call during an update waits for it, and runs on the new files; nothing is left running on the old', async () => {
+    const h = await harness();
+    const first = await makeTally(h);
+    await h.service.acceptOffer(first.offer.offerId, { conversationId: 'c_chat' });
+    const draft = await h.service.editDraft('c_chat', 'tally');
+    const tools = (tallyFiles('1.1.0')['tools.mjs'] ?? '').replace(
+      "return { total: (await app.data.get('total')) ?? 0 };",
+      "return { total: (await app.data.get('total')) ?? 0, version: 2 };",
+    );
+    await h.service.write(draft.id, 'tools.mjs', tools);
+    await h.service.write(draft.id, 'conch-app.json', tallyFiles('1.1.0')['conch-app.json'] ?? '');
+    await h.service.check(draft.id);
+    await h.service.tryTool(draft.id, 'count', {});
+    await h.service.tryTool(draft.id, 'read_count', {});
+    await h.service.check(draft.id);
+    const offer = await h.service.present(h.chat(), draft.id, 'v2');
+    // The update holds its files a moment as they go into place; a call arrives then.
+    const store = h.service.store;
+    const place = store.place.bind(store);
+    let placing!: () => void;
+    const entered = new Promise<void>((resolve) => (placing = resolve));
+    store.place = async (...args) => {
+      placing();
+      await new Promise((r) => setTimeout(r, 30));
+      return place(...args);
+    };
+    const [updated, during] = await Promise.all([
+      h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' }),
+      entered.then(() => h.service.callFromPage({ appId: 'tally' }, 'read_count', {}, false)),
+    ]);
+    expect(updated.manifest.version).toBe('1.1.0');
+    expect(during).toMatchObject({ ok: true, json: { version: 2 } });
+    const live = h.parts.runtimes.filter(
+      (r) => r.app === 'tally' && !r.stopped && r.appDir.endsWith('current'),
+    );
+    expect(live).toHaveLength(1);
+  });
+});

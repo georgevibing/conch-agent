@@ -118,6 +118,23 @@ export async function writeFiles(dir: string, files: AppFiles): Promise<void> {
   }
 }
 
+/** Errors Windows gives for a moment while a process that just ended still holds a folder. */
+const BUSY = new Set(['EPERM', 'EACCES', 'EBUSY', 'ENOTEMPTY']);
+
+/** `rename`, waiting out a moment's refusal (about two seconds in all), then giving up in words. */
+export async function renameSoon(from: string, to: string, tries = 10): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await rename(from, to);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? '';
+      if (!BUSY.has(code) || attempt >= tries - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(25 * 2 ** attempt, 500)));
+    }
+  }
+}
+
 const exists = (path: string) =>
   stat(path).then(
     () => true,
@@ -339,7 +356,7 @@ export class ConchAppStore {
     if (!(await exists(dir))) return false;
     await mkdir(this.#incoming, { recursive: true, mode: 0o700 });
     const aside = join(this.#incoming, newId('data'));
-    await rename(dir, aside);
+    await renameSoon(dir, aside);
     await removeTree(aside);
     return true;
   }

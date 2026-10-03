@@ -223,6 +223,9 @@ const yours = (source: ConchAppSource) => source.kind === 'made' && !source.base
 export const otherMakerWarning = (name: string) =>
   `This replaces ${name} from another maker; its settings, keys and data won’t carry over, so it starts fresh.`;
 
+/** Files that should be there and aren't: what to do about it. */
+const MISSING = 'Its files are missing. Open Settings → Health and press Repair everything.';
+
 /** A workshop's refusal, in the service's own kind of error. */
 function rethrow(error: unknown): never {
   if (error instanceof WorkshopError)
@@ -243,7 +246,12 @@ export class ConchAppService {
   readonly store: ConchAppStore;
   readonly workshop: Workshop;
   readonly hosted: ConchApps;
-  #runtimes = new Map<string, AppRuntime>();
+  /** Each app's runtime as it starts: set at once, so two callers get one runtime. */
+  #runtimes = new Map<string, Promise<AppRuntime>>();
+  /** The runtimes that did start, to stop. */
+  #started = new Map<string, AppRuntime>();
+  /** A change to an app in progress (install, go back, settings, removal): one at a time per app. */
+  #writes = new Map<string, Promise<unknown>>();
   #drafts = new Map<string, { hash: string; runtime: AppRuntime }>();
   #failures = new Map<string, string>();
   #missing = new Map<string, string[]>();
@@ -304,11 +312,12 @@ export class ConchAppService {
     for (const timer of this.#timers) clearTimeout(timer);
     this.#timers = [];
     await Promise.all(
-      [...this.#runtimes.values(), ...[...this.#drafts.values()].map((d) => d.runtime)].map((r) =>
+      [...this.#started.values(), ...[...this.#drafts.values()].map((d) => d.runtime)].map((r) =>
         r.stop().catch(() => undefined),
       ),
     );
     this.#runtimes.clear();
+    this.#started.clear();
     this.#drafts.clear();
   }
 
@@ -438,13 +447,55 @@ export class ConchAppService {
     return this.intact(id);
   }
 
-  /** One runtime per app, started when first used. */
-  async runtimeFor(id: string): Promise<AppRuntime> {
-    const existing = this.#runtimes.get(id);
-    if (existing) return existing;
+  /**
+   * Change an app with nothing else changing it at once, and no runtime
+   * starting on files that are being swapped (a runtime asked for meanwhile
+   * waits for this to end).
+   */
+  #exclusive<T>(id: string, fn: () => Promise<T>): Promise<T> {
+    const before = this.#writes.get(id) ?? Promise.resolve();
+    const run = before.catch(() => undefined).then(fn);
+    const tail = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.#writes.set(id, tail);
+    void tail.then(() => {
+      if (this.#writes.get(id) === tail) this.#writes.delete(id);
+    });
+    return run;
+  }
+
+  /** One runtime per app, started when first used, once any change to it has finished. */
+  runtimeFor(id: string): Promise<AppRuntime> {
+    return this.#runtime(id, false);
+  }
+
+  /** `inside`: asked from within a change to this app, which mustn't wait for itself. */
+  #runtime(id: string, inside: boolean): Promise<AppRuntime> {
+    const held = this.#runtimes.get(id);
+    if (held) return held;
+    // Always after a turn of the loop, so the entry below is in place before it looks.
+    const pending = (inside ? undefined : this.#writes.get(id)) ?? Promise.resolve();
+    const slot: { token?: Promise<AppRuntime> } = {};
+    const starting = (async () => {
+      await pending;
+      // Stopped or replaced while it waited: whatever is current now.
+      if (!slot.token || this.#runtimes.get(id) !== slot.token) return this.#runtime(id, inside);
+      return this.#start(id, slot.token);
+    })();
+    slot.token = starting;
+    this.#runtimes.set(id, starting);
+    starting.catch(() => {
+      if (this.#runtimes.get(id) === starting) this.#runtimes.delete(id);
+    });
+    return starting;
+  }
+
+  async #start(id: string, token: Promise<AppRuntime>): Promise<AppRuntime> {
     const app = await this.#record(id);
     if (!(await this.#heal(app)))
-      throw new ConchAppError('unavailable', this.#failures.get(id) ?? 'Its files are missing.');
+      throw new ConchAppError('unavailable', this.#failures.get(id) ?? MISSING);
     await mkdir(this.store.dataDir(id), { recursive: true, mode: 0o700 });
     const runtime = this.deps.parts.runtime({
       appDir: this.store.current(id),
@@ -458,13 +509,20 @@ export class ConchAppService {
       fetcher: this.deps.parts.fetcher,
       heal: (message) => this.deps.heal?.(message),
     });
-    this.#runtimes.set(id, runtime);
+    // Stopped while it was being made: never left running on files that changed.
+    if (this.#runtimes.get(id) !== token) {
+      await runtime.stop().catch(() => undefined);
+      return this.#runtime(id, true);
+    }
+    this.#started.set(id, runtime);
     return runtime;
   }
 
+  /** Stop an app's runtime and wait for it to end (its process lets go of its data folder). */
   async #stop(id: string) {
-    const runtime = this.#runtimes.get(id);
     this.#runtimes.delete(id);
+    const runtime = this.#started.get(id);
+    this.#started.delete(id);
     await runtime?.stop().catch(() => undefined);
   }
 
@@ -479,11 +537,15 @@ export class ConchAppService {
 
   /** Start an app's tools again and list them (its card's Try again). */
   async checkRuntime(id: string): Promise<void> {
+    await this.#exclusive(id, () => this.#checkRuntime(id));
+  }
+
+  async #checkRuntime(id: string): Promise<void> {
     const app = await this.#record(id);
     await this.#stop(id);
     this.#failures.delete(id);
     try {
-      const tools = await (await this.runtimeFor(id)).list();
+      const tools = await (await this.#runtime(id, true)).list();
       await this.store.patch(id, (record) => {
         record.tools = tools.map(storedTool);
       });
@@ -952,7 +1014,12 @@ export class ConchAppService {
    * Put an app in place: its files (the version before kept for Go back),
    * its settings, its policy, then its tools as its runtime lists them.
    */
-  async #install(input: {
+  #install(input: Parameters<ConchAppService['installNow']>[0]): Promise<ConchApp> {
+    return this.#exclusive(input.pkg.manifest.id, () => this.installNow(input));
+  }
+
+  /** `#install`, inside the app's own lock. Only for `#install`. */
+  private async installNow(input: {
     pkg: AppPackage;
     source: ConchAppSource;
     signature: SkillSignature;
@@ -1073,11 +1140,13 @@ export class ConchAppService {
           ),
         };
     await this.store.update((apps) => [...apps.filter((a) => a.id !== id), record]);
+    // Whatever started on the files before they were in place goes again.
+    await this.#stop(id);
     await this.store.prune(id, [record.hash, ...record.versions.map((v) => v.hash)]);
     this.#failures.delete(id);
     // Its tools as its runtime lists them now.
     try {
-      const listed = await (await this.runtimeFor(id)).list();
+      const listed = await (await this.#runtime(id, true)).list();
       await this.store.patch(id, (app) => {
         app.tools = listed.map(storedTool);
       });
@@ -1482,92 +1551,100 @@ export class ConchAppService {
 
   /** **Go back** to a kept version. */
   async rollback(id: string, version: string): Promise<ConchApp> {
-    return this.#installing.run(async () => {
-      const app = await this.#record(id);
-      const target = app.versions.find((v) => v.version === version);
-      if (!target) throw new ConchAppError('not-found', 'That version isn’t kept any more.');
-      const read = await this.deps.parts.readFolder(this.store.kept(id, target.hash));
-      if (!read.ok || read.app.hash !== target.hash)
-        throw new ConchAppError(
-          'unavailable',
-          'The copy of that version isn’t what was kept, so Conch won’t go back to it.',
-        );
-      // Kept versions are the same hands' by construction; checked again all the same.
-      const hands = {
-        source: target.source ?? app.source,
-        signature: target.signature ?? app.signature,
-      };
-      const keep = sameHands(app, hands);
-      await this.#stop(id);
-      await this.store.restore(id, target.hash);
-      if (!keep) {
-        await this.store.setSecrets(id, undefined);
-        await this.store.wipeData(id);
-        await mkdir(this.store.dataDir(id), { recursive: true, mode: 0o700 });
-      }
-      await this.store.patch(id, (record) => {
-        record.versions = keep
-          ? [
-              {
-                version: record.manifest.version,
-                at: record.updatedAt,
-                hash: record.hash,
-                source: record.source,
-                signature: record.signature,
-              },
-              ...record.versions.filter((v) => v.hash !== target.hash),
-            ].slice(0, APP_LIMITS.keep)
-          : [];
-        record.manifest = read.app.manifest;
-        record.hash = target.hash;
-        record.updatedAt = this.#now();
+    return this.#installing.run(() =>
+      this.#exclusive(id, async () => {
+        const app = await this.#record(id);
+        const target = app.versions.find((v) => v.version === version);
+        if (!target) throw new ConchAppError('not-found', 'That version isn’t kept any more.');
+        const read = await this.deps.parts.readFolder(this.store.kept(id, target.hash));
+        if (!read.ok || read.app.hash !== target.hash)
+          throw new ConchAppError(
+            'unavailable',
+            'The copy of that version isn’t what was kept, so Conch won’t go back to it.',
+          );
+        // Kept versions are the same hands' by construction; checked again all the same.
+        const hands = {
+          source: target.source ?? app.source,
+          signature: target.signature ?? app.signature,
+        };
+        const keep = sameHands(app, hands);
+        await this.#stop(id);
+        await this.store.restore(id, target.hash);
         if (!keep) {
-          record.source = hands.source;
-          record.signature = hands.signature;
-          record.values = {};
-          record.policy = defaultPolicy(hands);
-          record.toolPolicies = {};
+          await this.store.setSecrets(id, undefined);
+          await this.store.wipeData(id);
+          await mkdir(this.store.dataDir(id), { recursive: true, mode: 0o700 });
         }
-      });
-      await this.store.prune(id, [
-        target.hash,
-        ...((await this.store.get(id))?.versions.map((v) => v.hash) ?? []),
-      ]);
-      await this.checkRuntime(id);
-      this.deps.skillsChanged?.();
-      return this.get(id);
-    });
+        await this.store.patch(id, (record) => {
+          record.versions = keep
+            ? [
+                {
+                  version: record.manifest.version,
+                  at: record.updatedAt,
+                  hash: record.hash,
+                  source: record.source,
+                  signature: record.signature,
+                },
+                ...record.versions.filter((v) => v.hash !== target.hash),
+              ].slice(0, APP_LIMITS.keep)
+            : [];
+          record.manifest = read.app.manifest;
+          record.hash = target.hash;
+          record.updatedAt = this.#now();
+          if (!keep) {
+            record.source = hands.source;
+            record.signature = hands.signature;
+            record.values = {};
+            record.policy = defaultPolicy(hands);
+            record.toolPolicies = {};
+          }
+        });
+        await this.store.prune(id, [
+          target.hash,
+          ...((await this.store.get(id))?.versions.map((v) => v.hash) ?? []),
+        ]);
+        await this.#checkRuntime(id);
+        this.deps.skillsChanged?.();
+        return this.get(id);
+      }),
+    );
   }
 
   /** Remove an app; its data goes too unless it's kept. */
   async remove(id: string, options: { keepData: boolean }): Promise<void> {
-    await this.#installing.run(async () => {
-      const app = await this.#record(id);
-      const hadSkills = await this.#hasSkills(id);
-      await this.#stop(id);
-      this.#updates.delete(id);
-      this.#failures.delete(id);
-      await this.store.removeFiles(id, options.keepData);
-      await this.store.setSecrets(id, undefined);
-      // Whose data stays, so it's given back only to the same hands.
-      await this.store.setKeptData(
-        id,
-        options.keepData
-          ? {
-              source: app.source,
-              ...(app.signature.fingerprint && { fingerprint: app.signature.fingerprint }),
-            }
-          : undefined,
-      );
-      await this.store.update((apps) => apps.filter((a) => a.id !== app.id));
-      if (hadSkills) this.deps.skillsChanged?.();
-      await this.#changed(id);
-      if (app.update) this.deps.updatesChanged?.();
-    });
+    await this.#installing.run(() =>
+      this.#exclusive(id, async () => {
+        const app = await this.#record(id);
+        const hadSkills = await this.#hasSkills(id);
+        await this.#stop(id);
+        this.#updates.delete(id);
+        this.#failures.delete(id);
+        await this.store.removeFiles(id, options.keepData);
+        await this.store.setSecrets(id, undefined);
+        // Whose data stays, so it's given back only to the same hands.
+        await this.store.setKeptData(
+          id,
+          options.keepData
+            ? {
+                source: app.source,
+                ...(app.signature.fingerprint && { fingerprint: app.signature.fingerprint }),
+              }
+            : undefined,
+        );
+        await this.store.update((apps) => apps.filter((a) => a.id !== app.id));
+        if (hadSkills) this.deps.skillsChanged?.();
+        await this.#changed(id);
+        if (app.update) this.deps.updatesChanged?.();
+      }),
+    );
   }
 
   /** The person's settings for an app. A secret one is never sent back; `''` clears one. */
   async setSettings(id: string, values: Record<string, string>): Promise<ConchApp> {
+    return this.#exclusive(id, () => this.#setSettings(id, values));
+  }
+
+  async #setSettings(id: string, values: Record<string, string>): Promise<ConchApp> {
     const app = await this.#record(id);
     const { secret, plain } = this.#settingsFor(app.manifest, values);
     if (Object.keys(secret).length) await this.store.setSecrets(id, secret);
