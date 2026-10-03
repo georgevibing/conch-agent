@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 320" width="640" height="320" role="img" aria-label="The Conch pearl">
+  <title>The Conch pearl</title>
+  <style>
+    .film { transform-origin: 320px 150px; animation: spin 24s linear infinite; }
+    .swirl { transform-origin: 320px 150px; animation: spin 36s linear infinite reverse; }
+    .halo { transform-origin: 320px 150px; animation: breathe 7s ease-in-out infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes breathe { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.06); } }
+    @media (prefers-reduced-motion: reduce) { .film, .swirl, .halo { animation: none; } }
+  </style>
+  <defs>
+    <radialGradient id="halo" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#e9b9a6" stop-opacity="0.5"/>
+      <stop offset="0.4" stop-color="#8f7fd0" stop-opacity="0.26"/>
+      <stop offset="0.75" stop-color="#5f8fb0" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#5f8fb0" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="body" cx="36%" cy="30%" r="76%">
+      <stop offset="0" stop-color="#fffaf5"/>
+      <stop offset="0.34" stop-color="#f9e4d9"/>
+      <stop offset="0.66" stop-color="#dcd5f0"/>
+      <stop offset="1" stop-color="#ad99bd"/>
+    </radialGradient>
+    <linearGradient id="filmA" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffb79a"/>
+      <stop offset="0.2" stop-color="#ffe7a8"/>
+      <stop offset="0.4" stop-color="#a8ecd8"/>
+      <stop offset="0.6" stop-color="#a9c9ff"/>
+      <stop offset="0.8" stop-color="#d4a9ff"/>
+      <stop offset="1" stop-color="#ffb0cf"/>
+    </linearGradient>
+    <linearGradient id="filmB" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9fd8ff" stop-opacity="0.9"/>
+      <stop offset="0.35" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.65" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#ffb3c8" stop-opacity="0.9"/>
+    </linearGradient>
+    <radialGradient id="rim" cx="40%" cy="36%" r="66%">
+      <stop offset="0.3" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="0.75" stop-color="#fff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0.95"/>
+    </radialGradient>
+    <mask id="fresnel" maskUnits="userSpaceOnUse" x="0" y="0" width="640" height="320">
+      <circle cx="320" cy="150" r="96" fill="url(#rim)"/>
+    </mask>
+    <radialGradient id="sheen" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.95"/>
+      <stop offset="0.5" stop-color="#fff" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="shadow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#c9b8e6" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#c9b8e6" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="sphere"><circle cx="320" cy="150" r="96"/></clipPath>
+  </defs>
+
+  <ellipse class="halo" cx="320" cy="150" rx="200" ry="138" fill="url(#halo)"/>
+  <ellipse cx="320" cy="266" rx="100" ry="13" fill="url(#shadow)"/>
+
+  <circle cx="320" cy="150" r="96" fill="url(#body)"/>
+  <g clip-path="url(#sphere)">
+    <g mask="url(#fresnel)">
+      <rect class="film" x="184" y="14" width="272" height="272" fill="url(#filmA)" opacity="0.62"/>
+      <rect class="swirl" x="184" y="14" width="272" height="272" fill="url(#filmB)" opacity="0.7"/>
+    </g>
+    <ellipse cx="288" cy="110" rx="42" ry="28" fill="url(#sheen)" transform="rotate(-26 288 110)"/>
+    <ellipse cx="354" cy="222" rx="32" ry="9" fill="url(#sheen)" opacity="0.5" transform="rotate(-12 354 222)"/>
+  </g>
+  <circle cx="320" cy="150" r="95.5" fill="none" stroke="#ffffff" stroke-opacity="0.16"/>
+</svg>
