@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import type { Gatekeeper } from '../security';
 import { safePage } from './here';
+import { cliName } from '../cli/command';
 
 /**
  * "This computer", proven (ADR 0063).
@@ -55,8 +56,7 @@ export function registerHereRoutes(app: FastifyInstance, gate: Gatekeeper): void
       gate.limiter.fail(client);
       return reply.code(401).send({
         error: 'invalid',
-        message:
-          'That link has expired or was already used. Open Conch from your apps again, or run: pnpm conch open',
+        message: `That link has expired or was already used. Open Conch from your apps again, or run: ${cliName()} open`,
       });
     }
     reply.header('set-cookie', gate.hereCookie(request));

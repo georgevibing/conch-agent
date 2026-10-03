@@ -14,6 +14,7 @@ import { secureHome } from '../auth/checkup';
 import { pausedWords } from '../routines/spend';
 import type { Services } from '../services';
 import type { DoctorCheck } from './service';
+import { cliName } from '../cli/command';
 
 /** Below this much free space, saving chats and backups starts to fail. */
 const LOW_DISK_BYTES = 1024 ** 3;
@@ -300,7 +301,7 @@ export function computerCheck(services: Services): DoctorCheck {
           title: 'Sign-in',
           state: 'needs-you',
           message: 'Locked, because Conch couldn’t read who may sign in.',
-          action: { kind: 'command', label: 'Run on this computer', command: 'pnpm conch reset' },
+          action: { kind: 'command', label: 'Run on this computer', command: `${cliName()} reset` },
         });
 
       const before = services.homeProblems;

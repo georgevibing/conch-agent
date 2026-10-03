@@ -65,11 +65,8 @@ interface Binding {
   expiresAt: number;
 }
 
-export class PasskeyError extends Error {
-  constructor(message: string) {
-    super(message);
-  }
-}
+/** A passkey that wasn’t accepted, in words a person can act on. */
+export class PasskeyError extends Error {}
 
 const NOT_ACCEPTED =
   'That passkey wasn’t accepted. Try again, or use your password if you have one.';

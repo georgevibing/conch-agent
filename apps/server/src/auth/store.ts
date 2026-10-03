@@ -37,6 +37,7 @@ import {
   safeEqual,
   verifyPassword,
 } from './secrets';
+import { cliName } from '../cli/command';
 
 /** Sessions end 30 days after sign-in (NIST SP 800-63B-4 AAL1) … */
 export const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -76,6 +77,8 @@ const SessionRecord = z.object({
   hash: z.string(),
   via: SignInVia,
   keyId: z.string().optional(),
+  /** The passkey it signed in with, so removing that passkey signs it out (ADR 0065). */
+  passkeyId: z.string().optional(),
   device: z.string(),
   kind: DeviceKind,
   createdAt: z.number(),
@@ -187,8 +190,8 @@ export class AccessError extends Error {
 }
 
 /** Where the way back in is: having this computer's terminal is the proof it's you. */
-export const LOCKED_MESSAGE =
-  'Sign-in is locked because Conch couldn’t read who may sign in. On the computer running Conch, run: pnpm conch reset';
+export const lockedMessage = () =>
+  `Sign-in is locked because Conch couldn’t read who may sign in. On the computer running Conch, run: ${cliName()} reset`;
 
 /**
  * What a damaged `access.json` reads as: password sign-in with no password.
@@ -416,7 +419,7 @@ export class AccessStore {
     return this.#mutex.run(async () => {
       this.#checkedAt = 0;
       const file = structuredClone(await this.get());
-      if (this.#locked && !resets) throw new AccessError('locked', LOCKED_MESSAGE);
+      if (this.#locked && !resets) throw new AccessError('locked', lockedMessage());
       const result = await fn(file);
       tidy(file, Date.now());
       await writeJson(this.path, file);
@@ -645,9 +648,12 @@ export class AccessStore {
     });
   }
 
-  /** Remove a passkey, unless it's the last way in. */
-  async removePasskey(id: string): Promise<void> {
-    await this.#update((file) => {
+  /**
+   * Remove a passkey, unless it's the last way in. Every device signed in
+   * with it is signed out, as revoking a key does. Returns the ended sessions.
+   */
+  async removePasskey(id: string): Promise<string[]> {
+    return this.#update((file) => {
       if (!file.passkeys.some((p) => p.id === id))
         throw new AccessError('not-found', 'No such passkey.');
       const rest = file.passkeys.filter((p) => p.id !== id);
@@ -657,6 +663,9 @@ export class AccessStore {
           'This passkey is your only way to sign in. Add another passkey or a password first.',
         );
       file.passkeys = rest;
+      const ended = file.sessions.filter((s) => s.passkeyId === id).map((s) => s.id);
+      file.sessions = file.sessions.filter((s) => s.passkeyId !== id);
+      return ended;
     });
   }
 
@@ -749,6 +758,7 @@ export class AccessStore {
     via: SignInVia;
     userAgent?: string;
     keyId?: string;
+    passkeyId?: string;
     deviceId?: string;
   }): Promise<{ token: string; session: SessionRecord }> {
     const token = randomToken(32);
@@ -759,6 +769,7 @@ export class AccessStore {
       hash: hashToken(token),
       via: input.via,
       ...(input.keyId && { keyId: input.keyId }),
+      ...(input.passkeyId && { passkeyId: input.passkeyId }),
       device,
       kind,
       createdAt: now,
@@ -1036,7 +1047,7 @@ export class AccessStore {
       if (!keep && waiting.length >= MAX_WAITING)
         throw new AccessError(
           'busy',
-          'Too many devices are waiting to be approved. On the computer running Conch, approve or turn them down first: pnpm conch devices',
+          `Too many devices are waiting to be approved. Approve or turn them down first: in Settings → Security on a device you’ve let in, or ${cliName()} devices on the computer running Conch.`,
         );
       const expiresAt = now + APPROVAL_TTL_MS;
       const session: SessionRecord = {
@@ -1315,8 +1326,7 @@ export class AccessStore {
   }
 }
 
-const HELLO_GONE =
-  'This link has been used or has run out. On the computer running Conch, run conch hello for a new one.';
+const HELLO_GONE = `This link has been used or has run out. On the computer running Conch, run ${cliName()} hello for a new one.`;
 
 const NO_REQUEST =
   'No device is waiting with that code. It may have run out: sign in again on that device to get a new one.';

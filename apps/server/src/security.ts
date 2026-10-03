@@ -6,6 +6,7 @@ import { Emitter } from './lib/emitter';
 import { SignInLimiter } from './auth/limiter';
 import { HERE_COOKIE_MAX_AGE_S, hereCookieName, ThisComputer } from './auth/here';
 import { HostPolicy, isLoopbackAddress, isLoopbackHost } from './auth/network';
+import { PasskeyCeremonies, passkeyPlace } from './auth/passkeys';
 import { safeEqual } from './auth/secrets';
 import {
   type AccessStore,
@@ -13,6 +14,7 @@ import {
   SESSION_MAX_AGE_MS,
   VERIFY_WINDOW_MS,
 } from './auth/store';
+import { cliName } from './cli/command';
 
 /** How a request was let in. */
 export type Access =
@@ -40,6 +42,11 @@ const PUBLIC_API = new Set([
   'POST /api/auth/sign-out',
   // Handing in a one-time code from `#here=` (ADR 0063); it checks its own.
   'POST /api/here',
+  // A passkey challenge to sign in, or to make Conch yours from the hello link (ADR 0064, 0065).
+  'POST /api/auth/passkey',
+  // The hello link: is it still good, and use it (ADR 0064). Each checks its own code.
+  'POST /api/auth/hello',
+  'POST /api/auth/hello/finish',
 ]);
 
 /** What the menu bar helper may ask, with its token instead of a sign-in (ADR 0029). */
@@ -84,6 +91,8 @@ const FORWARDED = ['forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-real-i
  */
 export class Gatekeeper {
   readonly limiter = new SignInLimiter();
+  /** Making and using passkeys (ADR 0065): the challenges it gave out live here. */
+  readonly passkeys: PasskeyCeremonies;
   readonly hosts: HostPolicy;
   /** Open sockets per session, so signing a device out disconnects it at once. */
   readonly #sockets = new Map<string, Set<{ close(code?: number, reason?: string): void }>>();
@@ -125,6 +134,7 @@ export class Gatekeeper {
     readonly here: ThisComputer = new ThisComputer(config.CONCH_HOME),
   ) {
     this.hosts = new HostPolicy(config);
+    this.passkeys = new PasskeyCeremonies(store);
   }
 
   /** `CONCH_TOKEN` (legacy) acts as an access key and turns sign-in on. */
@@ -297,7 +307,15 @@ export class Gatekeeper {
       // Only those still outside need telling: the way back in is on this computer.
       ...(!signedIn && (await this.store.locked()) && { locked: true }),
       ...(approval && { approval }),
+      ...(!signedIn && (await this.passkeysHere(request)) && { passkeys: true }),
     };
+  }
+
+  /** A passkey made for the address this request came to could sign in (ADR 0065). */
+  async passkeysHere(request: FastifyRequest): Promise<boolean> {
+    const place = passkeyPlace(request);
+    if (!place || (await this.store.method()) === 'none') return false;
+    return (await this.store.passkeyRecords()).some((p) => p.rpId === place.rpId);
   }
 
   /** Sensitive changes need a recent password/key ("sudo mode"). */
@@ -546,7 +564,7 @@ export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
         reply,
         401,
         'here-required',
-        'This browser hasn’t been opened from Conch yet. On the computer running Conch, open Conch from your apps, or run: pnpm conch open',
+        `This browser hasn’t been opened from Conch yet. On the computer running Conch, open Conch from your apps, or run: ${cliName()} open`,
       );
     }
     if (resolved === 'unauthorized') return reject(reply, 401, 'unauthorized', 'Please sign in.');
@@ -558,7 +576,7 @@ export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
         message:
           request.approval?.state === 'rejected'
             ? 'Using this key from this device was turned down.'
-            : `This key needs your approval to be used from this device. On the computer running Conch, run: pnpm conch devices approve ${code}`,
+            : `This key needs your approval to be used from this device. Approve it in Settings → Security on a device you’ve let in, or on the computer running Conch: ${cliName()} devices approve ${code}`,
       });
     }
     request.access = resolved;

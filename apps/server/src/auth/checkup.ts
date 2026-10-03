@@ -7,6 +7,7 @@ import { isStaleKey, type CheckupItem, type PermissionMode } from '@conch/protoc
 import type { Config } from '../config';
 import { exposure } from './network';
 import type { AccessFile } from './store';
+import { cliName } from '../cli/command';
 
 /**
  * `~/.conch` holds every conversation, memory and credential hash. Make sure
@@ -211,7 +212,7 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       title: 'Sign-in is locked',
       detail:
         'Conch couldn’t read who may sign in, so nobody can sign in until you reset it on this computer. A copy of the damaged file was kept next to it.',
-      command: 'pnpm conch reset',
+      command: `${cliName()} reset`,
     });
   } else if (access.method === 'none') {
     items.push(
@@ -258,7 +259,7 @@ export function checkup(input: CheckupInput): CheckupItem[] {
             : `${waiting.length} devices are waiting for your approval`,
         detail:
           'Something signed in with your password or key and is asking to be let in. Approve it only if it’s yours. If it isn’t, someone knows your password: turn it down and change it.',
-        command: 'pnpm conch devices',
+        command: `${cliName()} devices`,
         fix: { kind: 'open', label: 'Review', place: 'devices' },
       });
     } else if (access.approval) {

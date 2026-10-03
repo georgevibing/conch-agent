@@ -27,6 +27,7 @@ import { Mutex, writeFileAtomic, writeJson } from '../lib/fs';
 import { readStore, setAside } from '../lib/recover';
 import { isSealed, SealedError, sealerFor, type Sealer } from '../lib/sealed';
 import { fingerprintOf, newSigner, publicKeyFrom, type Signer } from './signing';
+import { cliName } from '../cli/command';
 
 const TrustFile = z.object({
   publishers: z
@@ -52,7 +53,7 @@ export const TRUST_FILE = 'skills.trust.json';
 export const SIGNER_FILE = 'skills.signing.json';
 
 /** What to do when the key can't be used, for the terminal and Repair everything. */
-export const NEW_KEY_COMMAND = 'pnpm conch skills key --new';
+export const newKeyCommand = () => `${cliName()} skills key --new`;
 
 /** Your signing key can't be used. The message is for a person, and says nothing was signed. */
 export class SigningKeyError extends Error {

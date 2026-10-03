@@ -12,10 +12,11 @@ import { describe, expect, it } from 'vitest';
 
 import { isBrokenCopy } from '../lib/recover';
 import { deviceSealer, isSealed } from '../lib/sealed';
+import { captureUi } from '../cli/ui';
 import { skillsCommand, type SkillsIo } from './cli';
 import { signingKeyCheck } from './doctor';
 import { newSigner, SIG_FILE, type Signer } from './signing';
-import { NEW_KEY_COMMAND, SIGNER_FILE, SigningKeyError, SkillTrust } from './trust';
+import { newKeyCommand, SIGNER_FILE, SigningKeyError, SkillTrust } from './trust';
 
 const thisComputer = deviceSealer(async () => Buffer.alloc(32, 1));
 const anotherComputer = deviceSealer(async () => Buffer.alloc(32, 2));
@@ -174,15 +175,19 @@ describe('your key for signing skills, locked with this computer’s key', () =>
   });
 });
 
-describe('pnpm conch skills, when the key can’t be opened', () => {
+describe('conch skills, when the key can’t be opened', () => {
   async function setup() {
     const root = await home();
-    const lines: string[] = [];
+    const { ui, text } = captureUi();
+    /** What was said, a line each, without the indent. */
+    const lines = () =>
+      text()
+        .split('\n')
+        .filter((line) => line.trim())
+        .map((line) => line.replace(/^ {2}/, ''));
     const io: SkillsIo = {
-      say: (line = '') => void lines.push(line),
-      bold: (s) => s,
-      dim: (s) => s,
-      green: (s) => s,
+      ui,
+      conch: (args) => `pnpm conch ${args}`,
       cwd: root,
       defaultName: 'ada',
     };
@@ -197,15 +202,15 @@ describe('pnpm conch skills, when the key can’t be opened', () => {
     await new SkillTrust(dir, { sealer: anotherComputer }).signer('Ada');
     const trust = new SkillTrust(dir, { sealer: thisComputer });
     expect(await skillsCommand(['sign', folder], trust, io)).toBe(1);
-    expect(lines[0]).toBe(
+    expect(lines()[0]).toBe(
       '✗ Your key for signing skills can’t be opened: the file was changed, or it was locked on another computer. Nothing was signed.',
     );
-    expect(lines[1]).toContain(NEW_KEY_COMMAND);
+    expect(lines()[1]).toContain(newKeyCommand());
     await expect(readFile(join(folder, SIG_FILE))).rejects.toThrow();
 
     // `key --new` makes a new one; then signing works.
     expect(await skillsCommand(['key', '--new', '--as', 'Ada'], trust, io)).toBe(0);
-    expect(lines.join('\n')).toContain('A new signing key for Ada.');
+    expect(lines().join('\n')).toContain('A new signing key for Ada.');
     expect(await skillsCommand(['sign', folder], trust, io)).toBe(0);
   });
 
@@ -213,7 +218,7 @@ describe('pnpm conch skills, when the key can’t be opened', () => {
     const { lines, io, folder, dir } = await setup();
     const trust = new SkillTrust(dir, { sealer: noKeychain });
     expect(await skillsCommand(['sign', folder], trust, io)).toBe(1);
-    expect(lines[1]).toMatch(/Unlock this computer’s keychain/);
+    expect(lines()[1]).toMatch(/Unlock this computer’s keychain/);
   });
 });
 
@@ -245,7 +250,7 @@ describe('Repair everything', () => {
       {
         state: 'needs-you',
         message: expect.stringContaining('Restore it from a passphrase-locked backup'),
-        action: { kind: 'command', command: NEW_KEY_COMMAND },
+        action: { kind: 'command', command: newKeyCommand() },
       },
     ]);
   });

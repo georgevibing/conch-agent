@@ -14,8 +14,9 @@ const BE = 0x08;
 const BS = 0x10;
 const AT = 0x40;
 
-const b64 = (bytes: Uint8Array) => isoBase64URL.fromBuffer(bytes);
-const sha256 = (data: Uint8Array | string) => new Uint8Array(createHash('sha256').update(data).digest());
+const b64 = (bytes: Uint8Array) => isoBase64URL.fromBuffer(new Uint8Array(bytes));
+const sha256 = (data: Uint8Array | string) =>
+  new Uint8Array(createHash('sha256').update(data).digest());
 
 function counterBytes(counter: number): Uint8Array {
   const out = new Uint8Array(4);
@@ -51,12 +52,7 @@ export class PretendAuthenticator {
 
   #flags(extra = 0): number {
     const synced = this.options.synced ?? true;
-    return (
-      UP |
-      ((this.options.verifies ?? true) ? UV : 0) |
-      (synced ? BE | BS : 0) |
-      extra
-    );
+    return UP | ((this.options.verifies ?? true) ? UV : 0) | (synced ? BE | BS : 0) | extra;
   }
 
   /** Answer `navigator.credentials.create()`'s options. */
@@ -141,7 +137,11 @@ export class PretendAuthenticator {
         crossOrigin: false,
       }),
     );
-    const signature = sign('sha256', Buffer.concat([authData, sha256(clientDataJSON)]), passkey.privateKey);
+    const signature = sign(
+      'sha256',
+      Buffer.concat([authData, sha256(clientDataJSON)]),
+      passkey.privateKey,
+    );
     return {
       id: passkey.id,
       rawId: passkey.id,

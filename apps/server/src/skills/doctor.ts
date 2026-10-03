@@ -2,7 +2,7 @@
 import type { DoctorItem } from '@conch/protocol';
 
 import type { DoctorCheck } from '../doctor/service';
-import { NEW_KEY_COMMAND, type SkillTrust } from './trust';
+import { newKeyCommand, type SkillTrust } from './trust';
 
 const GROUP = 'This computer';
 const TITLE = 'Your key for signing skills';
@@ -40,7 +40,7 @@ export function signingKeyCheck(trust: SkillTrust): DoctorCheck {
       return item(
         'needs-you',
         `${key.problem} Restore it from a passphrase-locked backup, or make a new one.`,
-        { kind: 'command', label: 'Copy', command: NEW_KEY_COMMAND },
+        { kind: 'command', label: 'Copy', command: newKeyCommand() },
       );
     },
   };
