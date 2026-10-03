@@ -1,7 +1,6 @@
 import { ReplyChips } from '@conch/nacre';
 
 import type { ConversationView } from '../../live/reducer';
-import styles from './NextReplies.module.css';
 
 /** Tolerance for the gateway's clock running a little behind this device's. */
 const CLOCK_SLACK_MS = 1500;
@@ -33,7 +32,6 @@ export function NextReplies({
       replies={latest.replies}
       onSend={onSend}
       entrance={latest.at >= openedAt - CLOCK_SLACK_MS}
-      className={styles.replies}
       data-by={latest.by}
     />
   );

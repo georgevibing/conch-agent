@@ -74,12 +74,28 @@ const ArrivedLive = createContext(false);
  * Wraps one transcript block. Whether it arrived live is decided once, when it
  * first appears, and never changes: blocks that were already there (history, a
  * reload) render at rest — no entrance, no reveal; only news animates.
+ *
+ * A `part` of a reply (a tool row, a card, more of its words) is a box of its
+ * own that sits one step under what's above it, lined up with the reply's
+ * words, wherever it is: in the transcript, or in the reply's own column.
+ * One that renders nothing takes no room.
  */
-export function Arrival({ live, children }: { live: boolean; children: ReactNode }) {
+export function Arrival({
+  live,
+  part,
+  children,
+}: {
+  live: boolean;
+  part?: boolean;
+  children: ReactNode;
+}) {
   const [arrivedLive] = useState(live);
   return (
     <ArrivedLive value={arrivedLive}>
-      <div className={styles.arrival} data-at-rest={arrivedLive ? undefined : ''}>
+      <div
+        className={part ? `${styles.arrival} ${styles.part}` : styles.arrival}
+        data-at-rest={arrivedLive ? undefined : ''}
+      >
         {children}
       </div>
     </ArrivedLive>
@@ -133,12 +149,21 @@ export function AssistantMessage({
   name,
   wait,
   entrance = true,
+  attached,
+  said,
 }: {
   item: Of<'assistant'>;
   name: string;
   /** Present while the turn runs: shown in place of the reply until its first words arrive. */
   wait?: Wait;
   entrance?: boolean;
+  /** The rest of the reply (tool rows, more words, its cards), drawn before its actions. */
+  attached?: ReactNode;
+  /**
+   * The whole reply's words, once it's over: what Copy and Read aloud take.
+   * Undefined while any of it is still being written (no actions yet).
+   */
+  said?: string;
 }) {
   const streaming = !item.done;
   const arrivedLive = useContext(ArrivedLive);
@@ -179,11 +204,12 @@ export function AssistantMessage({
       timestamp={new Date(item.startedAt)}
       status={streaming ? 'streaming' : 'complete'}
       entrance={entrance}
+      attached={attached}
       actions={
-        item.done && item.text ? (
+        item.done && said ? (
           <>
-            <ReadAloud text={item.text} />
-            <CopyButton value={item.text} label="Copy reply" />
+            <ReadAloud text={said} />
+            <CopyButton value={said} label="Copy reply" />
           </>
         ) : undefined
       }
