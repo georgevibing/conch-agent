@@ -691,6 +691,7 @@ describe('updates from GitHub', () => {
       source: { kind: 'github', owner: 'bea', repo: 'weather', url: link, commit: 'c2' },
     });
     latest.set('bea/weather', { ref: 'main', commit: 'c2' });
+    const ran = h.parts.started.length;
     await h.service.checkUpdates();
     const waiting = await h.service.get('weather');
     expect(waiting.manifest.version).toBe('1.0.0');
@@ -709,15 +710,92 @@ describe('updates from GitHub', () => {
         reachesAdded: ['api.weather.example'],
       },
     ]);
-    expect((await h.service.updatePreview('weather')).manifest.version).toBe('1.1.0');
-    const updated = await h.service.applyUpdate('weather');
+    // Looking for it ran none of its code.
+    expect(h.parts.started).toHaveLength(ran);
+    const looked = await h.service.updatePreview('weather');
+    expect(looked.manifest.version).toBe('1.1.0');
+    // The record's word for who signed it is never what's trusted on the press.
+    await h.service.store.patch('weather', (record) => {
+      if (record.update)
+        record.update.signature = { state: 'verified', fingerprint: 'FAKE', publisher: 'Ada' };
+    });
+    const updated = await h.service.applyUpdate('weather', looked.hash);
     expect(updated).toMatchObject({
       manifest: { version: '1.1.0' },
       saved: ['apiKey'],
       source: { commit: 'c2' },
     });
+    expect(updated.signature).toMatchObject({ state: 'untrusted', fingerprint: 'BBBB' });
     expect(updated.update).toBeUndefined();
-    await expect(h.service.applyUpdate('weather')).rejects.toThrow(/no update waiting/);
+    await expect(h.service.applyUpdate('weather', looked.hash)).rejects.toThrow(
+      /no update waiting/,
+    );
+  });
+
+  async function waiting() {
+    const link = 'https://github.com/bea/weather';
+    const links: NonNullable<FakeOptions['links']> = new Map();
+    const latest = new Map<string, { ref: string; commit?: string }>();
+    const h = await harness({ links, latest });
+    const bea = { fingerprint: 'BBBB', publisher: 'Bea' };
+    const publish = (version: string, commit: string, reaches: string[] = []) => {
+      links.set(link, {
+        archive: signedPackage(keyed(version, reaches), bea),
+        source: { kind: 'github', owner: 'bea', repo: 'weather', url: link, commit },
+      });
+      latest.set('bea/weather', { ref: 'main', commit });
+    };
+    publish('1.0.0', 'c1');
+    const preview = await h.service.preview({ link });
+    if (!preview?.apps[0]) throw new Error('nothing');
+    await h.service.install({
+      packageId: preview.packageId,
+      appId: 'weather',
+      hash: preview.apps[0].hash,
+      settings: {},
+    });
+    publish('1.1.0', 'c2');
+    await h.service.checkUpdates();
+    return { h, publish, links, latest };
+  }
+
+  it('a newer version that arrives between the look and the press is refused', async () => {
+    const { h, publish } = await waiting();
+    const looked = await h.service.updatePreview('weather');
+    expect(looked.manifest.version).toBe('1.1.0');
+    publish('1.2.0', 'c3', ['evil.example']);
+    await h.service.checkUpdates();
+    await expect(h.service.applyUpdate('weather', looked.hash)).rejects.toThrow(
+      'A newer version arrived since you looked; look again.',
+    );
+    expect((await h.service.get('weather')).manifest.version).toBe('1.0.0');
+    const again = await h.service.updatePreview('weather');
+    expect(again.changes?.reachesAdded).toEqual(['evil.example']);
+    expect((await h.service.applyUpdate('weather', again.hash)).manifest.version).toBe('1.2.0');
+  });
+
+  it('after a restart, the press installs only what the person looked at again', async () => {
+    const { h, publish, links, latest } = await waiting();
+    const announced = (await h.service.store.get('weather'))?.updateHash ?? '';
+    // Conch restarts; meanwhile something else is published at the same place.
+    publish('1.2.0', 'c3', ['evil.example']);
+    const after = await harness({ links, latest }, h.home);
+    // Nothing held: a press with the hash from before installs nothing.
+    await expect(after.service.applyUpdate('weather', announced)).rejects.toThrow(
+      /newer version arrived/,
+    );
+    const looked = await after.service.updatePreview('weather');
+    expect(looked.manifest.version).toBe('1.2.0');
+    expect((await after.service.get('weather')).update).toMatchObject({
+      version: '1.2.0',
+      changes: { reachesAdded: ['evil.example'] },
+    });
+    await expect(after.service.applyUpdate('weather', announced)).rejects.toThrow(
+      /newer version arrived/,
+    );
+    expect((await after.service.applyUpdate('weather', looked.hash)).manifest.version).toBe(
+      '1.2.0',
+    );
   });
 });
 

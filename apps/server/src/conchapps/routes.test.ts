@@ -238,9 +238,26 @@ describe('Conch apps over HTTP: the attacks', () => {
     expect(refused.json().error).toBe('verify-required');
     for (const url of ['/api/conch-apps/weather/update', '/api/conch-apps/weather/publish'])
       expect(
-        (await g.app.inject({ method: 'POST', url, headers: { cookie }, payload: {} })).json()
-          .error,
+        (
+          await g.app.inject({
+            method: 'POST',
+            url,
+            headers: { cookie },
+            payload: url.endsWith('update') ? { hash: 'h' } : {},
+          })
+        ).json().error,
       ).toBe('verify-required');
+    // An update's press must say which files it means.
+    expect(
+      (
+        await g.app.inject({
+          method: 'POST',
+          url: '/api/conch-apps/weather/update',
+          headers: { cookie },
+          payload: {},
+        })
+      ).statusCode,
+    ).toBe(400);
     // Saving it as a file can sign with your key: it asks too.
     expect(
       (

@@ -16,6 +16,7 @@
 import {
   AcceptAppOfferBody,
   AppCallBody,
+  ApplyUpdateBody,
   AppSettingsBody,
   DeclineAppOfferBody,
   Id,
@@ -211,10 +212,13 @@ export function registerConchAppRoutes(
     guarded(reply, async () => noStore(reply).send(await service.updatePreview(request.params.id))),
   );
 
+  // The press carries the hash of the version the person looked at: nothing else is installed.
   app.post<{ Params: { id: string } }>('/api/conch-apps/:id/update', async (request, reply) => {
+    const body = parse(ApplyUpdateBody, request.body, reply);
+    if (!body) return;
     if (verifyRequired(request, reply)) return;
     return guarded(reply, async () => {
-      const updated = await service.applyUpdate(request.params.id);
+      const updated = await service.applyUpdate(request.params.id, body.hash);
       changed();
       return updated;
     });

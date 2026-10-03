@@ -550,6 +550,10 @@ export type AppSettingsBody = z.infer<typeof AppSettingsBody>;
 
 export const RollbackAppBody = z.object({ version: z.string() }).strict();
 
+/** **Update**: the exact files the person looked at (`ConchAppFound.hash` from the update's preview). */
+export const ApplyUpdateBody = z.object({ hash: z.string().min(1).max(128) }).strict();
+export type ApplyUpdateBody = z.infer<typeof ApplyUpdateBody>;
+
 /** A repository on GitHub with the topic `conch-app`. */
 export const CommunityApp = z.object({
   owner: z.string(),
