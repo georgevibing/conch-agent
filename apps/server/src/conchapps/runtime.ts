@@ -14,7 +14,7 @@
  *   `APP_LIMITS.callMs`, and one that runs over stops the process.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdir, realpath } from 'node:fs/promises';
+import { mkdir, readdir, realpath, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { APP_LIMITS, ConchAppTool } from '@conch/protocol';
@@ -87,6 +87,20 @@ export function sealedEnv(platform: NodeJS.Platform = process.platform): Record<
   const env = Object.fromEntries(WINDOWS_REQUIRED.map((name) => [name, '']));
   env.SYSTEMROOT = process.env.SYSTEMROOT ?? process.env.SystemRoot ?? String.raw`C:\Windows`;
   return env;
+}
+
+/**
+ * A data write's temp file (`.<key>.<hex>.tmp`), left behind when the
+ * process was stopped mid-write. The runtime counts only what it's writing
+ * now, so these are cleared before every start.
+ */
+const TEMP_FILE = /^\..*\.tmp$/;
+
+export async function sweepTemp(dataDir: string): Promise<void> {
+  const entries = await readdir(dataDir, { withFileTypes: true }).catch(() => []);
+  for (const entry of entries)
+    if (entry.isFile() && TEMP_FILE.test(entry.name))
+      await rm(join(dataDir, entry.name), { force: true }).catch(() => undefined);
 }
 
 // ── What the sealed process may say ───────────────────────────────────────
@@ -392,6 +406,7 @@ export class SealedRuntime implements AppRuntime {
   async #start(): Promise<AppToolDefinition[]> {
     const toolsPath = this.options.manifest.tools as string;
     await mkdir(this.options.dataDir, { recursive: true });
+    await sweepTemp(this.options.dataDir);
     // The permission model compares real paths: a link or an 8.3 name would otherwise miss.
     const [host, appDir, dataDir] = await Promise.all([
       realpath(this.options.hostScript ?? HOST_SCRIPT),

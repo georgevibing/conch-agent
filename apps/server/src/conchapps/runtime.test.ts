@@ -23,6 +23,7 @@ import {
   inputProblem,
   sealedArgs,
   sealedEnv,
+  sweepTemp,
   type SealedRuntime,
 } from './runtime';
 import type { AppFetcher } from './types';
@@ -786,6 +787,34 @@ export const tools = {
     });
     // Replacing a key counts only the new value.
     expect((await runtime.call('fill', { key: 'a', n: 9000 })).text).toBe('kept');
+  });
+
+  it('clears the temp files of a process stopped mid-write, so they never get past the cap', async () => {
+    const app = await makeApp(`export const tools = {
+      ${tool('start_big', 'void app.data.set("big", "z".repeat(input.n)).catch(() => {}); return "started";')}
+      ${tool('fill', 'await app.data.set(input.key, "z".repeat(input.n)); return "kept";')}
+    };`);
+    const runtime = start(app, { dataLimit: 40 * 1024 * 1024 });
+    // Stopped while it writes 30 MB: whatever it left half-written is a temp file.
+    expect((await runtime.call('start_big', { n: 30 * 1024 * 1024 })).text).toBe('started');
+    await runtime.stop();
+    // And one from an earlier run, as a crash would leave it.
+    await writeFile(join(app.dataDir, '.log.0badc0de.tmp'), 'z'.repeat(1024 * 1024));
+    expect((await runtime.call('fill', { key: 'small', n: 10 })).text).toBe('kept');
+    expect((await readdir(app.dataDir)).filter((n) => n.endsWith('.tmp'))).toEqual([]);
+    await runtime.stop();
+    await writeFile(join(app.dataDir, '.x.1.tmp'), 'leftover');
+    await sweepTemp(app.dataDir);
+    expect((await readdir(app.dataDir)).filter((n) => n.endsWith('.tmp'))).toEqual([]);
+  });
+
+  it('holds the cap when several keys are written at once', async () => {
+    const app = await makeApp(`export const tools = {
+      ${tool('both', 'const r = await Promise.allSettled([app.data.set("a", "z".repeat(6000)), app.data.set("b", "z".repeat(6000)), app.data.set("c", "z".repeat(6000))]); return r.map((x) => x.status);')}
+    };`);
+    const got = (await start(app, { dataLimit: 10_000 }).call('both', {})).json as string[];
+    expect(got.filter((s) => s === 'fulfilled')).toHaveLength(1);
+    expect(got.filter((s) => s === 'rejected')).toHaveLength(2);
   });
 
   it('says so when what’s kept is damaged', async () => {

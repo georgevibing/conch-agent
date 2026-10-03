@@ -530,6 +530,19 @@ async function readValue(key) {
   }
 }
 
+/** Bytes being written right now, one entry per write: counted against the cap. */
+const writing = new Map();
+let lastReservation = 0;
+
+/** A write's temp file, left behind when the process was stopped mid-write. */
+const TEMP_FILE = /^\..*\.tmp$/;
+
+/** Temp files from a process stopped mid-write: never counted, so never kept. */
+async function sweepTemp() {
+  for (const name of await readdir(dataDir).catch(() => []))
+    if (TEMP_FILE.test(name)) await rm(join(dataDir, name), { force: true }).catch(() => undefined);
+}
+
 async function writeValue(key, value) {
   if (value === undefined) return removeValue(key);
   let text;
@@ -541,23 +554,31 @@ async function writeValue(key, value) {
   if (text === undefined) throw new Error(`Only JSON can be kept, and “${key}” isn’t.`);
   const bytes = BufferByteLength(text);
   const known = await knownSizes();
+  // From here to the reservation nothing waits, so two writes at once can't
+  // both fit in the room only one has. A write's temp file counts until it's
+  // renamed; the value it replaces is subtracted, since the rename removes it.
   let total = 0;
   for (const size of known.values()) total += size;
+  for (const size of writing.values()) total += size;
   if (total - (known.get(key) ?? 0) + bytes > limits.data)
     throw new Error(
       `The app’s data is full (${Math.round(limits.data / 1024 / 1024)} MB). Delete what it no longer needs, then try again.`,
     );
-  await mkdir(dataDir, { recursive: true });
+  const reservation = ++lastReservation;
+  writing.set(reservation, bytes);
   const path = join(dataDir, `${key}.json`);
   const tmp = join(dataDir, `.${key}.${randomBytes(4).toString('hex')}.tmp`);
-  await writeFile(tmp, text);
   try {
+    await mkdir(dataDir, { recursive: true });
+    await writeFile(tmp, text);
     await replace(tmp, path);
+    known.set(key, bytes);
   } catch (error) {
     await rm(tmp, { force: true });
     throw new Error(`Couldn’t keep “${key}”: ${error?.code ?? 'the disk refused'}.`);
+  } finally {
+    writing.delete(reservation);
   }
-  known.set(key, bytes);
 }
 
 async function removeValue(key) {
@@ -761,6 +782,7 @@ async function load(message) {
   limits = { ...limits, ...message.limits };
   entryUrl = pathToFileURL(join(appDir, message.tools)).href;
   const settings = freeze({ ...message.settings });
+  await sweepTemp();
   installHooks();
   fenceNetwork();
   lockRealProcess();
