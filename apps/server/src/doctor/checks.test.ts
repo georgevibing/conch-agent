@@ -1,4 +1,4 @@
-import { mkdtemp } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -19,6 +19,8 @@ async function setup(state = 'ready') {
     loadConfig({ CONCH_HOME: home, CONCH_ENGINE: 'mock', CONCH_LOG_LEVEL: 'silent' }),
   );
   delete process.env.CONCH_MOCK_STATE;
+  // A started Conch has made this computer's key (Services.start).
+  services.here.key();
   return services;
 }
 
@@ -34,8 +36,27 @@ describe('Repair everything, on a real Conch', () => {
     const byId = Object.fromEntries(report.items.map((i) => [i.id, i]));
     expect(byId['providers:mock']).toMatchObject({ state: 'ok', group: 'Providers' });
     expect(byId['computer:files']).toMatchObject({ state: 'ok' });
+    expect(byId['computer:here']).toMatchObject({ state: 'ok', title: 'This computer’s key' });
     expect(report.items.some((i) => i.state === 'checking')).toBe(false);
     expect(report.running).toBe(false);
+  });
+
+  it('makes this computer’s key again when it’s damaged, and says what that means', async () => {
+    const s = await setup();
+    const file = join(s.config.CONCH_HOME, 'here', 'key');
+    await mkdir(join(s.config.CONCH_HOME, 'here'), { recursive: true });
+    await writeFile(file, 'not a key');
+    const looked = await s.doctor.run();
+    expect(looked.items.find((i) => i.id === 'computer:here')).toMatchObject({
+      state: 'warning',
+      message: expect.stringMatching(/damaged/),
+    });
+    const repaired = await s.doctor.run({ repair: true });
+    expect(repaired.items.find((i) => i.id === 'computer:here')).toMatchObject({
+      state: 'fixed',
+      message: expect.stringMatching(/Open Conch from your apps/),
+    });
+    expect((await readFile(file, 'utf8')).trim()).toMatch(/^[A-Za-z0-9_-]{43}$/);
   });
 
   it('points at the one thing only you can do: signing in', async () => {

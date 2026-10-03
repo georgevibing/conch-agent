@@ -65,7 +65,8 @@ back exactly where they were.
 **Who can open one.**
 
 - **This computer** (a genuinely local request: loopback socket, loopback `Host`, no
-  proxy headers): yes, like the rest of Conch.
+  proxy headers, and since ADR 0063 proof that it's you on this computer): yes, like
+  the rest of Conch.
 - **Any other device: off by default.** Settings › Terminal › _From other devices_
   turns it on, and turning it on needs a recent password or key. The checkup warns
   while it's on.

@@ -11,6 +11,7 @@ import { type ConversationEvent, type ServerEvent, type TaintSource } from '@con
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
+import { onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import type { TurnInput } from '../engines/types';
 import { Services } from '../services';
@@ -30,7 +31,7 @@ async function setup() {
       CONCH_WEB_DIST: '/nonexistent',
     }),
   );
-  const app = await buildApp(services);
+  const app = onThisComputer(await buildApp(services), services);
   open.push(app);
   // What each turn was given: its tools and its prompt.
   const engine = services.engines.get('mock');

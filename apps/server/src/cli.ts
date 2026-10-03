@@ -13,6 +13,8 @@ import { checkPassword, suggestPassword } from '@conch/protocol';
 import { renderUnicodeCompact } from 'uqr';
 
 import { checkup, secureHome, workspaceRules } from './auth/checkup';
+import { ThisComputer } from './auth/here';
+import { askHere, openHere } from './auth/open-here';
 import { backgroundCommand, quitCommand, type BackgroundIo } from './background/cli';
 import { carriedEnv } from './background/files';
 import { backendFor, BackgroundService, lastWords } from './background/service';
@@ -223,8 +225,51 @@ async function reset() {
   const answer = await ask('Type “reset” to continue: ');
   if (answer.trim() !== 'reset') return say('Nothing was changed.');
   await store.disable();
-  say('✓ Sign-in is off. Open Conch on this computer and choose a new password in');
-  say('  Settings → Security, or run: pnpm conch password');
+  // Every browser here proves itself again (ADR 0063): one that kept a cookie isn't trusted on it.
+  new ThisComputer(config.CONCH_HOME).rotate();
+  say('✓ Sign-in is off. Open Conch from your apps on this computer (or run: pnpm conch open)');
+  say('  and choose a new password in Settings → Security, or run: pnpm conch password');
+}
+
+/** `pnpm conch open [page] [--link]`: Conch in this computer's browser, as this computer (ADR 0063). */
+async function open() {
+  const args = process.argv.slice(3);
+  const wantsLink = args.includes('--link');
+  const page = args.find((arg) => arg.startsWith('/'));
+  const port = (await runningGateway(config.CONCH_HOME))?.port ?? config.CONCH_PORT;
+  if ((await probePort(config.CONCH_HOST, port)) !== 'conch') {
+    say('Conch isn’t running. Start it with: pnpm start');
+    process.exitCode = 1;
+    return;
+  }
+  if (wantsLink) {
+    const link = await askHere({ home: config.CONCH_HOME, page });
+    if (!link) {
+      say(
+        '✗ Conch didn’t hand out a link. Restart it (pnpm conch quit, then pnpm start) and try again.',
+      );
+      process.exitCode = 1;
+      return;
+    }
+    say('Open this in the browser you want to use Conch in, on this computer:');
+    say();
+    say(`  ${bold(link.url)}`);
+    say();
+    say(dim('It works once, for two minutes. Don’t share it: whoever opens it first gets in.'));
+    return;
+  }
+  const how = await openHere({ home: config.CONCH_HOME, url: `http://localhost:${port}`, page });
+  if (how === 'opened') say(green('✓ Opened Conch in your browser.'));
+  else if (how === 'plain')
+    say(
+      yellow(
+        '! Opened Conch, but it couldn’t hand your browser its key. Restart Conch and try again.',
+      ),
+    );
+  else {
+    say('There’s no browser to open here. For a browser on this computer, or at the end of an');
+    say('SSH tunnel, ask for a one-time link: pnpm conch open --link');
+  }
 }
 
 /** The provider in use, for the checkup, without starting the whole gateway. */
@@ -503,6 +548,7 @@ const commands: Record<CliCommandName | 'help', () => Promise<void> | void> = {
   devices,
   'sign-out-everywhere': signOutEverywhere,
   reset,
+  open,
   background,
   quit,
   shortcut,

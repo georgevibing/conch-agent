@@ -61,3 +61,5 @@ pnpm start
 ```
 
 Conch builds and opens at `http://localhost:4317`, reachable only from this computer. If another program has that port, it takes the next free one and says so.
+
+Conch trusts a browser it opened itself. To use another browser on this computer, run `pnpm conch open --link` and paste the link it prints. [This computer](../security/signing-in.md#this-computer) says why.

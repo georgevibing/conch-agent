@@ -167,6 +167,11 @@ export const RULES: readonly BackupRule[] = [
     why: 'What the assistant changed, kept so it can be undone: copies of files on this computer, about this computer’s folders.',
   },
   {
+    match: 'here/**',
+    class: 'derived',
+    why: 'The key that proves a browser or a launcher is on this computer (ADR 0063), and the one-time files that open Conch: this computer’s own, made again on the next start.',
+  },
+  {
     match: 'tray/**',
     class: 'derived',
     why: 'Conch’s menu bar helper, built on this computer, and its token: made again on the next start.',

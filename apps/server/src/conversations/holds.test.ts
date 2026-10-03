@@ -10,6 +10,7 @@ import type { ServerEvent } from '@conch/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { buildApp } from '../app';
+import { onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 
@@ -36,7 +37,7 @@ async function gateway(env: Record<string, string> = {}) {
       ...env,
     }),
   );
-  const app = await buildApp(services);
+  const app = onThisComputer(await buildApp(services), services);
   await app.ready();
   closers.push(() => app.close());
   const done = new Promise<void>((resolve) => {

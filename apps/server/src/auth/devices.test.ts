@@ -6,6 +6,7 @@ import type { AccessSettings, AuthStatus } from '@conch/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
+import { onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 import { APPROVAL_TTL_MS, AccessStore, MAX_WAITING } from './store';
@@ -36,7 +37,7 @@ async function setup() {
     CONCH_ALLOWED_HOSTS: 'conch.example',
   });
   const services = new Services(config);
-  const app = await buildApp(services);
+  const app = onThisComputer(await buildApp(services), services);
   close = () => app.close();
   return { app, services, home, store: services.access };
 }
@@ -55,7 +56,7 @@ class Browser {
   cookies = new Map<string, string>();
   constructor(
     readonly app: App,
-    readonly where: { remoteAddress: string; host: string; userAgent: string },
+    readonly where: { remoteAddress: string; host: string; userAgent: string; proof?: false },
   ) {}
 
   async fetch(url: string, init: { method?: string; payload?: object; bearer?: string } = {}) {
@@ -66,6 +67,8 @@ class Browser {
       headers: {
         host: this.where.host,
         'user-agent': this.where.userAgent,
+        // A browser here that wasn't opened from Conch, or a proxy that hides itself (ADR 0063).
+        ...(this.where.proof === false && { 'x-conch-here': '' }),
         ...(this.cookies.size && {
           cookie: [...this.cookies].map(([k, v]) => `${k}=${v}`).join('; '),
         }),
@@ -105,6 +108,14 @@ const laptop = (app: App) =>
   new Browser(app, { remoteAddress: '100.64.0.9', host: 'conch.example', userAgent: MAC });
 const here = (app: App) =>
   new Browser(app, { remoteAddress: '127.0.0.1', host: 'localhost:4317', userAgent: MAC });
+/** nginx's `proxy_pass http://127.0.0.1:4317;`: loopback, a loopback Host, no header, no proof. */
+const hiddenProxy = (app: App) =>
+  new Browser(app, {
+    remoteAddress: '127.0.0.1',
+    host: '127.0.0.1:4317',
+    userAgent: IPHONE,
+    proof: false,
+  });
 
 /** Password sign-in, set up on this computer, which stays signed in and verified. */
 async function withPassword(app: App) {
@@ -328,6 +339,39 @@ describe('approve new devices', () => {
     expect((res.json() as AuthStatus).signedIn).toBe(true);
     const device = (await owner.access()).devices.find((d) => d.kind === 'phone');
     expect(device).toMatchObject({ approved: true, approvedHow: 'link' });
+  });
+
+  it('makes a proxy that hides itself wait like any new device, and never lets it approve', async () => {
+    const { app } = await setup();
+    const owner = await withPassword(app);
+    await approvalOn(owner);
+
+    // The right password through nginx's defaults: a new device, not this computer.
+    const visitor = hiddenProxy(app);
+    const asked = (await visitor.signIn()).json() as AuthStatus;
+    expect(asked.signedIn).toBe(false);
+    expect(asked.approval?.code).toBeTruthy();
+    expect((await visitor.fetch('/api/state')).statusCode).toBe(401);
+    const code = asked.approval?.code ?? '';
+
+    // Approved by the owner, it still can't approve others or turn approval off.
+    expect(
+      (await owner.fetch(`/api/access/requests/${code}/approve`, { method: 'POST' })).statusCode,
+    ).toBe(200);
+    expect((await visitor.fetch('/api/state')).statusCode).toBe(200);
+    const iphone = phone(app);
+    const waiting = (await iphone.signIn()).json() as AuthStatus;
+    const approve = await visitor.fetch(`/api/access/requests/${waiting.approval?.code}/approve`, {
+      method: 'POST',
+    });
+    expect(approve.statusCode).toBe(403);
+    expect(approve.json().error).toBe('here-only');
+    const off = await visitor.fetch('/api/access/approval', {
+      method: 'PUT',
+      payload: { on: false },
+    });
+    expect(off.statusCode).toBe(403);
+    expect(off.json().error).toBe('here-only');
   });
 
   it('keeps devices signed in when it’s turned on, so nobody is locked out', async () => {

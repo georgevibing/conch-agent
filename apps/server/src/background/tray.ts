@@ -27,6 +27,7 @@ import { run, type RunResult } from '../lib/proc';
 import { serviceLabel, shellLauncher, shQuote, windowsLauncher, type LaunchSpec } from './files';
 import { powershellSource, pythonSource, swiftSource, type TraySpec } from './tray-sources';
 import { icoFromPng } from './shortcut';
+import { hereAsksDir } from '../auth/here';
 import { unitName } from './backends';
 
 export const trayDir = (home: string) => join(home, 'tray');
@@ -306,6 +307,7 @@ nohup /bin/sh ${shQuote(join(this.#dir, 'launch'))} >/dev/null 2>&1 &
       url: this.deps.url,
       ...(this.deps.ask && { ask: this.deps.ask }),
       tokenFile: join(this.#dir, 'token'),
+      asksDir: hereAsksDir(this.deps.home),
       startScript: start.path,
     };
     if (this.#platform === 'darwin') {

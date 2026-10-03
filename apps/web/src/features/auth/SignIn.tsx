@@ -96,6 +96,41 @@ export function SignIn({ status, notice }: { status: AuthStatus; notice?: string
     );
   }
 
+  // This computer, but a browser Conch didn't open (ADR 0063): open it from Conch.
+  if (status.hereRequired) {
+    return (
+      <main className={styles.root}>
+        <div className={styles.glow} aria-hidden />
+        <Stack gap={5} align="center" className={styles.card}>
+          <Pearl size="lg" state="idle" label={null} />
+          <Heading level={1} display size="4xl" align="center">
+            Open Conch from your apps
+          </Heading>
+          <Text tone="muted" align="center">
+            Conch can run commands on this computer, so it only trusts a browser it opened itself.
+            Open Conch from your apps, and this browser is let in from then on.
+          </Text>
+          {notice && (
+            <Callout tone="warning" live="polite">
+              {notice}
+            </Callout>
+          )}
+          <Text size="sm" tone="muted" align="center">
+            Or, in a terminal in the Conch folder:
+          </Text>
+          <CodeBlock language="bash" code="pnpm conch open" className={styles.command} />
+          <Button
+            variant="surface"
+            leadingIcon={<RotateCw />}
+            onClick={() => void client.invalidateQueries({ queryKey: keys.auth })}
+          >
+            I’ve opened it — try again
+          </Button>
+        </Stack>
+      </main>
+    );
+  }
+
   if (status.setupRequired) {
     return (
       <main className={styles.root}>
@@ -208,6 +243,13 @@ export function SignIn({ status, notice }: { status: AuthStatus; notice?: string
             </Button>
           </Stack>
         </form>
+
+        {status.here === 'unproven' && (
+          <Text size="sm" tone="muted" align="center">
+            On the computer running Conch? Open Conch from your apps, and this browser counts as
+            that computer: it can approve new devices.
+          </Text>
+        )}
 
         <Collapsible>
           <Collapsible.Trigger chevron className={styles.help}>

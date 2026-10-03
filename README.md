@@ -157,7 +157,7 @@ pnpm start        # builds and opens http://localhost:4317
 
 > [!IMPORTANT]
 > **Conch runs as you.** It can read your files and run commands, so treat it like
-> an SSH server. Out of the box only this computer can open it. Read
+> an SSH server. Out of the box only this computer can open it, in a browser Conch opened itself. Read
 > [docs/SECURITY.md](./docs/SECURITY.md) before you put it on a network.
 
 **On your phone:** choose a password in **Settings → Security**, press **Add a

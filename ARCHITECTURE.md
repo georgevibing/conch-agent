@@ -299,7 +299,9 @@ src/
   five minutes), rebuilds it when its source changes and replaces it when Conch updates.
   It polls `GET /api/tray/status` with `X-Conch-Tray` (the token in `tray/token`, 0600);
   `Gatekeeper.trayAllowed` accepts it from loopback only, for the two `TRAY_API`
-  routes only. `little.ts` has `AfterLogout` (`loginctl enable-linger`, or the one
+  routes only. Its pages open as this computer (ADR 0063): it leaves `<id>.ask` in
+  `~/.conch/here/asks`, and opens the private file the gateway names in `<id>.open`. Its token
+  never opens anything: it goes to whatever listens on the port. `little.ts` has `AfterLogout` (`loginctl enable-linger`, or the one
   `sudo` command) and `KeepAwake` (`caffeinate -s -w <pid>` in the background Conch).
   Both show in `BackgroundStatus` (`tray`, `afterLogout`, `keepAwake`) and in Nacre
   `AlwaysOn`'s `options` (web `RunningOptions`). `install.sh --server` lingers, asks for a
@@ -600,7 +602,7 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
     scrollback in memory, replayed on attach. A viewer that falls 4 MB behind pauses
     the shell. The OSC title becomes the tab's name. A shell that exits non-zero within
     2.5 s is `endedEarly`, and the app offers to start it without the profile.
-  - **Who may open one** (`service.ts`). Local requests, yes. Other devices only
+  - **Who may open one** (`service.ts`). This computer, proven (ADR 0063), yes. Other devices only
     with `allowRemote` on, and a verification from the last 10 minutes for every
     open and attach. Terminals are owned by the session or key that opened them.
     Signing that out (`Gatekeeper.signedOut`) or revoking the key ends them.
@@ -1005,9 +1007,19 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
 
 - **Who gets in** (`apps/server/src/security.ts`, `auth/`). The owner chooses
   _password_ (scrypt, NIST SP 800-63B-4 rules), _access keys_ (`conch_…`, 256-bit,
-  hashed, revocable) or _no sign-in_. With no sign-in, only genuinely local requests
-  are served: loopback socket **and** loopback `Host` **and** no proxy headers.
-  Everything else gets `401 setup-required`. Credentials, sessions and pairing codes
+  hashed, revocable) or _no sign-in_. With no sign-in, only this computer, proven, is let in
+  (ADR 0063). The request must look local: a loopback socket **and** a loopback `Host`
+  **and** no proxy headers (`Gatekeeper.looksLocal`). It must also carry the key from
+  `~/.conch/here/key`, either in `X-Conch-Here` (programs) or as the cookie made with it,
+  `conch_here_<port>` (`Gatekeeper.isLocal`). A browser gets that cookie when a launcher opens
+  it through a one-time link in a private file. The launcher asks for that link through
+  `~/.conch/here/asks` (`ThisComputer.answer`), never over the network, where whatever holds
+  the port would hear it. A request that looks local without the proof
+  gets `401 here-required` ("Open Conch from your apps"); everything else gets
+  `401 setup-required`. Everything that trusts "this computer" asks `isLocal`: approving
+  devices, sign-ins that approve themselves, sudo mode for channels, the terminal, and the
+  sign-in limiter. Cookie flags and "secure" describe the connection, so they follow
+  `looksLocal`. Credentials, sessions and pairing codes
   live hashed in `~/.conch/access.json` (0600). A damaged `access.json` never reads
   as "no sign-in": sign-in locks (this computer included) until `pnpm conch reset`,
   keeping a copy. Only unreadable sessions and pairing codes are dropped.
@@ -1084,8 +1096,9 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
 
 Known limits:
 
-- With sign-in off, other OS users on the same machine can reach loopback. The
-  checkup suggests a password.
+- Cookies for `localhost` reach every port on it: a web server that another account runs on
+  this computer, if you visit it, could read your here-cookie (and your session cookie). Both
+  are HttpOnly and SameSite=Strict, and `pnpm conch reset` takes every here-cookie back.
 - The agent can read `ANTHROPIC_API_KEY`, which it needs.
 - Claude Code loads the workspace's own `.claude/` settings; the checkup warns when they add hooks, auto-allowed tools or MCP servers, and can set those files aside.
 - Breached-password checks use a local blocklist only.

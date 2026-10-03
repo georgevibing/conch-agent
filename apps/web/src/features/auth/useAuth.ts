@@ -16,20 +16,27 @@ export function useAuth() {
 }
 
 /**
- * Read a one-time pairing code (`#pair=…`) or a legacy `?token=` from the
- * address bar, and remove it at once so it never lingers in history,
- * bookmarks or screenshots. Fragments never reach the server's logs.
+ * Read a one-time code from the address bar — `#here=…` from a launcher on
+ * this computer (ADR 0063), `#pair=…` from a pairing link — or a legacy
+ * `?token=`, and remove it at once so it never lingers in history, bookmarks
+ * or screenshots. Fragments never reach the server's logs.
  */
 export function takeLinkCredential():
-  { with: 'pairing'; code: string } | { with: 'key'; key: string } | undefined {
+  | { with: 'here'; code: string }
+  | { with: 'pairing'; code: string }
+  | { with: 'key'; key: string }
+  | undefined {
   const url = new URL(window.location.href);
   const hash = new URLSearchParams(url.hash.slice(1));
+  const here = hash.get('here');
   const code = hash.get('pair');
   const token = url.searchParams.get('token');
-  if (!code && !token) return undefined;
+  if (!here && !code && !token) return undefined;
+  hash.delete('here');
   hash.delete('pair');
   url.searchParams.delete('token');
   url.hash = hash.toString();
   window.history.replaceState(window.history.state, '', url.toString().replace(/#$/, ''));
+  if (here) return { with: 'here', code: here };
   return code ? { with: 'pairing', code } : token ? { with: 'key', key: token } : undefined;
 }

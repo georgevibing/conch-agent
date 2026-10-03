@@ -118,7 +118,15 @@ export const CLI_COMMANDS = [
     summary: 'Forgot your password? Turn sign-in off and start again',
     group: 'Signing in',
     detail:
-      'The way back in: having this terminal is the proof that it’s you. Deletes the password and every access key, signs every device out and leaves Conch open to this computer only. Asks you to type “reset” first.',
+      'The way back in: having this terminal is the proof that it’s you. Deletes the password and every access key, signs every device out and leaves Conch open to this computer only. Every browser on this computer opens Conch from your apps once more. Asks you to type “reset” first.',
+  },
+  {
+    name: 'open',
+    usage: 'open [page] [--link]',
+    summary: 'Open Conch in your browser, as this computer',
+    group: 'Running Conch',
+    detail:
+      'Opens Conch in your default browser as the computer it runs on, as its app does: that browser can then use Conch with sign-in off, and approve devices. --link prints a one-time link instead, for another browser on this computer or one at the end of an SSH tunnel. It works once, for two minutes, and only on this computer.',
   },
   {
     name: 'background',

@@ -71,6 +71,7 @@ import { CHANNEL_NAMES, ChannelService } from './channels/service';
 import { ChannelStore } from './channels/store';
 import { TerminalService } from './terminal/service';
 import { Gatekeeper } from './security';
+import { linuxBrowserHome, ThisComputer } from './auth/here';
 import type { Config } from './config';
 import { CommandStore } from './commands/store';
 import { ConversationManager, type TurnRoute } from './conversations/manager';
@@ -194,6 +195,7 @@ export class Services {
   /** Who may sign in (`~/.conch/access.json`). */
   readonly access: AccessStore;
   readonly gate: Gatekeeper;
+  readonly here: ThisComputer;
   /** Files in CONCH_HOME whose permissions couldn't be tightened (see `secureHome`). */
   homeProblems: string[] = [];
   readonly memory: MemoryStore;
@@ -295,6 +297,8 @@ export class Services {
   #login?: { handle: LoginHandle; state: LoginState };
   #channelStore?: ChannelStore;
   #sweeper?: NodeJS.Timeout;
+  #hereSweeper?: NodeJS.Timeout;
+  #stopAsks?: () => void;
   #vaultDoctor?: NodeJS.Timeout;
 
   constructor(
@@ -344,7 +348,12 @@ export class Services {
     registerSlackDoctor(this.doctor, this.slack);
     this.settings = new SettingsStore(config.CONCH_HOME, heal);
     this.access = new AccessStore(config.CONCH_HOME, heal);
-    this.gate = new Gatekeeper(config, this.access);
+    // "This computer", proven (ADR 0063): the key only your account can read.
+    this.here = new ThisComputer(config.CONCH_HOME, {
+      heal: (message) => heal('access', message),
+      ...(process.platform === 'linux' && { browserHome: () => linuxBrowserHome() }),
+    });
+    this.gate = new Gatekeeper(config, this.access, this.here);
     this.memory = new MemoryStore(join(config.CONCH_HOME, 'memory'));
     this.commands = new CommandStore(join(config.CONCH_HOME, 'commands'));
     this.attachments = new AttachmentStore(join(config.CONCH_HOME, 'attachments'));
@@ -1761,6 +1770,12 @@ export class Services {
 
   /** Read the remembered provider before the first request arrives. */
   async start() {
+    // This computer's key, and no launcher file a crash left behind (ADR 0063).
+    await this.here.start().catch((error: unknown) => console.error('[here]', error));
+    this.#hereSweeper ??= setInterval(() => void this.here.sweep(), 30_000);
+    this.#hereSweeper.unref();
+    // Launchers ask for a link through a folder only you can write, never over the network.
+    this.#stopAsks ??= this.here.watch(() => this.config.CONCH_PORT);
     // The servers you added are providers too: built before the first request needs them.
     await this.providers.loadServers().catch(() => undefined);
     await this.providers.load();
@@ -1804,6 +1819,9 @@ export class Services {
     void this.mockMatrix?.stop();
     void this.mockWeChat?.stop();
     clearInterval(this.#sweeper);
+    clearInterval(this.#hereSweeper);
+    this.#stopAsks?.();
+    this.#stopAsks = undefined;
     this.#sweeper = undefined;
     this.network.stop();
     this.updates.stop();

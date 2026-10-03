@@ -6,6 +6,7 @@ import { ClientCommand, type ConversationEvent, type ServerEvent } from '@conch/
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { buildApp } from '../app';
+import { onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 import { forTurn, TEXT_INLINE_MAX } from './prompt';
@@ -265,7 +266,7 @@ async function setup() {
     CONCH_WEB_DIST: '/nonexistent',
   });
   const services = new Services(config);
-  const app = await buildApp(services);
+  const app = onThisComputer(await buildApp(services), services);
   return { app, services };
 }
 

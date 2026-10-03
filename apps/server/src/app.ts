@@ -68,6 +68,7 @@ import { slackRoutes } from './slack/routes';
 import { IntegrationError, type SignIn } from './integrations/service';
 import { preview } from './routines/schedule';
 import { RoutineError } from './routines/service';
+import { registerHereRoutes } from './auth/here-routes';
 import { registerAuthRoutes } from './auth/routes';
 import { registerPhoneRoutes } from './phone/routes';
 import { pushOwner, registerPushRoutes } from './push/routes';
@@ -190,6 +191,7 @@ export async function buildApp(services: Services) {
   // 1 MB per message is plenty for a 200k-character prompt; ws defaults to 100 MiB.
   await app.register(fastifyWebsocket, { options: { maxPayload: 1_000_000 } });
   registerAuthRoutes(app, services, gate);
+  registerHereRoutes(app, gate);
   registerBrowserRoutes(app, services, gate);
   registerTerminalRoutes(app, services, gate);
   registerLocalRoutes(app, services, gate);

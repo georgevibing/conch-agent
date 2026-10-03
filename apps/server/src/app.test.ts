@@ -6,6 +6,7 @@ import { ServerEvent, UsageSnapshot } from '@conch/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from './app';
+import { hereInit, onThisComputer } from './test/here';
 import { loadConfig } from './config';
 import { Services } from './services';
 
@@ -20,7 +21,7 @@ async function setup(env: Record<string, string | undefined> = {}) {
     ...env,
   });
   const services = new Services(config);
-  const app = await buildApp(services);
+  const app = onThisComputer(await buildApp(services), services);
   return { app, services, home };
 }
 
@@ -345,7 +346,7 @@ describe('gateway WebSocket', () => {
     close = () => app.close();
     await app.listen({ port: 0, host: '127.0.0.1' });
     const port = (app.server.address() as { port: number }).port;
-    const ws = new WebSocket(`ws://localhost:${port}/ws`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws`, hereInit(app));
     const events: ServerEvent[] = [];
     const done = new Promise<void>((resolve) => {
       ws.onmessage = (msg) => {
@@ -410,7 +411,7 @@ describe('gateway WebSocket', () => {
     close = () => app.close();
     await app.listen({ port: 0, host: '127.0.0.1' });
     const port = (app.server.address() as { port: number }).port;
-    const ws = new WebSocket(`ws://localhost:${port}/ws`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws`, hereInit(app));
     const events: ServerEvent[] = [];
     const done = new Promise<void>((resolve) => {
       ws.onmessage = (msg) => {
@@ -612,7 +613,7 @@ describe('gateway WebSocket', () => {
     close = () => app.close();
     await app.listen({ port: 0, host: '127.0.0.1' });
     const port = (app.server.address() as { port: number }).port;
-    const ws = new WebSocket(`ws://localhost:${port}/ws`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws`, hereInit(app));
     const error = new Promise<ServerEvent>((resolve) => {
       ws.onmessage = (msg) => {
         const event = ServerEvent.parse(JSON.parse(String(msg.data)));

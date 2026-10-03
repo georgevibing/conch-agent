@@ -21,6 +21,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const [linkError, setLinkError] = useState<string>();
   const [pairing, setPairing] = useState(Boolean(linkCredential));
+  const [opening] = useState(linkCredential?.with === 'here');
   // Whether this device was waiting for approval, so what comes next can say what happened.
   const approval = auth.data?.approval;
   const [waiting, setWaiting] = useState(false);
@@ -50,13 +51,18 @@ export function AuthGate({ children }: { children: ReactNode }) {
     const credential = linkCredential;
     linkCredential = undefined;
     if (!credential) return;
-    api
-      .signIn(credential)
-      .then((status) => applySignedIn(client, status))
+    // From a launcher on this computer (ADR 0063): this browser becomes this computer.
+    const done =
+      credential.with === 'here'
+        ? api.here(credential.code).then(async () => applySignedIn(client, await api.auth()))
+        : api.signIn(credential).then((status) => applySignedIn(client, status));
+    done
       .catch((error: unknown) =>
         setLinkError(
           error instanceof ApiError && error.status === 401
-            ? 'That sign-in link has expired or was already used. Ask for a new one, or sign in below.'
+            ? credential.with === 'here'
+              ? 'That link has expired or was already used. Open Conch from your apps again.'
+              : 'That sign-in link has expired or was already used. Ask for a new one, or sign in below.'
             : (error as Error).message,
         ),
       )
@@ -66,7 +72,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
   if (pairing || auth.isPending) {
     return (
       <div className={styles.center} aria-busy>
-        <Pearl size="lg" state="thinking" label={pairing ? 'Signing you in' : 'Starting Conch'} />
+        <Pearl
+          size="lg"
+          state="thinking"
+          label={pairing ? (opening ? 'Opening Conch' : 'Signing you in') : 'Starting Conch'}
+        />
       </div>
     );
   }

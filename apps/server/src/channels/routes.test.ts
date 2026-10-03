@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
+import { onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 import { MockMail } from './mock/email';
@@ -32,7 +33,7 @@ async function setup() {
       CONCH_ALLOWED_HOSTS: 'conch.example',
     }),
   );
-  const app = await buildApp(services);
+  const app = onThisComputer(await buildApp(services), services);
   await app.ready();
   cleanup = async () => {
     await app.close();

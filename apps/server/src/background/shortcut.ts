@@ -12,7 +12,7 @@
 import { existsSync } from 'node:fs';
 import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, posix, win32 } from 'node:path';
 
 import { writeFileAtomic } from '../lib/fs';
 import { run } from '../lib/proc';
@@ -64,6 +64,12 @@ export function macInfoPlist(version: string): string {
  * What runs when you open the app: Conch answering means open it; otherwise
  * start it — through Always on's agent when it's on, or once by itself —
  * say "Starting Conch…" the computer's own way, and open it once it answers.
+ *
+ * It opens as this computer (ADR 0063): it asks Conch for a one-time link in
+ * a folder only your account can write (`here/asks`), and opens the private
+ * file Conch writes back. Nothing secret goes over the network, so whatever
+ * listens on Conch's port while Conch is stopped learns nothing, and can't
+ * choose what gets opened.
  */
 export function openScript(spec: ShortcutSpec, platform: 'darwin' | 'linux'): string {
   const label = serviceLabel(spec.home);
@@ -89,9 +95,26 @@ export function openScript(spec: ShortcutSpec, platform: 'darwin' | 'linux'): st
   return `#!/bin/sh
 # Opens Conch, starting it first when it isn't running. Written by Conch; changes here don't last.
 URL=${shQuote(spec.url)}
+ASKS=${shQuote(posix.join(spec.home, 'here', 'asks'))}
 HERE=$(cd "$(dirname "$0")" && pwd)
 up() { /usr/bin/curl -fsS --max-time 2 -o /dev/null "$URL/api/health" 2>/dev/null; }
-if up; then exec ${open} "$URL"; fi
+show() {
+  FILE=
+  if [ -d "$ASKS" ]; then
+    ASK="$ASKS/$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')"
+    if (umask 077 && printf '/\\n' > "$ASK.tmp" && mv "$ASK.tmp" "$ASK.ask"); then
+      i=0
+      while [ $i -lt 50 ] && [ ! -e "$ASK.open" ]; do sleep 0.1; i=$((i + 1)); done
+      [ -s "$ASK.open" ] && [ -O "$ASK.open" ] && [ ! -L "$ASK.open" ] && FILE=$(cat "$ASK.open")
+      rm -f "$ASK.ask"
+    fi
+  fi
+  # Only a private page Conch wrote: its name, a plain file of yours, not a link.
+  case "$FILE" in */conch-open-*.html) ;; *) FILE= ;; esac
+  if [ -n "$FILE" ] && [ -f "$FILE" ] && [ ! -L "$FILE" ] && [ -O "$FILE" ]; then exec ${open} "$FILE"; fi
+  exec ${open} "$URL"
+}
+if up; then show; fi
 STARTED=
 ${startViaComputer}
 if [ -z "$STARTED" ]; then
@@ -102,7 +125,7 @@ fi
 ${notify}
 i=0
 while [ $i -lt 120 ]; do
-  if up; then exec ${open} "$URL"; fi
+  if up; then show; fi
   sleep 0.5
   i=$((i + 1))
 done
@@ -162,11 +185,52 @@ export function icoFromPng(png: Uint8Array): Uint8Array {
 /** VBScript string: double quotes doubled. */
 const vbs = (value: string) => value.replaceAll('"', '""');
 
-/** The Start menu item runs this with no window: open Conch, starting it first if it's down. */
+/**
+ * The Start menu item runs this with no window: open Conch, starting it first
+ * if it's down. It opens as this computer (ADR 0063): it asks Conch for a
+ * one-time link in a folder only your account can write (`here\asks`), and
+ * opens the private file Conch writes back. Nothing secret goes over the
+ * network.
+ */
 export function windowsOpenScript(spec: ShortcutSpec, startCmd: string): string {
   return [
     `Dim url : url = "${vbs(spec.url)}"`,
+    `Dim asks : asks = "${vbs(win32.join(spec.home, 'here', 'asks'))}"`,
+    `Dim pages : pages = "${vbs(win32.join(spec.home, 'here', 'open'))}"`,
     'Dim shell : Set shell = CreateObject("WScript.Shell")',
+    'Dim fso : Set fso = CreateObject("Scripting.FileSystemObject")',
+    'Function HereFile()',
+    '  On Error Resume Next',
+    '  HereFile = ""',
+    '  If Not fso.FolderExists(asks) Then Exit Function',
+    '  Randomize',
+    '  Dim id, n : id = ""',
+    '  For n = 1 To 24 : id = id & LCase(Hex(Int(Rnd * 16))) : Next',
+    '  Dim ask : ask = asks & "\\" & id',
+    '  Dim f : Set f = fso.CreateTextFile(ask & ".tmp", True)',
+    '  f.WriteLine "/"',
+    '  f.Close',
+    '  fso.MoveFile ask & ".tmp", ask & ".ask"',
+    '  Dim i : i = 0',
+    '  Do While i < 50 And Not fso.FileExists(ask & ".open")',
+    '    WScript.Sleep 100',
+    '    i = i + 1',
+    '  Loop',
+    '  If fso.FileExists(ask & ".open") Then HereFile = Trim(Replace(Replace(fso.OpenTextFile(ask & ".open", 1).ReadAll(), vbCr, ""), vbLf, ""))',
+    '  If fso.FileExists(ask & ".ask") Then fso.DeleteFile ask & ".ask"',
+    'End Function',
+    "' Only a private page Conch wrote: in its folder, its name, a plain file (not a link).",
+    'Function Mine(file)',
+    '  On Error Resume Next',
+    '  Mine = False',
+    '  If file = "" Then Exit Function',
+    '  If Not fso.FileExists(file) Then Exit Function',
+    '  If LCase(fso.GetParentFolderName(file)) <> LCase(pages) Then Exit Function',
+    '  Dim name : name = LCase(fso.GetFileName(file))',
+    '  If Len(name) <> 40 Or Left(name, 11) <> "conch-open-" Or Right(name, 5) <> ".html" Then Exit Function',
+    '  If (fso.GetFile(file).Attributes And 1024) <> 0 Then Exit Function',
+    '  Mine = (Err.Number = 0)',
+    'End Function',
     'Function Up()',
     '  On Error Resume Next',
     '  Dim http : Set http = CreateObject("MSXML2.ServerXMLHTTP.6.0")',
@@ -184,7 +248,12 @@ export function windowsOpenScript(spec: ShortcutSpec, startCmd: string): string 
     '  Loop',
     'End If',
     'If Up() Then',
-    '  shell.Run url',
+    '  Dim file : file = HereFile()',
+    '  If Mine(file) Then',
+    '    shell.Run """" & file & """"',
+    '  Else',
+    '    shell.Run url',
+    '  End If',
     'Else',
     '  MsgBox "Conch didn\'t start. Run pnpm start in Conch\'s folder to see why.", 48, "Conch"',
     'End If',

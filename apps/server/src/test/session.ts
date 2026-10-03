@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import type { ServerEvent } from '@conch/protocol';
 
 import { buildApp } from '../app';
+import { onThisComputer } from './here';
 import { loadConfig } from '../config';
 import { sessionsDir, TranscriptStore } from '../engines/api/session';
 import { MockMatrix } from '../channels/mock/matrix';
@@ -43,7 +44,7 @@ export async function gateway(home?: string) {
     // Conch apps' sealed runtime and package reader are stood in for (ADR 0061).
     { conchAppParts: fakeParts() },
   );
-  const app = await buildApp(services);
+  const app = onThisComputer(await buildApp(services), services);
   await app.ready();
   return { home: dir, services, app };
 }

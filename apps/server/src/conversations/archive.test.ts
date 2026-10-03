@@ -6,6 +6,7 @@ import type { ConversationSummary, ServerEvent } from '@conch/protocol';
 import { describe, expect, it } from 'vitest';
 
 import { buildApp } from '../app';
+import { onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 
@@ -110,7 +111,7 @@ describe('archiving a chat', () => {
 describe('PATCH /api/conversations/:id', () => {
   it('renames, archives and puts back, and refuses an empty change', async () => {
     const { services } = await setup();
-    const app = await buildApp(services);
+    const app = onThisComputer(await buildApp(services), services);
     const convo = await services.conversations.send({ clientMessageId: 'u1', text: 'hello' });
     await until(services, convo.id, 'idle');
     const patch = (payload: Record<string, unknown>) =>

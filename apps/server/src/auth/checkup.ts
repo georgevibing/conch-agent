@@ -229,7 +229,7 @@ export function checkup(input: CheckupInput): CheckupItem[] {
             level: 'info',
             title: 'No sign-in on this computer',
             detail:
-              'Only this computer can open Conch. If other people use this computer, add a password so they can’t use your assistant or open a terminal as you.',
+              'Only browsers Conch opens on this computer can use it. If other people use your account on this computer, add a password so they can’t use your assistant or open a terminal as you.',
             fix: { kind: 'open', label: 'Add a password', place: 'sign-in' },
           },
     );

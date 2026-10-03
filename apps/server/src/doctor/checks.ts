@@ -329,6 +329,34 @@ export function computerCheck(services: Services): DoctorCheck {
             },
       );
 
+      // This computer's key (ADR 0063): what proves a browser or a launcher is you, here.
+      const key = services.here.inspect();
+      if (key !== 'ok' && repair) services.here.heal();
+      items.push({
+        id: 'computer:here',
+        group: COMPUTER,
+        title: 'This computer’s key',
+        ...(key === 'ok'
+          ? { state: 'ok' as const, message: 'Only you can read it.' }
+          : repair
+            ? {
+                state: 'fixed' as const,
+                message:
+                  key === 'readable'
+                    ? 'Only you can read it now.'
+                    : 'Made a new one. Open Conch from your apps to use it in this browser again.',
+              }
+            : {
+                state: 'warning' as const,
+                message:
+                  key === 'readable'
+                    ? 'Other people on this computer could read it.'
+                    : key === 'missing'
+                      ? 'It’s missing, so browsers on this computer can’t prove they’re here.'
+                      : 'It’s damaged, so browsers on this computer can’t prove they’re here.',
+              }),
+      });
+
       try {
         const disk = await statfs(home);
         const free = Number(disk.bavail) * Number(disk.bsize);

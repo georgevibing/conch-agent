@@ -6,6 +6,7 @@ import type { ConversationEvent } from '@conch/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
+import { onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 
@@ -19,7 +20,7 @@ async function setup() {
     CONCH_WEB_DIST: '/nonexistent',
   });
   const services = new Services(config);
-  const app = await buildApp(services);
+  const app = onThisComputer(await buildApp(services), services);
   await vi.waitUntil(() => Boolean(services.mockVendor?.base), { timeout: 5000 });
   close = async () => {
     services.integrations.stop();

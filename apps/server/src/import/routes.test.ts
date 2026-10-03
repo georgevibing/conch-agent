@@ -13,6 +13,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
+import { onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 import { MockSlack } from '../channels/mock/slack';
@@ -42,7 +43,7 @@ async function setup(fixture: (home: string) => string = openClawHome) {
       CONCH_IMPORT_HOME: source,
     }),
   );
-  const app = await buildApp(services);
+  const app = onThisComputer(await buildApp(services), services);
   await app.ready();
   await vi.waitUntil(() => Boolean(services.mockVendor?.base && services.mockSlack?.base), {
     timeout: 5000,

@@ -104,7 +104,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
     if (gate.isLocal(request)) return true;
     void reply.code(403).send({
       error: 'here-only',
-      message: `${what} on the computer running Conch: in Settings → Security there, or with pnpm conch devices in its terminal.`,
+      message: `${what} on the computer running Conch: open Conch from your apps there, then Settings → Security; or run pnpm conch devices in its terminal.`,
     });
     return false;
   };

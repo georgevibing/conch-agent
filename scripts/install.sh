@@ -461,6 +461,9 @@ else
   say "${DIM}Start it with: cd \"$DIR\" && $START${RESET}"
 fi
 printf '\n'
+# It opens as this computer (ADR 0063): `pnpm conch open` hands the browser a one-time link.
 if [ -n "$OPEN" ] && [ -n "$BACKGROUND" ]; then
-  if [ "$OS" = darwin ]; then open "$URL"; elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$URL" >/dev/null 2>&1 || true; fi
+  if ! conch open >/dev/null 2>&1; then
+    if [ "$OS" = darwin ]; then open "$URL"; elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$URL" >/dev/null 2>&1 || true; fi
+  fi
 fi

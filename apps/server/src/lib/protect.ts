@@ -29,6 +29,11 @@ export function protectedPaths(home: string): string[] {
     // Whether the public door is open: the agent mustn't open it.
     join(home, 'door.json'),
     join(home, 'access.json'),
+    // What proves a browser or a program is on this computer (ADR 0063): this computer's key,
+    // the one-time files that open Conch, and the menu bar helper's token. With either, the
+    // assistant could make itself "this computer" and approve its own devices.
+    join(home, 'here'),
+    join(home, 'tray'),
     // Task evidence is authority: the model must never forge completion or erase dedupe.
     join(home, 'tasks.json'),
     // Whose skills are trusted, and your signing key (ADR 0031): an assistant
@@ -66,14 +71,20 @@ export const PROTECTED_MESSAGE =
   'That’s where Conch keeps the user’s passwords and its own keys; it isn’t for reading or changing with files or commands. Use passwords_find, passwords_read or passwords_request instead.';
 
 /**
- * `pnpm conch skills sign|trust|forget|key` from the assistant's own shell:
- * signing with your key, or changing whose skills you trust, would let it
- * vouch for its own skills (ADR 0047). The terminal command opens your key
- * the way the gateway does, so these are the person's to type, never the
- * assistant's. A fence for the obvious spellings, not a box: protected paths
- * and sealing still stand behind it.
+ * `pnpm conch …` from the assistant's own shell, for what is the person's to do:
+ *
+ * - `skills sign|trust|forget|key`: signing with your key, or changing whose
+ *   skills you trust, would let it vouch for its own skills (ADR 0047);
+ * - `open`: hands out a link that makes a browser "this computer" (ADR 0063);
+ * - `password`, `key`, `revoke`, `pair`, `reset`, `sign-out-everywhere` and
+ *   `devices approve|on|off|reject|remove`: who may sign in, and from where.
+ *
+ * The terminal commands open your keys the way the gateway does, so these are
+ * the person's to type, never the assistant's. A fence for the obvious
+ * spellings, not a box: protected paths and sealing still stand behind it.
  */
-const CONCH_POWERS = /\b(?:conch|cli\.[cm]?[jt]s)["']?\s+skills\s+(?:sign|trust|forget|key)\b/i;
+const CONCH_POWERS =
+  /\b(?:conch|cli\.[cm]?[jt]s)["']?\s+(?:skills\s+(?:sign|trust|forget|key)|devices\s+(?:approve|on|off|reject|remove)|open|password|key|revoke|pair|reset|sign-out-everywhere)\b/i;
 
 export function runsConchPower(toolName: string, input: unknown): boolean {
   if (toolName !== 'Bash') return false;
@@ -82,4 +93,4 @@ export function runsConchPower(toolName: string, input: unknown): boolean {
 }
 
 export const CONCH_POWER_MESSAGE =
-  'Signing skills and choosing whose skills to trust are for the user to do in their own terminal, not for the assistant. Tell them the command to run instead.';
+  'Signing skills, choosing whose skills to trust, deciding who may sign in and opening Conch as this computer are for the user to do in their own terminal, not for the assistant. Tell them the command to run instead.';

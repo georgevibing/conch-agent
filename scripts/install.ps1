@@ -329,4 +329,7 @@ Write-Host "  Conch is ready at $url" -ForegroundColor White
 if (-not $env:CONCH_NO_BACKGROUND) { Say 'Open it any time from the Start menu: just type Conch.' }
 else { Say "Start it with: cd `"$Dir`"; corepack pnpm start" }
 Write-Host ''
-if (-not $env:CONCH_NO_OPEN -and -not $env:CONCH_NO_BACKGROUND) { Start-Process $url }
+# It opens as this computer (ADR 0063): `pnpm conch open` hands the browser a one-time link.
+if (-not $env:CONCH_NO_OPEN -and -not $env:CONCH_NO_BACKGROUND) {
+  if (-not (Invoke-Conch @('open')).Ok) { Start-Process $url }
+}

@@ -6,6 +6,7 @@ import { UpdatesStatus } from '@conch/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
+import { onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { setRestartHandler } from '../lib/lifecycle';
 import { Services } from '../services';
@@ -30,7 +31,7 @@ async function setup() {
       CONCH_WEB_DIST: '/nonexistent',
     }),
   );
-  const app = await buildApp(services);
+  const app = onThisComputer(await buildApp(services), services);
   await app.ready();
   // The mock vendor starts in the background.
   await vi.waitUntil(() => Boolean(services.mockVendor?.base), { timeout: 5000 });

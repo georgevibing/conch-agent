@@ -26,7 +26,7 @@ It interrupts you for two things only: an approval that matters (spending, sendi
 
 ## Safe by default
 
-Out of the box, only this computer can open Conch. Other devices get in after you choose a password, over an address only your own devices can reach. Your assistant can't give itself more room: anything that grants trust takes a person. [The whole story](../security/signing-in.md).
+Out of the box, only this computer can open Conch, in a browser Conch opened itself. Other devices get in after you choose a password, over an address only your own devices can reach. Your assistant can't give itself more room: anything that grants trust takes a person. [The whole story](../security/signing-in.md).
 
 ## Go deeper
 

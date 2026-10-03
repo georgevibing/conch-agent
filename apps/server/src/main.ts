@@ -1,5 +1,6 @@
 import { buildApp } from './app';
 import { checkup, secureHome, workspaceRules } from './auth/checkup';
+import { openHere } from './auth/open-here';
 import { applyPendingRestore } from './backup/restore';
 import { exposure } from './auth/network';
 import { loadConfig, portIsExplicit } from './config';
@@ -66,7 +67,8 @@ if (choice.kind === 'running') {
   console.warn(
     `\n  🐚  Conch is already running at ${running}${config.CONCH_OPEN ? ' — opening it.' : '.'}\n`,
   );
-  if (config.CONCH_OPEN) await openInBrowser(running);
+  // As this computer (ADR 0063): through a one-time link from the Conch that's running.
+  if (config.CONCH_OPEN) await openHere({ home: config.CONCH_HOME, url: running });
   process.exit(0);
 }
 if (choice.kind === 'taken') {
@@ -194,8 +196,12 @@ if (findings.length) console.warn('\n  Settings → Security in Conch has the de
 if (process.env.CONCH_STARTED_BECAUSE === 'crash')
   void services.healed.note('gateway', 'Conch stopped unexpectedly, so it started itself again.');
 // A restart (after an update or a restore) doesn't open another browser tab.
+// It opens as this computer (ADR 0063): a private file carries a one-time link.
 if (config.CONCH_OPEN && !process.env.CONCH_STARTED_BECAUSE?.match(/restart|crash/))
-  void openInBrowser(url);
+  void services.here
+    .link({ port: config.CONCH_PORT, file: true })
+    .then((link) => openInBrowser(link.file ?? url))
+    .catch(() => openInBrowser(url));
 
 // An update or a restore can ask to start again; the supervisor does it.
 setRestartHandler(async () => {

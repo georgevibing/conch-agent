@@ -52,6 +52,11 @@ words.
 
 ### "No sign-in" is still safe
 
+> **Amended by [ADR 0063](./0063-this-computer-is-proven.md).** Looking local is no longer
+> enough: nginx's defaults and other accounts on this computer look exactly like this. A
+> request is from this computer when it looks local as below **and** carries proof that
+> only your account can have (the key in `~/.conch/here/key`, or the cookie made with it).
+
 With sign-in off, only **genuinely local** requests are served. A request is local
 when all three hold:
 
@@ -172,7 +177,7 @@ ourselves would be more code to get wrong than this adds.
 - One user per Conch; there are no accounts or roles. Multi-user support would be a
   new ADR.
 - Remaining risks, documented in ARCHITECTURE.md:
-  - with sign-in off, other local OS users can reach loopback;
+  - with sign-in off, other local OS users can reach loopback (closed by ADR 0063);
   - the agent can read `ANTHROPIC_API_KEY`, which it needs to run;
   - Claude Code still loads the workspace's `.claude/` settings (the checkup warns when they add hooks, auto-allowed tools or MCP servers);
   - breached-password checks are local only, because we don't call HIBP (no

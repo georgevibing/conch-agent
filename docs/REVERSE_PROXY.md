@@ -42,6 +42,16 @@ Use your proxy's own setting for preserving `Host` (for example
 `proxy_set_header Host $host;` in nginx; Caddy keeps it by default), and expose
 Conch only after you've checked both sign-ins: the proxy's and Conch's own.
 
+A proxy that gets this wrong still doesn't get in as this computer. nginx's
+defaults (`proxy_pass http://127.0.0.1:4317;` alone) send `Host: 127.0.0.1:4317`
+and no `X-Forwarded-For`, so every visitor looks like the computer Conch runs on.
+Conch doesn't trust looks for that ([ADR 0063](adr/0063-this-computer-is-proven.md)):
+a browser is this computer only once Conch has opened it there. Visitors through
+such a proxy see **Open Conch from your apps** while sign-in is off. With sign-in
+on, they sign in like any other device, wait for approval when it's on, and can't
+approve devices. Set `Host` and `X-Forwarded-For` anyway, so that Conch shows the
+right address and limits sign-in attempts per visitor.
+
 ## Login and revocation
 
 Open the HTTPS app URL, pass the outer login, then paste the saved `conch_…` key

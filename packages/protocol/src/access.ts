@@ -49,8 +49,41 @@ export const AuthStatus = z.object({
   locked: z.boolean().optional(),
   /** Signed in, but this device is waiting to be approved (see `DeviceRequest`). */
   approval: WaitingApproval.optional(),
+  /**
+   * Sign-in is off, and this looks like the computer running Conch, but this
+   * browser hasn't been opened from Conch yet (ADR 0063): open it from your apps.
+   */
+  hereRequired: z.boolean().optional(),
+  /**
+   * Only when the request looks like it's from the computer running Conch:
+   * whether this browser has proven it is (opened from Conch) or not yet.
+   */
+  here: z.enum(['proven', 'unproven']).optional(),
 });
 export type AuthStatus = z.infer<typeof AuthStatus>;
+
+/**
+ * "This computer" (ADR 0063): a program holding the key asks for a one-time
+ * link to a page of Conch (`POST /api/here/link`, or the menu bar helper's
+ * `POST /api/tray/open`). With `file`, it gets a private file to open instead
+ * of the address, so the code is never on a command line.
+ */
+export const HereLinkBody = z
+  .object({ page: z.string().max(512).optional(), file: z.boolean().optional() })
+  .strict();
+export type HereLinkBody = z.infer<typeof HereLinkBody>;
+
+export const HereLink = z.object({
+  /** `http://localhost:<port>/<page>#here=<code>`. */
+  url: z.string(),
+  code: z.string(),
+  /** The private file that opens `url`, when one was asked for. */
+  file: z.string().optional(),
+});
+export type HereLink = z.infer<typeof HereLink>;
+
+/** The web app hands in the code it took from `#here=` (`POST /api/here`). */
+export const HereRedeemBody = z.object({ code: z.string().trim().min(1).max(128) }).strict();
 
 export const PASSWORD_MIN = 15;
 export const PASSWORD_MAX = 256;

@@ -81,6 +81,8 @@ export const api = {
   auth: () => request(AuthStatus, '/api/auth'),
   signIn: (body: SignInBody) => request(AuthStatus, '/api/auth/sign-in', { method: 'POST', body }),
   signOut: () => request(Ok, '/api/auth/sign-out', { method: 'POST' }),
+  /** Hand in a one-time code from `#here=`: this browser becomes this computer (ADR 0063). */
+  here: (code: string) => request(Ok, '/api/here', { method: 'POST', body: { code } }),
   access: () => request(AccessSettings, '/api/access'),
   verify: (secret: string) =>
     request(AccessSettings, '/api/access/verify', { method: 'POST', body: { secret } }),

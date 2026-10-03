@@ -1360,7 +1360,8 @@ export class ConversationManager {
         'guard',
       );
       if (blocked) return { decision: 'deny', message: blocked };
-      // Your key and whose skills you trust are yours to use (ADR 0047), in every mode.
+      // Your keys, whose skills you trust and who may sign in are yours to use (ADR 0047,
+      // ADR 0063), in every mode.
       if (runsConchPower(request.toolName, request.input))
         return { decision: 'deny', message: CONCH_POWER_MESSAGE };
       await keepBefore(request.toolUseId, request.toolName, request.input);

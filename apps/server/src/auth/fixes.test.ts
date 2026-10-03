@@ -6,6 +6,7 @@ import { CheckupAction, type CheckupItem } from '@conch/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
+import { onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 import {
@@ -34,7 +35,7 @@ async function setup(env: Record<string, string> = {}) {
     ...env,
   });
   const services = new Services(config);
-  const app = await buildApp(services);
+  const app = onThisComputer(await buildApp(services), services);
   close = () => app.close();
   return { app, services, home };
 }

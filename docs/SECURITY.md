@@ -9,6 +9,53 @@ protected like your computer is. This page is the whole story in plain words.
 computer**. Nothing else on your network can get in, not even to see a sign-in
 page.
 
+And only by **you**, on this computer: Conch trusts a browser once it has opened
+that browser itself. See [This computer](#this-computer) below.
+
+## This computer
+
+Conch can run commands on this computer, so the computer it runs on gets more
+than any other device. With sign-in off, it's the only one let in. With sign-in
+on, it's the only place new devices can be approved.
+
+Conch doesn't decide that from where a request seems to come from. A reverse
+proxy on the same computer (nginx's `proxy_pass` defaults), or another account
+on it, looks exactly like this computer. So Conch asks for proof instead:
+
+- Conch keeps a key in `~/.conch/here/key`, a file only your account can read.
+- When Conch opens itself in your browser, it hands that browser a one-time link
+  through a private file, and the browser gets a cookie that says it's this
+  computer. The cookie lasts 400 days. Conch opens itself from your apps, its
+  icon in the menu bar or tray, the desktop app, `pnpm start`, the installer, or
+  `pnpm conch open`.
+- A browser Conch hasn't opened (a new one, a private window, or anything that
+  reaches Conch through a proxy) sees **Open Conch from your apps**. Open Conch
+  from your apps once, and that browser is let in from then on.
+
+For another browser on this computer, or one at the end of an SSH tunnel, ask
+for a one-time link and paste it into the browser's address bar. It works once,
+for two minutes:
+
+```bash
+pnpm conch open --link
+```
+
+To take this back from every browser on this computer at once, run
+`pnpm conch reset`. It also turns sign-in off, as it always has.
+
+Your assistant can't do any of this for itself. It can't read the key, and it
+can't run `pnpm conch open`, or any command that changes who may sign in.
+
+**Your own scripts on this computer.** With a password or access key set, send
+an access key (`Authorization: Bearer conch_…`). With sign-in off, send this
+computer's key in `X-Conch-Here`. Hand it to curl on its input, so it never
+shows up on a command line that other accounts can read:
+
+```bash
+printf 'header = "X-Conch-Here: %s"\n' "$(cat ~/.conch/here/key)" |
+  curl -K - http://localhost:4317/api/state
+```
+
 ## Choose how you sign in
 
 Open **Settings → Security** and pick one:
@@ -63,7 +110,8 @@ warn you that the connection isn't encrypted — that's accurate: someone on the
 same Wi-Fi could read your traffic.
 
 **SSH tunnel** (for developers): `ssh -N -L 4317:localhost:4317 you@your-computer`,
-then open http://localhost:4317.
+then open http://localhost:4317 and sign in. With sign-in off, run
+`pnpm conch open --link` on that computer and open the link it prints instead.
 
 **A computer that stays on.** Install with `--server` (`sh install.sh --server`) and
 Conch keeps running after you log out, asks you for a password in the terminal, turns
@@ -92,7 +140,8 @@ From then on, a device Conch hasn't seen before still has to be approved
 
 3. The new device opens by itself. Next time, it's recognised and doesn't ask.
 
-Some devices never need approving: the computer running Conch itself, a phone
+Some devices never need approving: the computer running Conch itself (in a
+browser Conch opened, see [This computer](#this-computer)), a phone
 you add with the **Add a device** QR code, and the devices already signed in
 when you turn this on (you'll see them listed, so remove any you don't know).
 
@@ -112,7 +161,8 @@ pnpm conch devices off             # back to just the password or key
 ```
 
 Only the computer running Conch can approve devices or turn this off, so
-someone who got in elsewhere can't let others in. Scripts that use an access
+someone who got in elsewhere can't let others in. That holds for someone who
+reaches Conch through a proxy on that same computer, too. Scripts that use an access
 key from another device are approved once, as that key.
 
 ## Forgot your password? Lost a key?
@@ -138,7 +188,7 @@ tells you, in plain words, when something is risky:
 | Warning                                        | Why it matters                                                  |
 | ---------------------------------------------- | --------------------------------------------------------------- |
 | Your network can see Conch traffic             | Plain HTTP on Wi-Fi exposes chats and your password.            |
-| No sign-in on this computer                    | Anyone using your computer could use your assistant.            |
+| No sign-in on this computer                    | Anyone using your account could use your assistant.             |
 | New chats never ask before acting              | "Full trust" lets a malicious web page or file steer the agent. |
 | An access key is set in CONCH_TOKEN            | Environment variables leak easily and can't be revoked singly.  |
 | Conch is running as the administrator (root)   | Anything the agent does would control the whole computer.       |
