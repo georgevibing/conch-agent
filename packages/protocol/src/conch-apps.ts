@@ -402,8 +402,15 @@ export const ConchApp = z.object({
   conversationId: z.string().optional(),
   /** A draft of a change waiting in a chat. */
   draftId: z.string().optional(),
+  /** Its pages are in the sidebar (**Pinned**); on by itself when it has one. */
+  pinned: z.boolean().default(false),
+  /** Where it was published on GitHub, when you published it. */
+  published: z.string().optional(),
 });
 export type ConchApp = z.infer<typeof ConchApp>;
+
+export const UpdateConchAppBody = z.object({ pinned: z.boolean() }).partial().strict();
+export type UpdateConchAppBody = z.infer<typeof UpdateConchAppBody>;
 
 export const ConchAppsList = z.object({ apps: z.array(ConchApp) });
 export type ConchAppsList = z.infer<typeof ConchAppsList>;
