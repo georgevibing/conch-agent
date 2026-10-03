@@ -16,7 +16,7 @@ import {
   type ReleaseNoteItem,
   type SoftwareUpdateProps,
 } from '@conch/nacre';
-import { ArrowUpRight, RefreshCw, RotateCcw, Undo2 } from 'lucide-react';
+import { ArrowUpRight, Download, RefreshCw, RotateCcw, Undo2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { useUi } from '../../app/ui';
@@ -55,7 +55,9 @@ export function noteItems(releases: Notes[]): ReleaseNoteItem[] {
 }
 
 export type ConchCard = Omit<SoftwareUpdateProps, 'action' | 'notes'> & {
-  offer?: 'update' | 'retry' | 'restart';
+  offer?: 'update' | 'retry' | 'restart' | 'download';
+  /** Where to download it, when the app can't replace itself (ADR 0054). */
+  download?: string;
   /** A release's notes, drawn with `ReleaseNotes` behind "What's new". */
   releases?: Notes[];
 };
@@ -164,6 +166,17 @@ function releaseCard(
   }: { restartable: boolean; now: number; checked?: string; notice: SoftwareUpdateProps['notice'] },
 ): ConchCard {
   const outcome = conch.outcome;
+  // The desktop app that can't replace itself: the release page, one press away (ADR 0054).
+  if (conch.latest && conch.blocked?.download)
+    return {
+      state: 'available',
+      title: `Conch ${short(conch.latest.version)} is ready`,
+      detail: [`You have ${conch.version}`, checked].filter(Boolean).join(' · '),
+      releases: conch.releases,
+      footnote: conch.blocked.reason,
+      offer: 'download',
+      download: conch.blocked.download,
+    };
   if (conch.latest)
     return {
       state: 'available',
@@ -272,12 +285,17 @@ export function UpdatesSection() {
     if (focus === 'updates' || started.current) return;
     started.current = true;
     if (focus === 'check-updates') void actions.check();
-    else if (status.conch.behind > 0) void actions.updateConch();
+    // An app that can’t replace itself only shows its download (ADR 0054).
+    else if (status.conch.behind > 0 && !status.conch.blocked?.download) void actions.updateConch();
   }, [focus, status, actions]);
 
   if (!status) return null;
   const { conch } = status;
-  const { releases: cardNotes, ...card } = conchCard(conch, {
+  const {
+    releases: cardNotes,
+    download,
+    ...card
+  } = conchCard(conch, {
     restartable: status.restartable,
     now,
   });
@@ -290,7 +308,13 @@ export function UpdatesSection() {
     Boolean(conch.branch && conch.branch !== 'main');
   const conchBusy = Boolean(status.conch.running) || actions.pending === 'conch';
   const cardAction =
-    card.offer === 'restart' ? (
+    card.offer === 'download' && download ? (
+      <Button asChild leadingIcon={<Download />}>
+        <a href={download} target="_blank" rel="noopener noreferrer">
+          Download Conch {conch.latest ? short(conch.latest.version) : ''}
+        </a>
+      </Button>
+    ) : card.offer === 'restart' ? (
       <Button
         leadingIcon={<RotateCcw />}
         onClick={() => void actions.restart('Updating Conch…').then(setRestartNote)}

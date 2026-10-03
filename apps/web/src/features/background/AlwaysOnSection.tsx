@@ -173,7 +173,9 @@ export function AlwaysOnSection() {
               Your other devices, chat apps and routines can’t reach Conch until it’s open again.
               {status.on
                 ? ' It starts again by itself when you log in.'
-                : ' Open it again from your apps, or run pnpm start.'}
+                : status.running === 'app'
+                  ? ' Open it again from your apps.'
+                  : ' Open it again from your apps, or run pnpm start.'}
             </AlertDialog.Description>
           </AlertDialog.Header>
           <AlertDialog.Footer>

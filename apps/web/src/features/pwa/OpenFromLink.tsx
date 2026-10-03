@@ -2,12 +2,14 @@ import { useEffect } from 'react';
 
 import { useUi } from '../../app/ui';
 
-/** `?open=…` from a notification: the place in Conch it's about. */
+/** `?open=…` from a notification or the desktop app's menu: the place in Conch it's about. */
 const PLACES = {
   devices: ['security', 'devices'],
   notifications: ['notifications', undefined],
   background: ['health', 'background'],
   updates: ['health', 'updates'],
+  // The desktop app's Check for Updates… (ADR 0054): opens Updates and looks.
+  'check-updates': ['health', 'check-updates'],
 } as const;
 
 /**
