@@ -107,6 +107,23 @@ export const Adding: Story = { args: { busy: 'plant-diary' } };
 
 export const Added: Story = { args: { added: ['plant-diary'] } };
 
+/** It has your app's name but comes from someone else: said before you add it. */
+export const ReplacesAnother: Story = {
+  args: {
+    apps: [
+      {
+        ...plant,
+        warnings: [
+          {
+            message:
+              'It replaces the Plant diary you have, which came from someone else. Its settings and keys don’t carry over.',
+          },
+        ],
+      },
+    ],
+  },
+};
+
 /** You have 1.0.0: Update, with the new reach first. */
 export const Update: Story = {
   args: {

@@ -26,6 +26,8 @@ export interface AppPreviewApp {
   signature: AppSignatureView;
   /** Why it can't be added, in words; empty when it can. */
   problems?: readonly { message: string; file?: string; line?: number }[];
+  /** What to know before adding it, in words: it replaces an app from another maker. */
+  warnings?: readonly { message: string }[];
   /** The version you have, when you have it. */
   installed?: string;
   /** Its settings that already have a value (from the app you have): no field for those. */
@@ -352,6 +354,19 @@ function FoundApp({
       {update && app.changes && words.changes && (
         <AppChanges changes={app.changes} words={words.changes} />
       )}
+      {stand !== 'blocked' && stand !== 'added' && app.warnings?.length ? (
+        <Callout tone="warning" title="Before you add it">
+          {app.warnings.length === 1 ? (
+            app.warnings[0]?.message
+          ) : (
+            <ul className={styles.warnings}>
+              {app.warnings.map((w) => (
+                <li key={w.message}>{w.message}</li>
+              ))}
+            </ul>
+          )}
+        </Callout>
+      ) : null}
       <div>
         <p className={styles.label} aria-hidden>
           What it can do

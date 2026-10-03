@@ -69,6 +69,16 @@ export const Failed: Story = {
   },
 };
 
+/** Someone else made it: the address it came from, and the file. Only its maker publishes it. */
+export const FromSomeoneElse: Story = {
+  args: { elsewhere: { url: 'https://github.com/ada/plant-diary' } },
+};
+
+/** From a file: nothing to point at, so the file is the way. */
+export const FromAFile: Story = {
+  args: { elsewhere: {} },
+};
+
 /** The versions kept, each with Go back. */
 export const Versions: Story = {
   render: () => {
