@@ -30,7 +30,7 @@ Setting up one part offers the other when it can. After you connect Slack, the d
 
 ## What it found, as it is
 
-When your assistant looks in Google Calendar, Gmail, Google Drive or Slack, what it found shows under that step in the chat, the way the app itself would show it:
+When your assistant looks in Google Calendar, Gmail, Google Drive or Slack, the step says so in plain words beside the app's logo, like **Looked at your calendar** or **Read #design**. What it found shows under that step, the way the app itself would show it:
 
 - **Google Calendar**: the days you asked about, Today first. Each event has its time, a line in its calendar's colour, a camera for a video call and the place. A day with nothing on says **Free**, and today shows where now is.
 - **Gmail**: who each email is from, the subject, its first line and when it came, with a dot for unread and a clip for attachments. **Reply** puts "Draft a reply to …" in the box you type in. Nothing is sent: you read it, change it and send it.
