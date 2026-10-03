@@ -280,6 +280,9 @@ describe('the other two ways', () => {
     expect(await setup([], t.deps)).toBe(0);
     const out = t.text();
     expect(out).toContain('ssh -N -L 4317:localhost:4317 george@vps-1');
+    const tunnel = deps({ sshHost: '198.51.100.7' }, { choose: 'local' });
+    await setup([], tunnel.deps);
+    expect(tunnel.text()).toContain('george@198.51.100.7');
     expect(out).toContain('conch open --link');
   });
 

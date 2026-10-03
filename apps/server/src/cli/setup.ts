@@ -31,6 +31,8 @@ export interface SetupDeps {
   version: string;
   /** This computer's name, for the banner. */
   hostname: string;
+  /** The address the person reached this computer at over SSH, for the tunnel hint. */
+  sshHost?: string;
   /** No screen of its own: a server, or someone here over SSH. */
   headless: boolean;
   /** Where Conch is on this computer, for the SSH tunnel hint. */
@@ -372,7 +374,9 @@ async function local(deps: SetupDeps): Promise<void> {
     return;
   }
   ui.say('Conch stays on this computer. To open it from yours, connect with a tunnel:');
-  ui.command(`ssh -N -L ${deps.port}:localhost:${deps.port} ${deps.user}@${deps.hostname}`);
+  ui.command(
+    `ssh -N -L ${deps.port}:localhost:${deps.port} ${deps.user}@${deps.sshHost ?? deps.hostname}`,
+  );
   ui.say(`Then, here, ask for a link to open on your end of it:`);
   ui.command(deps.conch('open --link'));
   ui.hint(`Want it reachable from anywhere later? ${deps.conch('setup')}`);

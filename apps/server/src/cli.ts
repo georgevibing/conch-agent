@@ -16,6 +16,7 @@ import { AddressStatus, checkPassword, suggestPassword } from '@conch/protocol';
 
 import { ensurePrivateNode, lowPortsAllowed, setcapCommand } from './address/runtime';
 import { dnsReport } from './address/service';
+import { AddressStore } from './address/store';
 import { HERE_HEADER, hereKeyFile } from './auth/here';
 import { setup as setupWizard } from './cli/setup';
 
@@ -94,7 +95,20 @@ async function ask(question: string, options: { hidden?: boolean; default?: stri
 async function addresses(): Promise<string[]> {
   const hosts = new HostPolicy(config);
   await hosts.discover();
+  hosts.setOwnAddress(await ownAddress());
   return hosts.urls();
+}
+
+/**
+ * Where Conch answers by itself (ADR 0064): the running Conch says, and while
+ * it isn't running, the address it keeps a certificate for.
+ */
+async function ownAddress(): Promise<string | undefined> {
+  const live = await addressApi.status().catch(() => undefined);
+  if (live) return live.state === 'ready' ? live.name : undefined;
+  const saved = new AddressStore(config.CONCH_HOME);
+  const name = (await saved.read().catch(() => undefined))?.name;
+  return name && (await saved.certificate()) ? name : undefined;
 }
 
 /** A one-time link in a card, with a QR code when it fits. */
@@ -665,6 +679,10 @@ async function setup() {
     conch,
     version: SERVER_VERSION,
     hostname: hostname(),
+    // SSH_CONNECTION is "client port server port": the server address is what reached here.
+    ...(process.env.SSH_CONNECTION?.split(' ')[2] && {
+      sshHost: process.env.SSH_CONNECTION.split(' ')[2],
+    }),
     headless: headless(),
     port: config.CONCH_PORT,
     user: userInfo().username,
