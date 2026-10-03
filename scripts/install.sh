@@ -1,7 +1,7 @@
 #!/bin/sh
 # Conch, installed with one line (ADR 0026):
 #
-#   curl -fsSL https://raw.githubusercontent.com/giotiskl/conch-agent/main/scripts/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/georgevibing/conch-agent/main/scripts/install.sh | sh
 #
 # It gets what Conch needs (Node.js and Git, when they're missing), puts
 # Conch in its own folder, builds it, keeps it running in the background,
@@ -23,7 +23,7 @@
 set -eu
 
 NODE_MAJOR=24
-REPO=${CONCH_REPO:-https://github.com/giotiskl/conch-agent.git}
+REPO=${CONCH_REPO:-https://github.com/georgevibing/conch-agent.git}
 BRANCH=${CONCH_BRANCH:-main}
 CHANNEL=${CONCH_CHANNEL:-stable}
 HOME_DIR=${CONCH_HOME:-$HOME/.conch}

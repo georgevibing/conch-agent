@@ -33,7 +33,7 @@ export const Tones: Story = {
       <Callout tone="accent" title="Plan mode">
         Claude will propose changes before editing any files.
       </Callout>
-      <Callout tone="info" title="Connected to kaltsgea-mbp">
+      <Callout tone="info" title="Connected to studio-mac">
         Sessions run with your local credentials and working directory.
       </Callout>
       <Callout tone="success" title="All tests passed">

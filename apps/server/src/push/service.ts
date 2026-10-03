@@ -26,7 +26,7 @@ import type { PushStore, Subscription } from './store';
 import { sendPush, type Fetcher } from './webpush';
 
 /** Who signs Conch's pushes (RFC 8292 `sub`): a way to reach whoever runs it. */
-export const PUSH_SUBJECT = 'https://github.com/giotiskl/conch-agent';
+export const PUSH_SUBJECT = 'https://github.com/georgevibing/conch-agent';
 
 /** What a notification says: the service worker shows it (`apps/web/public/sw.js`). */
 export interface PushMessage {

@@ -84,7 +84,7 @@ export type ChannelHealth = z.infer<typeof ChannelHealth>;
 /** Who the bot is, as the app says. */
 export const ChannelBot = z.object({
   id: z.string().max(64),
-  /** Display name: "Yiotis's Conch". */
+  /** Display name: "Ada's Conch". */
   name: z.string().max(200),
   /** `@handle` without the @ (Telegram, Discord). */
   username: z.string().max(100).optional(),

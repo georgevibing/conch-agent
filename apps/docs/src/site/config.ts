@@ -1,12 +1,9 @@
 /** Where the code lives, for "Edit this page" and links to files that aren't pages. */
-export const REPO_URL = 'https://github.com/giotiskl/conch-agent';
+export const REPO_URL = 'https://github.com/georgevibing/conch-agent';
 export const REPO_BRANCH = 'main';
 
-/**
- * Who signs the note on the front page. A placeholder taken from the
- * repository's address: change it to the name and page you want there.
- */
-export const AUTHOR = { name: 'giotiskl', url: 'https://github.com/giotiskl' } as const;
+/** Who signs the note on the front page. */
+export const AUTHOR = { name: 'George Kal', url: 'https://github.com/georgevibing' } as const;
 
 /**
  * Where the app is downloaded (ADR 0054): the newest release on GitHub, with
@@ -14,10 +11,10 @@ export const AUTHOR = { name: 'giotiskl', url: 'https://github.com/giotiskl' } a
  */
 export const DOWNLOADS = `${REPO_URL}/releases/latest`;
 
-/** The one-line installers (README § Quick start). */
+/** The one-line installers (README § Install). */
 export const INSTALL = {
-  unix: `curl -fsSL https://raw.githubusercontent.com/giotiskl/conch-agent/${REPO_BRANCH}/scripts/install.sh | sh`,
-  windows: `irm https://raw.githubusercontent.com/giotiskl/conch-agent/${REPO_BRANCH}/scripts/install.ps1 | iex`,
+  unix: `curl -fsSL https://raw.githubusercontent.com/georgevibing/conch-agent/${REPO_BRANCH}/scripts/install.sh | sh`,
+  windows: `irm https://raw.githubusercontent.com/georgevibing/conch-agent/${REPO_BRANCH}/scripts/install.ps1 | iex`,
 } as const;
 
 export interface Section {

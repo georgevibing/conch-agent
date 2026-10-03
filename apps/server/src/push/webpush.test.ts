@@ -88,7 +88,7 @@ describe('RFC 8292 VAPID', () => {
     const keys = generateVapidKeys();
     expect(vapidKeysValid(keys)).toBe(true);
     const header = vapidAuthorization('https://fcm.googleapis.com/fcm/send/abc', keys, {
-      subject: 'https://github.com/giotiskl/conch-agent',
+      subject: 'https://github.com/georgevibing/conch-agent',
       now: 1_790_000_000_000,
     });
     const match = /^vapid t=([^.]+)\.([^.]+)\.([^,]+), k=(.+)$/.exec(header);
@@ -99,7 +99,7 @@ describe('RFC 8292 VAPID', () => {
     expect(JSON.parse(b(c ?? '').toString())).toEqual({
       aud: 'https://fcm.googleapis.com',
       exp: 1_790_000_000 + 12 * 3600,
-      sub: 'https://github.com/giotiskl/conch-agent',
+      sub: 'https://github.com/georgevibing/conch-agent',
     });
     const point = b(keys.publicKey);
     const publicKey = createPublicKey({
@@ -170,7 +170,7 @@ describe('sending', () => {
     const calls: { url: string; init: RequestInit }[] = [];
     const outcome = sendPush(subscription, '{"title":"Hi"}', {
       vapid,
-      subject: 'https://github.com/giotiskl/conch-agent',
+      subject: 'https://github.com/georgevibing/conch-agent',
       urgency: 'high',
       topic: 'perm:abc.def',
       fetch: async (url, init) => {

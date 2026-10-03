@@ -31,7 +31,7 @@ function Basic({ side, defaultOpen }: { side: SheetSide; defaultOpen?: boolean }
       <Sheet.Content side={side}>
         <Sheet.Header>
           <Sheet.Title>Session details</Sheet.Title>
-          <Sheet.Description>Started 12 minutes ago on kaltsgea-mbp.</Sheet.Description>
+          <Sheet.Description>Started 12 minutes ago on studio-mac.</Sheet.Description>
         </Sheet.Header>
         <Sheet.Body>
           <Text size="sm" tone="muted">

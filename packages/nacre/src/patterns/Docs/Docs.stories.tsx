@@ -179,7 +179,7 @@ export const Command: Story = {
       <CommandLine
         size="lg"
         typed
-        command="curl -fsSL https://raw.githubusercontent.com/giotiskl/conch-agent/main/scripts/install.sh | sh"
+        command="curl -fsSL https://raw.githubusercontent.com/georgevibing/conch-agent/main/scripts/install.sh | sh"
       />
       <CommandLine prompt=">" command="pnpm conch devices approve" />
     </div>

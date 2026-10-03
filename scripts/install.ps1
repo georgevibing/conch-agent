@@ -1,6 +1,6 @@
 # Conch, installed with one line on Windows (ADR 0026):
 #
-#   irm https://raw.githubusercontent.com/giotiskl/conch-agent/main/scripts/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/georgevibing/conch-agent/main/scripts/install.ps1 | iex
 #
 # It gets what Conch needs (Node.js and Git, when they're missing) into your
 # own folders, builds Conch, keeps it running in the background, adds it to
@@ -20,7 +20,7 @@ $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $NodeMajor = 24
-$Repo = if ($env:CONCH_REPO) { $env:CONCH_REPO } else { 'https://github.com/giotiskl/conch-agent.git' }
+$Repo = if ($env:CONCH_REPO) { $env:CONCH_REPO } else { 'https://github.com/georgevibing/conch-agent.git' }
 $Branch = if ($env:CONCH_BRANCH) { $env:CONCH_BRANCH } else { 'main' }
 $Channel = if ($env:CONCH_CHANNEL) { $env:CONCH_CHANNEL } else { 'stable' }
 if ($Channel -notin @('stable', 'beta', 'alpha')) { throw "CONCH_CHANNEL can be stable, beta or alpha (not $Channel)." }
