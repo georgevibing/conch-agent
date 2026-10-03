@@ -126,7 +126,8 @@ export class MockSlack {
   /** The person's own token, from an app made with Conch's settings: every scope. */
   static readonly USER_TOKEN = 'xoxp-' + '1111111111-2222222222-3333333333-mockmockmockmockmock';
   /** From an app made before Slack with every model: it can't read or search yet. */
-  static readonly NARROW_USER_TOKEN = 'xoxp-' + '1111111111-2222222222-4444444444-narrownarrownarrow';
+  static readonly NARROW_USER_TOKEN =
+    'xoxp-' + '1111111111-2222222222-4444444444-narrownarrownarrow';
   readonly botTokens = new Set([MockSlack.BOT_TOKEN]);
   /** User tokens, and what each may do (Slack's `x-oauth-scopes`). */
   readonly userTokens = new Map<string, string[]>([

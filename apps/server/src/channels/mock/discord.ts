@@ -40,7 +40,8 @@ export class MockDiscord {
   #nextId = 5000;
   #silent = false;
   base = '';
-  static readonly TOKEN = 'MTEwMDAwMDAwMDAwMDAwMDAw.' + 'GmockA.mockmockmockmockmockmockmockmockmock12';
+  static readonly TOKEN =
+    'MTEwMDAwMDAwMDAwMDAwMDAw.' + 'GmockA.mockmockmockmockmockmockmockmockmock12';
   static readonly OWNER: MockUser = { id: '424242', username: 'ada', global_name: 'Ada Lovelace' };
   readonly tokens = new Set([MockDiscord.TOKEN]);
   readonly bot: MockUser = {

@@ -153,7 +153,9 @@ test('Slack: two keys, sorted whichever box they land in', async ({ page, reques
     .getByLabel('Bot token')
     .fill('xapp-1-A0MOCKAPP-3333333333-mockmockmockmockmockmockmock');
   await expect(page.getByLabel('Bot token')).toHaveValue('');
-  await page.getByLabel('Bot token').fill('xoxb-' + '1111111111-2222222222-mockmockmockmockmockmock');
+  await page
+    .getByLabel('Bot token')
+    .fill('xoxb-' + '1111111111-2222222222-mockmockmockmockmockmock');
   await expect(page.getByText('Waiting for your message')).toBeVisible();
   await request.post(`${SLACK}/__control/say`, { data: { text: 'hi' } });
   await page.getByRole('button', { name: 'That’s me' }).click();

@@ -76,9 +76,9 @@ describe('connecting Slack', () => {
     await expect(service.connect(MockSlack.BOT_TOKEN)).rejects.toThrow(/bot token.*xoxp-/);
     await expect(service.connect(MockSlack.APP_TOKEN)).rejects.toThrow(/app-level token/);
     await expect(service.connect('hello there')).rejects.toThrow(/starts with xoxp-/);
-    await expect(service.connect('xoxp-' + '0000000000-0000000000-wrongwrongwrong')).rejects.toThrow(
-      /doesn’t accept that token/,
-    );
+    await expect(
+      service.connect('xoxp-' + '0000000000-0000000000-wrongwrongwrong'),
+    ).rejects.toThrow(/doesn’t accept that token/);
     expect((await service.status()).connected).toBe(false);
   });
 
