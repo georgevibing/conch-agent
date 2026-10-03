@@ -138,6 +138,17 @@ describe('a page', () => {
     ).toBeInTheDocument();
   });
 
+  it('about privacy lives at /privacy, out of the sidebar and the front page’s footer links to it', async () => {
+    const { container } = open('/privacy');
+    expect(screen.getByRole('heading', { level: 1, name: 'Privacy policy' })).toBeInTheDocument();
+    expect(screen.getByText(/We set no cookies/)).toBeInTheDocument();
+    // No section, so no crumb: it isn't a decision record.
+    expect(within(screen.getByRole('main')).queryByRole('link', { name: 'Decisions' })).toBeNull();
+    const sidebar = screen.getByRole('navigation', { name: 'Documentation' });
+    expect(within(sidebar).queryByRole('link', { name: 'Privacy policy' })).toBeNull();
+    await accessible(container);
+  });
+
   it('that doesn’t exist says so and offers the way back', () => {
     open('/no/such/page');
     expect(screen.getByRole('heading', { name: 'There’s no page here' })).toBeInTheDocument();

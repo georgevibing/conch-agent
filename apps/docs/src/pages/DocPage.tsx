@@ -60,15 +60,18 @@ function Article({ page }: { page: Page }) {
       <main id="content" className={styles.main}>
         <article className={styles.article}>
           <header className={styles.head}>
-            <Text size="sm" tone="accent" weight="medium">
-              {section ? (
-                section.title
-              ) : (
-                <Link to="/project/decisions" className={styles.crumb}>
-                  Decisions
-                </Link>
-              )}
-            </Text>
+            {/* A legal page (`/privacy`) belongs to no section: it has no crumb. */}
+            {(section || page.section === 'decisions') && (
+              <Text size="sm" tone="accent" weight="medium">
+                {section ? (
+                  section.title
+                ) : (
+                  <Link to="/project/decisions" className={styles.crumb}>
+                    Decisions
+                  </Link>
+                )}
+              </Text>
+            )}
             <Heading level={1} display size="5xl">
               {page.title}
             </Heading>

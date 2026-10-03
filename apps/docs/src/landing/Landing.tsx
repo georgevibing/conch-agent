@@ -56,6 +56,7 @@ export const LANDING_LINKS = {
   makeApps: '/features/make-apps',
   decisions: '/project/decisions',
   nacre: '/project/nacre',
+  privacy: '/privacy',
 } as const;
 
 const channels = reference.channels.filter((channel) => channel.available);
@@ -529,6 +530,9 @@ export function Landing() {
             </TextLink>
             <TextLink href={REPO_URL} target="_blank" rel="noreferrer">
               GitHub
+            </TextLink>
+            <TextLink asChild>
+              <Link to={LANDING_LINKS.privacy}>Privacy</Link>
             </TextLink>
           </nav>
         </footer>

@@ -6,7 +6,9 @@ The documentation is the Markdown in this folder, drawn by `apps/docs` with Nacr
 ## A page is a file
 
 `content/<section>/<name>.md` is the page at `/<section>/<name>`. Sections and their
-order are in `src/site/config.ts`; nothing else is listed by hand. Each file starts
+order are in `src/site/config.ts`; nothing else is listed by hand. The one exception is
+`content/legal/<name>.md`: a page at `/<name>` (`/privacy`), left out of the sidebar
+and linked from the front page's footer. Each file starts
 with:
 
 ```yaml
