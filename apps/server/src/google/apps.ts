@@ -16,6 +16,7 @@ import {
   type GoogleAppId,
   GOOGLE_APP_CAPABILITIES,
   GoogleAppId as AppId,
+  type GoogleToolName,
   type GoogleCapability,
   type Integration,
   type IntegrationHealth,
@@ -37,6 +38,8 @@ const DRAFT = 'google_mail_create_draft';
 const ACCOUNTS = 'google_accounts';
 
 interface AppTool extends IntegrationTool {
+  /** One of the names the chat has words for (`@conch/protocol` `APP_TOOL_WORDS`). */
+  name: GoogleToolName;
   /** What an account needs for this tool to work. */
   needs: GoogleCapability;
 }
@@ -103,7 +106,7 @@ const TOOLS: Record<GoogleAppId, AppTool[]> = {
   ],
 };
 
-const APP_OF = new Map(
+const APP_OF = new Map<string, GoogleAppId>(
   Object.entries(TOOLS).flatMap(([app, tools]) => tools.map((t) => [t.name, app as GoogleAppId])),
 );
 

@@ -315,6 +315,33 @@
     /* Every page's column (Apps, Routines, Tasks, Settings…): one width, so
        nothing jumps sideways moving between them. */
     --nc-page-width: 64rem;
+    /* The chat: one geometry for a reply and everything that belongs to it.
+       Its words start past the assistant's mark (`--nc-chat-inset`); each
+       part after them (tool rows, a plan, a question, an offer, chips) sits
+       one step under what's above it, lined up with the words. */
+    --nc-chat-mark: 1.75rem;
+    --nc-chat-inset: calc(var(--nc-chat-mark) + var(--nc-space-3));
+    --nc-chat-step: var(--nc-space-3);
+    /* Where a part sits: the gap of the column it's in, and how far in it
+       starts. These are the transcript's; a reply's `Message attached` slot
+       sets its own, so the same part fits both. */
+    --nc-chat-flow-gap: var(--nc-space-6);
+    --nc-chat-indent: var(--nc-chat-inset);
+    /* A card in a reply (an offer, a question, a plan, an approval): one
+       shape, one surface, one padding, one size of mark beside its title. */
+    --nc-chat-card-radius: var(--nc-radius-lg);
+    --nc-chat-card-surface: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    --nc-chat-card-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle), var(--nc-glaze-edge), var(--nc-elevation-1);
+    --nc-chat-card-pad: var(--nc-space-3) var(--nc-space-3-5);
+    --nc-chat-card-mark: 1.75rem;
+    --nc-chat-card-width: 34rem;
+    /* A row in a reply: a tool, and a card folded to one line it can open again. */
+    --nc-chat-row-radius: var(--nc-radius-md);
+    --nc-chat-row-height: 2.5rem;
+    /* A card that's done and says so in a line: its words and its icon. */
+    --nc-chat-note-size: var(--nc-text-sm);
+    --nc-chat-note-icon: 0.875rem;
 
     /* ── Control sizing ──────────────────────────────────────────────── */
     --nc-control-xs: 1.5rem; /* 24 */
@@ -543,6 +570,14 @@
       --nc-radius-lg: calc(21px * var(--nc-radius-scale));
       --nc-radius-xl: calc(30px * var(--nc-radius-scale));
       --nc-radius-2xl: calc(40px * var(--nc-radius-scale));
+    }
+  }
+
+  /* On a phone a reply's parts span the column, from the mark's edge. */
+  @media (max-width: 640px) {
+    :root,
+    [data-nacre-theme] {
+      --nc-chat-indent: 0px;
     }
   }
 

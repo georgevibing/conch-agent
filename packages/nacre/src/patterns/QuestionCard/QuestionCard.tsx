@@ -17,6 +17,7 @@ import { Input } from '../../components/Input';
 import { NumberField } from '../../components/NumberField';
 import { Textarea } from '../../components/Textarea';
 import { TimePicker } from '../../components/TimePicker';
+import { readTime } from '../../components/TimePicker/time';
 import { cx } from '../../utils/cx';
 import styles from './QuestionCard.module.css';
 import { dateOf, dayStrip, timeOf, timeSlots } from './when';
@@ -162,7 +163,6 @@ function useWords(locale: string | undefined, today: string) {
     const weekday = f({ weekday: 'short' });
     const day = f({ day: 'numeric' });
     const full = f({ weekday: 'long', day: 'numeric', month: 'long' });
-    const time = f({ hour: 'numeric', minute: '2-digit' });
     const relative = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
     return {
       /** "Today", "Tomorrow", or "Thu". */
@@ -174,10 +174,8 @@ function useWords(locale: string | undefined, today: string) {
       },
       dayNumber: (date: string) => day.format(toUtc(date)),
       fullDay: (date: string) => full.format(toUtc(date)),
-      time: (value: string) => {
-        const [h = 0, m = 0] = value.split(':').map(Number);
-        return time.format(Date.UTC(2000, 0, 1, h, m));
-      },
+      /** As the time picker beside it writes it: "9:00 AM", or "09:00". */
+      time: (value: string) => readTime(value, locale),
     };
   }, [locale, today]);
 }
@@ -393,6 +391,8 @@ export function QuestionCard({
                 {showSend && (
                   <Button
                     size="sm"
+                    // Not ready yet: a quiet button, so a disabled one is grey, never a muddy accent.
+                    variant={complete || sending ? 'solid' : 'surface'}
                     loading={sending}
                     disabled={!complete || (locked && !sending)}
                     onClick={() => send()}
@@ -692,6 +692,33 @@ function ChoiceControl({
   );
 }
 
+/**
+ * Which ends of a sideways list have more beyond them, as `data-more`
+ * ("start", "end", "start end"), so it can fade where it goes on and only there.
+ */
+function useMore<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [more, setMore] = useState('');
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const look = () => {
+      const start = el.scrollLeft > 1;
+      const end = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+      setMore([start && 'start', end && 'end'].filter(Boolean).join(' '));
+    };
+    look();
+    el.addEventListener('scroll', look, { passive: true });
+    const sized = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(look);
+    sized?.observe(el);
+    return () => {
+      el.removeEventListener('scroll', look);
+      sized?.disconnect();
+    };
+  }, []);
+  return [ref, more || undefined] as const;
+}
+
 function WhenControl({
   field,
   draft,
@@ -706,6 +733,8 @@ function WhenControl({
   draft: Extract<Draft, { kind: 'when' }>;
 }) {
   const id = useId();
+  const exactRef = useRef<HTMLDivElement>(null);
+  const [stripRef, more] = useMore<HTMLDivElement>();
   const minDate = dateOf(field.min);
   const maxDate = dateOf(field.max);
   const days = dayStrip(today, { min: minDate, max: maxDate, suggested: dateOf(field.suggested) });
@@ -716,6 +745,11 @@ function WhenControl({
     max: field.kind === 'time' || draft.date === maxDate ? timeOf(field.max) : undefined,
     suggested: timeOf(field.suggested),
   });
+  // The slots say the likely times; any other is one tap away, never a second control beside them.
+  const [another, setAnother] = useState(
+    () => draft.time !== undefined && !slots.includes(draft.time),
+  );
+  const exact = another || slots.length === 0;
 
   return (
     <div className={styles.when}>
@@ -731,6 +765,8 @@ function WhenControl({
             }}
             disabled={disabled}
             loop
+            ref={stripRef}
+            data-more={more}
             className={styles.strip}
           >
             {days.map((date) => (
@@ -771,7 +807,9 @@ function WhenControl({
               aria-describedby={labelledBy}
               value={draft.time ?? ''}
               onValueChange={(time) => {
-                if (time) setDraft({ ...draft, time });
+                if (!time) return;
+                setDraft({ ...draft, time });
+                setAnother(false);
               }}
               disabled={disabled}
               loop
@@ -784,19 +822,41 @@ function WhenControl({
               ))}
             </ToggleGroup.Root>
           )}
-          <span id={`${id}-exact`} className={styles.srOnly}>
-            Another time
-          </span>
-          <TimePicker
-            size="sm"
-            aria-labelledby={`${id}-exact`}
-            value={draft.time ?? timeOf(field.suggested) ?? slots[0] ?? '09:00'}
-            onValueChange={(time) => setDraft({ ...draft, time })}
-            minuteStep={15}
-            locale={locale}
-            disabled={disabled}
-            className={styles.picker}
-          />
+          {exact ? (
+            <div ref={exactRef} className={styles.exact}>
+              <span id={`${id}-exact`} className={styles.srOnly}>
+                Another time
+              </span>
+              <TimePicker
+                size="sm"
+                aria-labelledby={`${id}-exact`}
+                value={draft.time ?? timeOf(field.suggested) ?? slots[0] ?? '09:00'}
+                onValueChange={(time) => setDraft({ ...draft, time })}
+                minuteStep={15}
+                locale={locale}
+                disabled={disabled}
+                className={styles.picker}
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              className={`${styles.slot} ${styles.another}`}
+              disabled={disabled}
+              data-lustre=""
+              onClick={() => {
+                setAnother(true);
+                // The time it starts from is the one chosen; the hour takes the keys.
+                if (draft.time === undefined)
+                  setDraft({ ...draft, time: timeOf(field.suggested) ?? slots[0] ?? '09:00' });
+                requestAnimationFrame(() =>
+                  exactRef.current?.querySelector<HTMLElement>('[role="spinbutton"]')?.focus(),
+                );
+              }}
+            >
+              Another time…
+            </button>
+          )}
         </div>
       )}
     </div>

@@ -7,7 +7,7 @@
   .column {
     display: flex;
     flex-direction: column;
-    gap: var(--nc-space-6);
+    gap: var(--nc-chat-flow-gap);
     inline-size: min(46rem, 100%);
     margin-inline: auto;
     padding: var(--nc-space-8) var(--nc-space-5) var(--nc-space-10);
@@ -17,19 +17,35 @@
     display: contents;
   }
 
-  /* History shows at rest: nothing replays its entrance on reload. */
-  .arrival[data-at-rest] :is(*, *::before, *::after) {
+  /* History shows at rest: nothing replays its entrance on reload. What
+     arrives live inside a reply that was already there still does. */
+  .arrival[data-at-rest] :is(*, *::before, *::after):not(.arrival:not([data-at-rest]) *) {
     animation-duration: 0s !important;
     animation-delay: 0s !important;
   }
 
-  /* An offer to connect an app belongs to the reply above it: lined up with its
-     words, a little closer than the next message. On “Not now” it folds away,
-     and the gap it sat in closes with it. */
-  .suggestion {
-    margin-block-start: calc(var(--nc-space-3) * -1);
-    margin-inline-start: 2.75rem;
+  /* Everything that belongs to a reply after its first words (tool rows, a
+     plan, more words, a question, an offer, chips) is a part: one step under
+     what's above it and lined up with the words, in the transcript or in the
+     reply's own column (Nacre `Message attached`). On a phone it spans the
+     column, from the mark's edge. */
+  .part {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    margin-block-start: calc(var(--nc-chat-step) - var(--nc-chat-flow-gap));
+    margin-inline-start: var(--nc-chat-indent);
     transition: margin-block-start var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  /* Nothing to show: no room taken. */
+  .part:empty {
+    display: none;
+  }
+
+  /* Folding away to nothing (an offer's “Not now”): the gap it sat in closes with it. */
+  .part:has(> [data-state='dismissed']) {
+    margin-block-start: calc(var(--nc-chat-flow-gap) * -1);
   }
 
   /* Where a long chat's summary starts: a little room either side of the line. */
@@ -37,25 +53,10 @@
     margin-block: var(--nc-space-2);
   }
 
-  .suggestion[data-state='dismissed'] {
-    margin-block-start: calc(var(--nc-space-6) * -1);
-  }
-
-  /* “Also try” under the reply that carried on, in line with its words. */
-  .alsoTry {
-    margin-block-start: var(--nc-space-1);
-    margin-inline-start: 2.75rem;
-  }
-
   @media (prefers-reduced-motion: reduce) {
-    .suggestion {
+    .part {
       transition: none;
     }
-  }
-
-  /* A question sits close under the words that asked it (ADR 0060), like an offer. */
-  .question {
-    margin-block-start: calc(var(--nc-space-3) * -1);
   }
 
   .user[data-pending] {
@@ -78,16 +79,14 @@
     overflow-wrap: anywhere;
   }
 
+  /* Tool rows stack closer than the parts around them. */
   .tools {
     display: flex;
     flex-direction: column;
     gap: var(--nc-space-1-5);
-    margin-block: calc(var(--nc-space-3) * -1);
-    padding-inline-start: 2.75rem;
   }
 
   .continuation {
-    padding-inline-start: 2.75rem;
     animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
   }
 
@@ -118,15 +117,7 @@
 
   /* The quiet wait between steps only shows if the pause lingers, so quick hand-offs don't flicker. */
   .between {
-    padding-inline-start: 2.75rem;
-    margin-block-start: calc(var(--nc-space-3) * -1);
     animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) 650ms both;
-  }
-
-  /* Steps already reach half-way into the gap below them: after steps, the
-     wait keeps its own half, so it never sits right against the last one. */
-  .arrival:has(> .tools:last-child) + .between {
-    margin-block-start: 0;
   }
 
   .thoughtWrap {
@@ -136,9 +127,10 @@
   .permission {
     display: flex;
     flex-direction: column;
-    gap: var(--nc-space-4);
-    margin-inline-start: 2.75rem;
-    padding: var(--nc-space-4) var(--nc-space-5);
+    gap: var(--nc-space-3);
+    padding: var(--nc-chat-card-pad);
+    border-radius: var(--nc-chat-card-radius);
+    background: var(--nc-chat-card-surface);
     animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
   }
 
@@ -151,18 +143,18 @@
   .permissionIcon {
     display: grid;
     place-items: center;
-    inline-size: 2rem;
-    block-size: 2rem;
+    inline-size: var(--nc-chat-card-mark);
+    block-size: var(--nc-chat-card-mark);
     flex-shrink: 0;
-    border-radius: var(--nc-radius-md);
+    border-radius: var(--nc-radius-full);
     corner-shape: var(--nc-corner-shape);
     color: var(--nc-accent-11);
     background: var(--nc-accent-3);
   }
 
   .permissionIcon svg {
-    inline-size: 1.05rem;
-    block-size: 1.05rem;
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
   }
 
   .permissionCommand {
@@ -188,15 +180,14 @@
     display: flex;
     align-items: center;
     gap: var(--nc-space-2);
-    margin-inline-start: 2.75rem;
-    font-size: var(--nc-text-sm);
-    color: var(--nc-text-subtle);
+    font-size: var(--nc-chat-note-size);
+    color: var(--nc-text-muted);
     animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
   }
 
   .resolved svg {
-    inline-size: 0.9rem;
-    block-size: 0.9rem;
+    inline-size: var(--nc-chat-note-icon);
+    block-size: var(--nc-chat-note-icon);
   }
 
   .resolved[data-allowed] svg {
@@ -206,14 +197,12 @@
   /* Aligned with the assistant's text, like the memory pill. */
   .skillUsed {
     display: flex;
-    margin-inline-start: 2.75rem;
   }
 
   /* Where the reply would be: waiting for the internet, or who answered instead. */
   .aside {
     display: flex;
     flex-direction: column;
-    margin-inline-start: 2.75rem;
   }
 
   .memory {
@@ -221,8 +210,7 @@
     align-items: center;
     gap: var(--nc-space-2);
     align-self: flex-start;
-    max-inline-size: calc(100% - 2.75rem);
-    margin-inline-start: 2.75rem;
+    max-inline-size: 100%;
     padding: var(--nc-space-1) var(--nc-space-1) var(--nc-space-1) var(--nc-space-3);
     border-radius: var(--nc-radius-full);
     font-size: var(--nc-text-sm);
@@ -291,26 +279,6 @@
   @media (max-width: 640px) {
     .column {
       padding-inline: var(--nc-space-3);
-    }
-
-    .tools,
-    .continuation,
-    .between {
-      padding-inline-start: 0;
-    }
-
-    .permission,
-    .resolved,
-    .memory,
-    .aside,
-    .skillUsed,
-    .suggestion,
-    .alsoTry {
-      margin-inline-start: 0;
-    }
-
-    .memory {
-      max-inline-size: 100%;
     }
   }
 }

@@ -22,6 +22,9 @@ describe('days in the reader’s words', () => {
     expect(dayName('2026-10-06', utc)).toBe('Tuesday');
     expect(dayDate('2026-10-06', utc)).toBe('Tue 6 Oct');
     expect(dayDate('2027-01-06', utc)).toBe('Wed 6 Jan 2027');
+    // Beside "Friday", the date alone.
+    expect(dayDate('2026-10-09', utc, { weekday: false })).toBe('9 Oct');
+    expect(dayDate('2026-10-09', { ...utc, locale: 'en-US' }, { weekday: false })).toBe('Oct 9');
   });
 
   it('reads a day in the reader’s time zone, and an end as the day before', () => {

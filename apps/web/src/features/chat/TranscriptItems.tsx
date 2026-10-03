@@ -74,12 +74,28 @@ const ArrivedLive = createContext(false);
  * Wraps one transcript block. Whether it arrived live is decided once, when it
  * first appears, and never changes: blocks that were already there (history, a
  * reload) render at rest — no entrance, no reveal; only news animates.
+ *
+ * A `part` of a reply (a tool row, a card, more of its words) is a box of its
+ * own that sits one step under what's above it, lined up with the reply's
+ * words, wherever it is: in the transcript, or in the reply's own column.
+ * One that renders nothing takes no room.
  */
-export function Arrival({ live, children }: { live: boolean; children: ReactNode }) {
+export function Arrival({
+  live,
+  part,
+  children,
+}: {
+  live: boolean;
+  part?: boolean;
+  children: ReactNode;
+}) {
   const [arrivedLive] = useState(live);
   return (
     <ArrivedLive value={arrivedLive}>
-      <div className={styles.arrival} data-at-rest={arrivedLive ? undefined : ''}>
+      <div
+        className={part ? `${styles.arrival} ${styles.part}` : styles.arrival}
+        data-at-rest={arrivedLive ? undefined : ''}
+      >
         {children}
       </div>
     </ArrivedLive>
@@ -133,12 +149,21 @@ export function AssistantMessage({
   name,
   wait,
   entrance = true,
+  attached,
+  said,
 }: {
   item: Of<'assistant'>;
   name: string;
   /** Present while the turn runs: shown in place of the reply until its first words arrive. */
   wait?: Wait;
   entrance?: boolean;
+  /** The rest of the reply (tool rows, more words, its cards), drawn before its actions. */
+  attached?: ReactNode;
+  /**
+   * The whole reply's words, once it's over: what Copy and Read aloud take.
+   * Undefined while any of it is still being written (no actions yet).
+   */
+  said?: string;
 }) {
   const streaming = !item.done;
   const arrivedLive = useContext(ArrivedLive);
@@ -179,11 +204,12 @@ export function AssistantMessage({
       timestamp={new Date(item.startedAt)}
       status={streaming ? 'streaming' : 'complete'}
       entrance={entrance}
+      attached={attached}
       actions={
-        item.done && item.text ? (
+        item.done && said ? (
           <>
-            <ReadAloud text={item.text} />
-            <CopyButton value={item.text} label="Copy reply" />
+            <ReadAloud text={said} />
+            <CopyButton value={said} label="Copy reply" />
           </>
         ) : undefined
       }
@@ -205,7 +231,11 @@ const toolStatus: Record<Of<'tool'>['status'], ToolCallStatus> = {
 };
 
 export function ToolItem({ item }: { item: Of<'tool'> }) {
-  const label = useToolLabel()(item.name);
+  const label = useToolLabel()(item.name, {
+    running: item.status === 'running' || item.status === 'pending',
+    input: item.input,
+    view: item.view,
+  });
   const diff = toolDiff(item.name, item.input);
   const stopped = item.status === 'error' && item.output === 'Stopped.';
   return (
@@ -213,7 +243,7 @@ export function ToolItem({ item }: { item: Of<'tool'> }) {
       data-anchor={item.id}
       name={label ? label.title : item.name}
       leading={label?.leading}
-      summary={toolSummary(item.name, item.input)}
+      summary={label?.summary ?? toolSummary(item.name, item.input)}
       status={stopped ? 'cancelled' : toolStatus[item.status]}
       duration={item.durationMs}
       input={diff ? undefined : formatInput(item.input)}
@@ -299,7 +329,7 @@ export function PermissionCard({
   return (
     <Surface
       lustre
-      elevation={2}
+      elevation={1}
       radius="lg"
       className={styles.permission}
       role="group"
@@ -310,11 +340,11 @@ export function PermissionCard({
           <ShieldQuestion />
         </span>
         <Stack gap={0.5}>
-          <Text weight="semibold">
+          <Text size="sm" weight="semibold">
             {name} would like to{' '}
             {withCode(item.summary.charAt(0).toLowerCase() + item.summary.slice(1))}
           </Text>
-          <Text size="sm" tone="muted">
+          <Text size="xs" tone="muted">
             Nothing happens until you decide.
           </Text>
         </Stack>

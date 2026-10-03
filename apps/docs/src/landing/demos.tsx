@@ -276,18 +276,14 @@ function Knows({ at }: { at: number }) {
         >
           <div className={styles.reply}>
             <ToolCall
-              name="Read your calendar"
+              name={at < KNOWS.toolDone ? 'Looking at your calendar' : 'Looked at your calendar'}
               leading={
-                <span className={styles.toolApp}>
-                  <IntegrationLogo
-                    brand="google-calendar"
-                    name={CALENDAR}
-                    color={calendar?.color}
-                    size="xs"
-                    decorative
-                  />
-                  <span>{CALENDAR}</span>
-                </span>
+                <IntegrationLogo
+                  brand="google-calendar"
+                  name={CALENDAR}
+                  color={calendar?.color}
+                  size="xs"
+                />
               }
               status={at < KNOWS.toolDone ? 'running' : 'success'}
               duration={1_200}

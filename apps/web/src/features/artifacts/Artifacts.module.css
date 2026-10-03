@@ -1,8 +1,4 @@
 @layer nacre.components {
-  .chatCard {
-    margin-block: var(--nc-space-2);
-  }
-
   /* The panel as a card in the dock, like the browser beside it. */
   .panel {
     overflow: hidden;

@@ -5,14 +5,11 @@
     flex-direction: column;
     gap: var(--nc-space-3);
     min-inline-size: 0;
-    padding: var(--nc-space-4);
-    border-radius: var(--nc-radius-lg);
+    padding: var(--nc-chat-card-pad);
+    border-radius: var(--nc-chat-card-radius);
     corner-shape: var(--nc-corner-shape);
-    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
-    box-shadow:
-      inset 0 0 0 1px var(--nc-border-subtle),
-      var(--nc-glaze-edge),
-      var(--nc-elevation-1);
+    background: var(--nc-chat-card-surface);
+    box-shadow: var(--nc-chat-card-shadow);
     animation: nc-surface-in var(--nc-duration-slow) var(--nc-ease-out) both;
   }
 
@@ -26,16 +23,16 @@
     display: grid;
     flex-shrink: 0;
     place-items: center;
-    inline-size: 2rem;
-    block-size: 2rem;
+    inline-size: var(--nc-chat-card-mark);
+    block-size: var(--nc-chat-card-mark);
     border-radius: var(--nc-radius-full);
     background: var(--nc-accent-3);
     color: var(--nc-accent-11);
   }
 
   .mark > svg {
-    inline-size: 1rem;
-    block-size: 1rem;
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
   }
 
   .words {
@@ -138,7 +135,7 @@
   /* ── Settled: a quiet line that opens to the plan again ───────────── */
   .settled {
     min-inline-size: 0;
-    border-radius: var(--nc-radius-md);
+    border-radius: var(--nc-chat-row-radius);
     corner-shape: var(--nc-corner-shape);
     background: var(--nc-surface);
     box-shadow:
@@ -157,7 +154,7 @@
     align-items: center;
     gap: var(--nc-space-2-5);
     inline-size: 100%;
-    min-block-size: 2.5rem;
+    min-block-size: var(--nc-chat-row-height);
     margin: 0;
     padding: 0 var(--nc-space-3);
     border: 0;
