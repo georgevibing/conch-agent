@@ -16,7 +16,10 @@ import {
   VaultPasskeyRow,
   VaultRow,
   VaultRowSkeleton,
+  VaultSelectionBar,
+  VaultSourceFilter,
   VaultSourceRow,
+  siteName,
   VaultTransferProgress,
   VaultUnlockCard,
 } from './Passwords';
@@ -58,9 +61,9 @@ describe('VaultRow', () => {
     const { container, rerender } = renderNacre(
       <VaultRow kind="login" title="Bank" source="1password" />,
     );
-    expect(container.querySelector('[aria-label="1Password"]')).not.toBeNull();
+    expect(container.querySelector('[title="1Password"]')).not.toBeNull();
     rerender(<VaultRow kind="login" title="Bank" source="1password" sourceMark={false} />);
-    expect(container.querySelector('[aria-label="1Password"]')).toBeNull();
+    expect(container.querySelector('[title="1Password"]')).toBeNull();
     // Where it's from is still in its name.
     expect(screen.getByRole('button', { name: 'Bank, from 1Password' })).toBeInTheDocument();
   });
@@ -314,6 +317,86 @@ describe('in the chat', () => {
     await user.type(screen.getByLabelText('Password for Passwords'), 'nope nope');
     await user.click(screen.getByRole('button', { name: 'Unlock' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('isn’t the password');
+    await expectAccessible(container);
+  });
+});
+
+describe('where items live, and choosing several', () => {
+  it('names a site by whose it is, not by its first label', () => {
+    expect(siteName('app.yazio.com')).toBe('yazio');
+    expect(siteName('www.bbc.co.uk')).toBe('bbc');
+    expect(siteName('accounts.google.com')).toBe('google');
+    expect(siteName('github.com')).toBe('github');
+    expect(siteName('192.168.1.1')).toBe('192.168.1.1');
+    expect(siteName('localhost')).toBe('localhost');
+  });
+
+  it('says where an item lives in its name, with its vault, and Conch’s own when asked', async () => {
+    const { container } = renderNacre(
+      <div role="list">
+        <div role="listitem">
+          <VaultRow
+            kind="login"
+            title="Mail"
+            subtitle="ada"
+            source="1password"
+            container="Private"
+          />
+        </div>
+        <div role="listitem">
+          <VaultRow kind="login" title="Bank" subtitle="ada" source="conch" sourceMark />
+        </div>
+      </div>,
+    );
+    expect(
+      screen.getByRole('button', { name: 'Mail, ada, from 1Password, Private' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bank, ada, in Conch' })).toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
+  it('turns a row into a toggle while choosing several', async () => {
+    const onClick = vi.fn();
+    renderNacre(<VaultRow kind="note" title="Safe" selecting checked onClick={onClick} />);
+    const row = screen.getByRole('button', { name: 'Safe' });
+    expect(row).toHaveAttribute('aria-pressed', 'true');
+    expect(row).not.toHaveAttribute('aria-current');
+    await userEvent.click(row);
+    expect(onClick).toHaveBeenCalled();
+  });
+
+  it('chooses one place with a press or the arrow keys, and says how many are there', async () => {
+    const onValueChange = vi.fn();
+    const { container } = renderNacre(
+      <VaultSourceFilter
+        value="all"
+        onValueChange={onValueChange}
+        total={4}
+        sources={[
+          { source: 'conch', count: 3 },
+          { source: '1password', count: 1 },
+        ]}
+      />,
+    );
+    await userEvent.click(screen.getByRole('radio', { name: '1Password, 1 item' }));
+    expect(onValueChange).toHaveBeenLastCalledWith('1password');
+    expect(screen.getByRole('radio', { name: 'Everywhere, 4 items' })).toBeChecked();
+    await expectAccessible(container);
+  });
+
+  it('says how many are chosen, offers Select all until they all are, and Done', async () => {
+    const onSelectAll = vi.fn();
+    const onDone = vi.fn();
+    const { container, rerender } = renderNacre(
+      <VaultSelectionBar count={2} total={5} onSelectAll={onSelectAll} onDone={onDone} />,
+    );
+    expect(screen.getByRole('toolbar', { name: 'Chosen items' })).toHaveTextContent('2 chosen');
+    await userEvent.click(screen.getByRole('button', { name: 'Select all 5' }));
+    expect(onSelectAll).toHaveBeenCalled();
+    rerender(<VaultSelectionBar count={5} total={5} onSelectAll={onSelectAll} onDone={onDone} />);
+    expect(screen.queryByRole('button', { name: /Select all/ })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(onDone).toHaveBeenCalled();
     await expectAccessible(container);
   });
 });

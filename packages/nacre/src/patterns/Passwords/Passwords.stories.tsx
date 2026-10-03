@@ -19,6 +19,8 @@ import {
   VaultPasskeyRow,
   VaultRow,
   VaultRowSkeleton,
+  VaultSelectionBar,
+  VaultSourceFilter,
   VaultSourceRow,
   VaultTransferProgress,
 } from './Passwords';
@@ -111,6 +113,92 @@ export const List: Story = {
             onClick={() => setSelected(r.title)}
           />
         ))}
+      </div>
+    );
+  },
+};
+
+/**
+ * Where each item lives: Conch's pearl or the password manager's mark on the
+ * corner of its tile, and one press to show only one place's items.
+ */
+export const WhereItemsLive: Story = {
+  render: () => {
+    const [from, setFrom] = useState<'all' | 'conch' | '1password' | 'bitwarden'>('all');
+    const shown = rows.filter(
+      (r) => from === 'all' || ('source' in r ? r.source : 'conch') === from,
+    );
+    return (
+      <div style={{ display: 'grid', gap: 8, maxInlineSize: 380 }}>
+        <VaultSourceFilter
+          value={from}
+          onValueChange={(v) => setFrom(v as typeof from)}
+          total={rows.length}
+          sources={[
+            { source: 'conch', count: rows.filter((r) => !('source' in r)).length },
+            { source: '1password', count: 1 },
+            { source: 'bitwarden', count: 1 },
+          ]}
+        />
+        <div style={{ display: 'grid', gap: 2 }}>
+          {shown.map((r) => (
+            <VaultRow
+              key={r.title}
+              {...r}
+              container={'source' in r && r.source === '1password' ? 'Private' : undefined}
+              issues={'issues' in r ? [...r.issues] : undefined}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  },
+};
+
+/**
+ * Choosing several: ⌘/Ctrl-click or Shift-click a row, or Select. The tiles
+ * turn into tick boxes, and the bar says how many and what can be done.
+ */
+export const ChoosingSeveral: Story = {
+  render: () => {
+    const [chosen, setChosen] = useState<Set<string>>(new Set(['Netflix', 'Old forum']));
+    const toggle = (title: string) =>
+      setChosen((before) => {
+        const next = new Set(before);
+        if (next.has(title)) next.delete(title);
+        else next.add(title);
+        return next;
+      });
+    return (
+      <div style={{ display: 'grid', gap: 8, maxInlineSize: 380 }}>
+        <VaultSelectionBar
+          count={chosen.size}
+          total={rows.length}
+          onSelectAll={() => setChosen(new Set(rows.map((r) => r.title)))}
+          onDone={() => setChosen(new Set())}
+          actions={
+            <>
+              <Button size="sm" variant="surface">
+                Copy to 1Password
+              </Button>
+              <Button size="sm" variant="ghost" tone="danger">
+                Delete {chosen.size}
+              </Button>
+            </>
+          }
+        />
+        <div style={{ display: 'grid', gap: 2 }}>
+          {rows.slice(0, 7).map((r) => (
+            <VaultRow
+              key={r.title}
+              {...r}
+              issues={'issues' in r ? [...r.issues] : undefined}
+              selecting
+              checked={chosen.has(r.title)}
+              onClick={() => toggle(r.title)}
+            />
+          ))}
+        </div>
       </div>
     );
   },
