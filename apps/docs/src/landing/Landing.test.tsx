@@ -86,6 +86,16 @@ describe('the front page', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
+  it('shows the chat carrying on once an app is on, with what that app really suggests next', () => {
+    open();
+    const calendar = reference.integrations.find((app) => app.id === 'google-calendar');
+    const picture = screen.getByRole('figure', { name: /offers to connect Google Calendar/ });
+    expect(picture).toHaveTextContent(`Connected ${calendar?.name}`);
+    expect(picture).toHaveTextContent('carrying on');
+    // The chips under the answer are the catalog's own examples, never typed here.
+    for (const example of calendar?.examples ?? []) expect(picture).toHaveTextContent(example);
+  });
+
   it('names the computer on each install tab, with its mark', () => {
     open();
     for (const tab of screen.getAllByRole('tab', { name: 'macOS and Linux' }))
