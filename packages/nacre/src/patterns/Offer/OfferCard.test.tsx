@@ -29,6 +29,40 @@ const review = {
 };
 
 describe('OfferCard', () => {
+  it('turns on a Conch app you switched off, with its own icon, never Connect', async () => {
+    const onTake = vi.fn();
+    const { container, rerender } = renderNacre(
+      <OfferCard
+        kind="app"
+        name="Tally"
+        app={{ glyph: 'calculator', color: 'teal' }}
+        description="Count things for you."
+        assistant="Ada’s helper"
+        state="suggested"
+        onTake={onTake}
+        onNotNow={() => {}}
+      />,
+    );
+    expect(screen.getByText('Tally is off')).toBeInTheDocument();
+    expect(
+      screen.getByText('Turn it on and Ada’s helper can count things for you.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Connect/ })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Turn on Tally' }));
+    expect(onTake).toHaveBeenCalledOnce();
+    await expectAccessible(container);
+    rerender(
+      <OfferCard
+        kind="app"
+        name="Tally"
+        app={{ glyph: 'calculator', color: 'teal' }}
+        description="Count things for you."
+        state="accepted"
+      />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(/Turned on Tally.*carrying on/);
+  });
+
   it('offers to connect an app, in the assistant’s words, with every way out', async () => {
     const onTake = vi.fn();
     const onNotNow = vi.fn();

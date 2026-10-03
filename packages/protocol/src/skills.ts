@@ -33,6 +33,8 @@ export const SkillSource = z.enum([
   'openclaw',
   /** `~/.hermes/skills` */
   'hermes',
+  /** A Conch app's own skills (ADR 0061): `conch-apps/<id>/current/skills`, read-only. */
+  'app',
 ]);
 export type SkillSource = z.infer<typeof SkillSource>;
 

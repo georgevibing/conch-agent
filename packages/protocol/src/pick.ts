@@ -11,6 +11,8 @@ export const PickPurpose = z.enum([
   'workspace',
   /** A folder a routine watches for changes (ADR 0056). */
   'watch-folder',
+  /** A `.conchapp` file, or a folder with a `conch-app.json`, to add (ADR 0061). */
+  'conch-app',
 ]);
 export type PickPurpose = z.infer<typeof PickPurpose>;
 

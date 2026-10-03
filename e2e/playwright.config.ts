@@ -113,6 +113,17 @@ const scenarios = {
     port: 4363,
     env: { CONCH_MOCK_STATE: 'ready', CONCH_IMPORT_HOME: importMoreHome },
   },
+  // Apps you make, share and add (ADR 0061): made by the mock the real way, used, saved, added back.
+  // GitHub's program sees no sign-in here, so nothing can ever be published from a test.
+  'conch-apps': {
+    port: 4344,
+    env: {
+      CONCH_MOCK_STATE: 'ready',
+      GH_CONFIG_DIR: mkdtempSync(join(tmpdir(), 'conch-e2e-gh-')),
+      GH_TOKEN: '',
+      GITHUB_TOKEN: '',
+    },
+  },
   // Show me: things made beside the chat, sealed pages, pinned apps (ADR 0034).
   'show-me': { port: 4371, env: { CONCH_MOCK_STATE: 'ready' } },
   // What a tool found, drawn as it is (ADR 0060): the mock's pretend calendar, mail, files and Slack.
@@ -262,6 +273,10 @@ export default defineConfig({
         mkdtempSync(join(tmpdir(), 'conch-e2e-nohome-')),
       CONCH_WEB_DIST: join(root, 'apps/web/dist'),
       CONCH_LOG_LEVEL: 'warn',
+      // No journey can reach GitHub as whoever runs it: no gh sign-in, no token.
+      GH_CONFIG_DIR: mkdtempSync(join(tmpdir(), 'conch-e2e-gh-')),
+      GH_TOKEN: '',
+      GITHUB_TOKEN: '',
     },
   })),
 });

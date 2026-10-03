@@ -117,6 +117,23 @@ export const Expired: Story = { args: { state: 'expired' } };
 /** “Don’t suggest Google Calendar”: one line, with Undo. */
 export const Muted: Story = { args: { state: 'muted' } };
 
+/** A Conch app you have but switched off (ADR 0061): its own icon, and **Turn on**. */
+export const AppSwitchedOff: Story = {
+  args: {
+    name: 'Tally',
+    brand: undefined,
+    color: undefined,
+    app: { glyph: 'calculator', color: 'teal' },
+    description: 'Count things for you, one tap at a time.',
+    why: undefined,
+    state: 'suggested',
+  },
+};
+
+export const AppTurnedOn: Story = {
+  args: { ...AppSwitchedOff.args, state: 'accepted' },
+};
+
 export const SkillOff: Story = { args: { ...review, state: 'suggested' } };
 
 /** **Turn on** first shows what it may do, in place. */

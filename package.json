@@ -33,6 +33,7 @@
     "format:check": "prettier --check .",
     "check": "pnpm format:check && turbo run lint typecheck --concurrency=2 && turbo run test --concurrency=1 -- --maxWorkers=2",
     "a11y": "node scripts/a11y-sweep.mjs",
+    "pagekit": "node scripts/pagekit.mjs",
     "start": "pnpm --filter @conch/web build && pnpm --filter @conch/server start",
     "start:network": "CONCH_HOST=0.0.0.0 CONCH_ALLOW_REMOTE=1 pnpm start",
     "conch": "pnpm --silent --filter @conch/server conch",

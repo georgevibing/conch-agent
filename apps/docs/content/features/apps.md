@@ -20,6 +20,8 @@ The page has three parts, top to bottom:
 2. **Add another app**: what Conch offers, by kind. The kinds are **Work**, **Talk to me here**, **Files**, **Passwords**, **Design**, **Business**, **Developer** and **Home**. **Passwords** has the password managers Conch can read: turn one on from its page here or from **Passwords**, it's the same switch. Pick a kind above the gallery to see only that one, or type a name in **Find an app**.
 3. **Found in** and a provider's name: apps Conch came across there. See [Apps a provider set up by itself](#apps-a-provider-set-up-by-itself).
 
+Type in **Find an app** to see apps people shared under **From the community**, or, when nothing matches, press **Make … with Conch**.
+
 Every app in the gallery is one Conch can really connect: before an app goes in, Conch's own sign-in is tried against the service. A few well-known services only let apps they already know sign in, so they aren't offered. **Zapier** reaches many of those, and **Add your own** takes any other.
 
 ## What it does
@@ -106,7 +108,15 @@ Conch checks your apps and keeps their sign-ins fresh. One that needs you moves 
 
 ## Something that isn't listed
 
-**Add your own** connects any app that speaks MCP, the open standard assistants use for tools. Paste its address, and Conch opens its sign-in page if it needs one. For one that runs on this computer, choose **Run a program**. What you add yourself starts at **Ask every time**.
+Press **Add your own**. It opens on **Describe it**: say what you want in your own words, press **Build it**, and Conch makes the app for you in a chat. See [Make an app](./make-apps.md).
+
+The dialog's other tabs:
+
+- **From a link** adds an app someone shared, from its GitHub page or a `.conchapp` file.
+- **By address** connects any app that speaks MCP, the open standard assistants use for tools. Paste its address, and Conch opens its sign-in page if it needs one.
+- **Run a program** connects an MCP app that runs on this computer.
+
+What you add by address or as a program starts at **Ask every time**.
 
 > [!WARNING]
 > A program you add runs as you and can do anything you can. Only add programs from people you trust.

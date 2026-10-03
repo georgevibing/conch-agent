@@ -16,6 +16,7 @@ import { readPastChatRead, readPastChatsFound, severityFor } from '@conch/protoc
 
 import { Emitter } from '../../lib/emitter';
 import { hostToolText } from '../types';
+import { TALLY_ID, tallyFiles } from './tally';
 import { pretendFind } from './views';
 import type {
   Completion,
@@ -731,6 +732,76 @@ export class MockEngine implements Engine {
         }
         yield { type: 'message-done', messageId: next };
         yield { type: 'done', outcome: 'success' };
+        return;
+      }
+      // Conch apps (ADR 0061): the maker's real path, end to end, with no model bill.
+      const maker = (name: string) => input.tools.some((t) => t.name === name);
+      const madeApp = /\b(make|change) (?:me )?(?:an |the )?app\b/i.exec(input.prompt);
+      if (madeApp && maker('app_new')) {
+        const change = madeApp[1]?.toLowerCase() === 'change';
+        yield* hostTool('app_guide', {});
+        if (change) yield* hostTool('app_edit', { app: TALLY_ID });
+        else
+          yield* hostTool('app_new', {
+            name: 'Tally',
+            id: TALLY_ID,
+            tagline: 'Counts things for you, one tap at a time',
+          });
+        for (const [path, content] of Object.entries(tallyFiles(change ? '1.1.0' : '1.0.0')))
+          yield* hostTool('app_write', { path, content });
+        yield* hostTool('app_check', {});
+        yield* hostTool('app_try', { tool: 'count', input: { by: 1 } });
+        yield* hostTool('app_try', { tool: 'read_count', input: {} });
+        yield* hostTool('app_check', {});
+        const shown = yield* hostTool('app_present', {
+          summary: change
+            ? 'A new version of Tally.'
+            : 'Tally counts things for you, from a chat or from its page.',
+        });
+        yield* speak(
+          /^A card/.test(shown)
+            ? change
+              ? 'I changed Tally. The card under this reply says what’s different; press Update to use it.'
+              : 'I made Tally: tell me what to count, or tap the button on its page. Press Add to my apps on the card below to keep it.'
+            : `I couldn’t offer it yet: ${shown}`,
+        );
+        return;
+      }
+      const appLink = /\badd the app at (\S+)/i.exec(input.prompt)?.[1]?.replace(/[.,!?]+$/, '');
+      if (appLink && maker('app_get')) {
+        const shown = yield* hostTool('app_get', { link: appLink });
+        yield* speak(
+          /^A card/.test(shown)
+            ? 'Here it is. The card says what it can do; press Add to my apps if you want it.'
+            : shown,
+        );
+        return;
+      }
+      if (/\bput it on github\b/i.test(input.prompt) && maker('app_share')) {
+        const shown = yield* hostTool('app_share', { app: TALLY_ID });
+        yield* speak(
+          /^A card/.test(shown) ? 'Press Publish on GitHub on the card when you’re ready.' : shown,
+        );
+        return;
+      }
+      // Using an app you added (ADR 0061): its own tool, as any model would call it.
+      const tally = `app_${TALLY_ID}__count`;
+      if (/\bcount one more\b/i.test(input.prompt) && maker(tally)) {
+        const counted = yield* hostTool(tally, { by: 1 });
+        const said = (() => {
+          try {
+            return String((JSON.parse(counted) as { text?: unknown }).text ?? counted);
+          } catch {
+            return counted;
+          }
+        })();
+        yield* speak(/\d/.test(said) ? `Counted. ${said}` : said);
+        return;
+      }
+      const wanted = /\bis there an app (?:for|that) (.+?)[.?!]*$/i.exec(input.prompt.trim())?.[1];
+      if (wanted && maker('app_find')) {
+        const found = yield* hostTool('app_find', { query: wanted });
+        yield* speak(`Here’s what I found:\n\n${found}`);
         return;
       }
       // What a tool found, drawn as it is (ADR 0060): the pretend apps' calendar,

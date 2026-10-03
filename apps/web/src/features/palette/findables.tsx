@@ -1,5 +1,7 @@
 import { canUseApps, generatePassword, type TaskList, type TextRange } from '@conch/protocol';
 import {
+  AppIcon,
+  type AppIconLook,
   ARTIFACT_KINDS,
   CHAT_ONLY_WORDS,
   IntegrationLogo,
@@ -80,6 +82,8 @@ import { useVault } from '../passwords/queries';
 import { modelLabel, providerLogo } from '../models/catalog';
 import { modelKey, useTurnOptions } from '../models/useTurnOptions';
 import { useArtifacts } from '../artifacts/queries';
+import { useConchApps } from '../conchapps/queries';
+import { conchPagePath } from '../conchapps/words';
 import { useRoutines } from '../routines/queries';
 import { taskKeys } from '../tasks/queries';
 import { fuzzyFilter, type FuzzyMatch } from '../search/fuzzy';
@@ -296,6 +300,7 @@ export function useFindables(query: string, conversationId: string | undefined):
   const { data: integrations } = useIntegrations();
   const { data: routines } = useRoutines();
   const { data: artifacts } = useArtifacts();
+  const { data: conchApps } = useConchApps();
   const openArtifact = useUi((s) => s.openArtifact);
   // The sidebar keeps the tasks loaded; reading them here costs no fetch of its own.
   const tasks = useQueryClient().getQueryData<TaskList>(taskKeys.all);
@@ -378,13 +383,22 @@ export function useFindables(query: string, conversationId: string | undefined):
   });
 
   const connected = integrations?.integrations ?? [];
-  const apps = [
+  const apps: {
+    id: string;
+    name: string;
+    brand: string;
+    color?: string;
+    connected: boolean;
+    app?: AppIconLook;
+  }[] = [
     ...connected.map((i) => ({
       id: i.id,
       name: i.name,
       brand: i.catalogId ?? 'custom',
       color: integrations?.catalog.find((c) => c.id === i.catalogId)?.color,
       connected: true,
+      // An app you made or added wears its own icon (ADR 0061).
+      app: conchApps?.find((a) => a.id === i.conchApp)?.manifest.icon,
     })),
     ...(integrations?.catalog ?? [])
       .filter((c) => !connected.some((i) => i.catalogId === c.id))
@@ -411,7 +425,9 @@ export function useFindables(query: string, conversationId: string | undefined):
     label: item.name,
     ranges: match.ranges,
     hint: item.connected ? 'Open' : 'Connect',
-    icon: (
+    icon: item.app ? (
+      <AppIcon glyph={item.app.glyph} color={item.app.color} size="xs" />
+    ) : (
       <IntegrationLogo
         brand={item.brand}
         name={item.name}
@@ -501,6 +517,34 @@ export function useFindables(query: string, conversationId: string | undefined):
     description: item.scheduleText,
     icon: <Repeat />,
     run: () => void navigate(`/routines/${item.id}`),
+  }));
+
+  // The pages of apps you made or added (ADR 0061): "Plant diary — Plants".
+  const conchPages = (conchApps ?? []).flatMap((a) =>
+    a.manifest.pages.map((page) => ({
+      key: `${a.id}/${page.id}`,
+      label:
+        page.title.toLowerCase() === a.manifest.name.toLowerCase()
+          ? `${a.manifest.name} page`
+          : `${a.manifest.name} — ${page.title}`,
+      words: `${a.manifest.name} ${page.title} ${a.manifest.tagline} page open app`,
+      to: conchPagePath(a.id, page.id),
+      icon: a.manifest.icon,
+    })),
+  );
+  const pageItems = find(
+    conchPages,
+    q,
+    (p) => p.label,
+    (p) => p.words,
+    4,
+  ).map(({ item, match }): Findable => ({
+    id: `app-page:${item.key}`,
+    label: item.label,
+    ranges: match.ranges,
+    hint: 'Open',
+    icon: <AppIcon glyph={item.icon.glyph} color={item.icon.color} size="xs" />,
+    run: () => void navigate(item.to),
   }));
 
   // Things made in chats (ADR 0034): a pinned app opens on its page, anything else beside its chat.
@@ -800,6 +844,23 @@ export function useFindables(query: string, conversationId: string | undefined):
       run: () => void navigate('/apps?show=talk'),
     },
     {
+      // Apps you make (ADR 0061): Add your own, open on Describe it.
+      id: 'make-app',
+      label: 'Make an app',
+      keywords:
+        'make build create new app my own custom tool maker describe conch app track remember log counter',
+      icon: <WandSparkles />,
+      run: () => void navigate('/apps?add=describe'),
+    },
+    {
+      id: 'add-app-link',
+      label: 'Add an app from a link',
+      keywords:
+        'add install app link address github repository file conchapp shared someone community import',
+      icon: <Download />,
+      run: () => void navigate('/apps?add=link'),
+    },
+    {
       id: 'apps',
       label: 'Apps',
       keywords:
@@ -922,7 +983,7 @@ export function useFindables(query: string, conversationId: string | undefined):
     { heading: 'Passwords', items: passwordItems },
     { heading: 'Skills', items: skillItems },
     { heading: 'Models', items: modelItems },
-    { heading: 'Apps', items: appItems },
+    { heading: 'Apps', items: [...appItems, ...pageItems] },
     { heading: 'Talk to me here', items: channelItems },
     { heading: 'Routines', items: routineItems },
     { heading: 'Made for you', items: [...artifactItems, ...editItems] },

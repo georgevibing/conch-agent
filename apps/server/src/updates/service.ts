@@ -19,6 +19,7 @@ import {
   type UpdateProgress,
   type UpdatesSettingsBody,
   type UpdatesStatus,
+  type AppUpdateNotice,
 } from '@conch/protocol';
 import { z } from 'zod';
 
@@ -161,6 +162,8 @@ export interface UpdatesDeps {
   landed: (id: string) => Promise<void>;
   restartable: () => boolean;
   restart: () => boolean;
+  /** Apps added from GitHub with a newer version waiting (ADR 0061): shown beside the programs. */
+  apps?: () => AppUpdateNotice[];
   /** Look by itself once a day (off for tests and the mock engine). */
   schedule?: boolean;
   now?: () => number;
@@ -219,6 +222,11 @@ export class UpdatesService {
   }
 
   /** Tell the page where things stand, as they are this moment. */
+  /** Something beside Conch's own look changed (an app's update): tell the page. */
+  changed(): void {
+    this.#emit();
+  }
+
   #emit(): void {
     try {
       this.deps.emit(this.#snapshot());
@@ -257,9 +265,11 @@ export class UpdatesService {
         },
       ];
     });
+    const apps = this.deps.apps?.() ?? [];
     return {
       conch: this.#conch(),
       programs,
+      ...(apps.length && { apps }),
       checking: Boolean(this.#checking),
       checkedAt: this.#cache.checkedAt,
       auto: this.#cache.auto,

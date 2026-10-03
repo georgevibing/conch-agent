@@ -60,6 +60,35 @@ describe('what Conch knows how to get', () => {
     ]);
   });
 
+  it('gets GitHub’s program and Git for publishing apps, and keeps them up to date', () => {
+    const gh = KNOWN_NEEDS.get('gh');
+    expect(gh?.install?.win32).toMatchObject({
+      manager: 'winget',
+      args: expect.arrayContaining(['--id', 'GitHub.cli']),
+    });
+    expect(gh?.install?.darwin).toEqual({ manager: 'brew', args: ['install', 'gh'] });
+    expect(gh?.download?.linux).toMatch(/^https:\/\/github\.com\/cli\/cli/);
+    const winget = String.raw`C:\Users\ada\AppData\Local\Microsoft\WinGet\Links\gh.exe`;
+    expect(gh?.update?.(winget, 'win32')[0]?.args.slice(0, 3)).toEqual([
+      'upgrade',
+      '--id',
+      'GitHub.cli',
+    ]);
+    const git = KNOWN_NEEDS.get('git');
+    expect(git?.install?.win32).toMatchObject({
+      manager: 'winget',
+      args: expect.arrayContaining(['--id', 'Git.Git']),
+    });
+    expect(git?.install?.darwin).toEqual({ manager: 'brew', args: ['install', 'git'] });
+    expect(git?.update?.('/opt/homebrew/Cellar/git/2.51.0/bin/git', 'darwin')).toEqual([
+      { manager: 'brew', args: ['upgrade', 'git'] },
+    ]);
+    for (const need of [gh, git]) {
+      expect(need?.version).toBeTypeOf('function');
+      expect(need?.latest).toBeTypeOf('function');
+    }
+  });
+
   it('looks for Ollama where its installers put it', () => {
     expect(ollamaDirs('win32')[0]).toMatch(/Programs.Ollama$/);
     expect(ollamaDirs('darwin')).toContain('/Applications/Ollama.app/Contents/Resources');

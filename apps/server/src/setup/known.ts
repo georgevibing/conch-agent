@@ -1,4 +1,4 @@
-import { realpathSync } from 'node:fs';
+import { readdirSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -654,6 +654,43 @@ list.push(
     hint: () => 'Comes with macOS. Open Messages and sign in with your Apple ID.',
   },
   {
+    // Publishing an app on GitHub (ADR 0061 §5) goes through GitHub's own
+    // program, so Conch never keeps a GitHub token of its own.
+    id: 'gh',
+    name: 'GitHub CLI',
+    short: 'GitHub CLI',
+    find: (platform) => findGh(platform),
+    install: {
+      win32: winget('GitHub.cli'),
+      darwin: { manager: 'brew', args: ['install', 'gh'] },
+    },
+    ...updatable({ winget: 'GitHub.cli', brew: 'gh' }),
+    // Linux packages need sudo and GitHub's package repository.
+    download: {
+      win32: 'https://cli.github.com/',
+      darwin: 'https://cli.github.com/',
+      linux: 'https://github.com/cli/cli/blob/trunk/docs/install_linux.md',
+    },
+  },
+  {
+    // Git, for pushing what Conch publishes (ADR 0061 §5).
+    id: 'git',
+    name: 'Git',
+    short: 'Git',
+    find: (platform) => findGit(platform),
+    install: {
+      win32: winget('Git.Git'),
+      darwin: { manager: 'brew', args: ['install', 'git'] },
+    },
+    ...updatable({ winget: 'Git.Git', brew: 'git' }),
+    // Linux packages need sudo.
+    download: {
+      win32: 'https://git-scm.com/downloads/win',
+      darwin: 'https://git-scm.com/downloads/mac',
+      linux: 'https://git-scm.com/downloads/linux',
+    },
+  },
+  {
     id: 'docker',
     name: 'Docker',
     short: 'Docker',
@@ -733,6 +770,55 @@ export function ollamaDirs(platform: Platform): string[] {
 
 export function findOllama(platform: Platform): Promise<string | undefined> {
   return findExecutable('ollama', { extraDirs: ollamaDirs(platform) });
+}
+
+/**
+ * GitHub's program: on `PATH`, where its installer puts it, or in the folder
+ * winget unpacks it to (`WinGet\Packages\GitHub.cli_…\bin`), which isn't
+ * always on the `PATH` Conch started with.
+ */
+export async function findGh(platform: Platform = process.platform as Platform) {
+  const dirs: string[] = [];
+  if (platform === 'win32') {
+    dirs.push(
+      join(process.env.ProgramFiles ?? join('C:', 'Program Files'), 'GitHub CLI'),
+      join(localAppData(), 'Programs', 'GitHub CLI'),
+    );
+    const packages = join(localAppData(), 'Microsoft', 'WinGet', 'Packages');
+    try {
+      for (const name of readdirSync(packages))
+        if (name.startsWith('GitHub.cli_')) dirs.push(join(packages, name, 'bin'));
+    } catch {
+      // No winget packages here.
+    }
+  }
+  return findExecutable('gh', { extraDirs: dirs });
+}
+
+/** Homebrew's git, before the one macOS keeps in `/usr/bin`. */
+const BREW_GIT = ['/opt/homebrew/bin/git', '/usr/local/bin/git'];
+
+/**
+ * Git. On a Mac `/usr/bin/git` is there even without Apple's Command Line
+ * Tools, and running it then opens Apple's installer, so it only counts when
+ * they're installed.
+ */
+export async function findGit(platform: Platform = process.platform as Platform) {
+  if (platform === 'darwin') {
+    const brew = BREW_GIT.find(presentSync);
+    if (brew) return brew;
+    const tools = await run('xcode-select', ['-p'], { timeout: 5_000 });
+    return tools.code === 0 && presentSync('/usr/bin/git') ? '/usr/bin/git' : undefined;
+  }
+  return findExecutable('git', {
+    extraDirs:
+      platform === 'win32'
+        ? [
+            join(process.env.ProgramFiles ?? join('C:', 'Program Files'), 'Git', 'cmd'),
+            join(localAppData(), 'Programs', 'Git', 'cmd'),
+          ]
+        : [],
+  });
 }
 
 /** Where Docker Desktop keeps its command-line tools. */

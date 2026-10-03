@@ -1,0 +1,102 @@
+@layer nacre.components {
+  .maker {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+  }
+
+  /* The question, in the display serif: an invitation, not a form label. */
+  .question {
+    margin: 0;
+    font-family: var(--nc-font-display);
+    font-size: var(--nc-text-2xl);
+    font-weight: 400;
+    line-height: var(--nc-leading-tight);
+    letter-spacing: -0.005em;
+    color: var(--nc-text);
+  }
+
+  .box textarea {
+    font-size: var(--nc-text-lg);
+    line-height: var(--nc-leading-normal);
+  }
+
+  .box textarea::placeholder {
+    color: var(--nc-text-subtle);
+    transition: color var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .footer {
+    display: flex;
+    flex: 1;
+    justify-content: flex-end;
+  }
+
+  .examples {
+    --nc-rim-rest: 0;
+    --nc-rim-hover: 0.3;
+    --nc-sheen-hover: 0.14;
+
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1-5);
+  }
+
+  .example {
+    appearance: none;
+    min-block-size: var(--nc-control-sm);
+    padding: var(--nc-space-1) var(--nc-space-3);
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border),
+      var(--nc-glaze-edge);
+    color: var(--nc-text-muted);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    text-align: start;
+    cursor: pointer;
+    transition:
+      background var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .example:active:not(:disabled) {
+    transform: scale(0.975);
+    transition-duration: 0ms;
+  }
+
+  .example:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .example:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  @media (hover: hover) {
+    .example:hover:not(:disabled) {
+      background: var(--nc-surface-hi);
+      color: var(--nc-text);
+    }
+  }
+
+  .note {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-subtle);
+    text-wrap: pretty;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .example {
+      transition: none;
+    }
+  }
+}

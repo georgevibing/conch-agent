@@ -3,7 +3,7 @@
  * (searchable by meaning, with its model), a command, a routine that ran, a skill, an integration with its token, a
  * chat with an attachment, a model API's transcript, the browser's and
  * terminal's settings, a note the assistant wrote (and Undo's copy), a budget, a limit on what routines spend, a password, a provider key,
- * a linked WhatsApp and Signal, and a backup.
+ * a linked WhatsApp and Signal, an app made in a chat and one added from a file (with its key), and a backup.
  * Everything is written by the real services, the way using Conch writes it.
  * The backup tests use it to check nothing Conch writes is left unclassified.
  */
@@ -21,6 +21,7 @@ import { MockTeams } from '../channels/mock/teams';
 import { MockTelegram } from '../channels/mock/telegram';
 import { recordGateway } from '../port';
 import { Services } from '../services';
+import { fakePack, fakeParts, fakeSign, textFiles } from './conchapps';
 
 export const PASSWORD = 'purple otters juggle at dawn';
 const GITHUB_TOKEN = 'github_pat_mock_0123456789abcdefghij';
@@ -39,6 +40,8 @@ export async function gateway(home?: string) {
       CONCH_LOG_LEVEL: 'silent',
       CONCH_WEB_DIST: '/nonexistent',
     }),
+    // Conch apps' sealed runtime and package reader are stood in for (ADR 0061).
+    { conchAppParts: fakeParts() },
   );
   const app = await buildApp(services);
   await app.ready();
@@ -180,6 +183,63 @@ export async function useConch(g: Gateway) {
   await services.integrations.create(
     { catalogId: 'github', values: { token: GITHUB_TOKEN } },
     { redirectUrl: 'http://localhost/oauth/callback', display: 'popup' },
+  );
+  // An app made in a chat and added from its card, with something counted (ADR 0061)…
+  const maker = await chat(services, 'make me an app that counts things');
+  const card = (await services.conversations.detail(maker.id)).events.flatMap((e) =>
+    e.type === 'conch-app.offer' && e.offer.state === 'ready' ? [e.offer] : [],
+  )[0];
+  if (!card) throw new Error('no app card');
+  await ok(
+    await app.inject({
+      method: 'POST',
+      url: `/api/conch-apps/offers/${card.offerId}/accept`,
+      payload: { conversationId: maker.id },
+    }),
+  );
+  await ok(
+    await app.inject({
+      method: 'POST',
+      url: '/api/conch-apps/tally/call',
+      payload: { tool: 'count', input: { by: 2 }, confirmed: true },
+    }),
+  );
+  // …and one added from a file, with the key it needs.
+  const weather = fakePack(
+    fakeSign(
+      textFiles({
+        'conch-app.json': JSON.stringify({
+          conch: 1,
+          id: 'weather',
+          name: 'Weather',
+          tagline: 'The weather where you are',
+          version: '1.0.0',
+          icon: { glyph: 'cloud-sun', color: 'blue' },
+          reaches: ['api.weather.example'],
+          settings: [{ key: 'apiKey', label: 'API key', secret: true }],
+        }),
+      }),
+      { fingerprint: 'BBBB 2222', publisher: 'Bea' },
+    ),
+  );
+  const looked = await ok(
+    await app.inject({
+      method: 'POST',
+      url: '/api/conch-apps/preview',
+      payload: { file: weather.toString('base64'), name: 'weather.conchapp' },
+    }),
+  );
+  await ok(
+    await app.inject({
+      method: 'POST',
+      url: '/api/conch-apps/install',
+      payload: {
+        packageId: looked.packageId,
+        appId: 'weather',
+        hash: (looked.apps as { hash: string }[])[0]?.hash,
+        settings: { apiKey: 'wx-0123456789abcdef' },
+      },
+    }),
   );
   await ok(
     await app.inject({

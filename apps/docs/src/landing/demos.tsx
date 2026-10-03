@@ -6,6 +6,7 @@
  */
 import {
   AgendaView,
+  AppOffer,
   ArtifactChart,
   Badge,
   BrowserApproval,
@@ -34,6 +35,7 @@ import {
   type HandsetMessage,
   type OfferCardState,
 } from '@conch/nacre';
+import { appAbilities, appSourceLine } from '@conch/protocol';
 import { Mail } from 'lucide-react';
 import reference from 'virtual:conch-reference';
 
@@ -333,6 +335,164 @@ export function KnowsDemo() {
         {/* As tall as the whole chat from the start: it fills, it never grows. */}
         <Steady align="end" holds={[<Knows key="end" at={KNOWS.end} />]}>
           <Knows at={at} />
+        </Steady>
+      </Stage>
+    </div>
+  );
+}
+
+// ── Make it yours: ask for an app, and Conch builds it, checks it, offers it ─
+
+const MAKE = {
+  ask: 500,
+  think: 1_300,
+  write: 2_000,
+  writeDone: 3_400,
+  check: 3_600,
+  checkDone: 4_600,
+  tried: 4_800,
+  triedDone: 5_600,
+  reply: 5_900,
+  replyDone: 7_300,
+  offer: 7_600,
+  press: 10_400,
+  added: 11_100,
+  end: 17_500,
+} as const;
+
+const MAKE_ASK = 'Make me something that remembers when I water my plants.';
+const MAKE_REPLY = 'I made Plant diary. Tell me when you water one, or tap it off on its page.';
+
+/** The app the scene makes: written as the maker's tools would write it. */
+const PLANT_DIARY = {
+  manifest: {
+    conch: 1 as const,
+    id: 'plant-diary',
+    name: 'Plant diary',
+    tagline: 'Remembers when you water your plants',
+    description: 'Logs each watering and says which plants are due.',
+    version: '1.0.0',
+    icon: { glyph: 'sprout' as const, color: 'green' as const },
+    kind: 'home' as const,
+    tools: 'tools.mjs',
+    pages: [{ id: 'main', title: 'Plants', file: 'pages/main.html' }],
+    reaches: [],
+    settings: [],
+    instructions: '',
+    examples: [
+      'I watered the fern',
+      'Which plants need water?',
+      'When did I last water the cactus?',
+    ],
+  },
+  tools: [
+    {
+      name: 'log_watering',
+      title: 'Log watering',
+      description: 'Records that a plant was watered.',
+      changes: true,
+    },
+    {
+      name: 'due',
+      title: 'Plants due',
+      description: 'Says which plants are due for water.',
+      changes: false,
+    },
+  ],
+};
+
+const PLANT_WORDS = {
+  abilities: appAbilities(PLANT_DIARY.manifest, PLANT_DIARY.tools),
+  from: appSourceLine({ kind: 'made' }, { state: 'unsigned' }),
+};
+
+/** The chat as it stands at one moment: asked, built, checked, offered, added. */
+function Make({ at }: { at: number }) {
+  const state = at >= MAKE.added ? 'added' : 'ready';
+  return (
+    <div className={styles.chat}>
+      {at >= MAKE.ask && <Message from="user">{MAKE_ASK}</Message>}
+      {at >= MAKE.think && (
+        <Message
+          from="assistant"
+          author="Conch"
+          status={at < MAKE.replyDone ? 'streaming' : 'complete'}
+        >
+          {at < MAKE.write ? (
+            <ThinkingIndicator size="sm" label="Thinking" />
+          ) : (
+            <div className={styles.reply}>
+              <ToolCall
+                name="Writing Plant diary"
+                status={at < MAKE.writeDone ? 'running' : 'success'}
+                duration={1_400}
+              />
+              {at >= MAKE.check && (
+                <ToolCall
+                  name="Checking it"
+                  status={at < MAKE.checkDone ? 'running' : 'success'}
+                  duration={1_000}
+                />
+              )}
+              {at >= MAKE.tried && (
+                <ToolCall
+                  name="Trying Log watering and Plants due"
+                  status={at < MAKE.triedDone ? 'running' : 'success'}
+                  duration={800}
+                />
+              )}
+              {at >= MAKE.reply && (
+                <StreamingText
+                  as="p"
+                  text={arrived(MAKE_REPLY, at, MAKE.reply, MAKE.replyDone)}
+                  streaming={at < MAKE.replyDone}
+                />
+              )}
+            </div>
+          )}
+        </Message>
+      )}
+      {at >= MAKE.offer && (
+        <AppOffer
+          className={styles.offer}
+          action="add"
+          manifest={PLANT_DIARY.manifest}
+          tools={PLANT_DIARY.tools}
+          source={{ kind: 'made' }}
+          signature={{ state: 'unsigned' }}
+          summary="Plant diary logs each watering and says which plants are due."
+          state={state}
+          busy={at >= MAKE.press && at < MAKE.added}
+          words={PLANT_WORDS}
+          onAdd={noop}
+          onOpenPage={noop}
+          onNotNow={noop}
+          onTry={noop}
+          onOpenApp={noop}
+        />
+      )}
+    </div>
+  );
+}
+
+export function MakerDemo() {
+  const [ref, inView] = useInView<HTMLDivElement>({ once: false, margin: '0px' });
+  const at = useClock(MAKE.end, inView);
+  const working = at >= MAKE.think && at < MAKE.replyDone;
+
+  return (
+    <div ref={ref}>
+      <Stage
+        label="Asked for something that remembers when the plants were watered, Conch writes Plant diary, checks it, tries it, and offers it as a card; pressed, it's in your apps"
+        alive={working || (at >= MAKE.offer && at < MAKE.added)}
+        align="end"
+      >
+        {/* As tall as the whole chat from the start: it fills, it never grows. */}
+        <Steady
+          align="end"
+          holds={[<Make key="ready" at={MAKE.press - 1} />, <Make key="end" at={MAKE.end} />]}
+        >
+          <Make at={at} />
         </Steady>
       </Stage>
     </div>

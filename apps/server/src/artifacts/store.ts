@@ -16,7 +16,7 @@ import {
   type ArtifactKind,
 } from '@conch/protocol';
 
-import { Mutex, safeJoin, writeFileAtomic, writeJson } from '../lib/fs';
+import { Mutex, safeJoin, syncFile, writeFileAtomic, writeJson } from '../lib/fs';
 import { newId } from '../lib/ids';
 import { readStore, type Heal } from '../lib/recover';
 
@@ -197,12 +197,7 @@ export class ArtifactStore {
           join(folder, versionFile(input.kind, 1)),
           join(folder, 'artifact.json'),
         ]) {
-          const file = await open(path, 'r');
-          try {
-            await file.sync();
-          } finally {
-            await file.close();
-          }
+          await syncFile(path);
         }
         if (process.platform !== 'win32') {
           for (const path of [folder, this.dir]) {

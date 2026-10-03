@@ -9,6 +9,8 @@ import { ArchiveView } from '../features/archive/ArchiveView';
 import { ARCHIVE_PATH } from '../features/archive/useArchive';
 import { AppView } from '../features/artifacts/AppView';
 import { useArtifact } from '../features/artifacts/queries';
+import { AppPageView } from '../features/conchapps/AppPage';
+import { appIdOf } from '../features/conchapps/words';
 import { useUnsavedGuard } from '../features/artifacts/edits';
 import { MemoryView } from '../features/memory/MemoryView';
 import { RestartWatch } from '../features/health/RestartWatch';
@@ -57,7 +59,8 @@ function Reconnecting() {
 }
 
 export function Shell() {
-  const { conversationId, routineId, appId, skillId, channelId, channelKind, itemId } = useParams();
+  const { conversationId, routineId, appId, pageId, skillId, channelId, channelKind, itemId } =
+    useParams();
   const navigate = useNavigate();
   const path = useLocation().pathname;
   const routinesArea = path.startsWith('/routines');
@@ -226,7 +229,13 @@ export function Shell() {
               <SkillsView />
             )
           ) : appsArea ? (
-            appId ? (
+            pageId && appIdOf(appId) ? (
+              <AppPageView
+                key={`${appId}/${pageId}`}
+                appId={appIdOf(appId) ?? ''}
+                pageId={pageId}
+              />
+            ) : appId ? (
               <AppDetailView key={appId} appId={appId} />
             ) : (
               <AppsView />

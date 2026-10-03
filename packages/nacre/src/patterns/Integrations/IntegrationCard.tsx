@@ -5,6 +5,7 @@ import { Button } from '../../components/Button';
 import { IconButton } from '../../components/IconButton';
 import { Switch } from '../../components/Switch';
 import { cx } from '../../utils/cx';
+import { AppIcon, type AppIconLook } from '../ConchApps/AppIcon';
 import { IntegrationLogo } from './IntegrationLogo';
 import styles from './IntegrationCard.module.css';
 import { integrationStateMeta, type IntegrationStateValue } from './status';
@@ -14,6 +15,10 @@ interface Base extends Omit<ComponentProps<'article'>, 'title' | 'onToggle'> {
   /** Catalog id, for the logo. */
   brand?: string;
   color?: string;
+  /** A Conch app's own icon, in place of a brand's logo (ADR 0061). */
+  app?: AppIconLook;
+  /** A quiet word beside the name: “Made by you” (`AppMadeBadge`). */
+  badge?: ReactNode;
   onOpen?: () => void;
   /** Position in a grid, to stagger the entrance. */
   index?: number;
@@ -70,8 +75,36 @@ export type IntegrationCardProps = ConnectedCardProps | CatalogCardProps | Found
 export function IntegrationCard(props: IntegrationCardProps) {
   const titleId = useId();
   const statusId = useId();
-  const { name, brand, color, onOpen, index = 0, className, style } = props;
+  const { name, brand, color, app, badge, onOpen, index = 0, className, style } = props;
   const stagger = { '--ic-i': Math.min(index, 12), ...style } as CSSProperties;
+  const logo = (size: 'md' | 'lg', status?: IntegrationStateValue) =>
+    app ? (
+      <AppIcon glyph={app.glyph} color={app.color} size={size} status={status} />
+    ) : (
+      <IntegrationLogo
+        brand={brand}
+        name={name}
+        color={color}
+        size={size}
+        status={status}
+        decorative
+      />
+    );
+  const title = (
+    <h3 className={styles.title}>
+      <button type="button" id={titleId} className={styles.open} onClick={onOpen}>
+        {name}
+      </button>
+    </h3>
+  );
+  const titled = badge ? (
+    <div className={styles.titleRow}>
+      {title}
+      <span className={styles.badge}>{badge}</span>
+    </div>
+  ) : (
+    title
+  );
 
   if (props.variant === 'catalog') {
     const {
@@ -83,6 +116,8 @@ export function IntegrationCard(props: IntegrationCardProps) {
       name: _n,
       brand: _b,
       color: _c,
+      app: _a,
+      badge: _bd,
       onOpen: _o,
       index: _i,
       className: _cl,
@@ -99,13 +134,9 @@ export function IntegrationCard(props: IntegrationCardProps) {
         style={stagger}
         {...rest}
       >
-        <IntegrationLogo brand={brand} name={name} color={color} size="md" decorative />
+        {logo('md')}
         <div className={styles.text}>
-          <h3 className={styles.title}>
-            <button type="button" id={titleId} className={styles.open} onClick={onOpen}>
-              {name}
-            </button>
-          </h3>
+          {titled}
           <p className={styles.tagline}>{tagline}</p>
           {(local || note) && (
             <p className={styles.note}>
@@ -131,6 +162,8 @@ export function IntegrationCard(props: IntegrationCardProps) {
       name: _n,
       brand: _b,
       color: _c,
+      app: _a,
+      badge: _bd,
       onOpen: _o,
       index: _i,
       className: _cl,
@@ -146,13 +179,9 @@ export function IntegrationCard(props: IntegrationCardProps) {
         style={stagger}
         {...rest}
       >
-        <IntegrationLogo brand={brand} name={name} color={color} size="md" decorative />
+        {logo('md')}
         <div className={styles.text}>
-          <h3 className={styles.title}>
-            <button type="button" id={titleId} className={styles.open} onClick={onOpen}>
-              {name}
-            </button>
-          </h3>
+          {titled}
           {tagline && <p className={styles.tagline}>{tagline}</p>}
         </div>
         <div className={styles.foundActions}>
@@ -193,6 +222,8 @@ export function IntegrationCard(props: IntegrationCardProps) {
     name: _n,
     brand: _b,
     color: _c,
+    app: _a,
+    badge: _bd,
     onOpen: _o,
     index: _i,
     className: _cl,
@@ -216,20 +247,9 @@ export function IntegrationCard(props: IntegrationCardProps) {
       style={stagger}
       {...rest}
     >
-      <IntegrationLogo
-        brand={brand}
-        name={name}
-        color={color}
-        size="lg"
-        status={state}
-        decorative
-      />
+      {logo('lg', state)}
       <div className={styles.text}>
-        <h3 className={styles.title}>
-          <button type="button" id={titleId} className={styles.open} onClick={onOpen}>
-            {name}
-          </button>
-        </h3>
+        {titled}
         <p id={statusId} className={styles.status} data-tone={calm ? 'info' : info.tone}>
           {(attention || busy || state === 'off') && (
             <span className={styles.statusIcon} aria-hidden>

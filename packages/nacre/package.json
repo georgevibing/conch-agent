@@ -11,6 +11,7 @@
     ".": "./src/index.ts",
     "./styles.css": "./src/styles/index.css",
     "./tokens.css": "./src/styles/tokens.css",
+    "./pagekit.css": "./src/pagekit/pagekit.css",
     "./vite": "./vite.shared.ts"
   },
   "scripts": {

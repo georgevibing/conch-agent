@@ -160,7 +160,10 @@ test('a page with a link out starts with its code off, until you say', async ({ 
   // (A click just as the notice above goes can miss the moving frame: click again.)
   await expect(async () => {
     await frame.getByRole('link', { name: 'The best article' }).click();
-    await expect(page.getByText('Open evil.example?').first()).toBeVisible({ timeout: 2_000 });
+    // The whole address is asked about, not just its host (ADR 0034).
+    await expect(page.getByText('Open evil.example/?q=everything-you-said?').first()).toBeVisible({
+      timeout: 2_000,
+    });
   }).toPass({ timeout: 15_000 });
   await expect(page.getByText('https://evil.example/?q=everything-you-said').first()).toBeVisible();
   await expect(frame.getByRole('heading', { name: 'Reading list' })).toBeVisible();

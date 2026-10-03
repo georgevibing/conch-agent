@@ -65,6 +65,8 @@ export function Root() {
         <Route path="/skills/:skillId" element={<Shell />} />
         <Route path="/apps" element={<Shell />} />
         <Route path="/apps/:appId" element={<Shell />} />
+        {/* A Conch app's page, on a page of its own (ADR 0061). */}
+        <Route path="/apps/:appId/:pageId" element={<Shell />} />
         {/* Integrations and Channels are Apps now (ADR 0052): old links still arrive. */}
         <Route path="/integrations" element={<MovedToApps />} />
         <Route path="/integrations/:integrationId" element={<MovedToApps />} />

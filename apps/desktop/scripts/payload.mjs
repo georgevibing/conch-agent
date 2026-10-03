@@ -217,6 +217,20 @@ const check = spawnSync(
   { cwd: server, encoding: 'utf8' },
 );
 if (check.status !== 0) throw new Error(`The payload's gateway doesn't load:\n${check.stderr}`);
+// Conch apps' sealed runtime is a plain .mjs the gateway starts by path (ADR 0061): it must be there.
+const sealed = spawnSync(
+  nodeExe,
+  [
+    '--import',
+    'tsx',
+    '--input-type=module',
+    '-e',
+    "const { HOST_SCRIPT } = await import('./src/conchapps/runtime.ts'); const { existsSync } = await import('node:fs'); if (!existsSync(HOST_SCRIPT)) throw new Error('missing ' + HOST_SCRIPT);",
+  ],
+  { cwd: server, encoding: 'utf8' },
+);
+if (sealed.status !== 0)
+  throw new Error(`The payload is missing the runtime Conch apps run in:\n${sealed.stderr}`);
 
 const size = (dir) => {
   let total = 0;

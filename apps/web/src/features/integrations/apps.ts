@@ -388,18 +388,23 @@ export function toolGroups(integration: Integration): ToolGroup[] {
   const reads = integration.tools.filter((t) => t.access === 'read' && !t.destructive);
   const writes = integration.tools.filter((t) => !(t.access === 'read' && !t.destructive));
   const groups: ToolGroup[] = [];
+  // A Conch app's tools have titles of their own (ADR 0061): its switches say what they are.
+  const named = (tools: IntegrationTool[]) =>
+    integration.conchApp && tools.every((t) => t.title)
+      ? `${tools.map((t) => t.title).join(', ')}.`
+      : undefined;
   if (reads.length)
     groups.push({
       id: 'read',
       title: 'Look things up',
-      description: `Read and search in ${integration.name}.`,
+      description: named(reads) ?? `Read and search in ${integration.name}.`,
       tools: reads,
     });
   if (writes.length)
     groups.push({
       id: 'write',
       title: integration.policy === 'trust' ? 'Make changes' : 'Make changes (asks first)',
-      description: `Create, change or delete things in ${integration.name}.`,
+      description: named(writes) ?? `Create, change or delete things in ${integration.name}.`,
       tools: writes,
     });
   return groups;

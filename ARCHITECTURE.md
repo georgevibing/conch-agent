@@ -120,6 +120,8 @@ src/
   import/                     Come home: OpenClaw and Hermes read-only, a plan, a ledger for Undo (ADR 0035)
   artifacts/                  things made beside the chat: store, tools, fenced blocks, the sealed frame (ADR 0034); edits, drafts, live data (`live.ts`, ADR 0046)
   tasks/                      background tasks and helpers side by side (`delegate`), queue, worktrees (ADR 0033)
+  conchapps/                  Conch apps (ADR 0061): the maker's tools, drafts, the sealed runtime (`runtime/host.mjs`),
+                              the quality bar, packages, signatures, GitHub, `ConchApps` (a hosted tool family)
   questions/                  `ask`: a question answered with a tap, the one waiting per chat, its answer route (ADR 0060)
   doctor/                     Repair everything: every part's `DoctorCheck`, run at once (`doctor.report`)
   network/watch.ts            online or not (`network.status`); offline routing (ADR 0023)
@@ -358,6 +360,31 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   versions that could navigate run with `script-src 'none'` until allowed. Charts,
   tables, Markdown, SVG and Mermaid are drawn by the web app. Pinned ones are apps at
   `/apps/:id`; a refresh is a chat (origin `artifact`) that may only update that one.
+
+- **Conch apps** ([ADR 0061](./docs/adr/0061-apps-you-make-share-and-add.md)). An app is a
+  folder (`conch-app.json`, `tools.mjs`, pages, skills). The maker's host tools
+  (`conchapps/tools.ts`) write a draft in `~/.conch/app-workshop/<draft>/`, run
+  `checkApp` (`check.ts`: the manifest, the tools listed in the sealed runtime, pages,
+  skills, secrets, every tool tried) and `tryTool` on the draft's scratch data, and
+  `app_present` logs a `conch-app.offer` card. `POST /api/conch-apps/offers/:id/accept`
+  re-reads the exact files on the card (by hash) and installs them into
+  `~/.conch/conch-apps/<id>/current/` (kept versions beside it, data in
+  `conch-app-data/<id>/`, secrets in the sealed `conch-apps.secrets.json`).
+  `ConchApps` (`hosted.ts`) joins `hostedApps()`, so an app is an `Integration`
+  (`capp_<id>`) and its tools are host tools `app_<id>__<tool>` for every provider.
+  A tool runs in `SealedRuntime` (`runtime.ts`): `process.execPath` under
+  `--permission` (its folder read-only, its data writable, nothing else), no env,
+  and `host.mjs`'s fence; `app.fetch` comes back over IPC to `createFetcher`, which
+  dials only `reaches` through live data's guarded lookup. Pages are served by
+  `/api/conch-apps/:id/pages/:page/frame` with `frameHeaders`, the page kit
+  (`pagekit.generated.ts`, from Nacre by `pnpm pagekit`) and `conch.call`, which
+  `SealedFrame.onCall` passes to `POST …/call` (own tools only; a change needs a
+  press). Sharing: `packApp` (`.conchapp`, `backup/archive.ts`'s tar), `signApp`
+  (the skills' Ed25519 key, domain `conch-app-signature/1`), and `createPublisher`
+  (`gh`, its device sign-in, a repository with the topic `conch-app` and a release).
+  Adding: `parseLink` and `createSources` (GitHub's API through `guardedFetch`,
+  capped), `findApps`, `checkApp` with `safetyOnly`, `verifyApp`; a daily look for
+  newer versions fills `UpdatesStatus.apps`.
 
 - **Edit by hand and live data** ([ADR 0046](./docs/adr/0046-edit-by-hand-and-live-data.md)).
   Nacre's `CodeEditor` (CodeMirror 6, a lazy chunk) inside `ArtifactEditor`; edits
@@ -787,6 +814,13 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
 - First run is a short, skippable flow: welcome → connect a provider (install /
   sign-in / API key, with live re-checks) → a useful first job → personality and
   "about you" → chat.
+- **Conch apps** (ADR 0061). **Add your own** opens on **Describe it** (Nacre `AppMaker`),
+  which sends "Make me an app: …" as a new chat; **From a link** previews a package
+  (`AppPreview`). The transcript draws `conch-app.offer` as `AppOffer` and
+  `conch-app.share` as `ShareSteps`. An app is a card in Apps (its `AppIcon`, a badge
+  from `appSourceLine`), its page has its pages, settings, **Share**, **Change it**,
+  **Versions** and **Remove**, and a page opens in `SealedFrame` with `onCall`.
+  **Find an app** also searches the community and offers **Make "…" with Conch**.
 - **Passwords** (ADR 0025). `/passwords`: one list of Conch's own encrypted vault and the
   password managers you turn on (1Password, Bitwarden, KeePassXC, Proton Pass, Dashlane,
   Keeper, the macOS Keychain), with search, filters, the Security check (breached, reused,

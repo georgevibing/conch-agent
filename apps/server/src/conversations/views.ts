@@ -57,15 +57,31 @@ export function cleanView(view: unknown, redact?: (text: string) => string): Too
  * show: then the call gets its row, with its view, when it finishes.
  */
 export class HostToolRows {
-  readonly #open = new Map<string, { name: string; input: unknown; at: number }>();
+  readonly #open = new Map<string, { name: string; input: unknown; at: number; shown: boolean }>();
 
   constructor(
     private readonly redact?: (text: string) => string,
     private readonly now: () => number = Date.now,
   ) {}
 
-  start(call: { toolUseId: string; name: string; input: unknown }): void {
-    this.#open.set(call.toolUseId, { name: call.name, input: call.input, at: this.now() });
+  /**
+   * A call begins. A tool that asked for a row (`HostTool.row`: an app's
+   * own tools, the maker's steps) shows at once, running; any other shows
+   * only if it ends with something to show.
+   */
+  start(
+    call: { toolUseId: string; name: string; input: unknown },
+    row = false,
+  ): ConversationEventInput[] {
+    this.#open.set(call.toolUseId, {
+      name: call.name,
+      input: call.input,
+      at: this.now(),
+      shown: row,
+    });
+    return row
+      ? [{ type: 'tool.started', toolUseId: call.toolUseId, name: call.name, input: call.input }]
+      : [];
   }
 
   owns(toolUseId: string): boolean {
@@ -81,19 +97,21 @@ export class HostToolRows {
   }): ConversationEventInput[] {
     const open = this.#open.get(call.toolUseId);
     this.#open.delete(call.toolUseId);
-    if (!open || call.status !== 'success') return [];
-    const view = cleanView(call.view, this.redact);
-    if (!view) return [];
+    if (!open) return [];
+    const view = call.status === 'success' ? cleanView(call.view, this.redact) : undefined;
+    const finished: ConversationEventInput = {
+      type: 'tool.finished',
+      toolUseId: call.toolUseId,
+      status: call.status,
+      output: call.output,
+      durationMs: Math.max(0, this.now() - open.at),
+      ...(view && { view }),
+    };
+    if (open.shown) return [finished];
+    if (call.status !== 'success' || !view) return [];
     return [
       { type: 'tool.started', toolUseId: call.toolUseId, name: open.name, input: open.input },
-      {
-        type: 'tool.finished',
-        toolUseId: call.toolUseId,
-        status: call.status,
-        output: call.output,
-        durationMs: Math.max(0, this.now() - open.at),
-        view,
-      },
+      finished,
     ];
   }
 }

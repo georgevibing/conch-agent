@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { platform } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 
@@ -77,6 +77,21 @@ export async function writeJson(path: string, value: unknown): Promise<void> {
   const sealer = sealerFor(path);
   if (sealer) return writeFileAtomic(path, await sealer.seal(basename(path), Buffer.from(text)));
   return writeFileAtomic(path, text);
+}
+
+/**
+ * Puts a file's bytes on stable storage before anything that depends on them
+ * goes ahead. Windows flushes only a handle that may write (FlushFileBuffers
+ * needs write access: a read-only handle fails with EPERM), so it's opened
+ * for writing there, without changing a byte.
+ */
+export async function syncFile(path: string): Promise<void> {
+  const file = await open(path, process.platform === 'win32' ? 'r+' : 'r');
+  try {
+    await file.sync();
+  } finally {
+    await file.close();
+  }
 }
 
 /** Serialises async operations so read-modify-write cycles never interleave. */

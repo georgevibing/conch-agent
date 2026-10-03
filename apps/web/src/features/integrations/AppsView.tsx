@@ -1,6 +1,15 @@
-import type { CatalogEntry, Channel } from '@conch/protocol';
 import {
+  appSourceLine,
+  madeHere,
+  type CatalogEntry,
+  type Channel,
+  type ConchApp,
+} from '@conch/protocol';
+import {
+  AppMadeBadge,
   Button,
+  CommunityApps,
+  DropOverlay,
   Heading,
   Input,
   IntegrationCard,
@@ -10,9 +19,10 @@ import {
   Stack,
   Text,
   toast,
+  useFileDrop,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, ShieldCheck } from 'lucide-react';
+import { Globe, Plus, Search, ShieldCheck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
@@ -22,6 +32,10 @@ import { channelsApi } from '../channels/api';
 import { APPS as CHANNEL_APPS, channelState } from '../channels/describe';
 import { errorText as channelError, putChannel, useChannels } from '../channels/queries';
 import { TalkIntro } from '../channels/TalkIntro';
+import conchStyles from '../conchapps/ConchApps.module.css';
+import { putConchApp, useCommunityApps, useConchApps } from '../conchapps/queries';
+import { updateApp } from '../conchapps/update';
+import { conchAppPath } from '../conchapps/words';
 import { vaultApi } from '../passwords/api';
 import { useVault, vaultKeys } from '../passwords/queries';
 import {
@@ -37,7 +51,7 @@ import {
   type Tile,
 } from './apps';
 import { ConnectDialog } from './ConnectDialog';
-import { CustomDialog } from './CustomDialog';
+import { CustomDialog, type AddStart, type AddTab } from './CustomDialog';
 import { categoryLabel } from './describe';
 import styles from './Integrations.module.css';
 import { appPath } from './paths';
@@ -99,10 +113,40 @@ export function AppsView() {
   const { fix, pending } = useFix();
   const navigate = useNavigate();
   const [connecting, setConnecting] = useState<CatalogEntry>();
-  const [custom, setCustom] = useState(false);
-  const [query, setQuery] = useState('');
   const [params, setParams] = useSearchParams();
+  // ⌘K's Make an app and Add an app from a link arrive as `?add=describe` and `?add=link`.
+  const asked = params.get('add');
+  const [custom, setCustom] = useState<{ tab: AddTab; start?: AddStart }>();
+  const [query, setQuery] = useState('');
+  // The community lives behind the search; Browse community apps asks it for everything.
+  const [browsing, setBrowsing] = useState(false);
+  const { data: conchApps } = useConchApps();
   const show = params.get('show') ?? 'all';
+  const addYourOwn = (tab: AddTab = 'describe', start?: AddStart) => setCustom({ tab, start });
+  const [seenAsk, setSeenAsk] = useState<string | null>(null);
+  if (asked !== seenAsk) {
+    setSeenAsk(asked);
+    if (asked === 'describe' || asked === 'link') setCustom({ tab: asked });
+  }
+  // Asked once: the address forgets it, so a reload doesn't open it again.
+  useEffect(() => {
+    if (!asked) return;
+    setParams(
+      (now) => {
+        const next = new URLSearchParams(now);
+        next.delete('add');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [asked, setParams]);
+  // A `.conchapp` dropped anywhere on Apps opens From a link with it.
+  const drop = useFileDrop({
+    onDrop: ({ files }) => {
+      const file = files.find((f) => /\.conchapp$/i.test(f.name)) ?? files[0];
+      if (file) addYourOwn('link', { link: { file } });
+    },
+  });
 
   const catalog = useMemo(() => data?.catalog ?? [], [data]);
   const items = useMemo(
@@ -143,6 +187,38 @@ export function AppsView() {
     );
 
   const needle = query.trim().toLowerCase();
+  const community = useCommunityApps(needle ? needle : browsing ? '' : undefined);
+  const lookingAtCommunity = Boolean(needle) || browsing;
+  const conchOf = (item: AppItem): ConchApp | undefined =>
+    item.integration?.conchApp
+      ? conchApps?.find((a) => a.id === item.integration?.conchApp)
+      : undefined;
+
+  /** An app's Update on its card: one press when nothing it can reach or asks for is new. */
+  const updateOnCard = async (app: ConchApp) => {
+    const change = app.update?.changes;
+    const quiet =
+      app.update?.sameSigner &&
+      change &&
+      !change.otherMaker &&
+      !change.reachesAdded.length &&
+      !change.settingsAdded.length &&
+      !change.toolsNowChange.length;
+    if (!quiet) return void navigate(conchAppPath(app.id));
+    try {
+      await guard(async () => {
+        const outcome = await updateApp(app);
+        // A newer version than the card said: its page shows what changed first.
+        if ('look' in outcome) return void navigate(conchAppPath(app.id));
+        putConchApp(client, outcome.updated);
+        toast.success(
+          `${outcome.updated.manifest.name} is updated to ${outcome.updated.manifest.version}`,
+        );
+      });
+    } catch (error) {
+      toast.error(channelError(error, 'It didn’t update. Nothing changed.'));
+    }
+  };
   const talking = show === TALK;
   const found = items.filter(isFound);
   // Looking for one by name finds it wherever it is on the page.
@@ -239,7 +315,13 @@ export function AppsView() {
   );
 
   return (
-    <Page gap={8}>
+    <Page gap={8} {...drop.props}>
+      <DropOverlay
+        active={drop.dragging}
+        title="Drop to add the app"
+        hint="A .conchapp file someone sent you"
+        className={conchStyles.dropOverlay}
+      />
       <header className={styles.pageHeader}>
         <Stack gap={1}>
           <Heading level={1} display size="4xl">
@@ -250,7 +332,7 @@ export function AppsView() {
             talk to it from the ones you chat in.
           </Text>
         </Stack>
-        <Button variant="surface" leadingIcon={<Plus />} onClick={() => setCustom(true)}>
+        <Button variant="surface" leadingIcon={<Plus />} onClick={() => addYourOwn()}>
           Add your own
         </Button>
       </header>
@@ -271,6 +353,7 @@ export function AppsView() {
                 const card = describeApp(item);
                 const integration = card.fix?.integration;
                 const channel = card.fix?.channel;
+                const conch = conchOf(item);
                 return (
                   <li key={item.key}>
                     <IntegrationCard
@@ -279,9 +362,24 @@ export function AppsView() {
                       name={item.name}
                       brand={item.brand}
                       color={item.color}
+                      {...(conch && {
+                        app: conch.manifest.icon,
+                        ...(madeHere(conch.source)
+                          ? { badge: <AppMadeBadge kind="made" /> }
+                          : conch.source.kind === 'github' && {
+                              badge: <AppMadeBadge kind="community" />,
+                            }),
+                      })}
                       state={card.state}
                       message={card.message}
-                      meta={card.meta}
+                      meta={
+                        // Who it's from, in a few words, before its quiet facts (ADR 0061).
+                        conch && !madeHere(conch.source)
+                          ? [appSourceLine(conch.source, conch.signature), card.meta]
+                              .filter(Boolean)
+                              .join(' · ')
+                          : card.meta
+                      }
                       enabled={card.enabled}
                       action={
                         card.fix
@@ -296,20 +394,27 @@ export function AppsView() {
                           : undefined
                       }
                       notice={
-                        card.notice
+                        conch?.update && !card.fix
                           ? {
-                              message: card.notice.message,
-                              label: card.notice.label,
-                              onClick: () => void navigate(`/channels/${card.notice?.channel.id}`),
+                              message: `Version ${conch.update.version} is ready`,
+                              label: 'Update',
+                              onClick: () => void updateOnCard(conch),
                             }
-                          : talking && !item.channels.length
+                          : card.notice
                             ? {
-                                // It could talk to you too: its page has the switch.
-                                message: `You can talk to ${assistant} here too.`,
-                                label: 'Set up',
-                                onClick: () => void navigate(item.to),
+                                message: card.notice.message,
+                                label: card.notice.label,
+                                onClick: () =>
+                                  void navigate(`/channels/${card.notice?.channel.id}`),
                               }
-                            : undefined
+                            : talking && !item.channels.length
+                              ? {
+                                  // It could talk to you too: its page has the switch.
+                                  message: `You can talk to ${assistant} here too.`,
+                                  label: 'Set up',
+                                  onClick: () => void navigate(item.to),
+                                }
+                              : undefined
                       }
                       onToggle={(enabled) => toggle(item, enabled)}
                       onOpen={() => void navigate(item.to)}
@@ -381,24 +486,62 @@ export function AppsView() {
           </div>
         ) : shown.length ? (
           <ul className={styles.tiles}>{shown.map(tileCard)}</ul>
-        ) : needle && foundShown.length ? null : (
+        ) : needle ? (
+          foundShown.length ? null : (
+            <ul className={styles.tiles}>
+              <li>
+                <IntegrationCard
+                  variant="catalog"
+                  name={`Make “${query.trim()}” with Conch`}
+                  app={{ glyph: 'sparkles', color: 'violet' }}
+                  tagline="Conch builds it for you in a chat."
+                  onOpen={() => addYourOwn('describe', { describe: query.trim() })}
+                />
+              </li>
+            </ul>
+          )
+        ) : (
           <Stack gap={2} align="start" className={styles.noMatch}>
-            <Text tone="muted">
-              {needle ? `Nothing called “${query}” here yet.` : 'You have every app here already.'}
-            </Text>
-            {needle && (
-              <Button
-                variant="surface"
-                size="sm"
-                leadingIcon={<Plus />}
-                onClick={() => setCustom(true)}
-              >
-                Add it yourself
-              </Button>
-            )}
+            <Text tone="muted">You have every app here already.</Text>
           </Stack>
         )}
+        {!loading && !lookingAtCommunity && !talking && (
+          <div>
+            <Button
+              variant="ghost"
+              size="sm"
+              leadingIcon={<Globe />}
+              onClick={() => setBrowsing(true)}
+            >
+              Browse community apps
+            </Button>
+          </div>
+        )}
       </section>
+
+      {!loading && lookingAtCommunity && !talking && (
+        <CommunityApps
+          apps={community.data?.apps ?? []}
+          // Until GitHub answers, never a flash of “Nobody has shared…”.
+          loading={!community.data && !community.isError}
+          limited={community.data?.limited}
+          offline={community.data?.offline ?? community.isError}
+          query={needle || undefined}
+          onLook={(app) => addYourOwn('link', { link: { link: app.url } })}
+          emptyAction={
+            needle ? (
+              <Button
+                size="sm"
+                variant="surface"
+                leadingIcon={<Plus />}
+                onClick={() => addYourOwn('describe', { describe: query.trim() })}
+              >
+                Make it with Conch
+              </Button>
+            ) : undefined
+          }
+        />
+      )}
 
       {!loading && !talking && foundShown.length > 0 && (
         <section aria-labelledby="apps-found" className={styles.section}>
@@ -474,7 +617,12 @@ export function AppsView() {
             );
         }}
       />
-      <CustomDialog open={custom} onOpenChange={setCustom} />
+      <CustomDialog
+        open={Boolean(custom)}
+        tab={custom?.tab}
+        start={custom?.start}
+        onOpenChange={(open) => !open && setCustom(undefined)}
+      />
       {dialog}
     </Page>
   );

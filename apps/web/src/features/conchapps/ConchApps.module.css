@@ -1,0 +1,131 @@
+/* Conch apps in the web app (ADR 0061): layout only. Every look is Nacre's. */
+@layer nacre.components {
+  /* From a link: the address, the file, then what's there. */
+  .fromLink {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-4);
+  }
+
+  .linkRow {
+    display: flex;
+    gap: var(--nc-space-2);
+  }
+
+  .linkInput {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .orFile {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-1) var(--nc-space-2);
+  }
+
+  /* Apps scrolls: the drop hint stays in view wherever the page is. */
+  .dropOverlay.dropOverlay {
+    position: fixed;
+  }
+
+  /* The app's page in Apps. */
+  .about {
+    max-inline-size: 60ch;
+  }
+
+  .pages {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pageRow {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    padding-block: var(--nc-space-1);
+  }
+
+  .pageIcon {
+    flex-shrink: 0;
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .pageName {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .settingHead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+  }
+
+  /* What a page sends, in the confirm. */
+  .sends {
+    padding: var(--nc-space-3) var(--nc-space-5) 0;
+    overflow-wrap: anywhere;
+  }
+
+  /* One of an app's pages, on a page of its own. */
+  .pageView {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    min-block-size: 0;
+    padding: var(--nc-space-2) var(--nc-space-4) var(--nc-space-4);
+  }
+
+  .pageBar {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .pageTitle {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .pageLoading {
+    flex: 1;
+    margin: var(--nc-space-4);
+  }
+
+  /* Beside a chat, where things made for you open. */
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    block-size: 100%;
+    min-block-size: 0;
+    padding: var(--nc-space-2) var(--nc-space-3) var(--nc-space-3);
+    overflow: hidden;
+    border-radius: var(--nc-radius-xl);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-2);
+  }
+
+  .panelBar {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+  }
+}

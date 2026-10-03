@@ -1,0 +1,235 @@
+@layer nacre.components {
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+    gap: var(--nc-space-3);
+  }
+
+  .note {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  .note svg {
+    flex: none;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+  }
+
+  /* ── A tile, like the catalog's ───────────────────────────────────── */
+  .tile {
+    --nc-rim-rest: 0.16;
+    --nc-rim-hover: 0.8;
+    --nc-sheen-size: 220px;
+    --nc-sheen-hover: 0.18;
+
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-3);
+    min-inline-size: 0;
+    padding: var(--nc-space-3);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+    animation-delay: calc(var(--ct-i, 0) * 28ms);
+    transition:
+      box-shadow var(--nc-duration-slow) var(--nc-ease-out),
+      transform var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  @media (hover: hover) {
+    .tile:hover {
+      transform: translateY(-1px);
+      box-shadow:
+        inset 0 0 0 1px var(--nc-border-subtle),
+        var(--nc-glaze-edge),
+        var(--nc-elevation-3);
+    }
+
+    .tile:hover .look {
+      background: var(--nc-surface-hi);
+      color: var(--nc-text);
+    }
+  }
+
+  .tile:active {
+    transform: scale(0.99);
+    transition-duration: var(--nc-duration-fast);
+  }
+
+  .tile:has(.open:focus-visible) {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-inline-size: 0;
+  }
+
+  .title {
+    margin: 0;
+    overflow: hidden;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    letter-spacing: -0.008em;
+    color: var(--nc-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The title stretches over the tile so a tap anywhere looks. */
+  .open {
+    appearance: none;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .open::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+  }
+
+  .open:focus-visible {
+    outline: none;
+  }
+
+  /* A long name ends in an ellipsis; the whole of it is in the label. */
+  .title .open {
+    display: block;
+    max-inline-size: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .owner {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    margin: 0;
+    overflow: hidden;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+    white-space: nowrap;
+  }
+
+  .stars {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.1875rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stars svg {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    fill: currentColor;
+    color: light-dark(oklch(0.72 0.14 var(--nc-warning-h)), oklch(0.8 0.13 var(--nc-warning-h)));
+  }
+
+  .description {
+    display: -webkit-box;
+    margin: var(--nc-space-1) 0 0;
+    overflow: hidden;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .description[data-empty] {
+    font-style: italic;
+    color: var(--nc-text-subtle);
+  }
+
+  .side {
+    display: flex;
+    flex: none;
+    align-items: center;
+  }
+
+  .look {
+    padding: var(--nc-space-1) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-wash-1);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-muted);
+    transition:
+      background var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .placeholder {
+    display: flex;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-3);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  /* ── Nothing found ────────────────────────────────────────────────── */
+  .empty {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .emptyIcon {
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .emptyText {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tile {
+      animation: none;
+      transition: none;
+    }
+  }
+}

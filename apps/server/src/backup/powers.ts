@@ -19,6 +19,7 @@ import { DEFAULT_MONTHLY_USD } from '../routines/spend';
 export function previewReads(path: string): boolean {
   return (
     path === 'integrations.json' ||
+    path === 'conch-apps.json' ||
     path === 'settings.json' ||
     path === 'browser.json' ||
     path === 'terminal.json' ||
@@ -113,6 +114,26 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
         more: Math.max(0, allowed.length - MAX_LISTED),
       });
   }
+
+  // Apps you made or added (ADR 0061): code that runs for you, and the websites it reaches.
+  const apps = json(read, 'conch-apps.json')?.apps;
+  const appNames = (Array.isArray(apps) ? apps : [])
+    .map(record)
+    .filter((app) => app && on(app.enabled))
+    .map((app) => {
+      const manifest = record(app?.manifest);
+      const reaches = (Array.isArray(manifest?.reaches) ? manifest.reaches : []).filter(
+        (r): r is string => typeof r === 'string',
+      );
+      const name = text(manifest?.name ?? app?.id, 'An app');
+      return text(reaches.length ? `${name} (reaches ${reaches.join(', ')})` : name, 'An app');
+    });
+  if (appNames.length)
+    powers.push({
+      kind: 'conch-apps',
+      names: appNames.slice(0, MAX_LISTED),
+      more: Math.max(0, appNames.length - MAX_LISTED),
+    });
 
   const settings = json(read, 'settings.json');
   if (record(settings?.preferences)?.permissionMode === 'bypassPermissions')

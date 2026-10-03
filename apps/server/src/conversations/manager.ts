@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 
 import type {
+  ConchAppOffer,
   Attachment,
   BrowserPermission,
   Memory,
@@ -1176,6 +1177,8 @@ export class ConversationManager {
       ...replies.tools,
       ...plan.tools,
     );
+    // Conch's own tools that are worth a row as they run: an app's tools, the maker's steps.
+    const rowTools = new Set(tools.filter((t) => t.row).map((t) => `mcp__conch__${t.name}`));
     // Scoped tasks may use the common connector/artifact tools, never the rest
     // of the normal chat's powers. Guards enforce this again at execution time.
     if (extras?.toolAllowed)
@@ -1515,7 +1518,8 @@ export class ConversationManager {
             break;
           case 'tool-start':
             if (isHostTool(event.name)) {
-              hostRows.start(event);
+              for (const shown of hostRows.start(event, rowTools.has(event.name)))
+                this.#append(live, shown);
               break;
             }
             if (event.name.startsWith('mcp__'))
@@ -1896,6 +1900,17 @@ export class ConversationManager {
     if (dismissed) return;
     this.#append(live, { type: 'integration.suggestion.dismissed', catalogId });
     // A running turn saves the log when it ends; writing it now as well could race.
+    if (!live.abort) await this.#persist(live);
+  }
+
+  /**
+   * A Conch app's card changed outside a turn (ADR 0061): added, updated,
+   * put away or failed, from the person's press on it. Like `dismissOffer`,
+   * a running turn saves the log when it ends.
+   */
+  async noteAppOffer(id: string, offer: ConchAppOffer): Promise<void> {
+    const live = await this.#get(id);
+    this.#append(live, { type: 'conch-app.offer', offer });
     if (!live.abort) await this.#persist(live);
   }
 

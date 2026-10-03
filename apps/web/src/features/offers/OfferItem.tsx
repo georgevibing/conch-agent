@@ -5,10 +5,17 @@ import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 
 import { api } from '../../api/client';
+import { useConchApps } from '../conchapps/queries';
+import { integrationsApi } from '../integrations/api';
 import { useAppState, useUpdateSettings } from '../../api/queries';
 import type { TranscriptItem } from '../../live/reducer';
 import { ConnectDialog } from '../integrations/ConnectDialog';
-import { errorText, useAssistantName, useIntegrations } from '../integrations/queries';
+import {
+  errorText,
+  putIntegration,
+  useAssistantName,
+  useIntegrations,
+} from '../integrations/queries';
 import { signInResults } from '../integrations/useSignInResult';
 import { skillKeys, useSkills } from '../skills/queries';
 import { offersApi } from './api';
@@ -65,7 +72,11 @@ export function OfferItem({
   const accepting = useRef(false);
 
   const isApp = offer.kind === 'app';
-  const entry = isApp ? data?.catalog.find((c) => c.id === offer.target) : undefined;
+  // A Conch app you have but switched off (ADR 0061): its card is `capp_<id>`, and the fix is its switch.
+  const conchApp = isApp && offer.target.startsWith('capp_');
+  const { data: conchApps } = useConchApps();
+  const made = conchApp ? conchApps?.find((a) => a.integrationId === offer.target) : undefined;
+  const entry = isApp && !conchApp ? data?.catalog.find((c) => c.id === offer.target) : undefined;
   const integration = isApp
     ? data?.integrations.find((i) => (i.catalogId ?? i.id) === offer.target)
     : undefined;
@@ -151,6 +162,34 @@ export function OfferItem({
                 ? 'review'
                 : 'suggested';
 
+  /** **Turn on**: the same switch as its card in Apps; once it works, the chat carries on. */
+  const turnOn = async () => {
+    if (!integration) return;
+    setBusy(true);
+    try {
+      const turned = await integrationsApi.update(integration.id, { enabled: true });
+      putIntegration(client, turned);
+      if (turned.health.state === 'ok' || turned.health.state === 'warning') {
+        setWaiting(true);
+        return;
+      }
+      // It needs something only the person has (a key): its page has the field.
+      toast(turned.health.message ?? `${turned.name} needs something from you first.`, {
+        action: {
+          label: `Open ${turned.name}`,
+          onClick: () =>
+            window.dispatchEvent(
+              new CustomEvent('conch:navigate', { detail: `/apps/${turned.id}` }),
+            ),
+        },
+      });
+    } catch (error) {
+      toast.error(errorText(error, `${offer.name} didn’t turn on. Try again.`));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const mute = (yes: boolean) => {
     setMutedHere(yes);
     const key = mutedKey(offer);
@@ -181,14 +220,17 @@ export function OfferItem({
             declared: permissions.declared,
           },
         })}
+        {...(made && { app: made.manifest.icon })}
         onTake={
-          isApp
-            ? entry &&
-              (() => {
-                setWaiting(true);
-                setDialog(entry);
-              })
-            : () => setReviewing(true)
+          conchApp
+            ? () => void turnOn()
+            : isApp
+              ? entry &&
+                (() => {
+                  setWaiting(true);
+                  setDialog(entry);
+                })
+              : () => setReviewing(true)
         }
         onTurnOn={() => accept('on')}
         onUseOnce={() => accept('once')}
@@ -209,7 +251,7 @@ export function OfferItem({
           focusComposer?.();
         }}
       />
-      {isApp && (
+      {isApp && !conchApp && (
         <ConnectDialog
           // Taken: the dialog has done its job.
           entry={item.resolution ? undefined : dialog}
