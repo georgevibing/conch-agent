@@ -289,6 +289,31 @@ describe('CommunityApps', () => {
   });
 });
 
+describe('AppPreview of an earlier version', () => {
+  it('says so, and never calls it new', () => {
+    renderNacre(
+      <AppPreview
+        state="ready"
+        looking="a file"
+        apps={[
+          {
+            ...plant,
+            installed: '1.2.0',
+            changes: { from: '1.2.0', to: '1.0.0' },
+            words: { ...plant.words, changes: ['No longer: Weekly report'] },
+          },
+        ]}
+        onAdd={() => {}}
+      />,
+    );
+    expect(screen.getByText('You have a newer version, 1.2.0.')).toBeInTheDocument();
+    expect(screen.getByText('How 1.0.0 is different')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Use Plant diary 1.0.0' })).toHaveTextContent(
+      'Use this version',
+    );
+  });
+});
+
 describe('AppPreview warnings', () => {
   it('says plainly when it replaces an app from another maker', async () => {
     const { container } = renderNacre(

@@ -155,6 +155,17 @@ export function AppPreview({
   );
 }
 
+/** -1 when `a` is an earlier `major.minor.patch` than `b`, 1 when later, 0 when the same. */
+export function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d) return d < 0 ? -1 : 1;
+  }
+  return 0;
+}
+
 /** Where one found app stands, for its button. */
 function standing(app: AppPreviewApp, added: boolean) {
   if (added) return 'added' as const;
@@ -255,6 +266,9 @@ function FoundApp({
   const [values, setValues] = useState<Record<string, string>>({});
   const stand = standing(app, added);
   const update = stand === 'update';
+  // An earlier version than the one you have: said as it is, never as "new".
+  const older =
+    update && app.installed ? compareVersions(manifest.version, app.installed) < 0 : false;
   const needed = (manifest.settings ?? []).filter((s) => !app.saved?.includes(s.key));
   const add = () => {
     if (!onAdd || busy) return;
@@ -314,9 +328,15 @@ function FoundApp({
             <Button
               onClick={add}
               loading={busy}
-              aria-label={update ? `Update ${manifest.name}` : `Add ${manifest.name} to my apps`}
+              aria-label={
+                older
+                  ? `Use ${manifest.name} ${manifest.version}`
+                  : update
+                    ? `Update ${manifest.name}`
+                    : `Add ${manifest.name} to my apps`
+              }
             >
-              {update ? 'Update' : 'Add to my apps'}
+              {older ? 'Use this version' : update ? 'Update' : 'Add to my apps'}
             </Button>
           )}
         </div>
@@ -347,12 +367,18 @@ function FoundApp({
       {update && app.installed && (
         <p className={styles.installed}>
           <History aria-hidden />
-          You have version {app.installed}.
+          {older
+            ? `You have a newer version, ${app.installed}.`
+            : `You have version ${app.installed}.`}
         </p>
       )}
       {manifest.description && <p className={styles.description}>{manifest.description}</p>}
       {update && app.changes && words.changes && (
-        <AppChanges changes={app.changes} words={words.changes} />
+        <AppChanges
+          changes={app.changes}
+          words={words.changes}
+          title={older ? `How ${manifest.version} is different` : undefined}
+        />
       )}
       {stand !== 'blocked' && stand !== 'added' && app.warnings?.length ? (
         <Callout tone="warning" title="Before you add it">
