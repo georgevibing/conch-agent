@@ -222,7 +222,15 @@ views) so `e2e` covers them without a real model.
 - The `## Not connected yet` section (ADR 0021) stays for cue matches. The map
   doesn't replace it; it's what lets the assistant offer apps nobody named.
 - The map costs up to 2,400 characters a turn on providers with tools. The
-  budget and the order of what's dropped are tested.
+  budget and the order of what's dropped are tested. Apps the person's latest
+  message names are listed first, so the budget never cuts the one they asked
+  about.
+- `offer` is loaded up front (`alwaysLoad`), because the map names it and
+  Claude Code otherwise defers tools until searched for.
+- Claude Code gets all of Conch's tools from one MCP server, so one tool whose
+  input can't be listed (a `z.record`) takes them all away.
+  `engines/claude-code/conch-tools.test.ts` lists every tool the way Claude
+  Code does. Use `z.looseObject({})` for open objects.
 - New Nacre patterns: `OfferCard`, `QuestionCard`, `ReplyChips`,
   `PlanChecklist`, `AgendaView`, `MailList`, `FileList`, `ChatMessages`. Each
   has stories and axe tests like every other pattern.
