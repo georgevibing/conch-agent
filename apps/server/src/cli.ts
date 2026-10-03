@@ -1068,7 +1068,7 @@ try {
     process.exitCode = 1;
   }
 } catch (error) {
-  ui.error(error instanceof AccessError ? error.message : String(error));
+  ui.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 } finally {
   prompts.close();

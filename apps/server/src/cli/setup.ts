@@ -190,7 +190,17 @@ async function ownAddress(deps: SetupDeps, args: Args, asking: boolean): Promise
   ui.blank();
 
   // 1. The name points here.
-  let report = await working(ui, `Looking up ${name}`, () => deps.dns(name), {
+  // A lookup that fails outright is said in words, never shown as an error from deep inside.
+  const lookup = (name: string) =>
+    deps.dns(name).catch((): DnsReport => ({
+      name,
+      mine: {},
+      found: { v4: [], v6: [] },
+      pointing: 'missing',
+      message: `Conch couldn’t look ${name} up just now. It keeps trying.`,
+      advice: [],
+    }));
+  let report = await working(ui, `Looking up ${name}`, () => lookup(name), {
     done: (r) => (r.pointing === 'here' ? `${name} points here` : `Looked up ${name}`),
   });
   const mine = report.mine.v4 ?? report.mine.v6;
@@ -222,7 +232,7 @@ async function ownAddress(deps: SetupDeps, args: Args, asking: boolean): Promise
         let tries = 1;
         for (;;) {
           await deps.sleep(5000);
-          const now = await deps.dns(name).catch(() => report);
+          const now = await lookup(name);
           tries++;
           if (now.pointing === 'here' || now.pointing === 'cloudflare') return now;
           if (deps.now() - started > DNS_PATIENCE_MS) return now;

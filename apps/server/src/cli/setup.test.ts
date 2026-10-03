@@ -293,3 +293,17 @@ describe('the other two ways', () => {
     expect(t.deps.gateway.address.set).not.toHaveBeenCalled();
   });
 });
+
+describe('when looking the name up fails', () => {
+  it('says so in words and carries on looking, never showing an error from deep inside', async () => {
+    const dns = vi
+      .fn<SetupDeps['dns']>()
+      .mockRejectedValueOnce(new Error('queryA ECONNREFUSED conch.example.com'))
+      .mockResolvedValue(report('here'));
+    const t = deps({ dns }, { choose: 'address', ask: [NAME] });
+    expect(await setup([], t.deps)).toBe(0);
+    const out = t.text();
+    expect(out).not.toContain('ECONNREFUSED');
+    expect(out).toContain('Conch couldn’t look conch.example.com up just now');
+  });
+});

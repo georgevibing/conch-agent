@@ -58,7 +58,8 @@ export async function lookupName(name: string, resolve: Resolve = resolveWithNod
       v6,
     }));
   const chosen = chosenResolvers();
-  if (chosen) return both(chosen);
+  // Unreachable resolvers are "nothing found yet", never an error to show.
+  if (chosen) return both(chosen).catch(() => ({ v4: [], v6: [] }));
   try {
     return await both(PUBLIC_RESOLVERS);
   } catch {

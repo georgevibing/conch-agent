@@ -468,10 +468,13 @@ fi
 # link that makes it yours, opened on your own computer.
 if [ -n "$HEADLESS" ]; then
   printf '\n'
+  # Through the conch command itself when it's there: it talks to you, with nothing in between.
+  SETUP=conch
+  [ -x "$HOME/.local/bin/conch" ] && SETUP="$HOME/.local/bin/conch"
   if has_keyboard; then
-    conch setup ${DOMAIN:+--domain "$DOMAIN"} < /dev/tty || true
+    "$SETUP" setup ${DOMAIN:+--domain "$DOMAIN"} < /dev/tty || true
   elif [ -n "$DOMAIN" ]; then
-    conch setup --domain "$DOMAIN" --yes < /dev/null || true
+    "$SETUP" setup --domain "$DOMAIN" --yes < /dev/null || true
   else
     say "Conch is installed. When you're at a keyboard, run ${BOLD}conch setup${RESET} to choose how you'll reach it."
   fi
