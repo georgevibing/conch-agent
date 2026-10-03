@@ -30,7 +30,7 @@ import {
   useInView,
   type HandsetMessage,
 } from '@conch/nacre';
-import { CalendarClock } from 'lucide-react';
+import { Mail } from 'lucide-react';
 import reference from 'virtual:conch-reference';
 
 import styles from './demos.module.css';
@@ -561,14 +561,16 @@ export function TaskDemo() {
 }
 
 function Routine({ on }: { on: boolean }) {
+  // A routine that starts when something happens (ADR 0056), in the words Conch gives it.
   return (
     <RoutineCard
       variant="proposal"
-      title="Morning briefing"
-      summary="What’s on my calendar, and anything urgent in my inbox."
-      scheduleText="Every weekday at 8:00 AM"
+      title="When Anna replies"
+      summary="Tells you as soon as Anna writes, with what it says."
+      scheduleText="When Anna Smith emails you"
+      waitingText="Free until something happens"
       status={on ? 'active' : 'draft'}
-      icon={<CalendarClock />}
+      icon={<Mail />}
       onActivate={noop}
       onTryNow={noop}
       onEdit={noop}

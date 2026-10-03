@@ -315,9 +315,9 @@ export function Landing() {
             <Bento.Tile
               span={2}
               index={4}
-              title="A schedule you can read"
-              text="Routines run on a schedule written in plain words. Nothing runs until you turn it on."
-              picture="A routine your assistant drafted, waiting to be turned on"
+              title="At a time, or when it happens"
+              text="Routines run at a time you read in plain words, or when something happens, like an email from someone. Watching costs nothing. Nothing runs until you turn it on."
+              picture="A routine your assistant drafted to tell you when someone emails, waiting to be turned on"
             >
               <RoutineDemo />
             </Bento.Tile>

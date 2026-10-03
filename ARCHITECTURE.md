@@ -191,6 +191,19 @@ src/
   at a monthly limit, and holds runs while a plan window is 80% used; event-started
   runs and pre-run checks go through the same `allow` / `record`. See
   [ADR 0057](./docs/adr/0057-routines-cant-run-up-a-bill.md).
+- **When… routines** (`routines/triggers/`, ADR 0056): a routine starts at a time or
+  when something happens. `pulse.ts` beats every 15 s and asks each source, with no
+  model call, whether anything new happened: `mail.ts` (Gmail's search, either sign-in),
+  `calendar.ts` (Google Calendar, decided every beat), `page.ts` (readable text through
+  `artifacts/live.ts`'s guard, confirmed on a second read), `folder.ts` (`fs.watch`,
+  settled, never protected places), `finished.ts` (tasks, other routines' runs, loops
+  refused) and `hook.ts` (an address on the public door, Standard Webhooks or GitHub
+  HMAC). Each thing once (`routines/when/<id>.seen.json`), bursts into one run, four
+  runs an hour; `onlyif.ts` asks the cheapest model before waking the agent;
+  `RoutineService.fire` starts the run tainted, with what happened fenced as data in
+  its first message (`brief.ts`). The trigger lives in `routines/when/<id>.json`; the
+  routine's own file keeps a placeholder schedule an older Conch never runs.
+  `doctor.ts` joins Repair everything.
 - **Integrations** (`integrations/`): MCP servers the user connects from a catalog
   (one-click OAuth, tokens, local programs) or adds by address/command. The service
   keeps health (probe → plain-language state + one fix action), refreshes tokens
@@ -667,7 +680,7 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   [ADR 0059 — Looking through earlier chats](./docs/adr/0059-looking-through-earlier-chats.md).
 - Local data lives in `~/.conch/` (`CONCH_HOME`): `settings.json`, `secrets.json`
   (the API key and a key per provider, or a 1Password reference to one),
-  `memory/*.md` (+ derived `memory-index.db`, `memory-tidy.json`, `models/`; `skill-suggestions.json`, `skill-learned.json`, `skill-usage.json`), `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `search.db`,
+  `memory/*.md` (+ derived `memory-index.db`, `memory-tidy.json`, `models/`; `skill-suggestions.json`, `skill-learned.json`, `skill-usage.json`), `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`, `routines/when/*.json`; derived `routines/when/*.seen.json`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `search.db`,
   `integrations.json` + `integrations.secrets.json`, `skills/<name>/SKILL.md` +
   `skills.json` (modes for skills Conch doesn't own), `local.json` (the local model chosen, the last download speed), `api-sessions/<id>.json` (the
   transcript a plain model API needs, since it keeps no session of its own),
@@ -964,7 +977,10 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
 - **Agent containment:**
   - `CONCH_*` variables never reach the agent;
   - the agent can draft routines but can't enable them, grant trust or raise what
-    they may spend, and rewriting an active routine pauses it;
+    they may spend, and rewriting an active routine (or what starts it) pauses it;
+  - a run something started (ADR 0056) is tainted from its first message, with
+    what happened fenced as data; a page is only ever read through the live-data
+    guard, and another app's address takes signed, fresh, unrepeated deliveries;
   - unattended runs get no routine tools, and their permission prompts expire;
   - "Always allow" lasts for the conversation only and is never written to
     Claude Code's settings;

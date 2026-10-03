@@ -23,7 +23,8 @@ what breaks, and asks only for approvals that matter.
   OpenRouter, Anthropic, OpenAI, Google, Mistral, DeepSeek and more.
 - **Apps, skills and routines for every model.** Gmail, Google Calendar and
   Drive, Slack, GitHub, Notion, Linear and more from one gallery, plus Agent Skills
-  (`SKILL.md`) and routines that run on a schedule you read in plain words.
+  (`SKILL.md`) and routines that run at a time you read in plain words, or when
+  something happens (an email, a meeting, a page that changed), free until it does.
 - **Skills from what worked.** After the assistant works something out, one press
   keeps how it did it as a skill. Nothing is saved or turned on until you say so.
 - **Memory you can read.** Memories are Markdown files you can edit or delete,
