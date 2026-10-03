@@ -28,7 +28,7 @@ import { PastChatsLooked } from './past-chats';
 import { EngineStatus, LoginState } from './engine';
 import { HealNote } from './healed';
 import { CatalogId, Integration } from './integrations';
-import { Routine, RoutineRun } from './routines';
+import { Routine, RoutineRun, RoutineSpending } from './routines';
 import { VaultPermission, VaultRequest } from './vault';
 import { VoiceStatus } from './phone';
 import { ChangedFile } from './undo';
@@ -712,6 +712,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('routine.changed'), routine: Routine }),
   z.object({ type: z.literal('routine.deleted'), routineId: z.string() }),
   z.object({ type: z.literal('routine.run'), run: RoutineRun }),
+  /** What routines spent this month changed, or they paused at its limit (ADR 0057). */
+  z.object({ type: z.literal('routines.spending'), spending: RoutineSpending }),
   z.object({ type: z.literal('integration.changed'), integration: Integration }),
   z.object({ type: z.literal('integration.deleted'), integrationId: z.string() }),
   /** A skill was added, changed or removed (here, or in one of the folders Conch reads). */

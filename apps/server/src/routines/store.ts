@@ -12,6 +12,7 @@ export const StoredRoutine = Routine.omit({
   nextRunAt: true,
   lastRun: true,
   runCount: true,
+  spend: true,
 }).extend({
   /** The scheduled time most recently handled (run, skipped or missed). */
   lastScheduledFor: z.number().optional(),

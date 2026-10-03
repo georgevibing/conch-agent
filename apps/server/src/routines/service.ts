@@ -8,15 +8,19 @@ import {
   type PermissionMode,
   type RoutineDetail,
   type RoutineRun,
+  type RoutineSpending,
   type ServerEvent,
   type UpdateRoutineBody,
+  type Usage,
 } from '@conch/protocol';
 import { z } from 'zod';
 
 import type { ConversationManager } from '../conversations/manager';
 import type { Engine, HostTool } from '../engines/types';
 import { newId } from '../lib/ids';
+import { cheapModel } from '../memory/learning';
 import { describe, nextRuns, previousRun, ScheduleError, validate } from './schedule';
+import { monthKey, type Allowed, type RoutineSpend } from './spend';
 import type { RoutineStore, StoredRoutine } from './store';
 
 /** Re-check at least this often, so sleep/wake and clock changes are noticed. */
@@ -59,6 +63,11 @@ export class RoutineService {
     string,
     { engine: EngineId; since: number; scheduledFor?: number; runId: string }
   >();
+  /**
+   * Runs waiting for room on a plan (ADR 0057): they go once the window has
+   * room again, unless their routine's next time comes first.
+   */
+  #roomWait = new Map<string, { until?: number; scheduledFor?: number }>();
   #started = false;
 
   constructor(
@@ -71,6 +80,8 @@ export class RoutineService {
       now?: () => number;
       /** Leaves a “fixed on its own” note (a held run went once its provider came back). */
       onHeal?: (message: string) => void;
+      /** What runs spend, and the guards on it (ADR 0057). */
+      spend?: RoutineSpend;
     },
   ) {}
 
@@ -126,6 +137,7 @@ export class RoutineService {
       schedule: body.schedule,
       timezone: body.timezone,
       status: body.status,
+      ...(body.runLimitUsd && { runLimitUsd: body.runLimitUsd }),
       trust: body.trust,
       catchUp: body.catchUp,
       options: body.options,
@@ -147,9 +159,12 @@ export class RoutineService {
     const reactivating = patch.status === 'active' && current.status !== 'active';
     if (reschedule || reactivating) this.#validate(schedule, timezone);
     const now = this.#now;
+    const { runLimitUsd, ...rest } = patch;
     const stored = await this.deps.store.save({
       ...current,
-      ...patch,
+      ...rest,
+      // `null` goes back to Conch's default.
+      ...(runLimitUsd !== undefined && { runLimitUsd: runLimitUsd ?? undefined }),
       ...(patch.title !== undefined && { title: tidyTitle(patch.title) }),
       ...(patch.summary !== undefined && { summary: tidySentence(patch.summary) }),
       // A new schedule (or turning it back on) starts counting from now — never
@@ -202,6 +217,47 @@ export class RoutineService {
           `“${routine.title}” didn’t run while ${engine.label} was signed out, so it ran once ${engine.label} was back.`,
         );
     }
+    // Runs that waited for room on a plan go once there's room (ADR 0057).
+    for (const [routineId, held] of this.#roomWait) {
+      if (held.until !== undefined && this.#now < held.until) continue;
+      const routine = await this.deps.store.get(routineId).catch(() => undefined);
+      if (!routine || routine.status !== 'active') {
+        this.#roomWait.delete(routineId);
+        continue;
+      }
+      const allowed = await this.#allow(routine, this.deps.engine(routine.options.engine));
+      if (!allowed.ok) {
+        if (allowed.guard === 'plan-room') held.until = allowed.until;
+        else this.#roomWait.delete(routineId);
+        continue;
+      }
+      this.#roomWait.delete(routineId);
+      await this.#execute(routine, 'catch-up', held.scheduledFor);
+    }
+  }
+
+  /** Routines waiting for room on a plan, or paused at the monthly limit (for Repair everything). */
+  waitingForRoom(): string[] {
+    return [...this.#roomWait.keys()];
+  }
+
+  /** What routines spent this month, with what the active ones will spend (ADR 0057). */
+  async spending(): Promise<RoutineSpending | undefined> {
+    const spend = this.deps.spend;
+    if (!spend) return undefined;
+    const active = (await this.list()).filter(
+      (r) => r.status === 'active' && r.spend?.billing === 'metered',
+    );
+    const known = active.flatMap((r) =>
+      r.spend?.monthlyUsd !== undefined ? [r.spend.monthlyUsd] : [],
+    );
+    return spend.state(known.length ? known.reduce((a, b) => a + b, 0) : undefined);
+  }
+
+  async #allow(routine: StoredRoutine, engine: Engine): Promise<Allowed> {
+    return (
+      (await this.deps.spend?.allow(routine.id, engine).catch(() => undefined)) ?? { ok: true }
+    );
   }
 
   async #tick() {
@@ -220,6 +276,8 @@ export class RoutineService {
       const due = previousRun(routine.schedule, routine.timezone, now, routine.anchor) ?? firstDue;
       const late = now - firstDue > LATE_MS;
       await this.deps.store.save({ ...routine, lastScheduledFor: due });
+      // Its next time came: that run replaces one still waiting for room.
+      this.#roomWait.delete(routine.id);
       if (late && !routine.catchUp) {
         await this.#record(routine, { trigger: 'schedule', status: 'missed', scheduledFor: due });
         await this.#afterRun(routine.id);
@@ -305,6 +363,20 @@ export class RoutineService {
     }
     this.#waiting.delete(routine.id);
 
+    // Spending guards (ADR 0057). “Run now” is a person asking, so it goes.
+    const checked = await this.#allow(routine, engine);
+    const allowed: Allowed = trigger === 'manual' && !checked.ok ? { ok: true } : checked;
+    if (!allowed.ok) return this.#guarded(routine, trigger, scheduledFor, allowed);
+    const spend = this.deps.spend;
+    const billing =
+      allowed.billing ?? (await spend?.billing(engine).catch(() => undefined))?.billing;
+    const history = spend ? await this.deps.store.runs(routine.id) : [];
+    const limit = spend?.runLimit(routine, history, routine.options.model);
+    let conversationId: string | undefined;
+    let stopped: string | undefined;
+    /** What it had used when last told: a run cut short may not say at the end. */
+    let used: Usage | undefined;
+
     let run: RoutineRun = {
       id: newId('run'),
       routineId: routine.id,
@@ -344,8 +416,16 @@ export class RoutineService {
       this.deps.emit({ type: 'routine.run', run });
     };
 
+    /** Past its limit: stop it cleanly, once (ADR 0057). */
+    const stop = (why: string) => {
+      if (stopped) return;
+      stopped = why;
+      if (conversationId)
+        void this.deps.conversations.interrupt(conversationId).catch(() => undefined);
+    };
+
     try {
-      const { conversationId, result } = await this.deps.conversations.start({
+      const started = await this.deps.conversations.start({
         title: routine.title,
         text: routine.prompt,
         options: routine.options,
@@ -354,39 +434,105 @@ export class RoutineService {
           systemExtra: runBrief(routine, trigger, this.#now),
           tools: [report as HostTool],
           permissionMode: trustModes[routine.trust],
+          onConversation: async (id) => {
+            conversationId = id;
+          },
           onStatus: (s) => {
             if (s === 'awaiting-permission' && run.status === 'running')
               void update({ status: 'needs-you' });
             if (s === 'running' && run.status === 'needs-you') void update({ status: 'running' });
           },
+          ...(spend &&
+            limit && {
+              onUsage: (usage, from) => {
+                used = usage;
+                const why = spend.over(limit, billing, usage, from.model);
+                if (why) stop(why);
+              },
+            }),
         },
       });
+      conversationId = started.conversationId;
+      // Over its limit before the conversation was known: stop it now.
+      if (stopped) void this.deps.conversations.interrupt(conversationId).catch(() => undefined);
       await update({ conversationId });
-      const turn = await result;
+      const turn = await started.result;
+      const cost = spend
+        ? await spend
+            .cost(
+              turn.usage ?? used,
+              { engine: turn.engine ?? engine.id, model: turn.model },
+              allowed.before,
+            )
+            .catch(() => undefined)
+        : undefined;
+      if (cost) await spend?.count(routine.id, cost).catch(() => undefined);
       const final: Partial<RoutineRun> =
-        turn.outcome === 'interrupted'
-          ? { status: 'stopped', outcome: 'Stopped before it finished.' }
-          : turn.outcome === 'error'
-            ? { status: 'failed', error: turn.error ?? 'Something went wrong.' }
-            : {
-                status:
-                  reported?.status === 'nothing-to-do'
-                    ? 'nothing-to-do'
-                    : reported?.status === 'needs-attention'
-                      ? 'needs-you'
-                      : 'succeeded',
-                outcome: tidySentence(
-                  reported?.summary ?? firstLine(turn.finalText) ?? 'Done.',
-                  160,
-                ),
-              };
-      await update({ ...final, finishedAt: this.#now, usage: turn.usage });
+        stopped && turn.outcome !== 'error'
+          ? { status: 'needs-you', guard: 'run', outcome: stopped }
+          : turn.outcome === 'interrupted'
+            ? { status: 'stopped', outcome: 'Stopped before it finished.' }
+            : turn.outcome === 'error'
+              ? { status: 'failed', error: turn.error ?? 'Something went wrong.' }
+              : {
+                  status:
+                    reported?.status === 'nothing-to-do'
+                      ? 'nothing-to-do'
+                      : reported?.status === 'needs-attention'
+                        ? 'needs-you'
+                        : 'succeeded',
+                  outcome: tidySentence(
+                    reported?.summary ?? firstLine(turn.finalText) ?? 'Done.',
+                    160,
+                  ),
+                };
+      await update({
+        ...final,
+        finishedAt: this.#now,
+        usage: turn.usage ?? used,
+        ...(cost && { cost }),
+      });
     } catch (error) {
       await update({ status: 'failed', finishedAt: this.#now, error: (error as Error).message });
     } finally {
       this.#running.delete(routine.id);
       await this.#afterRun(routine.id);
     }
+    return run;
+  }
+
+  /**
+   * A spending guard held this run (ADR 0057): it's said once, not every time
+   * it comes round. At the monthly limit it skips until the 1st (or a higher
+   * limit); for room on a plan it waits and goes once the window has room.
+   */
+  async #guarded(
+    routine: StoredRoutine,
+    trigger: RoutineRun['trigger'],
+    scheduledFor: number | undefined,
+    allowed: Extract<Allowed, { ok: false }>,
+  ): Promise<RoutineRun | undefined> {
+    const [last] = await this.deps.store.runs(routine.id);
+    const said =
+      last?.status === 'skipped' &&
+      last.guard === allowed.guard &&
+      (allowed.guard === 'month'
+        ? monthKey(last.startedAt) === monthKey(this.#now)
+        : this.#roomWait.has(routine.id));
+    if (allowed.guard === 'plan-room')
+      this.#roomWait.set(routine.id, {
+        ...(allowed.until !== undefined && { until: allowed.until }),
+        ...(scheduledFor !== undefined && { scheduledFor }),
+      });
+    if (said) return undefined;
+    const run = await this.#record(routine, {
+      trigger,
+      status: 'skipped',
+      scheduledFor,
+      guard: allowed.guard,
+      outcome: allowed.message,
+    });
+    await this.#afterRun(routine.id);
     return run;
   }
 
@@ -442,12 +588,14 @@ export class RoutineService {
         '- summary: one plain sentence (max ~15 words) saying what the user gets, e.g. "A short summary of today’s calendar and the weather."',
         '- prompt: complete, self-contained instructions for a future run that has no memory of this chat: what to do, where to look, and what to write back. Plain language.',
         'Prefer the simplest schedule type (daily, weekly, monthly, interval, once) over cron. Times are 24h HH:MM in the user’s timezone.',
+        'Set light: true only when the job is simple enough for a small, cheaper model to do as well (a reminder, a yes/no check, copying something over). Leave it off for anything that writes, summarises or judges: briefings, digests, research.',
       ].join('\n'),
       input: {
         title: z.string().min(1).max(60),
         summary: z.string().max(200),
         prompt: z.string().min(1).max(20_000),
         schedule: Schedule,
+        light: z.boolean().optional(),
       },
       run: async (args) => {
         // Never quietly create a second copy of something the user already has.
@@ -460,9 +608,21 @@ export class RoutineService {
           return `The user already has a routine called “${existing.title}” [${existing.id}] — ${existing.scheduleText}, ${existing.status}. Don’t create a duplicate: tell them it exists and offer to change it with update_routine (or ask if they want a second, differently named one).`;
         }
         try {
+          const { light, ...draft } = args as {
+            title: string;
+            summary: string;
+            prompt: string;
+            schedule: Schedule;
+            light?: boolean;
+          };
           const routine = await this.create(
             {
-              ...(args as { title: string; summary: string; prompt: string; schedule: Schedule }),
+              title: draft.title,
+              summary: draft.summary,
+              prompt: draft.prompt,
+              schedule: draft.schedule,
+              // A simple job on the provider's small model: cheaper, never pricier (ADR 0057).
+              ...(light && { options: await this.#lightOptions() }),
               // Only a person can grant trust — an agent that read something hostile
               // must not be able to schedule itself an unsupervised future.
               trust: 'ask',
@@ -514,7 +674,15 @@ export class RoutineService {
         status: z.enum(['paused']).optional(),
       },
       run: async (args) => {
-        const { id, ...patch } = args as { id: string } & UpdateRoutineBody;
+        const { id, ...given } = args as { id: string } & UpdateRoutineBody;
+        // Only what the tool offers: never trust, a provider, or what a run may spend.
+        const patch: UpdateRoutineBody = {
+          ...(given.title !== undefined && { title: given.title }),
+          ...(given.summary !== undefined && { summary: given.summary }),
+          ...(given.prompt !== undefined && { prompt: given.prompt }),
+          ...(given.schedule !== undefined && { schedule: given.schedule }),
+          ...(given.status === 'paused' && { status: 'paused' as const }),
+        };
         try {
           const current = await this.#require(id);
           // New instructions from the agent need a person's review before they
@@ -573,6 +741,13 @@ export class RoutineService {
 
   // ── Helpers ────────────────────────────────────────────────────────────
 
+  /** The default provider's small model, for a simple job; nothing when it has none. */
+  async #lightOptions(): Promise<{ engine?: EngineId; model?: string }> {
+    const engine = this.deps.engine();
+    const small = await cheapModel(engine).catch(() => undefined);
+    return small?.model ? { engine: engine.id, model: small.model } : {};
+  }
+
   #validate(schedule: Schedule, timezone: string) {
     try {
       validate(schedule, timezone, this.#now);
@@ -595,12 +770,14 @@ export class RoutineService {
       stored.status === 'active'
         ? nextRuns(stored.schedule, stored.timezone, { from: this.#now, anchor })[0]
         : undefined;
+    const spend = await this.deps.spend?.view(stored, runs).catch(() => undefined);
     return Routine.parse({
       ...rest,
       scheduleText: describe(stored.schedule, stored.timezone),
       nextRunAt,
       lastRun: runs[0],
       runCount: runs.length,
+      ...(spend && { spend }),
     });
   }
 

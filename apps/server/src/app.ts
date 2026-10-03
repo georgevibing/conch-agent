@@ -43,6 +43,7 @@ import {
   UpdateSettingsBody,
   UpdateSkillBody,
   UsageBudgetBody,
+  RoutineSpendingBody,
   UpdatesSettingsBody,
   type ServerEvent,
 } from '@conch/protocol';
@@ -547,6 +548,19 @@ export async function buildApp(services: Services) {
     const body = parse(SchedulePreviewBody, request.body, reply);
     if (!body) return;
     return preview(body.schedule, body.timezone);
+  });
+  // What routines spend (ADR 0057). Changing the limit is a person's choice
+  // here; no tool the agent has can reach it.
+  app.get('/api/routines/spending', () => services.routines.spending());
+  app.put('/api/routines/spending', async (request, reply) => {
+    const body = parse(RoutineSpendingBody, request.body, reply);
+    if (!body) return;
+    await services.routineSpend.setLimit(body.limitUsd);
+    return services.routines.spending();
+  });
+  app.post('/api/routines/spending/keep-paused', async () => {
+    await services.routineSpend.keepPaused();
+    return services.routines.spending();
   });
   app.post('/api/routines', async (request, reply) => {
     const body = parse(CreateRoutineBody, request.body, reply);

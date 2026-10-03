@@ -234,6 +234,23 @@ describe('notifications', () => {
     );
   });
 
+  it('says routines paused at their monthly limit, and where to look (ADR 0057)', async () => {
+    const { push, sent } = setup();
+    const phone = browser();
+    await push.subscribe('device:phone', 'iPhone', phone.subscription);
+    await push.routinesPaused({
+      limitUsd: 20,
+      isDefault: true,
+      monthUsd: 20.4,
+      paused: { until: new Date(2026, 10, 1).getTime(), dismissed: false },
+    });
+    expect(phone.read(sent[0]?.body ?? Buffer.alloc(0))).toMatchObject({
+      title: 'Your routines are paused',
+      body: 'Your routines have used $20.40 this month, so the ones that cost money are paused until November 1. You can raise the limit in Conch.',
+      url: '/routines',
+    });
+  });
+
   it('tells the devices already in about a new one, not the new one itself', async () => {
     const { push, sent } = setup();
     const phone = browser();

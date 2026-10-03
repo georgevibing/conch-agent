@@ -41,7 +41,7 @@ export interface BackupRule {
    * Restored by merging with what's here rather than replacing it (and never
    * removed when the backup has none): `usage` keeps money already spent.
    */
-  merge?: 'usage' | 'tasks';
+  merge?: 'usage' | 'tasks' | 'routine-spend';
   /** Why, in one line (the ADR quotes these). */
   why: string;
 }
@@ -213,6 +213,13 @@ export const RULES: readonly BackupRule[] = [
     group: 'settings',
     merge: 'usage',
     why: 'Your budget, and what you spent (chats you deleted included, so it can’t be rebuilt). Merged on restore: money already spent stays counted.',
+  },
+  {
+    match: 'routine-spend.json',
+    class: 'kept',
+    group: 'routines',
+    merge: 'routine-spend',
+    why: 'What your routines spent each month, and the monthly limit you chose (ADR 0057). Merged on restore: money already spent stays counted.',
   },
   { match: 'memory/*.md', class: 'kept', group: 'memory', why: 'Your memories, one file each.' },
   {

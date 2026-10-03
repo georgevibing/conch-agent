@@ -118,6 +118,7 @@ import { SkillLearner } from './skills/learn';
 import { SkillSuggester } from './skills/suggest';
 import { SkillUsage, skillUsedIn } from './skills/usage';
 import { RoutineService } from './routines/service';
+import { RoutineSpend } from './routines/spend';
 import { PAST_CHATS_PROMPT, pastChatTools, withOthers, type ChatFacts } from './search/past';
 import { SearchService } from './search/service';
 import { RoutineStore } from './routines/store';
@@ -190,6 +191,8 @@ export class Services {
   /** Passwords: Conch's own vault and the managers it reads (ADR 0025). */
   readonly vault: VaultService;
   readonly routines: RoutineService;
+  /** What routines spend, and the limits on it (ADR 0057). */
+  readonly routineSpend: RoutineSpend;
   readonly conversations: ConversationManager;
   readonly browser: BrowserService;
   readonly terminal: TerminalService;
@@ -622,12 +625,31 @@ export class Services {
       },
       heal: (message) => void this.healed.note('conversations', message),
     });
+    // What unattended runs spend, and its guards (ADR 0057).
+    this.routineSpend = new RoutineSpend({
+      home: config.CONCH_HOME,
+      engine: (id) => this.providers.engineFor(id),
+      heal,
+      changed: () =>
+        void this.routines
+          .spending()
+          .then((spending) => {
+            if (spending) this.broadcast.emit({ type: 'routines.spending', spending });
+          })
+          .catch(() => undefined),
+      // Once a month, wherever the person hears from Conch.
+      paused: (spending) => {
+        void this.push.routinesPaused(spending).catch(() => undefined);
+        void this.channels.routinesPaused(spending).catch(() => undefined);
+      },
+    });
     this.routines = new RoutineService({
       store: new RoutineStore(join(config.CONCH_HOME, 'routines'), heal),
       conversations: this.conversations,
       engine: (id) => this.providers.engineFor(id),
       emit: (event) => this.broadcast.emit(event),
       onHeal: (message) => void this.healed.note('routines', message),
+      spend: this.routineSpend,
     });
     this.tasks = new TaskService({
       store: new TaskStore(config.CONCH_HOME, heal),

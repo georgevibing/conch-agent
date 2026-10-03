@@ -19,9 +19,11 @@ import type {
   PushStatus,
   PushSubscriptionJson,
   PushTopic,
+  RoutineSpending,
   ServerEvent,
 } from '@conch/protocol';
 
+import { pausedWords } from '../routines/spend';
 import type { PushStore, Subscription } from './store';
 import { sendPush, type Fetcher } from './webpush';
 
@@ -249,6 +251,18 @@ export class PushService {
       quiet: 'A new version of Conch is ready.',
       url: '/?open=updates',
       tag: 'conch-update',
+    });
+  }
+
+  /** Routines reached this month's limit (ADR 0057): said once, by `RoutineSpend`. */
+  async routinesPaused(spending: RoutineSpending): Promise<void> {
+    const { title, body } = pausedWords(spending);
+    await this.notify('routines', {
+      title,
+      body,
+      quiet: 'Your routines are paused for the rest of the month.',
+      url: '/routines',
+      tag: 'routines-paused',
     });
   }
 

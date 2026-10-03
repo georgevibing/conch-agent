@@ -13,6 +13,8 @@
  */
 import { POWER_TEXT_MAX, type BackupPower } from '@conch/protocol';
 
+import { DEFAULT_MONTHLY_USD } from '../routines/spend';
+
 /** The files the preview reads (routine files, not their run history). */
 export function previewReads(path: string): boolean {
   return (
@@ -23,6 +25,7 @@ export function previewReads(path: string): boolean {
     path === 'channels.json' ||
     path === 'skills.trust.json' ||
     path === 'artifacts/access.json' ||
+    path === 'routine-spend.json' ||
     /^routines\/[^/]+(?<!\.runs)\.json$/.test(path)
   );
 }
@@ -140,6 +143,12 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
     if (routine?.trust === 'full' && routine.status !== 'draft' && routine.status !== 'paused')
       powers.push({ kind: 'routine-never-asks', name: text(routine.title, 'A routine') });
   }
+
+  // Routines allowed to spend more than Conch would by itself (ADR 0057).
+  const spend = json(read, 'routine-spend.json');
+  const limit = spend?.limit;
+  if (limit === null || (typeof limit === 'number' && limit > DEFAULT_MONTHLY_USD))
+    powers.push({ kind: 'routines-spend', limitUsd: typeof limit === 'number' ? limit : null });
 
   const browser = json(read, 'browser.json');
   const sites = (Array.isArray(browser?.sites) ? browser.sites : [])

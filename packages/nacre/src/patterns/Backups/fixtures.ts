@@ -41,6 +41,7 @@ export const powers: BackupPowerInfo[] = [
   { kind: 'browser-local' },
   { kind: 'terminal-remote' },
   { kind: 'channel-people', name: 'Ada’s Conch on Telegram', people: ['Ada', 'Sam'] },
+  { kind: 'routines-spend', limitUsd: 60 },
 ];
 
 /** What most people's own backups say: one local program they added. */

@@ -2,7 +2,7 @@
  * A Conch that's been used for a while, in a temp home: settings, a memory
  * (searchable by meaning, with its model), a command, a routine that ran, a skill, an integration with its token, a
  * chat with an attachment, a model API's transcript, the browser's and
- * terminal's settings, a note the assistant wrote (and Undo's copy), a budget, a password, a provider key,
+ * terminal's settings, a note the assistant wrote (and Undo's copy), a budget, a limit on what routines spend, a password, a provider key,
  * a linked WhatsApp and Signal, and a backup.
  * Everything is written by the real services, the way using Conch writes it.
  * The backup tests use it to check nothing Conch writes is left unclassified.
@@ -163,6 +163,9 @@ export async function useConch(g: Gateway) {
     await app.inject({ method: 'PATCH', url: '/api/terminal/settings', payload: { fontSize: 15 } }),
   );
   await ok(await app.inject({ method: 'PUT', url: '/api/usage/budget', payload: { budget: 25 } }));
+  await ok(
+    await app.inject({ method: 'PUT', url: '/api/routines/spending', payload: { limitUsd: 30 } }),
+  );
   await services.settings.setProviderSecret('openrouter', {
     source: 'conch',
     value: 'sk-or-v1-0123456789abcdef',

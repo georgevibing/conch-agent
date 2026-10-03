@@ -11,6 +11,7 @@ import {
   Server,
   ShieldAlert,
   SquareTerminal,
+  Wallet,
   Wrench,
 } from 'lucide-react';
 import { useId, type ComponentProps, type ReactNode } from 'react';
@@ -31,6 +32,7 @@ const ICONS: Record<BackupPowerInfo['kind'], ReactNode> = {
   'tools-never-ask': <Wrench />,
   'chats-never-ask': <MessagesSquare />,
   'routine-never-asks': <Repeat />,
+  'routines-spend': <Wallet />,
   'browser-sites': <Globe />,
   'browser-local': <Router />,
   'terminal-remote': <MonitorSmartphone />,

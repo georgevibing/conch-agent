@@ -16,6 +16,7 @@ import {
   type OpenImessageBody,
   type ReplaceChannelTokenBody,
   type RoutineRun,
+  type RoutineSpending,
   type ServerEvent,
   type UpdateChannelBody,
   ChannelSecrets as ChannelSecretsSchema,
@@ -29,6 +30,7 @@ import type { AttachmentStore } from '../attachments/store';
 import { ConversationError, type ConversationManager } from '../conversations/manager';
 import type { PermissionDecision } from '../engines/types';
 import { newId } from '../lib/ids';
+import { pausedWords } from '../routines/spend';
 import type { SettingsStore } from '../settings/store';
 import { CHANNEL_NAMES, catalogFor } from './catalog';
 import { isLinked, ownAccount } from './linked';
@@ -1820,6 +1822,35 @@ export class ChannelService {
 
   // ── Routines ───────────────────────────────────────────────────────────
 
+  /**
+   * Routines reached this month's limit (ADR 0057): the owner of each channel
+   * that hears about routines is told, once (`RoutineSpend` says when).
+   */
+  async routinesPaused(spending: RoutineSpending): Promise<void> {
+    const { title, body } = pausedWords(spending);
+    for (const channel of await this.#routineChannels()) {
+      const live = this.#live.get(channel.id);
+      const owner = channel.people[0];
+      if (!live || !owner) continue;
+      const chat = await live.connection.directChat(owner.id).catch(() => undefined);
+      if (!chat) continue;
+      await live.connection
+        .send(chat, `⏸️ **${title}.** ${body}`)
+        .catch((error: unknown) => this.#log(`routine: ${explain(error)}`));
+    }
+  }
+
+  /** Channels whose owner wants to hear about routines, and that are online now. */
+  async #routineChannels() {
+    return (await this.deps.store.all()).filter(
+      (c) =>
+        c.enabled &&
+        c.settings.notifyRoutines &&
+        c.people.length &&
+        this.#live.get(c.id)?.health.state === 'online',
+    );
+  }
+
   /** A routine finished or needs you: tell the owner of each channel that wants to know. */
   async #routineRun(run: RoutineRun) {
     const wanted = ['succeeded', 'failed', 'needs-you'];
@@ -1829,13 +1860,7 @@ export class ChannelService {
     this.#notified.set(key, run.status);
     if (this.#notified.size > 500) this.#notified.delete(this.#notified.keys().next().value ?? '');
 
-    const channels = (await this.deps.store.all()).filter(
-      (c) =>
-        c.enabled &&
-        c.settings.notifyRoutines &&
-        c.people.length &&
-        this.#live.get(c.id)?.health.state === 'online',
-    );
+    const channels = await this.#routineChannels();
     if (!channels.length) return;
     const title = (await this.deps.routineTitle?.(run.routineId)) ?? 'A routine';
     const pending =

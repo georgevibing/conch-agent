@@ -22,6 +22,7 @@ describe('what in a backup can act for you', () => {
         'integrations.secrets.json',
         'skills.trust.json',
         'skills.signing.json',
+        'routine-spend.json',
       ].filter(previewReads),
     ).toEqual([
       'integrations.json',
@@ -31,7 +32,23 @@ describe('what in a backup can act for you', () => {
       'channels.json',
       'routines/r_1.json',
       'skills.trust.json',
+      'routine-spend.json',
     ]);
+  });
+
+  it('names a limit that lets routines spend more than Conch would by itself (ADR 0057)', () => {
+    const of = (spend: unknown) =>
+      powersOf(['routine-spend.json'], reader({ 'routine-spend.json': spend }));
+    expect(of({ version: 1, limit: 80, months: {} })).toEqual([
+      { kind: 'routines-spend', limitUsd: 80 },
+    ]);
+    expect(of({ version: 1, limit: null, months: {} })).toEqual([
+      { kind: 'routines-spend', limitUsd: null },
+    ]);
+    // The default, or less, is nothing to warn about.
+    expect(of({ version: 1, months: {} })).toEqual([]);
+    expect(of({ version: 1, limit: 5, months: {} })).toEqual([]);
+    for (const power of of({ limit: null })) expect(BackupPower.parse(power)).toEqual(power);
   });
 
   it('names every model server a backup would send your chats to (ADR 0053)', () => {
