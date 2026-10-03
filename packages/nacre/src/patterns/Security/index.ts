@@ -9,3 +9,24 @@ export {
   type CheckLevel,
   type SecurityCheckupProps,
 } from './SecurityCheckup';
+export {
+  AddressStatus,
+  type AddressProblem,
+  type AddressState,
+  type AddressStatusProps,
+} from './AddressStatus';
+export {
+  MakeItYours,
+  type MakeItYoursProps,
+  type MakeItYoursState,
+  type PasswordVerdict,
+} from './MakeItYours';
+export { PasskeyButton, passkeyIcons, type PasskeyButtonProps } from './PasskeyButton';
+export { PasskeyList, type PasskeyItem, type PasskeyListProps } from './PasskeyList';
+export {
+  passkeyLabel,
+  passkeyName,
+  passkeyPlatform,
+  type PasskeyAction,
+  type PasskeyPlatform,
+} from './passkeyPlatform';

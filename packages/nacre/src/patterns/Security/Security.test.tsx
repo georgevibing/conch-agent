@@ -209,3 +209,68 @@ describe('DeviceApproval', () => {
     await expectAccessible(container);
   });
 });
+
+describe('DeviceApproval from your devices (ADR 0065)', () => {
+  it('says any of your devices can let it in, with the terminal second', async () => {
+    const { container } = renderNacre(
+      <DeviceApproval
+        state="waiting"
+        code="K7M-Q2X"
+        device="Chrome on Windows"
+        command="conch devices approve K7M-Q2X"
+        fromDevices
+      />,
+    );
+    expect(screen.getByText(/a device you’re already signed in on/)).toBeInTheDocument();
+    expect(screen.getByText(/Open Conch on your laptop or phone/)).toBeInTheDocument();
+    expect(screen.getByText('conch devices approve K7M-Q2X')).toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
+  it('offers this device’s passkey instead of waiting', async () => {
+    const user = userEvent.setup();
+    const onUse = vi.fn();
+    const { container } = renderNacre(
+      <DeviceApproval
+        state="waiting"
+        code="K7M-Q2X"
+        device="Safari on Mac"
+        fromDevices
+        passkey={{ platform: 'mac', onUse }}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Use Touch ID to let yourself in' }));
+    expect(onUse).toHaveBeenCalledOnce();
+    await expectAccessible(container);
+  });
+
+  it('doesn’t offer a passkey once it was turned down', () => {
+    renderNacre(
+      <DeviceApproval
+        state="rejected"
+        code="K7M-Q2X"
+        device="Safari on Mac"
+        fromDevices
+        passkey={{ platform: 'mac', onUse: () => undefined }}
+      />,
+    );
+    expect(screen.getByText(/It was turned down\. If that was a mistake/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Touch ID/ })).toBeNull();
+  });
+});
+
+describe('DeviceRequests hint', () => {
+  it('says where to approve, in the app’s words', () => {
+    renderNacre(
+      <DeviceRequests
+        requests={requests.slice(0, 1)}
+        canApprove={false}
+        hint="Approve it from a device you’ve signed in on:"
+        commandFor={(code) => `conch devices approve ${code}`}
+      />,
+    );
+    expect(screen.getByText('Approve it from a device you’ve signed in on:')).toBeInTheDocument();
+    const [first] = requests;
+    expect(screen.getByText(`conch devices approve ${first?.code ?? ''}`)).toBeInTheDocument();
+  });
+});

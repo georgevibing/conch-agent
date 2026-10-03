@@ -135,3 +135,62 @@ export const ApprovalApproved: Story = {
   parameters: { layout: 'centered' },
   render: () => <DeviceApproval state="approved" code="K7M-Q2X" device="Safari on iPhone" />,
 };
+
+/** ADR 0065: any approved device can let it in, after confirming it’s you; the terminal is the second way. */
+export const ApprovalFromDevices: Story = {
+  parameters: { layout: 'centered' },
+  render: () => (
+    <DeviceApproval
+      state="waiting"
+      code="K7M-Q2X"
+      device="Chrome on Windows"
+      expiresAt={inTenMinutes()}
+      command="conch devices approve K7M-Q2X"
+      fromDevices
+      onCancel={() => undefined}
+    />
+  ),
+};
+
+/** This device could use a passkey instead of waiting. */
+export const ApprovalWithPasskey: Story = {
+  parameters: { layout: 'centered' },
+  render: () => (
+    <DeviceApproval
+      state="waiting"
+      code="K7M-Q2X"
+      device="Safari on Mac"
+      expiresAt={inTenMinutes()}
+      command="conch devices approve K7M-Q2X"
+      fromDevices
+      passkey={{ platform: 'mac', onUse: () => undefined }}
+      onCancel={() => undefined}
+    />
+  ),
+};
+
+export const ApprovalRejectedFromDevices: Story = {
+  parameters: { layout: 'centered' },
+  render: () => (
+    <DeviceApproval
+      state="rejected"
+      code="K7M-Q2X"
+      device="Chrome on Windows"
+      fromDevices
+      onRetry={() => undefined}
+    />
+  ),
+};
+
+/** On a device that can’t approve (not confirmed, or not approved itself): the hint says where. */
+export const WaitingElsewhereFromDevices: Story = {
+  render: () => (
+    <DeviceRequests
+      requests={requests}
+      canApprove={false}
+      hint="Approve it from a device you’ve signed in on, or on the computer running Conch:"
+      commandFor={(code) => `conch devices approve ${code}`}
+      onReject={() => undefined}
+    />
+  ),
+};

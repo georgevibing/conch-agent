@@ -6,6 +6,8 @@ import { Pearl } from '../../components/Pearl';
 import { cx } from '../../utils/cx';
 import { CopyButton } from '../CopyButton';
 import styles from './DeviceApproval.module.css';
+import { PasskeyButton } from './PasskeyButton';
+import { passkeyName, type PasskeyPlatform } from './passkeyPlatform';
 
 export interface DeviceApprovalProps extends Omit<ComponentProps<'section'>, 'children'> {
   /** `waiting` for the OK; `rejected` when turned down; `approved` for the moment before the app opens. */
@@ -24,6 +26,17 @@ export interface DeviceApprovalProps extends Omit<ComponentProps<'section'>, 'ch
   onRetry?: () => void;
   /** Extra words under the steps, e.g. a hint about Settings on that computer. */
   footnote?: ReactNode;
+  /**
+   * The owner's other devices can approve it too (ADR 0065), not only the
+   * computer running Conch: the words say so, and the terminal becomes the
+   * second way.
+   */
+  fromDevices?: boolean;
+  /**
+   * This device could let itself in with a passkey instead of waiting: a
+   * quiet second button under the code.
+   */
+  passkey?: { platform: PasskeyPlatform; onUse: () => void; loading?: boolean };
 }
 
 function left(expiresAt: number, now: number) {
@@ -47,6 +60,8 @@ export function DeviceApproval({
   onCancel,
   onRetry,
   footnote,
+  fromDevices = false,
+  passkey,
   className,
   ...props
 }: DeviceApprovalProps) {
@@ -80,15 +95,30 @@ export function DeviceApproval({
         </h1>
         <p className={styles.lead}>
           {state === 'waiting' ? (
-            <>
-              You’re signed in, nearly. For extra protection, <strong>{device}</strong> also needs
-              your OK on the computer running Conch.
-            </>
+            fromDevices ? (
+              <>
+                You’re signed in, nearly. For extra protection, <strong>{device}</strong> also needs
+                your OK from a device you’re already signed in on, or from the computer running
+                Conch.
+              </>
+            ) : (
+              <>
+                You’re signed in, nearly. For extra protection, <strong>{device}</strong> also needs
+                your OK on the computer running Conch.
+              </>
+            )
           ) : state === 'rejected' ? (
-            <>
-              It was turned down on the computer running Conch. If that was a mistake, it can still
-              be approved there, or sign in again to ask anew.
-            </>
+            fromDevices ? (
+              <>
+                It was turned down. If that was a mistake, it can still be approved for a few
+                minutes, or sign in again to ask anew.
+              </>
+            ) : (
+              <>
+                It was turned down on the computer running Conch. If that was a mistake, it can
+                still be approved there, or sign in again to ask anew.
+              </>
+            )
           ) : (
             <>Opening Conch…</>
           )}
@@ -118,14 +148,39 @@ export function DeviceApproval({
 
       {state === 'waiting' && (
         <div className={styles.steps}>
-          <p className={styles.step}>
-            On that computer, open a terminal in the Conch folder and run:
-          </p>
+          {fromDevices ? (
+            <p className={styles.step}>
+              Open Conch on your laptop or phone: it’s asking there now, with this code. Or, in a
+              terminal on the computer running Conch:
+            </p>
+          ) : (
+            <p className={styles.step}>
+              On that computer, open a terminal in the Conch folder and run:
+            </p>
+          )}
           <div className={styles.command}>
             <code>{command}</code>
             <CopyButton value={command} label="Copy command" />
           </div>
           {footnote && <p className={styles.footnote}>{footnote}</p>}
+        </div>
+      )}
+
+      {state === 'waiting' && passkey && (
+        <div className={styles.passkey}>
+          <span className={styles.or}>or</span>
+          <PasskeyButton
+            platform={passkey.platform}
+            action="sign-in"
+            size="md"
+            variant="surface"
+            loading={passkey.loading}
+            onClick={passkey.onUse}
+          >
+            {passkey.platform === 'phone'
+              ? 'Use a passkey from your phone to let yourself in'
+              : `Use ${passkeyName(passkey.platform)} to let yourself in`}
+          </PasskeyButton>
         </div>
       )}
 

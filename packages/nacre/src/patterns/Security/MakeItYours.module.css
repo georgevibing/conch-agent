@@ -1,0 +1,299 @@
+@layer nacre.components {
+  .root {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    min-block-size: 100dvh;
+    padding: var(--nc-space-12) var(--nc-space-6);
+    overflow-y: auto;
+  }
+
+  /* The pearl tide behind the page: two soft blooms of the spectrum. */
+  .glow {
+    position: fixed;
+    inset: -30% -10% auto;
+    block-size: 70vh;
+    background:
+      radial-gradient(
+        40% 50% at 30% 40%,
+        color-mix(in oklch, var(--nc-pearl-1) 45%, transparent),
+        transparent 70%
+      ),
+      radial-gradient(
+        35% 45% at 70% 30%,
+        color-mix(in oklch, var(--nc-pearl-3) 35%, transparent),
+        transparent 70%
+      );
+    opacity: 0.42;
+    pointer-events: none;
+    animation: nc-fade-in 1.2s var(--nc-ease-out);
+  }
+
+  .card {
+    position: relative;
+    inline-size: min(25rem, 100%);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .view {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--nc-space-6);
+    text-align: center;
+  }
+
+  .mark {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-block-size: 3.5rem;
+  }
+
+  .head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .address {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    max-inline-size: 100%;
+    margin: 0 0 var(--nc-space-1);
+    padding: var(--nc-space-1) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+  }
+
+  .address > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .address > svg {
+    flex-shrink: 0;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: light-dark(oklch(0.55 0.13 var(--nc-success-h)), oklch(0.76 0.13 var(--nc-success-h)));
+  }
+
+  .title {
+    margin: 0;
+    font-family: var(--nc-font-display);
+    font-size: var(--nc-text-4xl);
+    font-weight: var(--nc-weight-regular);
+    line-height: var(--nc-leading-tight);
+    letter-spacing: -0.015em;
+    color: var(--nc-text);
+    text-wrap: balance;
+  }
+
+  .lead {
+    margin: 0;
+    font-size: var(--nc-text-md);
+    line-height: var(--nc-leading-relaxed);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  /* ── The way in ─────────────────────────────────────────────────────── */
+  .choice {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--nc-space-3);
+    inline-size: 100%;
+  }
+
+  .hint {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-subtle);
+  }
+
+  .choice > [role='alert'],
+  .choice > [role='status'] {
+    align-self: stretch;
+    text-align: start;
+  }
+
+  .form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-4);
+    inline-size: 100%;
+    text-align: start;
+  }
+
+  .formTitle {
+    margin: 0;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .formActions {
+    display: flex;
+    flex-wrap: wrap-reverse;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+  }
+
+  .formActions > :last-child {
+    margin-inline-start: auto;
+  }
+
+  .other {
+    display: flex;
+    justify-content: center;
+  }
+
+  .promise {
+    max-inline-size: 22rem;
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-subtle);
+    text-wrap: pretty;
+  }
+
+  /* ── Spent ──────────────────────────────────────────────────────────── */
+  .command {
+    display: flex;
+    align-items: center;
+    align-self: stretch;
+    gap: var(--nc-space-1);
+    padding-inline: var(--nc-space-3) var(--nc-space-0-5);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    font-size: var(--nc-text-sm);
+    text-align: start;
+  }
+
+  .command code {
+    flex: 1;
+    min-inline-size: 0;
+    padding-block: var(--nc-space-2);
+    overflow-x: auto;
+    font-family: var(--nc-font-mono);
+    white-space: nowrap;
+    color: var(--nc-text);
+  }
+
+  /* ── It's yours ─────────────────────────────────────────────────────── */
+  .done {
+    position: relative;
+    display: grid;
+    place-items: center;
+    inline-size: 3.5rem;
+    block-size: 3.5rem;
+    border-radius: var(--nc-radius-full);
+    color: var(--nc-accent-contrast);
+    background: var(--nc-accent-9);
+    box-shadow:
+      0 0 0 6px color-mix(in oklch, var(--nc-accent-9) 16%, transparent),
+      var(--nc-glaze-edge);
+  }
+
+  .done > svg {
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+  }
+
+  /* One ring of pearl light passes out from the check as it lands. */
+  .ring {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    inline-size: 3.5rem;
+    block-size: 3.5rem;
+    padding: 2px;
+    border-radius: var(--nc-radius-full);
+    background: conic-gradient(from 210deg in oklab, var(--nc-pearl-spectrum));
+    mask:
+      linear-gradient(#000 0 0) content-box exclude,
+      linear-gradient(#000 0 0);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .view[data-arrived] .done {
+    animation: nc-yours-land var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both;
+  }
+
+  .view[data-arrived] .ring {
+    animation: nc-yours-ring 1100ms var(--nc-ease-out) 140ms both;
+  }
+
+  .view[data-arrived] .head {
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) 160ms both;
+  }
+
+  .view[data-arrived] > :last-child:not(.head) {
+    animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) 320ms both;
+  }
+
+  .opening {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  @keyframes nc-yours-land {
+    from {
+      transform: scale(0.55) translateY(4px);
+      opacity: 0;
+    }
+
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+
+  @keyframes nc-yours-ring {
+    0% {
+      transform: scale(0.9);
+      opacity: 0;
+    }
+
+    25% {
+      opacity: calc(0.9 * var(--nc-lustre));
+    }
+
+    100% {
+      transform: scale(2.1);
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card,
+    .glow,
+    .view[data-arrived] .done,
+    .view[data-arrived] .head,
+    .view[data-arrived] > :last-child:not(.head) {
+      animation: none;
+    }
+
+    .view[data-arrived] .ring {
+      display: none;
+    }
+  }
+}
