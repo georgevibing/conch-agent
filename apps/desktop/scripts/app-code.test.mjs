@@ -29,7 +29,7 @@ describe('running pnpm from a script', () => {
       shell: false,
     });
     expect(pnpmCommand(['x'], {}, 'linux')).toEqual({ command: 'pnpm', args: ['x'], shell: false });
-    expect(pnpmCommand(['x'], { npm_execpath: 'C:\npm\npm-cli.js' }, 'win32')).toEqual({
+    expect(pnpmCommand(['x'], { npm_execpath: 'C:\\npm\\npm-cli.js' }, 'win32')).toEqual({
       command: 'pnpm.cmd',
       args: ['x'],
       shell: true,
