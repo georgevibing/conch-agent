@@ -45,6 +45,8 @@ rl.createInterface({input:process.stdin}).on('line', line => {
    setTimeout(() => { if (!OPTIONS.loginFails) fs.writeFileSync(auth,JSON.stringify({auth_mode:'chatgpt',tokens:{access_token:'test-only-token'}})); note('account/login/completed',{loginId:'device1',success:!OPTIONS.loginFails}); },30);
  }
  else if (m.method === 'account/logout') { fs.rmSync(auth,{force:true}); reply({}); }
+ else if (m.method === 'test/renew') { fs.writeFileSync(auth,JSON.stringify({auth_mode:'chatgpt',tokens:{access_token:'renewed-token'}})); reply({}); }
+ else if (m.method === 'test/lose') { fs.rmSync(auth,{force:true}); reply({}); }
  else if (m.method === 'model/list') reply({data:[{id:'m',model:'account-model',displayName:'Account model',description:'Listed by this account',supportedReasoningEfforts:[{reasoningEffort:'high'}],inputModalities:['text','image']}],nextCursor:null});
  else if (m.method === 'thread/start') reply({thread:{id:'t1'}});
  else if (m.method === 'turn/start') {

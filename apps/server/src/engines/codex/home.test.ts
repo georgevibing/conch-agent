@@ -6,11 +6,15 @@ import { basename, join } from 'node:path';
 import type { LoginState } from '@conch/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { z } from 'zod';
+
+import { readStore } from '../../lib/recover';
 import { deviceSealer, registerSealer, unregisterSealer } from '../../lib/sealed';
 import { ProviderKeys } from '../../providers/keys';
 import { SettingsStore } from '../../settings/store';
 import { fakeCodexApp } from '../../test/fakeCodexApp';
 import { CodexEngine } from './app-engine';
+import { CodexHome } from './home';
 
 /**
  * Windows keeps a program's open files locked for a moment after it has
@@ -60,7 +64,7 @@ async function setup(options: Parameters<typeof fakeCodexApp>[0] = {}) {
         ),
       )
     ).flat();
-  return { engine, home, runs, left };
+  return { engine, home, runs, left, bin: fake.bin };
 }
 
 async function login(engine: CodexEngine) {
@@ -123,5 +127,46 @@ describe('the Codex run folder', () => {
     expect(last?.message).toBe(
       'Conch couldn’t set up the sign-in on this computer. Please try again.',
     );
+  });
+});
+
+describe('the saved Codex sign-in', () => {
+  const saved = async (home: string) =>
+    (await readStore(join(home, 'codex.secrets.json'), z.object({ auth: z.unknown().optional() })))
+      .value.auth;
+
+  it('keeps the sign-in when a run ends without Codex’s file', async () => {
+    const { engine, home, bin } = await setup();
+    await login(engine);
+    const before = await saved(home);
+    expect(before).toBeDefined();
+
+    // Codex tidied its file away, or the run stopped short: not a sign-out.
+    await new CodexHome(home).withClient(bin, (rpc) => rpc.request('test/lose', {}));
+    expect(await saved(home)).toEqual(before);
+    expect((await engine.detect({ force: true })).state).toBe('ready');
+  });
+
+  it('forgets it when you disconnect', async () => {
+    const { engine, home } = await setup();
+    await login(engine);
+    await engine.disconnect();
+    expect(await saved(home)).toBeUndefined();
+    expect((await engine.detect({ force: true })).state).toBe('signed-out');
+  });
+
+  it('keeps a renewed sign-in while the run is still going', async () => {
+    const { engine, home, bin } = await setup();
+    await login(engine);
+    await new CodexHome(home).withClient(bin, async (rpc) => {
+      // Codex renews its token mid-turn; Conch could be stopped any moment now
+      // (a restart, a crash), so the new one is saved before the run ends.
+      await rpc.request('test/renew', {});
+      await vi.waitFor(
+        async () =>
+          expect(await saved(home)).toMatchObject({ tokens: { access_token: 'renewed-token' } }),
+        { timeout: 5000, interval: 100 },
+      );
+    });
   });
 });

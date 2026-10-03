@@ -295,7 +295,9 @@ export class CodexEngine implements Engine {
   async disconnect(): Promise<void> {
     const executable = await findCodex(this.explicitPath);
     if (!executable) throw new Error('Install Codex to safely disconnect this account.');
-    await this.#home.withClient(executable, (rpc) => rpc.request('account/logout', {}));
+    await this.#home.withClient(executable, (rpc) => rpc.request('account/logout', {}), {
+      signOut: true,
+    });
     this.#status = undefined;
     this.#caps = undefined;
   }

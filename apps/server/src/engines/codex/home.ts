@@ -10,7 +10,11 @@ import { sealerFor } from '../../lib/sealed';
 import { hostEnvironment } from '../host';
 import { CodexRpc } from './rpc';
 
-const Credentials = z.object({ auth: z.record(z.string(), z.unknown()).optional() });
+const Auth = z.record(z.string(), z.unknown());
+const Credentials = z.object({ auth: Auth.optional() });
+
+/** How often a run's sign-in is looked at, so a renewed one is kept straight away. */
+const RENEWAL_CHECK_MS = 500;
 
 /**
  * Take a run folder away: the credential first, so it never waits in the clear,
@@ -56,16 +60,50 @@ export async function cleanCodexRuntime(root: string): Promise<void> {
   }
 }
 
-async function saveCredentials(path: string, dir: string): Promise<void> {
+/**
+ * Keep the sign-in as Codex left it. A run that ends without one only means
+ * "signed out" when signing out was the run: otherwise (Codex tidied up, the
+ * run stopped short) the saved sign-in stays.
+ */
+async function saveCredentials(path: string, dir: string, signOut: boolean): Promise<void> {
   try {
-    const auth = z
-      .record(z.string(), z.unknown())
-      .parse(JSON.parse(await readFile(join(dir, 'auth.json'), 'utf8')));
+    const auth = Auth.parse(JSON.parse(await readFile(join(dir, 'auth.json'), 'utf8')));
     await writeJson(path, { auth });
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') await writeJson(path, {});
-    else throw new Error('Conch could not safely save the Codex sign-in. Please reconnect.');
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+      throw new Error('Conch could not safely save the Codex sign-in. Please reconnect.');
+    if (signOut) await writeJson(path, {});
   }
+}
+
+/**
+ * Codex renews its ChatGPT sign-in as it goes, and an old one is refused once
+ * it has been renewed. Save each new one as soon as it lands: Conch can stop
+ * mid-run (a restart, a crash), and the renewal would go with the run folder.
+ */
+function keepRenewals(path: string, dir: string, written: string | undefined) {
+  let last = written;
+  let saving = Promise.resolve();
+  const look = async () => {
+    const text = await readFile(join(dir, 'auth.json'), 'utf8').catch(() => undefined);
+    if (text === undefined || text === last) return;
+    let auth: z.infer<typeof Auth>;
+    try {
+      auth = Auth.parse(JSON.parse(text));
+    } catch {
+      return; // Still being written: the next look gets it whole.
+    }
+    await writeJson(path, { auth });
+    last = text;
+  };
+  const timer = setInterval(() => {
+    saving = saving.then(look).catch(() => undefined);
+  }, RENEWAL_CHECK_MS);
+  timer.unref();
+  return async () => {
+    clearInterval(timer);
+    await saving;
+  };
 }
 
 export class CodexHome {
@@ -76,7 +114,12 @@ export class CodexHome {
   async withClient<T>(
     executable: string,
     run: (rpc: CodexRpc) => Promise<T>,
-    options: { signal?: AbortSignal; config?: string[] } = {},
+    options: {
+      signal?: AbortSignal;
+      config?: string[];
+      /** This run signs out: a sign-in that's gone afterwards is forgotten. */
+      signOut?: boolean;
+    } = {},
   ): Promise<T> {
     return this.#mutex.run(async () => {
       options.signal?.throwIfAborted();
@@ -89,15 +132,15 @@ export class CodexHome {
       await cleanCodexRuntime(root);
       const dir = await mkdtemp(join(root, 'run-'));
       let rpc: CodexRpc | undefined;
+      let stopKeeping: (() => Promise<void>) | undefined;
       const stop = () => {
         void rpc?.close();
       };
       try {
         await writeFile(join(dir, 'owner.json'), String(process.pid), { mode: 0o600 });
-        if (saved.value.auth)
-          await writeFile(join(dir, 'auth.json'), JSON.stringify(saved.value.auth), {
-            mode: 0o600,
-          });
+        const written = saved.value.auth ? JSON.stringify(saved.value.auth) : undefined;
+        if (written) await writeFile(join(dir, 'auth.json'), written, { mode: 0o600 });
+        stopKeeping = keepRenewals(path, dir, written);
         options.signal?.throwIfAborted();
         rpc = new CodexRpc(executable, {
           cwd: dir,
@@ -110,8 +153,9 @@ export class CodexHome {
       } finally {
         options.signal?.removeEventListener('abort', stop);
         await rpc?.close();
+        await stopKeeping?.();
         try {
-          if (rpc) await saveCredentials(path, dir);
+          if (rpc) await saveCredentials(path, dir, options.signOut === true);
         } finally {
           await discard(dir);
         }
