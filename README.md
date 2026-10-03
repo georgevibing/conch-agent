@@ -4,7 +4,8 @@
 own computer.**
 
 Conch is a small gateway that runs on your machine and a polished web app that
-talks to it, from your laptop, your tablet or your phone. It drives every provider
+talks to it, from your laptop, your tablet or your phone, or as an app on your
+computer. It drives every provider
 you connect at once — the plans you already pay for (Claude Code, Codex, GitHub
 Copilot, Gemini CLI, Grok), a model on this computer, a server of your own, or a key
 from any of a dozen companies — from one model picker, and a conversation can move between them
@@ -24,7 +25,14 @@ surfaces with a pointer-reactive, mother-of-pearl iridescence we call _Lustre_.
 
 ## Quick start
 
-One line, nothing else to install first:
+**Download the app** for macOS, Windows or Linux from the
+[latest release](https://github.com/giotiskl/conch-agent/releases/latest), and open it.
+It carries everything it needs, keeps running in the menu bar when you close its
+window, and brings each new release to you. If your computer asks before opening it the first time,
+[the guide](./apps/docs/content/start/app.md#if-your-computer-asks-first) says which
+button to press.
+
+Or one line in a terminal, nothing else to install first:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/giotiskl/conch-agent/main/scripts/install.sh | sh
@@ -179,6 +187,12 @@ always reach it. Turning it on from a Terminal window moves Conch to the backgro
 without losing your place. Open **Conch** from Applications, Spotlight or the Start
 menu, and it starts itself first if it has to. ([ADR 0026](./docs/adr/0026-always-on.md))
 
+**The app.** Conch for macOS, Windows and Linux, as a download: its own window, the
+pearl in the menu bar, Always on, and each release one press away (installed by
+itself where the computer lets it). It carries Node and Conch inside, keeps your things in `~/.conch` like any
+other Conch, and shows a Conch that's already running instead of starting a second.
+Links and sign-ins open in your own browser. ([ADR 0054](./docs/adr/0054-the-desktop-app.md))
+
 **In the menu bar.** The pearl in the menu bar (the tray on Windows, the panel on
 Linux) says whether Conch is running, shows a dot when something needs you, and opens,
 starts or quits Conch in one click. On a computer that stays on, Conch keeps running
@@ -259,6 +273,10 @@ pnpm storybook      # explore Nacre at http://localhost:6006
 pnpm docs:dev       # the site at http://localhost:4400: the front page, and the documentation at /docs
 pnpm check          # format + lint + typecheck + tests — must pass before every commit
 pnpm e2e            # Playwright journeys against the gateway and the mock engine
+pnpm desktop:dev    # the desktop app on the repository, with hot reload
+pnpm desktop:start  # the desktop app as it ships, without packaging it
+pnpm desktop:build  # this computer's installers in apps/desktop/out (CI builds every platform)
+pnpm desktop:e2e    # drive the desktop app with Playwright
 pnpm start:network  # reachable from your network (sign-in required)
 pnpm conch help     # sign-in from the terminal: status, password, key, pair, reset …
 pnpm conch import --from openclaw --dry-run   # what would come over from OpenClaw (or hermes)
@@ -275,6 +293,7 @@ documents it. For an authenticated HTTPS reverse proxy, see
 | `apps/web`          | React 19 + Vite web app                                                  |
 | `apps/server`       | Fastify gateway: providers, integrations, browser, terminal, channels, … |
 | `apps/docs`         | The site: front page, guides in Markdown, reference read from the code   |
+| `apps/desktop`      | The Electron app for macOS, Windows and Linux                            |
 | `packages/nacre`    | Design system + Storybook                                                |
 | `packages/protocol` | Zod-validated wire protocol                                              |
 | `e2e`               | Playwright journeys                                                      |
@@ -293,4 +312,4 @@ from the code, so they are never behind it
 - [docs/BROWSER.md](./docs/BROWSER.md) — the browser: watching, taking over, what it asks
 - [docs/TERMINAL.md](./docs/TERMINAL.md) — the terminal: shortcuts, the assistant, other devices
 - [docs/design/NACRE.md](./docs/design/NACRE.md) — the design language
-- [docs/adr](./docs/adr) — decision records (0001–0051)
+- [docs/adr](./docs/adr) — decision records (0001–0054)

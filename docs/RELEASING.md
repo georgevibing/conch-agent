@@ -74,3 +74,38 @@ by hand, with a live preview`, not what changed in the code.
   person must do: `BREAKING CHANGE: Sign in again after updating.`
 - `chore`, `test`, `docs`, `refactor`, `ci` and `build` never appear in the
   notes.
+
+## The desktop apps
+
+Pushing a release tag also builds the app for every platform
+(`.github/workflows/desktop.yml`, [ADR 0054](./adr/0054-the-desktop-app.md)), in
+about half an hour:
+
+| File                                          | Built on           |
+| --------------------------------------------- | ------------------ |
+| `Conch-0.3.0-mac-arm64.dmg` and `.zip`        | `macos-latest`     |
+| `Conch-0.3.0-mac-x64.dmg` and `.zip`          | `macos-15-intel`   |
+| `Conch-0.3.0-win-x64.exe`                     | `windows-latest`   |
+| `Conch-0.3.0-linux-x64.AppImage` and `.deb`   | `ubuntu-latest`    |
+| `Conch-0.3.0-linux-arm64.AppImage` and `.deb` | `ubuntu-24.04-arm` |
+
+Each one is opened once on its runner to check it starts. Then the workflow makes the
+GitHub Release from the tag if `pnpm release` couldn't (no `gh` here), attaches the
+files and the update feeds (`latest.yml`, `latest-mac.yml`, `latest-linux*.yml`), and
+records where each file came from (`gh attestation verify <file> --repo
+giotiskl/conch-agent`).
+
+- **Installed apps update from these releases.** They read the repository's public
+  releases, so the repository must be public for them to find one.
+- **Signing is optional, and needs only secrets.** Without them, macOS and Windows ask
+  once before opening the app, and a Mac app can't replace itself (it offers the
+  download instead). Add these repository secrets to sign:
+  - `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`: a Developer ID Application certificate
+    (`.p12`, base64), and `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` to
+    notarize.
+  - `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD`: a code-signing certificate.
+- **To build without releasing**, run **Desktop app** from the Actions tab: the files
+  stay with the run for two weeks. Give it a tag to attach the apps to a release that
+  has none.
+- **On your own computer**, `pnpm desktop:build` makes that computer's installers in
+  `apps/desktop/out`. Each platform's app is built on that platform.

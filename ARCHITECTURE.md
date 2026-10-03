@@ -806,6 +806,45 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   pickers. Defaults live in Settings → Models; your commands in Settings →
   Commands.
 
+### Desktop app (`apps/desktop`)
+
+Conch as an app for macOS, Windows and Linux ([ADR 0054](./docs/adr/0054-the-desktop-app.md)):
+an Electron shell around the same gateway and web app, not a second implementation.
+
+```mermaid
+flowchart LR
+  Main["Electron main: window, tray, updater"] -- "spawn + IPC (GatewayToApp / AppToGateway)" --> Gateway["node --import tsx apps/server/src/main.ts<br/>(Node 24 carried in the app)"]
+  Window["BrowserWindow: sandboxed, no preload"] -- "http://127.0.0.1:port" --> Gateway
+  Gateway -- "GitHub Releases API" --> Releases[("Releases + latest*.yml")]
+  Main -- "electron-updater: SHA-512, then install" --> Releases
+```
+
+- **What it carries.** `resources/node` is Node 24 from nodejs.org, checked against its
+  `SHASUMS256.txt` at build time. `resources/conch` is laid out like a checkout: the root
+  `package.json`, `release/allowed_signers`, `apps/server` with its production
+  `node_modules` (`pnpm deploy`, hoisted, other platforms' binaries pruned) and
+  `apps/web/dist`. `scripts/payload.mjs` assembles it; `scripts/dist.mjs` packages it
+  with electron-builder. Native modules are built where they run, so each platform is
+  built on its own runner (`.github/workflows/desktop.yml`).
+- **Supervision.** `src/gateway.ts` starts the gateway with `CONCH_SUPERVISED=1`,
+  `CONCH_APP` and an IPC channel, and applies `supervisor.ts`'s `nextStep`: exit 75
+  restarts at once, crashes back off, five in ten minutes stop with a status page
+  (`conch-app://app/status.html`). The gateway reports `listening`, `elsewhere` (another
+  Conch already answers; the app shows it and starts its own when it goes) or `failed`,
+  and stops when the channel closes. `src/environment.ts` gives it the login shell's PATH
+  with the carried Node last, and drops `ELECTRON_*` and `NODE_OPTIONS`.
+- **The window** (`src/window.ts`, rules in `src/policy.ts`): `contextIsolation`,
+  `sandbox`, no preload. Navigation stays on the gateway's origin; other links go to the
+  person's browser (`http`, `https`, `mailto` only). Sign-in windows are created hidden
+  and their provider address handed to the browser. Permissions only for Conch's origin
+  and only notifications, the microphone, the clipboard and full screen. Fuses turn off
+  `RunAsNode`, `NODE_OPTIONS` and the inspector, and only the checked ASAR loads.
+- **Joining the whole of Conch.** `runningAs()` is `app`; Always on writes the usual
+  login item, launching the app with `--background` (autostart on Linux, never systemd);
+  the tray is the app's own icon (`TrayService` with `app`); updates come from
+  `updates/app.ts` (GitHub Releases in the channel, notes via `parseNotes`, installed by
+  the app, or a download link where it can't replace itself).
+
 ### Documentation (`apps/docs`)
 
 A Vite + React site built from Nacre, started with `pnpm docs:dev` and built to static

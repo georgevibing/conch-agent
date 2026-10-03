@@ -18,8 +18,8 @@ The gateway already does everything a person sees. What's missing is the shell a
 
 ## Decision
 
-Conch ships an app for macOS (Apple silicon and Intel), Windows (x64 and Arm) and Linux (x64 and
-Arm), built with [Electron](https://www.electronjs.org) in `apps/desktop`. Each release attaches
+Conch ships an app for macOS (Apple silicon and Intel), Windows (x64, which Windows on Arm
+runs too) and Linux (x64 and Arm), built with [Electron](https://www.electronjs.org) in `apps/desktop`. Each release attaches
 the downloads to its GitHub Release.
 
 ### The app is a shell around the same Conch
@@ -134,8 +134,10 @@ release` couldn't, and attaches the files. The two Mac builds each write a `late
 
 ## Consequences
 
-- An install is a download. The app is big (about 250 MB unpacked), mostly Claude Code's own
-  program and the on-device model runtime, which Conch already uses.
+- An install is a download, and a big one: about 290 MB to download and 1 GB installed. Most of
+  it is Claude Code's own program (240 MB), Node, Electron and the on-device model runtime,
+  which Conch already uses. The first start after installing is slower while the computer
+  looks over the new files; later starts take a couple of seconds.
 - Without signing certificates, macOS says the app is from an unidentified developer and
   Windows SmartScreen asks once. The download page says how to open it anyway. With
   certificates in the repository's secrets, both go away with no code change.
