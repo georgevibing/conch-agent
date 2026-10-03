@@ -7,12 +7,15 @@ import type { OllamaLink } from './ollama';
 import { cloudName, localAccount, ollamaCloudVariant } from './ollamaCloud';
 import type { WireEvent } from './types';
 
-function link(fetch: typeof globalThis.fetch, running = true): OllamaLink {
+function link(
+  fetch: typeof globalThis.fetch,
+  ensureRunning: OllamaLink['ensureRunning'] = async () => true,
+): OllamaLink {
   return {
     client: new OllamaClient(() => 'http://127.0.0.1:11434', fetch),
     models: async () => [],
     contextFor: () => 8192,
-    ensureRunning: async () => running,
+    ensureRunning,
     loaded: async () => true,
     engineStatus: async () => {
       throw new Error('not used');
@@ -57,6 +60,7 @@ describe('the Ollama app’s own sign-in', () => {
 
   it('connects through the app with no key, and sends chats there under their cloud names', async () => {
     const fetch = fakeFetch((call) => {
+      if (call.url.endsWith('/api/version')) return jsonResponse({ version: '0.35.0' });
       if (call.url.endsWith('/api/me')) return jsonResponse({ name: 'ada', plan: 'pro' });
       if (call.url === 'http://127.0.0.1:11434/v1/chat/completions')
         return sseResponse(
@@ -89,16 +93,31 @@ describe('the Ollama app’s own sign-in', () => {
   });
 
   it('asks for a sign-in or a key when neither is there', async () => {
-    const fetch = fakeFetch(() => jsonResponse({ signin_url: SIGNIN }, 401));
+    const fetch = fakeFetch((call) =>
+      call.url.endsWith('/api/version')
+        ? jsonResponse({ version: '0.35.0' })
+        : jsonResponse({ signin_url: SIGNIN }, 401),
+    );
     const error = await failure(ollamaCloudVariant(link(fetch.fetch)).wire.check({ key: '' }));
     expect(error).toMatchObject({
       kind: 'auth',
       message: expect.stringContaining('Sign in to Ollama'),
     });
+  });
+
+  it('never starts Ollama just to look: a stopped app is a sign-in away', async () => {
+    const stopped = fakeFetch(() => {
+      throw new TypeError('fetch failed');
+    });
+    const ensureRunning = vi.fn(async () => true);
     const none = await failure(
-      ollamaCloudVariant(link(fetch.fetch, false)).wire.check({ key: '' }),
+      ollamaCloudVariant(link(stopped.fetch, ensureRunning)).wire.check({ key: '' }),
     );
-    expect(none.message).toContain('install the Ollama app');
+    expect(none).toMatchObject({
+      kind: 'auth',
+      message: expect.stringContaining('Sign in starts it'),
+    });
+    expect(ensureRunning).not.toHaveBeenCalled();
   });
 
   it('shows Ollama’s page, waits for the sign-in, and finishes by itself', async () => {

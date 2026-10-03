@@ -105,11 +105,12 @@ class OllamaCloudWire implements Wire {
     }
     if (!this.link)
       throw new ApiError('auth', 'Paste an Ollama key, or sign in through the Ollama app.');
-    const running = await this.link.ensureRunning({ note: false }).catch(() => false);
+    // Only asks: a look at the Providers page never starts Ollama. Signing in does.
+    const running = await this.link.client.version().catch(() => undefined);
     if (!running)
       throw new ApiError(
         'auth',
-        'Paste an Ollama key, or install the Ollama app and sign in through it.',
+        'Paste an Ollama key, or sign in through the Ollama app: Sign in starts it for you.',
       );
     const account = await localAccount(this.link, signal).catch(() => ({
       signedIn: false as const,
