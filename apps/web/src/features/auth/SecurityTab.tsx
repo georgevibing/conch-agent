@@ -62,7 +62,8 @@ import { keys } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { relativeTime } from '../../lib/time';
 import { Section } from '../settings/Section';
-import { DEVICES_FOCUS, PASSKEYS_FOCUS } from './focus';
+import { AddressSection } from './AddressSection';
+import { ADDRESS_FOCUS, DEVICES_FOCUS, PASSKEYS_FOCUS } from './focus';
 import styles from './Security.module.css';
 import { createPasskey, passkeyProblem } from './passkey';
 import { applySignedIn } from './signedIn';
@@ -1192,14 +1193,6 @@ export function SecurityTab() {
   const settingsFocus = useUi((s) => s.settingsFocus);
   const loaded = Boolean(access.data);
   const { focusOn } = fix;
-  // Your address (ADR 0064) has no section of its own here yet: its fixes start at the top.
-  const top = useRef<HTMLElement>(null);
-  const addressFocus = fix.focus?.place === 'address' ? fix.focus : undefined;
-  useEffect(() => {
-    if (!addressFocus) return;
-    addressFocus.done();
-    reveal(top.current, undefined);
-  }, [addressFocus]);
   useEffect(() => {
     if (settingsFocus !== DEVICES_FOCUS || !loaded) return;
     useUi.setState({ settingsFocus: undefined });
@@ -1214,6 +1207,11 @@ export function SecurityTab() {
     if (settingsFocus !== PASSKEYS_FOCUS || !loaded) return;
     useUi.setState({ settingsFocus: undefined });
     focusOn('passkeys');
+  }, [settingsFocus, loaded, focusOn]);
+  useEffect(() => {
+    if (settingsFocus !== ADDRESS_FOCUS || !loaded) return;
+    useUi.setState({ settingsFocus: undefined });
+    focusOn('address');
   }, [settingsFocus, loaded, focusOn]);
 
   // "Add your phone" with no sign-in yet: a phone signs in with a password, so
@@ -1263,7 +1261,7 @@ export function SecurityTab() {
 
   return (
     <Stack gap={8}>
-      <Section ref={top} title="Security" description="Keep Conch — and this computer — safe.">
+      <Section title="Security" description="Keep Conch — and this computer — safe.">
         <SecurityCheckup items={items} />
       </Section>
       <SafetySection />
@@ -1271,6 +1269,7 @@ export function SecurityTab() {
       <PasskeysSection access={data} guard={guard} focus={fix.focus} />
       <SignInSection access={data} guard={guard} focus={fix.focus} />
       {data.method !== 'none' && <DevicesSection access={data} guard={guard} focus={fix.focus} />}
+      <AddressSection guard={guard} focus={fix.focus} />
       <ReachSection access={data} focus={fix.focus} />
       {dialog}
       <Text size="xs" tone="subtle" className={styles.footnote}>

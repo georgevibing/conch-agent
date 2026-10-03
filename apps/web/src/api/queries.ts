@@ -15,6 +15,8 @@ export const keys = {
   usage: ['usage'] as const,
   auth: ['auth'] as const,
   access: ['access'] as const,
+  /** Your own address (ADR 0064); kept fresh by the `address.changed` event. */
+  address: ['address'] as const,
   healed: ['healed'] as const,
 };
 

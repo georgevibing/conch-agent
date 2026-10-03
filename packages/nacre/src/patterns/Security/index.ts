@@ -1,4 +1,5 @@
 export { DeviceApproval, type DeviceApprovalProps } from './DeviceApproval';
+export { DnsRecordCard, type DnsRecord, type DnsRecordCardProps } from './DnsRecordCard';
 export { DeviceList, deviceIcons, type Device, type DeviceListProps } from './DeviceList';
 export { DeviceRequests, type DeviceRequestItem, type DeviceRequestsProps } from './DeviceRequests';
 export { SecretReveal, type SecretRevealProps } from './SecretReveal';

@@ -212,6 +212,12 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         case 'backups.changed':
           void client.invalidateQueries({ queryKey: backupKeys.status });
           break;
+        case 'address.changed':
+          // Your own address (ADR 0064): checking, a certificate, ready, or a problem.
+          client.setQueryData(keys.address, event.address);
+          // The checkup says what it means for your security.
+          void client.invalidateQueries({ queryKey: keys.access });
+          break;
         case 'import.progress':
           useImportProgress.setState({
             done: event.done,

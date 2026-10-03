@@ -1,5 +1,7 @@
 import {
   AccessSettings,
+  AddressStatus,
+  DnsReport,
   AppState,
   AuthStatus,
   type CheckupAction,
@@ -115,6 +117,16 @@ export const api = {
     request(AccessSettings, `/api/access/passkeys/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     }),
+  /** Your own address (ADR 0064): where Conch answers over HTTPS, and setting it up. */
+  address: () => request(AddressStatus, '/api/address'),
+  addressDns: (name: string) =>
+    request(DnsReport, '/api/address/dns', { method: 'POST', body: { name } }),
+  setAddress: (name: string) =>
+    request(AddressStatus, '/api/address', { method: 'PUT', body: { name } }),
+  removeAddress: () => request(AddressStatus, '/api/address', { method: 'DELETE' }),
+  renewAddress: () => request(AddressStatus, '/api/address/renew', { method: 'POST' }),
+  /** Turn on here an address a backup brought from another computer. */
+  addressHere: () => request(AddressStatus, '/api/address/here', { method: 'POST' }),
   /** The hello link (ADR 0064): is it still good, and use it. */
   checkHello: (code: string) =>
     request(HelloCheck, '/api/auth/hello', { method: 'POST', body: { code } }),
