@@ -70,7 +70,8 @@ export async function localAccount(
     const me = Me.safeParse(body);
     return {
       signedIn: true,
-      ...(me.success && (me.data.name || me.data.email) && { name: me.data.name ?? me.data.email ?? undefined }),
+      ...(me.success &&
+        (me.data.name || me.data.email) && { name: me.data.name ?? me.data.email ?? undefined }),
       ...(me.success && me.data.plan && { plan: me.data.plan }),
     };
   }
@@ -106,12 +107,23 @@ class OllamaCloudWire implements Wire {
       throw new ApiError('auth', 'Paste an Ollama key, or sign in through the Ollama app.');
     const running = await this.link.ensureRunning({ note: false }).catch(() => false);
     if (!running)
-      throw new ApiError('auth', 'Paste an Ollama key, or install the Ollama app and sign in through it.');
-    const account = await localAccount(this.link, signal).catch(() => ({ signedIn: false as const }));
+      throw new ApiError(
+        'auth',
+        'Paste an Ollama key, or install the Ollama app and sign in through it.',
+      );
+    const account = await localAccount(this.link, signal).catch(() => ({
+      signedIn: false as const,
+    }));
     if (!account.signedIn)
-      throw new ApiError('auth', 'Sign in to Ollama through the app on this computer, or paste a key.');
+      throw new ApiError(
+        'auth',
+        'Sign in to Ollama through the app on this computer, or paste a key.',
+      );
     this.#through = 'app';
-    const who = [account.name, account.plan && `${account.plan[0]?.toUpperCase()}${account.plan.slice(1)} plan`]
+    const who = [
+      account.name,
+      account.plan && `${account.plan[0]?.toUpperCase()}${account.plan.slice(1)} plan`,
+    ]
       .filter(Boolean)
       .join(' · ');
     return { description: `Through the Ollama app${who ? ` · ${who}` : ''}` };
@@ -183,14 +195,18 @@ export function ollamaCloudVariant(link: OllamaLink | undefined, deps: ApiDeps =
       void (async () => {
         emit({ phase: 'starting' });
         if (!link || !(await link.ensureRunning({ note: true }).catch(() => false)))
-          throw new Error('Signing in goes through the Ollama app. Install it first, or paste a key.');
+          throw new Error(
+            'Signing in goes through the Ollama app. Install it first, or paste a key.',
+          );
         const first = await localAccount(link);
         if (!first.signedIn) {
-          if (!first.url) throw new Error('Ollama didn’t give a sign-in page. Update Ollama, or paste a key.');
+          if (!first.url)
+            throw new Error('Ollama didn’t give a sign-in page. Update Ollama, or paste a key.');
           emit({
             phase: 'waiting-for-browser',
             url: first.url,
-            message: 'Sign in to your Ollama account on the page that opens. This updates by itself.',
+            message:
+              'Sign in to your Ollama account on the page that opens. This updates by itself.',
           });
           for (;;) {
             await new Promise((resolve) => setTimeout(resolve, POLL_MS));
@@ -204,7 +220,8 @@ export function ollamaCloudVariant(link: OllamaLink | undefined, deps: ApiDeps =
         .catch((error: unknown) =>
           emit({
             phase: abort.signal.aborted ? 'cancelled' : 'failed',
-            message: error instanceof Error && error.message ? error.message : 'Signing in didn’t finish.',
+            message:
+              error instanceof Error && error.message ? error.message : 'Signing in didn’t finish.',
           }),
         )
         .finally(() => clearTimeout(timer));
@@ -229,7 +246,7 @@ export function ollamaCloudVariant(link: OllamaLink | undefined, deps: ApiDeps =
     login,
     wire: new OllamaCloudWire(
       new OpenAiWire(preset, fetchImpl),
-      new OpenAiWire(appPreset, link?.client.fetch ?? fetchImpl),
+      new OpenAiWire(appPreset, link?.client?.fetch ?? fetchImpl),
       link,
     ),
     home: deps.home ?? defaultHome(),
