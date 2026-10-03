@@ -94,10 +94,11 @@ fresh confirmation does that job better, and works where nobody sits at the comp
   device that holds it, and the face, finger or PIN that unlocks it), so a new device that signs
   in with one isn't asked to wait (`approvedHow: 'passkey'`). A password or access key still
   waits.
-- **The owner hears about it.** A device starting to wait already shows a toast on every
-  signed-in screen; it now also sends a notification (ADR 0027) to approved devices that have
-  notifications on: "A new device wants to sign in to Conch". The notification carries the
-  device's name and where it's from, never the code; the code is matched on screen.
+- **The owner hears about it.** A device starting to wait shows a toast on every signed-in
+  screen, and the notification ADR 0024 added ("A new device wants to sign in", with the
+  device's name and its code) reaches the person's devices that have notifications on. Until
+  now it could only send them to this computer; now **Approve** works where they read it. The
+  code grants nothing by itself (ADR 0024): it's for matching the screen in front of them.
 - The waiting screen says where to approve: "Open Conch on a device you've already signed in on,
   or on the computer running it". When this device could use a passkey, it offers that too, so
   the person can let themselves in.

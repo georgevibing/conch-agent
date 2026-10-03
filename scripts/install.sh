@@ -125,7 +125,8 @@ quietly() {
   fi
 }
 
-printf '\n  %s🐚  Conch%s\n\n' "$BOLD" "$RESET"
+printf '\n  %s🐚  Conch%s\n  %s%s%s\n\n' "$BOLD" "$RESET" "$DIM" \
+  "Your own assistant, on your own computer. Let's get it settled in." "$RESET"
 
 if [ "$(id -u)" = 0 ]; then
   fail "Run this as yourself, not with sudo." \
@@ -478,7 +479,7 @@ if [ -n "$HEADLESS" ]; then
   exit 0
 fi
 
-printf '\n  %sConch is ready%s at %s\n' "$BOLD" "$RESET" "$URL"
+printf '\n  %s✨ Conch is ready%s at %s\n' "$BOLD" "$RESET" "$URL"
 if [ -n "$BACKGROUND" ]; then
   if [ "$OS" = darwin ]; then say "${DIM}Open it any time from Applications or Spotlight: just type Conch.${RESET}"
   else say "${DIM}Open it any time from your apps.${RESET}"; fi
