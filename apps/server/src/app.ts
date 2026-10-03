@@ -7,7 +7,9 @@ import {
   AdoptIntegrationBody,
   ApiKeyBody,
   AppState,
+  AcceptOfferBody,
   CatalogId,
+  DismissOfferBody,
   ClientCommand,
   CommandName,
   CreateIntegrationBody,
@@ -52,6 +54,7 @@ import { registerVaultRoutes } from './vault/routes';
 import { AttachmentError } from './attachments/store';
 import { isLoopbackAddress } from './auth/network';
 import { ConversationError } from './conversations/manager';
+import { OfferError } from './offers/desk';
 import { BOOT_ID, restart, restartable } from './lib/lifecycle';
 import { googleRoutes } from './google/routes';
 import { slackRoutes } from './slack/routes';
@@ -103,10 +106,17 @@ function signInFor(request: FastifyRequest): SignIn {
     request.protocol === 'https' ||
     (isLoopbackAddress(request.socket.remoteAddress) &&
       request.headers['x-forwarded-proto'] === 'https');
-  const display = (request.query as { display?: string } | undefined)?.display;
+  const query = request.query as { display?: string; chat?: unknown; offer?: unknown } | undefined;
+  const display = query?.display === 'tab' ? 'tab' : 'popup';
+  // From a chat's offer, in this tab: the way back is that chat, which takes the offer by itself.
+  const chat = Id.safeParse(query?.chat);
+  const offer = Id.safeParse(query?.offer);
   return {
     redirectUrl: `${https ? 'https' : 'http'}://${request.headers.host ?? 'localhost'}/oauth/callback`,
-    display: display === 'tab' ? 'tab' : 'popup',
+    display,
+    ...(display === 'tab' &&
+      chat.success &&
+      offer.success && { returnTo: { conversationId: chat.data, offerId: offer.data } }),
   };
 }
 
@@ -136,6 +146,10 @@ function sendError(reply: FastifyReply, error: unknown) {
   }
   if (error instanceof UpdatesError) {
     const status = { 'not-found': 404, busy: 409, unavailable: 503 }[error.code];
+    return reply.code(status).send({ error: error.code, message: error.message });
+  }
+  if (error instanceof OfferError) {
+    const status = error.code === 'not-found' ? 404 : 409;
     return reply.code(status).send({ error: error.code, message: error.message });
   }
   if (error instanceof ConversationError) {
@@ -865,9 +879,26 @@ export async function buildApp(services: Services) {
     const state = oauthParam(query.state, 256);
     const code = oauthParam(query.code);
     const error = oauthParam(query.error, 200);
-    const back = (flow: { integrationId: string; display: string } | undefined, result: string) => {
+    const back = (
+      flow:
+        | {
+            integrationId: string;
+            display: string;
+            returnTo?: { conversationId: string; offerId: string };
+          }
+        | undefined,
+      result: string,
+    ) => {
       // Apps (ADR 0052); `/integrations/done` is the sign-in window's own page.
       if (!flow) return reply.redirect(`/apps?result=${result}`, 303);
+      // Back to the chat it was offered in, which carries on by itself (ADR 0055).
+      if (flow.display === 'tab' && flow.returnTo) {
+        const { conversationId, offerId } = flow.returnTo;
+        return reply.redirect(
+          `/c/${encodeURIComponent(conversationId)}?offer=${encodeURIComponent(offerId)}&result=${result}`,
+          303,
+        );
+      }
       const base = flow.display === 'popup' ? `/integrations/done` : `/apps/${flow.integrationId}`;
       return reply.redirect(`${base}?id=${flow.integrationId}&result=${result}`, 303);
     };
@@ -879,7 +910,15 @@ export async function buildApp(services: Services) {
     try {
       return back(await services.integrations.finishOAuth(state, code), 'connected');
     } catch (failure) {
-      const flow = (failure as { flow?: { integrationId: string; display: string } }).flow;
+      const flow = (
+        failure as {
+          flow?: {
+            integrationId: string;
+            display: string;
+            returnTo?: { conversationId: string; offerId: string };
+          };
+        }
+      ).flow;
       return back(flow, flow ? 'failed' : 'expired');
     }
   });
@@ -1005,6 +1044,37 @@ export async function buildApp(services: Services) {
         return reply.code(404).send({ error: 'not-found', message: 'Not found.' });
       try {
         await services.conversations.dismissSuggestion(request.params.id, request.params.catalogId);
+        return { ok: true };
+      } catch (error) {
+        return sendError(reply, error);
+      }
+    },
+  );
+  // Taking an offer (ADR 0055): what was offered must be on now; then the chat carries on, once.
+  app.post<{ Params: { id: string; offerId: string } }>(
+    '/api/conversations/:id/offers/:offerId/accept',
+    async (request, reply) => {
+      if (!Id.safeParse(request.params.offerId).success)
+        return reply.code(404).send({ error: 'not-found', message: 'Not found.' });
+      const body = parse(AcceptOfferBody, request.body ?? {}, reply);
+      if (!body) return;
+      try {
+        const state = await services.offers.accept(request.params.id, request.params.offerId, body);
+        return { ok: true, state };
+      } catch (error) {
+        return sendError(reply, error);
+      }
+    },
+  );
+  // “Not now” on an offer, for the rest of this conversation.
+  app.post<{ Params: { id: string; offerId: string } }>(
+    '/api/conversations/:id/offers/:offerId/dismiss',
+    async (request, reply) => {
+      if (!Id.safeParse(request.params.offerId).success)
+        return reply.code(404).send({ error: 'not-found', message: 'Not found.' });
+      if (!parse(DismissOfferBody, request.body ?? {}, reply)) return;
+      try {
+        await services.offers.dismiss(request.params.id, request.params.offerId);
         return { ok: true };
       } catch (error) {
         return sendError(reply, error);

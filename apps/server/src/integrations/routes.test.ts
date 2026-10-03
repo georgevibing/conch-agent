@@ -280,28 +280,30 @@ describe('connect from the chat over HTTP', () => {
     await vi.waitUntil(async () => (await events()).some((e) => e.type === 'turn.completed'), {
       timeout: 5000,
     });
-    expect(await events()).toContainEqual(
-      expect.objectContaining({ type: 'integration.suggestion', catalogId: 'linear' }),
-    );
+    const offer = (await events()).flatMap((e) => (e.type === 'offer' ? [e.offer] : []))[0];
+    expect(offer).toMatchObject({ kind: 'app', target: 'linear', by: 'cue' });
     // The mock answers as the prompt asks a real model to.
     const reply = (await events())
       .flatMap((e) => (e.type === 'assistant.delta' && e.kind === 'text' ? [e.delta] : []))
       .join('');
     expect(reply).toMatch(/can’t see your Linear yet/);
 
-    const dismiss = (catalogId: string, id = sent.id) =>
+    const dismiss = (offerId: string, id = sent.id) =>
       app.inject({
         method: 'POST',
-        url: `/api/conversations/${id}/suggestions/${catalogId}/dismiss`,
+        url: `/api/conversations/${id}/offers/${offerId}/dismiss`,
         payload: {},
       });
-    expect((await dismiss('linear')).statusCode).toBe(200);
+    expect((await dismiss(offer?.offerId ?? '')).statusCode).toBe(200);
     expect(await events()).toContainEqual(
-      expect.objectContaining({ type: 'integration.suggestion.dismissed', catalogId: 'linear' }),
+      expect.objectContaining({
+        type: 'offer.resolved',
+        offerId: offer?.offerId,
+        outcome: 'dismissed',
+      }),
     );
-    expect((await dismiss('notion')).statusCode).toBe(404);
+    expect((await dismiss('of_nothing')).statusCode).toBe(404);
     expect((await dismiss('..%2F..%2Fsettings')).statusCode).toBe(404);
-    expect((await dismiss('Linear')).statusCode).toBe(404);
-    expect((await dismiss('linear', 'c_nothing')).statusCode).toBe(404);
+    expect((await dismiss(offer?.offerId ?? '', 'c_nothing')).statusCode).toBe(404);
   });
 });

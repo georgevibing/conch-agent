@@ -57,9 +57,7 @@ export type OfferOutcome = z.infer<typeof OfferOutcome>;
  * on for good (`on`: **Turn on**, **Always**) or used for this request only
  * (`once`: **Use it**); either way the request runs with it.
  */
-export const AcceptOfferBody = z
-  .object({ skill: z.enum(['on', 'once']).optional() })
-  .strict();
+export const AcceptOfferBody = z.object({ skill: z.enum(['on', 'once']).optional() }).strict();
 export type AcceptOfferBody = z.infer<typeof AcceptOfferBody>;
 
 /** “Not now” on an offer: nothing more to say. */

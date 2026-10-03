@@ -2,7 +2,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { Capabilities, ConversationEvent, EngineStatus, Integration } from '@conch/protocol';
+import type { Capabilities, EngineStatus, Integration } from '@conch/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ConversationManager, notConnectedPrompt } from '../conversations/manager';
@@ -262,10 +262,7 @@ describe('the conversation', () => {
       return summary.id;
     };
     const offers = async (id: string) =>
-      (await manager.detail(id)).events.filter(
-        (e): e is Extract<ConversationEvent, { type: 'integration.suggestion' }> =>
-          e.type === 'integration.suggestion',
-      );
+      (await manager.detail(id)).events.flatMap((e) => (e.type === 'offer' ? [e.offer] : []));
     return { manager, make, engine, integrations, say, offers };
   }
 
@@ -275,12 +272,17 @@ describe('the conversation', () => {
     const { events } = await manager.detail(id);
     // Straight after the message (and the turn starting), before any of the reply.
     const kinds = events.map((e) => e.type).filter((type) => type !== 'status');
-    expect(kinds.slice(0, 3)).toEqual([
-      'user.message',
-      'integration.suggestion',
-      'assistant.delta',
+    expect(kinds.slice(0, 3)).toEqual(['user.message', 'offer', 'assistant.delta']);
+    // Noticed in the person's words, and it carries on with them, as typed.
+    expect(await offers(id)).toMatchObject([
+      {
+        kind: 'app',
+        target: 'linear',
+        name: 'Linear',
+        by: 'cue',
+        resume: { request: 'what’s assigned to me in Linear this week?' },
+      },
     ]);
-    expect(await offers(id)).toMatchObject([{ catalogId: 'linear', name: 'Linear' }]);
     expect(engine.turns[0]?.systemAppend).toMatch(/Linear isn’t connected/);
 
     await say('and what about Linear next week?', id);
@@ -307,15 +309,17 @@ describe('the conversation', () => {
   it('keeps the offer, and “Not now”, through a reload', async () => {
     const { manager, make, say, offers } = await chat();
     const id = await say('find my notes in Notion');
-    await manager.dismissSuggestion(id, 'notion');
-    await manager.dismissSuggestion(id, 'notion');
-    await expect(manager.dismissSuggestion(id, 'linear')).rejects.toThrow(/wasn’t offered/);
+    const [offer] = await offers(id);
+    if (!offer) throw new Error('No offer.');
+    await manager.dismissOffer(id, offer.offerId);
+    await manager.dismissOffer(id, offer.offerId);
+    await expect(manager.dismissOffer(id, 'of_nothing')).rejects.toThrow(/wasn’t offered/);
 
     const reloaded = make();
     const { events } = await reloaded.detail(id);
-    expect(events.filter((e) => e.type === 'integration.suggestion')).toHaveLength(1);
-    expect(events.filter((e) => e.type === 'integration.suggestion.dismissed')).toEqual([
-      expect.objectContaining({ catalogId: 'notion' }),
+    expect(events.filter((e) => e.type === 'offer')).toHaveLength(1);
+    expect(events.filter((e) => e.type === 'offer.resolved')).toEqual([
+      expect.objectContaining({ offerId: offer.offerId, outcome: 'dismissed' }),
     ]);
     // Still once, after the reload too.
     await reloaded.send({ conversationId: id, clientMessageId: 'again', text: 'Notion again?' });

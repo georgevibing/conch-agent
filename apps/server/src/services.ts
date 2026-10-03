@@ -116,6 +116,8 @@ import { MemoryStore } from './memory/store';
 import { MemoryTidy } from './memory/tidy';
 import { SkillSuggester } from './skills/suggest';
 import { RoutineService } from './routines/service';
+import { OfferDesk } from './offers/desk';
+import { offerTools } from './offers/tools';
 import { SearchService } from './search/service';
 import { RoutineStore } from './routines/store';
 import { SettingsStore } from './settings/store';
@@ -184,6 +186,8 @@ export class Services {
   readonly vault: VaultService;
   readonly routines: RoutineService;
   readonly conversations: ConversationManager;
+  /** Every offer to turn something on in a chat goes through here (ADR 0055). */
+  readonly offers: OfferDesk;
   readonly browser: BrowserService;
   readonly terminal: TerminalService;
   readonly engines: Map<EngineId, Engine>;
@@ -513,6 +517,43 @@ export class Services {
       model: this.onDevice,
       reindex: () => this.memoryIndex.sync(),
     });
+    const muted = async () => (await this.settings.get()).preferences.mutedSuggestions;
+    this.offers = new OfferDesk({
+      muted,
+      // What this provider could turn on now: apps not connected, skills off or waiting to be asked.
+      map: async (engine) => {
+        const [apps, skills] = await Promise.all([
+          this.integrations.connectable(engine).catch(() => undefined),
+          this.skills.offerable(engine).catch(() => []),
+        ]);
+        return {
+          apps: (apps ?? []).map((a) => ({
+            id: a.id,
+            name: a.name,
+            tagline: a.tagline,
+            description: a.description,
+            ...(a.color && { color: a.color }),
+            featured: a.featured,
+          })),
+          skills,
+        };
+      },
+      suggest: (text, engine, skip) => this.integrations.suggest(text, engine, skip),
+      chat: {
+        events: async (id) => (await this.conversations.detail(id)).events,
+        taint: (id) => this.conversations.taintOf(id),
+        unattended: async (id) =>
+          Boolean((await this.conversations.detail(id)).conversation.origin),
+        carryOn: (id, offerId, turn) => this.conversations.carryOn(id, offerId, turn),
+        dismiss: (id, offerId) => this.conversations.dismissOffer(id, offerId),
+      },
+      apps: { connected: (id) => this.integrations.connected(id) },
+      skills: {
+        modeOf: (id) => this.skills.modeOf(id),
+        turnOn: (id) => this.skills.turnOn(id),
+        once: (id, request) => this.skills.once(id, request),
+      },
+    });
     this.conversations = new ConversationManager({
       store: conversationStore,
       settings: this.settings,
@@ -539,6 +580,8 @@ export class Services {
                 ctx,
               ),
               ...offeredSlackTools(this.slack, ctx),
+              // Offer what this request is missing (ADR 0055): never to nobody.
+              ...(ctx.unattended ? [] : offerTools(this.offers, ctx)),
             ],
       context: async (engine, conversationId) =>
         [
@@ -546,6 +589,10 @@ export class Services {
           await this.skills.promptSection(engine).catch(() => ''),
           await this.browser.promptSection(engine).catch(() => ''),
           await this.integrations.promptSection(),
+          // The map, beside the apps: only for providers that can call `offer` (ADR 0055).
+          engine.hostTools === false
+            ? ''
+            : await this.offers.section(engine, conversationId).catch(() => ''),
           engine.hostTools === false ? '' : await this.slack.promptSection().catch(() => ''),
           engine.hostTools === false ? '' : this.vault.promptSection(),
           this.artifacts.promptSection(engine.hostTools !== false),
@@ -572,6 +619,7 @@ export class Services {
           input,
         ),
       integrations: this.integrations,
+      offers: this.offers,
       attachments: this.attachments,
       redact: this.vault.redactor(),
       protectedPaths: protectedPaths(config.CONCH_HOME),

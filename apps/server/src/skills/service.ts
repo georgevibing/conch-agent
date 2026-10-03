@@ -6,6 +6,7 @@ import {
   type SkillDescriptionDraft,
   type SkillDetail,
   type SkillDraft,
+  type SkillMode,
   type SkillPermissions,
   type SkillsList,
   type TrustedPublisher,
@@ -271,19 +272,16 @@ export class SkillService {
    * typed after the name. Anything that isn't a usable skill's name is left
    * alone (Conch's own commands never reach the gateway; the provider's do).
    */
-  async expand(text: string): Promise<
-    | {
-        prompt: string;
-        skill: { skillId: string; name: string; title: string; permissions: SkillPermissions };
-      }
-    | undefined
-  > {
+  async expand(text: string): Promise<Expanded | undefined> {
     const match = /^\/([a-z0-9][a-z0-9-]{0,63})(?:\s+([\s\S]*))?$/i.exec(text.trim());
     if (!match?.[1]) return undefined;
     const skill = await this.deps.store.byName(match[1]);
     if (!skill) return undefined;
+    return this.#expand(skill, match[2]?.trim());
+  }
+
+  async #expand(skill: LoadedSkill, request: string | undefined): Promise<Expanded> {
     const instructions = await this.deps.store.instructions(skill);
-    const request = match[2]?.trim();
     return {
       prompt: [
         `<skill name="${xml(skill.name)}" title="${xml(skill.title)}" folder="${xml(skill.path)}">`,
@@ -305,6 +303,72 @@ export class SkillService {
       },
     };
   }
+
+  // ── Offering a skill in the chat (ADR 0055) ─────────────────────────────
+
+  /**
+   * The skills the assistant may offer to turn on: Off, or set to When I ask,
+   * that would work if turned on (nothing wrong with the file, nothing
+   * worrying found, a signature that holds), and not ones this provider
+   * loads by itself.
+   */
+  async offerable(engine: Engine): Promise<OfferableSkill[]> {
+    const { skills } = await this.deps.store.list().catch(() => ({ skills: [] as LoadedSkill[] }));
+    const native = new Set(engine.skillSources ?? []);
+    return skills
+      .filter(
+        (s) =>
+          (s.mode === 'off' || s.mode === 'manual') &&
+          !s.problem &&
+          s.review?.verdict !== 'danger' &&
+          s.signature?.state !== 'invalid' &&
+          !native.has(s.source),
+      )
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        title: s.title,
+        description: s.description,
+        mode: s.mode as 'off' | 'manual',
+      }));
+  }
+
+  /** A skill's mode now, or `undefined` when it's gone or can't be used. */
+  async modeOf(id: string): Promise<SkillMode | undefined> {
+    const skill = await this.deps.store.get(id).catch(() => undefined);
+    return skill && !skill.problem ? skill.mode : undefined;
+  }
+
+  /** **Turn on** / **Always** from a chat's offer: set to Automatically, as the Skills page would. */
+  async turnOn(id: string): Promise<void> {
+    await this.update(id, { mode: 'auto' });
+  }
+
+  /**
+   * Run a request with a skill, once (**Use it** on an offer, ADR 0055): its
+   * instructions and the request, as `/name request` would. `undefined` when
+   * it's off, gone, or can't be read.
+   */
+  async once(id: string, request: string): Promise<Expanded | undefined> {
+    const skill = await this.deps.store.get(id).catch(() => undefined);
+    if (!skill || skill.mode === 'off' || skill.problem) return undefined;
+    return this.#expand(skill, request).catch(() => undefined);
+  }
+}
+
+/** A request with a skill's instructions in front: what the provider gets. */
+export interface Expanded {
+  prompt: string;
+  skill: { skillId: string; name: string; title: string; permissions: SkillPermissions };
+}
+
+/** A skill the chat can offer (ADR 0055). */
+export interface OfferableSkill {
+  id: string;
+  name: string;
+  title: string;
+  description: string;
+  mode: 'off' | 'manual';
 }
 
 function xml(text: string): string {
