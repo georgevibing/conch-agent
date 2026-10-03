@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Conch</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        box-sizing: border-box;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        font:
+          16px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          system-ui,
+          sans-serif;
+        background: light-dark(#fbf9f7, #13100e);
+        color: light-dark(#2b2522, #efe8e3);
+        -webkit-font-smoothing: antialiased;
+        user-select: none;
+      }
+      main {
+        display: grid;
+        justify-items: center;
+        gap: 12px;
+        max-width: 28rem;
+        text-align: center;
+      }
+      .pearl {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 38% 32%, #fffaf5, #f6d9cc 45%, #d9d3ee 75%, #c7b7c9);
+        box-shadow: 0 12px 32px -14px rgba(120, 90, 110, 0.55);
+        margin-bottom: 8px;
+      }
+      [data-state='starting'] .pearl {
+        animation: breathe 2.4s ease-in-out infinite;
+      }
+      [data-state='stopped'] .pearl {
+        filter: saturate(0.5);
+      }
+      @keyframes breathe {
+        50% {
+          transform: scale(0.94);
+          opacity: 0.8;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        [data-state='starting'] .pearl {
+          animation: none;
+        }
+      }
+      h1 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      p {
+        margin: 0;
+        color: light-dark(#6d625c, #b6aba4);
+        text-wrap: pretty;
+        user-select: text;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      a {
+        padding: 10px 18px;
+        border-radius: 999px;
+        font-weight: 600;
+        text-decoration: none;
+        color: light-dark(#2b2522, #efe8e3);
+        background: light-dark(#efe9e4, #2a2421);
+      }
+      a.primary {
+        background: light-dark(#2b2522, #efe8e3);
+        color: light-dark(#fbf9f7, #13100e);
+      }
+      a:focus-visible {
+        outline: 2px solid light-dark(#8a5cf6, #b8a2ff);
+        outline-offset: 2px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="main" role="status" aria-live="polite" data-state="starting">
+      <div class="pearl" aria-hidden="true"></div>
+      <h1 id="title">Starting Conch…</h1>
+      <p id="detail">This takes a few seconds.</p>
+      <div class="actions" id="actions" hidden>
+        <a class="primary" href="#retry">Try again</a>
+        <a href="#log">Show what it said</a>
+        <a href="#quit">Quit</a>
+      </div>
+    </main>
+    <script src="status.js"></script>
+  </body>
+</html>

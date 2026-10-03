@@ -1,0 +1,7 @@
+{
+  "extends": "@conch/tsconfig/node.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"]
+  },
+  "include": ["src", "e2e", "scripts/*.d.ts"]
+}

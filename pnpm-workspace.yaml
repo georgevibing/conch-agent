@@ -6,6 +6,11 @@ allowBuilds:
   # WhatsApp (ADR 0043): its preinstall only checks the Node version, and
   # protobufjs's postinstall only prints a notice. Neither is needed.
   '@whiskeysockets/baileys': false
+  # The desktop app (ADR 0054): its install script downloads Electron itself,
+  # checked against the checksums the package ships.
+  electron: true
+  # electron-builder's Squirrel.Windows maker; the app is installed with NSIS instead.
+  electron-winstaller: false
   esbuild: true
   # Optional: picks a prebuilt binary (or compiles on Linux). If it fails,
   # installation still succeeds and terminals use Python/basic mode.

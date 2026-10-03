@@ -1,0 +1,346 @@
+/**
+ * Conch, the app (ADR 0054): a window on the gateway it carries.
+ *
+ * One copy runs at a time. It starts the gateway (or finds a Conch already
+ * running and shows that), keeps it running, opens the window on it, and
+ * stays in the menu bar when the window closes. Quit Conch stops both.
+ */
+import {
+  appendFileSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname, join } from 'node:path';
+
+import { app, type BrowserWindow, Notification, screen, shell } from 'electron';
+
+import { gatewayEnv, loginShellPath } from './environment';
+import { Gateway } from './gateway';
+import { appMenu, ConchTray } from './menus';
+import { missing, places } from './places';
+import { originOf, STATUS_PAGE } from './policy';
+import { Updater, updatesMode } from './updater';
+import { appScheme, createWindow, grantPermissions, serveAppFiles, showStatus } from './window';
+
+/** Started at login by Always on: no window until it's asked for. */
+const background = process.argv.includes('--background');
+
+if (!app.requestSingleInstanceLock()) app.exit(0);
+else {
+  appScheme();
+  main();
+}
+
+function main(): void {
+  // Windows names the app's notifications and taskbar entry by this.
+  app.setAppUserModelId('io.github.giotiskl.conch');
+  const at = places({
+    packaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    appPath: app.getAppPath(),
+  });
+  const dev = at.kind === 'dev';
+
+  // ── The log: what the gateway says, kept beside Conch's own ────────────
+  const logPath = join(at.home, 'logs', 'app.log');
+  const log = (text: string) => {
+    try {
+      mkdirSync(dirname(logPath), { recursive: true, mode: 0o700 });
+      if ((statSync(logPath, { throwIfNoEntry: false })?.size ?? 0) > 5_000_000)
+        renameSync(logPath, `${logPath}.1`);
+      appendFileSync(logPath, text, { mode: 0o600 });
+    } catch {
+      // A log that can't be written never stops Conch.
+    }
+    if (dev) process.stdout.write(text);
+  };
+  log(
+    `--- ${new Date().toISOString()} Conch ${app.getVersion()} is starting${background ? ' in the background' : ''}\n`,
+  );
+  process.on('uncaughtException', (error) => log(`[app] ${error.stack ?? error.message}\n`));
+
+  // ── Who it is, and how it updates ─────────────────────────────────────
+  const signed = (() => {
+    try {
+      const own = JSON.parse(readFileSync(join(app.getAppPath(), 'package.json'), 'utf8')) as {
+        conch?: { signed?: unknown };
+      };
+      return own.conch?.signed === true;
+    } catch {
+      return false;
+    }
+  })();
+  const updates = updatesMode({
+    packaged: app.isPackaged,
+    platform: process.platform,
+    env: process.env,
+    signed,
+  });
+  const loginPath = loginShellPath();
+
+  // ── The gateway ───────────────────────────────────────────────────────
+  let shellPath: string | undefined;
+  const gateway = new Gateway(
+    () => ({
+      command: at.node,
+      args: ['--import', 'tsx', 'src/main.ts'],
+      cwd: join(at.conch, 'apps', 'server'),
+      env: gatewayEnv({
+        env: process.env,
+        home: at.home,
+        exe: process.execPath,
+        updates,
+        background,
+        loginPath: shellPath,
+        nodeBin: at.nodeBin,
+      }),
+    }),
+    { log },
+  );
+
+  let quitting = false;
+  let window: BrowserWindow | undefined;
+  let gatewayUrl: string | undefined;
+  const origins = () =>
+    [gatewayUrl, at.web].flatMap((url) => {
+      const origin = url ? originOf(url) : undefined;
+      return origin ? [origin] : [];
+    });
+  /** Where the window shows Conch: the gateway, or the web app's dev server. */
+  const conchPage = () => at.web ?? gatewayUrl;
+
+  // ── The window ────────────────────────────────────────────────────────
+  const boundsFile = join(app.getPath('userData'), 'window.json');
+  const savedBounds = (): Electron.Rectangle | undefined => {
+    try {
+      const saved = JSON.parse(readFileSync(boundsFile, 'utf8')) as Electron.Rectangle;
+      const area = screen.getDisplayMatching(saved).workArea;
+      const visible =
+        saved.x < area.x + area.width - 80 &&
+        saved.x + saved.width > area.x + 80 &&
+        saved.y >= area.y - 10 &&
+        saved.y < area.y + area.height - 80;
+      return visible && saved.width >= 380 && saved.height >= 480 ? saved : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  const resources = at.resources;
+  const onAction = (action: 'retry' | 'log' | 'quit') => {
+    if (action === 'quit') app.quit();
+    else if (action === 'log') void shell.openPath(logPath);
+    else {
+      if (window) showStatus(window, { state: 'starting' });
+      gateway.retry();
+    }
+  };
+
+  const ensureWindow = (): BrowserWindow => {
+    if (window && !window.isDestroyed()) return window;
+    const made = createWindow(
+      {
+        resources,
+        origins,
+        onAction,
+        dev,
+        ...(process.platform === 'linux' && { icon: join(resources, 'icon.png') }),
+      },
+      savedBounds(),
+    );
+    window = made;
+    made.once('ready-to-show', () => {
+      if (!background || shownOnce) made.show();
+    });
+    made.on('close', (event) => {
+      try {
+        writeFileSync(boundsFile, JSON.stringify(made.getNormalBounds()));
+      } catch {
+        // Its size is only a nicety.
+      }
+      if (quitting) return;
+      // Conch keeps running: the window only hides.
+      event.preventDefault();
+      made.hide();
+      sayStillRunning();
+    });
+    const state = gateway.state;
+    const target = conchPage();
+    if (state.kind === 'running' && target) void made.loadURL(target).catch(() => undefined);
+    else if (state.kind === 'stopped')
+      showStatus(made, { state: 'stopped', message: state.message });
+    else showStatus(made, { state: 'starting' });
+    return made;
+  };
+
+  let shownOnce = !background;
+  const showWindow = () => {
+    shownOnce = true;
+    const shown = ensureWindow();
+    if (shown.isMinimized()) shown.restore();
+    shown.show();
+    shown.focus();
+  };
+
+  /** The first time the window closes on Windows and Linux: Conch is still here. */
+  const sayStillRunning = () => {
+    if (process.platform === 'darwin' || !Notification.isSupported()) return;
+    const told = join(app.getPath('userData'), 'told-still-running');
+    try {
+      readFileSync(told);
+      return;
+    } catch {
+      // Not yet.
+    }
+    try {
+      writeFileSync(told, '1');
+    } catch {
+      // Then it may say it again; that's fine.
+    }
+    const note = new Notification({
+      title: 'Conch is still running',
+      body: `Open it again from the ${process.platform === 'win32' ? 'tray' : 'panel'}. Quit Conch from there to stop it.`,
+    });
+    note.on('click', showWindow);
+    note.show();
+  };
+
+  // ── The tray, the menus, updates ──────────────────────────────────────
+  const actions = {
+    open: showWindow,
+    quit: () => app.quit(),
+    checkForUpdates: () => {
+      showWindow();
+      const target = conchPage();
+      if (target && window) void window.loadURL(new URL('/?open=check-updates', target).href);
+    },
+    dev,
+  };
+  const tray = new ConchTray(resources, actions);
+  const updater = new Updater({
+    send: (message) => void gateway.send(message),
+    beforeInstall: async () => {
+      quitting = true;
+      await gateway.stop();
+    },
+    log: (line) => log(`${line}\n`),
+  });
+
+  // ── What the gateway says ─────────────────────────────────────────────
+  let watching: NodeJS.Timeout | undefined;
+  gateway.on('state', (state) => {
+    clearInterval(watching);
+    if (state.kind === 'running') {
+      const moved = gatewayUrl !== state.url;
+      gatewayUrl = state.url;
+      const target = conchPage();
+      const current = window && !window.isDestroyed() ? window.webContents.getURL() : '';
+      // A restart on the same address: the page brings itself back.
+      if (window && target && (moved || !current.startsWith(target)))
+        void window.loadURL(target).catch(() => undefined);
+      // Another Conch: if it goes away, this app starts its own.
+      if (state.elsewhere) watching = watchElsewhere(state.url);
+    } else if (state.kind === 'stopped') {
+      if (window && !window.isDestroyed())
+        showStatus(window, { state: 'stopped', message: state.message });
+      if ((!window || !window.isVisible()) && Notification.isSupported()) {
+        const note = new Notification({ title: 'Conch stopped', body: state.message });
+        note.on('click', showWindow);
+        note.show();
+      }
+    } else if (state.kind === 'quit') {
+      quitting = true;
+      app.quit();
+    } else if (
+      window &&
+      !window.isDestroyed() &&
+      window.webContents.getURL().startsWith(STATUS_PAGE)
+    ) {
+      showStatus(window, { state: 'starting' });
+    }
+  });
+  gateway.on('message', (message) => {
+    if (message.type === 'tray') tray.show(message.on);
+    else if (message.type === 'update') void updater.get(message.version, message.feed);
+  });
+
+  const watchElsewhere = (url: string) => {
+    let misses = 0;
+    const timer = setInterval(() => {
+      void fetch(new URL('/api/health', url), { signal: AbortSignal.timeout(3_000) })
+        .then((response) => (misses = response.ok ? 0 : misses + 1))
+        .catch(() => (misses += 1))
+        .then(() => {
+          if (misses < 2 || quitting) return;
+          clearInterval(timer);
+          log('[app] The Conch this app was showing stopped; starting its own.\n');
+          gateway.retry();
+        });
+    }, 5_000);
+    timer.unref();
+    return timer;
+  };
+
+  // ── The app's life ────────────────────────────────────────────────────
+  app.on('second-instance', (_event, argv) => {
+    if (!argv.includes('--background')) showWindow();
+  });
+  // The Dock icon. A Mac also says "activate" as an app starts: not a reason to
+  // open a window that Always on started without one.
+  const launchedAt = Date.now();
+  app.on('activate', () => {
+    if (!background || Date.now() - launchedAt > 3_000) showWindow();
+  });
+  app.on('window-all-closed', () => {
+    // Conch keeps running in the menu bar.
+  });
+  let stopped = false;
+  app.on('before-quit', (event) => {
+    quitting = true;
+    if (stopped) return;
+    event.preventDefault();
+    clearInterval(watching);
+    void gateway.stop().finally(() => {
+      stopped = true;
+      tray.show(false);
+      app.quit();
+    });
+  });
+
+  void app.whenReady().then(async () => {
+    appMenu(actions);
+    serveAppFiles(resources);
+    grantPermissions(origins);
+    const problem = missing(at);
+    if (!background) showWindow();
+    if (problem) {
+      if (window) showStatus(window, { state: 'stopped', message: problem });
+      return;
+    }
+    shellPath = await loginPath;
+    gateway.start();
+    // Development: the gateway starts again when its code changes.
+    if (dev)
+      watchSource(join(at.conch, 'apps', 'server', 'src'), () => {
+        void gateway.stop().then(() => gateway.retry());
+      });
+  });
+}
+
+/** Development only: call `changed` a moment after the gateway's source changes. */
+function watchSource(folder: string, changed: () => void): void {
+  let timer: NodeJS.Timeout | undefined;
+  void import('node:fs').then(({ watch }) => {
+    try {
+      watch(folder, { recursive: true }, (_event, file) => {
+        if (!file || /\.test\.ts$/.test(String(file))) return;
+        clearTimeout(timer);
+        timer = setTimeout(changed, 300);
+      });
+    } catch {
+      // No watching here: restart the app to pick up changes.
+    }
+  });
+}

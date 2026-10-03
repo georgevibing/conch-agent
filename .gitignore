@@ -14,5 +14,10 @@ coverage/
 test-results/
 playwright-report/
 
+# The desktop app: what it carries, the Node it downloads, the installers (ADR 0054).
+/apps/desktop/payload/
+/apps/desktop/.cache/
+/apps/desktop/out/
+
 # Git worktrees for parallel work (e.g. an agent on a feature branch).
 /.worktrees/

@@ -33,7 +33,14 @@
     "conch": "pnpm --silent --filter @conch/server conch",
     "release": "pnpm --silent --filter @conch/server release",
     "dev:mock": "CONCH_ENGINE=mock turbo run dev",
-    "e2e": "pnpm --filter @conch/web build && playwright test -c e2e/playwright.config.ts"
+    "e2e": "pnpm --filter @conch/web build && playwright test -c e2e/playwright.config.ts",
+    "desktop:dev": "pnpm --filter @conch/desktop app:dev",
+    "desktop:start": "pnpm --filter @conch/desktop app:start",
+    "desktop:build": "pnpm --filter @conch/desktop dist",
+    "desktop:build:mac": "pnpm --filter @conch/desktop dist --mac",
+    "desktop:build:win": "pnpm --filter @conch/desktop dist --win",
+    "desktop:build:linux": "pnpm --filter @conch/desktop dist --linux",
+    "desktop:e2e": "pnpm --filter @conch/desktop app:start --build-only && pnpm --filter @conch/desktop e2e"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

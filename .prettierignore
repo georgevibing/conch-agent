@@ -3,6 +3,9 @@ dist
 storybook-static
 coverage
 .turbo
+apps/desktop/payload
+apps/desktop/.cache
+apps/desktop/out
 
 # Other checkouts of this repo (git worktrees) format themselves.
 .worktrees
