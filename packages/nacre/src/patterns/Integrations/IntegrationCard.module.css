@@ -78,6 +78,26 @@
     color: var(--nc-text);
   }
 
+  /* A quiet word beside the name (“Made by you”): the name gives way first. */
+  .titleRow {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+  }
+
+  .titleRow .title {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .badge {
+    display: inline-flex;
+    flex-shrink: 0;
+  }
+
   /* The title button stretches over the card so a tap anywhere opens it. */
   .open {
     appearance: none;
@@ -239,6 +259,11 @@
 
   .connected .text {
     display: contents;
+  }
+
+  .connected .titleRow {
+    grid-area: title;
+    align-self: center;
   }
 
   .connected .title {

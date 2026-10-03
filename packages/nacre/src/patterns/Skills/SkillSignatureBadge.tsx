@@ -16,6 +16,8 @@ export interface SkillSignatureBadgeProps extends Omit<ComponentProps<'section'>
   lookalike?: boolean;
   /** "Trust this publisher…", for a signature that holds from someone you don't know yet. */
   action?: ReactNode;
+  /** What was signed, for the words: a skill, or a Conch app (ADR 0061). */
+  of?: 'skill' | 'app';
 }
 
 /**
@@ -32,6 +34,7 @@ export function SkillSignatureBadge({
   problem,
   lookalike,
   action,
+  of = 'skill',
   className,
   ...props
 }: SkillSignatureBadgeProps) {
@@ -79,7 +82,7 @@ export function SkillSignatureBadge({
         <p className={styles.fine}>
           {lookalike
             ? `You trust a publisher called ${who}, but this was signed with another key. Someone may be pretending to be them.`
-            : `The signature holds, so nothing changed since ${who} signed it. Trust them to see “Verified” on their skills, and let their signed updates carry on.`}
+            : `The signature holds, so nothing changed since ${who} signed it. Trust them to see “Verified” on their ${of}s, and let their signed updates carry on.`}
         </p>
       )}
       {state === 'invalid' && problem && <p className={styles.fine}>{problem}</p>}

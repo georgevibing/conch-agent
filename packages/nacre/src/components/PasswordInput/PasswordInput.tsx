@@ -9,6 +9,9 @@ export interface PasswordInputProps extends Omit<InputProps, 'type' | 'trailing'
   revealed?: boolean;
   defaultRevealed?: boolean;
   onRevealedChange?: (revealed: boolean) => void;
+  /** What the toggle says, for a secret that isn't a password: “Show API key”. */
+  showLabel?: string;
+  hideLabel?: string;
 }
 
 /**
@@ -21,6 +24,8 @@ export function PasswordInput({
   defaultRevealed = false,
   onRevealedChange,
   autoComplete = 'current-password',
+  showLabel = 'Show password',
+  hideLabel = 'Hide password',
   ...props
 }: PasswordInputProps) {
   const [uncontrolled, setUncontrolled] = useState(defaultRevealed);
@@ -41,7 +46,7 @@ export function PasswordInput({
       trailing={
         <IconButton
           size="sm"
-          label={revealed ? 'Hide password' : 'Show password'}
+          label={revealed ? hideLabel : showLabel}
           aria-pressed={revealed}
           onClick={toggle}
           disabled={props.disabled}

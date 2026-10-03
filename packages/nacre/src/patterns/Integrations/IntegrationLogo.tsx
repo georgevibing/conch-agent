@@ -18,6 +18,8 @@ export interface IntegrationLogoProps extends Omit<ComponentProps<'span'>, 'chil
   status?: IntegrationStateValue;
   /** Hide from assistive tech when the name is already next to it. */
   decorative?: boolean;
+  /** A glyph of its own instead of a brand's mark: a Conch app's icon (`AppIcon`). */
+  icon?: ReactNode;
 }
 
 /**
@@ -70,13 +72,14 @@ export function IntegrationLogo({
   size = 'md',
   status,
   decorative,
+  icon,
   className,
   style,
   ...props
 }: IntegrationLogoProps) {
-  const art = brand ? brandArt[brand] : undefined;
-  const path = brand && !art ? brandMarks[brand] : undefined;
-  const glyph = brand && !art ? glyphs[brand] : undefined;
+  const art = brand && !icon ? brandArt[brand] : undefined;
+  const path = brand && !art && !icon ? brandMarks[brand] : undefined;
+  const glyph = icon ?? (brand && !art ? glyphs[brand] : undefined);
   // No mark and no brand colour: a soft monogram tile instead of a loud one.
   const custom = !art && !path && !glyph && !color;
   return (
