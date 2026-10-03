@@ -614,6 +614,17 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
       );
       return updated ? { ...base, items: updated } : base;
     }
+    // The chat knows Conch (ADR 0055): each is drawn by its own feature.
+    case 'offer':
+    case 'offer.resolved':
+      return base;
+    case 'question':
+    case 'question.answered':
+      return base;
+    case 'replies':
+      return base;
+    case 'plan':
+      return base;
     case 'skill.used':
       return {
         ...base,

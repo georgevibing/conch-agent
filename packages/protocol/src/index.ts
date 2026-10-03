@@ -10,6 +10,15 @@ import { z } from 'zod';
 import { AppNeed, AppsModel } from './apps';
 import { Artifact, ArtifactKind } from './artifacts';
 import { ATTACHMENT_LIMITS, Attachment } from './attachments';
+import {
+  Offer,
+  OfferOutcome,
+  PlanStep,
+  Question,
+  QuestionAnswer,
+  ReplySuggestion,
+  ToolView,
+} from './chat-cards';
 import { BrowserHandoff, BrowserPermission, BrowserStatus, BrowserStep } from './browser';
 import { Channel, ChannelDoor, ChannelOrigin } from './channels';
 import { ChannelLink } from './linking';
@@ -39,6 +48,7 @@ import { UsageSnapshot } from './usage';
 export * from './access';
 export * from './apps';
 export * from './artifacts';
+export * from './chat-cards';
 export * from './attachments';
 export * from './background';
 export * from './backups';
@@ -377,6 +387,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     status: ToolStatus,
     output: z.string().optional(),
     durationMs: z.number().nonnegative().optional(),
+    /** What it found, drawn as it is (an agenda, emails, files): ADR 0055. */
+    view: ToolView.optional(),
   }),
   z.object({
     ...logged,
@@ -594,6 +606,46 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     ...logged,
     type: z.literal('integration.suggestion.dismissed'),
     catalogId: CatalogId,
+  }),
+  /**
+   * An offer to turn on what this request is missing, an app or a skill
+   * (ADR 0055). Replaces `integration.suggestion`, which older logs still hold.
+   */
+  z.object({ ...logged, type: z.literal('offer'), offer: Offer }),
+  /** The offer was taken (and the chat carries on), put away, or overtaken. */
+  z.object({
+    ...logged,
+    type: z.literal('offer.resolved'),
+    offerId: z.string(),
+    outcome: OfferOutcome,
+  }),
+  /**
+   * The assistant asks something with answers to tap; the reply waits for it
+   * (the chat's status is `awaiting-permission`: waiting for you).
+   */
+  z.object({ ...logged, type: z.literal('question'), question: Question }),
+  /** Answered, or `null`: skipped, or the reply was stopped first. */
+  z.object({
+    ...logged,
+    type: z.literal('question.answered'),
+    questionId: z.string(),
+    answer: QuestionAnswer.nullable(),
+  }),
+  /**
+   * What the person might say next, under the latest reply. From the
+   * assistant, or from Conch itself (“Show it as a chart” under a table).
+   */
+  z.object({
+    ...logged,
+    type: z.literal('replies'),
+    replies: z.array(ReplySuggestion).min(1).max(3),
+    by: z.enum(['assistant', 'conch']),
+  }),
+  /** The assistant's plan for this reply, as it stands now; a later one replaces it. */
+  z.object({
+    ...logged,
+    type: z.literal('plan'),
+    steps: z.array(PlanStep).min(1).max(30),
   }),
 ]);
 export type ConversationEvent = z.infer<typeof ConversationEvent>;
