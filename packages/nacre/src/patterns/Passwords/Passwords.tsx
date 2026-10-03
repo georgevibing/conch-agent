@@ -244,28 +244,34 @@ export function VaultSourceMark({
 }
 
 /**
- * Where an item lives, as a small badge on the corner of its tile: Conch's
- * pearl, or the password manager's mark. A quiet answer to "whose is this?"
- * on every row, without taking a word of the row's width.
+ * Where an item lives: Conch's pearl, the password manager's mark, or a lock
+ * for the keys Conch uses. On its own it's the size of the text around it and
+ * sits on its middle, for a button, a menu or a line of words; `corner` puts
+ * it on the corner of a row's tile, cut out by a ring, so every row answers
+ * "whose is this?" without taking a word of its width.
  */
 export function VaultSourceBadge({
   source,
+  corner,
   className,
 }: {
   source: VaultSourceKind;
+  /** On the corner of an item's tile (a list row). */
+  corner?: boolean;
   className?: string;
 }) {
   return (
     <span
       aria-hidden
       data-source={source}
+      data-corner={corner || undefined}
       className={cx(styles.sourceBadge, className)}
       title={SOURCE_NAMES[source]}
     >
       {source === 'system' ? (
         <LockKeyhole />
       ) : source === 'conch' ? (
-        <Pearl size="xs" label={null} />
+        <Pearl size="xs" label={null} className={styles.badgePearl} />
       ) : (
         <IntegrationLogo
           brand={source}
@@ -410,7 +416,7 @@ export function VaultRow({
         ) : (
           <VaultItemIcon kind={kind} domain={domain} title={title} />
         )}
-        {badge && <VaultSourceBadge source={source} />}
+        {badge && <VaultSourceBadge source={source} corner />}
       </span>
       <span className={styles.rowText}>
         <span className={styles.rowTitle}>
@@ -525,7 +531,7 @@ export function VaultSourceFilter({
             className={styles.sourceChip}
             aria-label={`${SOURCE_NAMES[s.source]}, ${s.count} ${s.count === 1 ? 'item' : 'items'}`}
           >
-            <VaultSourceBadge source={s.source} className={styles.sourceChipMark} />
+            <VaultSourceBadge source={s.source} />
             {SOURCE_NAMES[s.source]}
             <span className={styles.sourceChipCount}>{s.count}</span>
           </ToggleGroup.Item>

@@ -13,6 +13,7 @@ import {
   DropdownMenu,
   EmptyState,
   IconButton,
+  ResizeHandle,
   Input,
   Stack,
   Text,
@@ -196,6 +197,18 @@ const ISSUES: VaultProblem[] = ['compromised', 'reused', 'weak', 'expired', 'ins
 
 /** How the list was left: kept in this browser, so Passwords opens the way you use it. */
 const VIEW_KEY = 'conch.passwords.view';
+
+/** How wide you made the list, in this browser. Until then it's the usual width. */
+const WIDTH_KEY = 'conch.passwords.listWidth';
+const MIN_LIST = 260;
+function savedWidth(): number | undefined {
+  try {
+    const value = Number(localStorage.getItem(WIDTH_KEY));
+    return Number.isFinite(value) && value >= MIN_LIST ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
 interface SavedView {
   filter: VaultFilter;
   sort: VaultSort;
@@ -250,6 +263,29 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
   const auth = useAuth();
   const { guard: verify, dialog } = useVerify(auth.data?.method ?? 'none');
   const narrow = useMediaQuery('(max-width: 900px)');
+  // The list's width: drag the seam beside it, or focus it and use the arrows.
+  const [listWidth, setListWidth] = useState(savedWidth);
+  const page = useRef<HTMLDivElement>(null);
+  const [pageWidth, setPageWidth] = useState(0);
+  useEffect(() => {
+    const el = page.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setPageWidth(Math.round(entry.contentRect.width));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  // Room for the item beside it, always.
+  const maxList = Math.max(MIN_LIST, Math.round(pageWidth * 0.65) || 720);
+  const resize = (width: number) => {
+    setListWidth(width);
+    try {
+      localStorage.setItem(WIDTH_KEY, String(width));
+    } catch {
+      // A private window: it's the usual width next time.
+    }
+  };
   const [query, setQuery] = useState('');
   // The search box answers each key at once; the list follows when there's a moment.
   const sought = useDeferredValue(query);
@@ -281,6 +317,8 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
   const list = useRef<VirtualListHandle>(null);
   const listId = useId();
   const listPane = useRef<HTMLElement>(null);
+  // The list's width as drawn, for the seam before it's ever been dragged.
+  const [measuredList, setMeasuredList] = useState(336);
   const resting = useRef<ReturnType<typeof setTimeout>>(undefined);
   const location = useLocation();
 
@@ -673,6 +711,15 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
   );
 
   const showList = !narrow || (!itemId && mode.kind === 'view');
+  useEffect(() => {
+    const el = listPane.current;
+    if (!showList || !el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setMeasuredList(Math.round(entry.borderBoxSize[0]?.inlineSize ?? 336));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [showList]);
   const showDetail = !narrow || Boolean(itemId) || mode.kind !== 'view';
   const health = status?.health;
   const issueTotal = health
@@ -712,10 +759,18 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
   const empty =
     !isLoading && tally.all === 0 && tally.deleted === 0 && filter.kind === 'all' && !query;
 
+  const shownWidth =
+    listWidth === undefined ? undefined : Math.min(maxList, Math.max(MIN_LIST, listWidth));
+
   return (
-    <div className={styles.page}>
+    <div className={styles.page} ref={page}>
       {showList && (
-        <section className={styles.listPane} aria-label="Passwords" ref={listPane}>
+        <section
+          className={styles.listPane}
+          aria-label="Passwords"
+          ref={listPane}
+          style={!narrow && shownWidth !== undefined ? { inlineSize: shownWidth } : undefined}
+        >
           <div className={styles.toolbar}>
             <Input
               ref={search}
@@ -1038,6 +1093,26 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
             </Text>
           )}
         </section>
+      )}
+
+      {showList && showDetail && (
+        <ResizeHandle
+          label="Resize the list"
+          className={styles.seam}
+          value={shownWidth ?? measuredList}
+          min={MIN_LIST}
+          max={maxList}
+          grows="end"
+          onValueChange={resize}
+          onDoubleClick={() => {
+            setListWidth(undefined);
+            try {
+              localStorage.removeItem(WIDTH_KEY);
+            } catch {
+              // Nothing kept, nothing to forget.
+            }
+          }}
+        />
       )}
 
       {showDetail && (
