@@ -558,7 +558,13 @@ describe('save how I did this', () => {
         steps: 12,
         chat: { conversationId: 'c1', title: 'Release notes for 1.3' },
         examples: [{ text: 'Write the release notes for this version', conversationId: 'c1' }],
-        draft: { permissions: { capabilities: ['commands'], commands: ['git'] } },
+        draft: {
+          permissions: {
+            capabilities: ['commands'],
+            commands: ['git'],
+            words: ['run commands (only `git`)'],
+          },
+        },
       },
     });
     // The cheapest model of the provider that answered the chat, which has seen it already.

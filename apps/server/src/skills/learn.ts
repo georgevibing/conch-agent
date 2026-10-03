@@ -38,7 +38,7 @@ import type { Completion, CompletionInput } from '../engines/types';
 import { Mutex, writeJson } from '../lib/fs';
 import { readStore, type Heal } from '../lib/recover';
 import { cleanSkillDescription, cleanSkillTitle } from './draft';
-import { needs } from './permissions';
+import { needs, permissionsValue, readPermissions } from './permissions';
 import { scanText } from './scan';
 import { similar } from './suggest';
 
@@ -326,6 +326,11 @@ export function permissionsOf(
       programs.size <= 8 && { commands: [...programs].sort() }),
     ...(can.has('apps') && !anyApp && apps.size > 0 && { apps: [...apps].sort() }),
   });
+}
+
+/** The list in plain words, exactly as the skill's page will say it once saved. */
+export function withWords(p: SkillDraftPermissions): SkillDraftPermissions {
+  return { ...p, words: readPermissions(`permissions: ${permissionsValue(p)}`).words };
 }
 
 // ── The draft ─────────────────────────────────────────────────────────────
@@ -717,7 +722,7 @@ export class SkillLearner {
       return { why: 'like a skill you have' };
     if (this.#turnedDown(file, `${draft.title} ${asked}`)) return { why: 'you turned it down' };
 
-    const permissions = permissionsOf(work.steps, workspace);
+    const permissions = withWords(permissionsOf(work.steps, workspace));
     const offer: Offer = {
       id: `ws_${createHash('sha256').update(`${key}|${this.#now}`).digest('hex').slice(0, 16)}`,
       key,

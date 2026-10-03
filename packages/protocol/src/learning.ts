@@ -114,6 +114,8 @@ export const SkillDraftPermissions = z.object({
   commands: z.array(SkillCommandPrefix).max(12).optional(),
   /** Only these apps (integration servers). */
   apps: z.array(SkillAppName).max(12).optional(),
+  /** The list in plain words, as the skill's page will say it. */
+  words: z.array(z.string().max(200)).max(7).optional(),
 });
 export type SkillDraftPermissions = z.infer<typeof SkillDraftPermissions>;
 
