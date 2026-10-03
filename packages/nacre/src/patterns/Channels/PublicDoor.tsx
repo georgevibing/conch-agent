@@ -18,6 +18,8 @@ export interface PublicDoorProps extends Omit<ComponentProps<'section'>, 'title'
   /** The public address, once there is one. */
   url?: string;
   via?: 'tailscale' | 'own';
+  /** Conch's own address (ADR 0064), offered first when there is one: `https://conch.example.com`. */
+  conchAddress?: string;
   /** The apps that come in through it ("Teams", "WeChat"), for the words. */
   apps: string[];
   /** One plain sentence when it isn't simply fine. */
@@ -30,6 +32,7 @@ export interface PublicDoorProps extends Omit<ComponentProps<'section'>, 'title'
   port?: number;
   busy?: boolean;
   onTailscale?: () => void;
+  onConchAddress?: () => void;
   onOwn?: (url: string) => void;
   onOff?: () => void;
   onCheck?: () => void;
@@ -48,6 +51,7 @@ export function PublicDoor({
   state,
   url,
   via,
+  conchAddress,
   apps,
   message,
   problem,
@@ -55,6 +59,7 @@ export function PublicDoor({
   port = 4319,
   busy,
   onTailscale,
+  onConchAddress,
   onOwn,
   onOff,
   onCheck,
@@ -109,6 +114,8 @@ export function PublicDoor({
           <Text size="sm" tone="muted">
             {names} only deliver messages to a web address. Conch can open one that leads to a small
             door of its own, which lets in nothing but their signed messages.
+            {conchAddress &&
+              ` Conch already answers at ${conchAddress.replace(/^https:\/\//, '')}, so it can use that.`}
           </Text>
         )}
         {state === 'starting' && (
@@ -137,10 +144,17 @@ export function PublicDoor({
           )}
           {install}
           {(state === 'off' || state === 'needs-you' || state === 'error') &&
+            conchAddress &&
+            onConchAddress && (
+              <Button variant="solid" size="sm" loading={busy} onClick={onConchAddress}>
+                Use {conchAddress.replace(/^https:\/\//, '')}
+              </Button>
+            )}
+          {(state === 'off' || state === 'needs-you' || state === 'error') &&
             !install &&
             onTailscale && (
               <Button
-                variant={problem?.url ? 'surface' : 'solid'}
+                variant={problem?.url || conchAddress ? 'surface' : 'solid'}
                 size="sm"
                 loading={busy}
                 onClick={onTailscale}

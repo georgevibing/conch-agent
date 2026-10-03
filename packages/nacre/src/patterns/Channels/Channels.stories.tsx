@@ -657,6 +657,14 @@ export const PublicAddress: Story = {
           onCheck={() => undefined}
         />
         <PublicDoor
+          state="off"
+          apps={['Teams', 'WeChat']}
+          conchAddress="https://conch.example.com"
+          onConchAddress={() => undefined}
+          onTailscale={() => undefined}
+          onOwn={() => undefined}
+        />
+        <PublicDoor
           state="needs-you"
           apps={['Teams']}
           via="tailscale"

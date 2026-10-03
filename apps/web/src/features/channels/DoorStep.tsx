@@ -62,6 +62,7 @@ export function DoorStep() {
         apps={apps}
         {...(door.url && { url: door.url })}
         {...(door.via && { via: door.via })}
+        {...(door.address && { conchAddress: door.address })}
         {...(door.message && { message: door.message })}
         {...(door.problem && { problem: door.problem })}
         install={
@@ -71,6 +72,7 @@ export function DoorStep() {
         }
         busy={busy}
         onTailscale={() => void act(channelsApi.doorTailscale)}
+        onConchAddress={() => void act(channelsApi.doorAddress)}
         onOwn={(url) => void act(() => channelsApi.doorOwn(url))}
         onOff={() => void act(channelsApi.doorOff)}
         onCheck={() =>

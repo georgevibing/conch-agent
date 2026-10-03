@@ -83,6 +83,16 @@ export function registerChannelRoutes(
       if (!trusted(request, reply)) return reply;
       return door.useTailscale();
     });
+    app.post('/api/channels/door/address', async (request, reply) => {
+      if (!trusted(request, reply)) return reply;
+      try {
+        return await door.useConchAddress();
+      } catch (error) {
+        if (error instanceof DoorError)
+          return reply.code(409).send({ error: 'invalid', message: error.message });
+        throw error;
+      }
+    });
     app.put('/api/channels/door', async (request, reply) => {
       const body = parse(SetChannelDoorBody, request.body, reply);
       if (!body || !trusted(request, reply)) return reply;

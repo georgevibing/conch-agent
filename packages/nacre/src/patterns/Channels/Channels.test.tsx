@@ -400,6 +400,26 @@ describe('PublicDoor', () => {
     await expectAccessible(container);
   });
 
+  it('offers Conch’s own address first, when it has one (ADR 0064)', async () => {
+    const onConchAddress = vi.fn();
+    const { container } = renderNacre(
+      <PublicDoor
+        state="off"
+        apps={['Teams']}
+        conchAddress="https://conch.example.com"
+        onConchAddress={onConchAddress}
+        onTailscale={vi.fn()}
+        onOwn={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/Conch already answers at conch\.example\.com/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Use conch.example.com' }));
+    expect(onConchAddress).toHaveBeenCalled();
+    // Tailscale is still there, as the other way.
+    expect(screen.getByRole('button', { name: 'Turn on with Tailscale' })).toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
   it('takes an address of your own, from the keyboard', async () => {
     const onOwn = vi.fn();
     renderNacre(

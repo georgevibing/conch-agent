@@ -964,6 +964,11 @@ export class Services {
           fetch(door.localFor(String(url)), init),
       }),
       onHeal: (message) => void this.healed.note('channels', message),
+      // Read when asked, so the address (made further on) is always the current one.
+      conchAddress: () => {
+        const name = this.address.name();
+        return name && this.address.status().state === 'ready' ? `https://${name}` : undefined;
+      },
     });
     this.door = door;
     if (this.mockTeams) this.mockTeams.resolve = (url) => door.localFor(url);
@@ -1032,6 +1037,8 @@ export class Services {
     this.address.onChange((now) => {
       this.gate.hosts.setOwnAddress(this.address.name());
       this.broadcast.emit({ type: 'address.changed', address: now });
+      // Teams and WeChat's door can use it now (or can't any more).
+      door.addressChanged();
     });
     this.doctor.register(addressCheck(this.address));
     this.background = this.#background(config);
