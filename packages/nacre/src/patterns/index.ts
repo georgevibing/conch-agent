@@ -19,6 +19,7 @@ export * from './Safety';
 export * from './ScheduleEditor';
 export * from './RoutineCard';
 export * from './RunTimeline';
+export * from './RoutineSpending';
 export * from './FindBar';
 export * from './SearchPreview';
 export * from './Usage';

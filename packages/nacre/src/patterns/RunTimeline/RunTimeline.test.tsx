@@ -54,6 +54,31 @@ describe('RunTimeline', () => {
     expect(onOpen.mock.calls).toEqual([['a'], ['b']]);
   });
 
+  it('says what each run cost, and reads it out with the run (ADR 0057)', async () => {
+    const { container } = renderNacre(
+      <RunTimeline
+        runs={[
+          {
+            id: 'a',
+            status: 'succeeded',
+            at: now - 3_600_000,
+            trigger: 'schedule',
+            outcome: 'Sent your briefing.',
+            cost: '$0.61',
+          },
+        ]}
+        now={now}
+        timeZone="UTC"
+        onOpen={() => {}}
+      />,
+    );
+    expect(screen.getByText('$0.61')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Sent your briefing\. \(\$0\.61\)\. Open this run/ }),
+    ).toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
   it('has a calm empty state', () => {
     renderNacre(<RunTimeline runs={[]} />);
     expect(screen.getByText('No runs yet. The first one will appear here.')).toBeInTheDocument();

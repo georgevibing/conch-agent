@@ -50,6 +50,29 @@ describe('RoutineCard (list)', () => {
     expect(screen.getByText(new RegExp(`yesterday at ${time}$`))).toBeInTheDocument();
   });
 
+  it('says what it costs beside its schedule, on the page and in a chat (ADR 0057)', async () => {
+    const { container, rerender } = renderNacre(
+      <RoutineCard
+        {...base}
+        status="active"
+        cost={{ text: 'About $1.20 a month', billing: 'metered' }}
+        onOpen={() => {}}
+      />,
+    );
+    expect(screen.getByText('About $1.20 a month')).toBeInTheDocument();
+    await expectAccessible(container);
+    rerender(
+      <RoutineCard
+        {...base}
+        variant="proposal"
+        status="draft"
+        cost={{ text: 'Free on this computer', billing: 'free' }}
+        onActivate={() => {}}
+      />,
+    );
+    expect(screen.getByText('Free on this computer')).toBeInTheDocument();
+  });
+
   it('opens from the title and toggles without opening', async () => {
     const onOpen = vi.fn();
     const onToggle = vi.fn();

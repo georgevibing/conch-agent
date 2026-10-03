@@ -1,4 +1,14 @@
-import { CalendarClock, Check, Pause, Repeat, Sparkles, X } from 'lucide-react';
+import {
+  CalendarClock,
+  Check,
+  Coins,
+  Gauge,
+  Laptop,
+  Pause,
+  Repeat,
+  Sparkles,
+  X,
+} from 'lucide-react';
 import { useId, type ComponentProps, type ReactNode } from 'react';
 
 import { Button } from '../../components/Button';
@@ -17,6 +27,19 @@ export interface RoutineCardLastRun {
   outcome?: string;
 }
 
+/** What a routine costs, in Conch's own words (“About $1.20 a month”). */
+export interface RoutineCardCost {
+  text: string;
+  /** How it's paid for: picks the icon. */
+  billing?: 'free' | 'plan' | 'metered';
+}
+
+const costIcons = {
+  free: <Laptop aria-hidden />,
+  plan: <Gauge aria-hidden />,
+  metered: <Coins aria-hidden />,
+};
+
 export interface RoutineCardProps extends Omit<ComponentProps<'article'>, 'title' | 'onToggle'> {
   title: string;
   summary: string;
@@ -25,6 +48,8 @@ export interface RoutineCardProps extends Omit<ComponentProps<'article'>, 'title
   status: RoutineCardStatus;
   nextRunAt?: number;
   lastRun?: RoutineCardLastRun;
+  /** What it costs, shown beside its schedule. */
+  cost?: RoutineCardCost;
   icon?: ReactNode;
   /** `list` for the Routines page, `proposal` for the inline card Claude drafts in a chat. */
   variant?: 'list' | 'proposal';
@@ -85,6 +110,7 @@ export function RoutineCard({
   status,
   nextRunAt,
   lastRun,
+  cost,
   icon,
   variant = 'list',
   onOpen,
@@ -164,6 +190,12 @@ export function RoutineCard({
                 </span>
               </p>
             )}
+            {cost && status !== 'deleted' && (
+              <p className={cx(styles.schedule, styles.costLine)} data-cost={cost.billing}>
+                {costIcons[cost.billing ?? 'metered']}
+                <span>{cost.text}</span>
+              </p>
+            )}
           </div>
           {settled && status !== 'deleted' && onOpen && (
             <Button size="sm" variant="ghost" onClick={onOpen} className={styles.inlineOpen}>
@@ -226,6 +258,12 @@ export function RoutineCard({
             <CalendarClock aria-hidden />
             {scheduleText}
           </span>
+          {cost && (
+            <span className={styles.chip} data-cost={cost.billing}>
+              {costIcons[cost.billing ?? 'metered']}
+              {cost.text}
+            </span>
+          )}
           <span className={styles.dim}>
             {status === 'paused'
               ? 'Paused'

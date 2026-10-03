@@ -341,6 +341,13 @@
     color: var(--nc-text-accent);
   }
 
+  /* What it costs: a quieter line under the schedule. */
+  .costLine {
+    margin-block-start: 0;
+    color: var(--nc-text-muted);
+    font-weight: var(--nc-weight-regular);
+  }
+
   .schedule .dim {
     font-weight: var(--nc-weight-regular);
   }

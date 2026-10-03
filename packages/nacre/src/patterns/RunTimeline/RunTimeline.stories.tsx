@@ -72,3 +72,52 @@ export const History: Story = {
 export const Empty: Story = { args: { runs: [] } };
 
 export const ReadOnly: Story = { args: { onOpen: undefined } };
+
+/** What each run cost, and the runs a spending guard decided (ADR 0057). */
+export const Spending: Story = {
+  args: {
+    runs: [
+      {
+        id: 's1',
+        status: 'needs-you',
+        at: now - 1 * hour,
+        trigger: 'schedule',
+        outcome:
+          'This run stopped at its spending limit: it had used about $1.92, and a run may use $1.83.',
+        durationMs: 64_000,
+        cost: '$1.92',
+      },
+      {
+        id: 's2',
+        status: 'skipped',
+        at: now - 5 * hour,
+        trigger: 'schedule',
+        outcome:
+          'Waited so your own chats have room: your Claude Max plan is 84% used. It runs when it resets at 3:40 PM.',
+      },
+      {
+        id: 's3',
+        status: 'succeeded',
+        at: now - 26 * hour,
+        trigger: 'schedule',
+        outcome: 'Sent your briefing — 3 meetings, light rain after 4 PM.',
+        durationMs: 38_000,
+        cost: '$0.61',
+      },
+      {
+        id: 's4',
+        status: 'succeeded',
+        at: now - 50 * hour,
+        trigger: 'schedule',
+        outcome: 'Sent your briefing — a quiet day.',
+        durationMs: 31_000,
+        cost: '4% of your plan',
+      },
+    ],
+  },
+  render: (args) => (
+    <div style={{ maxInlineSize: '40rem' }}>
+      <RunTimeline {...args} />
+    </div>
+  ),
+};

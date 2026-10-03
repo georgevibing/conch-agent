@@ -37,6 +37,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {
   args: {
+    cost: { text: 'About $14 a month', billing: 'metered' },
     lastRun: {
       status: 'succeeded',
       at: now - 2 * hour,
@@ -63,6 +64,7 @@ export const List: Story = {
           status={states.a ? 'active' : 'paused'}
           nextRunAt={now + 16 * hour}
           icon={<Sunrise />}
+          cost={{ text: 'About $14 a month', billing: 'metered' }}
           lastRun={{
             status: 'succeeded',
             at: now - 2 * hour,
@@ -78,6 +80,7 @@ export const List: Story = {
           status={states.b ? 'active' : 'paused'}
           nextRunAt={now + 3 * 24 * hour}
           icon={<FolderInput />}
+          cost={{ text: 'About 3% of your Claude Max limit a run', billing: 'plan' }}
           lastRun={{
             status: 'needs-you',
             at: now - 20 * 60_000,
@@ -93,6 +96,7 @@ export const List: Story = {
           status={states.c ? 'active' : 'paused'}
           nextRunAt={now + 90 * 60_000}
           icon={<PersonStanding />}
+          cost={{ text: 'Free on this computer', billing: 'free' }}
           lastRun={{
             status: 'nothing-to-do',
             at: now - 26 * hour,
@@ -135,6 +139,7 @@ export const Proposal: Story = {
           status={status}
           nextRunAt={now + 16 * hour}
           icon={<Sunrise />}
+          cost={{ text: 'Roughly $18 a month', billing: 'metered' }}
           busy={busy}
           onActivate={() => {
             setBusy(true);

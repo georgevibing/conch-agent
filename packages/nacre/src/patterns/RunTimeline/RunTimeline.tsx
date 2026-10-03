@@ -16,6 +16,8 @@ export interface RunTimelineItem {
   outcome?: string;
   error?: string;
   durationMs?: number;
+  /** What it cost, in a few words: “$0.04”, “4% of your plan”, “Free”. */
+  cost?: string;
 }
 
 export interface RunTimelineProps extends Omit<ComponentProps<'div'>, 'children'> {
@@ -105,6 +107,7 @@ export function RunTimeline({
                       {run.durationMs !== undefined && run.status !== 'running' && (
                         <span className={styles.note}>{formatRunDuration(run.durationMs)}</span>
                       )}
+                      {run.cost && <span className={styles.note}>{run.cost}</span>}
                     </span>
                     <span className={styles.outcome} data-status={run.status}>
                       {runText(run)}
@@ -120,7 +123,7 @@ export function RunTimeline({
                       type="button"
                       className={styles.row}
                       onClick={() => onOpen(run.id)}
-                      aria-label={`${runStatusMeta[run.status].label} at ${formatTime(run.at, { timeZone })}: ${runText(run)}. Open this run.`}
+                      aria-label={`${runStatusMeta[run.status].label} at ${formatTime(run.at, { timeZone })}: ${runText(run)}${run.cost ? ` (${run.cost})` : ''}. Open this run.`}
                     >
                       {body}
                     </button>
