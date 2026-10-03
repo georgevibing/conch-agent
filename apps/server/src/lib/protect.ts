@@ -76,15 +76,20 @@ export const PROTECTED_MESSAGE =
  * - `skills sign|trust|forget|key`: signing with your key, or changing whose
  *   skills you trust, would let it vouch for its own skills (ADR 0047);
  * - `open`: hands out a link that makes a browser "this computer" (ADR 0063);
- * - `password`, `key`, `revoke`, `pair`, `reset`, `sign-out-everywhere` and
- *   `devices approve|on|off|reject|remove`: who may sign in, and from where.
+ * - `hello`: on a Conch nobody has claimed, a link whose opener owns it (ADR 0064);
+ * - `setup`, `address`, `phone`: where Conch can be reached from (ADR 0064, 0027);
+ * - `password`, `key`, `revoke`, `pair`, `reset`, `sign-out-everywhere`,
+ *   `passkeys remove` and `devices approve|on|off|reject|remove`: who may sign
+ *   in, and from where.
  *
- * The terminal commands open your keys the way the gateway does, so these are
- * the person's to type, never the assistant's. A fence for the obvious
- * spellings, not a box: protected paths and sealing still stand behind it.
+ * Whether it's typed `conch …` (the command the installer adds) or
+ * `pnpm conch …`, the terminal commands open your keys the way the gateway
+ * does, so these are the person's to type, never the assistant's. A fence for
+ * the obvious spellings, not a box: protected paths and sealing still stand
+ * behind it.
  */
 const CONCH_POWERS =
-  /\b(?:conch|cli\.[cm]?[jt]s)["']?\s+(?:skills\s+(?:sign|trust|forget|key)|devices\s+(?:approve|on|off|reject|remove)|open|password|key|revoke|pair|reset|sign-out-everywhere)\b/i;
+  /\b(?:conch|cli\.[cm]?[jt]s)["']?\s+(?:skills\s+(?:sign|trust|forget|key)|devices\s+(?:approve|on|off|reject|remove)|passkeys\s+remove|open|hello|setup|address|phone|password|key|revoke|pair|reset|sign-out-everywhere)\b/i;
 
 export function runsConchPower(toolName: string, input: unknown): boolean {
   if (toolName !== 'Bash') return false;

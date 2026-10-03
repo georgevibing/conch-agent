@@ -68,7 +68,7 @@ export function shimScript(options: {
   if (options.platform === 'win32') {
     return [
       '@echo off',
-      `rem ${SHIM_MARK}: runs Conch's command line. Made by Conch; conch shortcut remove takes it away.`,
+      `rem ${SHIM_MARK}: runs Conch's command line. Made by Conch; conch command off takes it away.`,
       'setlocal',
       `set "DIR=${options.installDir}"`,
       `if not defined CONCH_HOME set "CONCH_HOME=${options.conchHome}"`,
@@ -86,7 +86,7 @@ export function shimScript(options: {
   }
   return [
     '#!/bin/sh',
-    `# ${SHIM_MARK}: runs Conch's command line. Made by Conch; \`conch shortcut remove\` takes it away.`,
+    `# ${SHIM_MARK}: runs Conch's command line. Made by Conch; \`conch command off\` takes it away.`,
     `DIR=${sh(options.installDir)}`,
     `CONCH_HOME=\${CONCH_HOME:-${sh(options.conchHome)}}`,
     'export CONCH_HOME',
@@ -262,16 +262,21 @@ export function cliName(
   if (named && !fresh) return named as 'conch' | 'pnpm conch';
   const file = platform === 'win32' ? 'conch.cmd' : 'conch';
   const sep = platform === 'win32' ? ';' : ':';
-  const found = (env.PATH ?? env.Path ?? '')
-    .split(sep)
-    .filter(Boolean)
-    .some((dir) => {
-      try {
-        return readFileSync(join(dir, file), 'utf8').includes(SHIM_MARK);
-      } catch {
-        return false;
-      }
-    });
+  const ours = (path: string) => {
+    try {
+      return readFileSync(path, 'utf8').includes(SHIM_MARK);
+    } catch {
+      return false;
+    }
+  };
+  // On PATH here, or where Conch put it: a background Conch's PATH may not have the
+  // folder yet, but new terminals do (the profile line), and that's where people type.
+  const found =
+    (env.PATH ?? env.Path ?? '')
+      .split(sep)
+      .filter(Boolean)
+      .some((dir) => ours(join(dir, file))) ||
+    ours(shimPlace(platform, env.HOME ?? env.USERPROFILE ?? homedir(), env).file);
   named = found ? 'conch' : 'pnpm conch';
   return named as 'conch' | 'pnpm conch';
 }

@@ -39,6 +39,32 @@ describe('`pnpm conch` powers that are the person’s to use', () => {
       expect(bash(command), command).toBe(true);
   });
 
+  it('turns away the conch command the installer adds, and making or reaching a Conch (ADR 0064)', () => {
+    for (const command of [
+      // A hello link on an unclaimed Conch makes whoever opens it the owner.
+      'conch hello',
+      'pnpm conch hello',
+      '~/.local/bin/conch hello',
+      'conch setup --domain evil.example.com --yes',
+      'conch address set conch.example.com',
+      'conch address off',
+      'conch phone',
+      'conch passkeys remove pk_1',
+      'conch reset',
+      'conch devices approve K7M-Q2X',
+      'conch open --link',
+      'echo reset | conch reset',
+    ])
+      expect(bash(command), command).toBe(true);
+    for (const command of [
+      'conch status',
+      'conch passkeys',
+      'conch help setup',
+      'conch command on',
+    ])
+      expect(bash(command), command).toBe(false);
+  });
+
   it('leaves looking alone', () => {
     for (const command of [
       'pnpm conch status',
