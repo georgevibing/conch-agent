@@ -297,6 +297,11 @@ export const ConchAppTool = z.object({
   description: z.string().max(1000),
   /** It changes something (else it only looks). */
   changes: z.boolean(),
+  /**
+   * Its arguments, as the JSON Schema object the module declares (`input`).
+   * The runtime fills it in, so every model gets the tool's real arguments.
+   */
+  input: z.record(z.string(), z.unknown()).optional(),
 });
 export type ConchAppTool = z.infer<typeof ConchAppTool>;
 
@@ -354,6 +359,11 @@ export const ConchAppChanges = z.object({
   /** A tool that only looked now changes things. */
   toolsNowChange: z.array(z.string()).default([]),
   pagesAdded: z.array(z.string()).default([]),
+  /**
+   * It comes from another maker than the app you have (another source or
+   * signer): it replaces that app, and its settings and keys don't carry over.
+   */
+  otherMaker: z.boolean().optional(),
 });
 export type ConchAppChanges = z.infer<typeof ConchAppChanges>;
 
@@ -506,6 +516,8 @@ export const ConchAppFound = z.object({
   hash: z.string(),
   /** Why it can't be added, in words; empty when it can. */
   problems: z.array(AppCheckItem).default([]),
+  /** What to know before adding it, in words: it replaces an app from another maker. */
+  warnings: z.array(AppCheckItem).optional(),
   /** The version you have, when you have it. */
   installed: z.string().optional(),
   changes: ConchAppChanges.optional(),
