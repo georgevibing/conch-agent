@@ -16,7 +16,7 @@
  * Every message names the file (and the line where it can) and says what to
  * change, so the model that wrote the app can fix it.
  */
-import { AppToolName, ConchAppTool, type AppCheckItem } from '@conch/protocol';
+import { ConchAppToolName, ConchAppTool, type AppCheckItem } from '@conch/protocol';
 
 import { navigates } from '../artifacts/frame';
 import { scanText } from '../skills/scan';
@@ -299,7 +299,7 @@ function toolProblems(
   for (const d of definitions) {
     const name = quote(d.name);
     const before = problems.length;
-    if (!AppToolName.safeParse(d.name).success)
+    if (!ConchAppToolName.safeParse(d.name).success)
       problems.push({
         message: `The tool ${name} has a name Conch can’t use: lowercase letters, numbers and underscores, starting with a letter, at most 20 characters (like log_watering).`,
         file,

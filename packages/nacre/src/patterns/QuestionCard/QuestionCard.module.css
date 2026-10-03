@@ -4,7 +4,7 @@
     /* Never wider than the chat: the day strip slides instead. */
     grid-template-columns: minmax(0, 1fr);
     inline-size: 100%;
-    max-inline-size: 36rem;
+    max-inline-size: var(--nc-chat-card-width);
   }
 
   /* Answered: the card's rows close to nothing while it fades; the line takes its place. */
@@ -33,13 +33,11 @@
     flex-direction: column;
     gap: var(--nc-space-3);
     min-block-size: 0;
-    padding: var(--nc-space-3) var(--nc-space-3-5) var(--nc-space-3-5);
-    border-radius: var(--nc-radius-lg);
+    padding: var(--nc-chat-card-pad);
+    border-radius: var(--nc-chat-card-radius);
     corner-shape: var(--nc-corner-shape);
-    background: var(--nc-surface);
-    box-shadow:
-      var(--nc-glaze-edge),
-      inset 0 0 0 1px var(--nc-border-subtle);
+    background: var(--nc-chat-card-surface);
+    box-shadow: var(--nc-chat-card-shadow);
     animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
   }
 
@@ -61,15 +59,15 @@
   .header {
     display: flex;
     align-items: flex-start;
-    gap: var(--nc-space-2-5);
+    gap: var(--nc-space-3);
   }
 
   .mark {
     display: grid;
     flex: none;
     place-items: center;
-    inline-size: 1.75rem;
-    block-size: 1.75rem;
+    inline-size: var(--nc-chat-card-mark);
+    block-size: var(--nc-chat-card-mark);
     border-radius: var(--nc-radius-full);
     background: var(--nc-accent-3);
     color: var(--nc-accent-11);
@@ -338,11 +336,30 @@
     padding: 3px;
     overflow-x: auto;
     overscroll-behavior-x: contain;
-    scroll-snap-type: x proximity;
+    scroll-snap-type: x mandatory;
     scroll-padding-inline: 3px;
-    /* A day cut off at the edge fades, so it reads as "more this way". */
-    mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
     scrollbar-width: none;
+    --fade: 2.5rem;
+  }
+
+  /* More days that way: the edge fades, so it reads as "slide for more", and
+     only where there is more. */
+  .strip[data-more='end'] {
+    mask-image: linear-gradient(to right, #000 calc(100% - var(--fade)), transparent);
+  }
+
+  .strip[data-more='start'] {
+    mask-image: linear-gradient(to left, #000 calc(100% - var(--fade)), transparent);
+  }
+
+  .strip[data-more='start end'] {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 var(--fade),
+      #000 calc(100% - var(--fade)),
+      transparent
+    );
   }
 
   .strip::-webkit-scrollbar {
@@ -465,9 +482,29 @@
     inline-size: auto;
   }
 
-  /* The exact time, beside the ones to tap. */
+  /* “Another time…”: a chip like the slots, but quiet, since it's the way to
+     any other time rather than a time itself. */
+  .another {
+    background: transparent;
+    color: var(--nc-text-muted);
+    box-shadow: inset 0 0 0 1px var(--chip-border);
+  }
+
+  @media (hover: hover) {
+    .another:hover:not(:disabled) {
+      background: var(--nc-wash-1);
+      color: var(--nc-text);
+    }
+  }
+
+  /* The exact time, in place of “Another time…”. */
+  .exact {
+    display: contents;
+  }
+
   .timeRow .picker {
     inline-size: 7.5rem;
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
   }
 
   .number {
@@ -523,7 +560,7 @@
     row-gap: 0.125rem;
     margin: 0;
     padding-inline: var(--nc-space-1);
-    font-size: var(--nc-text-sm);
+    font-size: var(--nc-chat-note-size);
     line-height: var(--nc-leading-snug);
     color: var(--nc-text-muted);
     animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) both;
@@ -542,8 +579,8 @@
   .lineIcon {
     flex: none;
     align-self: center;
-    inline-size: 0.875rem;
-    block-size: 0.875rem;
+    inline-size: var(--nc-chat-note-icon);
+    block-size: var(--nc-chat-note-icon);
     color: var(--nc-text-subtle);
   }
 

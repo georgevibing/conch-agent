@@ -783,7 +783,6 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
             conversationId={conversationId}
             view={view}
             running={running || pending.length > 0}
-            className={styles.skillOffer}
           />
         }
       />

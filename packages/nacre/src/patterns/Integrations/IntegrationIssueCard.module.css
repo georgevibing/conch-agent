@@ -5,12 +5,16 @@
     display: flex;
     align-items: center;
     gap: var(--nc-space-3);
-    max-inline-size: 34rem;
-    padding: var(--nc-space-2-5) var(--nc-space-3);
-    border-radius: var(--nc-radius-lg);
+    max-inline-size: var(--nc-chat-card-width);
+    padding: var(--nc-chat-card-pad);
+    border-radius: var(--nc-chat-card-radius);
     corner-shape: var(--nc-corner-shape);
-    background: var(--nc-surface);
-    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--issue) 45%, transparent);
+    background: var(--nc-chat-card-surface);
+    /* The chat card's ring, in the colour of what's wrong. */
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--issue) 45%, transparent),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
     animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
   }
 
@@ -19,8 +23,7 @@
   }
 
   .card[data-resolved] {
-    --issue: var(--nc-border-subtle);
-    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    box-shadow: var(--nc-chat-card-shadow);
   }
 
   .text {
@@ -35,6 +38,7 @@
     margin: 0;
     font-size: var(--nc-text-sm);
     font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
     color: var(--nc-text);
   }
 
@@ -46,6 +50,7 @@
   .message {
     margin: 0;
     font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-snug);
     color: var(--nc-text-muted);
     text-wrap: pretty;
   }

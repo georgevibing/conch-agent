@@ -264,3 +264,50 @@ describe('looking through earlier chats', () => {
     });
   });
 });
+
+describe('a reply and what belongs to it (ADR 0060)', () => {
+  const calendar: TranscriptItem = {
+    kind: 'tool',
+    id: 't1',
+    name: 'mcp__conch__google_calendar_briefing',
+    input: { start: '2026-10-03', end: '2026-10-05' },
+    status: 'success',
+    startedAt: 3,
+  };
+  const more: TranscriptItem = {
+    kind: 'assistant',
+    id: 'm1#1',
+    messageId: 'm1',
+    continuation: true,
+    text: 'Two things today.',
+    thinking: '',
+    done: true,
+    startedAt: 4,
+  };
+  const ended: TranscriptItem = { kind: 'turn-end', id: 'end-1', outcome: 'success' };
+
+  it('draws its tool rows and words inside the reply, before its actions', () => {
+    show({ items: [user, assistant('Let me look.', true), calendar, more, ended] });
+    const reply = screen.getByRole('article', { name: 'Claude said:' });
+    const row = screen.getByRole('button', { name: /Looked at your calendar/ });
+    const copy = screen.getByRole('button', { name: 'Copy reply' });
+    expect(reply).toContainElement(row);
+    expect(reply).toHaveTextContent('Two things today.');
+    // Words, then the tool row, then the rest of the words, then Copy: one reply, one Copy.
+    expect(row.compareDocumentPosition(copy) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      screen.getByText('Two things today.').compareDocumentPosition(copy) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Copy reply' })).toHaveLength(1);
+  });
+
+  it('has no actions while any of it is still being written', () => {
+    show({
+      status: 'running',
+      items: [user, assistant('Let me look.', true), { ...calendar, status: 'running' }],
+    });
+    expect(screen.getByRole('button', { name: /Looking at your calendar/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copy reply' })).toBeNull();
+  });
+});

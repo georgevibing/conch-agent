@@ -69,7 +69,7 @@ const CALL_ID = /^[A-Za-z0-9_-]{1,32}$/;
  * this long could be what made it active, so it doesn't count as the page's.
  */
 const ACTIVATION_MS = 5000;
-/** An app's tool name (`AppToolName`). */
+/** An app's tool name (`ConchAppToolName`). */
 const TOOL = /^[a-z][a-z0-9_]{0,19}$/;
 
 /**

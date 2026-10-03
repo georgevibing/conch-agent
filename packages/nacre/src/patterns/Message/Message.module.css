@@ -1,6 +1,7 @@
 @layer nacre.components {
   .message {
-    --msg-gap: var(--nc-space-3);
+    /* The words start at `--nc-chat-inset`: the mark, then this gap. */
+    --msg-gap: calc(var(--nc-chat-inset) - var(--nc-chat-mark));
     position: relative;
     display: flex;
     gap: var(--msg-gap);
@@ -22,9 +23,10 @@
   }
 
   .main {
+    --msg-stack: var(--nc-space-1-5);
     display: flex;
     flex-direction: column;
-    gap: var(--nc-space-1-5);
+    gap: var(--msg-stack);
     min-inline-size: 0;
     flex: 1;
   }
@@ -68,8 +70,8 @@
     position: relative;
     display: inline-grid;
     place-items: center;
-    inline-size: 1.75rem;
-    block-size: 1.75rem;
+    inline-size: var(--nc-chat-mark);
+    block-size: var(--nc-chat-mark);
     border-radius: var(--nc-radius-sm);
     corner-shape: var(--nc-corner-shape);
     color: var(--nc-accent-contrast);
@@ -310,6 +312,30 @@
   .errorIcon {
     inline-size: 1rem;
     block-size: 1rem;
+  }
+
+  /* ── What belongs to the reply ────────────────────────────────────────
+     No box of its own: each part is a step of the message's own column, so
+     a part that folds away to nothing leaves no gap behind. A part sits
+     `--nc-chat-step` under what's above it with
+     `margin-block-start: calc(var(--nc-chat-step) - var(--nc-chat-flow-gap))`
+     and lines up with the words with `margin-inline-start: var(--nc-chat-indent)`.
+     On a narrow screen parts reach back to the mark's edge, as tool rows do. */
+  .attached {
+    display: contents;
+    --nc-chat-flow-gap: var(--msg-stack);
+    --nc-chat-indent: 0px;
+  }
+
+  @media (max-width: 640px) {
+    .attached {
+      --nc-chat-indent: calc(var(--nc-chat-inset) * -1);
+    }
+
+    /* …and the actions after them start where their words do. */
+    .attached ~ .actions {
+      margin-inline-start: calc(var(--nc-chat-inset) * -1 - var(--nc-space-2));
+    }
   }
 
   /* ── Actions ──────────────────────────────────────────────────────── */

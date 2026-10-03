@@ -7,14 +7,12 @@
     gap: var(--nc-space-3);
     inline-size: 100%;
     max-inline-size: 28rem;
-    padding: var(--nc-space-2-5) var(--nc-space-3);
+    padding: var(--nc-chat-card-pad);
     border: 0;
-    border-radius: var(--nc-radius-lg);
+    border-radius: var(--nc-chat-card-radius);
     corner-shape: var(--nc-corner-shape);
-    background: var(--nc-surface);
-    box-shadow:
-      inset 0 0 0 1px var(--nc-border-subtle),
-      var(--nc-elevation-1);
+    background: var(--nc-chat-card-surface);
+    box-shadow: var(--nc-chat-card-shadow);
     color: inherit;
     font: inherit;
     text-align: start;
@@ -98,15 +96,19 @@
     display: grid;
     flex: none;
     place-items: center;
-    inline-size: var(--nc-control-md);
-    block-size: var(--nc-control-md);
-    border-radius: var(--nc-radius-md);
+    inline-size: var(--nc-chat-card-mark);
+    block-size: var(--nc-chat-card-mark);
+    border-radius: var(--nc-radius-sm);
     corner-shape: var(--nc-corner-shape);
     background: var(--nc-accent-3);
     color: var(--nc-accent-11);
   }
 
-  .cardIcon svg,
+  .cardIcon svg {
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
+  }
+
   .panelIcon svg {
     inline-size: 1.125rem;
     block-size: 1.125rem;
@@ -124,7 +126,9 @@
     align-items: center;
     gap: var(--nc-space-1);
     overflow: hidden;
-    font-weight: var(--nc-weight-medium);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
     white-space: nowrap;
     text-overflow: ellipsis;
   }

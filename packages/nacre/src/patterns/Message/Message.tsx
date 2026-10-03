@@ -16,6 +16,14 @@ export interface MessageProps extends Omit<ComponentProps<'article'>, 'children'
   /** Custom avatar for assistant messages. Defaults to the pearl mark. */
   avatar?: ReactNode;
   timestamp?: Date | string;
+  /**
+   * What belongs to the reply after its words: tool rows, a plan, a question,
+   * an offer, replies to send next. Drawn in the text column one step under
+   * the words (`--nc-chat-step`) and before the actions, so the actions
+   * never sit between the words and their card. Each part places itself with
+   * `--nc-chat-flow-gap` and `--nc-chat-indent`, which the slot sets.
+   */
+  attached?: ReactNode;
   /** Action bar (copy, retry, …) revealed on hover / focus. Use small ghost IconButtons. */
   actions?: ReactNode;
   /** `hover` (default) reveals actions on hover/focus; `always` keeps them visible. */
@@ -92,6 +100,7 @@ export function Message({
   author,
   avatar,
   timestamp,
+  attached,
   actions,
   actionsVisibility = 'hover',
   status = 'complete',
@@ -144,6 +153,11 @@ export function Message({
               Retry
             </Button>
           )}
+        </div>
+      )}
+      {attached != null && (
+        <div className={styles.attached} data-attached="">
+          {attached}
         </div>
       )}
       {actions && status !== 'streaming' && (

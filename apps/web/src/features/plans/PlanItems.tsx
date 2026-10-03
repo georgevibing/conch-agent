@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { TranscriptItem } from '../../live/reducer';
 import { Markdown } from '../chat/Markdown';
-import styles from './Plans.module.css';
 
 type Of<K extends TranscriptItem['kind']> = Extract<TranscriptItem, { kind: K }>;
 
@@ -12,14 +11,7 @@ type Of<K extends TranscriptItem['kind']> = Extract<TranscriptItem, { kind: K }>
  * works. Once the turn ends it folds to one line, “Plan · 5 of 5 done”.
  */
 export function PlanItem({ item, ended }: { item: Of<'plan'>; ended: boolean }) {
-  return (
-    <PlanChecklist
-      data-anchor={item.id}
-      steps={item.steps}
-      folded={ended}
-      className={styles.plan}
-    />
-  );
+  return <PlanChecklist data-anchor={item.id} steps={item.steps} folded={ended} />;
 }
 
 /** Plan mode's question: the tool that asks to leave it (Claude Code's `ExitPlanMode`). */
@@ -86,7 +78,6 @@ export function PlanApprovalItem({
         onRespond('deny');
         focusComposer?.();
       }}
-      className={styles.approval}
     >
       {text && <Markdown text={text} />}
     </PlanApproval>

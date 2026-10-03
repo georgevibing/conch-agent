@@ -165,7 +165,7 @@ export const AppId = z
 export type AppId = z.infer<typeof AppId>;
 
 /** A tool's own name inside its app. */
-export const AppToolName = z
+export const ConchAppToolName = z
   .string()
   .min(1)
   .max(20)
@@ -292,7 +292,7 @@ export const appToolName = (app: string, tool: string) =>
 
 /** One of an app's tools, as its sealed runtime listed it. */
 export const ConchAppTool = z.object({
-  name: AppToolName,
+  name: ConchAppToolName,
   title: z.string().max(80),
   description: z.string().max(1000),
   /** It changes something (else it only looks). */
@@ -625,7 +625,7 @@ export type PublishState = z.infer<typeof PublishState>;
 /** A page calling its own app's tool (`conch.call`), through the panel. */
 export const AppCallBody = z
   .object({
-    tool: AppToolName,
+    tool: ConchAppToolName,
     input: z.record(z.string(), z.unknown()).default({}),
     /** The person pressed something in the page, or said yes: a change may go. */
     confirmed: z.boolean().default(false),

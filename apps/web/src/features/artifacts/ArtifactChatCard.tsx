@@ -3,7 +3,6 @@ import { ArtifactCard } from '@conch/nacre';
 import { useUi } from '../../app/ui';
 import type { TranscriptItem } from '../../live/reducer';
 import { ArtifactGlance, GLANCEABLE, useNearScreen } from './ArtifactGlance';
-import styles from './Artifacts.module.css';
 import { useArtifacts } from './queries';
 
 /**
@@ -28,7 +27,7 @@ export function ArtifactChatCard({
   const [ref, near] = useNearScreen<HTMLDivElement>();
   const gone = data !== undefined && !artifact;
   return (
-    <div className={styles.chatCard} ref={ref}>
+    <div ref={ref}>
       <ArtifactCard
         title={artifact?.title ?? item.title}
         kind={item.artifactKind}

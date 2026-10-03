@@ -11,7 +11,8 @@ Your chats are in the sidebar, newest first, grouped by day. Point at one and pr
 Sometimes your assistant needs your choice before it can go on: which day suits you, how you'd like to talk, how many people are coming. It asks with a card in the chat, and the reply waits for you.
 
 - Tap an answer. A question with one set of options goes as soon as you choose. Anything more has **Send**.
-- Pick a day from the row of days, or **Pick a date** for another. Times, numbers and a few words work the same way.
+- Pick a day from the row of days, or **Pick a date** for another. On a phone the row slides sideways for more days.
+- Pick a time from the few it suggests, or **Another time…** for any other. Numbers and a few words work the same way.
 - **Something else…** lets you write your own answer.
 - Or type your answer in the message box. While a question waits, it says **Answer above, or type it here**.
 - **Skip** lets your assistant carry on with its best guess. It tells you what it assumed.

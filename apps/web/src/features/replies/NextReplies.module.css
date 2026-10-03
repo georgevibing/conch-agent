@@ -1,8 +1,0 @@
-@layer nacre.components {
-  /* Under the reply they answer, lined up with its words (past the assistant's mark and the
-     gap beside it) at every width, and a little closer than the next message. */
-  .replies {
-    margin-block-start: calc(var(--nc-space-3) * -1);
-    margin-inline-start: calc(1.75rem + var(--nc-space-3));
-  }
-}

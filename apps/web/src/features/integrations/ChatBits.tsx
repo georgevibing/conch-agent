@@ -1,4 +1,6 @@
+import { appToolLine, type ToolView } from '@conch/protocol';
 import { AppIcon, humanizeTool, IntegrationIssueCard, IntegrationLogo } from '@conch/nacre';
+import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
 import type { TranscriptItem } from '../../live/reducer';
@@ -39,10 +41,6 @@ export function IntegrationIssue({ item }: { item: Issue }) {
   );
 }
 
-/**
- * The tool-row label for an integration's tool: its logo and name instead
- * of `mcp__notion__…`. Undefined for anything that isn't a connected integration.
- */
 /** The steps of making an app (ADR 0061), as the chat says them. */
 const MAKER_STEPS: Record<string, string> = {
   app_new: 'Starting the app',
@@ -57,22 +55,48 @@ const MAKER_STEPS: Record<string, string> = {
   app_share: 'Getting it ready to share',
 };
 
+/**
+ * The tool-row label for an app's tool: its logo and what it did, instead of
+ * `mcp__notion__…`. Conch's own apps (Google, Slack) always say it in a
+ * person's words, connected or not (`@conch/protocol` `appToolLine`):
+ * "Looked at your calendar", "Read #design". Any other app shows its logo and
+ * name while it's connected. Undefined for everything else.
+ */
 export function useToolLabel() {
   const { data } = useIntegrations();
   const { data: made } = useConchApps();
-  return (toolName: string) => {
+  return (
+    toolName: string,
+    call: { running: boolean; input?: unknown; view?: ToolView | undefined } = { running: false },
+  ): { title: string; leading: ReactNode; summary?: string } | undefined => {
+    const own = appToolLine(toolName, call);
+    if (own) {
+      const entry = data?.catalog.find((c) => c.id === own.app);
+      return {
+        title: own.title,
+        ...(own.summary && { summary: own.summary }),
+        leading: (
+          <IntegrationLogo
+            brand={own.app}
+            name={entry?.name ?? own.app}
+            color={entry?.color}
+            size="xs"
+          />
+        ),
+      };
+    }
     const match = /^mcp__([a-z0-9_-]+?)__(.+)$/.exec(toolName);
     if (!match) return undefined;
     if (match[1] === 'conch') {
       const step = MAKER_STEPS[match[2] ?? ''];
       if (step) return { title: step, leading: undefined };
       // An app you made or added: its icon and name, like any app's call.
-      const own = /^app_([a-z0-9_]+?)__([a-z0-9_]+)$/.exec(match[2] ?? '');
-      const app = own && made?.find((a) => a.id === own[1]?.replaceAll('_', '-'));
-      if (own && app) {
-        const tool = app.tools.find((t) => t.name === own[2]);
+      const mine = /^app_([a-z0-9_]+?)__([a-z0-9_]+)$/.exec(match[2] ?? '');
+      const app = mine && made?.find((a) => a.id === mine[1]?.replaceAll('_', '-'));
+      if (mine && app) {
+        const tool = app.tools.find((t) => t.name === mine[2]);
         return {
-          title: tool?.title || humanizeTool(own[2] ?? ''),
+          title: tool?.title || humanizeTool(mine[2] ?? ''),
           leading: (
             <span className={styles.toolLabel}>
               <AppIcon glyph={app.manifest.icon.glyph} color={app.manifest.icon.color} size="xs" />
@@ -82,7 +106,7 @@ export function useToolLabel() {
         };
       }
     }
-    // Conch's own apps (Google, Slack) run as Conch's tools: found by the tool's name.
+    // Conch's other tools of its own (`ask`, `offer`…) are found by the tool's name.
     const integration =
       match[1] === 'conch'
         ? data?.integrations.find((i) => i.tools.some((t) => t.name === match[2]))
@@ -93,7 +117,7 @@ export function useToolLabel() {
         : undefined;
     const tool = integration.tools.find((t) => t.name === match[2]);
     const entry = data?.catalog.find((c) => c.id === integration.catalogId);
-    const prefix = new RegExp(`^${integration.server.replace(/[-_]\d+$/, '')}[-_]`, 'i');
+    const prefix = new RegExp(`^${integration.server.replace(/[-_]d+$/, '')}[-_]`, 'i');
     return {
       title: tool?.title ?? humanizeTool((match[2] ?? '').replace(prefix, '')),
       leading: (

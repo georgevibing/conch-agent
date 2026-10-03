@@ -7,7 +7,10 @@ import { Stack } from '../../components/Stack';
 import { CopyButton } from '../CopyButton';
 import { sampleReply } from '../fixtures';
 import { Prose } from '../Prose';
+import { ReplyChips } from '../ReplyChips';
+import { ToolCall } from '../ToolCall';
 import { StreamingText } from '../StreamingText';
+import type { CSSProperties } from 'react';
 import { Message } from './Message';
 
 const at = new Date('2026-09-29T10:42:00');
@@ -126,5 +129,52 @@ export const Thread: Story = {
         </Prose>
       </Message>
     </Stack>
+  ),
+};
+
+/** How a part of a reply places itself (the web's `.part`): a step under what's above, lined up with the words. */
+const part: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  marginBlockStart: 'calc(var(--nc-chat-step) - var(--nc-chat-flow-gap))',
+  marginInlineStart: 'var(--nc-chat-indent)',
+};
+
+/**
+ * What belongs to the reply goes in `attached`: its tool rows, its cards, the
+ * replies to send next. They sit one step under the words, in the text column,
+ * and the actions come after them, so nothing hidden ever sits between the
+ * words and their card. Hover the reply to see the actions under the chips.
+ */
+export const WithWhatBelongsToIt: Story = {
+  render: () => (
+    <Message
+      from="assistant"
+      author="Conch"
+      timestamp={at}
+      actions={assistantActions}
+      attached={
+        <>
+          <div style={part}>
+            <ToolCall name="Looked at your calendar" summary="Today and tomorrow" duration={420} />
+          </div>
+          <div style={part}>
+            <Prose>
+              <p>Standup at 9:30, then the design review at 2. Tomorrow is the offsite.</p>
+            </Prose>
+          </div>
+          <div style={part}>
+            <ReplyChips
+              replies={[{ text: 'Move the design review' }, { text: 'What’s on Friday?' }]}
+              onSend={fn()}
+            />
+          </div>
+        </>
+      }
+    >
+      <Prose>
+        <p>Let me look at your calendar.</p>
+      </Prose>
+    </Message>
   ),
 };

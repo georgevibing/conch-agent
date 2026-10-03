@@ -20,13 +20,13 @@ import {
 } from './TranscriptItems';
 import { BrowserApprovalItem, BrowserTrailItem, HandoffItem } from '../browser/ChatCards';
 import { IntegrationIssue } from '../integrations/ChatBits';
+import { AppOfferItem, AppShareItem } from '../conchapps/ChatCards';
 import { OfferAlsoTryItem, OfferItem } from '../offers/OfferItem';
 import { NeedsAppsItem } from './NeedsApps';
 import { QuestionItem } from '../questions/QuestionItem';
 import { PastChatsItem } from './PastChatsItem';
 import { HeldItem, RoutedItem } from './OfflineBits';
 import { ArtifactChatCard } from '../artifacts/ArtifactChatCard';
-import { AppOfferItem, AppShareItem } from '../conchapps/ChatCards';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
 import { ChatFiles, turnChanges } from '../undo/ChatFiles';
 import { TaskChatCard } from '../tasks/TaskChatCard';
@@ -150,6 +150,64 @@ function planBefore(items: TranscriptItem[], id: string) {
   return plan?.kind === 'plan' ? plan.steps : undefined;
 }
 
+/** A reply: its first words, and everything after them until the next turn (its parts). */
+interface Reply {
+  head: Block;
+  parts: Block[];
+}
+
+/**
+ * Gathers each reply with what belongs to it, so it's drawn as one: its
+ * words, then its tool rows, more words and cards, then its actions. A turn
+ * that stopped or failed, or a summary line, ends the reply too.
+ */
+function replies(all: Block[]): (Block | Reply)[] {
+  const out: (Block | Reply)[] = [];
+  let open: Reply | undefined;
+  for (const block of all) {
+    const item = block.item;
+    // A turn that ended well says nothing, so the reply goes on to what comes after it (chips).
+    const ended = item?.kind === 'turn-end' && item.outcome !== 'success';
+    if (item && (isTurnStart(item) || ended || item.kind === 'summary')) {
+      open = undefined;
+    } else if (item?.kind === 'assistant' && !item.continuation) {
+      // A reply with nothing to show yet (hidden reasoning) has no column to hold its parts.
+      open = item.text || item.thinking ? { head: block, parts: [] } : undefined;
+      out.push(open ?? block);
+      continue;
+    } else if (open) {
+      open.parts.push(block);
+      continue;
+    }
+    out.push(block);
+  }
+  return out;
+}
+
+/** Everything but a message, the line where a turn ended and a summary is part of a reply. */
+const isPart = (block: Block) =>
+  !block.item ||
+  !(
+    block.item.kind === 'user' ||
+    block.item.kind === 'turn-end' ||
+    block.item.kind === 'summary' ||
+    (block.item.kind === 'assistant' && !block.item.continuation)
+  );
+
+/** A reply's words, all of them, once every part has finished: what Copy takes. */
+function saidIn(reply: Reply): string | undefined {
+  const words = [reply.head, ...reply.parts]
+    .map((b) => b.item)
+    .filter((i): i is Extract<TranscriptItem, { kind: 'assistant' }> => i?.kind === 'assistant');
+  if (words.some((w) => !w.done)) return undefined;
+  return (
+    words
+      .map((w) => w.text.trim())
+      .filter(Boolean)
+      .join('\n\n') || undefined
+  );
+}
+
 function timeOf(item: TranscriptItem): number | undefined {
   if (item.kind === 'user') return item.at;
   if (item.kind === 'assistant' || item.kind === 'tool') return item.startedAt;
@@ -269,195 +327,221 @@ export function Transcript({
       (last?.kind === 'question' && last.answer !== undefined) ||
       (last?.kind === 'assistant' && last.done));
 
+  const rows = replies(blocks(placeSuggestions(withoutPlanTools(items), turnRunning)));
+  const lastRow = rows.at(-1);
+  const live = (block: Block) => block.at >= openedAt - CLOCK_SLACK_MS;
+  // What comes after the latest reply, once it's over: drawn as parts of it when it's a reply.
+  const tail = {
+    alsoTry: alsoTry && onSend && <OfferAlsoTryItem target={alsoTry} onSend={onSend} />,
+    replies: onReply && (
+      <NextReplies view={view} waiting={pending.length > 0} openedAt={openedAt} onSend={onReply} />
+    ),
+    footer,
+  };
+  const tailParts = (
+    <>
+      {tail.alsoTry && <div className={styles.part}>{tail.alsoTry}</div>}
+      {tail.replies && <div className={styles.part}>{tail.replies}</div>}
+      {tail.footer && <div className={styles.part}>{tail.footer}</div>}
+    </>
+  );
+  const tailAttached = lastRow !== undefined && 'head' in lastRow;
+
+  const render = (block: Block, rest?: Reply) => (
+    <>
+      {block.tools && (
+        <div className={styles.tools}>
+          {block.tools.map((t) => (
+            <ToolItem key={t.id} item={t} />
+          ))}
+        </div>
+      )}
+      {block.item?.kind === 'user' &&
+        (block.item.id === firstUserId ? (
+          <RoutineInstruction text={block.item.text} />
+        ) : (
+          <UserMessage item={block.item} />
+        ))}
+      {block.item?.kind === 'assistant' && (
+        <AssistantMessage
+          item={block.item}
+          name={name}
+          wait={busy ? wait : undefined}
+          entrance={!(running && items.indexOf(block.item) > turnStart)}
+          {...(rest && {
+            attached: (
+              <>
+                {rest.parts.map((part) => (
+                  <Arrival key={part.key} live={live(part)} part>
+                    {render(part)}
+                  </Arrival>
+                ))}
+                {rest === lastRow && tailParts}
+              </>
+            ),
+            said: rest === lastRow && turnRunning ? undefined : saidIn(rest),
+          })}
+        />
+      )}
+      {block.browser && conversationId && (
+        <div className={styles.tools}>
+          <BrowserTrailItem conversationId={conversationId} steps={block.browser} />
+        </div>
+      )}
+      {block.item?.kind === 'handoff' && conversationId && (
+        <HandoffItem conversationId={conversationId} item={block.item} name={name} />
+      )}
+      {block.item?.kind === 'permission' && block.item.browser && conversationId && (
+        <BrowserApprovalItem
+          conversationId={conversationId}
+          item={block.item}
+          name={name}
+          onRespond={(d) => onRespond((block.item as { id: string }).id, d)}
+        />
+      )}
+      {block.item?.kind === 'permission' && block.item.vault && (
+        <VaultApprovalItem
+          item={block.item}
+          name={name}
+          onRespond={(d) => onRespond((block.item as { id: string }).id, d)}
+        />
+      )}
+      {block.item?.kind === 'vault-request' && <VaultRequestItem item={block.item} name={name} />}
+      {block.item?.kind === 'plan' && (
+        <PlanItem item={block.item} ended={ended.has(block.item.id)} />
+      )}
+      {block.item && isPlanApproval(block.item) && block.item.kind === 'permission' && (
+        <PlanApprovalItem
+          item={block.item}
+          name={name}
+          steps={planBefore(items, block.item.id)}
+          onRespond={(d) => onRespond((block.item as { id: string }).id, d)}
+          focusComposer={focusComposer}
+        />
+      )}
+      {block.item?.kind === 'question' && (
+        <QuestionItem
+          item={block.item}
+          conversationId={conversationId}
+          name={name}
+          waiting={running}
+        />
+      )}
+      {block.item?.kind === 'permission' &&
+        !block.item.browser &&
+        !block.item.vault &&
+        !isPlanApproval(block.item) && (
+          <PermissionCard
+            item={block.item}
+            name={name}
+            onRespond={(d) => onRespond((block.item as { id: string }).id, d)}
+          />
+        )}
+      {block.item?.kind === 'taint' && (
+        <TaintItem item={block.item} first={block.item.id === firstTaint} />
+      )}
+      {block.item?.kind === 'files' && (
+        <ChatFiles
+          item={block.item}
+          turn={turnRunning && block.item.id === lastFilesId ? undefined : turns.get(block.item.id)}
+        />
+      )}
+      {block.item?.kind === 'memory' && <MemoryPill item={block.item} />}
+      {block.item?.kind === 'looked' && <PastChatsItem item={block.item} name={name} />}
+      {block.item?.kind === 'skill' && (
+        <SkillUsedLine item={block.item} carriedFrom={taskChat ? 'chat' : 'helper'} />
+      )}
+      {block.item?.kind === 'skill-ended' && (
+        <SkillHoldEnded title={block.item.title} className={styles.skillUsed} />
+      )}
+      {block.item?.kind === 'routine' && (
+        <RoutineChatCard
+          routineId={block.item.routineId}
+          title={block.item.title}
+          action={block.item.action}
+        />
+      )}
+      {block.item?.kind === 'artifact' && conversationId && (
+        <ArtifactChatCard conversationId={conversationId} item={block.item} />
+      )}
+      {block.item?.kind === 'task' && (
+        <TaskChatCard
+          taskId={block.item.taskId}
+          title={block.item.title}
+          kind={block.item.taskKind}
+          state={block.item.state}
+          summary={block.item.summary}
+        />
+      )}
+      {block.item?.kind === 'integration-issue' && <IntegrationIssue item={block.item} />}
+      {block.item?.kind === 'held' && (
+        <HeldItem item={block.item} conversationId={conversationId} />
+      )}
+      {block.item?.kind === 'routed' && <RoutedItem item={block.item} />}
+      {block.item?.kind === 'summary' && (
+        <SummaryDivider
+          model={block.item.model}
+          summary={block.item.summary}
+          className={styles.summary}
+        />
+      )}
+      {block.item?.kind === 'needs-apps' && (
+        <NeedsAppsItem item={block.item} conversationId={conversationId} />
+      )}
+      {block.item?.kind === 'offer' && (
+        <OfferItem
+          item={block.item}
+          conversationId={conversationId}
+          onAskAgain={
+            // An older offer: only for the latest question, and not while a reply is being written.
+            !turnRunning && block.item.askedIn && block.item.askedIn === lastUserId
+              ? () => onAskAgain?.((block.item as { askedIn: string }).askedIn)
+              : undefined
+          }
+          focusComposer={focusComposer}
+        />
+      )}
+      {block.item?.kind === 'conch-app-offer' && (
+        <AppOfferItem
+          item={block.item}
+          conversationId={conversationId}
+          onSend={onReply ?? onSend}
+        />
+      )}
+      {block.item?.kind === 'conch-app-share' && <AppShareItem item={block.item} />}
+      {block.item?.kind === 'turn-end' && (
+        <TurnEnd
+          item={block.item}
+          onRetry={block.item.id === lastErrorId && !running ? onRetry : undefined}
+          recover={block.item.id === lastErrorId && !running ? recover : undefined}
+        />
+      )}
+    </>
+  );
+
   return (
     <MessageList className={styles.list} aria-label="Conversation" overlay={overlay}>
       <div ref={columnRef} className={styles.column}>
-        {blocks(placeSuggestions(withoutPlanTools(items), turnRunning)).map((block) => (
-          <Arrival key={block.key} live={block.at >= openedAt - CLOCK_SLACK_MS}>
-            {block.tools && (
-              <div className={styles.tools}>
-                {block.tools.map((t) => (
-                  <ToolItem key={t.id} item={t} />
-                ))}
-              </div>
-            )}
-            {block.item?.kind === 'user' &&
-              (block.item.id === firstUserId ? (
-                <RoutineInstruction text={block.item.text} />
-              ) : (
-                <UserMessage item={block.item} />
-              ))}
-            {block.item?.kind === 'assistant' && (
-              <AssistantMessage
-                item={block.item}
-                name={name}
-                wait={busy ? wait : undefined}
-                entrance={!(running && items.indexOf(block.item) > turnStart)}
-              />
-            )}
-            {block.browser && conversationId && (
-              <div className={styles.tools}>
-                <BrowserTrailItem conversationId={conversationId} steps={block.browser} />
-              </div>
-            )}
-            {block.item?.kind === 'handoff' && conversationId && (
-              <HandoffItem conversationId={conversationId} item={block.item} name={name} />
-            )}
-            {block.item?.kind === 'permission' && block.item.browser && conversationId && (
-              <BrowserApprovalItem
-                conversationId={conversationId}
-                item={block.item}
-                name={name}
-                onRespond={(d) => onRespond((block.item as { id: string }).id, d)}
-              />
-            )}
-            {block.item?.kind === 'permission' && block.item.vault && (
-              <VaultApprovalItem
-                item={block.item}
-                name={name}
-                onRespond={(d) => onRespond((block.item as { id: string }).id, d)}
-              />
-            )}
-            {block.item?.kind === 'vault-request' && (
-              <VaultRequestItem item={block.item} name={name} />
-            )}
-            {block.item?.kind === 'plan' && (
-              <PlanItem item={block.item} ended={ended.has(block.item.id)} />
-            )}
-            {block.item && isPlanApproval(block.item) && block.item.kind === 'permission' && (
-              <PlanApprovalItem
-                item={block.item}
-                name={name}
-                steps={planBefore(items, block.item.id)}
-                onRespond={(d) => onRespond((block.item as { id: string }).id, d)}
-                focusComposer={focusComposer}
-              />
-            )}
-            {block.item?.kind === 'question' && (
-              <QuestionItem
-                item={block.item}
-                conversationId={conversationId}
-                name={name}
-                waiting={running}
-              />
-            )}
-            {block.item?.kind === 'permission' &&
-              !block.item.browser &&
-              !block.item.vault &&
-              !isPlanApproval(block.item) && (
-                <PermissionCard
-                  item={block.item}
-                  name={name}
-                  onRespond={(d) => onRespond((block.item as { id: string }).id, d)}
-                />
-              )}
-            {block.item?.kind === 'taint' && (
-              <TaintItem item={block.item} first={block.item.id === firstTaint} />
-            )}
-            {block.item?.kind === 'files' && (
-              <ChatFiles
-                item={block.item}
-                turn={
-                  turnRunning && block.item.id === lastFilesId
-                    ? undefined
-                    : turns.get(block.item.id)
-                }
-              />
-            )}
-            {block.item?.kind === 'memory' && <MemoryPill item={block.item} />}
-            {block.item?.kind === 'looked' && <PastChatsItem item={block.item} name={name} />}
-            {block.item?.kind === 'skill' && (
-              <SkillUsedLine item={block.item} carriedFrom={taskChat ? 'chat' : 'helper'} />
-            )}
-            {block.item?.kind === 'skill-ended' && (
-              <SkillHoldEnded title={block.item.title} className={styles.skillUsed} />
-            )}
-            {block.item?.kind === 'routine' && (
-              <RoutineChatCard
-                routineId={block.item.routineId}
-                title={block.item.title}
-                action={block.item.action}
-              />
-            )}
-            {block.item?.kind === 'artifact' && conversationId && (
-              <ArtifactChatCard conversationId={conversationId} item={block.item} />
-            )}
-            {block.item?.kind === 'task' && (
-              <TaskChatCard
-                taskId={block.item.taskId}
-                title={block.item.title}
-                kind={block.item.taskKind}
-                state={block.item.state}
-                summary={block.item.summary}
-              />
-            )}
-            {block.item?.kind === 'integration-issue' && <IntegrationIssue item={block.item} />}
-            {block.item?.kind === 'held' && (
-              <HeldItem item={block.item} conversationId={conversationId} />
-            )}
-            {block.item?.kind === 'routed' && <RoutedItem item={block.item} />}
-            {block.item?.kind === 'summary' && (
-              <SummaryDivider
-                model={block.item.model}
-                summary={block.item.summary}
-                className={styles.summary}
-              />
-            )}
-            {block.item?.kind === 'needs-apps' && (
-              <NeedsAppsItem item={block.item} conversationId={conversationId} />
-            )}
-            {block.item?.kind === 'offer' && (
-              <OfferItem
-                item={block.item}
-                conversationId={conversationId}
-                className={styles.suggestion}
-                onAskAgain={
-                  // An older offer: only for the latest question, and not while a reply is being written.
-                  !turnRunning && block.item.askedIn && block.item.askedIn === lastUserId
-                    ? () => onAskAgain?.((block.item as { askedIn: string }).askedIn)
-                    : undefined
-                }
-                focusComposer={focusComposer}
-              />
-            )}
-            {block.item?.kind === 'conch-app-offer' && (
-              <AppOfferItem
-                item={block.item}
-                conversationId={conversationId}
-                onSend={onReply ?? onSend}
-                className={styles.suggestion}
-              />
-            )}
-            {block.item?.kind === 'conch-app-share' && (
-              <AppShareItem item={block.item} className={styles.suggestion} />
-            )}
-            {block.item?.kind === 'turn-end' && (
-              <TurnEnd
-                item={block.item}
-                onRetry={block.item.id === lastErrorId && !running ? onRetry : undefined}
-                recover={block.item.id === lastErrorId && !running ? recover : undefined}
-              />
-            )}
-          </Arrival>
-        ))}
-        {placeholder && <AssistantPlaceholder name={name} wait={wait} />}
-        {alsoTry && onSend && (
-          <OfferAlsoTryItem target={alsoTry} onSend={onSend} className={styles.alsoTry} />
+        {rows.map((row) =>
+          'head' in row ? (
+            <Arrival key={row.head.key} live={live(row.head)}>
+              {render(row.head, row)}
+            </Arrival>
+          ) : (
+            <Arrival key={row.key} live={live(row)} part={isPart(row)}>
+              {render(row)}
+            </Arrival>
+          ),
         )}
+        {placeholder && <AssistantPlaceholder name={name} wait={wait} />}
+        {!tailAttached && tail.alsoTry && <div className={styles.part}>{tail.alsoTry}</div>}
         {between && (
-          <div className={styles.between}>
+          <div className={`${styles.part} ${styles.between}`}>
             <Waiting wait={afterTool} compact />
           </div>
         )}
-        {onReply && (
-          <NextReplies
-            view={view}
-            waiting={pending.length > 0}
-            openedAt={openedAt}
-            onSend={onReply}
-          />
-        )}
-        {footer}
+        {!tailAttached && tail.replies && <div className={styles.part}>{tail.replies}</div>}
+        {!tailAttached && tail.footer && <div className={styles.part}>{tail.footer}</div>}
       </div>
     </MessageList>
   );

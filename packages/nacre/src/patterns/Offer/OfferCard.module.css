@@ -7,7 +7,7 @@
   .shell {
     display: grid;
     grid-template-rows: 1fr 0fr;
-    max-inline-size: 34rem;
+    max-inline-size: var(--nc-chat-card-width);
     transition:
       grid-template-rows var(--nc-spring-soft-duration) var(--nc-spring-soft),
       opacity var(--nc-duration-fast) var(--nc-ease-out);
@@ -52,13 +52,11 @@
     display: flex;
     align-items: flex-start;
     gap: var(--nc-space-3);
-    padding: var(--nc-space-3) var(--nc-space-3) var(--nc-space-3) var(--nc-space-3-5);
-    border-radius: var(--nc-radius-lg);
+    padding: var(--nc-chat-card-pad);
+    border-radius: var(--nc-chat-card-radius);
     corner-shape: var(--nc-corner-shape);
-    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
-    box-shadow:
-      inset 0 0 0 1px var(--nc-border-subtle),
-      var(--nc-glaze-edge);
+    background: var(--nc-chat-card-surface);
+    box-shadow: var(--nc-chat-card-shadow);
     animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
   }
 
@@ -71,7 +69,7 @@
 
   /* A skill's tile, the size of an app's logo beside it. */
   .mark .skillMark[data-size] {
-    --skill-size: 1.75rem;
+    --skill-size: var(--nc-chat-card-mark);
 
     border-radius: var(--nc-radius-sm);
     font-size: 0.8125rem;
@@ -117,7 +115,7 @@
   .message {
     margin: 0;
     font-size: var(--nc-text-xs);
-    line-height: var(--nc-leading-normal);
+    line-height: var(--nc-leading-snug);
     color: var(--nc-text-muted);
     text-wrap: pretty;
   }
@@ -186,7 +184,7 @@
     border-radius: var(--nc-radius-full);
     background: var(--nc-wash-1);
     box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
-    font-size: var(--nc-text-xs);
+    font-size: var(--nc-chat-note-size);
     line-height: var(--nc-leading-snug);
     color: var(--nc-text-muted);
   }

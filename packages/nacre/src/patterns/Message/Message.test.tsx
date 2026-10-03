@@ -61,4 +61,23 @@ describe('Message', () => {
     );
     expect(screen.getByRole('article', { name: 'Opus said:' })).toBeInTheDocument();
   });
+
+  it('draws what belongs to the reply inside it, before its actions', () => {
+    renderNacre(
+      <Message
+        from="assistant"
+        attached={<button type="button">Connect Linear</button>}
+        actions={<button type="button">Copy</button>}
+      >
+        I can’t see your issues yet.
+      </Message>,
+    );
+    const reply = screen.getByRole('article', { name: 'Claude said:' });
+    const card = screen.getByRole('button', { name: 'Connect Linear' });
+    expect(reply).toContainElement(card);
+    expect(
+      card.compareDocumentPosition(screen.getByRole('button', { name: 'Copy' })) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
 });

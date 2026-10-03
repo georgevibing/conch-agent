@@ -102,16 +102,7 @@
   block-size: clamp(17rem, 62cqi, 27rem);
 }
 
-/* An offer, and what to try next, sit under the words they follow, past the assistant's mark. */
+/* An offer, and what to try next, sit under the words they follow, lined up with them. */
 .offer {
-  margin-inline-start: 2.75rem;
-}
-
-/* An app's tool row leads with the app, as the chat shows it. */
-.toolApp {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nc-space-1-5);
-  font-weight: var(--nc-weight-medium);
-  color: var(--nc-text-muted);
+  margin-inline-start: var(--nc-chat-inset);
 }

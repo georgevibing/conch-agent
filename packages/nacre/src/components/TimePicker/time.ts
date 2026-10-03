@@ -60,3 +60,14 @@ export function dayPeriods(locale?: string): [string, string] {
     return ['AM', 'PM'];
   }
 }
+
+/**
+ * A time as the picker shows it, for anything beside it (a chip, a line):
+ * "9:00 AM" on a 12-hour clock, "08:30" on a 24-hour one.
+ */
+export function readTime(value: string, locale?: string): string {
+  const { hour, minute } = parseTime(value);
+  if (localeHourCycle(locale) === 'h23') return formatTime({ hour, minute });
+  const [am, pm] = dayPeriods(locale);
+  return `${to12(hour)}:${pad(minute)} ${hour < 12 ? am : pm}`;
+}

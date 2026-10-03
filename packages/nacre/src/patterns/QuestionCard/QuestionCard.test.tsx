@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -140,6 +140,24 @@ describe('QuestionCard', () => {
     await userEvent.click(screen.getByRole('radio', { name: '11:00' }));
     await userEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(onAnswer).toHaveBeenCalledWith({ when: '2026-10-08T11:00' });
+  });
+
+  it('any other time is one tap away: Another time… opens the exact time in its place', async () => {
+    const { onAnswer, container } = card({
+      questionId: 'q5b',
+      fields: [{ id: 'when', kind: 'time', label: 'What time?', suggested: '10:00' }],
+    });
+    // The slots, written as the time picker writes them, and no second control beside them.
+    expect(screen.getByRole('radio', { name: '10:00' })).toBeChecked();
+    expect(screen.queryByRole('spinbutton', { name: 'Hour' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Another time…' }));
+    const hour = await screen.findByRole('spinbutton', { name: 'Hour' });
+    await waitFor(() => expect(hour).toHaveFocus());
+    expect(screen.queryByRole('button', { name: 'Another time…' })).toBeNull();
+    await userEvent.keyboard('{ArrowUp}');
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(onAnswer).toHaveBeenCalledWith({ when: '11:00' });
+    await expectAccessible(container);
   });
 
   it('a short form sends only once what it needs is there, and leaves out the optional', async () => {

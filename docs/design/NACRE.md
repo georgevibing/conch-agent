@@ -158,6 +158,27 @@ picture), turn red with a Retry when they fail, and wear a small amber dot when
 the chosen model can't use them. `AttachmentPreview` is the closer look;
 `DropOverlay` dims the chat and gathers a pearl halo while files are dragged over.
 
+### A reply and what belongs to it (chat)
+
+A reply is one piece: its words, then everything that belongs to it (tool
+rows, more words, a plan, a question, an offer, an artifact, replies to send
+next), then its actions. `Message attached` holds those parts, so the hover
+actions (Copy, Read aloud) come once, at the end, and never sit as an empty
+row between the words and their card.
+
+- **One step.** Each part sits `--nc-chat-step` under what's above it and
+  lines up with the words (`--nc-chat-inset`, the mark plus its gap). A part
+  reads `--nc-chat-flow-gap` and `--nc-chat-indent`, so the same rule fits in
+  the transcript and inside a reply. Tool rows stack closer, a stack of their
+  own. On a phone parts reach back to the mark's edge.
+- **One card.** Every card in a reply takes its shape from the `--nc-chat-card-*`
+  tokens: radius, surface, ring with glaze and a soft shadow, padding, the
+  1.75rem mark beside a small semibold title, and one width.
+- **Folding.** A card done with folds away. One that can open again becomes a
+  row like a tool's (`--nc-chat-row-*`). One that only says what happened
+  becomes a line (`--nc-chat-note-*`). One that's dismissed closes the gap it
+  sat in as it goes.
+
 ### What a tool found (chat)
 
 A tool's results are drawn under its row, inside the same surface, the way the
