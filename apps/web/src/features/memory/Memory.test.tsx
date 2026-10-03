@@ -225,6 +225,7 @@ describe('Skills you keep asking for', () => {
       description: 'Summarises your week when you ask for it.',
       instructions: '1. Read the calendar.\n2. Five bullet points.',
     },
+    from: 'habit',
   };
 
   it('offers the draft to read and change, never saves it, and can be turned down', async () => {

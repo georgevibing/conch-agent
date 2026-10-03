@@ -57,6 +57,7 @@ const attachmentSrc = (attachment: Attachment) => attachmentUrl(attachment.id);
 import { AttachmentViewer, type Viewable } from './AttachmentViewer';
 import { ComposerOffline } from './OfflineBits';
 import { ChatHolds } from '../skills/ChatHolds';
+import { SkillOfferInChat } from '../skills/SkillOfferInChat';
 import { Transcript } from './Transcript';
 import type { TurnRecovery } from './TranscriptItems';
 import { type Draft, useDraftAttachments } from './useDraftAttachments';
@@ -732,6 +733,15 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
         }}
         focusComposer={() => composerRef.current?.focus()}
         recover={recover}
+        footer={
+          // Save how I did this (ADR 0058): under the reply that earned it, once it's over.
+          <SkillOfferInChat
+            conversationId={conversationId}
+            view={view}
+            running={running || pending.length > 0}
+            className={styles.skillOffer}
+          />
+        }
       />
       <div className={styles.dock}>{composer}</div>
     </div>

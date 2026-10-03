@@ -1,6 +1,7 @@
 import { SKILL_DESCRIPTION_MAX, type SkillMode } from '@conch/protocol';
 import {
   Button,
+  Callout,
   Field,
   Heading,
   Input,
@@ -9,6 +10,7 @@ import {
   SegmentedControl,
   SkillCard,
   skillModeLabels,
+  SkillPermissionList,
   Stack,
   Text,
   Textarea,
@@ -24,6 +26,7 @@ import { skillsApi } from './api';
 import { errorText, useCreateSkill } from './queries';
 import styles from './Skills.module.css';
 import { SkillIdeas } from './SkillsView';
+import type { SuggestedDraft } from './SkillSuggestions';
 
 /** Wait this long after typing stops before asking for a title and description. */
 const DRAFT_AFTER_MS = 1100;
@@ -59,17 +62,8 @@ export function NewSkill() {
   const location = useLocation();
   const assistant = useAssistantName();
   const create = useCreateSkill();
-  // A suggested skill (ADR 0032) arrives with its draft: yours to read and change.
-  const [start] = useState(
-    () =>
-      (location.state as {
-        instructions?: string;
-        title?: string;
-        description?: string;
-        /** From a suggestion: in how many chats you asked. */
-        suggested?: number;
-      } | null) ?? {},
-  );
+  // A suggested skill (ADR 0032, ADR 0058) arrives with its draft: yours to read and change.
+  const [start] = useState(() => (location.state as Partial<SuggestedDraft> | null) ?? {});
   const [instructions, setInstructions] = useState(start.instructions ?? '');
   const [title, setTitle] = useState(start.title ?? '');
   const [description, setDescription] = useState(start.description ?? '');
@@ -79,7 +73,9 @@ export function NewSkill() {
     description: Boolean(start.description),
   });
   // A suggestion starts as something you ask for by name: using it by itself is your call.
-  const [mode, setMode] = useState<Exclude<SkillMode, 'off'>>(start.suggested ? 'manual' : 'auto');
+  const [mode, setMode] = useState<Exclude<SkillMode, 'off'>>(
+    start.suggested || start.learned ? 'manual' : 'auto',
+  );
   const [writing, setWriting] = useState(false);
   const drafted = useRef('');
   const inFlight = useRef<AbortController | null>(null);
@@ -134,6 +130,15 @@ export function NewSkill() {
         ...(title.trim() && { title: title.trim() }),
         ...(description.trim() && { description: description.trim() }),
         mode,
+        // Only what the work needed, as the draft said (ADR 0058).
+        ...(start.permissions && {
+          permissions: {
+            capabilities: start.permissions.capabilities,
+            ...(start.permissions.commands && { commands: start.permissions.commands }),
+            ...(start.permissions.apps && { apps: start.permissions.apps }),
+          },
+        }),
+        ...(start.suggestion && { suggestion: start.suggestion }),
       },
       {
         onSuccess: (skill) => {
@@ -169,11 +174,20 @@ export function NewSkill() {
           Teach {assistant} a skill
         </Heading>
         <Text tone="muted">
-          {start.suggested
-            ? `You’ve asked for this in ${start.suggested} chats, so ${assistant} wrote a first draft from what you said. Read it, change anything, and save it only if you want it.`
-            : `Describe what it should do, in your own words. ${assistant} names it and writes a short description — change either if you like.`}
+          {start.learned
+            ? `${assistant} wrote this from how your chat “${start.learned.chat}” went: the steps that worked, made to fit next time. Read it, change anything, and save it only if you want it.`
+            : start.suggested
+              ? `You’ve asked for this in ${start.suggested} chats, so ${assistant} wrote a first draft from what you said. Read it, change anything, and save it only if you want it.`
+              : `Describe what it should do, in your own words. ${assistant} names it and writes a short description — change either if you like.`}
         </Text>
       </Stack>
+
+      {start.learned?.untrusted && (
+        <Callout tone="warning" title="Read the steps first">
+          {start.learned.untrusted} A page can try to slip in a step of its own, so check each one
+          is something you want done.
+        </Callout>
+      )}
 
       <Field>
         <Field.Label>What should {assistant} know how to do?</Field.Label>
@@ -283,6 +297,14 @@ export function NewSkill() {
               </Field.Description>
             </Field>
           </div>
+          {start.permissions?.words && (
+            <SkillPermissionList
+              variant="compact"
+              declared
+              capabilities={start.permissions.capabilities}
+              words={start.permissions.words}
+            />
+          )}
         </Stack>
       )}
 

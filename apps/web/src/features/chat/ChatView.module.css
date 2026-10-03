@@ -90,4 +90,10 @@
       padding-block-end: var(--nc-space-4);
     }
   }
+
+  /* Save how I did this: tucked under the reply it's about, in line with it. */
+  .skillOffer {
+    margin-block-start: calc(var(--nc-space-3) * -1);
+    margin-inline-start: 2.75rem;
+  }
 }

@@ -811,6 +811,119 @@ describe('Palette search', () => {
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/skills'));
   });
 
+  it('finds skills that are off by the words people use, archived among them (ADR 0058)', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    renderApp(
+      <>
+        <Palette />
+        <Where />
+      </>,
+    );
+    act(() => useUi.getState().setPalette(true));
+    for (const words of ['archived skills', 'unused skills', 'skills off']) {
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /Skills that are off/ }),
+      ).toBeInTheDocument();
+    }
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/skills?show=off'));
+  });
+
+  it('saves how the open chat’s work was done, only in a chat that earned it (ADR 0058)', async () => {
+    const user = userEvent.setup();
+    const offer = {
+      id: 'ws_1',
+      title: 'Release notes',
+      times: 1,
+      examples: [{ text: 'Release notes for 1.3', conversationId: 'c4', at: 1 }],
+      draft: {
+        title: 'Release notes',
+        description: 'Writes release notes. Use when asked for release notes.',
+        instructions: '1. Find the last tag.\n2. List the commits since it.',
+        permissions: {
+          capabilities: ['commands'],
+          commands: ['git'],
+          words: ['run commands (only `git`)'],
+        },
+      },
+      from: 'work',
+      chat: { conversationId: 'c4', title: 'Release notes for 1.3', endedAt: 1 },
+      steps: 12,
+    };
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'GET /api/skills/suggestions/work': () => ({ suggestions: [offer] }),
+    });
+    renderApp(
+      <Routes>
+        <Route
+          path="/c/:conversationId"
+          element={
+            <>
+              <Palette />
+              <Where />
+            </>
+          }
+        />
+        <Route path="/skills/new" element={<Where />} />
+      </Routes>,
+      { route: '/c/c5' },
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'save how');
+    // Another chat's offer isn't this chat's.
+    await waitFor(() =>
+      expect(screen.queryByRole('option', { name: /Save how I did this/ })).toBeNull(),
+    );
+  });
+
+  it('opens the draft from the chat that earned it', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'GET /api/skills/suggestions/work': () => ({
+        suggestions: [
+          {
+            id: 'ws_1',
+            title: 'Release notes',
+            times: 1,
+            examples: [],
+            draft: {
+              title: 'Release notes',
+              description: 'Writes release notes. Use when asked for release notes.',
+              instructions: '1. Find the last tag.\n2. List the commits since it.',
+            },
+            from: 'work',
+            chat: { conversationId: 'c4', title: 'Release notes for 1.3', endedAt: 1 },
+            steps: 12,
+          },
+        ],
+      }),
+    });
+    renderApp(
+      <Routes>
+        <Route path="/c/:conversationId" element={<Palette />} />
+        <Route path="/skills/new" element={<Where />} />
+      </Routes>,
+      { route: '/c/c4' },
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'learn the steps');
+    await user.click(await screen.findByRole('option', { name: /Save how I did this as a skill/ }));
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/skills/new'));
+  });
+
   it('finds notifications and adding a phone by the words people use', async () => {
     const user = userEvent.setup();
     mockFetch({

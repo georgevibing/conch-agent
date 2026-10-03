@@ -9,7 +9,28 @@ export const skillKeys = {
   all: ['skills'] as const,
   one: (id: string) => ['skills', id] as const,
   publishers: ['skill-publishers'] as const,
+  /** Under `['skills', 'suggestions']`, so refreshing suggestions refreshes these too. */
+  fromWork: ['skills', 'suggestions', 'work'] as const,
+  shelf: ['skills', 'suggestions', 'shelf'] as const,
 };
+
+/** Save how I did this (ADR 0058): what work in your chats could be, as skills. */
+export function useWorkSuggestions() {
+  return useQuery({
+    queryKey: skillKeys.fromWork,
+    queryFn: () => skillsApi.fromWork(),
+    staleTime: 60_000,
+  });
+}
+
+/** The tidy shelf (ADR 0058): skills Conch put here that sit unused. */
+export function useSkillShelf() {
+  return useQuery({
+    queryKey: skillKeys.shelf,
+    queryFn: () => skillsApi.shelf(),
+    staleTime: 60_000,
+  });
+}
 
 /** Whose signed skills you trust (ADR 0031). */
 export function usePublishers() {

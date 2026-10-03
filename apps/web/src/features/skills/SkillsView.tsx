@@ -14,17 +14,20 @@ import {
 } from '@conch/nacre';
 import { Plus, Search, Sparkles } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 
 import { useAssistantName } from '../integrations/queries';
 import { fuzzyFilter } from '../search/fuzzy';
 import { useSkills } from './queries';
+import { SkillShelfCard } from './SkillShelfCard';
 import { SkillSuggestions } from './SkillSuggestions';
 import styles from './Skills.module.css';
 import { PublishersSection, useTurnOn } from './SkillTrust';
 import { skillIdeas } from './templates';
 
-type Show = 'all' | 'mine' | 'found';
+/** `off`: every skill that's off — yours and other apps' — kept, never offered (ADR 0058). */
+type Show = 'all' | 'mine' | 'found' | 'off';
+const SHOWS: readonly Show[] = ['all', 'mine', 'found', 'off'];
 
 /** Ideas to start from: each opens a new skill with the words filled in. */
 export function SkillIdeas({ onPick }: { onPick: (instructions: string) => void }) {
@@ -58,17 +61,38 @@ export function SkillsView() {
   const navigate = useNavigate();
   const assistant = useAssistantName();
   const [query, setQuery] = useState('');
-  const [show, setShow] = useState<Show>('all');
+  // ⌘K "Skills that are off" opens this page at ?show=off.
+  const [params, setParams] = useSearchParams();
+  const asked = params.get('show') as Show | null;
+  const show: Show = asked && SHOWS.includes(asked) ? asked : 'all';
+  const setShow = (next: Show) =>
+    setParams(
+      (now) => {
+        const out = new URLSearchParams(now);
+        if (next === 'all') out.delete('show');
+        else out.set('show', next);
+        return out;
+      },
+      { replace: true },
+    );
 
   const skills = useMemo(() => data?.skills ?? [], [data]);
-  const mine = skills.filter((s) => s.source === 'conch');
-  const found = skills.filter((s) => s.source !== 'conch');
+  const offCount = skills.filter((s) => s.mode === 'off').length;
+  const shown = (s: Skill) => show !== 'off' || s.mode === 'off';
+  const mine = skills.filter((s) => s.source === 'conch' && shown(s));
+  const found = skills.filter((s) => s.source !== 'conch' && shown(s));
+  const bothKinds =
+    skills.some((s) => s.source === 'conch') && skills.some((s) => s.source !== 'conch');
   const q = query.trim();
   const matches = useMemo(
     () =>
       q
         ? fuzzyFilter(skills, q, (s) => `${s.title} ${s.name} ${s.description}`, 60).filter(
-            ({ item }) => show === 'all' || (show === 'mine') === (item.source === 'conch'),
+            ({ item }) =>
+              show === 'all' ||
+              (show === 'off'
+                ? item.mode === 'off'
+                : (show === 'mine') === (item.source === 'conch')),
           )
         : [],
     [skills, q, show],
@@ -121,6 +145,7 @@ export function SkillsView() {
       </header>
 
       <SkillSuggestions />
+      <SkillShelfCard />
 
       {isPending ? (
         <div className={styles.cards}>
@@ -155,7 +180,7 @@ export function SkillsView() {
               onChange={(e) => setQuery(e.target.value)}
               className={styles.search}
             />
-            {found.length > 0 && mine.length > 0 && (
+            {(bothKinds || offCount > 0) && (
               <SegmentedControl
                 size="sm"
                 value={show}
@@ -163,8 +188,11 @@ export function SkillsView() {
                 aria-label="Show"
               >
                 <SegmentedControl.Item value="all">All</SegmentedControl.Item>
-                <SegmentedControl.Item value="mine">Yours</SegmentedControl.Item>
-                <SegmentedControl.Item value="found">From other apps</SegmentedControl.Item>
+                {bothKinds && <SegmentedControl.Item value="mine">Yours</SegmentedControl.Item>}
+                {bothKinds && (
+                  <SegmentedControl.Item value="found">From other apps</SegmentedControl.Item>
+                )}
+                {offCount > 0 && <SegmentedControl.Item value="off">Off</SegmentedControl.Item>}
               </SegmentedControl>
             )}
           </div>
@@ -184,7 +212,14 @@ export function SkillsView() {
             )
           ) : (
             <>
-              {show !== 'found' && (
+              {show === 'off' && (
+                <Text size="sm" tone="muted">
+                  {offCount
+                    ? `Skills that are off are kept, and in every backup. ${assistant} never reaches for them, and one switch brings each back.`
+                    : 'Nothing is off now.'}
+                </Text>
+              )}
+              {show !== 'found' && (show !== 'off' || mine.length > 0) && (
                 <section aria-labelledby="skills-mine" className={styles.section}>
                   <Heading level={2} id="skills-mine" size="sm" tone="muted">
                     Yours

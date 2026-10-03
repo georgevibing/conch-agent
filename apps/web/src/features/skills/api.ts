@@ -1,5 +1,7 @@
 import {
   SkillDescriptionDraft,
+  SkillShelf,
+  SkillSuggestions,
   SkillDetail,
   SkillDraft,
   SkillsList,
@@ -36,6 +38,16 @@ export const skillsApi = {
   /** Trust whoever signed this skill. Needs a recent password or key. */
   trustPublisher: (id: string) =>
     request(SkillDetail, `${path(id)}/trust-publisher`, { method: 'POST', body: {} }),
+  /** Skills from work that went well in your chats (ADR 0058): quick, asked after every turn. */
+  fromWork: () => request(SkillSuggestions, '/api/skills/suggestions/work'),
+  /** Skills Conch put here that sit unused (ADR 0058). */
+  shelf: () => request(SkillShelf, '/api/skills/suggestions/shelf'),
+  /** Turn them off, or keep them. Only ever what's still on the shelf. */
+  tidyShelf: (action: 'off' | 'keep', ids: string[]) =>
+    request(z.object({ changed: z.number() }), '/api/skills/suggestions/shelf', {
+      method: 'POST',
+      body: { action, ids },
+    }),
   forgetPublisher: (fingerprint: string) =>
     request(Ok, `/api/skills/publishers/${encodeURIComponent(fingerprint)}`, { method: 'DELETE' }),
 };
