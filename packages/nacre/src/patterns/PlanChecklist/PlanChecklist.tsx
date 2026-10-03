@@ -1,6 +1,6 @@
 import { ChevronRight, ListChecks } from 'lucide-react';
 import { Collapsible } from 'radix-ui';
-import { useId, useState, type ComponentProps, type CSSProperties, type ReactNode } from 'react';
+import { useId, useState, type ComponentProps, type CSSProperties } from 'react';
 
 import { cx } from '../../utils/cx';
 import styles from './PlanChecklist.module.css';
@@ -137,7 +137,7 @@ export interface PlanChecklistProps extends Omit<ComponentProps<'section'>, 'tit
   /** Steps a long plan shows around where the work is, before “Show all”. */
   limit?: number;
   /** The heading: “Plan”. */
-  title?: ReactNode;
+  title?: string;
 }
 
 /**
@@ -211,15 +211,12 @@ export function PlanChecklist({
       className={cx(styles.root, className)}
       data-state-plan="working"
       data-finished={finished || undefined}
-      aria-labelledby={headingId}
+      aria-label={`${title}, ${progress} done`}
       {...props}
     >
       <header className={styles.header}>
         <ListChecks aria-hidden className={styles.icon} />
-        <h3 id={headingId} className={styles.heading}>
-          {title}
-          <span className="nc-visually-hidden">, {`${progress} done`}</span>
-        </h3>
+        <h3 className={styles.heading}>{title}</h3>
         <span className={styles.count} aria-hidden>
           {progress}
         </span>
