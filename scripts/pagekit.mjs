@@ -62,9 +62,56 @@ export function forPages(css) {
   return APP_BLOCKS.reduce((out, block) => out.replace(block, ''), minify(css));
 }
 
-/** The kit itself: tokens, then the kit, ready for a <style>. */
+/**
+ * Tokens a page's own CSS may use by name (the maker's guide lists them), and
+ * the knobs Conch sets for the person's accent: kept even when the kit itself
+ * doesn't use them.
+ */
+const PUBLIC = [
+  '--nc-text',
+  '--nc-text-muted',
+  '--nc-text-accent',
+  '--nc-surface',
+  '--nc-canvas',
+  '--nc-border',
+  '--nc-accent-9',
+  '--nc-accent-h',
+  '--nc-accent-c',
+  '--nc-neutral-h',
+  '--nc-neutral-c',
+];
+const DECLARATION = /(--nc-[\w-]+):([^;{}]*);?/g;
+const USES = /var\((--nc-[\w-]+)/g;
+
+/**
+ * Only the tokens a page can reach: what the kit uses, what a page may use by
+ * name, and what those are made of, followed through every `var()`. A token
+ * Conch adds for its own screens never makes every page heavier.
+ */
+export function usedTokens(tokens, kit) {
+  const values = new Map();
+  for (const [, name, value] of tokens.matchAll(DECLARATION))
+    values.set(name, `${values.get(name) ?? ''} ${value}`);
+  const keep = new Set();
+  const queue = [...PUBLIC, ...[...kit.matchAll(USES)].map((m) => m[1])];
+  while (queue.length) {
+    const name = queue.pop();
+    if (keep.has(name)) continue;
+    keep.add(name);
+    for (const [, used] of (values.get(name) ?? '').matchAll(USES)) queue.push(used);
+  }
+  return tokens
+    .replace(DECLARATION, (whole, name) => (keep.has(name) ? whole : ''))
+    .replace(/;}/g, '}')
+    .replace(/[^{}]+\{\}/g, '');
+}
+
+/** The kit itself: only the tokens it reaches, then the kit, ready for a <style>. */
 export function pageKitCss(root) {
-  const css = SOURCES.map((file) => forPages(readFileSync(join(root, file), 'utf8'))).join('\n');
+  const [tokens = '', kit = ''] = SOURCES.map((file) =>
+    forPages(readFileSync(join(root, file), 'utf8')),
+  );
+  const css = `${usedTokens(tokens, kit)}\n${kit}`;
   // It's written into a <style> in every page: nothing in it may end that element.
   if (/<\/|<!--/.test(css)) throw new Error('The page kit must not contain "</" or "<!--".');
   if (Buffer.byteLength(css) > BUDGET)
