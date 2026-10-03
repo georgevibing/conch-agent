@@ -1,0 +1,395 @@
+@layer nacre.components {
+  /*
+   * Two rows that trade places: the card, and the quiet line it folds into.
+   * Taking it collapses the card's row while the line's opens, on the soft
+   * spring, so the chat below closes the gap in one motion.
+   */
+  .shell {
+    display: grid;
+    grid-template-rows: 1fr 0fr;
+    max-inline-size: 34rem;
+    transition:
+      grid-template-rows var(--nc-spring-soft-duration) var(--nc-spring-soft),
+      opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .shell[data-folded] {
+    grid-template-rows: 0fr 1fr;
+  }
+
+  /* “Not now”: everything folds to nothing while it fades. */
+  .shell[data-state='dismissed'] {
+    grid-template-rows: 0fr 0fr;
+    opacity: 0;
+  }
+
+  .cardRow,
+  .lineRow {
+    min-block-size: 0;
+  }
+
+  .cardRow {
+    transition: opacity var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .shell[data-folded] .cardRow,
+  .shell[data-state='dismissed'] .cardRow {
+    overflow: hidden;
+    opacity: 0;
+  }
+
+  .lineRow {
+    overflow: hidden;
+  }
+
+  /* ── The card ─────────────────────────────────────────────────────── */
+  .card {
+    --nc-rim-rest: 0;
+    --nc-rim-hover: 0.35;
+    --nc-sheen-hover: 0.18;
+
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-3) var(--nc-space-3) var(--nc-space-3) var(--nc-space-3-5);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  .mark {
+    display: grid;
+    flex: none;
+    place-items: center;
+    margin-block-start: 0.125rem;
+  }
+
+  /* A skill's tile, the size of an app's logo beside it. */
+  .mark .skillMark[data-size] {
+    --skill-size: 1.75rem;
+
+    border-radius: var(--nc-radius-sm);
+    font-size: 0.8125rem;
+  }
+
+  .body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-2-5);
+    min-inline-size: 0;
+  }
+
+  .head {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+  }
+
+  /* Room for the overflow in the corner. */
+  .head[data-more] {
+    padding-inline-end: var(--nc-space-6);
+  }
+
+  .text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-inline-size: 0;
+    padding-block-start: 0.0625rem;
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+    text-wrap: balance;
+  }
+
+  .message {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  /* The quiet overflow: out of the way until it's wanted. */
+  .more {
+    position: absolute;
+    inset-block-start: var(--nc-space-2);
+    inset-inline-end: var(--nc-space-2);
+    color: var(--nc-text-subtle);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+  }
+
+  /* ── A skill's permissions, opening in place ──────────────────────── */
+  .review {
+    display: grid;
+    grid-template-rows: 0fr;
+    margin-block-end: calc(var(--nc-space-2-5) * -1);
+    transition:
+      grid-template-rows var(--nc-spring-soft-duration) var(--nc-spring-soft),
+      margin var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .review[data-open] {
+    grid-template-rows: 1fr;
+    margin-block-end: 0;
+  }
+
+  .reviewClip {
+    min-block-size: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .review[data-open] .reviewClip {
+    opacity: 1;
+  }
+
+  .permissions {
+    margin-block-start: var(--nc-space-0-5);
+    padding: var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  /* ── The quiet line it folds into ─────────────────────────────────── */
+  .lineClip {
+    padding-block: 0.125rem;
+  }
+
+  .line {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    max-inline-size: 100%;
+    padding: var(--nc-space-1) var(--nc-space-2-5) var(--nc-space-1) var(--nc-space-1);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-wash-1);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+  }
+
+  .line[data-just] {
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  /* Overtaken: smaller still, no fill. */
+  .line[data-state='expired'] {
+    background: none;
+    box-shadow: none;
+    padding-inline-start: 0;
+    color: var(--nc-text-subtle);
+  }
+
+  .line[data-state='expired'] .lineMark {
+    opacity: 0.7;
+    filter: grayscale(1);
+  }
+
+  .lineMark {
+    position: relative;
+    display: grid;
+    flex: none;
+    place-items: center;
+  }
+
+  .lineText {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .lineName {
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .line[data-state='expired'] .lineName {
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-muted);
+  }
+
+  .dot {
+    margin-inline: 0.375em;
+    color: var(--nc-text-subtle);
+  }
+
+  /* A small check on the mark's corner: it's on. */
+  .tick {
+    position: absolute;
+    inset-block-end: -0.25rem;
+    inset-inline-end: -0.3125rem;
+    display: grid;
+    place-items: center;
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+    border-radius: var(--nc-radius-full);
+    background: light-dark(
+      oklch(0.6 0.14 var(--nc-success-h)),
+      oklch(0.7 0.14 var(--nc-success-h))
+    );
+    box-shadow: 0 0 0 1.5px var(--nc-surface);
+    color: light-dark(oklch(1 0 0), oklch(0.2 0.03 var(--nc-success-h)));
+  }
+
+  .tick svg {
+    inline-size: 0.5625rem;
+    block-size: 0.5625rem;
+    stroke-width: 3.5;
+  }
+
+  /* Taken just now: the check pops in and draws itself. */
+  .line[data-just] .tick {
+    animation: nc-offer-pop var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both;
+    animation-delay: 160ms;
+  }
+
+  .line[data-just] .tick path {
+    stroke-dasharray: 24;
+    stroke-dashoffset: 24;
+    animation: nc-offer-draw var(--nc-duration-slow) var(--nc-ease-out) forwards;
+    animation-delay: 300ms;
+  }
+
+  @keyframes nc-offer-pop {
+    from {
+      transform: scale(0.4);
+      opacity: 0;
+    }
+
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  @keyframes nc-offer-draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  /* ── Muted ────────────────────────────────────────────────────────── */
+  .muted {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    padding-inline: var(--nc-space-1);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+  }
+
+  .mutedIcon {
+    flex: none;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .mutedText {
+    flex: 0 1 auto;
+    min-inline-size: 0;
+  }
+
+  /* ── Also try ─────────────────────────────────────────────────────── */
+  .also {
+    --nc-rim-rest: 0;
+    --nc-rim-hover: 0.3;
+    --nc-sheen-hover: 0.14;
+
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) both;
+  }
+
+  .alsoLabel {
+    margin-inline-end: var(--nc-space-0-5);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .chip {
+    appearance: none;
+    max-inline-size: 100%;
+    min-block-size: 1.875rem;
+    padding: var(--nc-space-1) var(--nc-space-3);
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border),
+      var(--nc-glaze-edge);
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-snug);
+    text-align: start;
+    cursor: pointer;
+    transition:
+      background var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .chip:active {
+    transform: scale(0.975);
+    transition-duration: 0ms;
+  }
+
+  .chip:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  @media (hover: hover) {
+    .chip:hover {
+      background: var(--nc-surface-hi);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shell,
+    .cardRow,
+    .review,
+    .reviewClip,
+    .chip {
+      transition: none;
+    }
+
+    .card,
+    .line[data-just],
+    .line[data-just] .tick,
+    .also {
+      animation: none;
+    }
+
+    .line[data-just] .tick path {
+      animation: none;
+      stroke-dashoffset: 0;
+    }
+  }
+}
