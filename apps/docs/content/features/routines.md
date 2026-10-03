@@ -78,6 +78,7 @@ Each routine says what it costs, beside its schedule.
 - **About $1.20 a month** with a provider you pay as you go, from what its runs cost and how often it runs. Before its first run it says **Roughly**, from a typical run on its model. If Conch doesn't know the model's price, it says nothing rather than guess.
 - With a subscription, that it **runs on your plan**, and once it has run, how much of your plan's limit a run takes.
 - **Free on this computer** with a model on this computer.
+- A routine that starts **When…** something happens says **Free until something happens**, and what one run costs: **About $0.04 a run**. Its **Only if…** checks count toward the monthly limit too.
 
 Each run in **History** shows what it cost, too.
 

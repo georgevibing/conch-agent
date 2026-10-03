@@ -122,6 +122,42 @@ describe('routines that start when something happens', () => {
     expect(view.watch).toMatchObject({ state: 'watching', noticed: 1, woke: 1 });
   });
 
+  it('wait at the spending limit with what happened kept, and go once it allows (ADR 0057)', async () => {
+    const { s } = await setup();
+    const brief = await s.routines.create(
+      { ...base, title: 'Morning briefing', schedule: { type: 'daily', time: '08:00' } },
+      { createdBy: 'user' },
+    );
+    const next = await s.routines.create(
+      { ...base, title: 'Then tell me', when: { kind: 'routine', routineId: brief.id } },
+      { createdBy: 'user' },
+    );
+    const real = s.routineSpend.allow.bind(s.routineSpend);
+    let paused = true;
+    s.routineSpend.allow = async (id, engine) =>
+      paused && id === next.id
+        ? {
+            ok: false,
+            guard: 'month',
+            message: 'Paused: your routines have used this month’s $20.',
+          }
+        : real(id, engine);
+    await s.routines.start();
+    await s.routines.runNow(brief.id);
+    await runs(s, brief.id);
+    await vi.waitFor(async () =>
+      expect((await s.routines.detail(next.id)).routine.watch).toMatchObject({
+        waiting: 1,
+        message: 'Paused: your routines have used this month’s $20.',
+      }),
+    );
+    expect((await s.routines.detail(next.id)).runs).toEqual([]);
+    paused = false;
+    await s.routines.lookAgain();
+    const [run] = await runs(s, next.id);
+    expect(run).toMatchObject({ trigger: 'event', status: 'succeeded' });
+  });
+
   it('can’t be made to start each other forever', async () => {
     const { s } = await setup();
     const a = await s.routines.create(

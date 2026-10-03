@@ -1061,11 +1061,18 @@ export class RoutineService {
             ...(file.onlyIf && { onlyIf: file.onlyIf }),
           })
           .catch(() => undefined));
+      // What a run costs (ADR 0057): it only runs when something happens, so per run, not a month.
+      const spend = await this.deps.spend?.view(stored, runs).catch(() => undefined);
+      const perRun =
+        spend?.text && /^(About|Roughly|Less than)/.test(spend.text)
+          ? { ...spend, text: `${spend.text} a run` }
+          : spend;
       return Routine.parse({
         ...rest,
         scheduleText: file ? this.#whenText(file.when) : 'When something happens (choose what)',
         lastRun: runs[0],
         runCount: runs.length,
+        ...(perRun && { spend: perRun }),
         ...(file && { when: file.when }),
         ...(file?.onlyIf && { onlyIf: file.onlyIf }),
         watch: watch ?? {

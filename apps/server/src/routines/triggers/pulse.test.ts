@@ -439,7 +439,9 @@ describe('only if…', () => {
       store: new WhenStore(await mkdtemp(join(tmpdir(), 'conch-pulse-'))),
       sources: { task: held.source },
       routines: async () => [withCondition],
-      fire: async () => 'started',
+      // The run itself is guarded where every run is (RoutineService.fire): it says why.
+      fire: async () =>
+        allow ? 'started' : { held: 'Paused: your routines have used this month’s $20.' },
       judge: async () => {
         checks++;
         return { verdict: 'yes' };
@@ -453,7 +455,7 @@ describe('only if…', () => {
     await quiet.beat();
     expect(checks).toBe(10);
     expect(await quiet.state(withCondition)).toMatchObject({ woke: 0, waiting: 1 });
-    expect((await quiet.state(withCondition)).message).toMatch(/spending limit/);
+    expect((await quiet.state(withCondition)).message).toMatch(/this month’s \$20/);
     quiet.stop();
   });
 });

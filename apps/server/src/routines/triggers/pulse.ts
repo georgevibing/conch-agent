@@ -203,6 +203,8 @@ export class Pulse {
         return live.checking ?? this.#check(i, live);
       }),
     );
+    // And whatever was waiting goes now, if it may.
+    for (const i of ids) await this.#drain(i).catch(() => undefined);
   }
 
   #check(id: string, live: Live): Promise<void> {
@@ -382,8 +384,6 @@ export class Pulse {
       return hold(
         `It has run ${RUNS_PER_HOUR} times this hour; what came since goes in its next run.`,
       );
-    if (this.deps.spend && !(await this.deps.spend.allow(id).catch(() => true)))
-      return hold('Waiting: routines have reached their spending limit for now.');
     const batch = seen.pending;
     const chain = batch.find((h) => h.chain)?.chain;
     const result = await this.deps

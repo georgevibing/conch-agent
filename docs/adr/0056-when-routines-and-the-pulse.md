@@ -88,11 +88,15 @@ stays silent (ADR 0006).
   that can't complete wakes the routine anyway and the run says so: missing
   the email you waited for is worse than one extra run. At most ten checks per
   routine an hour; past that, events go through unchecked, said the same way.
-- **Spending.** The pulse asks one seam, `RoutineSpend` (`allow(routineId)`,
-  `record(routineId, usage)`), before an only-if check and before an event run,
-  and records the check's usage. Routine spending limits (built alongside)
-  plug in there; until then it allows everything. The card says what it costs
-  in words: a When-routine is "Free until something happens".
+- **Spending** (ADR 0057). Before an only-if check the pulse asks routine
+  spending (`RoutineSpend.allow`) and records what the check cost (`record`,
+  with the small model's name); an event run goes through
+  `RoutineService.fire`, which asks the same `allow` first and, when a guard
+  says not yet (the monthly limit, a plan nearly used), keeps what happened
+  waiting in the pulse with the guard's sentence rather than losing it. The
+  run itself is priced and limited like every run. The card says "Free until
+  something happens" beside what one run costs ("About $0.04 a run"), since a
+  month depends on what happens.
 - **Honest.** Conch only notices things while it runs, said the way routines
   already say it ("What only works while Conch is running"). Mail and calendar
   are searched from where the pulse last looked, so mail that came while Conch
