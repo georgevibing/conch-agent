@@ -785,8 +785,14 @@ export class AcpEngine implements Engine {
                 close();
                 push({ type: 'tool-start', toolUseId: id, name, input: args });
               },
-              end: ({ id, status: state, output }) =>
-                push({ type: 'tool-end', toolUseId: id, status: state, output }),
+              end: ({ id, status: state, output, view }) =>
+                push({
+                  type: 'tool-end',
+                  toolUseId: id,
+                  status: state,
+                  output,
+                  ...(view && { view }),
+                }),
             },
             signal,
           )

@@ -9,6 +9,7 @@ import type {
   PermissionMode,
   SkillSource,
   ToolStatus,
+  ToolView,
   TurnProblem,
   Usage,
   UsageKind,
@@ -25,6 +26,11 @@ export interface HostToolResult {
   /** Trusted tool guarantee: no write was attempted (e.g. approval declined). */
   effect?: 'not-executed';
   images?: { data: string; mimeType: 'image/jpeg' | 'image/png' }[];
+  /**
+   * What it found, drawn as it is for the person (an agenda, emails, files,
+   * messages: ADR 0055). Never shown to the model, which reads `text`.
+   */
+  view?: ToolView;
 }
 
 /**
@@ -219,7 +225,14 @@ export type EngineEvent =
   | { type: 'thinking'; messageId: string; delta: string }
   | { type: 'message-done'; messageId: string }
   | { type: 'tool-start'; toolUseId: string; name: string; input: unknown }
-  | { type: 'tool-end'; toolUseId: string; status: ToolStatus; output?: string }
+  | {
+      type: 'tool-end';
+      toolUseId: string;
+      status: ToolStatus;
+      output?: string;
+      /** A host tool's `HostToolResult.view`, passed on for the person (ADR 0055). */
+      view?: ToolView;
+    }
   | { type: 'notice'; code: string; message: string }
   /** Integrations that failed to connect at the start of the turn. */
   | { type: 'mcp-status'; failed: { name: string; error: string }[] }

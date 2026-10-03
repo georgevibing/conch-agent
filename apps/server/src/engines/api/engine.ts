@@ -15,6 +15,7 @@ import type {
   EngineStatus,
   ModelInfo,
   ToolStatus,
+  ToolView,
   TurnProblem,
   Usage,
 } from '@conch/protocol';
@@ -109,7 +110,7 @@ export interface Callable {
   run(
     args: Record<string, unknown>,
     toolUseId: string,
-  ): Promise<{ text: string; isError: boolean }>;
+  ): Promise<{ text: string; isError: boolean; view?: ToolView }>;
 }
 
 /** A notice the engine may need to emit from inside a retry loop. */
@@ -204,7 +205,7 @@ export function buildTools(input: TurnInput): Map<string, Callable> {
           return { text: 'The tool arguments do not match its schema.', isError: true };
         const denied = await authorizeTool(input, display, parsed.data, id);
         if (denied) return { text: denied, isError: true };
-        return { text: await run(host, parsed.data), isError: false };
+        return { ...(await run(host, parsed.data)), isError: false };
       },
     }));
   }
@@ -225,10 +226,16 @@ export function buildTools(input: TurnInput): Map<string, Callable> {
   return tools;
 }
 
-async function run(tool: HostTool, args: Record<string, unknown>): Promise<string> {
+async function run(
+  tool: HostTool,
+  args: Record<string, unknown>,
+): Promise<{ text: string; view?: ToolView }> {
   // A HostTool validates its own arguments; the cast is the seam between an
-  // untyped wire and a typed shape. API providers take text results only.
-  return hostToolText(await tool.run(args as never));
+  // untyped wire and a typed shape. API providers take text results only; a
+  // view is for the person, passed on beside the text, never to the model.
+  const result = await tool.run(args as never);
+  const view = typeof result === 'string' ? undefined : result.view;
+  return { text: hostToolText(result), ...(view && { view }) };
 }
 
 export class ApiEngine implements Engine {
@@ -670,9 +677,15 @@ export class ApiEngine implements Engine {
             name: tool?.display ?? call.name,
             input: args ?? { arguments: call.argumentsJson.slice(0, 2_000) },
           };
-          const { text, status } = await this.#call(tool, args, call, input);
+          const { text, status, view } = await this.#call(tool, args, call, input);
           results.push({ id: call.id, name: call.name, text, isError: status === 'error' });
-          yield { type: 'tool-end', toolUseId: call.id, status, output: text };
+          yield {
+            type: 'tool-end',
+            toolUseId: call.id,
+            status,
+            output: text,
+            ...(view && { view }),
+          };
         }
         messages.push(...this.variant.wire.toolResults(results));
         await save();
@@ -710,7 +723,7 @@ export class ApiEngine implements Engine {
     args: Record<string, unknown> | undefined,
     call: { name: string; id: string },
     input: TurnInput,
-  ): Promise<{ text: string; status: ToolStatus }> {
+  ): Promise<{ text: string; status: ToolStatus; view?: ToolView }> {
     if (!args) {
       return {
         text: 'Those arguments were not valid JSON. Call the tool again with a JSON object.',
@@ -725,7 +738,11 @@ export class ApiEngine implements Engine {
     }
     try {
       const result = await tool.run(args, call.id);
-      return { text: result.text, status: result.isError ? 'error' : 'success' };
+      return {
+        text: result.text,
+        status: result.isError ? 'error' : 'success',
+        ...(result.view && !result.isError && { view: result.view }),
+      };
     } catch (error) {
       if (input.signal.aborted) return { text: 'Stopped.', status: 'error' };
       return { text: plainMessage(error, this.label), status: 'error' };

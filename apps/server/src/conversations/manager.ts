@@ -53,6 +53,7 @@ import { shownPath } from '../undo/tracker';
 
 type SkillNeed = ReturnType<typeof needs>;
 import { generateTitle } from './title';
+import { HostToolRows } from './views';
 
 /**
  * Why a turn failed, for engines that don't say: the key's in a locked
@@ -339,7 +340,7 @@ export class ConversationError extends Error {
   }
 }
 
-/** Host tools are shown through memory events, not as tool calls. */
+/** Host tools are shown through their own events (memory, artifacts…), or a row with a view. */
 const isHostTool = (name: string) => name.startsWith('mcp__conch__');
 
 /** Conversations kept in memory at once (idle ones beyond this are dropped). */
@@ -975,6 +976,8 @@ export class ConversationManager {
     const memoryTotal = picked?.total ?? memories.length;
     const started = new Map<string, number>();
     const calls = new Map<string, { name: string; input: unknown }>();
+    // Conch's own tools get a row only when they found something to show (ADR 0055).
+    const hostRows = new HostToolRows(this.deps.redact);
     let outcome: 'success' | 'interrupted' | 'error' = 'success';
     let completed: { usage?: Usage; error?: string; problem?: TurnProblem } | undefined;
     let heldProblem: TurnProblem | undefined;
@@ -1415,7 +1418,10 @@ export class ConversationManager {
             this.#append(live, { type: 'assistant.done', messageId: event.messageId });
             break;
           case 'tool-start':
-            if (isHostTool(event.name)) break;
+            if (isHostTool(event.name)) {
+              hostRows.start(event);
+              break;
+            }
             if (event.name.startsWith('mcp__'))
               void integrations?.markUsed(event.name).catch(() => undefined);
             started.set(event.toolUseId, Date.now());
@@ -1436,6 +1442,10 @@ export class ConversationManager {
             });
             break;
           case 'tool-end': {
+            if (hostRows.owns(event.toolUseId)) {
+              for (const shown of hostRows.end(event)) this.#append(live, shown);
+              break;
+            }
             const at = started.get(event.toolUseId);
             if (at === undefined) break;
             const call = calls.get(event.toolUseId);

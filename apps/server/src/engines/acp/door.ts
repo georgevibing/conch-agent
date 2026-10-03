@@ -24,7 +24,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
-import type { ToolStatus } from '@conch/protocol';
+import type { ToolStatus, ToolView } from '@conch/protocol';
 
 import type { Callable } from '../api/engine';
 
@@ -35,7 +35,13 @@ export const DOOR_NAME = 'conch';
 
 export interface DoorEvents {
   start(call: { id: string; name: string; input: unknown }): void | Promise<void>;
-  end(call: { id: string; status: ToolStatus; output: string }): void | Promise<void>;
+  /** `view`: what a host tool found, for the person only (ADR 0055); the agent gets `output`. */
+  end(call: {
+    id: string;
+    status: ToolStatus;
+    output: string;
+    view?: ToolView;
+  }): void | Promise<void>;
 }
 
 export interface Door {
@@ -102,13 +108,19 @@ export async function openDoor(
       await events.start({ id, name: tool.display, input: args });
       let text = 'The tool could not complete. Check the action and try again.';
       let isError = true;
+      let view: ToolView | undefined;
       try {
         signal.throwIfAborted();
-        ({ text, isError } = await tool.run(args, id));
+        ({ text, isError, view } = await tool.run(args, id));
       } catch {
         if (signal.aborted) text = 'Stopped.';
       }
-      await events.end({ id, status: isError ? 'error' : 'success', output: text });
+      await events.end({
+        id,
+        status: isError ? 'error' : 'success',
+        output: text,
+        ...(view && !isError && { view }),
+      });
       return { isError, content: [{ type: 'text' as const, text }] };
     });
     return server;

@@ -249,6 +249,49 @@ describe('a turn with an ACP agent', () => {
     expect(door?.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp$/);
   });
 
+  it('passes on what a tool behind the door found, and hands the agent only its text', async () => {
+    let door: { url: string; headers: { name: string; value: string }[] } | undefined;
+    const view = { kind: 'files' as const, items: [{ name: 'Tea notes' }] };
+    const tool: HostTool<{ content: z.ZodString }> = {
+      name: 'remember',
+      description: 'Save one durable fact.',
+      input: { content: z.string() },
+      run: async () => ({ text: 'Saved to memory.', view }),
+    };
+    const { engine } = await engineWith({
+      session: (params) => {
+        door = (
+          params.mcpServers as { url: string; headers: { name: string; value: string }[] }[]
+        )[0];
+        return { sessionId: 'sess_view' };
+      },
+      prompt: async () => {
+        if (!door) throw new Error('No door');
+        const client = new Client({ name: 'pretend-agent', version: '1' });
+        await client.connect(
+          new StreamableHTTPClientTransport(new URL(door.url), {
+            requestInit: {
+              headers: Object.fromEntries(door.headers.map((h) => [h.name, h.value])),
+            },
+          }),
+        );
+        const result = await client.callTool({
+          name: 'mcp__conch__remember',
+          arguments: { content: 'likes tea' },
+        });
+        expect(result.content).toEqual([{ type: 'text', text: 'Saved to memory.' }]);
+        await client.close();
+        return { stopReason: 'end_turn' };
+      },
+    });
+    const events = await collect(engine.runTurn(turn({ tools: [tool as HostTool] })));
+    expect(events.find((e) => e.type === 'tool-end')).toMatchObject({
+      status: 'success',
+      output: 'Saved to memory.',
+      view,
+    });
+  });
+
   it('lets the agent through to Conch’s tools, and declines its own', async () => {
     const answers: unknown[] = [];
     const { engine } = await engineWith({

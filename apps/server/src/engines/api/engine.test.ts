@@ -382,6 +382,33 @@ describe('a turn against the real OpenRouter wire', () => {
     expect(stored.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'assistant']);
   });
 
+  it('passes on what a host tool found for the person, and gives the model only its text', async () => {
+    let chats = 0;
+    const fetch = fakeFetch((call) => {
+      if (call.url.includes('/models')) return jsonResponse(MODELS);
+      chats++;
+      return sseResponse(chats === 1 ? FIRST : SECOND);
+    });
+    const { engine } = await engineFor(new OpenRouterWire(fetch.fetch));
+    const view = { kind: 'files' as const, items: [{ name: 'Tea notes' }] };
+    const tool: HostTool<{ content: z.ZodString }> = {
+      name: 'remember',
+      description: 'Save one durable fact.',
+      input: { content: z.string() },
+      run: async () => ({ text: 'Saved to memory.', view }),
+    };
+    const events = await collect(engine.runTurn(turn({ tools: [tool as HostTool] })));
+    expect(events.find((e) => e.type === 'tool-end')).toEqual({
+      type: 'tool-end',
+      toolUseId: 'call_1',
+      status: 'success',
+      output: 'Saved to memory.',
+      view,
+    });
+    const second = fetch.calls.at(-1)?.body as Record<string, unknown>;
+    expect(JSON.stringify(second['messages'])).not.toContain('Tea notes');
+  });
+
   it('replays the transcript on the next turn and doesn’t announce a new session', async () => {
     let chats = 0;
     const fetch = fakeFetch((call) => {

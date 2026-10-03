@@ -9,6 +9,7 @@ import {
   type LoginState,
   type Usage,
   type TurnProblem,
+  type ToolView,
 } from '@conch/protocol';
 import { z } from 'zod';
 
@@ -444,12 +445,14 @@ export class CodexEngine implements Engine {
                   });
                   let text = 'This tool is not enabled in this conversation.';
                   let isError = true;
+                  let view: ToolView | undefined;
                   try {
                     if (tool) {
                       signal.throwIfAborted();
                       const result = await tool.run(call.arguments, call.callId);
                       text = result.text;
                       isError = result.isError;
+                      view = result.isError ? undefined : result.view;
                     }
                   } catch {
                     text = signal.aborted
@@ -461,6 +464,7 @@ export class CodexEngine implements Engine {
                     toolUseId: call.callId,
                     status: isError ? 'error' : 'success',
                     output: text,
+                    ...(view && { view }),
                   });
                   if (!signal.aborted)
                     rpc.send({
