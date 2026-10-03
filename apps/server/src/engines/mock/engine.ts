@@ -964,7 +964,8 @@ export class MockEngine implements Engine {
           yield* hostTool('update_plan', { steps: steps(done) });
           const toolUseId = newId('tool');
           yield { type: 'tool-start', toolUseId, name: look.name, input: look.input };
-          await wait(700);
+          // A real second whatever the speed, so each tick can be seen (and tested).
+          await sleep(1000, input.signal);
           yield { type: 'tool-end', toolUseId, status: 'success', output: 'ok' };
         }
         yield* hostTool('update_plan', { steps: steps(titles.length) });
