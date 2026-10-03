@@ -154,6 +154,8 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
 5. **Accessibility is not optional.** `jsx-a11y` strict is on and never disabled.
    Every interactive component has keyboard support, visible focus, and an axe test.
 6. **No secrets in code or logs.** Config comes from env (`apps/server/.env.example` documents it).
+   A fake key in a test or a pretend app is written in two parts (`'xoxb-' + '…'`), so secret
+   scanners and GitHub's push protection never take it for a real one.
 7. **Inclusive language** in code, comments and docs (primary/replica, allowlist/denylist).
 8. **Don't edit generated or vendored files** (`pnpm-lock.yaml` by hand, `dist/`,
    `storybook-static/`).
