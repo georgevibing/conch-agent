@@ -31,7 +31,7 @@ Open **Settings → Providers**. Yours are on top. The rest wait below as tiles,
 
 ## Have a key? Paste it anywhere
 
-Paste a key anywhere on **Settings → Providers**. Conch knows whose it is from its shape (`gsk_` is Groq, `xai-` is xAI) and checks it with that provider straight away. Plenty of keys start `sk-`; for those, Conch asks whose it is rather than send it to the wrong company.
+Paste a key anywhere on **Settings → Providers**. When it starts with something only one company uses (`gsk_` is Groq, `xai-` is xAI), Conch knows whose it is and checks it with that provider straight away. Plenty of keys just start `sk-`, and some start with nothing at all; for those, Conch asks whose it is first. A key is only ever sent to the company it belongs to, never tried at several to see which one takes it.
 
 A company with regions (Kimi, Z.ai, MiniMax, Qwen) is tried at each of its own addresses, and Conch remembers the one that took your key.
 

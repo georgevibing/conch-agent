@@ -8,7 +8,7 @@ provider: qwen
 2. Press **Open modelstudio.console.alibabacloud.com** and create a key in Alibaba Cloud Model Studio.
 3. Paste it. Conch checks it before keeping it.
 
-Or paste the key anywhere on **Settings → Providers**. Conch knows whose key it is from its shape and checks it before keeping it.
+Or paste the key anywhere on **Settings → Providers**. Conch knows whose key it is from how it starts, and checks it before keeping it.
 
 A key works only in the region it was made in. Conch tries Singapore, the United States, China and Hong Kong in turn, all Alibaba Cloud’s own addresses, and remembers the one that takes it.
 

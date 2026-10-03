@@ -17,13 +17,19 @@ export interface KeyCandidate {
   color?: string;
 }
 
-export interface KeyCatcherProps extends Omit<ComponentProps<'section'>, 'children'> {
+/** Whose a pasted value could be. */
+export interface KeyMatch {
+  /** None means Conch doesn't know it. */
+  candidates: KeyCandidate[];
   /**
-   * The providers a pasted value could belong to: one is a match and is
-   * checked straight away, several are a choice, none means Conch doesn't
-   * know it.
+   * Only one provider's keys start like this: checked with it straight away.
+   * Otherwise Conch asks first, even when one provider fits the shape.
    */
-  recognise: (value: string) => KeyCandidate[];
+  sure: boolean;
+}
+
+export interface KeyCatcherProps extends Omit<ComponentProps<'section'>, 'children'> {
+  recognise: (value: string) => KeyMatch;
   /** Everyone a key connects, to choose from when nothing recognises it. */
   all?: KeyCandidate[];
   /** Connect it. Rejects with a sentence a person can read when the provider refused. */
@@ -104,9 +110,9 @@ export function KeyCatcher({
       setPhase({ kind: 'idle' });
       return;
     }
-    const candidates = latest.current.recognise(key);
+    const { candidates, sure } = latest.current.recognise(key);
     const only = candidates.length === 1 ? candidates[0] : undefined;
-    if (only) void connect(only, key);
+    if (only && sure) void connect(only, key);
     else setPhase({ kind: 'choose', candidates, known: candidates.length > 0 });
   };
 
@@ -117,7 +123,7 @@ export function KeyCatcher({
     const onPaste = (event: ClipboardEvent) => {
       if (editable(event.target)) return;
       const text = event.clipboardData?.getData('text/plain').trim() ?? '';
-      if (!looksLikeKey(text) || !latest.current.recognise(text).length) return;
+      if (!looksLikeKey(text) || !latest.current.recognise(text).candidates.length) return;
       event.preventDefault();
       inputRef.current?.focus({ preventScroll: true });
       take(text);
@@ -234,11 +240,13 @@ export function KeyCatcher({
           {phase.kind === 'choose' && (
             <div className={styles.choose}>
               <p className={styles.note}>
-                {phase.known
-                  ? 'Keys like this one come from more than one place. Whose is it?'
-                  : choices.length
-                    ? 'Conch doesn’t recognise this key. Whose is it?'
-                    : 'Conch doesn’t recognise this key. Open the provider it’s from and paste it there.'}
+                {phase.known && phase.candidates.length === 1
+                  ? `This looks like a ${phase.candidates[0]?.name} key. Is it?`
+                  : phase.known
+                    ? 'Keys like this one come from more than one place. Whose is it?'
+                    : choices.length
+                      ? 'Conch doesn’t recognise this key. Whose is it?'
+                      : 'Conch doesn’t recognise this key. Open the provider it’s from and paste it there.'}
               </p>
               {choices.length > 0 && (
                 <ul className={styles.choices}>
@@ -261,6 +269,18 @@ export function KeyCatcher({
                       </button>
                     </li>
                   ))}
+                  {phase.known && all.length > choices.length && (
+                    <li>
+                      <button
+                        type="button"
+                        className={styles.choice}
+                        data-quiet=""
+                        onClick={() => setPhase({ kind: 'choose', candidates: [], known: false })}
+                      >
+                        Someone else’s
+                      </button>
+                    </li>
+                  )}
                 </ul>
               )}
             </div>

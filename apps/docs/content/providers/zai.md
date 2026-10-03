@@ -8,7 +8,7 @@ provider: zai
 2. Press **Open z.ai** and create a key. A key from BigModel in China works too.
 3. Paste it. Conch checks it before keeping it.
 
-Or paste the key anywhere on **Settings → Providers**. Conch knows whose key it is from its shape and checks it before keeping it.
+Or paste the key anywhere on **Settings → Providers**. Its keys don’t start with anything only it uses, so Conch asks you whose it is, then checks it before keeping it.
 
 Conch tries Z.ai’s international address first, then BigModel’s, and remembers the one that takes your key. A key is only ever sent to Z.ai’s own addresses.
 

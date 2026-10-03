@@ -3,15 +3,22 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { expectAccessible, renderNacre } from '../../test/render';
-import { KeyCatcher, looksLikeKey, maskKey, type KeyCandidate } from './KeyCatcher';
+import { KeyCatcher, looksLikeKey, maskKey, type KeyCandidate, type KeyMatch } from './KeyCatcher';
 
 const GROQ: KeyCandidate = { id: 'groq', name: 'Groq', color: '#F55036' };
 const DEEPSEEK: KeyCandidate = { id: 'deepseek', name: 'DeepSeek', brand: 'deepseek' };
 const KIMI: KeyCandidate = { id: 'moonshot', name: 'Kimi', brand: 'moonshot' };
 const OPENAI: KeyCandidate = { id: 'openai', name: 'OpenAI' };
+const MISTRAL: KeyCandidate = { id: 'mistral', name: 'Mistral', brand: 'mistral' };
 
-const recognise = (value: string): KeyCandidate[] =>
-  value.startsWith('gsk_') ? [GROQ] : value.startsWith('sk-') ? [DEEPSEEK, KIMI] : [];
+const recognise = (value: string): KeyMatch =>
+  value.startsWith('gsk_')
+    ? { candidates: [GROQ], sure: true }
+    : value.startsWith('sk-')
+      ? { candidates: [DEEPSEEK, KIMI], sure: false }
+      : /^[A-Za-z0-9]{32}$/.test(value)
+        ? { candidates: [MISTRAL], sure: false }
+        : { candidates: [], sure: false };
 
 const GROQ_KEY = 'gsk_abcdefghijklmnopqrstuvwx4f2c';
 
@@ -57,12 +64,28 @@ describe('KeyCatcher', () => {
     expect(onConnect).toHaveBeenCalledWith('moonshot', 'sk-0123456789abcdefghijklmnop');
   });
 
-  it('offers everyone when it doesn’t know the key at all', async () => {
+  it('asks before sending a key whose shape only one provider fits, but whose prefix isn’t theirs', async () => {
     const user = userEvent.setup();
     const onConnect = vi.fn(async () => {});
     renderNacre(
-      <KeyCatcher recognise={recognise} all={[OPENAI, GROQ]} onConnect={onConnect} />,
+      <KeyCatcher recognise={recognise} all={[OPENAI, GROQ, MISTRAL]} onConnect={onConnect} />,
     );
+    const key = 'abcdefghijklmnopqrstuvwxyz012345';
+
+    paste(screen.getByLabelText('Paste a key'), key);
+
+    expect(onConnect).not.toHaveBeenCalled();
+    expect(screen.getByText('This looks like a Mistral key. Is it?')).toBeInTheDocument();
+    // Not theirs after all: everyone else, to choose from.
+    await user.click(screen.getByRole('button', { name: 'Someone else’s' }));
+    await user.click(screen.getByRole('button', { name: 'OpenAI' }));
+    expect(onConnect).toHaveBeenCalledWith('openai', key);
+  });
+
+  it('offers everyone when it doesn’t know the key at all', async () => {
+    const user = userEvent.setup();
+    const onConnect = vi.fn(async () => {});
+    renderNacre(<KeyCatcher recognise={recognise} all={[OPENAI, GROQ]} onConnect={onConnect} />);
 
     await user.type(screen.getByLabelText('Paste a key'), 'abcdefghijklmnopqrstuvwxyz0123');
     await user.click(screen.getByRole('button', { name: 'Connect' }));

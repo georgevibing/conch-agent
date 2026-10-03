@@ -24,7 +24,10 @@
   .root[data-phase='connected'] {
     box-shadow:
       inset 0 0 0 1px
-        light-dark(oklch(0.72 0.12 var(--nc-success-h) / 0.5), oklch(0.7 0.12 var(--nc-success-h) / 0.5)),
+        light-dark(
+          oklch(0.72 0.12 var(--nc-success-h) / 0.5),
+          oklch(0.7 0.12 var(--nc-success-h) / 0.5)
+        ),
       inset 0 1px 2px color-mix(in oklch, var(--nc-text) 5%, transparent);
   }
 
@@ -176,13 +179,25 @@
       transform var(--nc-spring-soft-duration) var(--nc-spring-soft);
   }
 
+  /* "Someone else's": there, but not one of the answers. */
+  .choice[data-quiet] {
+    padding-inline: var(--nc-space-3);
+    background: transparent;
+    box-shadow: none;
+    color: var(--nc-text-muted);
+  }
+
   .choice:focus-visible {
     outline: 2px solid var(--nc-ring);
     outline-offset: 2px;
   }
 
   @media (hover: hover) {
-    .choice:hover {
+    .choice[data-quiet]:hover {
+      color: var(--nc-text);
+    }
+
+    .choice:not([data-quiet]):hover {
       box-shadow:
         inset 0 0 0 1px var(--nc-border-subtle),
         var(--nc-glaze-edge),

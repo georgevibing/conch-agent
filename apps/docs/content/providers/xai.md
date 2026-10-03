@@ -8,7 +8,7 @@ provider: xai
 2. Press **Open console.x.ai**, create a key and load it with credits. It starts with `xai-`.
 3. Paste it. Conch checks it before keeping it.
 
-Or paste the key anywhere on **Settings → Providers**. Conch knows whose key it is from its shape and checks it before keeping it.
+Or paste the key anywhere on **Settings → Providers**. Conch knows whose key it is from how it starts, and checks it before keeping it.
 
 ## What you get
 

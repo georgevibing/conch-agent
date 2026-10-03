@@ -164,10 +164,7 @@ const PROVIDERS: ProviderCopy[] = [
     connect: 'program',
     group: 'subscription',
     highlights: ['Your SuperGrok plan', 'Sign in with X', 'Uses your apps'],
-    limits: [
-      'Grok’s usage is one weekly pool shared with your other Grok apps.',
-      AGENT_LIMIT,
-    ],
+    limits: ['Grok’s usage is one weekly pool shared with your other Grok apps.', AGENT_LIMIT],
     asksFirst: true,
     experimental: true,
     color: '#0D0D0D',
@@ -465,7 +462,8 @@ const PROVIDERS: ProviderCopy[] = [
       label: 'Z.ai API key',
       help: 'Create one on Z.ai, or on BigModel in China.',
       url: 'https://z.ai/manage-apikey/apikey-list',
-      recognise: { distinct: '^[A-Za-z0-9]{20,}\\.[A-Za-z0-9]{8,}$' },
+      // Seen in the wild, not a prefix Z.ai documents: Conch asks before using it.
+      recognise: { loose: '^[A-Za-z0-9]{20,}\\.[A-Za-z0-9]{8,}$' },
     }),
     envKeys: ['ZAI_API_KEY', 'ZHIPUAI_API_KEY'],
     color: '#2D2D2D',

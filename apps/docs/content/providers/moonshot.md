@@ -8,7 +8,7 @@ provider: moonshot
 2. Press **Open platform.kimi.ai**, top up at least $1 and create a key.
 3. Paste it. Conch checks it before keeping it.
 
-Or paste the key anywhere on **Settings → Providers**. Conch knows whose key it is from its shape and checks it before keeping it.
+Or paste the key anywhere on **Settings → Providers**. Its keys don’t start with anything only it uses, so Conch asks you whose it is, then checks it before keeping it.
 
 Keys from platform.kimi.ai and platform.kimi.com don’t mix. Conch tries the international address first, then the one in China, and remembers which took your key.
 

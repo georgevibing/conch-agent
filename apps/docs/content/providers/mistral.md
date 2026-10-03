@@ -8,7 +8,7 @@ provider: mistral
 2. Press **Open console.mistral.ai** and create a key. The free plan needs no card.
 3. Paste it. Conch checks it before keeping it.
 
-Or paste the key anywhere on **Settings → Providers**. Conch knows whose key it is from its shape and checks it before keeping it.
+Or paste the key anywhere on **Settings → Providers**. Its keys don’t start with anything only it uses, so Conch asks you whose it is, then checks it before keeping it.
 
 ## What you get
 

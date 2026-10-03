@@ -8,7 +8,7 @@ provider: gemini
 2. Press **Open aistudio.google.com** and create a key. It’s free, and starts with `AIza` or `AQ.`.
 3. Paste it. Conch checks it before keeping it.
 
-Or paste the key anywhere on **Settings → Providers**. Conch knows whose key it is from its shape and checks it before keeping it.
+Or paste the key anywhere on **Settings → Providers**. Conch knows whose key it is from how it starts, and checks it before keeping it.
 
 ## What you get
 

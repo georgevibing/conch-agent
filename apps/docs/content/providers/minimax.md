@@ -8,7 +8,7 @@ provider: minimax
 2. Press **Open platform.minimax.io** and create a key, or use your M Plan key.
 3. Paste it. Conch checks it before keeping it.
 
-Or paste the key anywhere on **Settings → Providers**. Conch knows whose key it is from its shape and checks it before keeping it.
+Or paste the key anywhere on **Settings → Providers**. Its keys don’t start with anything only it uses, so Conch asks you whose it is, then checks it before keeping it.
 
 International and China keys don’t mix. Conch tries both and remembers which took yours.
 

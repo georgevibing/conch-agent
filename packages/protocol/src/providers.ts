@@ -60,9 +60,10 @@ export const KeyForm = z.object({
   /** This provider can make a key for you when you sign in (one click, no copy-paste). */
   canSignIn: z.boolean().default(false),
   /**
-   * How a pasted key is known to be this provider's (ADR 0053): `distinct`
-   * only this provider's keys look like (`gsk_`, `xai-`), `loose` other
-   * providers' keys may look like too (plenty start `sk-`), so Conch asks.
+   * How a pasted key is known to be this provider's (ADR 0053): `distinct` is
+   * a prefix only this provider's keys start with (`gsk_`, `xai-`), so a match
+   * connects straight away; `loose` is a shape other keys may have too (plenty
+   * start `sk-`, and an unprefixed key could be anyone's), so Conch asks first.
    */
   recognise: z.object({ distinct: z.string().optional(), loose: z.string().optional() }).optional(),
 });
@@ -259,13 +260,14 @@ export type ProvidersList = z.infer<typeof ProvidersList>;
 /**
  * Whose a pasted key could be, from its shape alone (ADR 0053): the providers
  * only it could belong to if any match, else every provider whose keys could
- * look like it. Never a guess sent anywhere — the person picks when it's more
- * than one.
+ * look like it. `sure` only when one provider's own prefix matched: anything
+ * less is never sent anywhere until the person says whose it is, even when
+ * only one provider's shape fits.
  */
 export function recogniseKey(
   value: string,
   providers: readonly Pick<Provider, 'id' | 'keyForm'>[],
-): EngineId[] {
+): { ids: EngineId[]; sure: boolean } {
   const key = value.trim();
   const test = (pattern: string | undefined) => {
     if (!pattern) return false;
@@ -276,8 +278,11 @@ export function recogniseKey(
     }
   };
   const distinct = providers.filter((p) => test(p.keyForm?.recognise?.distinct)).map((p) => p.id);
-  if (distinct.length) return distinct;
-  return providers.filter((p) => test(p.keyForm?.recognise?.loose)).map((p) => p.id);
+  if (distinct.length) return { ids: distinct, sure: distinct.length === 1 };
+  return {
+    ids: providers.filter((p) => test(p.keyForm?.recognise?.loose)).map((p) => p.id),
+    sure: false,
+  };
 }
 
 /**
