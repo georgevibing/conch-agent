@@ -318,6 +318,12 @@ export const RULES: readonly BackupRule[] = [
     why: 'The apps you made or added (ADR 0061): where each came from, who signed it, its versions and your choices. Not its keys.',
   },
   {
+    match: 'conch-apps-published.json',
+    class: 'kept',
+    group: 'integrations',
+    why: 'The GitHub repositories your apps were published to, so publishing again only ever updates those.',
+  },
+  {
     match: 'conch-apps/**',
     class: 'kept',
     group: 'integrations',

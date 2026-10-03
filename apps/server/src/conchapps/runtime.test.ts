@@ -23,6 +23,7 @@ import {
   inputProblem,
   sealedArgs,
   sealedEnv,
+  sweepTemp,
   type SealedRuntime,
 } from './runtime';
 import type { AppFetcher } from './types';
@@ -380,7 +381,29 @@ export const tools = {
 
 // ── The permission model itself, with a stand-in runtime that has all of Node ──
 
-const PROBE = `
+/** What a stand-in runtime needs to speak the wire: lines of JSON in on stdin, out on fd 3. */
+const WIRE = `
+import { Socket } from 'node:net';
+const wire = new Socket({ fd: 3, readable: false, writable: true });
+const send = (m) => wire.write(JSON.stringify(m) + '\\n');
+const raw = (text) => wire.write(text);
+const handlers = [];
+const onMessage = (f) => handlers.push(f);
+let buffered = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (c) => {
+  buffered += c;
+  let i;
+  while ((i = buffered.indexOf('\\n')) >= 0) {
+    const line = buffered.slice(0, i);
+    buffered = buffered.slice(i + 1);
+    for (const f of handlers) f(JSON.parse(line));
+  }
+});
+process.stdin.on('end', () => process.exit(0));
+`;
+
+const PROBE = `${WIRE}
 import { readFile, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
@@ -389,7 +412,7 @@ const t = async (name, f) => {
   try { await f(); results[name] = 'allowed'; }
   catch (e) { results[name] = e.code || e.message; }
 };
-process.on('message', async (m) => {
+onMessage(async (m) => {
   if (m.t !== 'init') return;
   await t('read its own folder', () => readFile(join(m.appDir, 'tools.mjs')));
   await t('read outside its folder', () => readFile(m.settings.outside));
@@ -409,7 +432,7 @@ process.on('message', async (m) => {
   // Windows needs SYSTEMROOT to start a process; everything else is empty or absent.
   results.env = Object.entries(process.env).filter(([k, v]) => v && k.toUpperCase() !== 'SYSTEMROOT').map(([k]) => k);
   results.flags = process.execArgv;
-  process.send({ t: 'ready', tools: [{ name: 'probe', title: null, description: JSON.stringify(results), input: null, changes: null, runs: true }] });
+  send({ t: 'ready', tools: [{ name: 'probe', title: null, description: JSON.stringify(results), input: null, changes: null, runs: true }] });
 });
 `;
 
@@ -492,14 +515,28 @@ describe('the permission model holds, whatever the code in the process', () => {
 
 // ── What the process may say ──────────────────────────────────────────────
 
-const ROGUE = `
+const ROGUE = `${WIRE}
 let mode;
-process.on('message', (m) => {
+onMessage((m) => {
   if (m.t === 'init') {
     mode = m.settings.mode;
-    process.send({ t: 'ready', tools: [{ name: 'go', title: 'Go', description: 'Goes.', input: { type: 'object' }, changes: null, runs: true }] });
+    send({ t: 'ready', tools: [{ name: 'go', title: 'Go', description: 'Goes.', input: { type: 'object' }, changes: null, runs: true }] });
   }
   if (m.t === 'call') {
+    if (mode === 'not json') return raw('rm -rf /\\n');
+    if (mode === 'endless') {
+      // A result that never ends: half a gigabyte, if nobody stopped it.
+      raw('{"t":"result","id":' + m.id + ',"ok":true,"text":"');
+      const chunk = 'x'.repeat(1024 * 1024);
+      let sent = 0;
+      const pump = () => {
+        while (sent < 512) {
+          sent++;
+          if (!wire.write(chunk)) return wire.once('drain', pump);
+        }
+      };
+      return pump();
+    }
     const said = {
       text: 'just some words',
       number: 42,
@@ -509,13 +546,13 @@ process.on('message', (m) => {
       'bad fetch': { t: 'fetch', id: 1, request: { url: 5 } },
       'too much': { t: 'result', id: m.id, ok: true, text: 'x'.repeat(3 * 1024 * 1024) },
     }[mode];
-    process.send(said);
+    send(said);
   }
 });
 `;
 
 describe('the gateway believes only the protocol', () => {
-  it.each(['text', 'number', 'list', 'unknown', 'bad id', 'bad fetch', 'too much'])(
+  it.each(['text', 'number', 'list', 'unknown', 'bad id', 'bad fetch', 'not json', 'too much'])(
     'stops a process that says something else (%s), and the call fails in words',
     async (mode) => {
       const app = await makeApp('export const tools = {};\n');
@@ -533,6 +570,24 @@ describe('the gateway believes only the protocol', () => {
       await until(() => !runtime.running);
     },
   );
+
+  it('stops a process the moment a message runs past the cap, without reading the rest', async () => {
+    const app = await makeApp('export const tools = {};\n');
+    const script = join(app.base, 'rogue host.mjs');
+    await writeFile(script, ROGUE);
+    const runtime = start(app, { hostScript: script, settings: async () => ({ mode: 'endless' }) });
+    await runtime.list();
+    const before = process.memoryUsage().arrayBuffers;
+    const started = Date.now();
+    expect(await runtime.call('go', {})).toEqual({
+      ok: false,
+      text: 'Plant diary’s tools sent back more than Conch takes, so it stopped them. Return less at once.',
+    });
+    // Cut off at about 2 MB, long before half a gigabyte arrived.
+    expect(Date.now() - started).toBeLessThan(10_000);
+    expect(process.memoryUsage().arrayBuffers - before).toBeLessThan(64 * 1024 * 1024);
+    await until(() => !runtime.running);
+  });
 });
 
 // ── The tools module contract ─────────────────────────────────────────────
@@ -786,6 +841,34 @@ export const tools = {
     });
     // Replacing a key counts only the new value.
     expect((await runtime.call('fill', { key: 'a', n: 9000 })).text).toBe('kept');
+  });
+
+  it('clears the temp files of a process stopped mid-write, so they never get past the cap', async () => {
+    const app = await makeApp(`export const tools = {
+      ${tool('start_big', 'void app.data.set("big", "z".repeat(input.n)).catch(() => {}); return "started";')}
+      ${tool('fill', 'await app.data.set(input.key, "z".repeat(input.n)); return "kept";')}
+    };`);
+    const runtime = start(app, { dataLimit: 40 * 1024 * 1024 });
+    // Stopped while it writes 30 MB: whatever it left half-written is a temp file.
+    expect((await runtime.call('start_big', { n: 30 * 1024 * 1024 })).text).toBe('started');
+    await runtime.stop();
+    // And one from an earlier run, as a crash would leave it.
+    await writeFile(join(app.dataDir, '.log.0badc0de.tmp'), 'z'.repeat(1024 * 1024));
+    expect((await runtime.call('fill', { key: 'small', n: 10 })).text).toBe('kept');
+    expect((await readdir(app.dataDir)).filter((n) => n.endsWith('.tmp'))).toEqual([]);
+    await runtime.stop();
+    await writeFile(join(app.dataDir, '.x.1.tmp'), 'leftover');
+    await sweepTemp(app.dataDir);
+    expect((await readdir(app.dataDir)).filter((n) => n.endsWith('.tmp'))).toEqual([]);
+  });
+
+  it('holds the cap when several keys are written at once', async () => {
+    const app = await makeApp(`export const tools = {
+      ${tool('both', 'const r = await Promise.allSettled([app.data.set("a", "z".repeat(6000)), app.data.set("b", "z".repeat(6000)), app.data.set("c", "z".repeat(6000))]); return r.map((x) => x.status);')}
+    };`);
+    const got = (await start(app, { dataLimit: 10_000 }).call('both', {})).json as string[];
+    expect(got.filter((s) => s === 'fulfilled')).toHaveLength(1);
+    expect(got.filter((s) => s === 'rejected')).toHaveLength(2);
   });
 
   it('says so when what’s kept is damaged', async () => {

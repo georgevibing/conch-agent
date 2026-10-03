@@ -8,9 +8,13 @@
  * `conch-app` topic, and a release `v<version>`.
  *
  * Safety:
- * - Conch only pushes to a repository that's empty, that it made, or that
- *   already holds a `conch-app.json` with the same `id`. Anyone else's
- *   repository with the same name is left alone.
+ * - Conch only pushes to a repository by the app's name that's missing or
+ *   empty, or that it published this app to before (remembered by GitHub's
+ *   own repository id, which a rename, a transfer or a new repository by the
+ *   same name doesn't carry). With nothing remembered, an existing repository
+ *   must hold a `conch-app.json` with the same `id`, not be a fork, and be the
+ *   very repository asked for (GitHub follows a renamed repository's old
+ *   name). Anyone else's repository is left alone.
  * - Every program runs by its full path with an argument array, without a
  *   terminal: `GIT_TERMINAL_PROMPT=0`, `GH_PROMPT_DISABLED=1` (except the
  *   sign-in), no pager, no colour. Values that come from the manifest go in
@@ -169,6 +173,29 @@ export interface PublisherDeps {
   /** How long gh may take to show its code (30 s), and the person to enter it (15 min). */
   codeWaitMs?: number;
   signInMs?: number;
+  /**
+   * Which repository each app was published to, by GitHub's repository id.
+   * The service keeps it across restarts; without it, only until Conch stops.
+   */
+  published?: PublishedRepos;
+}
+
+/** The repository an app was last published to, by GitHub's numeric repository id. */
+export interface PublishedRepos {
+  get(appId: string): Promise<{ repoId: number } | undefined>;
+  set(appId: string, repoId: number): Promise<void>;
+}
+
+/** `PublishedRepos` that lasts until Conch stops. */
+export function publishedInMemory(): PublishedRepos {
+  const ids = new Map<string, number>();
+  return {
+    get: async (appId) => {
+      const repoId = ids.get(appId);
+      return repoId === undefined ? undefined : { repoId };
+    },
+    set: async (appId, repoId) => void ids.set(appId, repoId),
+  };
 }
 
 export type GitHubPublisher = Publisher & {
@@ -181,19 +208,29 @@ type App = Parameters<Publisher['publish']>[0];
 type SignIn = { code: string; done: Promise<true | string> } | { failed: string };
 
 const User = z.object({ login: z.string().regex(/^[A-Za-z0-9-]{1,39}$/), id: z.number().int() });
-const Repo = z.object({ archived: z.boolean().optional() });
+const Repo = z.object({
+  id: z.number().int().positive(),
+  full_name: z.string(),
+  fork: z.boolean().optional(),
+  archived: z.boolean().optional(),
+});
 const Contents = z.object({ content: z.string(), encoding: z.literal('base64') });
 
 /** What a repository by the app's name is, as far as Conch may touch it. */
-type Found = 'none' | 'empty' | 'ours' | 'theirs' | 'archived';
+type Found =
+  | { found: 'none' }
+  | { found: 'empty' | 'ours'; repoId: number }
+  | { found: 'theirs' }
+  | { found: 'archived' }
+  | { found: 'fork' }
+  | { found: 'moved' };
 
 export function createPublisher(deps: PublisherDeps = {}): GitHubPublisher {
   const exec = deps.exec ?? realExec;
   const find = deps.find ?? ((program: 'gh' | 'git') => (program === 'gh' ? findGh() : findGit()));
   const states = new Map<string, PublishState>();
   const jobs = new Map<string, Promise<void>>();
-  /** Repositories this Conch made, which it may push to while they're still empty or its own. */
-  const made = new Set<string>();
+  const published = deps.published ?? publishedInMemory();
   /** One sign-in at a time, shared by every app waiting on it. */
   let signIn: Promise<SignIn> | undefined;
 
@@ -325,35 +362,57 @@ export function createPublisher(deps: PublisherDeps = {}): GitHubPublisher {
 
   /** Whether a repository by the app's name is there, and whether it's this app's to update. */
   async function inspect(ghPath: string, repo: string, id: string): Promise<Found> {
+    const lookFailed = (result: RunResult) =>
+      signedOut(result)
+        ? new PublishError(signedOutWords)
+        : new PublishError(`Conch couldn’t look at your GitHub account${said(result)}. ${AGAIN}`);
     const meta = await gh(ghPath, ['api', `repos/${repo}`]);
     if (meta.code !== 0) {
-      if (/HTTP 404|Not Found/i.test(meta.stderr)) return 'none';
-      if (signedOut(meta)) throw new PublishError(signedOutWords);
-      throw new PublishError(`Conch couldn’t look at your GitHub account${said(meta)}. ${AGAIN}`);
+      if (/HTTP 404|Not Found/i.test(meta.stderr)) return { found: 'none' };
+      throw lookFailed(meta);
     }
     const info = Repo.safeParse(parseJson(meta.stdout));
-    if (info.success && info.data.archived) return 'archived';
-    // Made by this Conch, or holding this very app: it's this app's to update.
-    const theirs = made.has(repo) ? 'ours' : 'theirs';
+    if (!info.success) throw lookFailed(meta);
+    // GitHub answers a renamed or transferred repository's old name with the new one.
+    if (info.data.full_name.toLowerCase() !== repo.toLowerCase()) return { found: 'moved' };
+    if (info.data.archived) return { found: 'archived' };
+    if (info.data.fork) return { found: 'fork' };
+    const repoId = info.data.id;
+    // An empty repository is Conch's to fill.
+    const commits = await gh(ghPath, ['api', `repos/${repo}/commits?per_page=1`]);
+    if (commits.code !== 0) {
+      if (/HTTP 409|is empty/i.test(commits.stderr)) return { found: 'empty', repoId };
+      throw lookFailed(commits);
+    }
+    const list = parseJson(commits.stdout);
+    if (Array.isArray(list) && list.length === 0) return { found: 'empty', repoId };
+    // Published here before: only that very repository, whatever it holds now.
+    const before = await published.get(id);
+    if (before) return before.repoId === repoId ? { found: 'ours', repoId } : { found: 'theirs' };
+    // Never published from here: it must already be this app.
     const manifest = await gh(ghPath, ['api', `repos/${repo}/contents/conch-app.json`]);
     if (manifest.code === 0) {
       const file = Contents.safeParse(parseJson(manifest.stdout));
       const read = file.success
         ? parseJson(Buffer.from(file.data.content, 'base64').toString('utf8'))
         : undefined;
-      return (read as { id?: unknown } | undefined)?.id === id ? 'ours' : theirs;
+      return (read as { id?: unknown } | undefined)?.id === id
+        ? { found: 'ours', repoId }
+        : { found: 'theirs' };
     }
-    if (!/HTTP 404|Not Found/i.test(manifest.stderr)) {
-      if (signedOut(manifest)) throw new PublishError(signedOutWords);
+    if (/HTTP 404|Not Found/i.test(manifest.stderr)) return { found: 'theirs' };
+    throw lookFailed(manifest);
+  }
+
+  /** The id of the repository Conch just made, checking it's the one asked for. */
+  async function madeId(ghPath: string, repo: string): Promise<number> {
+    const meta = await gh(ghPath, ['api', `repos/${repo}`]);
+    const info = meta.code === 0 ? Repo.safeParse(parseJson(meta.stdout)) : undefined;
+    if (!info?.success || info.data.full_name.toLowerCase() !== repo.toLowerCase())
       throw new PublishError(
-        `Conch couldn’t look at your GitHub account${said(manifest)}. ${AGAIN}`,
+        `Conch made ${repo} on GitHub but couldn’t find it again${said(meta)}. ${AGAIN}`,
       );
-    }
-    // No manifest: an empty repository is Conch's to fill.
-    const commits = await gh(ghPath, ['api', `repos/${repo}/commits?per_page=1`]);
-    if (commits.code !== 0) return /HTTP 409|is empty/i.test(commits.stderr) ? 'empty' : theirs;
-    const list = parseJson(commits.stdout);
-    return Array.isArray(list) && list.length === 0 ? 'empty' : theirs;
+    return info.data.id;
   }
 
   /** The app's files, without links or hidden files, under the package limits. */
@@ -414,12 +473,20 @@ export function createPublisher(deps: PublisherDeps = {}): GitHubPublisher {
     const { login, id: userId } = user.data;
     const repo = `${login}/${app.id}`;
     const address = `https://github.com/${repo}`;
-    const found = await inspect(ghPath, repo, app.id);
-    if (found === 'theirs')
+    const looked = await inspect(ghPath, repo, app.id);
+    if (looked.found === 'theirs')
       throw new PublishError(
         `There’s already a repository called ${app.id} on your GitHub that isn’t this app, so Conch left it alone. Give the app another name, then press Publish on GitHub again.`,
       );
-    if (found === 'archived')
+    if (looked.found === 'fork')
+      throw new PublishError(
+        `Your repository ${repo} is a copy of someone else’s, so Conch left it alone. Give the app another name, then press Publish on GitHub again.`,
+      );
+    if (looked.found === 'moved')
+      throw new PublishError(
+        `GitHub sends ${repo} on to a repository with another name, so Conch left it alone. Give the app another name, then press Publish on GitHub again.`,
+      );
+    if (looked.found === 'archived')
       throw new PublishError(
         `Your repository ${repo} is archived, so Conch can’t update it. Unarchive it in its settings on GitHub, then press Publish on GitHub again.`,
       );
@@ -461,18 +528,20 @@ export function createPublisher(deps: PublisherDeps = {}): GitHubPublisher {
     const tmp = await mkdtemp(join(deps.tmp ?? tmpdir(), 'conch-publish-'));
     try {
       const work = join(tmp, 'repo');
-      if (found === 'none') {
+      if (looked.found === 'none') {
         set(step('Making the repository'));
         await must(
           gh(ghPath, ['repo', 'create', repo, '--public', `--description=${manifest.tagline}`]),
           `Conch couldn’t make the repository ${repo} on GitHub`,
         );
-        made.add(repo);
       }
+      // Remembered before uploading, so a failed upload can be finished later.
+      const repoId = looked.found === 'none' ? await madeId(ghPath, repo) : looked.repoId;
+      await published.set(app.id, repoId);
       set(step('Uploading'));
       const pushTo = `${address}.git`;
       let branch = 'HEAD';
-      if (found === 'ours') {
+      if (looked.found === 'ours') {
         await must(
           gh(ghPath, ['repo', 'clone', pushTo, work, '--', '--depth', '1'], { cwd: tmp }),
           `Conch couldn’t get ${repo} from GitHub`,

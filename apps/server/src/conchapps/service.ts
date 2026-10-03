@@ -37,6 +37,7 @@ import {
   type ConversationEvent,
   type ConversationEventInput,
   type InstallAppBody,
+  madeHere,
   type PreviewAppBody,
   type PublishState,
   type ServerEvent,
@@ -62,7 +63,7 @@ import {
   type AppRuntime,
   SourceError,
 } from './types';
-import { plainLine } from './words';
+import { plainLine, safeSchema } from './words';
 import { type DraftInfo, Workshop, WorkshopError } from './workshop';
 
 export class ConchAppError extends Error {
@@ -122,6 +123,13 @@ interface Package {
 /** A tool as a card shows it: no schema, which only the model needs. */
 const cardTool = ({ input: _input, ...tool }: ConchAppTool): ConchAppTool => tool;
 
+/** A tool as an app's record keeps it: its input schema rebuilt from the allowlist (`safeSchema`). */
+const storedTool = (tool: ConchAppTool): ConchAppTool => {
+  const { input: raw, ...rest } = tool;
+  const input = safeSchema(raw);
+  return input ? { ...rest, input } : rest;
+};
+
 /** What changed from one version to the next, new reach first. */
 export function changesOf(
   from: { manifest: ConchAppManifest; tools: readonly ConchAppTool[] },
@@ -167,7 +175,17 @@ const problemText = (problems: readonly AppCheckItem[]) =>
 
 /** The same place, identity by identity: a file is never the same as another. */
 const sameSource = (a: ConchAppSource, b: ConchAppSource): boolean => {
-  if (a.kind === 'made' && b.kind === 'made') return true;
+  if (a.kind === 'made' && b.kind === 'made') {
+    // Yours, untouched by anything from outside, on both sides; or changes to the same stranger's app.
+    if (madeHere(a) && madeHere(b)) return true;
+    return Boolean(
+      a.basedOn &&
+      b.basedOn &&
+      !a.afterReading?.length &&
+      !b.afterReading?.length &&
+      sameSource(a.basedOn.source, b.basedOn.source),
+    );
+  }
   if (a.kind === 'github' && b.kind === 'github')
     return (
       a.owner.toLowerCase() === b.owner.toLowerCase() &&
@@ -194,6 +212,12 @@ export const sameHands = (
     Boolean(before) && next.signature.state !== 'invalid' && before === next.signature.fingerprint
   );
 };
+
+/**
+ * What may go out under the person's name: an app they made here. A change
+ * to someone else's app is still that maker's, whatever was changed.
+ */
+const yours = (source: ConchAppSource) => source.kind === 'made' && !source.basedOn;
 
 /** The words a card or a preview shows when an app replaces one from another maker. */
 export const otherMakerWarning = (name: string) =>
@@ -461,7 +485,7 @@ export class ConchAppService {
     try {
       const tools = await (await this.runtimeFor(id)).list();
       await this.store.patch(id, (record) => {
-        record.tools = tools;
+        record.tools = tools.map(storedTool);
       });
     } catch (error) {
       if (!this.#failures.has(id)) this.#fail(app.id, error);
@@ -743,7 +767,25 @@ export class ConchAppService {
     await this.load();
     const installed = await this.store.get(manifest.id);
     const tools = check.tools.map(cardTool);
-    const source: ConchAppSource = { kind: 'made', conversationId: ctx.conversationId };
+    // What the chat had read, and whose app this changes: such an app is treated as from outside.
+    const seen = await this.deps.chats.taints?.(ctx.conversationId).catch(() => []);
+    const before = info.appId ? await this.store.get(info.appId) : undefined;
+    const basedOn =
+      before?.source.kind === 'made'
+        ? before.source.basedOn
+        : before && { name: plainLine(before.manifest.name, 80), source: before.source };
+    const afterReading = [
+      ...new Set([
+        ...(before?.source.kind === 'made' ? (before.source.afterReading ?? []) : []),
+        ...(seen ?? []).map((t) => plainLine(t.label, 120)),
+      ]),
+    ].slice(0, 5);
+    const source: ConchAppSource = {
+      kind: 'made',
+      conversationId: ctx.conversationId,
+      ...(afterReading.length && { afterReading }),
+      ...(basedOn && { basedOn }),
+    };
     const signature: SkillSignature = { state: 'unsigned' };
     const offer: ConchAppOffer = {
       offerId: newId('capo'),
@@ -965,7 +1007,7 @@ export class ConchAppService {
     const secrets = { ...kept, ...input.settings.secret };
     if (Object.values(secrets).some(Boolean)) await this.store.setSecrets(id, secrets);
     const now = this.#now();
-    const tools = input.tools;
+    const tools = input.tools.map(storedTool);
     const record: AppRecord = existing
       ? {
           ...existing,
@@ -1037,7 +1079,7 @@ export class ConchAppService {
     try {
       const listed = await (await this.runtimeFor(id)).list();
       await this.store.patch(id, (app) => {
-        app.tools = listed;
+        app.tools = listed.map(storedTool);
       });
     } catch (error) {
       this.#fail(id, error);
@@ -1292,15 +1334,17 @@ export class ConchAppService {
     }
   }
 
-  /** Download where an app came from; a different, safe version waits as its update. */
-  async #findUpdate(app: AppRecord): Promise<boolean> {
-    if (app.source.kind !== 'github') return false;
+  /** What's where an app came from now, downloaded and read. Nothing is written, nothing runs. */
+  async #fetchUpdate(
+    app: AppRecord,
+  ): Promise<{ pkg: AppPackage; source: ConchAppSource } | undefined> {
+    if (app.source.kind !== 'github') return undefined;
     const fetched = await this.deps.parts.sources.fetch(app.source.url);
     const reads = await this.deps.parts.findApps(fetched.archive, {
       ...((fetched.path ?? app.source.path) && { path: fetched.path ?? app.source.path }),
     });
     const read = reads.find((r) => r.ok && r.app.manifest.id === app.id);
-    if (!read?.ok) return false;
+    if (!read?.ok) return undefined;
     const source: ConchAppSource =
       fetched.source.kind === 'github'
         ? {
@@ -1309,74 +1353,113 @@ export class ConchAppService {
             ...(fetched.source.commit && { commit: fetched.source.commit }),
           }
         : app.source;
-    if (read.app.hash === app.hash) {
-      // The same files at a newer commit: nothing to offer, only where it's been seen.
-      await this.store.patch(app.id, (record) => {
-        record.source = source;
-      });
-      return false;
-    }
-    const { found } = await this.#look(read.app, source);
-    if (found.problems.length) return false;
+    return { pkg: read.app, source };
+  }
+
+  /**
+   * The quality bar's safety half without running anything: the tools
+   * module is scanned as text, never loaded. A stranger's code runs only
+   * once the person opens the update (ADR 0061 §9).
+   */
+  async #staticProblems(pkg: AppPackage): Promise<AppCheckItem[]> {
+    const { tools: _tools, ...manifest } = pkg.manifest;
+    const files = new Map(pkg.files);
+    files.set('conch-app.json', Buffer.from(JSON.stringify(manifest)));
+    const check = await this.deps.parts.checkApp(files, {
+      safetyOnly: true,
+      runtime: () => {
+        throw new Error('Nothing runs before you look at it.');
+      },
+    });
+    return check.problems;
+  }
+
+  /** Note a newer version as an app's update: static looks only, so nothing it holds runs. */
+  async #announce(
+    app: AppRecord,
+    held: { pkg: AppPackage; source: ConchAppSource },
+  ): Promise<boolean> {
+    if ((await this.#staticProblems(held.pkg)).length) return false;
+    const signature = await this.deps.parts.verifyApp(held.pkg, this.deps.home);
+    if (signature.state === 'invalid') return false;
     const sameSigner =
-      Boolean(app.signature.fingerprint) &&
-      found.signature.state !== 'invalid' &&
-      found.signature.fingerprint === app.signature.fingerprint;
-    this.#updates.set(app.id, { pkg: read.app, source });
+      Boolean(app.signature.fingerprint) && signature.fingerprint === app.signature.fingerprint;
+    this.#updates.set(app.id, held);
     await this.store.patch(app.id, (record) => {
       record.update = {
-        version: found.manifest.version,
+        version: held.pkg.manifest.version,
         foundAt: this.#now(),
-        signature: found.signature,
+        signature,
         sameSigner,
-        changes: found.changes ?? changesOf(app, { manifest: found.manifest, tools: found.tools }),
+        // Its tools are known once it's opened; until then, what its manifest says.
+        changes: changesOf(app, { manifest: held.pkg.manifest, tools: app.tools }),
       };
-      record.updateHash = read.app.hash;
+      record.updateHash = held.pkg.hash;
     });
     return true;
   }
 
-  /** The update waiting for an app, as its page shows it before **Update**. */
+  /** Download where an app came from; a different, safe version waits as its update. */
+  async #findUpdate(app: AppRecord): Promise<boolean> {
+    const held = await this.#fetchUpdate(app);
+    if (!held) return false;
+    if (held.pkg.hash === app.hash) {
+      // The same files at a newer commit: nothing to offer, only where it's been seen.
+      await this.store.patch(app.id, (record) => {
+        record.source = held.source;
+      });
+      return false;
+    }
+    return this.#announce(app, held);
+  }
+
+  /**
+   * The update waiting for an app, as its page shows it before **Update**:
+   * here, and only here, its tools load — in a throwaway runtime that
+   * fetches nothing and has none of your settings.
+   */
   async updatePreview(id: string): Promise<ConchAppFound> {
     const app = await this.#record(id);
     if (!app.update || !app.updateHash)
       throw new ConchAppError('not-found', 'There’s no update waiting for it.');
-    const held = await this.#heldUpdate(app);
+    let held = this.#updates.get(id);
+    if (!held) {
+      // After a restart the download is gone: fetched again, and what's there now is what's shown.
+      held = await this.#fetchUpdate(app).catch(() => undefined);
+      if (!held || held.pkg.hash === app.hash)
+        throw new ConchAppError('changed', 'The update isn’t there any more. Look again later.');
+      if (held.pkg.hash !== app.updateHash && !(await this.#announce(app, held)))
+        throw new ConchAppError('changed', 'The update changed and can’t be added as it is now.');
+      this.#updates.set(id, held);
+    }
     const { found } = await this.#look(held.pkg, held.source);
     return found;
   }
 
-  async #heldUpdate(app: AppRecord) {
-    let held = this.#updates.get(app.id);
-    if (!held) {
-      // After a restart the download is gone: fetched again, and it must be what was found.
-      await this.#findUpdate(app).catch(() => false);
-      held = this.#updates.get(app.id);
-    }
-    const now = await this.store.get(app.id);
-    if (!held || held.pkg.hash !== now?.updateHash)
-      throw new ConchAppError('changed', 'It changed since you saw it; look at the update again.');
-    return held;
-  }
-
-  /** **Update**: the person's press, installing exactly the version that was found. */
-  async applyUpdate(id: string): Promise<ConchApp> {
+  /**
+   * **Update**: the person's press, carrying the hash of the version they
+   * looked at. Exactly those files, with a signature read from them now.
+   */
+  async applyUpdate(id: string, hash: string): Promise<ConchApp> {
     return this.#installing.run(async () => {
       const app = await this.#record(id);
       if (!app.update) throw new ConchAppError('not-found', 'There’s no update waiting for it.');
-      const held = await this.#heldUpdate(app);
-      const signature = app.update.signature;
+      // Never fetched again here: a press installs what was held for the preview, or nothing.
+      const held = this.#updates.get(id);
+      if (!held || held.pkg.hash !== hash || app.updateHash !== hash)
+        throw new ConchAppError('changed', 'A newer version arrived since you looked; look again.');
+      const { found } = await this.#look(held.pkg, held.source);
+      if (found.problems.length) throw new ConchAppError('invalid', problemText(found.problems));
       return this.#install({
         pkg: held.pkg,
         source: held.source,
-        signature,
-        tools: app.tools,
+        signature: found.signature,
+        tools: found.tools,
         made: false,
         settings: { secret: {}, plain: {} },
       });
     });
   }
-
   /** Apps with an update waiting, for Settings → Updates. */
   updateNotices(): AppUpdateNotice[] {
     return this.store.peek().flatMap((app) =>
@@ -1530,7 +1613,7 @@ export class ConchAppService {
   /** An app made here, signed with the person's key: only what they made is vouched for as theirs. */
   async #signed(id: string): Promise<{ app: AppRecord; files: AppFiles }> {
     const { app, read } = await this.#added(id);
-    if (app.source.kind !== 'made')
+    if (!yours(app.source))
       throw new ConchAppError(
         'invalid',
         'Only apps you made can be published as yours. Share the address you added it from instead.',
@@ -1552,10 +1635,9 @@ export class ConchAppService {
    */
   async exportFile(id: string): Promise<{ name: string; bytes: Buffer }> {
     const app = await this.#record(id);
-    const files =
-      app.source.kind === 'made'
-        ? (await this.#signed(id)).files
-        : (await this.#added(id)).read.files;
+    const files = yours(app.source)
+      ? (await this.#signed(id)).files
+      : (await this.#added(id)).read.files;
     return { name: `${app.id}.conchapp`, bytes: await this.deps.parts.packApp(files) };
   }
 
@@ -1826,7 +1908,7 @@ export class ConchAppService {
       dir: join(this.store.current(app.id), 'skills'),
       depth: 1,
       // Made here: used by itself. Anyone else's: only when you ask for it.
-      mode: app.source.kind === 'made' ? 'auto' : 'manual',
+      mode: madeHere(app.source) ? 'auto' : 'manual',
       idPrefix: `app_${app.id.replaceAll('-', '_')}`,
     }));
   }

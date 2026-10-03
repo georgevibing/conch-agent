@@ -50,7 +50,7 @@ Press **Share** on the app's page, or ask in a chat: "put it on GitHub".
 - **Publish on GitHub** puts the app in a public repository under your GitHub account, ready for anyone to add. The first time, Conch installs GitHub's app if it needs to, and shows you a short code to enter on GitHub. It carries on by itself once you have. Publish again after a change, and the new version goes up.
 - **Save as a file** gives you a `.conchapp` file to send any way you like.
 
-Either way, the app carries your signature, so whoever adds it sees it's from you, and later versions from you carry on.
+Either way, the app carries your signature, so whoever adds it sees it's from you, and later versions from you carry on. Only apps you made can go out under your name: to share one you added, share the address you added it from.
 
 ## Add one someone made
 
@@ -58,7 +58,7 @@ Either way, the app carries your signature, so whoever adds it sees it's from yo
 - **From a file.** Drop a `.conchapp` file on **Apps**, or choose **From a link → Choose a file**.
 - **From the community.** Type in **Find an app**. Apps people have shared on GitHub show under **From the community**. Press **Look**.
 
-Before you add it, Conch shows what it does, what it can do, who made it, and why it can't be added if something is wrong. An app you didn't make starts at **Ask every time**, and its skills wait until you ask for them.
+Before you add it, Conch shows what it does, what it can do, who made it, and why it can't be added if something is wrong. Adding it asks you to confirm it's you first, as Conch does before anything that brings someone else's code in. An app you didn't make starts at **Ask every time**, and its skills wait until you ask for them. If it takes the place of an app with the same name from someone else, the preview says so, and nothing of the old one (its settings, keys or notes) carries over.
 
 A repository can hold several apps. Conch lists them all, and you choose.
 

@@ -146,6 +146,18 @@ describe('appSourceLine', () => {
 
   it('says who an app is from in a few words', () => {
     expect(appSourceLine({ kind: 'made' }, unsigned)).toBe('Made by you');
+    expect(appSourceLine({ kind: 'made', afterReading: ['trains.example'] }, unsigned)).toBe(
+      'Made in a chat that read trains.example',
+    );
+    expect(
+      appSourceLine({ kind: 'made', basedOn: { name: 'Weather', source: github } }, unsigned),
+    ).toBe('Based on Weather from github.com/ada/plant-diary');
+    expect(
+      appSourceLine(
+        { kind: 'made', basedOn: { name: 'Weather', source: { kind: 'file', name: 'w' } } },
+        unsigned,
+      ),
+    ).toBe('Based on Weather from a file');
     expect(appSourceLine(github, { state: 'verified', publisher: 'Ada Lovelace' })).toBe(
       'Signed by Ada Lovelace',
     );

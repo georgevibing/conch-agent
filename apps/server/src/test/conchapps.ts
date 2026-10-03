@@ -261,8 +261,9 @@ export function fakeParts(options: FakeOptions = {}): FakeParts {
         };
       const problems: AppCheckItem[] = [];
       let tools: ConchAppTool[] = [];
+      // Like the real check: no tools module named, nothing is loaded.
       try {
-        tools = await check.runtime(read.app).list();
+        if (read.app.manifest.tools) tools = await check.runtime(read.app).list();
       } catch (error) {
         problems.push({ message: `The tools module didn’t load: ${(error as Error).message}` });
       }

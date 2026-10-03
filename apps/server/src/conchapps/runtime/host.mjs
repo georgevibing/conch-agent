@@ -65,19 +65,26 @@
  * objects (`Object.prototype`, `Array.prototype` and the like) are frozen.
  * A call has 30 seconds.
  *
- * ## The wire (gateway ⇄ this process, over the IPC channel)
+ * ## The wire (gateway ⇄ this process)
+ *
+ * Newline-delimited JSON: in on stdin, out on fd 3 (a pipe of its own, so the
+ * gateway counts what comes out as it reads, and stops a process the moment
+ * a line runs past its cap). Node's IPC channel isn't used: it reads a whole
+ * message before anyone can measure it.
  *
  * - in: `init` (paths, settings, limits), `call` (id, tool, input), `fetched`
  *   (id, response);
  * - out: `ready` (the tools' definitions) or `broken` (why it didn't load),
  *   `result` (id, text or the error's message), `fetch` (id, request).
  *
- * The app never touches the channel: it sees a stand-in `process` with no
- * `send`, and the gateway checks every message anyway.
+ * The app never touches either pipe: it sees a stand-in `process` with no
+ * `stdin` or `send`, no Node module that could open a file descriptor, and
+ * the gateway checks every message anyway.
  */
 import { randomBytes } from 'node:crypto';
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { isBuiltin, registerHooks } from 'node:module';
+import { Socket } from 'node:net';
 import { isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { format } from 'node:util';
@@ -85,8 +92,7 @@ import { format } from 'node:util';
 // ── What this process keeps for itself, before anything else runs ─────────
 
 const real = globalThis.process;
-const send = real.send?.bind(real);
-const onMessage = real.on.bind(real);
+const onProcess = real.on.bind(real);
 const writeErr = real.stderr.write.bind(real.stderr);
 const exit = real.exit.bind(real);
 const nextTick = real.nextTick.bind(real);
@@ -100,10 +106,23 @@ const { freeze, defineProperty, getPrototypeOf, entries, hasOwn } = Object;
 const { isArray } = Array;
 const BufferFrom = Buffer.from.bind(Buffer);
 const BufferByteLength = Buffer.byteLength.bind(Buffer);
+const BufferConcat = Buffer.concat.bind(Buffer);
 
-if (!send) {
+/** What comes in on stdin, per line: more than any message the gateway sends. */
+const MAX_IN = 16 * 1024 * 1024;
+
+let wire;
+try {
+  wire = new Socket({ fd: 3, readable: false, writable: true });
+} catch {
   writeErr('This runtime only runs inside Conch.\n');
   exit(1);
+}
+const input = real.stdin;
+
+/** One message to the gateway: a line of JSON (which never holds a raw newline). */
+function send(message) {
+  wire.write(`${jsonStringify(message)}\n`);
 }
 
 /** Error messages name the app's own files, never where they are on this computer. */
@@ -344,7 +363,6 @@ function lockRealProcess() {
       } catch {
         // A property Node already made fixed stays as Node made it (and the permission model guards it).
       }
-  // `channel` stays: Node's own IPC reads through it (and the app never sees this object).
   for (const name of ['mainModule', 'report'])
     try {
       defineProperty(real, name, { value: undefined, writable: false, configurable: false });
@@ -469,6 +487,7 @@ function harden() {
     generatorProto.constructor,
     asyncGeneratorProto.constructor,
     Buffer,
+    Buffer.prototype,
   ];
   if (typeof Iterator === 'function') targets.push(Iterator, Iterator.prototype);
   for (const target of targets) freeze(target);
@@ -530,6 +549,19 @@ async function readValue(key) {
   }
 }
 
+/** Bytes being written right now, one entry per write: counted against the cap. */
+const writing = new Map();
+let lastReservation = 0;
+
+/** A write's temp file, left behind when the process was stopped mid-write. */
+const TEMP_FILE = /^\..*\.tmp$/;
+
+/** Temp files from a process stopped mid-write: never counted, so never kept. */
+async function sweepTemp() {
+  for (const name of await readdir(dataDir).catch(() => []))
+    if (TEMP_FILE.test(name)) await rm(join(dataDir, name), { force: true }).catch(() => undefined);
+}
+
 async function writeValue(key, value) {
   if (value === undefined) return removeValue(key);
   let text;
@@ -541,23 +573,31 @@ async function writeValue(key, value) {
   if (text === undefined) throw new Error(`Only JSON can be kept, and “${key}” isn’t.`);
   const bytes = BufferByteLength(text);
   const known = await knownSizes();
+  // From here to the reservation nothing waits, so two writes at once can't
+  // both fit in the room only one has. A write's temp file counts until it's
+  // renamed; the value it replaces is subtracted, since the rename removes it.
   let total = 0;
   for (const size of known.values()) total += size;
+  for (const size of writing.values()) total += size;
   if (total - (known.get(key) ?? 0) + bytes > limits.data)
     throw new Error(
       `The app’s data is full (${Math.round(limits.data / 1024 / 1024)} MB). Delete what it no longer needs, then try again.`,
     );
-  await mkdir(dataDir, { recursive: true });
+  const reservation = ++lastReservation;
+  writing.set(reservation, bytes);
   const path = join(dataDir, `${key}.json`);
   const tmp = join(dataDir, `.${key}.${randomBytes(4).toString('hex')}.tmp`);
-  await writeFile(tmp, text);
   try {
+    await mkdir(dataDir, { recursive: true });
+    await writeFile(tmp, text);
     await replace(tmp, path);
+    known.set(key, bytes);
   } catch (error) {
     await rm(tmp, { force: true });
     throw new Error(`Couldn’t keep “${key}”: ${error?.code ?? 'the disk refused'}.`);
+  } finally {
+    writing.delete(reservation);
   }
-  known.set(key, bytes);
 }
 
 async function removeValue(key) {
@@ -761,6 +801,7 @@ async function load(message) {
   limits = { ...limits, ...message.limits };
   entryUrl = pathToFileURL(join(appDir, message.tools)).href;
   const settings = freeze({ ...message.settings });
+  await sweepTemp();
   installHooks();
   fenceNetwork();
   lockRealProcess();
@@ -844,7 +885,7 @@ async function call(message) {
 }
 
 let loaded = false;
-onMessage('message', (message) => {
+function receive(message) {
   if (!message || typeof message !== 'object') return;
   if (message.t === 'init' && !loaded) {
     loaded = true;
@@ -858,9 +899,39 @@ onMessage('message', (message) => {
     fetches.delete(message.id);
     resolve?.(message.response ?? { refused: 'Conch couldn’t make that request.' });
   }
+}
+
+let partial = [];
+let partialBytes = 0;
+input.on('data', (chunk) => {
+  let start = 0;
+  for (;;) {
+    const end = chunk.indexOf(10, start);
+    if (end === -1) {
+      partial.push(chunk.subarray(start));
+      partialBytes += chunk.length - start;
+      if (partialBytes > MAX_IN) exit(1);
+      return;
+    }
+    partial.push(chunk.subarray(start, end));
+    const line = BufferConcat(partial).toString('utf8');
+    partial = [];
+    partialBytes = 0;
+    start = end + 1;
+    let message;
+    try {
+      message = jsonParse(line);
+    } catch {
+      continue;
+    }
+    receive(message);
+  }
 });
-onMessage('disconnect', () => exit(0));
+// The gateway closed its end, or went away: nothing more will come.
+input.on('end', () => exit(0));
+input.on('error', () => exit(0));
+wire.on('error', () => exit(0));
 // A tool's stray rejection is its own problem, not the end of every other call.
-onMessage('unhandledRejection', (reason) => {
+onProcess('unhandledRejection', (reason) => {
   writeErr(`${trim(local(String(reason?.stack ?? reason)), 2000)}\n`);
 });

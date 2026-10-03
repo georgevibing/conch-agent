@@ -2,7 +2,8 @@ import { gzipSync } from 'node:zlib';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { createSources, searchWords } from './sources';
+import { GitHub } from './github';
+import { createSources, searchWords, sourceOf } from './sources';
 import { SourceError } from './types';
 
 vi.mock('node:dns/promises', () => ({
@@ -136,6 +137,57 @@ describe('adding from a link', () => {
     );
     expect(ref.code).toBe('not-found');
     expect(ref.message).toMatch(/no branch, tag or release called v9/);
+  });
+
+  it('follows the newest version when no version was asked for, folder or not', async () => {
+    let tag = 'v1.0.0';
+    const commits: Record<string, string> = { 'v1.0.0': SHA, 'v1.1.0': OTHER };
+    const fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.hostname === 'codeload.github.com')
+        return new Response(new Uint8Array(archive), {
+          headers: { 'content-type': 'application/x-gzip' },
+        });
+      if (url.pathname.includes('/tarball/'))
+        return new Response(null, {
+          status: 302,
+          headers: { location: `https://codeload.github.com${url.pathname}` },
+        });
+      if (url.pathname === '/repos/ada/apps/releases/latest')
+        return Response.json({ tag_name: tag });
+      const ref = /^\/repos\/ada\/apps\/commits\/(.+)$/.exec(url.pathname)?.[1];
+      const sha = ref && commits[decodeURIComponent(ref)];
+      return sha ? Response.json({ sha }) : Response.json({}, { status: 404 });
+    }) as unknown as typeof globalThis.fetch;
+    // A folder in a repository, at its newest release.
+    const github = new GitHub({ fetch, version: '1' });
+    const added = sourceOf(
+      'ada',
+      'apps',
+      await github.resolve({ kind: 'github', owner: 'ada', repo: 'apps', path: 'apps/plant' }),
+    );
+    expect(added).toEqual({
+      kind: 'github',
+      owner: 'ada',
+      repo: 'apps',
+      path: 'apps/plant',
+      commit: SHA,
+      url: 'https://github.com/ada/apps',
+    });
+    // A new release: the link it keeps fetches it, and the folder still comes along.
+    tag = 'v1.1.0';
+    const sources = createSources({ fetch, version: '1' });
+    expect(await sources.latest({ owner: 'ada', repo: 'apps' })).toEqual({
+      ref: 'v1.1.0',
+      commit: OTHER,
+    });
+    const update = await sources.fetch(added.url);
+    expect(update.source).toMatchObject({ commit: OTHER });
+    expect(update.source).not.toHaveProperty('ref');
+    // A version someone asked for stays pinned, in the ref and the link.
+    expect(
+      sourceOf('ada', 'apps', { ref: 'v1.0.0', at: 'v1.0.0', commit: SHA, path: 'apps/plant' }),
+    ).toMatchObject({ ref: 'v1.0.0', url: 'https://github.com/ada/apps/tree/v1.0.0/apps/plant' });
   });
 
   it('downloads a .conchapp from anywhere public', async () => {

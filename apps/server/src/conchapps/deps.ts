@@ -10,7 +10,10 @@ import type { SkillTrust } from '../skills/trust';
 import { checkApp } from './check';
 import { createFetcher } from './fetcher';
 import { appHash, findApps, packApp, readFiles, readFolder, SIGNATURE_FILE } from './package';
-import { createPublisher } from './publish';
+import { join } from 'node:path';
+
+import { Mutex, readJson, writeJson } from '../lib/fs';
+import { createPublisher, type PublishedRepos } from './publish';
 import { createRuntime } from './runtime';
 import { signApp, verifyAppWith } from './sign';
 import { createSources } from './sources';
@@ -62,6 +65,33 @@ export interface PartsContext {
   redact: () => (text: string) => string;
 }
 
+/**
+ * The GitHub repositories each app was published to, by GitHub's own id
+ * (`conch-apps-published.json`): publishing again only ever updates that one.
+ */
+/** One lock per file, however many readers there are. */
+const locks = new Map<string, Mutex>();
+
+export function publishedRepos(home: string): PublishedRepos {
+  const path = join(home, 'conch-apps-published.json');
+  const lock = locks.get(path) ?? new Mutex();
+  locks.set(path, lock);
+  const read = async (): Promise<Record<string, { repoId: number }>> =>
+    (await readJson<Record<string, { repoId: number }>>(path).catch(() => undefined)) ?? {};
+  return {
+    get: async (appId) => {
+      const all = await read();
+      const found = Object.hasOwn(all, appId) ? all[appId] : undefined;
+      return found && Number.isSafeInteger(found.repoId) ? { repoId: found.repoId } : undefined;
+    },
+    set: (appId, repoId) =>
+      lock.run(async () => {
+        const all = await read();
+        await writeJson(path, { ...all, [appId]: { repoId } });
+      }),
+  };
+}
+
 /** The real parts, joined: each was built and tested alone against `types.ts`. */
 export function conchAppParts(context: PartsContext): ConchAppParts {
   // One fetcher for every app: the hourly limit lives in it.
@@ -86,6 +116,10 @@ export function conchAppParts(context: PartsContext): ConchAppParts {
     runtime: (options) => createRuntime({ ...options, heal: options.heal ?? context.heal }),
     fetcher,
     sources: createSources({ version: SERVER_VERSION }),
-    publisher: createPublisher({ home: context.home, redact: (text) => context.redact()(text) }),
+    publisher: createPublisher({
+      home: context.home,
+      redact: (text) => context.redact()(text),
+      published: publishedRepos(context.home),
+    }),
   };
 }

@@ -7,6 +7,7 @@
 import {
   AppFilePath,
   AppId,
+  madeHere,
   type ConchAppCheck,
   type ConversationEventInput,
   type TaintSource,
@@ -105,7 +106,7 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
   const fromOutside = async (appId: string | undefined) => {
     if (!appId) return;
     const app = await service.get(appId).catch(() => undefined);
-    if (app && app.source.kind !== 'made')
+    if (app && !madeHere(app.source))
       ctx.taint?.({
         kind: 'app',
         label: `${plainLine(app.manifest.name, 60)} (from ${sourceName(app.source)})`,

@@ -127,7 +127,13 @@ export function appSourceLine(
   source: ConchAppSource,
   signature: Pick<SkillSignature, 'state' | 'publisher' | 'lookalike'>,
 ): string {
-  if (source.kind === 'made') return 'Made by you';
+  if (source.kind === 'made') {
+    if (source.basedOn)
+      return `Based on ${source.basedOn.name} ${appSourceLine(source.basedOn.source, { state: 'unsigned' }).replace(/^From/, 'from')}`;
+    if (source.afterReading?.length)
+      return `Made in a chat that read ${source.afterReading.slice(0, 2).join(' and ')}`;
+    return 'Made by you';
+  }
   if (signature.state === 'invalid') return 'Its signature doesn’t hold';
   if (signature.lookalike)
     return signature.publisher
