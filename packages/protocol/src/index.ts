@@ -53,6 +53,7 @@ export * from './apps';
 export * from './artifacts';
 export * from './chat-cards';
 export * from './conch-apps';
+export * from './conch-apps-words';
 export * from './questions';
 export * from './attachments';
 export * from './background';
