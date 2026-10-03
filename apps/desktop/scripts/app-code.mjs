@@ -34,3 +34,23 @@ export function resources() {
   copyFileSync(join(icons, 'conch-512.png'), join(dir, 'icon.png'));
   copyFileSync(join(icons, 'conch-tray-256.png'), join(dir, 'tray.png'));
 }
+
+/**
+ * How to run pnpm from a script that pnpm started: the program in
+ * `npm_execpath` (pnpm 12's own native program, or a script for Node), else
+ * the `pnpm` on PATH (a `.cmd` on Windows, which only cmd.exe can start).
+ */
+export function pnpmCommand(args, env = process.env, platform = process.platform) {
+  const exec = env.npm_execpath;
+  if (exec && /pnpm/i.test(exec)) {
+    if (/\.[cm]?js$/i.test(exec))
+      return { command: process.execPath, args: [exec, ...args], shell: false };
+    if (!/\.(cmd|bat|ps1)$/i.test(exec)) return { command: exec, args, shell: false };
+  }
+  return {
+    command: platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
+    args,
+    // Every argument here is the script's own, never a person's.
+    shell: platform === 'win32',
+  };
+}

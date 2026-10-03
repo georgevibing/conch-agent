@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 
 import { context } from 'esbuild';
 
-import { options, resources } from './app-code.mjs';
+import { options, pnpmCommand, resources } from './app-code.mjs';
 
 const here = dirname(dirname(fileURLToPath(import.meta.url)));
 const repo = join(here, '..', '..');
@@ -33,18 +33,8 @@ const answers = async (url) => {
 // The web app: Vite, unless one is already running (pnpm dev).
 let vite;
 if (!(await answers(WEB))) {
-  const script = process.env.npm_execpath;
-  vite =
-    script && /pnpm/i.test(script)
-      ? spawn(process.execPath, [script, '--filter', '@conch/web', 'dev'], {
-          cwd: repo,
-          stdio: 'inherit',
-        })
-      : spawn('pnpm', ['--filter', '@conch/web', 'dev'], {
-          cwd: repo,
-          stdio: 'inherit',
-          shell: process.platform === 'win32',
-        });
+  const pn = pnpmCommand(['--filter', '@conch/web', 'dev']);
+  vite = spawn(pn.command, pn.args, { cwd: repo, stdio: 'inherit', shell: pn.shell });
   for (let i = 0; !(await answers(WEB)); i++) {
     if (i > 120) throw new Error(`The web app's dev server didn't start at ${WEB}.`);
     await new Promise((resolve) => setTimeout(resolve, 500));

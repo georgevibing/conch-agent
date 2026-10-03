@@ -27,6 +27,8 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 
+import { pnpmCommand } from './app-code.mjs';
+
 const here = dirname(dirname(fileURLToPath(import.meta.url)));
 const repo = join(here, '..', '..');
 const platform = process.platform;
@@ -42,16 +44,8 @@ const server = join(conch, 'apps', 'server');
 const say = (text) => console.warn(`  🐚  ${text}`);
 /** pnpm itself: its script with this Node when pnpm started us, else the `pnpm` on PATH. */
 const pnpm = (args, cwd = repo) => {
-  const script = process.env.npm_execpath;
-  const result =
-    script && /pnpm/i.test(script)
-      ? spawnSync(process.execPath, [script, ...args], { cwd, stdio: 'inherit' })
-      : spawnSync(platform === 'win32' ? 'pnpm.cmd' : 'pnpm', args, {
-          cwd,
-          stdio: 'inherit',
-          // A .cmd needs cmd.exe; every argument here is the script's own, never a person's.
-          shell: platform === 'win32',
-        });
+  const pn = pnpmCommand(args);
+  const result = spawnSync(pn.command, pn.args, { cwd, stdio: 'inherit', shell: pn.shell });
   if (result.status !== 0) throw new Error(`pnpm ${args.join(' ')} failed`);
 };
 
