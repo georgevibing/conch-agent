@@ -8,6 +8,32 @@ const at = (minutes: number) => 1_790_000_000_000 + minutes * 60_000;
 const ev = (e: Record<string, unknown>): ConversationEvent =>
   ({ conversationId: 'c1', seq: seq++, at: at(seq), ...e }) as ConversationEvent;
 
+describe('looking back through your chats', () => {
+  it('says what it looked for and which chat it read, and opens at the line', () => {
+    seq = 0;
+    const events = [
+      ev({
+        type: 'chats.looked',
+        lookId: 'look_1',
+        action: 'search',
+        query: 'venue',
+        chats: [{ id: 'c2', title: 'Wedding planning', lines: [] }],
+      }),
+      ev({
+        type: 'chats.looked',
+        lookId: 'look_2',
+        action: 'read',
+        chats: [{ id: 'c2', title: 'Wedding planning', lines: [] }],
+      }),
+    ];
+    const entries = entriesOf({ id: 'c1', title: 'Plans' }, events);
+    expect(entries.map((e) => [e.kind, e.title, e.anchor])).toEqual([
+      ['memory', 'Looked through your chats for “venue”', 'look_1'],
+      ['memory', 'Read your chat “Wedding planning”', 'look_2'],
+    ]);
+  });
+});
+
 describe('what the assistant did', () => {
   it('says it in the past tense', () => {
     expect(didWhat('Bash', { command: 'npm test' })).toBe('Ran `npm test`');

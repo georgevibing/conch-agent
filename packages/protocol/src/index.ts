@@ -24,6 +24,7 @@ import {
 } from './common';
 import { DoctorReport } from './doctor';
 import { Memory, MemoryKind } from './memory';
+import { PastChatsLooked } from './past-chats';
 import { EngineStatus, LoginState } from './engine';
 import { HealNote } from './healed';
 import { CatalogId, Integration } from './integrations';
@@ -61,6 +62,7 @@ export * from './providers';
 export * from './routines';
 export * from './safety';
 export * from './search';
+export * from './past-chats';
 export * from './setup';
 export * from './skills';
 export * from './holds';
@@ -416,6 +418,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
   }),
   /** The chat read something from outside: from here on, sending and changing ask first (ADR 0028). */
   z.object({ ...logged, type: z.literal('taint'), source: TaintSource }),
+  /** The assistant looked through your other chats (ADR 0059): for what, and where it found it. */
+  z.object({ ...logged, type: z.literal('chats.looked'), ...PastChatsLooked.shape }),
   /**
    * The assistant created, changed or deleted files (ADR 0030): what, and the
    * change set that puts them back. `toolUseId` when one tool call did it;

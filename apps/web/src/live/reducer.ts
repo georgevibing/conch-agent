@@ -5,6 +5,7 @@ import type {
   ArtifactKind,
   Attachment,
   ChangedFile,
+  PastChatSeen,
   TaintSource,
   VaultPermission,
   VaultRequest,
@@ -112,6 +113,16 @@ export type TranscriptItem =
       action: 'saved' | 'forgotten';
       /** Waits for an OK: learned in a chat that read something untrusted (ADR 0032). */
       pending?: boolean;
+    }
+  | {
+      /** It looked through your other chats (ADR 0059): for what, with a link to each place. */
+      kind: 'looked';
+      id: string;
+      action: 'search' | 'read';
+      query?: string;
+      close?: boolean;
+      chats: PastChatSeen[];
+      at: number;
     }
   | {
       /** Something the assistant made (ADR 0034): a card that opens it beside the chat. */
@@ -453,6 +464,22 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             content: event.memory.content,
             action: 'saved',
             ...(event.memory.pending && { pending: true }),
+          },
+        ],
+      };
+    case 'chats.looked':
+      return {
+        ...base,
+        items: [
+          ...items,
+          {
+            kind: 'looked',
+            id: event.lookId,
+            action: event.action,
+            ...(event.query !== undefined && { query: event.query }),
+            ...(event.close && { close: true }),
+            chats: event.chats,
+            at: event.at,
           },
         ],
       };

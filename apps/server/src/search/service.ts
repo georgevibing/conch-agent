@@ -3,7 +3,7 @@ import { existsSync, rmSync } from 'node:fs';
 import type { SearchPreview, SearchResults, SearchState, ServerEvent } from '@conch/protocol';
 
 import { setAside, type Heal } from '../lib/recover';
-import { isBroken, SearchIndex } from './index';
+import { isBroken, SearchIndex, type SearchSlice } from './index';
 import { SearchIndexer, type SearchSource } from './indexer';
 
 export interface SearchServiceDeps {
@@ -95,6 +95,14 @@ export class SearchService {
     q: string,
   ): Promise<SearchPreview | null | 'unavailable'> {
     return this.#use((index) => index.preview(conversationId, anchor, q), null);
+  }
+
+  /** A stretch of one conversation, for the assistant's `read_chat` (ADR 0059). */
+  slice(
+    conversationId: string,
+    options: Parameters<SearchIndex['slice']>[1],
+  ): Promise<SearchSlice | null | 'unavailable'> {
+    return this.#use((index) => index.slice(conversationId, options), null);
   }
 
   /** Wait for pending indexing (tests). */

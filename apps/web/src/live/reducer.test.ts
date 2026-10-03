@@ -103,6 +103,21 @@ describe('transcript reducer', () => {
     expect(pendingPermission(view)).toBeUndefined();
   });
 
+  it('shows where it looked through earlier chats, once per look', () => {
+    const chats = [{ id: 'c9', title: 'Wedding', lines: [] }];
+    const view = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'Which venue was it?' },
+        { type: 'chats.looked', lookId: 'look_1', action: 'search', query: 'venue', chats },
+        { type: 'chats.looked', lookId: 'look_2', action: 'read', chats },
+      ),
+    );
+    expect(view.items.slice(1)).toEqual([
+      { kind: 'looked', id: 'look_1', action: 'search', query: 'venue', chats, at: 1100 },
+      { kind: 'looked', id: 'look_2', action: 'read', chats, at: 1200 },
+    ]);
+  });
+
   it('records memories and errors, closing open messages at turn end', () => {
     const view = reduceAll(
       log(

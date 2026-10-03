@@ -287,6 +287,13 @@ export interface ToolContext {
    * Tools that would act without asking (a trusted site) ask once instead.
    */
   untrusted?: () => string | undefined;
+  /**
+   * Everything untrusted this chat has read so far (ADR 0028), whether or not
+   * the guard is on: a `person` among them means someone else's words are in it.
+   */
+  taints?: () => readonly TaintSource[];
+  /** A tool brought something untrusted in, beyond what `taintFrom` can tell from its name. */
+  taint?: (source: TaintSource) => void;
   /** A skill in use doesn't say it needs this (ADR 0031): why, in a sentence. */
   restricted?: (capability: SkillCapability, detail?: string) => Promise<string | undefined>;
 }
@@ -1074,6 +1081,8 @@ export class ConversationManager {
               const tainted = settings.preferences.checkAfterReading ? this.#tainted(live) : [];
               return tainted.length ? describeTaint(tainted) : undefined;
             },
+            taints: () => this.#tainted(live),
+            taint: (source) => this.#taint(live, source),
           }) ?? [])),
       ...(extras?.tools ?? []),
     );

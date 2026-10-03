@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { newId } from '../../lib/ids';
 import { installHints } from '../claude-code/detect';
 import { friendlyError } from '../claude-code/translate';
-import { severityFor } from '@conch/protocol';
+import { readPastChatRead, readPastChatsFound, severityFor } from '@conch/protocol';
 
 import { Emitter } from '../../lib/emitter';
 import { hostToolText } from '../types';
@@ -497,6 +497,35 @@ export class MockEngine implements Engine {
         yield { type: 'done', outcome: 'success' } as const;
       };
 
+      // Earlier chats (ADR 0059): find the line, then read around it.
+      const lookBack =
+        /\b(?:look through|search) (?:my|our) (?:earlier |past |old )?chats for (.+?)[.?!]*$/i.exec(
+          input.prompt.trim(),
+        );
+      if (lookBack?.[1]) {
+        if (!input.tools.some((t) => t.name === 'search_chats')) {
+          yield* speak('I can’t look through your earlier chats from here.');
+          return;
+        }
+        const found = readPastChatsFound(
+          yield* hostTool('search_chats', { query: lookBack[1].replace(/^["“]|["”]$/g, '') }),
+        );
+        const best = found?.chats[0];
+        const line = best?.lines[0];
+        const read =
+          best && line
+            ? readPastChatRead(
+                yield* hostTool('read_chat', { chat: best.chat, message: line.message }),
+              )
+            : undefined;
+        const said = read?.lines.find((l) => l.message === line?.message) ?? line;
+        yield* speak(
+          best && said
+            ? `In “${best.title}”, ${said.who === 'you' ? 'you said' : said.who === 'them' ? 'someone else said' : 'I said'}: “${said.text}”`
+            : `I couldn’t find ${lookBack[1]} in your earlier chats.`,
+        );
+        return;
+      }
       // Gmail as an app (ADR 0048): the Google apps' own tools, whichever way it's signed in.
       const gmail = /\bsearch my gmail for (.+?)[.?!]*$/i.exec(input.prompt.trim());
       if (gmail?.[1]) {

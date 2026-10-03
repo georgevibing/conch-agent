@@ -116,6 +116,7 @@ import { MemoryStore } from './memory/store';
 import { MemoryTidy } from './memory/tidy';
 import { SkillSuggester } from './skills/suggest';
 import { RoutineService } from './routines/service';
+import { PAST_CHATS_PROMPT, pastChatTools, withOthers, type ChatFacts } from './search/past';
 import { SearchService } from './search/service';
 import { RoutineStore } from './routines/store';
 import { SettingsStore } from './settings/store';
@@ -539,6 +540,15 @@ export class Services {
                 ctx,
               ),
               ...offeredSlackTools(this.slack, ctx),
+              // Your earlier chats, never in a chat with someone else in it (ADR 0059).
+              ...pastChatTools(
+                {
+                  search: this.search,
+                  about: (id) => this.#chatFacts(id),
+                  redact: this.vault.redactor(),
+                },
+                ctx,
+              ),
             ],
       context: async (engine, conversationId) =>
         [
@@ -551,6 +561,7 @@ export class Services {
           this.artifacts.promptSection(engine.hostTools !== false),
           await this.artifacts.editedSection(conversationId).catch(() => ''),
           engine.hostTools === false ? '' : TASKS_PROMPT,
+          engine.hostTools === false ? '' : await this.#pastChatsPrompt(conversationId),
         ]
           .filter(Boolean)
           .join('\n\n'),
@@ -1161,6 +1172,31 @@ export class Services {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /** What looking through earlier chats needs to know about one (ADR 0059); undefined once it's gone. */
+  async #chatFacts(id: string): Promise<ChatFacts | undefined> {
+    const found = await this.conversations.detail(id).catch(() => undefined);
+    if (!found) return undefined;
+    const { conversation, events } = found;
+    return {
+      title: conversation.title,
+      ...(conversation.archivedAt !== undefined && { archivedAt: conversation.archivedAt }),
+      ...(conversation.origin && { origin: conversation.origin }),
+      taint: events.flatMap((e) => (e.type === 'taint' ? [e.source] : [])),
+    };
+  }
+
+  /**
+   * How to look back, for the chats that can: not one with someone else's
+   * words in it, nor a routine's run, a task or a page's refresh, which don't
+   * get Conch's tools.
+   */
+  async #pastChatsPrompt(conversationId: string): Promise<string> {
+    const facts = await this.#chatFacts(conversationId);
+    if (!facts || withOthers(facts.taint)) return '';
+    if (facts.origin && facts.origin.kind !== 'channel') return '';
+    return PAST_CHATS_PROMPT;
   }
 
   /**

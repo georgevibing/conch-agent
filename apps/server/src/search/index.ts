@@ -59,6 +59,25 @@ export interface IndexedConversation {
   updatedAt: number;
 }
 
+/** One message of a conversation, as the index keeps it. */
+export interface SliceRow {
+  anchor: string;
+  role: SearchRole;
+  seq: number;
+  at: number;
+  text: string;
+}
+
+export interface SearchSlice {
+  conversation: IndexedConversation;
+  /** Oldest first. */
+  rows: SliceRow[];
+  /** The message asked for isn't in it (any more). */
+  missed?: boolean;
+  earlier: boolean;
+  later: boolean;
+}
+
 interface Row {
   id: number;
   conversation_id: string;
@@ -380,6 +399,67 @@ export class SearchIndex {
     return this.#stmt(
       'SELECT id, title, created_at, updated_at FROM conversations WHERE id = ?',
     ).get(id) as { id: string; title: string; created_at: number; updated_at: number } | undefined;
+  }
+
+  /**
+   * A stretch of one conversation, oldest first, for the assistant's
+   * `read_chat` (ADR 0059): `count` messages around `at` (it included), or
+   * just before or after it (not included). Without `at` (or with one that
+   * isn't there, `missed`): the end, or the start for `after`.
+   */
+  slice(
+    conversationId: string,
+    options: { at?: string; direction: 'around' | 'before' | 'after'; count: number },
+  ): SearchSlice | null {
+    const conversation = this.#conversation(conversationId);
+    if (!conversation) return null;
+    const cols = 'anchor, role, seq, at, text';
+    const count = Math.max(1, Math.floor(options.count));
+    const target = options.at
+      ? (this.#stmt(`SELECT ${cols} FROM docs WHERE conversation_id = ? AND anchor = ?`).get(
+          conversationId,
+          options.at,
+        ) as SliceRow | undefined)
+      : undefined;
+    const before = (seq: number, n: number) =>
+      (
+        this.#stmt(
+          `SELECT ${cols} FROM docs WHERE conversation_id = ? AND seq < ? ORDER BY seq DESC LIMIT ?`,
+        ).all(conversationId, seq, n) as unknown as SliceRow[]
+      ).reverse();
+    const after = (seq: number, n: number) =>
+      this.#stmt(
+        `SELECT ${cols} FROM docs WHERE conversation_id = ? AND seq > ? ORDER BY seq LIMIT ?`,
+      ).all(conversationId, seq, n) as unknown as SliceRow[];
+    let rows: SliceRow[];
+    if (target && options.direction === 'before') rows = before(target.seq, count);
+    else if (target && options.direction === 'after') rows = after(target.seq, count);
+    else if (target) {
+      const lead = Math.floor((count - 1) / 2);
+      const tail = after(target.seq, count - 1 - lead);
+      // Near the end, more of what came before.
+      rows = [...before(target.seq, count - 1 - tail.length), target, ...tail];
+    } else if (options.direction === 'after') rows = after(-1, count);
+    else rows = before(Number.MAX_SAFE_INTEGER, count);
+    const first = rows[0];
+    const last = rows.at(-1);
+    const exists = (sql: string, seq: number) => Boolean(this.#stmt(sql).get(conversationId, seq));
+    return {
+      conversation: {
+        id: conversation.id,
+        title: conversation.title,
+        createdAt: conversation.created_at,
+        updatedAt: conversation.updated_at,
+      },
+      rows,
+      ...(options.at && !target && { missed: true }),
+      earlier: first
+        ? exists('SELECT 1 FROM docs WHERE conversation_id = ? AND seq < ? LIMIT 1', first.seq)
+        : false,
+      later: last
+        ? exists('SELECT 1 FROM docs WHERE conversation_id = ? AND seq > ? LIMIT 1', last.seq)
+        : false,
+    };
   }
 
   /**
