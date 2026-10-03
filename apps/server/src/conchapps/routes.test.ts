@@ -12,6 +12,7 @@ import type { ConchAppOffer, ConversationEvent } from '@conch/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
+import { tallyFiles } from '../engines/mock/tally';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 import { fakePack, fakeParts, fakeSign, textFiles } from '../test/conchapps';
@@ -195,6 +196,55 @@ describe('Conch apps over HTTP: the attacks', () => {
       });
       expect(res.statusCode, `${method} ${url}`).toBe(403);
     }
+  });
+
+  it('asks that it’s you to add an app made in a chat that read something from outside', async () => {
+    const g = await setup();
+    const signedIn = await g.app.inject({
+      method: 'PUT',
+      url: '/api/access/password',
+      payload: { username: 'ada', password: PASSWORD },
+    });
+    const cookie = cookieOf(signedIn);
+    const convo = await chat(g.services, 'hello');
+    await g.services.conversations.addTaint(convo.id, [{ kind: 'web', label: 'trains.example' }]);
+    const apps = g.services.conchApps;
+    const { draft } = await apps.newDraft(convo.id, { name: 'Tally', id: 'tally' });
+    for (const [path, content] of Object.entries(tallyFiles()))
+      await apps.write(draft.id, path, content);
+    await apps.check(draft.id);
+    await apps.tryTool(draft.id, 'count', {});
+    await apps.tryTool(draft.id, 'read_count', {});
+    await apps.check(draft.id);
+    const offer = await apps.present(
+      {
+        conversationId: convo.id,
+        append: (event) => {
+          if (event.type === 'conch-app.offer')
+            void g.services.conversations.noteAppOffer(convo.id, event.offer);
+        },
+      },
+      draft.id,
+      'Tally.',
+    );
+    await vi.waitUntil(
+      async () =>
+        (await apps.offerIn(convo.id, offer.offerId).catch(() => undefined)) !== undefined,
+    );
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 11 * 60_000);
+    const accept = () =>
+      g.app.inject({
+        method: 'POST',
+        url: `/api/conch-apps/offers/${offer.offerId}/accept`,
+        headers: { cookie },
+        payload: { conversationId: convo.id },
+      });
+    expect((await accept()).json().error).toBe('verify-required');
+    vi.restoreAllMocks();
+    expect((await accept()).json()).toMatchObject({
+      id: 'tally',
+      source: { afterReading: ['trains.example'] },
+    });
   });
 
   it('asks that it’s you to add someone else’s app, update it, go back or publish; never echoes a secret', async () => {

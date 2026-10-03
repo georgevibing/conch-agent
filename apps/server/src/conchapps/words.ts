@@ -112,6 +112,9 @@ export const quoted = (text: string, max = 160): string => `“${plainLine(text,
 export function sourceName(source: ConchAppSource): string {
   switch (source.kind) {
     case 'made':
+      if (source.basedOn) return sourceName(source.basedOn.source);
+      if (source.afterReading?.length)
+        return `a chat that read ${plainLine(source.afterReading.slice(0, 2).join(' and '), 120)}`;
       return 'this Conch';
     case 'github':
       return plainLine(`github.com/${source.owner}/${source.repo}`, 120);

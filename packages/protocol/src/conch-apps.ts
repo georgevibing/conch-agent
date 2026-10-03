@@ -306,25 +306,52 @@ export const ConchAppTool = z.object({
 export type ConchAppTool = z.infer<typeof ConchAppTool>;
 
 /** Where an app came from. */
+const GithubSource = z.object({
+  kind: z.literal('github'),
+  owner: z.string().max(100),
+  repo: z.string().max(100),
+  /** A folder in the repository, for a collection. */
+  path: z.string().max(300).optional(),
+  /** The tag or branch asked for; unset: the newest release, or the default branch. */
+  ref: z.string().max(200).optional(),
+  /** The commit it came from. */
+  commit: z.string().max(64).optional(),
+  url: WebLink,
+});
+const LinkSource = z.object({ kind: z.literal('link'), url: WebLink });
+const FileSource = z.object({ kind: z.literal('file'), name: z.string().max(200) });
+
+/** Somewhere outside this Conch an app came from. */
+export const OutsideAppSource = z.discriminatedUnion('kind', [
+  GithubSource,
+  LinkSource,
+  FileSource,
+]);
+export type OutsideAppSource = z.infer<typeof OutsideAppSource>;
+
+/** Where an app came from. */
 export const ConchAppSource = z.discriminatedUnion('kind', [
   /** Made in this Conch, in that chat. */
-  z.object({ kind: z.literal('made'), conversationId: z.string().optional() }),
   z.object({
-    kind: z.literal('github'),
-    owner: z.string().max(100),
-    repo: z.string().max(100),
-    /** A folder in the repository, for a collection. */
-    path: z.string().max(300).optional(),
-    /** The tag or branch asked for; unset: the newest release, or the default branch. */
-    ref: z.string().max(200).optional(),
-    /** The commit it came from. */
-    commit: z.string().max(64).optional(),
-    url: WebLink,
+    kind: z.literal('made'),
+    conversationId: z.string().optional(),
+    /**
+     * What the chat had read from outside when it was offered (ADR 0028):
+     * someone else's words may be in it, so it's treated as from outside.
+     */
+    afterReading: z.array(z.string().max(120)).max(5).optional(),
+    /** A change to an app from somewhere else: whose it was, so it's still treated as theirs. */
+    basedOn: z.object({ name: z.string().max(80), source: OutsideAppSource }).optional(),
   }),
-  z.object({ kind: z.literal('link'), url: WebLink }),
-  z.object({ kind: z.literal('file'), name: z.string().max(200) }),
+  GithubSource,
+  LinkSource,
+  FileSource,
 ]);
 export type ConchAppSource = z.infer<typeof ConchAppSource>;
+
+/** Made here, by the person, with nothing from outside in it: the only source trusted as theirs. */
+export const madeHere = (source: ConchAppSource): boolean =>
+  source.kind === 'made' && !source.afterReading?.length && !source.basedOn;
 
 /** One thing the check found, in words a person (and a model) can act on. */
 export const AppCheckItem = z.object({

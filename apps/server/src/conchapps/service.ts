@@ -37,6 +37,7 @@ import {
   type ConversationEvent,
   type ConversationEventInput,
   type InstallAppBody,
+  madeHere,
   type PreviewAppBody,
   type PublishState,
   type ServerEvent,
@@ -174,7 +175,17 @@ const problemText = (problems: readonly AppCheckItem[]) =>
 
 /** The same place, identity by identity: a file is never the same as another. */
 const sameSource = (a: ConchAppSource, b: ConchAppSource): boolean => {
-  if (a.kind === 'made' && b.kind === 'made') return true;
+  if (a.kind === 'made' && b.kind === 'made') {
+    // Yours, untouched by anything from outside, on both sides; or changes to the same stranger's app.
+    if (madeHere(a) && madeHere(b)) return true;
+    return Boolean(
+      a.basedOn &&
+      b.basedOn &&
+      !a.afterReading?.length &&
+      !b.afterReading?.length &&
+      sameSource(a.basedOn.source, b.basedOn.source),
+    );
+  }
   if (a.kind === 'github' && b.kind === 'github')
     return (
       a.owner.toLowerCase() === b.owner.toLowerCase() &&
@@ -201,6 +212,12 @@ export const sameHands = (
     Boolean(before) && next.signature.state !== 'invalid' && before === next.signature.fingerprint
   );
 };
+
+/**
+ * What may go out under the person's name: an app they made here. A change
+ * to someone else's app is still that maker's, whatever was changed.
+ */
+const yours = (source: ConchAppSource) => source.kind === 'made' && !source.basedOn;
 
 /** The words a card or a preview shows when an app replaces one from another maker. */
 export const otherMakerWarning = (name: string) =>
@@ -750,7 +767,25 @@ export class ConchAppService {
     await this.load();
     const installed = await this.store.get(manifest.id);
     const tools = check.tools.map(cardTool);
-    const source: ConchAppSource = { kind: 'made', conversationId: ctx.conversationId };
+    // What the chat had read, and whose app this changes: such an app is treated as from outside.
+    const seen = await this.deps.chats.taints?.(ctx.conversationId).catch(() => []);
+    const before = info.appId ? await this.store.get(info.appId) : undefined;
+    const basedOn =
+      before?.source.kind === 'made'
+        ? before.source.basedOn
+        : before && { name: plainLine(before.manifest.name, 80), source: before.source };
+    const afterReading = [
+      ...new Set([
+        ...(before?.source.kind === 'made' ? (before.source.afterReading ?? []) : []),
+        ...(seen ?? []).map((t) => plainLine(t.label, 120)),
+      ]),
+    ].slice(0, 5);
+    const source: ConchAppSource = {
+      kind: 'made',
+      conversationId: ctx.conversationId,
+      ...(afterReading.length && { afterReading }),
+      ...(basedOn && { basedOn }),
+    };
     const signature: SkillSignature = { state: 'unsigned' };
     const offer: ConchAppOffer = {
       offerId: newId('capo'),
@@ -1578,7 +1613,7 @@ export class ConchAppService {
   /** An app made here, signed with the person's key: only what they made is vouched for as theirs. */
   async #signed(id: string): Promise<{ app: AppRecord; files: AppFiles }> {
     const { app, read } = await this.#added(id);
-    if (app.source.kind !== 'made')
+    if (!yours(app.source))
       throw new ConchAppError(
         'invalid',
         'Only apps you made can be published as yours. Share the address you added it from instead.',
@@ -1600,10 +1635,9 @@ export class ConchAppService {
    */
   async exportFile(id: string): Promise<{ name: string; bytes: Buffer }> {
     const app = await this.#record(id);
-    const files =
-      app.source.kind === 'made'
-        ? (await this.#signed(id)).files
-        : (await this.#added(id)).read.files;
+    const files = yours(app.source)
+      ? (await this.#signed(id)).files
+      : (await this.#added(id)).read.files;
     return { name: `${app.id}.conchapp`, bytes: await this.deps.parts.packApp(files) };
   }
 
@@ -1874,7 +1908,7 @@ export class ConchAppService {
       dir: join(this.store.current(app.id), 'skills'),
       depth: 1,
       // Made here: used by itself. Anyone else's: only when you ask for it.
-      mode: app.source.kind === 'made' ? 'auto' : 'manual',
+      mode: madeHere(app.source) ? 'auto' : 'manual',
       idPrefix: `app_${app.id.replaceAll('-', '_')}`,
     }));
   }

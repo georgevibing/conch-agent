@@ -21,6 +21,7 @@ import {
   DeclineAppOfferBody,
   Id,
   InstallAppBody,
+  madeHere,
   PreviewAppBody,
   RollbackAppBody,
   type ServerEvent,
@@ -148,8 +149,9 @@ export function registerConchAppRoutes(
       return guarded(reply, async () => {
         // Something someone else made is a trust decision; what was made in this chat isn't.
         const offer = await service.offerIn(body.conversationId, request.params.offerId);
-        if (offer.from === 'package' && offer.state === 'ready' && verifyRequired(request, reply))
-          return reply;
+        // So is one made in a chat that read something from outside, or a change to a stranger's app.
+        const outside = offer.from === 'package' || !madeHere(offer.source);
+        if (outside && offer.state === 'ready' && verifyRequired(request, reply)) return reply;
         const added = await service.acceptOffer(request.params.offerId, body);
         changed();
         return added;
