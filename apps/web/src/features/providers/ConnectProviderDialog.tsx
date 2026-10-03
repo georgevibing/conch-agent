@@ -594,8 +594,14 @@ function useProviderWatch(provider: Provider | undefined) {
   useWatchProvider(provider?.id, Boolean(provider) && provider?.status.state !== 'ready');
 }
 
+/**
+ * Ollama's own flow — Ollama, then a model it downloads. LM Studio and servers
+ * of your own run on this computer too, but bring their own models.
+ */
+const isOllama = (provider: Provider) => provider.id === 'ollama';
+
 const titleOf = (provider: Provider) =>
-  provider.local
+  isOllama(provider)
     ? provider.status.state === 'ready'
       ? 'Your model on this computer'
       : 'Run a model on this computer'
@@ -613,8 +619,8 @@ function ProviderBody({
 }) {
   const state = provider.status.state;
   const fix = provider.status.fix;
-  // A model on this computer is one flow of its own: Ollama, a model, done.
-  if (provider.local) {
+  // A model on this computer through Ollama is one flow of its own: Ollama, a model, done.
+  if (isOllama(provider)) {
     return (
       <Stack gap={5}>
         <LocalSetup provider={provider} />

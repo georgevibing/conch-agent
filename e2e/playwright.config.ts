@@ -159,6 +159,14 @@ const scenarios = {
     env: { CONCH_ENGINE: 'ollama' },
     command: 'node --import tsx ../../e2e/local-gateway.ts',
   },
+  // A server of your own (ADR 0053), against a pretend llama.cpp (e2e/fake-openai.ts). Not
+  // pinned to the mock, so the Providers gallery is the real one; port 4357 tells the spec
+  // where the pretend server is.
+  servers: {
+    port: 4356,
+    env: {},
+    command: 'node --import tsx ../../e2e/servers-gateway.ts',
+  },
 } as const satisfies Record<
   string,
   { port: number; env: Record<string, string>; command?: string; entry?: 'main' | 'start' }

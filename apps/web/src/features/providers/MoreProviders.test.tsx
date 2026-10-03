@@ -172,6 +172,8 @@ describe('more providers', () => {
         connect: 'key',
         group: 'server',
         brand: 'server',
+        // On this computer, like Ollama, but with its own models: not Ollama's page.
+        local: true,
         active: false,
         server: {
           id: 'server-abcdefgh',
