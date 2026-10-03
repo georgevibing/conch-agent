@@ -18,17 +18,16 @@ page changes", "brief me before each meeting", "when the big task is done, tidy
 up". Today the only way is a routine every 15 minutes that looks and usually
 finds nothing, and every look is a whole model turn.
 
-Other agents solve this two ways, and both cost too much:
+Other agents use two approaches:
 
-- **A heartbeat.** OpenClaw runs a full agent turn every 30 minutes, on by
-  default, reading a checklist and answering `NO_REPLY` when nothing needs
-  attention. People report $18 overnight and $50–150 a month for mostly
-  nothing; the fixes are knobs (a lighter context, a cheaper model per
-  heartbeat). Hermes makes it opt-in per session, but each beat is still a turn.
+- **A heartbeat.** OpenClaw runs an agent turn every 30 minutes by default,
+  reading a checklist and answering `NO_REPLY` when nothing needs attention,
+  with settings for a lighter context or a cheaper model per heartbeat. Hermes
+  makes it opt-in per session. Each beat is a model turn, so it has a cost.
 - **Event hooks in config.** OpenClaw's `/hooks/wake`, mapped hooks and Gmail
   Pub/Sub, Hermes's HMAC webhooks and its cron pre-run script that answers
-  `{"wakeAgent": false}` so polling is free until something changes. The last
-  is the right idea; all of them are files and flags.
+  `{"wakeAgent": false}` so polling is free until something changes. Conch
+  wants that last idea without asking anyone to edit files or flags.
 
 Conch's promise is that anyone can use it, it hides complexity, and it costs
 nothing it doesn't have to.

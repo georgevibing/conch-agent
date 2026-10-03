@@ -10,10 +10,9 @@ is a full model turn. Until now nothing limited one, nothing added them up, and
 nothing said what one would cost:
 
 - **On a key you pay as you go**, an hourly routine on a top model costs real
-  money quietly. Other agents are known for exactly this: OpenClaw's heartbeat
-  ran up $18.75 in a night, and $50–150 a month is common. Their answer is
-  configuration (a lighter context, an isolated session, a per-heartbeat
-  model); Hermes leans on jobs that are scripts instead of model turns.
+  money quietly. Other agents leave this to configuration: OpenClaw offers a
+  lighter context, an isolated session and a per-heartbeat model, and Hermes
+  leans on jobs that are scripts instead of model turns.
 - **On a subscription** (Claude Code, Codex, Copilot, Gemini CLI, Grok), money
   isn't the cost; the plan's usage window is. A routine that runs while the
   window is nearly used takes the last of it from the person's own chats.
