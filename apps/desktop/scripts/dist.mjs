@@ -75,6 +75,9 @@ const config = {
     name: 'conch',
     version: root.version,
     description: root.description,
+    // The .deb wants one; the Linux desktop links the window to its entry by desktopName.
+    homepage: `https://github.com/${owner}/${repo_}`,
+    desktopName: 'conch.desktop',
     main: 'dist/main.cjs',
     // Read by the app: a signed Mac app can replace itself (ADR 0054).
     conch: { signed: signing },
@@ -95,7 +98,8 @@ const config = {
     onlyLoadAppFromAsar: true,
     grantFileProtocolExtraPrivileges: false,
   },
-  artifactName: 'Conch-${version}-${os}-${arch}.${ext}',
+  // One name for the chip everywhere (x64, arm64), whatever each format calls it.
+  artifactName: `Conch-\${version}-\${os}-${archName}.\${ext}`,
   // Writes latest*.yml beside the installers, which updates read. The release
   // workflow attaches them; nothing is published from here.
   publish: [{ provider: 'github', owner, repo: repo_, releaseType: 'release' }],
@@ -143,7 +147,7 @@ const config = {
       { target: 'AppImage', arch: [archName] },
       { target: 'deb', arch: [archName] },
     ],
-    desktop: { entry: { StartupWMClass: 'Conch' } },
+    syncDesktopName: true,
   },
 };
 
