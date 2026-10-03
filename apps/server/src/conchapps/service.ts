@@ -63,7 +63,7 @@ import {
   type AppRuntime,
   SourceError,
 } from './types';
-import { plainLine, safeSchema } from './words';
+import { own, plainLine, safeSchema } from './words';
 import { type DraftInfo, Workshop, WorkshopError } from './workshop';
 
 export class ConchAppError extends Error {
@@ -223,6 +223,9 @@ const yours = (source: ConchAppSource) => source.kind === 'made' && !source.base
 export const otherMakerWarning = (name: string) =>
   `This replaces ${name} from another maker; its settings, keys and data won’t carry over, so it starts fresh.`;
 
+/** A link as one to compare: no trailing slash, any case. */
+const linkKey = (link: string) => link.trim().replace(/\/+$/, '').toLowerCase();
+
 /** Files that should be there and aren't: what to do about it. */
 const MISSING = 'Its files are missing. Open Settings → Health and press Repair everything.';
 
@@ -259,6 +262,8 @@ export class ConchAppService {
   /** Updates found, as downloaded: the press installs exactly these. */
   #updates = new Map<string, { pkg: AppPackage; source: ConchAppSource }>();
   #installing = new Mutex();
+  /** Per chat, the repositories `app_find` showed. */
+  #found = new Map<string, Set<string>>();
   #timers: NodeJS.Timeout[] = [];
   #loaded?: Promise<void>;
 
@@ -333,7 +338,9 @@ export class ConchAppService {
     const secrets = await this.store
       .allSecrets()
       .catch(() => ({}) as Record<string, Record<string, string>>);
-    return Promise.all(this.store.peek().map((app) => this.#toApp(app, secrets[app.id] ?? {})));
+    return Promise.all(
+      this.store.peek().map((app) => this.#toApp(app, own(secrets, app.id) ?? {})),
+    );
   }
 
   async get(id: string): Promise<ConchApp> {
@@ -350,7 +357,7 @@ export class ConchAppService {
 
   async #toApp(app: AppRecord, secrets: Record<string, string>): Promise<ConchApp> {
     const saved = app.manifest.settings
-      .filter((s) => (s.secret ? secrets[s.key] : app.values[s.key]))
+      .filter((s) => (s.secret ? own(secrets, s.key) : own(app.values, s.key)))
       .map((s) => s.key);
     return {
       id: app.id,
@@ -368,8 +375,8 @@ export class ConchAppService {
       saved,
       values: Object.fromEntries(
         app.manifest.settings
-          .filter((s) => !s.secret && app.values[s.key] !== undefined)
-          .map((s) => [s.key, app.values[s.key] ?? '']),
+          .filter((s) => !s.secret && own(app.values, s.key) !== undefined)
+          .map((s) => [s.key, own(app.values, s.key) ?? '']),
       ),
       missing: this.#missingOf(app, secrets),
       dataBytes: await this.store.dataBytes(app.id).catch(() => 0),
@@ -382,7 +389,7 @@ export class ConchAppService {
 
   #missingOf(app: AppRecord, secrets: Record<string, string>): string[] {
     return app.manifest.settings
-      .filter((s) => !s.optional && !(s.secret ? secrets[s.key] : app.values[s.key]))
+      .filter((s) => !s.optional && !(s.secret ? own(secrets, s.key) : own(app.values, s.key)))
       .map((s) => s.key);
   }
 
@@ -391,7 +398,7 @@ export class ConchAppService {
       .allSecrets()
       .catch(() => ({}) as Record<string, Record<string, string>>);
     this.#missing = new Map(
-      this.store.peek().map((app) => [app.id, this.#missingOf(app, secrets[app.id] ?? {})]),
+      this.store.peek().map((app) => [app.id, this.#missingOf(app, own(secrets, app.id) ?? {})]),
     );
   }
 
@@ -659,10 +666,7 @@ export class ConchAppService {
     const existing = (await this.workshop.ofChat(conversationId)).find((d) => d.appId === app.id);
     if (existing) return existing;
     if (!(await this.#heal(app)))
-      throw new ConchAppError(
-        'unavailable',
-        this.#failures.get(app.id) ?? 'Its files are missing.',
-      );
+      throw new ConchAppError('unavailable', this.#failures.get(app.id) ?? MISSING);
     const read = await this.deps.parts.readFolder(this.store.current(app.id));
     if (!read.ok)
       throw new ConchAppError(
@@ -1691,7 +1695,7 @@ export class ConchAppService {
   async #added(id: string): Promise<{ app: AppRecord; read: AppPackage }> {
     const app = await this.#record(id);
     if (!(await this.#heal(app)))
-      throw new ConchAppError('unavailable', this.#failures.get(id) ?? 'Its files are missing.');
+      throw new ConchAppError('unavailable', this.#failures.get(id) ?? MISSING);
     const read = await this.deps.parts.readFolder(this.store.current(id));
     if (!read.ok)
       throw new ConchAppError(
@@ -1798,6 +1802,21 @@ export class ConchAppService {
     };
   }
 
+  /**
+   * The repositories `app_find` showed in a chat: `app_get` may take exactly
+   * those links even after the chat read something from outside, since they
+   * came from GitHub's own list rather than from what was read.
+   */
+  rememberFound(conversationId: string, urls: readonly string[]): void {
+    const seen = this.#found.get(conversationId) ?? new Set<string>();
+    for (const url of urls) seen.add(linkKey(url));
+    this.#found.set(conversationId, new Set([...seen].slice(-50)));
+  }
+
+  wasFound(conversationId: string, link: string): boolean {
+    return this.#found.get(conversationId)?.has(linkKey(link)) ?? false;
+  }
+
   /** Your apps whose name, tagline or description has these words. */
   /**
    * Apps you have but switched off, for the map of what Conch can turn on
@@ -1846,10 +1865,7 @@ export class ConchAppService {
     if ('appId' in ref) {
       const app = await this.#record(ref.appId);
       if (!(await this.#heal(app)))
-        throw new ConchAppError(
-          'unavailable',
-          this.#failures.get(app.id) ?? 'Its files are missing.',
-        );
+        throw new ConchAppError('unavailable', this.#failures.get(app.id) ?? MISSING);
       return { manifest: app.manifest, dir: this.store.current(app.id) };
     }
     await this.workshop.info(ref.draftId).catch(() => {
@@ -1923,7 +1939,7 @@ export class ConchAppService {
         };
       if (!app.enabled)
         return { ok: false, reason: 'off', message: `${app.manifest.name} is turned off in Apps.` };
-      if (app.toolPolicies[tool] === 'off')
+      if (own(app.toolPolicies, tool) === 'off')
         return {
           ok: false,
           reason: 'off',
@@ -2017,7 +2033,7 @@ export class ConchAppService {
       .catch(() => ({}) as Record<string, Record<string, string>>);
     return this.store.peek().flatMap((app) =>
       app.manifest.settings.flatMap((setting) => {
-        const value = setting.secret ? secrets[app.id]?.[setting.key] : undefined;
+        const value = setting.secret ? own(own(secrets, app.id), setting.key) : undefined;
         return value
           ? [{ appId: app.id, name: app.manifest.name, label: setting.label, value }]
           : [];

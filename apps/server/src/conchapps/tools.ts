@@ -315,6 +315,10 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
       const found = await service.community(query);
       // What strangers wrote about their repositories came in from outside.
       if (found.apps.length) ctx.taint?.({ kind: 'web', label: 'GitHub search results' });
+      service.rememberFound(
+        ctx.conversationId,
+        found.apps.slice(0, 8).map((a) => a.url),
+      );
       const lines: string[] = [];
       lines.push(
         mine.length
@@ -355,8 +359,9 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
       // A link from something the chat read could be anyone's: only the person's own (ADR 0060).
       if (ctx.taints?.().length) {
         const said = (await ctx.lastMessage?.()) ?? '';
-        if (!said.includes(link.replace(/\/+$/, '')))
-          return 'This chat has read something from outside, so Conch only shows an app from a link the person typed themselves. Ask them to paste the link.';
+        // A repository app_find found in this chat came from GitHub's own list, not the page.
+        if (!said.includes(link.replace(/\/+$/, '')) && !service.wasFound(ctx.conversationId, link))
+          return 'This chat has read something from outside, so Conch only shows an app from a link the person typed themselves, or one app_find found. Ask them to paste the link.';
       }
       const preview = await service.preview({ link });
       if (!preview) return 'Nothing was chosen.';

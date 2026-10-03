@@ -105,6 +105,15 @@ export function safeSchema(input: unknown): Record<string, unknown> | undefined 
   return clean(input, 0);
 }
 
+/**
+ * A record's own value for a key, never one it inherits: a setting called
+ * `constructor` or an app called `tostring` is just a name.
+ */
+export const own = <T>(
+  record: Readonly<Record<string, T>> | undefined,
+  key: string,
+): T | undefined => (record && Object.hasOwn(record, key) ? record[key] : undefined);
+
 /** Someone else's words, as one quoted line of data. */
 export const quoted = (text: string, max = 160): string => `“${plainLine(text, max)}”`;
 

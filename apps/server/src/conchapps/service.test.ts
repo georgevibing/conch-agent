@@ -1517,3 +1517,47 @@ describe('a card made before things changed', () => {
     expect(await h.service.list()).toEqual([]);
   });
 });
+
+describe('names that are also built-in words', () => {
+  it('a setting called constructor, in an app called constructor, is just a name', async () => {
+    const h = await harness();
+    const files = tallyFiles();
+    const manifest = JSON.parse(files['conch-app.json'] ?? '{}') as Record<string, unknown>;
+    manifest.id = 'constructor';
+    manifest.name = 'Builder';
+    manifest.settings = [
+      { key: 'constructor', label: 'Token', secret: true },
+      { key: 'toString', label: 'City' },
+    ];
+    const preview = await h.service.preview({
+      file: signedPackage({ ...files, 'conch-app.json': JSON.stringify(manifest) }).toString(
+        'base64',
+      ),
+      name: 'b.conchapp',
+    });
+    if (!preview?.apps[0]) throw new Error('nothing');
+    const app = await h.service.install({
+      packageId: preview.packageId,
+      appId: 'constructor',
+      hash: preview.apps[0].hash,
+      settings: {},
+    });
+    expect(app.saved).toEqual([]);
+    expect(app.missing).toEqual(['constructor', 'toString']);
+    expect(app.values).toEqual({});
+    expect(await h.service.systemKeys()).toEqual([]);
+    expect((await h.service.hosted.get('capp_constructor')).health.state).toBe('needs-auth');
+    const set = await h.service.setSettings('constructor', {
+      constructor: 'tok-0001',
+      toString: 'Porto',
+    });
+    expect(set).toMatchObject({
+      saved: ['constructor', 'toString'],
+      missing: [],
+      values: { toString: 'Porto' },
+    });
+    await h.service.remove('constructor', { keepData: false });
+    // Nothing kept means nothing kept, even for this name.
+    expect(await h.service.store.keptData('constructor')).toBeUndefined();
+  });
+});

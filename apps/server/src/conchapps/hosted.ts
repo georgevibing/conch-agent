@@ -28,7 +28,7 @@ import type { HostTool, HostToolResult } from '../engines/types';
 import { IntegrationError, type HostedApps } from '../integrations/service';
 import type { AppRecord } from './store';
 import type { AppCallOutcome } from './types';
-import { plainLine, quoted, safeSchema, sourceName } from './words';
+import { own, plainLine, quoted, safeSchema, sourceName } from './words';
 
 /** Conch's host tools may arrive as `mcp__conch__app_…` (Claude Code) or bare (API engines). */
 const bare = (toolName: string) => toolName.replace(/^mcp__conch__/, '');
@@ -326,7 +326,7 @@ export class ConchApps implements HostedApps {
 
   toIntegration(app: AppRecord): Integration {
     const tools: IntegrationTool[] = app.tools.map((tool) => {
-      const policy = app.toolPolicies[tool.name];
+      const policy = own(app.toolPolicies, tool.name);
       return {
         name: appToolName(app.id, tool.name),
         title: plainLine(tool.title, 80),

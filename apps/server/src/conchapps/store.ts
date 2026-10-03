@@ -30,6 +30,7 @@ import { newId } from '../lib/ids';
 import { Mutex, removeTree, safeJoin, writeJson } from '../lib/fs';
 import { type Heal, readStore } from '../lib/recover';
 import type { AppFiles } from './types';
+import { own } from './words';
 
 /** A version kept for Go back, with whose it was: only the same hands' versions are kept. */
 export const KeptVersion = ConchAppVersion.extend({
@@ -230,7 +231,7 @@ export class ConchAppStore {
   /** Whose data was kept for an app that was removed, if any. */
   async keptData(id: string): Promise<KeptData | undefined> {
     await this.read();
-    return this.#kept[id];
+    return own(this.#kept, id);
   }
 
   /** Remember (or forget) whose data is kept for an app that's gone. */
@@ -389,7 +390,7 @@ export class ConchAppStore {
   }
 
   async secrets(id: string): Promise<Record<string, string>> {
-    return { ...(await this.#readSecrets()).apps[id] };
+    return { ...own((await this.#readSecrets()).apps, id) };
   }
 
   async allSecrets(): Promise<Record<string, Record<string, string>>> {
@@ -404,7 +405,9 @@ export class ConchAppStore {
         values === undefined
           ? {}
           : Object.fromEntries(
-              Object.entries({ ...data.apps[id], ...values }).filter(([, value]) => value !== ''),
+              Object.entries({ ...own(data.apps, id), ...values }).filter(
+                ([, value]) => value !== '',
+              ),
             );
       data.apps = Object.fromEntries(
         Object.entries({ ...data.apps, [id]: next }).filter(
