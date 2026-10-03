@@ -12,7 +12,9 @@ import {
   ShieldAlert,
   SquareTerminal,
   Wallet,
+  Webhook,
   Wrench,
+  Zap,
 } from 'lucide-react';
 import { useId, type ComponentProps, type ReactNode } from 'react';
 
@@ -33,6 +35,8 @@ const ICONS: Record<BackupPowerInfo['kind'], ReactNode> = {
   'chats-never-ask': <MessagesSquare />,
   'routine-never-asks': <Repeat />,
   'routines-spend': <Wallet />,
+  'routine-acts-on-events': <Zap />,
+  'routine-address': <Webhook />,
   'browser-sites': <Globe />,
   'browser-local': <Router />,
   'terminal-remote': <MonitorSmartphone />,

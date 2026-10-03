@@ -37,6 +37,8 @@ export const powers: BackupPowerInfo[] = [
   { kind: 'tools-never-ask', name: 'Calendar', tools: ['Delete an event', 'Send an invite'] },
   { kind: 'chats-never-ask' },
   { kind: 'routine-never-asks', name: 'Nightly tidy' },
+  { kind: 'routine-acts-on-events', name: 'Sort new downloads' },
+  { kind: 'routine-address', name: 'Shop orders' },
   { kind: 'browser-sites', sites: ['bank.example', 'shop.example'] },
   { kind: 'browser-local' },
   { kind: 'terminal-remote' },

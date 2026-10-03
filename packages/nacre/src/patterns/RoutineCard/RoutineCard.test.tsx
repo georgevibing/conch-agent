@@ -145,4 +145,39 @@ describe('RoutineCard (proposal)', () => {
     expect(screen.queryByRole('button', { name: 'Turn on' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open' })).toBeInTheDocument();
   });
+
+  it('starts when something happens: says it costs nothing until then, and why it can’t look', async () => {
+    const { container } = renderNacre(
+      <RoutineCard
+        {...base}
+        scheduleText="When Anna Smith emails you"
+        waitingText="Free until something happens"
+        problem="Gmail needs you to sign in again."
+        status="active"
+        onOpen={() => {}}
+        onToggle={() => {}}
+      />,
+    );
+    expect(screen.getByText('When Anna Smith emails you')).toBeInTheDocument();
+    expect(screen.getByText('Free until something happens')).toBeInTheDocument();
+    expect(screen.getByText('Gmail needs you to sign in again.')).toBeInTheDocument();
+    expect(screen.getByRole('article')).toHaveAttribute('data-attention', 'needs-you');
+    await expectAccessible(container);
+  });
+
+  it('a drafted When-routine says what starts it instead of a first run', () => {
+    renderNacre(
+      <RoutineCard
+        {...base}
+        variant="proposal"
+        scheduleText="When Anna Smith emails you"
+        waitingText="Free until something happens"
+        status="draft"
+        nextRunAt={now + 3_600_000}
+        onActivate={() => {}}
+      />,
+    );
+    expect(screen.getByText(/· Free until something happens/)).toBeInTheDocument();
+    expect(screen.queryByText(/first run/)).toBeNull();
+  });
 });

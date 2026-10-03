@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { FolderInput, PersonStanding, Sunrise } from 'lucide-react';
+import { CalendarClock, FolderInput, Globe, Mail, PersonStanding, Sunrise } from 'lucide-react';
 import { useState } from 'react';
 
 import { Stack } from '../../components/Stack';
@@ -183,6 +183,53 @@ export const ProposalStates: Story = {
           onOpen={() => {}}
         />
       ))}
+    </Stack>
+  ),
+};
+
+/** Routines that start when something happens (ADR 0056): free until it does. */
+export const WhenSomethingHappens: Story = {
+  render: () => (
+    <Stack gap={3} style={{ maxInlineSize: '40rem' }}>
+      <RoutineCard
+        variant="proposal"
+        title="When Anna replies"
+        summary="Tells you as soon as Anna writes, with what it says."
+        scheduleText="When Anna Smith emails you"
+        waitingText="Free until something happens"
+        status="draft"
+        icon={<Mail />}
+        onActivate={() => {}}
+        onTryNow={() => {}}
+        onEdit={() => {}}
+        onDismiss={() => {}}
+      />
+      <RoutineCard
+        title="Meeting brief"
+        summary="A short brief on who you’re meeting and what it’s about."
+        scheduleText="15 minutes before each meeting with other people"
+        waitingText="Free until something happens"
+        status="active"
+        icon={<CalendarClock />}
+        lastRun={{
+          status: 'succeeded',
+          at: now - 2 * hour,
+          outcome: 'Briefed you on the design review with Bo and Kai.',
+        }}
+        onOpen={() => {}}
+        onToggle={() => {}}
+      />
+      <RoutineCard
+        title="Price watch"
+        summary="Tells you when the pricing page changes."
+        scheduleText="When example.com/pricing changes"
+        waitingText="Free until something happens"
+        status="active"
+        icon={<Globe />}
+        problem="Gmail needs you to sign in again."
+        onOpen={() => {}}
+        onToggle={() => {}}
+      />
     </Stack>
   ),
 };

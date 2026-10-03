@@ -121,3 +121,46 @@ export const Spending: Story = {
     </div>
   ),
 };
+
+/** Runs something started (ADR 0056): what it was, and where. */
+export const StartedByEvents: Story = {
+  args: {
+    runs: [
+      {
+        id: 'e1',
+        status: 'succeeded',
+        at: now - 20 * 60_000,
+        trigger: 'event',
+        outcome: 'Anna sent the October invoice; it needs paying by Friday.',
+        durationMs: 21_000,
+        event: {
+          label: 'Anna Smith’s email “Invoice for October”',
+          link: 'https://mail.google.com/mail/#all/18f0c',
+        },
+      },
+      {
+        id: 'e2',
+        status: 'nothing-to-do',
+        at: now - 5 * hour,
+        trigger: 'event',
+        outcome: 'Only the footer changed.',
+        durationMs: 12_000,
+        event: { label: 'the changes on example.com/pricing', link: 'https://example.com/pricing' },
+      },
+      {
+        id: 'e3',
+        status: 'succeeded',
+        at: now - 26 * hour,
+        trigger: 'event',
+        outcome: 'Told you about 3 new files in Downloads.',
+        durationMs: 15_000,
+        event: { label: '3 changes in Downloads' },
+      },
+    ],
+  },
+  render: (args) => (
+    <div style={{ maxInlineSize: '40rem' }}>
+      <RunTimeline {...args} />
+    </div>
+  ),
+};

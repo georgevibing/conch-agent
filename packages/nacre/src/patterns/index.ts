@@ -17,6 +17,7 @@ export * from './ModePicker';
 export * from './Routines';
 export * from './Safety';
 export * from './ScheduleEditor';
+export * from './TriggerEditor';
 export * from './RoutineCard';
 export * from './RunTimeline';
 export * from './RoutineSpending';

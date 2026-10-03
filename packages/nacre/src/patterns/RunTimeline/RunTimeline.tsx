@@ -1,4 +1,4 @@
-import { ChevronRight, History } from 'lucide-react';
+import { ChevronRight, ExternalLink, History } from 'lucide-react';
 import { useState, type ComponentProps } from 'react';
 
 import { cx } from '../../utils/cx';
@@ -18,6 +18,8 @@ export interface RunTimelineItem {
   durationMs?: number;
   /** What it cost, in a few words: “$0.04”, “4% of your plan”, “Free”. */
   cost?: string;
+  /** What started it, for a routine that starts when something happens (ADR 0056). */
+  event?: { label: string; link?: string };
 }
 
 export interface RunTimelineProps extends Omit<ComponentProps<'div'>, 'children'> {
@@ -32,6 +34,7 @@ export interface RunTimelineProps extends Omit<ComponentProps<'div'>, 'children'
 const triggerNotes: Partial<Record<RunTrigger, string>> = {
   manual: 'Run by you',
   'catch-up': 'Caught up after Conch was off',
+  event: 'Something happened',
 };
 
 function dayKey(ts: number, timeZone?: string) {
@@ -95,7 +98,10 @@ export function RunTimeline({
           <h4 className={styles.day}>{group.label}</h4>
           <ol className={styles.list}>
             {group.runs.map((run) => {
-              const note = triggerNotes[run.trigger];
+              const note =
+                run.trigger === 'event' && run.event
+                  ? `After ${run.event.label}`
+                  : triggerNotes[run.trigger];
               const body = (
                 <>
                   <span className={styles.time}>{formatTime(run.at, { timeZone })}</span>
@@ -129,6 +135,17 @@ export function RunTimeline({
                     </button>
                   ) : (
                     <div className={styles.row}>{body}</div>
+                  )}
+                  {run.event?.link && (
+                    <a
+                      className={styles.eventLink}
+                      href={run.event.link}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                    >
+                      Open {run.event.label}
+                      <ExternalLink aria-hidden />
+                    </a>
                   )}
                 </li>
               );

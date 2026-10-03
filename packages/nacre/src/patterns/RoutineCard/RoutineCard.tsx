@@ -7,7 +7,9 @@ import {
   Pause,
   Repeat,
   Sparkles,
+  TriangleAlert,
   X,
+  Zap,
 } from 'lucide-react';
 import { useId, type ComponentProps, type ReactNode } from 'react';
 
@@ -43,8 +45,15 @@ const costIcons = {
 export interface RoutineCardProps extends Omit<ComponentProps<'article'>, 'title' | 'onToggle'> {
   title: string;
   summary: string;
-  /** Plain-language schedule, e.g. "Weekdays at 7:30 AM". */
+  /** Plain-language schedule, e.g. "Weekdays at 7:30 AM", or what starts it: "When Anna Smith emails you". */
   scheduleText: string;
+  /**
+   * For a routine that starts when something happens (ADR 0056): said instead of
+   * the next run, e.g. "Free until something happens".
+   */
+  waitingText?: string;
+  /** Its source can't look right now, in a sentence (signed out, a folder gone). */
+  problem?: string;
   status: RoutineCardStatus;
   nextRunAt?: number;
   lastRun?: RoutineCardLastRun;
@@ -107,6 +116,8 @@ export function RoutineCard({
   title,
   summary,
   scheduleText,
+  waitingText,
+  problem,
   status,
   nextRunAt,
   lastRun,
@@ -178,10 +189,13 @@ export function RoutineCard({
             {summary && status !== 'deleted' && <p className={styles.summary}>{summary}</p>}
             {status !== 'deleted' && (
               <p className={styles.schedule}>
-                <CalendarClock aria-hidden />
+                {waitingText ? <Zap aria-hidden /> : <CalendarClock aria-hidden />}
                 <span>
                   {scheduleText}
-                  {nextText && status !== 'paused' && (
+                  {waitingText && status !== 'paused' && (
+                    <span className={styles.dim}> · {waitingText}</span>
+                  )}
+                  {!waitingText && nextText && status !== 'paused' && (
                     <span className={styles.dim}>
                       {' '}
                       · {status === 'draft' ? 'first run' : 'next'} {nextText}
@@ -232,13 +246,15 @@ export function RoutineCard({
   }
 
   const active = status === 'active';
-  const needsAttention = lastRun && attention.has(lastRun.status);
+  const needsAttention = (lastRun && attention.has(lastRun.status)) || (active && problem);
   return (
     <article
       aria-labelledby={titleId}
       data-variant="list"
       data-status={status}
-      data-attention={needsAttention ? lastRun.status : undefined}
+      data-attention={
+        active && problem ? 'needs-you' : needsAttention ? lastRun?.status : undefined
+      }
       data-lustre=""
       className={cx(styles.card, className)}
       {...props}
@@ -255,7 +271,7 @@ export function RoutineCard({
         {summary && <p className={cx(styles.summary, styles.clamp)}>{summary}</p>}
         <p className={styles.meta}>
           <span className={styles.chip}>
-            <CalendarClock aria-hidden />
+            {waitingText ? <Zap aria-hidden /> : <CalendarClock aria-hidden />}
             {scheduleText}
           </span>
           {cost && (
@@ -271,11 +287,19 @@ export function RoutineCard({
                 ? 'Finished'
                 : status === 'draft'
                   ? 'Not turned on yet'
-                  : nextText
-                    ? `Next run ${nextText}`
-                    : null}
+                  : waitingText
+                    ? waitingText
+                    : nextText
+                      ? `Next run ${nextText}`
+                      : null}
           </span>
         </p>
+        {active && problem && (
+          <p className={styles.problem}>
+            <TriangleAlert aria-hidden />
+            <span>{problem}</span>
+          </p>
+        )}
         {lastRun && <LastRunLine run={lastRun} now={now} locale={locale} timeZone={timeZone} />}
       </div>
       {onToggle && status !== 'completed' && (

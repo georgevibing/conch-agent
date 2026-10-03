@@ -83,4 +83,32 @@ describe('RunTimeline', () => {
     renderNacre(<RunTimeline runs={[]} />);
     expect(screen.getByText('No runs yet. The first one will appear here.')).toBeInTheDocument();
   });
+
+  it('says what started a run, with a link to it beside the row', async () => {
+    const onOpen = vi.fn();
+    const { container } = renderNacre(
+      <RunTimeline
+        now={now}
+        timeZone="UTC"
+        onOpen={onOpen}
+        runs={[
+          {
+            id: 'e',
+            status: 'succeeded',
+            at: now - 60_000,
+            trigger: 'event',
+            outcome: 'Told you about the invoice.',
+            event: { label: 'Anna’s email', link: 'https://mail.google.com/mail/#all/1' },
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText('After Anna’s email')).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: 'Open Anna’s email' });
+    expect(link).toHaveAttribute('href', 'https://mail.google.com/mail/#all/1');
+    expect(link).toHaveAttribute('rel', 'noreferrer noopener');
+    await userEvent.click(screen.getByRole('button', { name: /Open this run/ }));
+    expect(onOpen).toHaveBeenCalledWith('e');
+    await expectAccessible(container);
+  });
 });
