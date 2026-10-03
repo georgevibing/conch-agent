@@ -111,7 +111,9 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
   }
 
   const { routine, runs } = data;
-  const running = runs[0]?.status === 'running' || runs[0]?.status === 'needs-you';
+  // Needing you mid-run (a question) is still running; a run that ended asking for a look isn't.
+  const running =
+    runs[0]?.status === 'running' || (runs[0]?.status === 'needs-you' && !runs[0].finishedAt);
   const openRun = (id: string) => {
     const r = runs.find((x) => x.id === id);
     if (r?.conversationId) void navigate(`/c/${r.conversationId}`);

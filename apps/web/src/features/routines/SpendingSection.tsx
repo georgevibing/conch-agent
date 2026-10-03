@@ -67,7 +67,7 @@ function LimitFields({ spending }: { spending: RoutineSpending }) {
           {valid ? (
             <Field.Description>
               {spending.isDefault
-                ? `Conch starts at ${formatMoney(DEFAULT_LIMIT)}: enough for a daily briefing on most models.`
+                ? `Conch starts at ${formatMoney(DEFAULT_LIMIT)}: enough for a daily briefing on a mid-priced model.`
                 : 'Only you can change this. Your assistant can’t.'}
             </Field.Description>
           ) : (
