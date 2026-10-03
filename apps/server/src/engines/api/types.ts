@@ -81,6 +81,8 @@ export interface ToolSpec {
 export interface WireUsage {
   inputTokens: number;
   outputTokens: number;
+  /** Of `inputTokens`, how many came from the provider's cache. */
+  cachedInputTokens?: number;
   costUsd?: number;
 }
 

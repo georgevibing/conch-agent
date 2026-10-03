@@ -130,6 +130,11 @@ export interface TurnExtras {
   taint?: readonly TaintSource[];
   /** Starts held to the skills the chat it came from was held to (ADR 0047), from there. */
   skills?: readonly (SkillHold & { from: string })[];
+  /**
+   * What the turn has used so far, as the engine reports it (a running total):
+   * a routine stops a run that goes past its limit (ADR 0057).
+   */
+  onUsage?: (usage: Usage, from: { engine: Engine; model?: string }) => void;
 }
 
 export interface TurnResult {
@@ -142,6 +147,9 @@ export interface TurnResult {
   next?: TurnRoute;
   /** Text of the last assistant message in the turn. */
   finalText: string;
+  /** Who answered, and with which model, when known: what it cost depends on it (ADR 0057). */
+  engine?: EngineId;
+  model?: string;
 }
 
 /**
@@ -1493,6 +1501,9 @@ export class ConversationManager {
               () => undefined,
             );
             break;
+          case 'usage':
+            extras?.onUsage?.(event.usage, { engine, model: answeredWith ?? resolved.model });
+            break;
           case 'done':
             outcome = event.outcome;
             completed = { usage: event.usage, error: event.error, problem: event.problem };
@@ -1599,6 +1610,8 @@ export class ConversationManager {
       ...(heldProblem && { problem: heldProblem }),
       ...(next && { next }),
       finalText,
+      engine: engine.id,
+      ...((answeredWith ?? resolved.model) && { model: answeredWith ?? resolved.model }),
     };
   }
 

@@ -53,6 +53,8 @@ export type ChatError = z.infer<typeof ChatError>;
 const Usage = z.object({
   prompt_tokens: z.number().nullish(),
   completion_tokens: z.number().nullish(),
+  /** How much of the prompt came from the provider's cache, when it says. */
+  prompt_tokens_details: z.object({ cached_tokens: z.number().nullish() }).nullish(),
   /** OpenRouter's credits, which are USD — the real charge for the request. */
   cost: z.number().nullish(),
 });
@@ -193,6 +195,9 @@ export function usageFrom(usage: z.infer<typeof Usage>): WireUsage {
   return {
     inputTokens: Math.max(0, Math.round(usage.prompt_tokens ?? 0)),
     outputTokens: Math.max(0, Math.round(usage.completion_tokens ?? 0)),
+    ...(usage.prompt_tokens_details?.cached_tokens && {
+      cachedInputTokens: Math.max(0, Math.round(usage.prompt_tokens_details.cached_tokens)),
+    }),
     ...(typeof usage.cost === 'number' && { costUsd: Math.max(0, usage.cost) }),
   };
 }

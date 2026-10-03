@@ -235,6 +235,12 @@ export type EngineEvent =
    * said "too long", and the turn went again by itself.
    */
   | ({ type: 'compacted'; healed?: boolean } & Compacted)
+  /**
+   * What the turn has used so far (a running total, not a step), from engines
+   * that know it before the end — so an unattended run can stop at its limit
+   * (ADR 0057). The `done` event's usage stays the final word.
+   */
+  | { type: 'usage'; usage: Usage }
   | {
       type: 'done';
       outcome: 'success' | 'interrupted' | 'error';

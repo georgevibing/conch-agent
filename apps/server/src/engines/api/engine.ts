@@ -744,6 +744,8 @@ export class ApiEngine implements Engine {
           );
         total.inputTokens += end.usage?.inputTokens ?? 0;
         total.outputTokens += end.usage?.outputTokens ?? 0;
+        if (end.usage?.cachedInputTokens)
+          total.cachedInputTokens = (total.cachedInputTokens ?? 0) + end.usage.cachedInputTokens;
         if (end.usage?.costUsd !== undefined) {
           cost += end.usage.costUsd;
           priced = true;
@@ -756,6 +758,9 @@ export class ApiEngine implements Engine {
           yield { type: 'done', outcome: 'success', usage: usage() };
           return;
         }
+
+        // Another request follows: say what the turn has used so far (ADR 0057).
+        yield { type: 'usage', usage: usage() };
 
         const results: ToolResult[] = [];
         let stopped = false;

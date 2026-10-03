@@ -422,6 +422,8 @@ describe('the local engine', () => {
 
     expect(events.map((ev) => ev.type)).toEqual([
       'session',
+      // What the turn has used so far, before the tool runs (ADR 0057).
+      'usage',
       'tool-start',
       'tool-end',
       'text',

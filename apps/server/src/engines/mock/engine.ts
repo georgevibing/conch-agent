@@ -1230,6 +1230,24 @@ export class MockEngine implements Engine {
       }
 
       const report = input.tools.find((t) => t.name === 'report_outcome');
+      // A routine that never stops looking: each step re-sends its whole context,
+      // as a real tool loop does, until its spending limit stops it (ADR 0057).
+      if (report && /\bkeep digging\b/i.test(text)) {
+        const step = { inputTokens: 72_000, outputTokens: 400, costUsd: 0.4 };
+        for (let i = 1; i <= 60; i++) {
+          await wait(20);
+          yield {
+            type: 'usage',
+            usage: {
+              inputTokens: step.inputTokens * i,
+              outputTokens: step.outputTokens * i,
+              costUsd: Number((step.costUsd * i).toFixed(4)),
+            },
+          };
+        }
+        yield { type: 'done', outcome: 'success' };
+        return;
+      }
       if (report) {
         const nothing = /nothing/i.test(text);
         const brief = nothing

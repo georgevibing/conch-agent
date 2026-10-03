@@ -350,6 +350,7 @@ export class AnthropicWire implements Wire {
     /** Blocks in the order the model sent them, kept whole for replay. */
     const blocks = new Map<number, { block: Record<string, unknown>; json: string }>();
     let inputTokens = 0;
+    let cachedInputTokens = 0;
     let outputTokens = 0;
     let stopReason: string | undefined;
 
@@ -368,6 +369,7 @@ export class AnthropicWire implements Wire {
           (usage?.input_tokens ?? 0) +
           (usage?.cache_creation_input_tokens ?? 0) +
           (usage?.cache_read_input_tokens ?? 0);
+        cachedInputTokens = usage?.cache_read_input_tokens ?? 0;
         continue;
       }
       if (kind === 'content_block_start') {
@@ -427,6 +429,7 @@ export class AnthropicWire implements Wire {
       .filter((call) => call.id && call.name);
     const usage: WireUsage = {
       inputTokens: Math.max(0, Math.round(inputTokens)),
+      ...(cachedInputTokens > 0 && { cachedInputTokens: Math.round(cachedInputTokens) }),
       outputTokens: Math.max(0, Math.round(outputTokens)),
     };
     const stop: WireStop =

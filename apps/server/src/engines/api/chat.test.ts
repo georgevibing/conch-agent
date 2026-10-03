@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { errorIn, readChatStream, ThinkSplitter } from './chat';
+import { errorIn, readChatStream, ThinkSplitter, usageFrom } from './chat';
 import { dataFrames, sseResponse } from './fake';
 import { ApiError, type WireEvent } from './types';
 
@@ -182,5 +182,22 @@ describe('reading an error body, in every shape providers send', () => {
 
   it('says nothing about a body that isn’t JSON', () => {
     expect(errorIn('<html>Bad gateway</html>')).toBeUndefined();
+  });
+});
+
+describe('usage', () => {
+  it('says how much of the prompt came from the provider’s cache, when it says (ADR 0057)', () => {
+    expect(
+      usageFrom({
+        prompt_tokens: 1000,
+        completion_tokens: 20,
+        prompt_tokens_details: { cached_tokens: 800 },
+      }),
+    ).toEqual({ inputTokens: 1000, outputTokens: 20, cachedInputTokens: 800 });
+    expect(usageFrom({ prompt_tokens: 10, completion_tokens: 2, cost: 0.01 })).toEqual({
+      inputTokens: 10,
+      outputTokens: 2,
+      costUsd: 0.01,
+    });
   });
 });

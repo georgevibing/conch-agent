@@ -257,7 +257,7 @@ describe('an Anthropic turn', () => {
       stop: 'tools',
       // input is the final count from message_start (cache reads included);
       // output is the last, cumulative message_delta.
-      usage: { inputTokens: 600, outputTokens: 42 },
+      usage: { inputTokens: 600, cachedInputTokens: 100, outputTokens: 42 },
       toolCalls: [
         { id: 'toolu_01', name: 'mcp__conch__remember', argumentsJson: '{"content":"tea"}' },
       ],

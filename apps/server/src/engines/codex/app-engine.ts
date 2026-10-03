@@ -501,7 +501,11 @@ export class CodexEngine implements Engine {
                   outputTokens: z.number().nonnegative(),
                 })
                 .safeParse(object(p.tokenUsage).total);
-              if (total.success) usage = total.data;
+              if (total.success) {
+                usage = total.data;
+                // A running total, so an unattended run can stop at its limit (ADR 0057).
+                emit({ type: 'usage', usage });
+              }
             }
             if (message.method === 'turn/completed') {
               const turn = object(p.turn);
