@@ -31,7 +31,7 @@ React re-renders happen on pointer move.
 | Rim           | `::before`            | A 1 px pearl edge. A conic spectrum rotates with the pointer's angle around the element, so the edge "catches the light" as you orbit it. |
 | Sheen         | `::after`             | A soft iridescent spotlight under the pointer (thin-film banding perpendicular to the light direction).                                   |
 | Tide ring     | `::after`             | On press, a ring of pearl light ripples out from the press point (animated `--nc-bloom`).                                                 |
-| Ambient orbit | `data-lustre-ambient` | The rim becomes a slowly orbiting band — used when something is _alive_, e.g. the composer while Claude is working.                       |
+| Ambient orbit | `data-lustre-ambient` | The rim becomes a slowly orbiting band — used when something is _alive_, e.g. the composer while the assistant is working.                |
 
 Knobs per component: `--nc-rim-rest`, `--nc-rim-hover`, `--nc-sheen-size`,
 `--nc-sheen-hover`, `--nc-sheen-blend`. Global intensity: `--nc-lustre` (0–1), set

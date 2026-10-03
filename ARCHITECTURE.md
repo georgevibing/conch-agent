@@ -57,7 +57,7 @@ apps can override predictably. Full design rationale: [docs/design/NACRE.md](./d
 
 ### Wire protocol (`packages/protocol`)
 
-Zod schemas for everything on the wire (v2):
+Zod schemas for everything on the wire:
 
 - **REST** — `GET /api/state` (onboarding flag, persona, profile, preferences, engine
   status, workspace), `PATCH /api/settings`, `GET /api/engine?refresh=1`,
@@ -713,8 +713,9 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   (`state.behind`); `Root` renders the routes at that page, so it stays mounted
   behind, and leaving goes back to it. `useUi.openSettings` keeps its signature for
   every caller and moves the router through `app/navigation.tsx` (`Navigator`, `go`).
-- First run is a short, skippable flow: welcome → connect Claude Code (install /
-  sign-in / API key, with live re-checks) → personality and "about you" → chat.
+- First run is a short, skippable flow: welcome → connect a provider (install /
+  sign-in / API key, with live re-checks) → a useful first job → personality and
+  "about you" → chat.
 - **Passwords** (ADR 0025). `/passwords`: one list of Conch's own encrypted vault and the
   password managers you turn on (1Password, Bitwarden, KeePassXC, Proton Pass, Dashlane,
   Keeper, the macOS Keychain), with search, filters, the Security check (breached, reused,

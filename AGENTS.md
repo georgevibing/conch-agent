@@ -132,7 +132,9 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
    For UI changes, also screenshot the affected stories in light _and_ dark mode with
    `scripts/snap.mjs` and look at them.
 2. **Small, conventional commits** (`feat(nacre): …`, `fix(server): …`, `docs: …`,
-   `chore: …`). One logical change per commit. Never push unless asked.
+   `chore: …`). One logical change per commit. Never push unless asked. A commit's
+   author is whoever `git config` names; never add `Co-Authored-By`, "Generated with"
+   or any other attribution lines to commits or pull requests.
 3. **Dependencies are decisions.** Prefer what's already installed. New runtime deps
    need a line of justification in the commit message; significant ones need an ADR.
    pnpm enforces a minimum release age — don't bypass it.
@@ -141,7 +143,7 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
    `@conch/protocol` on _both_ sides.
 5. **Accessibility is not optional.** `jsx-a11y` strict is on and never disabled.
    Every interactive component has keyboard support, visible focus, and an axe test.
-6. **No secrets in code or logs.** Config comes from env (`.env.example` documents it).
+6. **No secrets in code or logs.** Config comes from env (`apps/server/.env.example` documents it).
 7. **Inclusive language** in code, comments and docs (primary/replica, allowlist/denylist).
 8. **Don't edit generated or vendored files** (`pnpm-lock.yaml` by hand, `dist/`,
    `storybook-static/`).
@@ -363,7 +365,7 @@ Keep deployment hostnames in configuration, preserve Host/Origin for HTTP and WS
 and serve built assets through the gateway so document security headers apply.
 
 Conch runs commands **as the user**, and a prompt-injected agent is part of the
-threat model. Hold every change to the bar of a FAANG security review:
+threat model. Hold every change to the bar of a thorough professional security review:
 
 1. **Research before you build.** For anything touching auth, sessions, crypto,
    parsing untrusted input, the agent's powers, or network exposure, read the
@@ -580,14 +582,3 @@ Data across versions).
 - [ ] Fails well (working agreement 11)? Foreseeable failures heal themselves or end in one plain next step, and the healing paths are tested
 - [ ] Needs something outside Conch? It's declared as a need that Conch finds, installs or links to, and notices when it arrives. It's never a “Couldn't find X” message.
 - [ ] Joined the whole-Conch features (working agreement 12)? A Repair everything check, a backup rule for new files, `version`/`latest` for new programs, `cues` for new catalog apps, `local` and `TurnProblem` for new providers.
-
-<!-- BEGIN:turborepo-agent-rules -->
-
-# This is NOT the Turborepo you know
-
-Turborepo configuration, task behavior, and CLI commands can vary between installed versions and may differ from your training data. Resolve the `turbo` package from this file's directory or relevant workspace; in monorepos, it may not be visible from the repository root. For example, run `node -p "require.resolve('turbo/package.json')"` from a workspace that depends on `turbo`.
-
-Read `docs/README.md` inside that installed package first, then read the relevant pages from its `docs/` directory before changing Turborepo configuration or commands. Heed deprecation notices. These bundled docs match the installed package version and are available without network access.
-
-This block is written and re-added by `turbo` before repository-scoped commands when an AI agent is detected. In the Turborepo source repository, its template is defined in `crates/turborepo-cli/src/cli/agent_guidance.rs`. Removing the managed block while updates are enabled means a later qualifying invocation will add it again. Set `"agentGuidance": false` in the root `turbo.json` or `turbo.jsonc` to opt out; this does not remove an existing block. Keep the block committed with your work to avoid an uncommitted change on the next agent invocation.
-<!-- END:turborepo-agent-rules -->

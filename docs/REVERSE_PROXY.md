@@ -22,8 +22,8 @@ Allowed hosts are comma-separated hostnames without schemes, ports or paths.
    with this same `CONCH_HOME`. Save the one-time key in a password manager.
    Do not run it through captured logs, put the key in a URL, or set `CONCH_TOKEN`.
 2. Run `pnpm --filter @conch/web build`.
-3. Run `pnpm --filter @conch/server start` with a minimal environment. Do not
-   inherit unrelated 1Password, cloud, router or host-agent credentials.
+3. Run `pnpm --filter @conch/server start` with a minimal environment that
+   holds no unrelated credentials (password managers, cloud or router keys).
 4. Keep the default mode on **Ask first**, with no active routines or trusted
    custom integrations.
 5. Configure the proxy:
@@ -34,14 +34,13 @@ Allowed hosts are comma-separated hostnames without schemes, ports or paths.
    - Strip the outer session cookie upstream, but retain app-specific cookies.
    - No permissive CORS or disabled origin checks.
 
-For clawrouter, use `clawapp start <name> --preserve-host ... -- <command>`.
 For supervisors that track process groups, launch Node directly to avoid package
 manager child process groups: from the repository root, use
 `node --import ./apps/server/node_modules/tsx/dist/loader.mjs apps/server/src/main.ts`.
 
-Only that registration preserves Host; other applications retain their defaults.
-Publish the intended registration only after verifying both gates. Other reverse
-proxies should use their native Host-preservation configuration.
+Use your proxy's own setting for preserving `Host` (for example
+`proxy_set_header Host $host;` in nginx; Caddy keeps it by default), and expose
+Conch only after you've checked both sign-ins: the proxy's and Conch's own.
 
 ## Login and revocation
 
