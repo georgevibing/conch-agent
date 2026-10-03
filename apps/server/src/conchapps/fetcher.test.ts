@@ -233,6 +233,9 @@ describe('app.fetch: what an app may send', () => {
     expect(
       (await go(f, request('/echo', { headers: { 'x-a': 'one\r\nx-b: two' } }))).refused,
     ).toMatch(/line break/);
+    expect((await go(f, request('/echo', { headers: { 'x-name': 'Zoë' } }))).refused).toMatch(
+      /characters a header can’t carry/,
+    );
     expect(
       (await go(f, request('/echo', { method: 'TRACE' as AppFetchRequest['method'] }))).refused,
     ).toMatch(/can’t send TRACE/);

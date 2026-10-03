@@ -87,6 +87,8 @@ function headersFor(given: Record<string, string>, appId: string): Record<string
     if (DROPPED.has(name) || DROPPED_PREFIX.test(name)) continue;
     if (/[\r\n\0]/.test(value))
       return `The “${name}” header has a line break in it, which isn’t allowed.`;
+    if (/[^\t\x20-\x7e]/.test(value))
+      return `The “${name}” header has characters a header can’t carry: encode it first (for example with encodeURIComponent).`;
     if (value.length > 8192) return `The “${name}” header is too long.`;
     out[name] = value;
   }

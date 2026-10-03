@@ -667,6 +667,13 @@ export const tools = {
 });
 
 describe('a module that doesn’t load says why, plainly', () => {
+  it('names a tool whose name is far too long, instead of failing to start', async () => {
+    const app = await makeApp(
+      `export const tools = { ${'x'.repeat(300)}: { title: 'T', description: 'D', input: { type: 'object' }, run() {} } };`,
+    );
+    await expect(start(app).list()).rejects.toThrow(/The tool “x{40}” doesn’t fit: its name/);
+  });
+
   it.each<[string, string, RegExp]>([
     [
       'a syntax error',
@@ -903,17 +910,20 @@ describe('the process’s life', () => {
     const app = await makeApp(`export const tools = {
       ${tool('crash', 'setTimeout(() => { throw new Error("boom"); }, 10); await new Promise(() => {});')}
       ${tool('fine', 'return "fine";')}
+      ${tool('slow', 'await new Promise((r) => setTimeout(r, 5000)); return "late";')}
     };`);
     const runtime = start(app, { heal });
+    await runtime.list();
+    // A call still running on the same process fails too.
     const [crashed, other] = await Promise.all([
       runtime.call('crash', {}),
-      runtime.call('fine', {}).then(() => runtime.call('crash', {})),
+      runtime.call('slow', {}),
     ]);
     expect(crashed).toEqual({
       ok: false,
       text: 'Plant diary’s tools stopped while working (they crashed). Try again: Conch starts them afresh.',
     });
-    expect(other?.ok).toBe(false);
+    expect(other).toEqual(crashed);
     expect(runtime.log).toMatch(/boom/);
     expect(await runtime.call('fine', {})).toEqual({ ok: true, text: 'fine' });
     expect(await runtime.call('fine', {})).toEqual({ ok: true, text: 'fine' });
@@ -940,10 +950,17 @@ describe('the process’s life', () => {
       `export const tools = { ${tool('slow', 'await new Promise((r) => setTimeout(r, 5000)); return "late";')} };`,
     );
     const runtime = start(app);
+    await runtime.list();
     const controller = new AbortController();
     const pending = runtime.call('slow', {}, controller.signal);
     setTimeout(() => controller.abort(), 100);
     expect(await pending).toEqual({ ok: false, text: 'Stopped.' });
+    const early = new AbortController();
+    early.abort();
+    expect(await runtime.call('slow', {}, early.signal)).toEqual({
+      ok: false,
+      text: 'Stopped before it started.',
+    });
   });
 
   it('logs what the app writes with app.log', async () => {

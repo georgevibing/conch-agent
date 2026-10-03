@@ -443,6 +443,8 @@ export class SealedRuntime implements AppRuntime {
       });
       child.on('error', (error) => {
         clearTimeout(timer);
+        // It never started: there's no process to say is running.
+        if (child.pid === undefined && this.#child === child) this.#child = undefined;
         reject(new Error(`${this.#name}’s tools couldn’t start: ${error.message}`));
       });
       child.on('exit', (code, signal) => {

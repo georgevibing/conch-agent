@@ -744,9 +744,10 @@ function definitionOf(name, tool) {
     input = 'unreadable';
   }
   return {
-    name,
-    title: text(tool.title),
-    description: text(tool.description),
+    // Cut to what the gateway reads, so a long one is named as too long rather than lost.
+    name: trim(name, 100),
+    title: text(tool.title) === null ? null : trim(tool.title, 2000),
+    description: text(tool.description) === null ? null : trim(tool.description, 10_000),
     input,
     changes: typeof tool.changes === 'boolean' ? tool.changes : null,
     runs: typeof tool.run === 'function',
