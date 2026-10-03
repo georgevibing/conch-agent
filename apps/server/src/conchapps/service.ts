@@ -196,7 +196,7 @@ export const sameHands = (
 
 /** The words a card or a preview shows when an app replaces one from another maker. */
 export const otherMakerWarning = (name: string) =>
-  `This replaces ${name} from another maker; its settings and keys won’t carry over, so you’ll type them again.`;
+  `This replaces ${name} from another maker; its settings, keys and data won’t carry over, so it starts fresh.`;
 
 /** A workshop's refusal, in the service's own kind of error. */
 function rethrow(error: unknown): never {
@@ -929,6 +929,26 @@ export class ConchAppService {
     await this.#stop(id);
     this.#updates.delete(id);
     await this.store.place(id, pkg.files, pkg.hash);
+    // Its data carries over only in the same hands, like its keys: what one maker's app
+    // kept for you is never handed to another's (before any runtime starts on it).
+    if (existing) {
+      if (!keep) await this.store.wipeData(id);
+    } else {
+      const owner = await this.store.keptData(id);
+      const same =
+        owner &&
+        sameHands(
+          {
+            source: owner.source,
+            signature: owner.fingerprint
+              ? { state: 'untrusted', fingerprint: owner.fingerprint }
+              : { state: 'unsigned' },
+          },
+          { source, signature },
+        );
+      if (!same) await this.store.wipeData(id);
+      if (owner) await this.store.setKeptData(id, undefined);
+    }
     await mkdir(this.store.dataDir(id), { recursive: true, mode: 0o700 });
     // Secrets for settings it no longer declares go; new ones are kept sealed.
     const declared = new Set(manifest.settings.map((s) => s.key));
@@ -1396,7 +1416,11 @@ export class ConchAppService {
       const keep = sameHands(app, hands);
       await this.#stop(id);
       await this.store.restore(id, target.hash);
-      if (!keep) await this.store.setSecrets(id, undefined);
+      if (!keep) {
+        await this.store.setSecrets(id, undefined);
+        await this.store.wipeData(id);
+        await mkdir(this.store.dataDir(id), { recursive: true, mode: 0o700 });
+      }
       await this.store.patch(id, (record) => {
         record.versions = keep
           ? [
@@ -1441,6 +1465,16 @@ export class ConchAppService {
       this.#failures.delete(id);
       await this.store.removeFiles(id, options.keepData);
       await this.store.setSecrets(id, undefined);
+      // Whose data stays, so it's given back only to the same hands.
+      await this.store.setKeptData(
+        id,
+        options.keepData
+          ? {
+              source: app.source,
+              ...(app.signature.fingerprint && { fingerprint: app.signature.fingerprint }),
+            }
+          : undefined,
+      );
       await this.store.update((apps) => apps.filter((a) => a.id !== app.id));
       if (hadSkills) this.deps.skillsChanged?.();
       await this.#changed(id);

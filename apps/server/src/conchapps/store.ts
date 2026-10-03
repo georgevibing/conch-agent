@@ -70,7 +70,20 @@ export const AppRecord = z.object({
 });
 export type AppRecord = z.infer<typeof AppRecord>;
 
-const AppsFile = z.object({ apps: z.array(AppRecord).default([]) });
+/**
+ * Whose data was kept when an app was removed with its data. Kept here, not in
+ * the data folder, which the app itself can write.
+ */
+export const KeptData = z.object({
+  source: ConchAppSource,
+  fingerprint: z.string().optional(),
+});
+export type KeptData = z.infer<typeof KeptData>;
+
+const AppsFile = z.object({
+  apps: z.array(AppRecord).default([]),
+  keptData: z.record(z.string(), KeptData).default({}),
+});
 
 const SecretsFile = z.object({
   apps: z.record(z.string(), z.record(z.string(), z.string())).default({}),
@@ -133,6 +146,7 @@ export class ConchAppStore {
   #files = new Mutex();
   #cache?: Promise<AppRecord[]>;
   #last: AppRecord[] = [];
+  #kept: Record<string, KeptData> = {};
   #secrets?: Promise<z.infer<typeof SecretsFile>>;
 
   constructor(
@@ -163,7 +177,10 @@ export class ConchAppStore {
             : 'The list of apps you made or added couldn’t be read, so Conch kept a copy and started it again.',
         ),
     }).then(
-      (read) => (this.#last = read.value.apps),
+      (read) => {
+        this.#kept = read.value.keptData;
+        return (this.#last = read.value.apps);
+      },
       (error: unknown) => {
         this.#cache = undefined;
         throw error;
@@ -186,10 +203,26 @@ export class ConchAppStore {
     return this.#mutex.run(async () => {
       const draft = structuredClone(await this.read());
       const next = AppsFile.parse({ apps: fn(draft) ?? draft }).apps;
-      await writeJson(this.#path, { apps: next });
+      await writeJson(this.#path, { apps: next, keptData: this.#kept });
       this.#cache = Promise.resolve(next);
       this.#last = next;
       return next;
+    });
+  }
+
+  /** Whose data was kept for an app that was removed, if any. */
+  async keptData(id: string): Promise<KeptData | undefined> {
+    await this.read();
+    return this.#kept[id];
+  }
+
+  /** Remember (or forget) whose data is kept for an app that's gone. */
+  setKeptData(id: string, owner: KeptData | undefined): Promise<void> {
+    return this.#mutex.run(async () => {
+      const apps = await this.read();
+      const next = Object.fromEntries(Object.entries(this.#kept).filter(([key]) => key !== id));
+      this.#kept = owner ? { ...next, [id]: owner } : next;
+      await writeJson(this.#path, { apps, keptData: this.#kept });
     });
   }
 
@@ -298,6 +331,21 @@ export class ConchAppStore {
     if (!entries.length) return false;
     await removeTree(this.#incoming);
     return true;
+  }
+
+  /** An app's data gone: moved aside first, so a crash never leaves half of it for the next app. */
+  async wipeData(id: string): Promise<boolean> {
+    const dir = this.dataDir(id);
+    if (!(await exists(dir))) return false;
+    await mkdir(this.#incoming, { recursive: true, mode: 0o700 });
+    const aside = join(this.#incoming, newId('data'));
+    await rename(dir, aside);
+    await removeTree(aside);
+    return true;
+  }
+
+  async hasData(id: string): Promise<boolean> {
+    return exists(this.dataDir(id));
   }
 
   async dataBytes(id: string): Promise<number> {

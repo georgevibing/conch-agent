@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -360,7 +360,6 @@ describe('adding from elsewhere (ADR 0061 §6)', () => {
     });
     if (!preview || !found) return;
     // Nothing of the preview is left on disk.
-    const { readdir } = await import('node:fs/promises');
     expect(await readdir(join(h.home, 'conch-apps', '.incoming')).catch(() => [])).toEqual([]);
     await expect(
       h.service.install({
@@ -461,15 +460,19 @@ describe('adding from elsewhere (ADR 0061 §6)', () => {
     };
     const bea = { fingerprint: 'BBBB 2222', publisher: 'Bea' };
     await add(signedPackage(keyed('1.0.0'), bea), { apiKey: 'sk-bea-key-0001', city: 'Lisbon' });
+    await writeFile(join(h.home, 'conch-app-data', 'weather', 'data.json'), '{"secret":"bea’s"}');
     // A file is never "the same place" as another file: nothing carries over, and the preview says so.
     const other = await add(signedPackage(keyed('1.1.0'), bea));
     expect(other.found.warnings?.[0]?.message).toBe(
-      'This replaces Weather from another maker; its settings and keys won’t carry over, so you’ll type them again.',
+      'This replaces Weather from another maker; its settings, keys and data won’t carry over, so it starts fresh.',
     );
     expect(other.found.changes?.otherMaker).toBe(true);
     expect(other.app.saved).toEqual([]);
     expect(other.app.missing).toEqual(['apiKey', 'city']);
     expect(await h.service.systemKeys()).toEqual([]);
+    // Nor does what Bea's app kept for you.
+    expect(other.app.dataBytes).toBe(0);
+    expect(await readdir(join(h.home, 'conch-app-data', 'weather'))).toEqual([]);
     // Another maker's version is never offered for Go back.
     expect(other.app.versions).toEqual([]);
     await expect(h.service.rollback('weather', '1.0.0')).rejects.toThrow(/isn’t kept/);
@@ -497,6 +500,7 @@ describe('adding from elsewhere (ADR 0061 §6)', () => {
     };
     await add('1.0.0');
     const updated = await add('1.1.0');
+    await writeFile(join(h.home, 'conch-app-data', 'weather', 'data.json'), '{"kept":1}');
     expect(updated.versions.map((v) => v.version)).toEqual(['1.0.0']);
     await h.service.hosted.update('capp_weather', { policy: 'trust' });
     // Pretend the kept version said it came from somewhere else (an older file, a bug): checked again.
@@ -513,6 +517,53 @@ describe('adding from elsewhere (ADR 0061 §6)', () => {
     expect(back.versions).toEqual([]);
     expect((await h.service.hosted.get('capp_weather')).policy).toBe('ask');
     expect(await h.service.systemKeys()).toEqual([]);
+    expect(back.dataBytes).toBe(0);
+  });
+
+  it('data kept when an app is removed goes back only to the same hands', async () => {
+    const link = 'https://example.com/w.conchapp';
+    const h = await harness({ links: new Map() });
+    const bea = { fingerprint: 'BBBB 2222', publisher: 'Bea' };
+    const data = join(h.home, 'conch-app-data', 'weather', 'data.json');
+    const add = async (version: string, who?: { fingerprint: string; publisher: string }) => {
+      h.parts.options.links?.set(link, {
+        archive: signedPackage(keyed(version), who),
+        source: { kind: 'link', url: link },
+      });
+      const preview = await h.service.preview({ link });
+      const found = preview?.apps[0];
+      if (!preview || !found) throw new Error('nothing');
+      return h.service.install({
+        packageId: preview.packageId,
+        appId: 'weather',
+        hash: found.hash,
+        settings: {},
+      });
+    };
+    await add('1.0.0', bea);
+    await writeFile(data, '{"notes":["kept"]}');
+    await h.service.remove('weather', { keepData: true });
+    // Whose it was is in the list, not in the folder the app can write.
+    const list = JSON.parse(await readFile(join(h.home, 'conch-apps.json'), 'utf8')) as {
+      keptData: Record<string, unknown>;
+    };
+    expect(list.keptData).toEqual({
+      weather: { source: { kind: 'link', url: link }, fingerprint: 'BBBB 2222' },
+    });
+    // The same address and signer: it's there again.
+    expect((await add('1.1.0', bea)).dataBytes).toBeGreaterThan(0);
+    await h.service.remove('weather', { keepData: true });
+    // Someone else's at the same id: it starts fresh.
+    expect((await add('1.2.0', { fingerprint: 'MMMM', publisher: 'Bea' })).dataBytes).toBe(0);
+    await writeFile(data, '{"notes":["mallory"]}');
+    await h.service.remove('weather', { keepData: true });
+    // Unsigned never counts as the same hands.
+    expect((await add('1.3.0')).dataBytes).toBe(0);
+    await h.service.remove('weather', { keepData: false });
+    expect(
+      (JSON.parse(await readFile(join(h.home, 'conch-apps.json'), 'utf8')) as { keptData: object })
+        .keptData,
+    ).toEqual({});
   });
 
   it('a link: same address and same signer keeps the keys; unsigned, or another signer, doesn’t', async () => {
@@ -916,7 +967,6 @@ describe('Repair everything', () => {
       join(h.home, 'conch-apps', 'tally', 'current', 'tools.mjs'),
       'export const tools = {};',
     );
-    const { readdir } = await import('node:fs/promises');
     for (const entry of await readdir(join(h.home, 'conch-apps', 'tally')))
       if (entry !== 'current')
         await rm(join(h.home, 'conch-apps', 'tally', entry), { recursive: true });
