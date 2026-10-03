@@ -76,6 +76,45 @@ describe('a page, sealed off', () => {
     // Listening before any of the page's own code runs.
     expect(whole.indexOf('postMessage')).toBeLessThan(whole.indexOf('</head>'));
     expect(doc.indexOf('postMessage')).toBeLessThan(doc.indexOf('</head>'));
+    // An artifact's page has no way to call tools, and no kit.
+    expect(doc).not.toContain('app-call');
+    expect(doc).not.toContain('call:q');
+    expect(doc).toContain('<html lang="en"><head>');
+  });
+
+  it('gives a Conch app’s page the page kit before its own styles, its accent, and conch.call (ADR 0061)', () => {
+    const page = frameDocument(
+      '<html lang="en"><head><style>p{color:red}</style></head><body><p>x</p></body></html>',
+      {
+        title: 't',
+        theme: 'dark',
+        parentOrigin: 'http://h',
+        kit: '.nc-card{padding:1rem}</style><script>alert(1)</script>',
+        accent: 'teal',
+        calls: true,
+      },
+    );
+    expect(page).toContain('<html data-theme="dark" data-accent="teal" lang="en">');
+    // The kit comes first, so the page's own styles win; it can't close its own style early.
+    expect(page.indexOf('.nc-card')).toBeLessThan(page.indexOf('p{color:red}'));
+    expect(page).not.toContain('</style><script>alert(1)');
+    expect(page).toContain('p({call:{id:id,tool:String(t),input:x||{}}})');
+    // Answers to a call are believed only from Conch's own page, like live data.
+    expect(page.indexOf("m.conch==='app-call'")).toBeGreaterThan(
+      page.indexOf('if(e.source!==parent||e.origin!==o)return'),
+    );
+    expect(page).toContain('watch:function(source,params,f){');
+    expect(page).toContain(',call:q});');
+    // An accent that isn't a name or a colour is left out.
+    expect(
+      frameDocument('<p>x</p>', {
+        title: 't',
+        theme: 'light',
+        parentOrigin: 'http://h',
+        accent: '"><script>',
+        calls: true,
+      }),
+    ).not.toContain('data-accent');
   });
 });
 

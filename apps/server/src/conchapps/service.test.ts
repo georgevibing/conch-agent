@@ -1,0 +1,1016 @@
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import type {
+  ConchAppOffer,
+  ConversationEvent,
+  ConversationEventInput,
+  ServerEvent,
+} from '@conch/protocol';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import type { ToolContext } from '../conversations/manager';
+import { tallyFiles } from '../engines/mock/tally';
+import {
+  type FakeOptions,
+  type FakeParts,
+  fakePack,
+  fakeParts,
+  fakeSign,
+  textFiles,
+} from '../test/conchapps';
+import { conchAppsCheck } from './doctor';
+import { ConchAppError, ConchAppService } from './service';
+
+const homes: string[] = [];
+afterEach(async () => {
+  for (const home of homes.splice(0)) await rm(home, { recursive: true, force: true });
+});
+
+async function harness(options: FakeOptions = {}, home?: string) {
+  const dir = home ?? (await mkdtemp(join(tmpdir(), 'conch-apps-')));
+  homes.push(dir);
+  const parts: FakeParts = fakeParts(options);
+  const logs = new Map<string, ConversationEvent[]>();
+  const emitted: ServerEvent[] = [];
+  const heals: string[] = [];
+  let seq = 0;
+  let skills = 0;
+  const push = (id: string, input: ConversationEventInput) => {
+    const log = logs.get(id) ?? [];
+    logs.set(id, log);
+    log.push({ ...input, conversationId: id, seq: seq++, at: Date.now() } as ConversationEvent);
+  };
+  const service = new ConchAppService({
+    home: dir,
+    parts,
+    emit: (event) => emitted.push(event),
+    heal: (message) => heals.push(message),
+    chats: {
+      events: async (id) => {
+        const log = logs.get(id);
+        if (!log) throw new Error('not found');
+        return log;
+      },
+      note: async (id, offer) => push(id, { type: 'conch-app.offer', offer }),
+      exists: async (id) => logs.has(id),
+      taints: async (id) =>
+        (logs.get(id) ?? []).flatMap((e) => (e.type === 'taint' ? [e.source] : [])),
+    },
+    skillsChanged: () => void skills++,
+    manualChecks: true,
+  });
+  const chat = (id = 'c_chat') => {
+    logs.set(id, logs.get(id) ?? []);
+    return { conversationId: id, append: (event: ConversationEventInput) => push(id, event) };
+  };
+  const offers = (id = 'c_chat') =>
+    (logs.get(id) ?? []).flatMap((e) => (e.type === 'conch-app.offer' ? [e.offer] : []));
+  const latest = (offerId: string, id = 'c_chat') =>
+    offers(id)
+      .filter((o) => o.offerId === offerId)
+      .at(-1);
+  return {
+    home: dir,
+    parts,
+    service,
+    emitted,
+    heals,
+    chat,
+    offers,
+    latest,
+    logs,
+    skillsChanged: () => skills,
+  };
+}
+
+type Harness = Awaited<ReturnType<typeof harness>>;
+
+/** Make Tally in a chat, check it, try every tool, and offer it. */
+async function makeTally(h: Harness, version = '1.0.0', extra: Record<string, string> = {}) {
+  const ctx = h.chat();
+  const { draft } = await h.service.newDraft(ctx.conversationId, { name: 'Tally', id: 'tally' });
+  for (const [path, content] of Object.entries({ ...tallyFiles(version), ...extra }))
+    await h.service.write(draft.id, path, content);
+  await h.service.check(draft.id);
+  await h.service.tryTool(draft.id, 'count', { by: 1 });
+  await h.service.tryTool(draft.id, 'read_count', {});
+  await h.service.check(draft.id);
+  const offer = await h.service.present(ctx, draft.id, 'Tally counts things.');
+  return { ctx, draft, offer };
+}
+
+const signedPackage = (
+  files: Record<string, string>,
+  who?: { fingerprint: string; publisher: string },
+) => fakePack(who ? fakeSign(textFiles(files), who) : textFiles(files));
+
+const keyed = (version = '1.0.0', reaches: string[] = []) => {
+  const files = tallyFiles(version);
+  const manifest = JSON.parse(files['conch-app.json'] ?? '{}') as Record<string, unknown>;
+  manifest.id = 'weather';
+  manifest.name = 'Weather';
+  manifest.reaches = reaches;
+  manifest.settings = [
+    { key: 'apiKey', label: 'API key', secret: true },
+    { key: 'city', label: 'City' },
+  ];
+  return { ...files, 'conch-app.json': JSON.stringify(manifest) };
+};
+
+describe('making an app in a chat (ADR 0061 §4)', () => {
+  it('won’t offer a draft before its newest files pass and every tool was tried', async () => {
+    const h = await harness();
+    const ctx = h.chat();
+    const { draft, files } = await h.service.newDraft(ctx.conversationId, { name: 'Tally' });
+    expect([...files.keys()].sort()).toEqual(
+      ['README.md', 'conch-app.json', 'pages/main.html', 'tools.mjs'].sort(),
+    );
+    await expect(h.service.present(ctx, draft.id)).rejects.toThrow(/since the last app_check/);
+    let check = await h.service.check(draft.id);
+    expect(check.problems).toEqual([]);
+    expect(check.ok).toBe(false);
+    await expect(h.service.present(ctx, draft.id)).rejects.toThrow(/Try every tool.*add_note/);
+    await h.service.tryTool(draft.id, 'add_note', { text: 'buy soil' });
+    await h.service.tryTool(draft.id, 'list_notes', {});
+    // Changed after the check: checked again first.
+    await h.service.write(draft.id, 'README.md', '# Tally\n');
+    await expect(h.service.present(ctx, draft.id)).rejects.toThrow(/since the last app_check/);
+    check = await h.service.check(draft.id);
+    // Tried on older files doesn't count for newer ones.
+    expect(check.ok).toBe(false);
+    await h.service.tryTool(draft.id, 'add_note', { text: 'x' });
+    await h.service.tryTool(draft.id, 'list_notes', {});
+    expect((await h.service.check(draft.id)).ok).toBe(true);
+    const offer = await h.service.present(ctx, draft.id, 'Notes.');
+    expect(offer).toMatchObject({ action: 'add', from: 'draft', state: 'ready' });
+    // Scratch data, never shipped.
+    expect(
+      await readFile(join(h.home, 'app-workshop', draft.id, 'data', 'data.json'), 'utf8'),
+    ).toContain('x');
+  });
+
+  it('refuses paths outside the folder, unknown kinds of file and an app over 2 MB, in words', async () => {
+    const h = await harness();
+    const ctx = h.chat();
+    const { draft } = await h.service.newDraft(ctx.conversationId, { name: 'Tally' });
+    for (const bad of ['../escape.md', '/abs.md', '.hidden', 'pages/../../x.md', 'a\\b.md'])
+      await expect(h.service.write(draft.id, bad, 'x')).rejects.toBeInstanceOf(ConchAppError);
+    await expect(h.service.write(draft.id, 'tool.exe', 'x')).rejects.toThrow(
+      /isn’t a kind of file/,
+    );
+    await expect(
+      h.service.write(draft.id, 'big.txt', 'x'.repeat(2 * 1024 * 1024 + 1)),
+    ).rejects.toThrow(/The app is over 2 MB/);
+    await expect(h.service.write(draft.id, 'conch-app.sig', 'x')).rejects.toThrow(
+      /written by Conch/,
+    );
+    // Another chat's draft is out of reach.
+    await expect(h.service.draftFor('c_other', draft.id)).rejects.toThrow(/no draft with that id/);
+  });
+
+  it('keeps one draft per app in a chat', async () => {
+    const h = await harness();
+    const ctx = h.chat();
+    const first = await h.service.newDraft(ctx.conversationId, { name: 'Tally' });
+    const again = await h.service.newDraft(ctx.conversationId, { name: 'Tally' });
+    expect(again.reused).toBe(true);
+    expect(again.draft.id).toBe(first.draft.id);
+  });
+
+  it('makes earlier cards for the same draft history', async () => {
+    const h = await harness();
+    const { ctx, draft, offer } = await makeTally(h);
+    const second = await h.service.present(ctx, draft.id, 'Again.');
+    expect(h.latest(offer.offerId)?.state).toBe('stale');
+    await expect(
+      h.service.acceptOffer(offer.offerId, { conversationId: ctx.conversationId }),
+    ).rejects.toThrow(/newer version/);
+    expect(second.state).toBe('ready');
+  });
+});
+
+describe('the card’s press', () => {
+  it('adds exactly the files on the card, made here: Ask before changes, pinned, its tools listed', async () => {
+    const h = await harness();
+    const { ctx, offer } = await makeTally(h);
+    const app = await h.service.acceptOffer(offer.offerId, { conversationId: ctx.conversationId });
+    expect(app).toMatchObject({
+      id: 'tally',
+      integrationId: 'capp_tally',
+      pinned: true,
+      source: { kind: 'made', conversationId: 'c_chat' },
+    });
+    expect(app.tools.map((t) => t.name).sort()).toEqual(['count', 'read_count']);
+    expect(h.latest(offer.offerId)?.state).toBe('added');
+    const [integration] = await h.service.hosted.list();
+    expect(integration).toMatchObject({
+      id: 'capp_tally',
+      conchApp: 'tally',
+      server: 'app_tally',
+      policy: 'ask-writes',
+      auth: 'none',
+      transport: { type: 'host', how: 'Runs sealed off on this computer' },
+      health: { state: 'ok' },
+    });
+    expect(await stat(join(h.home, 'conch-apps', 'tally', 'current', 'tools.mjs'))).toBeTruthy();
+    expect(h.emitted.map((e) => e.type)).toEqual(
+      expect.arrayContaining(['conch-apps.changed', 'integration.changed']),
+    );
+    // Pressed twice (two devices): added once.
+    await h.service.acceptOffer(offer.offerId, { conversationId: ctx.conversationId });
+    expect(h.offers().filter((o) => o.state === 'added')).toHaveLength(1);
+    // The record that's backed up holds no secrets and says where it came from.
+    const record = JSON.parse(await readFile(join(h.home, 'conch-apps.json'), 'utf8')) as {
+      apps: { id: string; hash: string }[];
+    };
+    expect(record.apps[0]).toMatchObject({ id: 'tally', hash: offer.hash });
+  });
+
+  it('refuses files that changed since the card was shown', async () => {
+    const h = await harness();
+    const { ctx, draft, offer } = await makeTally(h);
+    await h.service.write(draft.id, 'README.md', '# Something else\n');
+    await expect(
+      h.service.acceptOffer(offer.offerId, { conversationId: ctx.conversationId }),
+    ).rejects.toThrow('It changed since you saw it; ask for the card again.');
+    expect(h.latest(offer.offerId)?.state).toBe('failed');
+    expect(await h.service.list()).toEqual([]);
+  });
+
+  it('refuses a card from another chat, and one that was never offered', async () => {
+    const h = await harness();
+    const { offer } = await makeTally(h);
+    h.chat('c_other');
+    await expect(
+      h.service.acceptOffer(offer.offerId, { conversationId: 'c_other' }),
+    ).rejects.toThrow(/wasn’t offered in this chat/);
+    await expect(
+      h.service.acceptOffer('capo_nothing', { conversationId: 'c_chat' }),
+    ).rejects.toThrow(/wasn’t offered/);
+  });
+
+  it('declines', async () => {
+    const h = await harness();
+    const { ctx, offer } = await makeTally(h);
+    await h.service.declineOffer(offer.offerId, { conversationId: ctx.conversationId });
+    expect(h.latest(offer.offerId)?.state).toBe('declined');
+    await expect(
+      h.service.acceptOffer(offer.offerId, { conversationId: ctx.conversationId }),
+    ).rejects.toThrow(/put away/);
+  });
+
+  it('updates with what changed, new reach first, keeps the version before, and goes back', async () => {
+    const h = await harness();
+    const first = await makeTally(h);
+    await h.service.acceptOffer(first.offer.offerId, { conversationId: 'c_chat' });
+    await h.service.callFromPage({ appId: 'tally' }, 'count', { by: 3 }, true);
+    const draft = await h.service.editDraft('c_chat', 'tally');
+    expect(draft.id).toBe(first.draft.id);
+    const manifest = JSON.parse(tallyFiles('1.1.0')['conch-app.json'] ?? '{}') as Record<
+      string,
+      unknown
+    >;
+    manifest.reaches = ['api.example.com'];
+    await h.service.write(draft.id, 'conch-app.json', JSON.stringify(manifest));
+    await h.service.check(draft.id);
+    await h.service.tryTool(draft.id, 'count', {});
+    await h.service.tryTool(draft.id, 'read_count', {});
+    await h.service.check(draft.id);
+    const offer = await h.service.present(h.chat(), draft.id, 'Now it reaches the web.');
+    expect(offer).toMatchObject({
+      action: 'update',
+      changes: { from: '1.0.0', to: '1.1.0', reachesAdded: ['api.example.com'] },
+    });
+    expect(offer.changes?.otherMaker).toBeUndefined();
+    const updated = await h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' });
+    expect(updated.manifest.version).toBe('1.1.0');
+    expect(updated.versions.map((v) => v.version)).toEqual(['1.0.0']);
+    expect(h.latest(offer.offerId)?.state).toBe('updated');
+    // Its data is the same data.
+    expect(await h.service.callFromPage({ appId: 'tally' }, 'read_count', {}, false)).toMatchObject(
+      {
+        ok: true,
+        json: { total: 3 },
+      },
+    );
+    const back = await h.service.rollback('tally', '1.0.0');
+    expect(back.manifest.version).toBe('1.0.0');
+    expect(back.versions.map((v) => v.version)).toEqual(['1.1.0']);
+    expect(await h.service.intact('tally')).toBe(true);
+    await expect(h.service.rollback('tally', '9.9.9')).rejects.toThrow(/isn’t kept/);
+  });
+
+  it('removes an app with its data, or keeps its data', async () => {
+    const h = await harness();
+    const { offer } = await makeTally(h);
+    await h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' });
+    await h.service.callFromPage({ appId: 'tally' }, 'count', {}, true);
+    const data = join(h.home, 'conch-app-data', 'tally');
+    await h.service.remove('tally', { keepData: true });
+    expect(await h.service.list()).toEqual([]);
+    expect(
+      await stat(data).then(
+        () => true,
+        () => false,
+      ),
+    ).toBe(true);
+    expect(h.emitted).toContainEqual({ type: 'integration.deleted', integrationId: 'capp_tally' });
+    const again = await makeTally(h);
+    await h.service.acceptOffer(again.offer.offerId, { conversationId: 'c_chat' });
+    await h.service.remove('tally', { keepData: false });
+    expect(
+      await stat(data).then(
+        () => true,
+        () => false,
+      ),
+    ).toBe(false);
+    expect(
+      await stat(join(h.home, 'conch-apps', 'tally')).then(
+        () => true,
+        () => false,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('adding from elsewhere (ADR 0061 §6)', () => {
+  it('looks at a file first, adds exactly what was shown, at Ask every time; settings never come back', async () => {
+    const h = await harness();
+    const file = signedPackage(keyed(), { fingerprint: 'BBBB 2222', publisher: 'Bea' });
+    const preview = await h.service.preview({
+      file: file.toString('base64'),
+      name: 'weather.conchapp',
+    });
+    expect(preview?.source).toEqual({ kind: 'file', name: 'weather.conchapp' });
+    const found = preview?.apps[0];
+    expect(found).toMatchObject({
+      manifest: { id: 'weather' },
+      signature: { state: 'untrusted', fingerprint: 'BBBB 2222' },
+      problems: [],
+    });
+    if (!preview || !found) return;
+    // Nothing of the preview is left on disk.
+    const { readdir } = await import('node:fs/promises');
+    expect(await readdir(join(h.home, 'conch-apps', '.incoming')).catch(() => [])).toEqual([]);
+    await expect(
+      h.service.install({
+        packageId: preview.packageId,
+        appId: 'weather',
+        hash: 'other',
+        settings: {},
+      }),
+    ).rejects.toThrow(/changed since you saw it/);
+    await expect(
+      h.service.install({
+        packageId: preview.packageId,
+        appId: 'weather',
+        hash: found.hash,
+        settings: { nope: 'x' },
+      }),
+    ).rejects.toThrow(/no setting called/);
+    const app = await h.service.install({
+      packageId: preview.packageId,
+      appId: 'weather',
+      hash: found.hash,
+      settings: { city: 'Lisbon' },
+    });
+    expect(app).toMatchObject({
+      source: { kind: 'file' },
+      missing: ['apiKey'],
+      values: { city: 'Lisbon' },
+      saved: ['city'],
+    });
+    const integration = await h.service.hosted.get('capp_weather');
+    expect(integration.policy).toBe('ask');
+    expect(integration.health).toMatchObject({
+      state: 'needs-auth',
+      message: 'Needs your API key.',
+      action: 'edit',
+    });
+    // Not set up: its tools aren't offered, and a page can't run them.
+    expect(h.service.hosted.decide('mcp__conch__app_weather__read_count')).toBe('off');
+    expect(
+      await h.service.callFromPage({ appId: 'weather' }, 'read_count', {}, false),
+    ).toMatchObject({
+      ok: false,
+      reason: 'missing-settings',
+    });
+    const set = await h.service.setSettings('weather', { apiKey: 'sk-very-secret-123456' });
+    expect(JSON.stringify(set)).not.toContain('sk-very-secret');
+    expect(set.saved.sort()).toEqual(['apiKey', 'city']);
+    expect(set.missing).toEqual([]);
+    expect(await readFile(join(h.home, 'conch-apps.json'), 'utf8')).not.toContain('sk-very-secret');
+    expect(await h.service.systemKeys()).toEqual([
+      { appId: 'weather', name: 'Weather', label: 'API key', value: 'sk-very-secret-123456' },
+    ]);
+    expect(h.service.hosted.decide('app_weather__read_count')).toBe('ask');
+  });
+
+  it('refuses a package whose signature doesn’t hold, or that holds no app', async () => {
+    const h = await harness();
+    const signed = fakeSign(textFiles(keyed()), { fingerprint: 'BBBB', publisher: 'Bea' });
+    signed.set('README.md', Buffer.from('changed after signing'));
+    const preview = await h.service.preview({
+      file: fakePack(signed).toString('base64'),
+      name: 'x.conchapp',
+    });
+    expect(preview?.apps[0]?.problems[0]?.message).toMatch(/isn’t what was signed/);
+    if (!preview) return;
+    await expect(
+      h.service.install({
+        packageId: preview.packageId,
+        appId: 'weather',
+        hash: preview.apps[0]?.hash ?? '',
+        settings: {},
+      }),
+    ).rejects.toThrow(/signed/);
+    await expect(
+      h.service.preview({
+        file: fakePack(textFiles({ 'a.txt': 'hi' })).toString('base64'),
+        name: 'x',
+      }),
+    ).rejects.toThrow(/no conch-app.json/);
+  });
+
+  it('carries settings and keys over only in the same hands', async () => {
+    const h = await harness();
+    const add = async (files: Buffer, settings: Record<string, string> = {}) => {
+      const preview = await h.service.preview({
+        file: files.toString('base64'),
+        name: 'w.conchapp',
+      });
+      const found = preview?.apps[0];
+      if (!preview || !found) throw new Error('nothing');
+      const app = await h.service.install({
+        packageId: preview.packageId,
+        appId: 'weather',
+        hash: found.hash,
+        settings,
+      });
+      return { found, app };
+    };
+    const bea = { fingerprint: 'BBBB 2222', publisher: 'Bea' };
+    await add(signedPackage(keyed('1.0.0'), bea), { apiKey: 'sk-bea-key-0001', city: 'Lisbon' });
+    // A file is never "the same place" as another file: nothing carries over, and the preview says so.
+    const other = await add(signedPackage(keyed('1.1.0'), bea));
+    expect(other.found.warnings?.[0]?.message).toBe(
+      'This replaces Weather from another maker; its settings and keys won’t carry over, so you’ll type them again.',
+    );
+    expect(other.found.changes?.otherMaker).toBe(true);
+    expect(other.app.saved).toEqual([]);
+    expect(other.app.missing).toEqual(['apiKey', 'city']);
+    expect(await h.service.systemKeys()).toEqual([]);
+    // Another maker's version is never offered for Go back.
+    expect(other.app.versions).toEqual([]);
+    await expect(h.service.rollback('weather', '1.0.0')).rejects.toThrow(/isn’t kept/);
+  });
+
+  it('going back to a version from other hands starts again without your keys and choices', async () => {
+    const h = await harness();
+    const link = 'https://example.com/w.conchapp';
+    h.parts.options.links = new Map();
+    const bea = { fingerprint: 'BBBB 2222', publisher: 'Bea' };
+    const add = async (version: string) => {
+      h.parts.options.links?.set(link, {
+        archive: signedPackage(keyed(version), bea),
+        source: { kind: 'link', url: link },
+      });
+      const preview = await h.service.preview({ link });
+      const found = preview?.apps[0];
+      if (!preview || !found) throw new Error('nothing');
+      return h.service.install({
+        packageId: preview.packageId,
+        appId: 'weather',
+        hash: found.hash,
+        settings: { apiKey: 'sk-bea-0001', city: 'Porto' },
+      });
+    };
+    await add('1.0.0');
+    const updated = await add('1.1.0');
+    expect(updated.versions.map((v) => v.version)).toEqual(['1.0.0']);
+    await h.service.hosted.update('capp_weather', { policy: 'trust' });
+    // Pretend the kept version said it came from somewhere else (an older file, a bug): checked again.
+    await h.service.store.patch('weather', (record) => {
+      const [kept] = record.versions;
+      if (kept) kept.source = { kind: 'link', url: 'https://evil.example/w.conchapp' };
+    });
+    const back = await h.service.rollback('weather', '1.0.0');
+    expect(back).toMatchObject({
+      saved: [],
+      values: {},
+      source: { url: 'https://evil.example/w.conchapp' },
+    });
+    expect(back.versions).toEqual([]);
+    expect((await h.service.hosted.get('capp_weather')).policy).toBe('ask');
+    expect(await h.service.systemKeys()).toEqual([]);
+  });
+
+  it('a link: same address and same signer keeps the keys; unsigned, or another signer, doesn’t', async () => {
+    const link = 'https://example.com/weather.conchapp';
+    const packages: NonNullable<FakeOptions['links']> = new Map();
+    const h = await harness({ links: packages });
+    const add = async (archive: Buffer, settings: Record<string, string> = {}) => {
+      packages.set(link, { archive, source: { kind: 'link', url: link } });
+      const preview = await h.service.preview({ link });
+      const found = preview?.apps[0];
+      if (!preview || !found) throw new Error('nothing');
+      return {
+        found,
+        app: await h.service.install({
+          packageId: preview.packageId,
+          appId: 'weather',
+          hash: found.hash,
+          settings,
+        }),
+      };
+    };
+    const bea = { fingerprint: 'BBBB 2222', publisher: 'Bea' };
+    await add(signedPackage(keyed('1.0.0'), bea), { apiKey: 'sk-bea-key-0001' });
+    const same = await add(signedPackage(keyed('1.1.0'), bea));
+    expect(same.found.warnings).toBeUndefined();
+    expect(same.app.saved).toEqual(['apiKey']);
+    const mallory = await add(
+      signedPackage(keyed('1.2.0'), { fingerprint: 'MMMM 6666', publisher: 'Bea' }),
+    );
+    expect(mallory.found.changes?.otherMaker).toBe(true);
+    expect(mallory.app.saved).toEqual([]);
+    expect(await h.service.hosted.get('capp_weather')).toMatchObject({ policy: 'ask' });
+    // Unsigned from the same address: no signer to be the same, so nothing carries over either.
+    await h.service.setSettings('weather', { apiKey: 'sk-again-0002' });
+    await add(signedPackage(keyed('1.3.0')));
+    const unsigned = await add(signedPackage(keyed('1.4.0')));
+    expect(unsigned.found.changes?.otherMaker).toBe(true);
+    expect(unsigned.app.saved).toEqual([]);
+  });
+
+  it('a draft that replaces an app from elsewhere says so, and gets none of its keys', async () => {
+    const h = await harness();
+    const files = keyed();
+    const preview = await h.service.preview({
+      file: signedPackage(files, { fingerprint: 'B', publisher: 'Bea' }).toString('base64'),
+      name: 'w',
+    });
+    if (!preview?.apps[0]) throw new Error('nothing');
+    await h.service.install({
+      packageId: preview.packageId,
+      appId: 'weather',
+      hash: preview.apps[0].hash,
+      settings: { apiKey: 'sk-bea-key-0001' },
+    });
+    const draft = await h.service.editDraft('c_chat', 'weather');
+    h.chat();
+    await h.service.write(draft.id, 'README.md', '# Mine now\n');
+    await h.service.check(draft.id);
+    await h.service.tryTool(draft.id, 'count', {});
+    await h.service.tryTool(draft.id, 'read_count', {});
+    await h.service.check(draft.id);
+    const offer = await h.service.present(h.chat(), draft.id, 'Changed.');
+    expect(offer.changes?.otherMaker).toBe(true);
+    const app = await h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' });
+    expect(app.saved).toEqual([]);
+    expect(app.source.kind).toBe('made');
+  });
+
+  it('shows an app from a link as a card in a chat, and the card adds it', async () => {
+    const link = 'https://github.com/bea/weather';
+    const h = await harness({
+      links: new Map([
+        [
+          link,
+          {
+            archive: signedPackage(keyed(), { fingerprint: 'B', publisher: 'Bea' }),
+            source: { kind: 'github', owner: 'bea', repo: 'weather', url: link, commit: 'abc' },
+          },
+        ],
+      ]),
+    });
+    const ctx = h.chat();
+    const preview = await h.service.preview({ link });
+    if (!preview) throw new Error('nothing');
+    const offer = (await h.service.offerPackage(ctx, preview)) as ConchAppOffer;
+    expect(offer).toMatchObject({
+      from: 'package',
+      action: 'add',
+      source: { kind: 'github', owner: 'bea' },
+    });
+    const app = await h.service.acceptOffer(offer.offerId, {
+      conversationId: 'c_chat',
+      settings: { apiKey: 'k-0001' },
+    });
+    expect(app.saved).toEqual(['apiKey']);
+    expect(h.latest(offer.offerId)?.state).toBe('added');
+    expect((await h.service.community('weather')).apps).toEqual([]);
+  });
+});
+
+describe('updates from GitHub', () => {
+  it('finds a newer version, signed by the same key, and installs it only on the press', async () => {
+    const link = 'https://github.com/bea/weather';
+    const links: NonNullable<FakeOptions['links']> = new Map();
+    const latest = new Map<string, { ref: string; commit?: string }>();
+    const h = await harness({ links, latest });
+    const bea = { fingerprint: 'BBBB', publisher: 'Bea' };
+    links.set(link, {
+      archive: signedPackage(keyed('1.0.0'), bea),
+      source: { kind: 'github', owner: 'bea', repo: 'weather', url: link, commit: 'c1' },
+    });
+    const preview = await h.service.preview({ link });
+    if (!preview?.apps[0]) throw new Error('nothing');
+    await h.service.install({
+      packageId: preview.packageId,
+      appId: 'weather',
+      hash: preview.apps[0].hash,
+      settings: { apiKey: 'k-1234' },
+    });
+    latest.set('bea/weather', { ref: 'main', commit: 'c1' });
+    await h.service.checkUpdates();
+    expect((await h.service.get('weather')).update).toBeUndefined();
+    links.set(link, {
+      archive: signedPackage(keyed('1.1.0', ['api.weather.example']), bea),
+      source: { kind: 'github', owner: 'bea', repo: 'weather', url: link, commit: 'c2' },
+    });
+    latest.set('bea/weather', { ref: 'main', commit: 'c2' });
+    await h.service.checkUpdates();
+    const waiting = await h.service.get('weather');
+    expect(waiting.manifest.version).toBe('1.0.0');
+    expect(waiting.update).toMatchObject({
+      version: '1.1.0',
+      sameSigner: true,
+      changes: { reachesAdded: ['api.weather.example'] },
+    });
+    expect(h.service.updateNotices()).toEqual([
+      {
+        appId: 'weather',
+        name: 'Weather',
+        installed: '1.0.0',
+        latest: '1.1.0',
+        sameSigner: true,
+        reachesAdded: ['api.weather.example'],
+      },
+    ]);
+    expect((await h.service.updatePreview('weather')).manifest.version).toBe('1.1.0');
+    const updated = await h.service.applyUpdate('weather');
+    expect(updated).toMatchObject({
+      manifest: { version: '1.1.0' },
+      saved: ['apiKey'],
+      source: { commit: 'c2' },
+    });
+    expect(updated.update).toBeUndefined();
+    await expect(h.service.applyUpdate('weather')).rejects.toThrow(/no update waiting/);
+  });
+});
+
+describe('its tools, for every model', () => {
+  async function added(policy?: 'ask' | 'ask-writes' | 'trust') {
+    const h = await harness();
+    const { offer } = await makeTally(h);
+    await h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' });
+    if (policy) await h.service.hosted.update('capp_tally', { policy });
+    return h;
+  }
+  const context = (answers: ('allow' | 'deny')[] = [], tainted?: string) => {
+    const asked: { summary: string; taint?: string }[] = [];
+    const taints: unknown[] = [];
+    const ctx = {
+      conversationId: 'c_chat',
+      append: () => undefined,
+      engine: {} as ToolContext['engine'],
+      permissionMode: 'default',
+      ask: async (request: { summary: string; taint?: string }) => {
+        asked.push(request);
+        return answers.shift() ?? 'allow';
+      },
+      signal: new AbortController().signal,
+      untrusted: () => tainted,
+      taint: (source: unknown) => void taints.push(source),
+    } as unknown as ToolContext;
+    return { ctx, asked, taints };
+  };
+
+  it('reads go by themselves, changes ask (Ask before changes), and a no does nothing', async () => {
+    const h = await added();
+    expect(h.service.hosted.decide('mcp__conch__app_tally__read_count')).toBe('allow');
+    expect(h.service.hosted.decide('app_tally__count')).toBe('ask');
+    expect(h.service.hosted.decide('app_gone__count')).toBe('off');
+    expect(h.service.hosted.decide('google_mail_search')).toBeUndefined();
+    const { ctx, asked } = context(['deny', 'allow']);
+    const tools = h.service.hosted.tools(ctx);
+    expect(tools.map((t) => t.name).sort()).toEqual(['app_tally__count', 'app_tally__read_count']);
+    const count = tools.find((t) => t.name === 'app_tally__count');
+    expect(Object.keys(count?.input ?? {})).toEqual(['by']);
+    expect(await count?.run({ by: 2 })).toMatchObject({ effect: 'not-executed' });
+    expect(asked[0]?.summary).toBe('Tally wants to count one more: 2');
+    expect(await count?.run({ by: 2 })).toContain('"total":2');
+    const read = tools.find((t) => t.name === 'app_tally__read_count');
+    expect(await read?.run({})).toContain('"total":2');
+    expect(asked).toHaveLength(2);
+    expect((await h.service.hosted.get('capp_tally')).lastUsedAt).toBeGreaterThan(0);
+  });
+
+  it('a tool turned off isn’t offered; Ask every time asks for reads too', async () => {
+    const h = await added('ask');
+    await h.service.hosted.update('capp_tally', { tools: { app_tally__count: 'off' } });
+    expect(h.service.hosted.decide('app_tally__count')).toBe('off');
+    const { ctx, asked } = context();
+    const tools = h.service.hosted.tools(ctx);
+    expect(tools.map((t) => t.name)).toEqual(['app_tally__read_count']);
+    await tools[0]?.run({});
+    expect(asked).toHaveLength(1);
+    await expect(
+      h.service.hosted.update('capp_tally', { tools: { app_other__x: 'allow' } }),
+    ).rejects.toThrow(/isn’t one of its tools/);
+    await h.service.hosted.update('capp_tally', { enabled: false });
+    expect(h.service.hosted.tools(ctx)).toEqual([]);
+    expect(await h.service.callFromPage({ appId: 'tally' }, 'read_count', {}, true)).toMatchObject({
+      ok: false,
+      reason: 'off',
+    });
+  });
+
+  it('after reading something untrusted, a change asks even when it’s allowed; an app that reaches the web taints the chat', async () => {
+    const h = await harness();
+    const manifest = JSON.parse(tallyFiles()['conch-app.json'] ?? '{}') as Record<string, unknown>;
+    manifest.reaches = ['api.example.com'];
+    const { offer } = await makeTally(h, '1.0.0', { 'conch-app.json': JSON.stringify(manifest) });
+    await h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' });
+    await h.service.hosted.update('capp_tally', { policy: 'trust' });
+    const { ctx, asked, taints } = context(
+      [],
+      'This chat read evil.example, which could be trying to steer me.',
+    );
+    const tools = h.service.hosted.tools(ctx);
+    await tools.find((t) => t.name === 'app_tally__read_count')?.run({});
+    expect(asked).toHaveLength(0);
+    expect(taints).toEqual([{ kind: 'app', label: 'Tally content' }]);
+    await tools.find((t) => t.name === 'app_tally__count')?.run({});
+    expect(asked[0]?.taint).toMatch(/evil.example/);
+  });
+
+  it('lists the apps for the prompt, with what they’re for in their maker’s words', async () => {
+    const h = await added();
+    const { working } = await h.service.hosted.promptLines();
+    expect(working[0]).toContain(
+      'Tally (a Conch app the user made; tools `app_tally__count` (changes things)',
+    );
+    expect(working[0]).toContain('in its maker’s words: “Use Tally when');
+    expect(working[0]).toContain('“Count one more coffee”');
+  });
+
+  it('a runtime that won’t start shows as an error with Try again', async () => {
+    const h = await harness({ failing: new Set(['tally']) });
+    const { offer } = await makeTally(h).catch(() => ({ offer: undefined }));
+    expect(offer).toBeUndefined();
+    h.parts.options.failing?.clear();
+    const made = await makeTally(h);
+    await h.service.acceptOffer(made.offer.offerId, { conversationId: 'c_chat' });
+    h.parts.options.failing?.add('tally');
+    await h.service.checkRuntime('tally');
+    expect((await h.service.hosted.get('capp_tally')).health).toMatchObject({
+      state: 'error',
+      action: 'retry',
+      message: expect.stringMatching(/^Tally couldn’t start: The tools module didn’t load/),
+    });
+    h.parts.options.failing?.clear();
+    await h.service.hosted.check('capp_tally');
+    expect((await h.service.hosted.get('capp_tally')).health.state).toBe('ok');
+  });
+});
+
+describe('pages', () => {
+  it('serves a page with the kit and conch.call, and calls only its own tools; a change needs a press', async () => {
+    const h = await harness();
+    const { offer, draft } = await makeTally(h);
+    const page = await h.service.pageDocument({ draftId: draft.id }, 'main', {
+      theme: 'dark',
+      accent: 'teal',
+      parentOrigin: 'http://localhost:4317',
+    });
+    expect(page.document).toContain('call:q');
+    expect(page.document).toContain('data-accent="teal"');
+    await h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' });
+    await expect(
+      h.service.pageDocument({ appId: 'tally' }, 'nope', { theme: 'light', parentOrigin: 'x' }),
+    ).rejects.toThrow(/no page/);
+    expect(await h.service.callFromPage({ appId: 'tally' }, 'count', {}, false)).toMatchObject({
+      ok: false,
+      reason: 'confirm',
+      message: 'Tally wants to count one more.',
+    });
+    expect(
+      await h.service.callFromPage({ appId: 'tally' }, 'count', { by: 1 }, true),
+    ).toMatchObject({ ok: true });
+    // Another app's tool, or something that isn't a tool, from this page: refused.
+    expect(await h.service.callFromPage({ appId: 'tally' }, 'add_note', {}, true)).toMatchObject({
+      ok: false,
+      reason: 'error',
+    });
+    await expect(h.service.callFromPage({ appId: 'other' }, 'count', {}, true)).rejects.toThrow(
+      /no app/,
+    );
+    // A draft's page runs on its scratch data.
+    expect(await h.service.callFromPage({ draftId: draft.id }, 'count', {}, false)).toMatchObject({
+      reason: 'confirm',
+    });
+    expect(
+      await h.service.callFromPage({ draftId: draft.id }, 'read_count', {}, false),
+    ).toMatchObject({ ok: true });
+  });
+});
+
+describe('a draft’s page, after its chat read something from outside', () => {
+  it('asks before anything that could send to the draft’s websites, naming them', async () => {
+    const h = await harness();
+    const ctx = h.chat();
+    const { draft } = await h.service.newDraft(ctx.conversationId, { name: 'Tally', id: 'tally' });
+    const manifest = JSON.parse(tallyFiles()['conch-app.json'] ?? '{}') as Record<string, unknown>;
+    manifest.reaches = ['api.x.com'];
+    for (const [path, content] of Object.entries({
+      ...tallyFiles(),
+      'conch-app.json': JSON.stringify(manifest),
+    }))
+      await h.service.write(draft.id, path, content);
+    // Not tainted: a read goes by itself.
+    expect(
+      await h.service.callFromPage({ draftId: draft.id }, 'read_count', {}, false),
+    ).toMatchObject({ ok: true });
+    ctx.append({ type: 'taint', source: { kind: 'web', label: 'evil.example' } });
+    expect(await h.service.callFromPage({ draftId: draft.id }, 'read_count', {}, false)).toEqual({
+      ok: false,
+      reason: 'confirm',
+      message:
+        'This chat read evil.example, which could be trying to steer me. Tally would send to api.x.com. Allow it?',
+    });
+    expect(
+      await h.service.callFromPage({ draftId: draft.id }, 'read_count', {}, true),
+    ).toMatchObject({ ok: true });
+  });
+});
+
+describe('healing', () => {
+  it('a damaged list of apps is set aside and noted', async () => {
+    const h = await harness();
+    await writeFile(join(h.home, 'conch-apps.json'), '{ not json');
+    expect(await h.service.list()).toEqual([]);
+    expect(h.heals.join(' ')).toMatch(/couldn’t be read, so Conch kept a copy/);
+  });
+
+  it('a missing files folder comes back from the kept copy', async () => {
+    const h = await harness();
+    const { offer } = await makeTally(h);
+    await h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' });
+    await rm(join(h.home, 'conch-apps', 'tally', 'current'), { recursive: true });
+    const again = await harness({}, h.home);
+    await again.service.load();
+    expect(again.heals).toContain('Tally’s files were missing; Conch put them back.');
+    expect(await again.service.intact('tally')).toBe(true);
+  });
+
+  it('an install a crash cut short is tidied on start', async () => {
+    const h = await harness();
+    const { offer } = await makeTally(h);
+    await h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' });
+    await writeFile(join(h.home, 'conch-apps', '.incoming', 'half.json'), '{}').catch(async () => {
+      const { mkdir } = await import('node:fs/promises');
+      await mkdir(join(h.home, 'conch-apps', '.incoming'), { recursive: true });
+      await writeFile(join(h.home, 'conch-apps', '.incoming', 'half.json'), '{}');
+    });
+    const again = await harness({}, h.home);
+    await again.service.load();
+    expect(again.heals.join(' ')).toMatch(/tidied away/);
+  });
+});
+
+describe('Repair everything', () => {
+  it('finds files that aren’t what was added, puts them back, and says when the tools won’t start', async () => {
+    const h = await harness();
+    const { offer } = await makeTally(h);
+    await h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' });
+    const check = conchAppsCheck(h.service);
+    const signal = new AbortController().signal;
+    expect(await check.run({ repair: false, signal })).toEqual([
+      expect.objectContaining({ id: 'conch-apps:tally', state: 'ok' }),
+    ]);
+    await writeFile(
+      join(h.home, 'conch-apps', 'tally', 'current', 'tools.mjs'),
+      'export const tools = {};',
+    );
+    expect((await check.run({ repair: false, signal }))[0]).toMatchObject({
+      state: 'warning',
+      message: 'Its files aren’t what was added. Repair puts them back.',
+    });
+    const repaired = await check.run({ repair: true, signal });
+    expect(repaired[0]).toMatchObject({ state: 'fixed' });
+    expect(await h.service.intact('tally')).toBe(true);
+    // No copy to bring back: only a person can.
+    await writeFile(
+      join(h.home, 'conch-apps', 'tally', 'current', 'tools.mjs'),
+      'export const tools = {};',
+    );
+    const { readdir } = await import('node:fs/promises');
+    for (const entry of await readdir(join(h.home, 'conch-apps', 'tally')))
+      if (entry !== 'current')
+        await rm(join(h.home, 'conch-apps', 'tally', entry), { recursive: true });
+    expect((await check.run({ repair: true, signal }))[0]).toMatchObject({
+      state: 'needs-you',
+      action: { kind: 'open', place: 'integrations', focus: 'capp_tally' },
+    });
+  });
+
+  it('a runtime that won’t start needs you', async () => {
+    const h = await harness();
+    const { offer } = await makeTally(h);
+    await h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' });
+    h.parts.options.failing = new Set(['tally']);
+    const items = await conchAppsCheck(h.service).run({
+      repair: true,
+      signal: new AbortController().signal,
+    });
+    expect(items[0]).toMatchObject({
+      state: 'needs-you',
+      message: expect.stringMatching(/couldn’t start/),
+    });
+  });
+});
+
+describe('sharing', () => {
+  it('saves a signed file and publishes, setting where it went', async () => {
+    const h = await harness();
+    const { offer } = await makeTally(h);
+    await h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' });
+    const file = await h.service.exportFile('tally');
+    expect(file.name).toBe('tally.conchapp');
+    const preview = await h.service.preview({
+      file: file.bytes.toString('base64'),
+      name: file.name,
+    });
+    expect(preview?.apps[0]?.signature).toMatchObject({
+      state: 'untrusted',
+      fingerprint: 'AAAA 1111',
+    });
+    expect(await h.service.publishState('tally')).toEqual({ state: 'idle' });
+    expect(await h.service.publish('tally')).toMatchObject({ state: 'published' });
+    expect((await h.service.get('tally')).published).toBe('https://github.com/ada/tally');
+  });
+});
+
+describe('an app’s skills', () => {
+  it('are read where the app keeps them: Automatically for apps made here, When I ask for others', async () => {
+    const { SkillStore } = await import('../skills/store');
+    const h = await harness();
+    const skill =
+      '---\nname: counting\ndescription: How to count things well with Tally.\n---\n# Counting\n\nCount carefully.\n';
+    const { offer } = await makeTally(h, '1.0.0', { 'skills/counting/SKILL.md': skill });
+    await h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' });
+    expect(h.skillsChanged()).toBe(1);
+    const preview = await h.service.preview({
+      file: signedPackage(
+        { ...keyed(), 'skills/weather-words/SKILL.md': skill.replace('counting', 'weather-words') },
+        { fingerprint: 'B', publisher: 'Bea' },
+      ).toString('base64'),
+      name: 'w',
+    });
+    if (!preview?.apps[0]) throw new Error('nothing');
+    await h.service.install({
+      packageId: preview.packageId,
+      appId: 'weather',
+      hash: preview.apps[0].hash,
+      settings: {},
+    });
+    const store = new SkillStore(h.home);
+    store.appRoots = () => h.service.skillRoots();
+    const { skills, sources } = await store.list({ fresh: true });
+    expect(skills.find((s) => s.id === 'app_tally_counting')).toMatchObject({
+      source: 'app',
+      sourceLabel: 'Tally',
+      mode: 'auto',
+      editable: false,
+    });
+    expect(skills.find((s) => s.id === 'app_weather_weather-words')).toMatchObject({
+      sourceLabel: 'Weather',
+      mode: 'manual',
+    });
+    expect(sources.find((s) => s.id === 'app')).toMatchObject({ label: 'Conch apps', count: 2 });
+  });
+});
+
+describe('the workshop', () => {
+  it('tidies drafts whose chat is gone after 30 days, and keeps the rest', async () => {
+    const h = await harness();
+    const ctx = h.chat();
+    const { draft } = await h.service.newDraft(ctx.conversationId, { name: 'Tally' });
+    const orphan = await h.service.workshop.create({
+      conversationId: 'c_gone',
+      files: textFiles(tallyFiles()),
+    });
+    expect(await h.service.tidy()).toBe(0);
+    const old = Date.now() - 31 * 24 * 60 * 60_000;
+    for (const id of [draft.id, orphan.id])
+      await h.service.workshop.patch(id, (info) => {
+        info.updatedAt = old;
+      });
+    expect(await h.service.tidy()).toBe(1);
+    expect((await h.service.workshop.all()).map((d) => d.id)).toEqual([draft.id]);
+  });
+});
