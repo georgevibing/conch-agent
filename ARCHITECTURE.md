@@ -99,7 +99,8 @@ src/
     codex/                    Codex app-server, its device sign-in and dynamic tools (ADR 0036)
     acp/                      Copilot, Gemini CLI, Grok over the Agent Client Protocol; the door (ADR 0053)
     api/                      key-based APIs: one OpenAI-style reader and adapter, a preset per
-                              company (presets.ts), Anthropic, Ollama, LM Studio, servers
+                              company (presets.ts), Anthropic, Ollama, LM Studio, servers;
+                              session.ts keeps the transcript, context.ts fits it to the window (ADR 0055)
     mock/                     scripted engine for UI work and E2E tests
   providers/                  the words for each engine, connecting them, switching, keys
   secrets/                    where a key lives: this computer, or 1Password (`op read`)
@@ -145,8 +146,19 @@ src/
   Each engine keeps its own session in `ConversationRecord.sessions[engine]` with the
   last event it saw; when a conversation moves to another provider, that provider
   resumes its own session and is handed the transcript it missed
-  (`conversations/handoff.ts`, newest first within 60,000 characters). `turn.completed`
-  says which provider and model answered.
+  (`conversations/handoff.ts`, newest first within 60,000 characters, with the chat's
+  latest summary for what that leaves out). `turn.completed` says which provider and
+  model answered.
+- **Long chats** ([ADR 0055](./docs/adr/0055-long-chats-on-every-model.md)). An engine
+  that keeps the transcript itself declares `Engine.context`: the model APIs fit each
+  request into the model's window (`ModelInfo.context`, `engines/api/context.ts`),
+  folding the oldest turns down to half the budget into a summary written by the
+  provider's cheapest model, carried in front of the first kept message. It says so
+  with a `compacted` event (where the kept turns start, from `TurnInput.seq`); the
+  conversation logs `context.compacted` (the chat's quiet line, Nacre
+  `SummaryDivider`) and learns what the person said before it (`MemoryTidy.learn`).
+  A "too long" refusal folds harder and goes again once, by itself, before it becomes
+  the `too-long` problem. `/compact` is `POST /api/conversations/:id/compact`.
 - **Slash commands.** Four sources, resolved in this order: Conch's own commands
   (`/model`, `/effort`, `/mode`, `/fast`, `/new`, `/remember`, `/skills`, … — handled
   in the web app, never sent to the model), your commands

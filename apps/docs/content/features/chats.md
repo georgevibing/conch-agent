@@ -1,6 +1,6 @@
 ---
 title: Your chats
-description: Rename a chat, archive it to tidy your list, find it again in Archived, or delete it for good.
+description: Rename a chat, archive it to tidy your list, find it again in Archived, delete it for good, and keep a long one going.
 order: 12
 ---
 
@@ -35,6 +35,17 @@ From there:
 ## Delete
 
 Choose **Delete**, from the list or from **Archived chats**, and confirm. The chat and what was attached only to it are removed from Conch. Anything your assistant remembered from it stays in [memory](./memory.md), where you can forget it too.
+
+## Long chats
+
+A chat can go on as long as you like, with any model. Each model reads only so much at once, so when a chat grows past that, Conch writes a short summary of its start. The model reads the summary instead of the oldest messages, and carries on.
+
+- A quiet line in the chat shows where the summary starts: **Earlier messages are summarised for** the model's name. Press it to read exactly what the model keeps.
+- Every message stays in the chat for you. Only what the model reads gets shorter.
+- Before the start of a chat is summarised, Conch learns what you said there, as the [memory](./memory.md) tidy-up does.
+- If the model still says the chat is too long, Conch summarises more and sends your message again by itself. Only if that isn't enough does the chat offer a model that reads more at once, or a new chat.
+
+Type `/compact` to summarise the start now. Add what matters most to you, and the summary keeps it: `/compact the garden plan`. In <kbd>mod+k</kbd>, **Summarise the start of this chat** does the same. Claude Code and Codex summarise long chats themselves, so there `/compact` is theirs.
 
 ## Good to know
 

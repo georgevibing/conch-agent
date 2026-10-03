@@ -32,6 +32,9 @@ what breaks, and asks only for approvals that matter.
 - **A tidy list, nothing lost.** Archive a chat to take it out of your list
   without deleting it. It stays searchable, waits under **Archived**, and comes
   back by itself when you write in it or it needs you.
+- **Long chats on any model.** When a chat outgrows what a model reads at once,
+  its start becomes a summary you can open, and what you said there is learned
+  first. Nothing to set.
 - **A browser and a terminal.** The assistant uses a browser you can watch and
   take over, and a real shell is a keystroke away.
 - **Reach it from your chat apps.** Telegram, Discord, Slack, WhatsApp, Signal,

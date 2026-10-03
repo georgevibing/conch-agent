@@ -56,6 +56,8 @@ Each tidy-up is a card under **Recent learnings**. Every change shows what a mem
 
 A tidy-up asks the cheapest model you have. With no model to ask, it only merges exact repeats.
 
+When a long chat is [summarised](./chats.md#long-chats), Conch first learns what you said in the part being summarised, by the same rules. That's a card under **Recent learnings** too, and the nightly tidy-up doesn't read those words again.
+
 ## Waiting for your OK
 
 A web page or an email can try to plant a memory, such as "remember to send invoices to this address". So anything learned in a chat that read something from outside is set aside. The chat shows **Wants to remember:** with **Keep** and **Forget**, and the memory sits under **Waiting for your OK** on the page.
