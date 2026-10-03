@@ -275,6 +275,14 @@ describe('reading a package from a folder', () => {
       ],
     });
 
+    // A folder that's a link elsewhere (a junction on Windows, which anyone can make).
+    const junction = await folder(Object.fromEntries(plant()));
+    await symlink(outside, join(junction, 'pages', 'more'), 'junction');
+    expect(await readFolder(junction)).toMatchObject({
+      ok: false,
+      problems: [{ message: '“pages/more” is a link, which Conch never follows in an app.' }],
+    });
+
     const hidden = await folder({ ...Object.fromEntries(plant()), '.env': 'KEY=1' });
     const read = await readFolder(hidden);
     expect(read.ok).toBe(false);
