@@ -628,6 +628,12 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   set aside (`search.db.broken-<time>`) and rebuilt from the logs while results say
   `catchingUp`. That happens once per run: a second failure answers 503 until a
   person presses Repair (`POST /api/search/repair`), never a loop.
+  The assistant reads the same index through `search_chats` and `read_chat`
+  (`search/past.ts`, registered with Conch's other tools in `Services`): never in a
+  chat with someone else's words in it, never for routine runs or tasks; what it
+  brings back from a tainted chat taints the chat asking; Passwords' redactor and
+  `scrubSecrets` run over every word; each look is a `chats.looked` event. See
+  [ADR 0059 — Looking through earlier chats](./docs/adr/0059-looking-through-earlier-chats.md).
 - Local data lives in `~/.conch/` (`CONCH_HOME`): `settings.json`, `secrets.json`
   (the API key and a key per provider, or a 1Password reference to one),
   `memory/*.md` (+ derived `memory-index.db`, `memory-tidy.json`, `models/`; `skill-suggestions.json`), `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `search.db`,

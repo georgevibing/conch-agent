@@ -35,6 +35,19 @@ If the download stops, Conch tries again by itself; if it still can't, the page 
 
 Your assistant uses the same search. While your memories are few, it has all of them in mind. Once there are many, it starts each reply with the ones that fit what you said, and looks up the rest when it needs them.
 
+## Your earlier chats
+
+Memories hold facts about you. Your chats hold everything else: the plan you made, the venue you picked, the command that fixed the build. Your assistant can look through them too.
+
+Say "like last time", "the Lisbon plan" or "what did we decide about the venue?" and it searches your other chats, the same way [Find anything](./find.md) does, then reads around the line it needs. The chat shows **Looked through your chats** with what it looked for. Open it to see each chat and line it found; choose one to go there.
+
+- It finds [archived](./chats.md#archive) chats too, and knows they're archived. The chat you're in is left out.
+- **Activity** lists every time it looked, beside what it remembered.
+- It never passes on a password or a key. Anything Passwords handed out, and anything shaped like a key or written as "password: …", comes back as •••.
+- A chat that read a web page or an email, or has someone else's words, could be trying to steer it. Reading one marks your chat the same way, so anything risky asks first. See [when the assistant reads something untrusted](../security/signing-in.md#when-the-assistant-reads-something-untrusted).
+- Someone you let in on a chat app can't use it. Their chat with your assistant never sees yours, and neither does a chat with a message you forwarded in. **New chat** starts one that can.
+- Routines and work sent to the background don't look back.
+
 ## Tidy up
 
 Memories pile up. **Tidy up now** merges repeats, updates what has changed, and picks up lasting things you said in recent chats. Turn on **Tidy up every night** and it happens once a night, between 2 and 5 in the morning, when nothing else is running.

@@ -25,7 +25,8 @@ what breaks, and asks only for approvals that matter.
   Drive, Slack, GitHub, Notion, Linear and more from one gallery, plus Agent Skills
   (`SKILL.md`) and routines that run on a schedule you read in plain words.
 - **Memory you can read.** Memories are Markdown files you can edit or delete,
-  and search finds any line in months of chats.
+  and search finds any line in months of chats. Your assistant can look through
+  them too: "like last time" finds the chat it means.
 - **A tidy list, nothing lost.** Archive a chat to take it out of your list
   without deleting it. It stays searchable, waits under **Archived**, and comes
   back by itself when you write in it or it needs you.

@@ -47,6 +47,7 @@ The rest of the keys are in [Keyboard shortcuts](../reference/keyboard.md).
 ## Good to know
 
 - Search happens on the computer Conch runs on. No outside service is involved.
+- Your assistant can search your chats the same way, when you mention one from before. See [Memory](./memory.md#your-earlier-chats).
 - The search index is made from your chats, and made again whenever it's missing. It is left out of [backups](../care/backups.md) for that reason.
 - If search stops working, the box says so and offers **Repair search**, which rebuilds it from your chats.
 - New kinds of things join the box as Conch grows: if you can name it, <kbd>mod+k</kbd> finds it.
