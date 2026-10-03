@@ -8,7 +8,7 @@ import { cx } from '../../utils/cx';
 import styles from './AlwaysOn.module.css';
 
 /** How the Conch answering now is running. */
-export type AlwaysOnRunning = 'background' | 'window' | 'dev';
+export type AlwaysOnRunning = 'background' | 'window' | 'app' | 'dev';
 
 export interface AlwaysOnProps extends Omit<ComponentProps<'section'>, 'title'> {
   /** Conch starts by itself when you log in. */
@@ -73,33 +73,37 @@ export function AlwaysOn({
   const title = unsupported
     ? 'Not available here'
     : busy
-      ? on
+      ? on || running === 'app'
         ? 'Changing how Conch starts…'
         : 'Moving Conch to the background…'
       : on
         ? 'Starts when you log in'
-        : running === 'background'
+        : running === 'background' || running === 'app'
           ? 'Running until you quit it'
           : 'Runs while its window is open';
 
   const detail = unsupported
     ? unsupported
     : busy
-      ? on
+      ? on || running === 'app'
         ? null
         : 'This page comes back by itself in a moment.'
       : on
         ? 'Conch keeps running with no window, and starts again by itself if it ever stops.'
         : running === 'background'
           ? 'Conch won’t start by itself the next time you log in.'
-          : 'Closing the Terminal window Conch runs in stops it. Turn this on to keep Conch running by itself.';
+          : running === 'app'
+            ? 'Closing the window keeps Conch running. Turn this on to start it when you log in, too.'
+            : 'Closing the Terminal window Conch runs in stops it. Turn this on to keep Conch running by itself.';
 
   const where =
     running === 'background'
       ? 'Running in the background'
       : running === 'window'
         ? 'Running in a Terminal window'
-        : 'Running as a development server';
+        : running === 'app'
+          ? 'Running in the Conch app'
+          : 'Running as a development server';
 
   return (
     <section

@@ -80,6 +80,11 @@ export const OffButRunning: Story = {
   args: { running: 'background', children: quit },
 };
 
+/** The desktop app (ADR 0054): closing its window keeps Conch running, so nothing warns. */
+export const InTheApp: Story = {
+  args: { running: 'app', since: '9:14 AM', children: quit },
+};
+
 export const Problem: Story = {
   args: {
     on: true,

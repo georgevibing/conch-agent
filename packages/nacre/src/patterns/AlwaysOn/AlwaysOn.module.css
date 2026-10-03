@@ -110,7 +110,8 @@
     background: var(--nc-text-subtle);
   }
 
-  .dot[data-running='background'] {
+  .dot[data-running='background'],
+  .dot[data-running='app'] {
     background: light-dark(
       oklch(0.62 0.15 var(--nc-success-h)),
       oklch(0.74 0.14 var(--nc-success-h))
@@ -206,7 +207,8 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .dot[data-running='background'] {
+    .dot[data-running='background'],
+    .dot[data-running='app'] {
       animation: none;
     }
   }

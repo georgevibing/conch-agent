@@ -61,6 +61,21 @@ describe('AlwaysOn', () => {
     );
   });
 
+  it('in the app: closing the window doesn’t stop Conch, and turning it on moves nothing', async () => {
+    const { container, rerender } = renderNacre(
+      <AlwaysOn on={false} onOnChange={() => undefined} running="app" since="9:14 AM" />,
+    );
+    const region = screen.getByRole('region', { name: 'Running until you quit it' });
+    expect(region).toHaveTextContent('Closing the window keeps Conch running');
+    expect(region).toHaveTextContent('Running in the Conch app since 9:14 AM');
+    expect(region).not.toHaveTextContent('Terminal');
+    await expectAccessible(container);
+    rerender(<AlwaysOn on={false} onOnChange={() => undefined} running="app" busy />);
+    expect(
+      screen.getByRole('region', { name: 'Changing how Conch starts…' }),
+    ).not.toHaveTextContent('comes back');
+  });
+
   it('shows a problem with the command to copy, calmly', async () => {
     const { container } = renderNacre(
       <AlwaysOn
