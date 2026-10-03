@@ -5,8 +5,9 @@ own computer.**
 
 Conch is a small gateway that runs on your machine and a polished web app that
 talks to it, from your laptop, your tablet or your phone. It drives every provider
-you connect at once — Claude Code, Codex, a model on this computer, OpenRouter or
-the Anthropic API — from one model picker, and a conversation can move between them
+you connect at once — the plans you already pay for (Claude Code, Codex, GitHub
+Copilot, Gemini CLI, Grok), a model on this computer, a server of your own, or a key
+from any of a dozen companies — from one model picker, and a conversation can move between them
 without losing its thread. Your files, your sign-ins and your settings stay on your
 computer, as plain files in `~/.conch`.
 
@@ -74,12 +75,19 @@ Google email and calendar, or review follow-up drafts. Each job shows its access
 keeps progress through interruptions and links verified saved results. Personality
 and import questions come afterwards. ([ADR 0039](./docs/adr/0039-first-useful-result.md))
 
-**Every provider at once.** Claude Code (through the Claude Agent SDK, with your
-existing `~/.claude`, `CLAUDE.md`, MCP servers and hooks), the Codex CLI, OpenRouter,
-the Anthropic API, and **On this computer** — an Ollama model that is private, free
-and works offline. Keys can live in 1Password instead of a dotfile.
+**Every provider at once.** _Your plans_: Claude Code (through the Claude Agent SDK,
+with your existing `~/.claude`, `CLAUDE.md`, MCP servers and hooks), Codex, GitHub
+Copilot, Gemini CLI and Grok, each signed in with its own program, so Conch never
+holds their credentials. _On this computer_: an Ollama or LM Studio model that is
+private, free and works offline, or any server you run (llama.cpp, vLLM, Jan,
+LiteLLM). _Pay as you go_: OpenRouter, Anthropic, OpenAI, Google Gemini, xAI,
+DeepSeek, Mistral, Groq, Cerebras, Z.ai, Kimi, MiniMax, Qwen and Ollama Cloud.
+Paste a key anywhere on **Settings → Providers**: Conch knows whose it is from how
+it starts, or asks when it can't tell, and never tries it at the wrong company. A key
+already in your environment, or a server already running, is offered in one press.
+Keys can live in 1Password instead of a dotfile.
 ([ADR 0010](./docs/adr/0010-providers.md), [0012](./docs/adr/0012-every-provider-at-once.md),
-[0022](./docs/adr/0022-a-model-on-this-computer.md))
+[0022](./docs/adr/0022-a-model-on-this-computer.md), [0053](./docs/adr/0053-more-providers.md))
 
 **Offline and at a limit, it carries on.** A message sent offline waits and goes by
 itself, or the model on this computer answers. At a usage limit, the provider you

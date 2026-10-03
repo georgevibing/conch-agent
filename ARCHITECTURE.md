@@ -3,8 +3,10 @@
 Conch is a **local-first shell around the agents of your choosing**. Out of the box
 it drives the Claude Code installation (and its authentication, settings, MCP
 servers, hooks and CLAUDE.md files) that already exists on the host machine; it
-equally drives another agent on that machine, or a model you hold a key for — all
-of them at once. Every connected provider's models are in one picker, and a
+equally drives the plans people already pay for through their vendor's own program
+(Codex, GitHub Copilot, Gemini CLI, Grok), a model on that machine or a server of
+their own, or a model from any of a dozen companies they hold a key for — all of
+them at once ([ADR 0053](./docs/adr/0053-more-providers.md)). Every connected provider's models are in one picker, and a
 conversation can move between them without losing its thread
 ([ADR 0010](./docs/adr/0010-providers.md), [ADR 0012](./docs/adr/0012-every-provider-at-once.md)).
 Apps and skills belong to Conch. Tool-capable models receive the shared
@@ -20,7 +22,7 @@ flowchart TB
   UI["React / Nacre: onboarding, chat, jobs, approvals"] --> Gateway["Fastify: authenticated REST + replayable WebSocket events"]
   Gateway --> Conversations["Conversation manager: permissions, scope, history"]
   Conversations --> Tasks["Tasks: durable operations + verified receipts"]
-  Conversations --> Engines["Provider adapters: Claude / Codex / API / local"]
+  Conversations --> Engines["Provider adapters: Claude / Codex / ACP agents / API / local / servers"]
   Engines --> Tools["Conch tools: files, artifacts, Google, integrations"]
   Tools --> Guard["Conch guard + exact approvals + task ledger"]
   Guard --> Effects["Bounded effects and independent readback"]
@@ -61,7 +63,9 @@ Zod schemas for everything on the wire (v2):
   status, workspace), `PATCH /api/settings`, `GET /api/engine?refresh=1`,
   `POST /api/engine/login` (+ `/code`, `/cancel`), `PUT|DELETE /api/engine/api-key`,
   `GET /api/providers` (+ `POST /api/providers/:id/use|check|login|signin`,
-  `PUT|DELETE /api/providers/:id/key`), memory CRUD under `/api/memories`,
+  `PUT|DELETE /api/providers/:id/key`, `POST /api/providers/servers/probe`,
+  `POST /api/providers/servers`, `PATCH|DELETE /api/providers/servers/:id`,
+  `POST /api/providers/found/:id/use`), memory CRUD under `/api/memories`,
   conversations under `/api/conversations`.
 - **WebSocket `/ws`** — `ClientCommand`: `conversation.send` (creates a conversation
   when no id is given), `conversation.subscribe` (with `afterSeq`), `conversation.interrupt`,
@@ -90,7 +94,12 @@ src/
   channels/                   Telegram, Discord, Slack, Teams, Matrix and WeChat bots, your linked WhatsApp and Signal, iMessage and email; pairing, relay, healing; the public door (ADR 0018, 0043, 0044, 0045)
   engines/
     types.ts                  Engine / HostTool / EngineEvent contracts
+    registry.ts               every built-in engine, and a server of your own's (ADR 0053)
     claude-code/              detect, login, env scrub, SDK → EngineEvent translator
+    codex/                    Codex app-server, its device sign-in and dynamic tools (ADR 0036)
+    acp/                      Copilot, Gemini CLI, Grok over the Agent Client Protocol; the door (ADR 0053)
+    api/                      key-based APIs: one OpenAI-style reader and adapter, a preset per
+                              company (presets.ts), Anthropic, Ollama, LM Studio, servers
     mock/                     scripted engine for UI work and E2E tests
   providers/                  the words for each engine, connecting them, switching, keys
   secrets/                    where a key lives: this computer, or 1Password (`op read`)
@@ -392,6 +401,30 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   Keys are checked before they're kept. OpenRouter can mint one for you over PKCE
   (`providers/oauth.ts`, callback `GET /oauth/provider/:flowId`). See
   [ADR 0010](./docs/adr/0010-providers.md).
+- **More providers** ([ADR 0053](./docs/adr/0053-more-providers.md)).
+  - _Pay as you go_: every OpenAI-style company is a `ChatPreset`
+    (`engines/api/presets.ts`) driven by one `OpenAiWire` and one stream reader
+    (`engines/api/chat.ts`). A company with regions is tried at each of its own
+    addresses, and the one that took the key is kept in `settings.endpoints`.
+  - _A pasted key_: `recogniseKey()` (protocol) says whose it is. It is `sure` only
+    for a prefix that is one company's own mark; otherwise the page asks. A key is
+    never tried at several companies.
+  - _Your plans_: Copilot, Gemini CLI and Grok run as the vendor's own program over
+    ACP (`engines/acp/`), signed in with its own sign-in. Conch never reads their
+    credentials. Conch's tools reach them through a per-turn loopback MCP door
+    (`door.ts`: no `Origin`, loopback `Host`, a random bearer key), and their own
+    changing tools are declined, as Codex's are.
+  - _Servers of your own_ (`providers/servers.ts`, `engines/api/server.ts`): each
+    is a `server-xxxxxxxx` engine. `probeServer` looks at the address as it is typed.
+    Plain http is allowed only to private addresses (`local/host.ts`
+    `isPrivateUrl`), and a restored backup names its servers (power
+    `provider-servers`).
+  - _Found on this computer_ (`providers/found.ts`): keys in the environment
+    (when started with `lookAround`) and servers on their usual ports, each used
+    only when someone presses **Use**.
+  - _On this computer_: LM Studio (`engines/api/lmstudio.ts`) is found from its own
+    files and its server started when needed. Ollama Cloud (`ollamaCloud.ts`) takes
+    a key, or the Ollama app's own sign-in.
 - **A model on this computer** (`local/`, `engines/api/ollama.ts`,
   [ADR 0022](./docs/adr/0022-a-model-on-this-computer.md)). The `ollama` provider
   (`Engine.local`) runs an open model through Ollama's native `/api/chat` with

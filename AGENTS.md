@@ -8,8 +8,9 @@ Nested `AGENTS.md` files override this one for their subtree.
 
 A self-hosted web shell for the coding agents and models of your choosing. A small
 Node gateway runs on your own machine, drives every provider you connected — [Claude
-Code](https://code.claude.com) through the Claude Agent SDK, another installed CLI,
-or a model API — all at once, from one model picker, and streams the conversation to
+Code](https://code.claude.com) through the Claude Agent SDK, the plans people pay for
+through their vendor's own program (Codex, Copilot, Gemini CLI, Grok), a model on this
+computer or a server of their own, or a model API — all at once, from one model picker, and streams the conversation to
 a React web app built on **Nacre**, our own design system. Apps (integrations) and
 skills belong to Conch, so they work with every provider. See
 [ARCHITECTURE.md](./ARCHITECTURE.md).
@@ -31,7 +32,10 @@ working agreement 11: _fix it before you ask_.
 | Lint / TS config shared across packages                                                                                                 | `packages/eslint-config/`, `packages/tsconfig/`                                                                                                                                                                                                                                                                                                                                                                                      |
 | Apps (integrations, MCP servers, OAuth, the catalog)                                                                                    | `apps/server/src/integrations/` (`hosted.ts` joins Conch's own apps) + [ADR 0009](./docs/adr/0009-integrations.md), [ADR 0049](./docs/adr/0049-every-app-works-with-every-model.md) (every app works with every model) — security-relevant                                                                                                                                                                                           |
 | The Apps page: one card per app, its switches, Talk to me here, old addresses                                                           | web `features/integrations/{apps,paths}.ts`, `{AppsView,AppDetailView,AppAbilitiesSection}.tsx`, `Channel.app`, `channels/routes.ts` (`/api/channels/email/gmail`), Nacre `AppAbilities`, `IntegrationCard` + [ADR 0052](./docs/adr/0052-one-app-one-card.md)                                                                                                                                                                        |
-| Providers (which engine runs, connecting them, keys)                                                                                    | `apps/server/src/providers/`, `apps/server/src/secrets/` + [ADR 0010](./docs/adr/0010-providers.md), [ADR 0012](./docs/adr/0012-every-provider-at-once.md) — security-relevant                                                                                                                                                                                                                                                       |
+| Providers (which engine runs, connecting them, keys, the Providers page)                                                                | `apps/server/src/providers/`, `apps/server/src/secrets/`, `engines/registry.ts` (every built-in engine), web `features/providers/` + [ADR 0010](./docs/adr/0010-providers.md), [ADR 0012](./docs/adr/0012-every-provider-at-once.md), [ADR 0053](./docs/adr/0053-more-providers.md) — security-relevant                                                                                                                              |
+| Pay-as-you-go providers: one OpenAI-style adapter, a row per company, regions, knowing a pasted key                                     | `engines/api/{chat,openai,presets}.ts`, `providers/catalog.ts` (`recognise`, `envKeys`), protocol `recogniseKey`, Nacre `KeyCatcher`, web `features/providers/FoundHere.tsx` (`KeyPaste`) + [ADR 0053](./docs/adr/0053-more-providers.md) — security-relevant                                                                                                                                                                        |
+| Your plans through the vendor's own program over ACP (Copilot, Gemini CLI, Grok)                                                        | `engines/acp/` (`agents.ts` one row per program, `door.ts` Conch's tools on loopback, `engine.ts` declines native tools) + [ADR 0053](./docs/adr/0053-more-providers.md), [ADR 0036](./docs/adr/0036-provider-consistency.md) — security-relevant                                                                                                                                                                                    |
+| Servers of your own, LM Studio, Ollama Cloud, Found on this computer                                                                    | `providers/{servers,found}.ts`, `engines/api/{server,lmstudio,ollamaCloud}.ts`, `local/host.ts` (`isPrivateUrl`), web `features/providers/{AddServer,FoundHere,ProviderGallery}.tsx` + [ADR 0053](./docs/adr/0053-more-providers.md) — security-relevant                                                                                                                                                                             |
 | A model on this computer (Ollama, pulls, offline)                                                                                       | `apps/server/src/local/`, `engines/api/ollama.ts`, `apps/web/src/features/local/` + [ADR 0022](./docs/adr/0022-a-model-on-this-computer.md) — security-relevant                                                                                                                                                                                                                                                                      |
 | Skills (SKILL.md, other agents' folders, `use_skill`)                                                                                   | `apps/server/src/skills/` + [ADR 0013](./docs/adr/0013-skills.md) — security-relevant                                                                                                                                                                                                                                                                                                                                                |
 | The browser (live view, takeover, per-site permissions)                                                                                 | `apps/server/src/browser/`, `apps/web/src/features/browser/`, `packages/nacre/src/patterns/Browser/` + [ADR 0014](./docs/adr/0014-browser.md) — security-relevant                                                                                                                                                                                                                                                                    |
@@ -136,8 +140,9 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
 8. **Don't edit generated or vendored files** (`pnpm-lock.yaml` by hand, `dist/`,
    `storybook-static/`).
 9. **Design for every provider, not just Claude Code.** Conch drives several
-   engines at once (Claude Code, Codex CLI, OpenRouter, the Anthropic API, local
-   models next), and one conversation can move between them. Every feature must
+   engines at once (Claude Code, Codex, Copilot, Gemini CLI and Grok through their
+   own programs; Ollama, LM Studio and servers of your own; a dozen key-based APIs
+   — `engines/registry.ts` has them all), and one conversation can move between them. Every feature must
    work for all of them, or degrade on purpose:
    - Never assume one active engine. The engine for a turn is the conversation's
      (`TurnOptions.engine`); the default provider only decides where new chats
@@ -317,6 +322,33 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
     rest is on you: read the page you changed (`pnpm docs:dev`), look
     at it in light and dark with `apps/docs/scripts/shot.mjs`, and run
     `apps/docs/scripts/a11y.mjs` when you changed how pages are drawn.
+
+## Adding a provider
+
+Most companies speak OpenAI's chat format; adding one is rows, not code
+([ADR 0053](./docs/adr/0053-more-providers.md)):
+
+1. **The engine.** A `ChatPreset` in `apps/server/src/engines/api/presets.ts`:
+   its endpoints (several for a company with regions, tried in order), where its
+   key comes from, how to read its model list, and what to say about its errors.
+   Add the id to `BuiltInEngineId` (`packages/protocol/src/common.ts`) and to
+   `builtInEngines` in `engines/registry.ts`. A program that speaks ACP is a row in
+   `engines/acp/agents.ts` instead, plus its need in `setup/known.ts`.
+2. **The words.** Its `ProviderCopy` in `providers/catalog.ts`: group, tagline,
+   description, highlights, an honest `free` note, the `envKeys` Conch may find,
+   and `keyForm.recognise`. Only a prefix that is the company's own mark is
+   `distinct`; any other shape is `loose`, so Conch asks before sending a key
+   there. Never try a key at several companies to see which one takes it.
+3. **The mark.** Its logo in Nacre `patterns/Integrations/brands.ts` and
+   `patterns/ModelPicker/ProviderLogo.tsx`.
+4. **Whole Conch.** Its key in Come home (`import/{openclaw,hermes}.ts`) if those
+   agents know it. Its `TurnProblem`s come from `mapChatError`, so a limit or an
+   outage routes to the fallback with nothing more to write.
+5. **Docs.** `apps/docs/content/providers/<id>.md` with `provider: <id>`: where to
+   get a key, what's free, what to know. `content.test.ts` fails until it exists.
+
+Test it with a fake fetch like `openai.test.ts`: models listed and tidied, a
+streamed answer with reasoning and a tool call, and each error it can give.
 
 ## Security engineering
 

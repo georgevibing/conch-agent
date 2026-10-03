@@ -30,7 +30,7 @@ const GROUPS: { id: ProviderRef['group']; title: string; lead: string }[] = [
   {
     id: 'key',
     title: 'Pay as you go',
-    lead: 'A key you paste. Conch knows whose it is by its shape.',
+    lead: 'A key you paste. Conch checks it with that company before keeping it.',
   },
 ];
 

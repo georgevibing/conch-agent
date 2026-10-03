@@ -67,11 +67,11 @@ function editable(target: EventTarget | null): boolean {
 }
 
 /**
- * Have a key? Paste it — here, or anywhere on the page. Conch works out whose
- * it is from its shape and checks it with that provider straight away; when
- * the shape is shared (plenty of keys start `sk-`), it asks whose it is rather
- * than send it to the wrong company. The key is never shown back: only its
- * start and its last four characters.
+ * Have a key? Paste it — here, or anywhere on the page. When it starts with
+ * one provider's own prefix, Conch checks it with that provider straight away;
+ * when it could be someone else's (plenty of keys start `sk-`), it asks whose
+ * it is rather than send it to the wrong company. The key is never shown back:
+ * only its start and its last four characters.
  */
 export function KeyCatcher({
   recognise,

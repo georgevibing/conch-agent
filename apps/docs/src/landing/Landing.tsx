@@ -169,7 +169,7 @@ export function Landing() {
           points={[
             `The plans you already pay for: ${sentence(plans)}.`,
             `${local?.name ?? 'A model on this computer'} is private, free and works offline.`,
-            'Paste any key, and Conch knows whose it is.',
+            'Paste a key, and Conch knows whose it is, or asks.',
             'Offline, or at a usage limit, the one you chose carries on.',
           ]}
           action={
