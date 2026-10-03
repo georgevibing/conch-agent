@@ -36,7 +36,7 @@ else {
 
 function main(): void {
   // Windows names the app's notifications and taskbar entry by this.
-  app.setAppUserModelId('io.github.georgevibing.conch');
+  app.setAppUserModelId('com.conchagent.app');
   const at = places({
     packaged: app.isPackaged,
     resourcesPath: process.resourcesPath,
@@ -146,6 +146,8 @@ function main(): void {
         origins,
         onAction,
         dev,
+        // The pearl in the title bar and on the taskbar; a Mac shows the app's own.
+        ...(process.platform === 'win32' && { icon: join(resources, 'icon.ico') }),
         ...(process.platform === 'linux' && { icon: join(resources, 'icon.png') }),
       },
       savedBounds(),

@@ -33,6 +33,9 @@ export function resources() {
     copyFileSync(join(here, 'pages', name), join(dir, name));
   copyFileSync(join(icons, 'conch-512.png'), join(dir, 'icon.png'));
   copyFileSync(join(icons, 'conch-tray-256.png'), join(dir, 'tray.png'));
+  // Windows draws each size from a picture of its own (scripts/icons.mjs).
+  copyFileSync(join(icons, 'conch.ico'), join(dir, 'icon.ico'));
+  copyFileSync(join(icons, 'conch-tray.ico'), join(dir, 'tray.ico'));
 }
 
 /**
