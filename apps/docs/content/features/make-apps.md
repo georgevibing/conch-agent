@@ -37,6 +37,8 @@ Talk to your assistant as you would anyway. It knows the apps you have and what 
 
 An app with a page has it in the sidebar, under **Pinned**, and on its page in **Apps**. Buttons in the page work at once when you press them. If a page tries to change something without a press, Conch asks you first.
 
+Switched an app off? Ask for something it does, and the chat offers it back with **Turn on**, then carries on.
+
 ## Change it
 
 Ask in the chat where you made it: "also remind me when a plant hasn't been watered for a week". Or press **Change it** on the app's page. Conch shows a new card with what's different, and **Update**. Until you press it, the app stays as it was.
@@ -55,14 +57,14 @@ Either way, the app carries your signature, so whoever adds it sees it's from yo
 ## Add one someone made
 
 - **From a link.** Press **Add your own**, choose **From a link**, and paste the address of the app's page on GitHub, or of a `.conchapp` file. Or paste the address into a chat: "add the app at github.com/ada/plant-diary".
-- **From a file.** Drop a `.conchapp` file on **Apps**, or choose **From a link → Choose a file**.
+- **From a file.** Drop a `.conchapp` file on **Apps**, or choose **From a link → Choose a file…**.
 - **From the community.** Type in **Find an app**. Apps people have shared on GitHub show under **From the community**. Press **Look**.
 
 Before you add it, Conch shows what it does, what it can do, who made it, and why it can't be added if something is wrong. Adding it asks you to confirm it's you first, as Conch does before anything that brings someone else's code in. An app you didn't make starts at **Ask every time**, and its skills wait until you ask for them. If it takes the place of an app with the same name from someone else, the preview says so, and nothing of the old one (its settings, keys or notes) carries over.
 
 A repository can hold several apps. Conch lists them all, and you choose.
 
-When an app you added from GitHub has a new version, its card says so, and so does **Settings → Updates**. Press **Update** to see what changed first. Nothing updates by itself.
+When an app you added from GitHub has a new version, its card and its page say so, and so does **Settings → Updates** under **Apps you added**. Press **Look first** (or **See what changed**) to read what's different, with any new website first, then **Update**. Nothing updates by itself.
 
 ## How it stays safe
 
