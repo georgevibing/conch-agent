@@ -2,16 +2,15 @@
  * "This computer", proven rather than guessed from the address (ADR 0063).
  *
  * A request is from this computer when it looks local *and* carries proof
- * that only your account on this computer can have. The proof starts as a
- * key in a file only you can read (`here/key`). Programs may send it as a
- * header (`X-Conch-Here`); browsers get a cookie made with it, by a one-time
- * code handed over through a private file that sends the browser on — never on
- * a command line, where other accounts can read it.
+ * that only your account on this computer can have: a cookie made with a key
+ * in a file only you can read (`here/key`). A browser gets it with a one-time
+ * code, handed over through a private file that sends the browser on — never
+ * on a command line, where other accounts can read it.
  *
- * Conch's own launchers never send a secret over the network: whatever
- * listens on Conch's port while Conch is stopped would get it. They ask
- * through a folder only your account can write (`here/asks`), and Conch
- * answers there (`answer`).
+ * The key never leaves its file, and nothing secret goes over the network to
+ * ask for a code: whatever listens on Conch's port while Conch is stopped
+ * would get it. Launchers ask through a folder only your account can write
+ * (`here/asks`), and Conch answers there (`answer`).
  */
 import { createHmac, randomBytes } from 'node:crypto';
 import { execFile } from 'node:child_process';
@@ -42,8 +41,6 @@ const ASK = /^([0-9a-f]{16,64})\.ask$/;
 /** The name of a private page Conch writes; launchers open nothing else. */
 export const OPEN_FILE = /^conch-open-[0-9a-f]{24}\.html$/;
 
-/** The header programs on this computer send the key in. */
-export const HERE_HEADER = 'x-conch-here';
 /** The cookie carries the port: cookies aren't kept apart by port (RFC 6265bis). */
 export const hereCookieName = (port: number) => `conch_here_${port}`;
 /** Browsers keep a cookie 400 days at most (RFC 6265bis); so does Conch. */
@@ -195,11 +192,6 @@ export class ThisComputer {
     this.#key = key;
     this.#checkedAt = this.#now();
     return key;
-  }
-
-  /** Whether `given` is the key. Constant time. */
-  proves(given: string | undefined): boolean {
-    return typeof given === 'string' && given.length > 0 && safeEqual(given, this.key());
   }
 
   #mac(payload: string): string {

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
-import { onThisComputer } from '../test/here';
+import { NOT_HERE, onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 import { AccessStore } from './store';
@@ -121,7 +121,7 @@ describe('this computer, proven', () => {
       url,
       headers: {
         host: '127.0.0.1:4317',
-        'x-conch-here': '',
+        [NOT_HERE]: '1',
         ...(init.cookie && { cookie: init.cookie }),
       },
     });
@@ -134,7 +134,7 @@ describe('this computer, proven', () => {
     const redeemed = await app.inject({
       method: 'POST',
       url: '/api/here',
-      headers: { 'x-conch-here': '' },
+      headers: { [NOT_HERE]: '1' },
       payload: { code },
     });
     expect(redeemed.statusCode).toBe(200);
@@ -190,7 +190,7 @@ describe('this computer, proven', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/here',
-      headers: { 'x-conch-here': '' },
+      headers: { [NOT_HERE]: '1' },
       payload: { code: link.code },
     });
     const line = String(res.headers['set-cookie']);
@@ -232,9 +232,8 @@ describe('this computer, proven', () => {
     expect(madeUp.statusCode).toBe(401);
   });
 
-  it('hands out links only for the key, from this computer, to a page of Conch', async () => {
-    const { app, services } = await setup();
-    const key = services.here.key();
+  it('hands out more links only to this computer, proven, and only to a page of Conch', async () => {
+    const { app } = await setup();
     const ask = (headers: Record<string, string>, payload: object = {}, remoteAddress?: string) =>
       app.inject({
         method: 'POST',
@@ -243,32 +242,44 @@ describe('this computer, proven', () => {
         payload,
         ...(remoteAddress && { remoteAddress }),
       });
-    expect((await ask({ 'x-conch-here': '' })).statusCode).toBe(401);
-    expect((await ask({ 'x-conch-here': `${key.slice(0, -1)}x` })).statusCode).toBe(401);
-    expect(
-      (await ask({ 'x-conch-here': key, host: 'conch.example' }, {}, REMOTE.remoteAddress))
-        .statusCode,
-    ).toBe(401);
-    expect((await ask({ 'x-conch-here': key, 'x-forwarded-for': '203.0.113.9' })).statusCode).toBe(
-      401,
-    );
+    expect((await ask({ [NOT_HERE]: '1' })).statusCode).toBe(401);
+    expect((await ask({ host: 'conch.example' }, {}, REMOTE.remoteAddress)).statusCode).toBe(401);
+    expect((await ask({ 'x-forwarded-for': '203.0.113.9' })).statusCode).toBe(401);
     for (const page of ['//evil.example', 'https://evil.example', '/\\evil.example'])
       expect((await ask({}, { page })).statusCode).toBe(400);
     expect((await ask({}, { page: '/?open=updates' })).statusCode).toBe(200);
   });
 
-  it('trusts the key only on a request that looks local', async () => {
+  it('never takes the key itself: nothing sent can be replayed to mint more', async () => {
     const { app, services } = await setup();
     const key = services.here.key();
+    for (const headers of [
+      { 'x-conch-here': key },
+      { authorization: `Bearer ${key}` },
+      { cookie: `conch_here_4317=${key}` },
+    ]) {
+      const res = await app.inject({ url: '/api/state', headers: { ...headers, [NOT_HERE]: '1' } });
+      expect(res.statusCode, JSON.stringify(Object.keys(headers))).toBe(401);
+    }
+    const link = await app.inject({
+      method: 'POST',
+      url: '/api/here/link',
+      headers: { 'x-conch-here': key, [NOT_HERE]: '1' },
+    });
+    expect(link.statusCode).toBe(401);
+  });
+
+  it('trusts the cookie only on a request that looks local', async () => {
+    const { app } = await setup();
     const proxied = await app.inject({
       url: '/api/state',
-      headers: { host: 'conch.example', 'x-forwarded-for': '203.0.113.9', 'x-conch-here': key },
+      headers: { host: 'conch.example', 'x-forwarded-for': '203.0.113.9' },
     });
     expect(proxied.statusCode).toBe(401);
     const fromAfar = await app.inject({
       url: '/api/state',
       remoteAddress: REMOTE.remoteAddress,
-      headers: { host: REMOTE.host, 'x-conch-here': key },
+      headers: { host: REMOTE.host },
     });
     expect(fromAfar.statusCode).toBe(401);
   });
@@ -309,7 +320,7 @@ describe('this computer, proven', () => {
     const signIn = await app.inject({
       method: 'POST',
       url: '/api/auth/sign-in',
-      headers: { host: '127.0.0.1:4317', 'x-conch-here': '' },
+      headers: { host: '127.0.0.1:4317', [NOT_HERE]: '1' },
       payload: { with: 'password', username: 'ada', password: PASSWORD },
     });
     expect(signIn.statusCode).toBe(200);

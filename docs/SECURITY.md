@@ -46,15 +46,11 @@ To take this back from every browser on this computer at once, run
 Your assistant can't do any of this for itself. It can't read the key, and it
 can't run `pnpm conch open`, or any command that changes who may sign in.
 
-**Your own scripts on this computer.** With a password or access key set, send
-an access key (`Authorization: Bearer conch_…`). With sign-in off, send this
-computer's key in `X-Conch-Here`. Hand it to curl on its input, so it never
-shows up on a command line that other accounts can read:
-
-```bash
-printf 'header = "X-Conch-Here: %s"\n' "$(cat ~/.conch/here/key)" |
-  curl -K - http://localhost:4317/api/state
-```
+**Your own scripts.** Conch's key never leaves its file, so a script can't
+borrow it. Choose **Access key** as the way to sign in (or run
+`pnpm conch key "My script"`) and have the script send
+`Authorization: Bearer conch_…`. A key is shown once, and you can revoke it on
+its own.
 
 ## Choose how you sign in
 

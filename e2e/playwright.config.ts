@@ -47,9 +47,9 @@ const importMoreHome = (process.env.CONCH_E2E_IMPORT_MORE_HOME ??= (() => {
 
 /**
  * This computer's key (ADR 0063), the same for every gateway in the run and in every worker (they
- * read the config again, and inherit the environment). The journeys are programs on this computer:
- * every request carries it (`extraHTTPHeaders`), as the launchers do. `security.spec.ts` drops it to
- * test the real way a browser becomes this computer, and what happens without it.
+ * read the config again, and inherit the environment). It never goes over the network: the
+ * journeys' browsers start with the cookie a launcher would have given them, made with it
+ * (`openedFromConch`). `this-computer.spec.ts` starts without it and goes the real way.
  */
 const hereKey = (process.env.CONCH_E2E_HERE_KEY ??= randomBytes(32).toString('base64url'));
 
@@ -60,10 +60,7 @@ function withHereKey(home: string): string {
   return home;
 }
 
-/**
- * The cookie a browser gets once Conch has opened it, made with the same key, for a gateway's
- * port. The page's live socket carries it: Chrome doesn't add `extraHTTPHeaders` to WebSockets.
- */
+/** The cookie a browser gets once Conch has opened it, made with the same key, for a gateway's port. */
 const thisComputer = new ThisComputer(withHereKey(mkdtempSync(join(tmpdir(), 'conch-e2e-here-'))));
 const openedFromConch = (port: number) => ({
   cookies: [
@@ -80,6 +77,11 @@ const openedFromConch = (port: number) => ({
   ],
   origins: [],
 });
+
+/** The `this-computer` journey asks for links through this gateway's own folder, as a launcher does. */
+const thisComputerHome = (process.env.CONCH_E2E_THIS_COMPUTER_HOME ??= mkdtempSync(
+  join(tmpdir(), 'conch-e2e-this-computer-'),
+));
 
 /** The `trust` journey puts a signed skill where its gateway looks, and changes it. */
 const trustHome = (process.env.CONCH_E2E_TRUST_HOME ??= mkdtempSync(
@@ -205,7 +207,10 @@ const scenarios = {
   // Approving new devices: "other devices" arrive through a pretend proxy (X-Forwarded-For).
   devices: { port: 4381, env: { CONCH_MOCK_STATE: 'ready', CONCH_HOME: devicesHome } },
   // "This computer", proven (ADR 0063): a browser Conch didn't open, and one it did (the real way).
-  'this-computer': { port: 4348, env: { CONCH_MOCK_STATE: 'ready' } },
+  'this-computer': {
+    port: 4348,
+    env: { CONCH_MOCK_STATE: 'ready', CONCH_HOME: thisComputerHome },
+  },
   security: {
     port: 4397,
     env: { CONCH_MOCK_STATE: 'ready', CONCH_ALLOWED_HOSTS: 'studio-mac.tail1234.ts.net' },
@@ -275,7 +280,6 @@ export default defineConfig({
     locale: 'en-US',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    extraHTTPHeaders: { 'x-conch-here': hereKey },
   },
   projects: chosen.map(([name, s]) => ({
     name,

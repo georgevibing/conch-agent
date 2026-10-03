@@ -1009,9 +1009,9 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
   _password_ (scrypt, NIST SP 800-63B-4 rules), _access keys_ (`conch_…`, 256-bit,
   hashed, revocable) or _no sign-in_. With no sign-in, only this computer, proven, is let in
   (ADR 0063). The request must look local: a loopback socket **and** a loopback `Host`
-  **and** no proxy headers (`Gatekeeper.looksLocal`). It must also carry the key from
-  `~/.conch/here/key`, either in `X-Conch-Here` (programs) or as the cookie made with it,
-  `conch_here_<port>` (`Gatekeeper.isLocal`). A browser gets that cookie when a launcher opens
+  **and** no proxy headers (`Gatekeeper.looksLocal`). It must also carry the cookie made with the key in
+  `~/.conch/here/key`, `conch_here_<port>` (`Gatekeeper.isLocal`); the key itself never leaves
+  its file and is never accepted. A browser gets that cookie when a launcher opens
   it through a one-time link in a private file. The launcher asks for that link through
   `~/.conch/here/asks` (`ThisComputer.answer`), never over the network, where whatever holds
   the port would hear it. A request that looks local without the proof

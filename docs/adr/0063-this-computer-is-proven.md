@@ -55,7 +55,7 @@ for you reads it, and turns it into a cookie for your browser.
   Conch once more.
 - It is per computer: backups never carry it (`derived`), and a restore makes a fresh one.
 
-### Proof a request can carry
+### The proof a request can carry
 
 1. **The cookie** `conch_here_<port>`: `v1.<issued>.<nonce>.<mac>`, where `mac` is
    HMAC-SHA-256 of the rest under the key. Conch checks it in constant time and refuses one older
@@ -63,12 +63,15 @@ for you reads it, and turns it into a cookie for your browser.
    `Path=/`, and host-only. It carries the port in its name, because cookies aren't separated by
    port (RFC 6265bis): two Conches on one computer, or a dev gateway beside the real one, would
    otherwise overwrite each other's cookie.
-2. **The header** `X-Conch-Here: <key>`, for programs rather than browsers: your own scripts and
-   the e2e harness. A web page can't send it: Conch answers no cross-origin request, and the page
-   can't read the key. Conch's own launchers never send it (see below).
 
-Each kind of proof counts only on a request that also looks local. A key or cookie that leaks
-still doesn't work from another computer through Tailscale or a proxy that says so.
+The key itself is never a credential: no header, cookie or bearer carrying it is accepted, and it
+never leaves its file. Anything that is sent can be overheard and sent again (a script talking to
+whatever holds Conch's port while Conch is stopped, say). A cookie that leaks can be taken back
+with `pnpm conch reset`. A key that leaks could mint cookies for good. Scripts use an access key
+(ADR 0008).
+
+The cookie counts only on a request that also looks local. A cookie that leaks still doesn't
+work from another computer through Tailscale or a proxy that says so.
 
 ### Getting a browser its cookie: a one-time code, through a file
 
@@ -101,8 +104,8 @@ account can listen there and answer like Conch. It would collect the key, and co
 file for the launcher to open (a `.command` file runs when a Mac opens it). Only your account can
 write in `here/asks`, so whatever Conch finds there was asked by you. The launcher only opens a
 path that the real Conch wrote into your own folder. So the menu bar helper's token stays what
-ADR 0029 made it, enough to read counts and quit and no more. `POST /api/here/link` (with the
-key) remains for your own scripts.
+ADR 0029 made it, enough to read counts and quit and no more. `POST /api/here/link` gives a
+browser that is already this computer another link, for another browser here.
 
 **Where the file goes.** Usually `~/.conch/here/open/`. Ubuntu's Firefox is a snap, and a snap
 can't read hidden folders in your home, so Conch asks which browser is the default
@@ -159,11 +162,10 @@ or after two minutes, and every start clears what a crash left.
 - The one new step: typing `localhost:4317` into a browser that has never been opened from Conch
   (a new browser, a private window, cleared site data). It shows "Open Conch from your apps".
   Once per browser, the cookie then lasts 400 days.
-- Every API client on this computer needs the key. The e2e harness writes one into each test
-  `CONCH_HOME`, sends it as a header, and starts each browser with the cookie a launcher would
-  have given it (Chrome adds no `extraHTTPHeaders` to a WebSocket). The server tests'
-  `onThisComputer(app)` sends the header too. `this-computer.spec.ts` does neither and goes the
-  real way.
+- A script on this computer that used Conch's API with sign-in off needs an access key now.
+  The e2e journeys start each browser with the cookie a launcher would have given it (minted with
+  the run's key), and the server tests' `onThisComputer(app)` sends the cookie too.
+  `this-computer.spec.ts` starts without it and asks through the folder, as a launcher does.
 - **What's left:** a cookie for `localhost` is sent to every port on `localhost`. If you visit a
   web server that another account runs on this computer, it could read your here-cookie and use
   it. Conch's session cookie has always had the same exposure. The cookie is `HttpOnly` and
@@ -177,7 +179,7 @@ or after two minutes, and every start clears what a crash left.
   attributes).
 - RFC 6265bis §8.5: cookies are not isolated by port.
 - Fetch Metadata / resource isolation: the existing `Sec-Fetch-Site` and `Origin` checks still
-  run first and refuse cross-site requests, so the new header can't be sent from a page.
+  run first and refuse cross-site requests, so a page can't make your browser use its cookie.
 - Jupyter Server's token and redirect file (`jpserver-<pid>-open.html`), and its snap-confinement
   issue, which is why the file's place depends on the browser.
 - The Clawdbot exposure (Jamieson O'Reilly, 23 January 2026; 1,100+ instances on Shodan and

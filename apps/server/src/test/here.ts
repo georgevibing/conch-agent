@@ -1,41 +1,50 @@
 import type { FastifyInstance, InjectOptions } from 'fastify';
 
-import { HERE_HEADER } from '../auth/here';
+import { hereCookieName } from '../auth/here';
 import type { Services } from '../services';
 
 /**
- * The app as a program on this computer sees it (ADR 0063): every injected
- * request carries this computer's key in `X-Conch-Here`, as the launchers, the
- * desktop app and `pnpm conch open` do. A request that sets its own host,
- * address or proxy headers is still judged by those: the key only counts on a
- * request that looks local.
- *
- * To send a request without the key (a browser not opened from Conch, or
- * another account on this computer), give `x-conch-here: ''`.
+ * Ask for a request without this computer's proof: a browser Conch didn't
+ * open, a proxy that hides itself, or another account here. Only the test
+ * helper reads it; the gateway never sees it.
  */
-const keys = new WeakMap<FastifyInstance, () => string>();
+export const NOT_HERE = 'x-test-not-here';
 
-/** For a real WebSocket to an app from `onThisComputer`: its key, as a program sends it. */
-export function hereInit(app: FastifyInstance): { headers: Record<string, string> } {
-  const key = keys.get(app);
-  if (!key) throw new Error('Wrap the app with onThisComputer first.');
-  return { headers: { [HERE_HEADER]: key() } };
-}
+const cookies = new WeakMap<FastifyInstance, (port: number) => string>();
 
+/**
+ * The app as a browser opened from Conch sees it (ADR 0063): every injected
+ * request carries the cookie a one-time code gives, for Conch's port. A
+ * request that sets its own host, address or proxy headers is still judged by
+ * those: the cookie only counts on a request that looks local. Give
+ * `[NOT_HERE]: '1'` for one without it.
+ */
 export function onThisComputer<T extends FastifyInstance>(app: T, services: Services): T {
-  keys.set(app, () => services.here.key());
+  const cookie = (port: number) => `${hereCookieName(port)}=${services.here.cookie()}`;
+  cookies.set(app, cookie);
   const inject = app.inject.bind(app);
   const wrapped = (options?: string | InjectOptions) => {
     if (options === undefined) return inject();
     const given: InjectOptions = typeof options === 'string' ? { url: options } : options;
-    const { [HERE_HEADER]: givenKey, ...rest } = (given.headers ?? {}) as Record<
-      string,
-      string | string[] | number | undefined
-    >;
-    // `''` sends none; anything else is sent as given; nothing said sends this computer's key.
-    const key = givenKey === undefined ? services.here.key() : givenKey;
-    return inject({ ...given, headers: key === '' ? rest : { ...rest, [HERE_HEADER]: key } });
+    const {
+      [NOT_HERE]: notHere,
+      cookie: theirs,
+      ...rest
+    } = (given.headers ?? {}) as Record<string, string | string[] | number | undefined>;
+    const jar = [theirs, notHere ? undefined : cookie(services.config.CONCH_PORT)]
+      .filter((part) => part !== undefined && part !== '')
+      .join('; ');
+    return inject({ ...given, headers: { ...rest, ...(jar && { cookie: jar }) } });
   };
   Object.defineProperty(app, 'inject', { value: wrapped, configurable: true, writable: true });
   return app;
+}
+
+/** For a real WebSocket to an app from `onThisComputer`, listening: the cookie for its port. */
+export function hereInit(app: FastifyInstance): { headers: Record<string, string> } {
+  const cookie = cookies.get(app);
+  const address = app.server.address();
+  if (!cookie || !address || typeof address === 'string')
+    throw new Error('Wrap the app with onThisComputer, and listen, first.');
+  return { headers: { cookie: cookie(address.port) } };
 }

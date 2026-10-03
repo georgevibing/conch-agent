@@ -6,7 +6,7 @@ import type { AccessSettings, AuthStatus } from '@conch/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
-import { onThisComputer } from '../test/here';
+import { NOT_HERE, onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 import { APPROVAL_TTL_MS, AccessStore, MAX_WAITING } from './store';
@@ -68,7 +68,7 @@ class Browser {
         host: this.where.host,
         'user-agent': this.where.userAgent,
         // A browser here that wasn't opened from Conch, or a proxy that hides itself (ADR 0063).
-        ...(this.where.proof === false && { 'x-conch-here': '' }),
+        ...(this.where.proof === false && { [NOT_HERE]: '1' }),
         ...(this.cookies.size && {
           cookie: [...this.cookies].map(([k, v]) => `${k}=${v}`).join('; '),
         }),

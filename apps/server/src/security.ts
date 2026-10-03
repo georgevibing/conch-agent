@@ -4,7 +4,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Config } from './config';
 import { Emitter } from './lib/emitter';
 import { SignInLimiter } from './auth/limiter';
-import { HERE_COOKIE_MAX_AGE_S, HERE_HEADER, hereCookieName, ThisComputer } from './auth/here';
+import { HERE_COOKIE_MAX_AGE_S, hereCookieName, ThisComputer } from './auth/here';
 import { HostPolicy, isLoopbackAddress, isLoopbackHost } from './auth/network';
 import { safeEqual } from './auth/secrets';
 import {
@@ -45,7 +45,7 @@ const PUBLIC_API = new Set([
 /** What the menu bar helper may ask, with its token instead of a sign-in (ADR 0029). */
 const TRAY_API = new Set(['GET /api/tray/status', 'POST /api/tray/quit']);
 
-/** What a program holding this computer's key may ask, with the key instead of a sign-in (ADR 0063). */
+/** What this computer, proven, may ask even with sign-in on and no session (ADR 0063). */
 const HERE_API = new Set(['POST /api/here/link']);
 
 const COOKIE = 'conch_session';
@@ -119,12 +119,6 @@ export class Gatekeeper {
     );
   }
 
-  /** A program on this computer with the key in `X-Conch-Here` (never a browser page). */
-  hereAllowed(request: FastifyRequest): boolean {
-    const given = request.headers[HERE_HEADER];
-    return this.looksLocal(request) && typeof given === 'string' && this.here.proves(given);
-  }
-
   constructor(
     readonly config: Config,
     readonly store: AccessStore,
@@ -165,13 +159,11 @@ export class Gatekeeper {
   }
 
   /**
-   * Proof that only your account on this computer can have (ADR 0063): the key
-   * in `X-Conch-Here` (a program), or the cookie made with it (a browser opened
-   * from Conch).
+   * Proof that only your account on this computer can have (ADR 0063): the
+   * cookie a one-time code gave this browser. The key it's made with never
+   * leaves its file, so nothing that is sent can be replayed to mint more.
    */
   proves(request: FastifyRequest): boolean {
-    const given = request.headers[HERE_HEADER];
-    if (typeof given === 'string' && this.here.proves(given)) return true;
     return this.here.checkCookie(readCookie(request.headers.cookie, this.hereCookieName(request)));
   }
 
@@ -529,14 +521,14 @@ export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
       if (gate.trayAllowed(request)) return;
       return reject(reply, 401, 'unauthorized', 'Only Conch’s menu bar helper can ask that.');
     }
-    // A launcher, the desktop app or `pnpm conch open`, with this computer's key (ADR 0063).
+    // Another one-time link, for a browser that is already this computer (ADR 0063).
     if (HERE_API.has(`${request.method} ${path}`)) {
-      if (gate.hereAllowed(request)) return;
+      if (gate.isLocal(request)) return;
       return reject(
         reply,
         401,
         'unauthorized',
-        'Only a program on the computer running Conch, with its key, can ask that.',
+        'Only a browser Conch opened on the computer running it can ask that.',
       );
     }
 

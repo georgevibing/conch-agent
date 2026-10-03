@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
-import { onThisComputer } from '../test/here';
+import { NOT_HERE, onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 
@@ -44,7 +44,7 @@ describe('the menu bar helper’s door', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/tray/open',
-      headers: { host: '127.0.0.1:4317', 'x-conch-tray': token, 'x-conch-here': '' },
+      headers: { host: '127.0.0.1:4317', 'x-conch-tray': token, [NOT_HERE]: '1' },
       payload: { page: '/', file: true },
     });
     expect(res.statusCode).not.toBe(200);

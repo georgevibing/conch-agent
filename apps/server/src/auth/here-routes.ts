@@ -7,11 +7,11 @@ import { safePage } from './here';
 /**
  * "This computer", proven (ADR 0063).
  *
- * - `POST /api/here/link`: a program holding this computer's key asks for a
- *   one-time link to a page, and with `file`, for the private file that opens
- *   it. Its key is checked in `security.ts` (`HERE_API`). Conch's own launchers
- *   don't use it: they ask through `here/asks` (`ThisComputer.answer`), so no
- *   secret ever goes to whatever listens on the port.
+ * - `POST /api/here/link`: a browser that is already this computer asks for
+ *   another one-time link to a page (for another browser here), and with
+ *   `file`, for the private file that opens it (`security.ts`, `HERE_API`).
+ *   Launchers don't use it: they ask through `here/asks`
+ *   (`ThisComputer.answer`), so nothing secret goes over the network.
  * - `POST /api/here`: the web app hands in the code it took from `#here=`, and
  *   the browser gets the cookie that makes it this computer.
  *

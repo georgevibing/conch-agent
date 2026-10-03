@@ -75,14 +75,10 @@ describe('the key', () => {
     expect(running.here.checkCookie(cookie)).toBe(false);
   });
 
-  it('proves only with the exact key', async () => {
+  it('is never a cookie itself: only what it signs is', async () => {
     const { here } = computer(await home());
-    const key = here.key();
-    expect(here.proves(key)).toBe(true);
-    expect(here.proves(` ${key}`)).toBe(false);
-    expect(here.proves(key.slice(1))).toBe(false);
-    expect(here.proves('')).toBe(false);
-    expect(here.proves(undefined)).toBe(false);
+    expect(here.checkCookie(here.key())).toBe(false);
+    expect(here.checkCookie(`v1.0.${'A'.repeat(22)}.${here.key()}`)).toBe(false);
   });
 });
 

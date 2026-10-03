@@ -2,33 +2,36 @@ import { pathToFileURL } from 'node:url';
 
 import { expect, request as playwrightRequest, test, type Page } from '@playwright/test';
 
+import { askHere } from '../apps/server/src/auth/open-here';
 import { say } from './app';
 
 /**
  * "This computer", proven (ADR 0063), in a real browser against the real gateway.
  *
- * Every other journey is a program on this computer: it sends the key. This one
- * is a browser, so it doesn't. Looking like this computer (loopback, a loopback
- * name, no proxy header) isn't enough any more — nginx's defaults and other
- * accounts on this computer look exactly like that — and only a browser Conch
- * opened itself, through the private file a launcher opens, gets in.
+ * Every other journey starts with the cookie a launcher would have given its
+ * browser. This one starts without it. Looking like this computer (loopback, a
+ * loopback name, no proxy header) isn't enough any more — nginx's defaults and
+ * other accounts on this computer look exactly like that — and only a browser
+ * Conch opened itself, through the private file a launcher opens, gets in.
  */
-test.use({ extraHTTPHeaders: {}, storageState: { cookies: [], origins: [] } });
+test.use({ storageState: { cookies: [], origins: [] } });
 
-const KEY = process.env.CONCH_E2E_HERE_KEY ?? '';
+const HOME = process.env.CONCH_E2E_THIS_COMPUTER_HOME ?? '';
 
-/** A launcher on this computer: it holds the key, and asks for a link. */
-async function launcher(baseURL: string | undefined) {
-  return playwrightRequest.newContext({ baseURL, extraHTTPHeaders: { 'x-conch-here': KEY } });
+/** What a launcher does: ask through the gateway's own folder, never over the network. */
+async function link(page = '/') {
+  const made = await askHere({ home: HOME, page });
+  expect(made?.file).toBeTruthy();
+  return { url: made?.url ?? '', file: made?.file ?? '' };
 }
 
-async function link(baseURL: string | undefined, page = '/', file = false) {
-  const asks = await launcher(baseURL);
-  const res = await asks.post('/api/here/link', { data: { page, file } });
-  expect(res.status()).toBe(200);
-  const made = (await res.json()) as { url: string; code: string; file?: string };
-  await asks.dispose();
-  return made;
+/** A browser already opened from Conch, for setting up. */
+async function launcher(baseURL: string | undefined) {
+  const { url } = await link();
+  const asks = await playwrightRequest.newContext({ baseURL });
+  const code = url.split('#here=')[1];
+  expect((await asks.post('/api/here', { data: { code } })).status()).toBe(200);
+  return asks;
 }
 
 const composer = (page: Page) => page.getByRole('textbox', { name: 'Message Conch' });
@@ -60,12 +63,10 @@ test('a browser Conch didn’t open is asked to open it from your apps, and gets
 
 test('a launcher’s private file opens Conch as this computer, and it stays that way', async ({
   page,
-  baseURL,
 }) => {
-  const made = await link(baseURL, '/', true);
-  expect(made.file).toBeTruthy();
+  const made = await link('/');
   // What the app shortcut and the menu bar helper open: a file, never the code on a command line.
-  await page.goto(pathToFileURL(made.file ?? '').href);
+  await page.goto(pathToFileURL(made.file).href);
   await expect(composer(page)).toBeVisible({ timeout: 15_000 });
   // The code left the address bar as soon as the page read it.
   expect(page.url()).not.toContain('here=');
@@ -78,17 +79,18 @@ test('a launcher’s private file opens Conch as this computer, and it stays tha
   await expect(composer(again)).toBeVisible();
 });
 
-test('a link works once: the second browser to open it is turned away', async ({
-  browser,
-  baseURL,
-}) => {
-  const made = await link(baseURL, '/?open=devices');
-  const first = await browser.newContext({ extraHTTPHeaders: {}, storageState: undefined });
+test('a link works once: the second browser to open it is turned away', async ({ browser }) => {
+  const made = await link('/?open=devices');
+  const first = await browser.newContext({ storageState: undefined });
   const firstPage = await first.newPage();
   await firstPage.goto(made.url);
-  await expect(composer(firstPage)).toBeVisible();
+  // In, and where the link pointed: Settings, open on its devices.
+  await expect(firstPage.getByRole('dialog', { name: 'Settings' })).toBeVisible();
+  await expect(firstPage.getByRole('heading', { name: 'Open Conch from your apps' })).toHaveCount(
+    0,
+  );
 
-  const second = await browser.newContext({ extraHTTPHeaders: {}, storageState: undefined });
+  const second = await browser.newContext({ storageState: undefined });
   const secondPage = await second.newPage();
   await secondPage.goto(made.url);
   await expect(
