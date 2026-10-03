@@ -380,7 +380,7 @@ describe('where items live, and choosing several', () => {
     );
     await userEvent.click(screen.getByRole('radio', { name: '1Password, 1 item' }));
     expect(onValueChange).toHaveBeenLastCalledWith('1password');
-    expect(screen.getByRole('radio', { name: 'Everywhere, 4 items' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'All, 4 items' })).toBeChecked();
     await expectAccessible(container);
   });
 
@@ -390,7 +390,7 @@ describe('where items live, and choosing several', () => {
     const { container, rerender } = renderNacre(
       <VaultSelectionBar count={2} total={5} onSelectAll={onSelectAll} onDone={onDone} />,
     );
-    expect(screen.getByRole('toolbar', { name: 'Chosen items' })).toHaveTextContent('2 chosen');
+    expect(screen.getByRole('group', { name: 'Chosen items' })).toHaveTextContent('2 chosen');
     await userEvent.click(screen.getByRole('button', { name: 'Select all 5' }));
     expect(onSelectAll).toHaveBeenCalled();
     rerender(<VaultSelectionBar count={5} total={5} onSelectAll={onSelectAll} onDone={onDone} />);

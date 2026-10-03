@@ -346,20 +346,22 @@ export function registerVaultRoutes(
   });
 
   // ── Copy to: Conch's own items, made as new items in another manager (ADR 0062) ──
-  // It sends passwords to another program: a recent sign-in, as for an export.
+  // It sends passwords to another program: a sign-in from the last five minutes, as for
+  // an export, and from another device each request counts towards its reveals.
   app.post<{ Params: { id: string } }>('/api/vault/sources/:id/copy', async (request, reply) => {
     const id = sourceId(reply, request.params.id);
     const body = id && parse(VaultCopyOutBody, request.body ?? {}, reply);
     if (!id || !body) return;
     if (id === 'system')
       return reply.code(404).send({ error: 'not-found', message: 'Nothing can be copied there.' });
-    if (!verify(request, reply)) return;
+    if (!verify(request, reply, REVEAL_WINDOW_MS)) return;
     return guarded(reply, async () =>
       VaultCopyOutResult.parse(
         await vault.copyOut(id, {
           ids: body.ids,
           ...(body.place && { place: body.place }),
           skipDuplicates: body.skipDuplicates,
+          who: who(request.access),
         }),
       ),
     );

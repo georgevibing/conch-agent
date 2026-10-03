@@ -256,6 +256,7 @@ export function useItemActions({
       const where = place ? `${target.name} (${place.name})` : target.name;
       const id = toast.loading(`Copying ${named(mine)} to ${where}…`);
       const total = { copied: 0, skipped: 0, failed: [] as { title: string; message: string }[] };
+      let stopped = false;
       try {
         for (let at = 0; at < mine.length; at += COPY_CHUNK) {
           const chunk = mine.slice(at, at + COPY_CHUNK);
@@ -266,7 +267,12 @@ export function useItemActions({
               skipDuplicates: true,
             }),
           );
-          if (!result) return void toast.dismiss(id);
+          if (!result) {
+            // Not confirmed part way: say what already went across.
+            if (!total.copied && !total.skipped) return void toast.dismiss(id);
+            stopped = true;
+            break;
+          }
           total.copied += result.copied;
           total.skipped += result.skipped;
           total.failed.push(...result.failed);
@@ -293,9 +299,11 @@ export function useItemActions({
             `${total.copied === 1 && mine.length === 1 ? named(mine) : plural(total.copied, 'item')} copied to ${where}`,
             {
               id,
-              description: total.skipped
-                ? `${total.skipped} already there.`
-                : `Change ${total.copied === 1 ? 'it' : 'them'} in either place: they’re separate now.`,
+              description: stopped
+                ? `Stopped before the other ${mine.length - total.copied - total.skipped}.`
+                : total.skipped
+                  ? `${total.skipped} already there.`
+                  : `Change ${total.copied === 1 ? 'it' : 'them'} in either place: they’re separate now.`,
             },
           );
       } catch (e) {

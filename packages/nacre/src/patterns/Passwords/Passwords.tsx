@@ -513,7 +513,7 @@ export function VaultSourceFilter({
         <ToggleGroup.Item
           value="all"
           className={styles.sourceChip}
-          aria-label={`Everywhere, ${total} ${total === 1 ? 'item' : 'items'}`}
+          aria-label={`All, ${total} ${total === 1 ? 'item' : 'items'}`}
         >
           All
           <span className={styles.sourceChipCount}>{total}</span>
@@ -561,7 +561,7 @@ export function VaultSelectionBar({
 }: VaultSelectionBarProps) {
   return (
     <div
-      role="toolbar"
+      role="group"
       aria-label="Chosen items"
       className={cx(styles.selectionBar, className)}
       {...props}

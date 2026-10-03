@@ -436,12 +436,13 @@ export class OnePasswordSource implements PasswordSource {
       JSON.stringify(toOpTemplate(item)),
     );
     if (result.code !== 0) throw new SourceError(this.#explain(result.stderr));
-    this.#list = undefined;
+    // Read again next time; until then its vaults are still known.
+    if (this.#list) this.#list.at = 0;
   }
 
   #explain(stderr: string): string {
     const text = firstLine(stderr).toLowerCase();
-    if (/lock|sign|authoriz|session|biometric/.test(text))
+    if (/\block|\bsign(ed)?[ -]?in\b|authoriz|session|biometric/.test(text))
       return '1Password is locked. Unlock it, then try again.';
     return text ? `1Password said: ${firstLine(stderr)}` : '1Password didn’t answer.';
   }
@@ -503,13 +504,18 @@ export function toBitwardenItem(item: OutgoingItem) {
       : null;
   let card = null;
   if (type === 3) {
-    const expiry = /^(\d{1,2})\s*\/\s*(\d{2,4})$/.exec(own('expiry')?.value.trim() ?? '');
+    // Bitwarden's month is "1"–"12". An expiry in any other shape stays a field of its own.
+    const typed = item.fields.find((f) => f.role === 'expiry' && f.value)?.value.trim() ?? '';
+    const m = /^(\d{1,2})\s*\/\s*(\d{2}|\d{4})$/.exec(typed);
+    const month = m ? Number(m[1]) : 0;
+    const expiry = m?.[2] && month >= 1 && month <= 12 ? { month, year: m[2] } : undefined;
+    if (expiry) own('expiry');
     card = {
       cardholderName: own('cardholder')?.value ?? null,
       number: own('cardNumber')?.value ?? null,
       code: own('cvv')?.value ?? null,
-      expMonth: expiry?.[1] ?? null,
-      expYear: expiry?.[2] ? (expiry[2].length === 2 ? `20${expiry[2]}` : expiry[2]) : null,
+      expMonth: expiry ? String(expiry.month) : null,
+      expYear: expiry ? (expiry.year.length === 2 ? `20${expiry.year}` : expiry.year) : null,
       brand: null,
     };
   }
@@ -622,7 +628,7 @@ export class BitwardenSource implements PasswordSource {
       if (/locked|session/i.test(result.stderr)) this.lock();
       throw new SourceError(firstLine(result.stderr) || 'Bitwarden didn’t take it.');
     }
-    this.#list = undefined;
+    if (this.#list) this.#list.at = 0;
   }
 
   async #items(signal?: AbortSignal): Promise<BwItem[]> {

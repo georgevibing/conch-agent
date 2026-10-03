@@ -1,8 +1,9 @@
 import {
   VAULT_TEMPLATES,
   type VaultItemSummary,
-  type VaultItemType,
-  type VaultProblem,
+  VaultItemType,
+  VaultProblem,
+  VaultSourceId,
 } from '@conch/protocol';
 import {
   AlertDialog,
@@ -62,6 +63,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useLocation, useNavigate } from 'react-router';
+import { z } from 'zod';
 
 import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
@@ -200,12 +202,28 @@ interface SavedView {
   from: VaultFrom;
 }
 
+/**
+ * What this browser kept, checked against what Passwords knows: an older or
+ * hand-edited value opens the usual way instead of breaking the page.
+ * Recently deleted is somewhere you go, not where Passwords should open.
+ */
+const SavedFilter = z.union([
+  z.object({ kind: z.enum(['all', 'favorites', 'codes']) }),
+  z.object({ kind: z.literal('type'), type: VaultItemType }),
+  z.object({ kind: z.literal('problem'), problem: VaultProblem }),
+  z.object({ kind: z.literal('tag'), tag: z.string().min(1).max(100) }),
+]);
 function savedView(): Partial<SavedView> {
   try {
-    const saved = JSON.parse(localStorage.getItem(VIEW_KEY) ?? '{}') as Partial<SavedView>;
-    // Recently deleted is somewhere you go, not where Passwords should open.
-    if (saved.filter?.kind === 'deleted' || saved.filter?.kind === 'source') delete saved.filter;
-    return saved;
+    const raw = JSON.parse(localStorage.getItem(VIEW_KEY) ?? '{}') as Record<string, unknown>;
+    const filter = SavedFilter.safeParse(raw.filter);
+    const sort = z.enum(['name', 'recent', 'used']).safeParse(raw.sort);
+    const from = z.union([z.literal('all'), VaultSourceId]).safeParse(raw.from);
+    return {
+      ...(filter.success && { filter: filter.data }),
+      ...(sort.success && { sort: sort.data }),
+      ...(from.success && { from: from.data }),
+    };
   } catch {
     return {};
   }
@@ -416,16 +434,20 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
   );
 
   /** What the keys act on: the chosen, or the row with focus, or the open item. */
-  const subject = (): VaultItemSummary[] => {
-    if (visibleChosen.length) return visibleChosen;
-    const focused = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>(
-      'button[data-id]',
-    )?.dataset.id;
-    const one = byId.get(focused ?? itemId ?? '');
+  const focusedRow = () =>
+    (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('button[data-id]')?.dataset
+      .id;
+  /**
+   * What the keys act on: while choosing, the chosen and nothing else; otherwise the
+   * row with focus, or (for copying, `open`) the item that's open.
+   */
+  const subject = (how: { open: boolean }): VaultItemSummary[] => {
+    if (selecting) return visibleChosen;
+    const one = byId.get(focusedRow() ?? (how.open ? (itemId ?? '') : ''));
     return one ? [one] : [];
   };
   const onKeys = (e: globalThis.KeyboardEvent) => {
-    if (e.defaultPrevented || typing(e)) return;
+    if (e.defaultPrevented || e.repeat || typing(e)) return;
     if (document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]')) return;
     const inList = listPane.current?.contains(document.activeElement) ?? false;
     const mod = e.metaKey || e.ctrlKey;
@@ -444,7 +466,7 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
       return;
     }
     if (mod && key === 'c') {
-      const [one, ...more] = subject();
+      const [one, ...more] = subject({ open: true });
       if (!one || more.length || one.deletedAt) return;
       e.preventDefault();
       if (e.altKey) void (mayHaveCode(one) && actions.copyCode(one));
@@ -452,8 +474,9 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
       else void actions.copyPassword(one);
       return;
     }
+    // Delete only where it's plain what it deletes: the chosen, or the row with focus.
     if ((e.key === 'Delete' || (e.key === 'Backspace' && mod)) && (inList || selecting)) {
-      const them = subject();
+      const them = subject({ open: false });
       if (!them.length) return;
       e.preventDefault();
       const mine = them.filter((i) => i.source === 'conch' && !i.deletedAt);
@@ -557,12 +580,15 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
   /** The arrow keys: the item before or after the chosen one, brought into view. */
   const move = (by: 1 | -1) => {
     // The list may be a key press behind the search box: go by what's typed now.
-    const found = sought === query ? shown : visibleItems(index, { query, filter, sort });
+    const found =
+      sought === query ? shown : visibleItems(index, { query, filter, sort, from: place });
     const at = found.findIndex((i) => i.id === itemId);
     const next = found[Math.min(found.length - 1, Math.max(0, at + by))];
     if (!next) return undefined;
     open(next.id, { keys: true });
     reveal(next.id);
+    // Shift-click chooses from here.
+    anchor.current = next.id;
     return next;
   };
 
@@ -585,7 +611,8 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
       e.preventDefault();
       move(e.key === 'ArrowDown' ? 1 : -1);
     } else if (e.key === 'Enter') {
-      const found = sought === query ? shown : visibleItems(index, { query, filter, sort });
+      const found =
+        sought === query ? shown : visibleItems(index, { query, filter, sort, from: place });
       const best = found[0];
       if (!best || found.some((i) => i.id === itemId)) return;
       e.preventDefault();

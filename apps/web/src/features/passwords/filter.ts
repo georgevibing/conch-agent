@@ -1,5 +1,11 @@
 import { vaultSourceName } from '@conch/nacre';
-import type { VaultItemSummary, VaultItemType, VaultProblem, VaultSourceId } from '@conch/protocol';
+import {
+  sameAccountKey,
+  type VaultItemSummary,
+  type VaultItemType,
+  type VaultProblem,
+  type VaultSourceId,
+} from '@conch/protocol';
 
 /** What the list shows. One filter at a time, chosen in the sidebar. */
 export type VaultFilter =
@@ -297,13 +303,14 @@ export function ago(at: number | undefined, now = Date.now()): string {
   });
 }
 
-/**
- * The same account in two places (Conch and 1Password, say): the same site,
- * or title when there's none, and the same account. Names only: no password
- * is compared.
- */
+/** The same account in two places, by the key Copy to uses too (`sameAccountKey`). */
 export function twinKey(item: VaultItemSummary): string {
-  return `${(item.domains[0] ?? item.title).toLowerCase().replace(/^www\./, '')}\0${item.subtitle.trim().toLowerCase()}`;
+  return sameAccountKey({
+    type: item.type,
+    title: item.title,
+    site: item.domains[0],
+    account: item.subtitle,
+  });
 }
 
 /** Each item's twins in other places, by id. */

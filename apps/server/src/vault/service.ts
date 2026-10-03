@@ -17,6 +17,7 @@ import {
   type ImportPreview,
   isConcealed,
   passwordScore,
+  sameAccountKey,
   SaveVaultItemBody,
   siteMatches,
   siteOf,
@@ -570,6 +571,7 @@ export class VaultService {
         if (last) {
           items.push(...last.map((item) => this.#external(source, item)));
           state.count = last.length;
+          if (source.add && source.places) state.places = source.places();
         }
         continue;
       }
@@ -579,6 +581,8 @@ export class VaultService {
         items.push(...external.map((item) => this.#external(source, item)));
         state.count = external.length;
         state.syncedAt = Date.now();
+        // Where Copy to can put an item, from the list just read (the status was made before it).
+        if (source.add && source.places) state.places = source.places();
       } catch (error) {
         this.#listed.delete(source.id);
         state.state = 'error';
@@ -1403,8 +1407,9 @@ export class VaultService {
    */
   async copyOut(
     id: VaultSourceId,
-    options: { ids: string[]; place?: string; skipDuplicates: boolean },
+    options: { ids: string[]; place?: string; skipDuplicates: boolean; who?: string },
   ): Promise<VaultCopyOutResult> {
+    this.#rateLimit(options.who);
     const records = await this.#records();
     const source = await this.#readySource(id);
     if (!source.add)
@@ -1422,13 +1427,17 @@ export class VaultService {
         })
       : [];
     const held = new Set(
-      listed.map((i) => `${siteOf(i.urls[0] ?? '') ?? i.title.toLowerCase()}\0${i.subtitle}`),
+      listed.map((i) =>
+        sameAccountKey({ type: i.type, title: i.title, site: i.urls[0], account: i.subtitle }),
+      ),
     );
     const result: VaultCopyOutResult = { copied: 0, skipped: 0, failed: [] };
     for (const r of chosen) {
-      const user = r.fields.find((f) => f.role === 'username')?.value ?? '';
-      const site = siteOf(r.urls[0] ?? '') ?? r.title.toLowerCase();
-      if (options.skipDuplicates && (r.origin?.source === id || held.has(`${site}\0${user}`))) {
+      const account =
+        r.fields.find((f) => f.role === 'username' && f.value)?.value ??
+        r.fields.find((f) => (f.role === 'email' || f.kind === 'email') && f.value)?.value;
+      const key = sameAccountKey({ type: r.type, title: r.title, site: r.urls[0], account });
+      if (options.skipDuplicates && (r.origin?.source === id || held.has(key))) {
         result.skipped++;
         continue;
       }
@@ -1449,9 +1458,13 @@ export class VaultService {
         await source.add(item, { ...(options.place && { place: options.place }) });
         result.copied++;
       } catch (error) {
-        result.failed.push({ title: r.title, message: (error as Error).message.slice(0, 200) });
+        // The manager's own words may quote what it was given: none of it goes back.
+        let message = (error as Error).message;
+        for (const value of [...r.fields.map((f) => f.value), r.notes])
+          if (value.length >= 3) message = message.split(value).join('•••');
+        result.failed.push({ title: r.title, message: message.slice(0, 200) });
         // Locked part way: the rest would fail the same way.
-        if (/locked|unlock/i.test((error as Error).message)) break;
+        if (/locked|unlock/i.test(message)) break;
       }
     }
     if (result.copied) this.#changed();

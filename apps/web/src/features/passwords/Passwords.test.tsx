@@ -378,7 +378,7 @@ describe('where items live, and doing things to several', () => {
     await user.keyboard('{Shift>}');
     await user.click(screen.getByRole('button', { name: /^Mail,/ }));
     await user.keyboard('{/Shift}');
-    const bar = screen.getByRole('toolbar', { name: 'Chosen items' });
+    const bar = screen.getByRole('group', { name: 'Chosen items' });
     expect(bar).toHaveTextContent('3 chosen');
     // Choosing doesn't open anything.
     expect(where()).toBe('/passwords');
@@ -391,7 +391,7 @@ describe('where items live, and doing things to several', () => {
         ids: ['pw_1', 'pw_2'],
       }),
     );
-    expect(screen.queryByRole('toolbar', { name: 'Chosen items' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Chosen items' })).not.toBeInTheDocument();
     await user.click(await screen.findByRole('button', { name: 'Undo' }));
     await waitFor(() =>
       expect(calls.find((c) => c.path === '/api/vault/restore')?.body).toEqual({
@@ -503,7 +503,7 @@ describe('where items live, and doing things to several', () => {
       ],
       { route: '/passwords/pw_1', sources: [source({}), onePassword()] },
     );
-    const other = await screen.findByRole('button', { name: 'Open the one in 1Password' });
+    const other = await screen.findByRole('button', { name: /^1Password/ });
     await userEvent.click(other);
     await waitFor(() => expect(where()).toBe('/passwords/op_v_1'));
   });

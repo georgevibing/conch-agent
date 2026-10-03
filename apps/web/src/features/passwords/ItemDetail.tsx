@@ -300,7 +300,6 @@ export function ItemDetail({
               size="sm"
               variant="ghost"
               leadingIcon={<VaultSourceBadge source={t.source} />}
-              aria-label={`Open the one in ${t.source === 'conch' ? 'Conch' : vaultSourceName(t.source)}`}
               onClick={() => onOpenItem(t.id)}
             >
               {t.source === 'conch' ? 'Conch' : vaultSourceName(t.source)}

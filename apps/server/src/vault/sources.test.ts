@@ -968,7 +968,12 @@ describe('Copy to another password manager (ADR 0062)', () => {
     const { service } = await vault({ exec: onePassword(calls, created) });
     const { bank, mail } = await withItems(service);
     await service.setSource('1password', { enabled: true });
-    await service.list({ looking: true });
+    // Its vaults come with the very first list, from what that list read.
+    const first = await service.list({ looking: true });
+    expect(first.status.sources.find((s) => s.id === '1password')).toMatchObject({
+      accepts: true,
+      places: [{ id: 'vaultprivate', name: 'Private' }],
+    });
 
     const status = (await service.sourceStatus()).find((s) => s.id === '1password');
     expect(status).toMatchObject({
@@ -1083,5 +1088,68 @@ describe('Copy to another password manager (ADR 0062)', () => {
       fields: [{ name: 'PIN', value: '4242', type: 1 }],
     });
     expectNoSecretsIn(calls, ['bank-secret-123', '4242', 'master']);
+  });
+
+  it('keeps a card’s expiry it can’t read as a field, leaves out a note it already has, and never echoes a value in an error', async () => {
+    const calls: Call[] = [];
+    const created: Record<string, unknown>[] = [];
+    let refuse = false;
+    const bw = exec(calls, {
+      bw: (args, env) => {
+        if (args[0] === 'status')
+          return JSON.stringify({ status: env?.BW_SESSION ? 'unlocked' : 'locked' });
+        if (args[0] === 'unlock') return 'SESSION';
+        if (args.join(' ') === 'list items')
+          return JSON.stringify(
+            created.map((c, i) => ({ ...c, id: `0000000${i}-0000-0000-0000-000000000000` })),
+          );
+        if (args.join(' ') === 'create item') {
+          const item = JSON.parse(
+            Buffer.from(calls.at(-1)?.input ?? '', 'base64').toString('utf8'),
+          ) as Record<string, unknown>;
+          if (refuse) return { stderr: `Bad value: ${JSON.stringify(item)}` };
+          created.push(item);
+          return '{}';
+        }
+        return undefined as unknown as string;
+      },
+    });
+    const { service } = await vault({ exec: bw });
+    const card = (expiry: string, title: string) =>
+      service.create({
+        type: 'card',
+        title,
+        fields: [
+          { label: 'Number', kind: 'secret', role: 'cardNumber', value: '4242424242424242' },
+          { label: 'Expiry', kind: 'monthYear', role: 'expiry', value: expiry },
+        ],
+      });
+    const visa = await card('01/27', 'Visa');
+    const odd = await card('2027-01', 'Amex');
+    const note = await service.create({
+      type: 'note',
+      title: 'Safe',
+      fields: [],
+      notes: 'combination 1234',
+    });
+    await service.setSource('bitwarden', { enabled: true });
+    await service.unlockSource('bitwarden', 'master');
+    const copy = (id: string) => service.copyOut('bitwarden', { ids: [id], skipDuplicates: true });
+
+    expect(await copy(visa.id)).toMatchObject({ copied: 1 });
+    expect(created[0]).toMatchObject({ type: 3, card: { expMonth: '1', expYear: '2027' } });
+    expect(await copy(odd.id)).toMatchObject({ copied: 1 });
+    expect(created[1]).toMatchObject({
+      card: { expMonth: null, expYear: null },
+      fields: [{ name: 'Expiry', value: '2027-01', type: 0 }],
+    });
+    expect(await copy(note.id)).toMatchObject({ copied: 1 });
+    // The same note again: it's there already (a note is its kind and its title).
+    expect(await copy(note.id)).toMatchObject({ copied: 0, skipped: 1 });
+
+    refuse = true;
+    const failed = await service.copyOut('bitwarden', { ids: [visa.id], skipDuplicates: false });
+    expect(failed.failed).toHaveLength(1);
+    expect(JSON.stringify(failed)).not.toContain('4242424242424242');
   });
 });
