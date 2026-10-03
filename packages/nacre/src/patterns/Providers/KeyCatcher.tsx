@@ -40,7 +40,8 @@ export interface KeyCatcherProps extends Omit<ComponentProps<'section'>, 'childr
 
 type Phase =
   | { kind: 'idle' }
-  | { kind: 'choose'; candidates: KeyCandidate[]; known: boolean }
+  /** `widened`: Conch had a guess, and the person said it was someone else's. */
+  | { kind: 'choose'; candidates: KeyCandidate[]; known: boolean; widened?: boolean }
   | { kind: 'checking'; who: KeyCandidate }
   | { kind: 'connected'; who: KeyCandidate }
   | { kind: 'failed'; who: KeyCandidate; message: string };
@@ -247,9 +248,11 @@ export function KeyCatcher({
                   ? `This looks like a ${phase.candidates[0]?.name} key. Is it?`
                   : phase.known
                     ? 'Keys like this one come from more than one place. Whose is it?'
-                    : choices.length
-                      ? 'Conch doesn’t recognise this key. Whose is it?'
-                      : 'Conch doesn’t recognise this key. Open the provider it’s from and paste it there.'}
+                    : phase.widened
+                      ? 'Whose is it?'
+                      : choices.length
+                        ? 'Conch doesn’t recognise this key. Whose is it?'
+                        : 'Conch doesn’t recognise this key. Open the provider it’s from and paste it there.'}
               </p>
               {choices.length > 0 && (
                 <ul className={styles.choices}>
@@ -278,7 +281,9 @@ export function KeyCatcher({
                         type="button"
                         className={styles.choice}
                         data-quiet=""
-                        onClick={() => setPhase({ kind: 'choose', candidates: [], known: false })}
+                        onClick={() =>
+                          setPhase({ kind: 'choose', candidates: [], known: false, widened: true })
+                        }
                       >
                         Someone else’s
                       </button>

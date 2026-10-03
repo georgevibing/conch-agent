@@ -78,6 +78,7 @@ describe('KeyCatcher', () => {
     expect(screen.getByText('This looks like a Mistral key. Is it?')).toBeInTheDocument();
     // Not theirs after all: everyone else, to choose from.
     await user.click(screen.getByRole('button', { name: 'Someone else’s' }));
+    expect(screen.getByText('Whose is it?')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'OpenAI' }));
     expect(onConnect).toHaveBeenCalledWith('openai', key);
   });
