@@ -20,4 +20,9 @@ export {
   type LiveDataListProps,
   type LiveDataSourceView,
 } from './LiveData';
-export { SealedFrame, type SealedDataRequest, type SealedFrameProps } from './SealedFrame';
+export {
+  SealedFrame,
+  type SealedCallResult,
+  type SealedDataRequest,
+  type SealedFrameProps,
+} from './SealedFrame';
