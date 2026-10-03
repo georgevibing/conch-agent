@@ -247,7 +247,9 @@ describe('pnpm release, end to end, against a local origin and a pretend gh', ()
     const w = await world();
     w.answers.push('y', 'y');
     expect(await w.go({}, { gh: null })).toBe(0);
-    expect(text(w.said)).toContain('No gh here, so no GitHub Release: the tag carries the notes.');
+    expect(text(w.said)).toContain(
+      'No gh here: GitHub Actions makes the GitHub Release from the tag, with the desktop apps',
+    );
     expect(existsSync(w.ghLog)).toBe(false);
   });
 

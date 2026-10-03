@@ -402,10 +402,13 @@ export async function release(options: ReleaseOptions, deps: ReleaseDeps): Promi
         );
         say(
           made.code === 0
-            ? 'Made the GitHub Release.'
+            ? 'Made the GitHub Release. GitHub Actions builds the desktop apps and attaches them to it, in about half an hour.'
             : `The tag is pushed, but gh couldn’t make the GitHub Release (${(made.stderr || made.stdout).trim().split('\n')[0] ?? ''}). The tag carries the notes; make it later with: gh release create ${tagOf(version)} --notes-from-tag`,
         );
-      } else say('No gh here, so no GitHub Release: the tag carries the notes.');
+      } else
+        say(
+          'No gh here: GitHub Actions makes the GitHub Release from the tag, with the desktop apps, in about half an hour.',
+        );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
