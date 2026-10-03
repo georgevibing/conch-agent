@@ -214,6 +214,30 @@ describe('ArtifactCard and ArtifactPanel', () => {
     await expectAccessible(container);
   });
 
+  it('a card can show a small preview that can’t be reached, and still opens as one button', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const { container } = renderNacre(
+      <ArtifactCard
+        title="Budget"
+        kind="table"
+        version={1}
+        onClick={onClick}
+        preview={<ArtifactTable csv={'Item,Cost\nRent,1200\nFood,400'} label="Budget" compact />}
+      />,
+    );
+    const card = screen.getByRole('button', { name: /Budget.*Table · made for you.*Open/ });
+    expect(card).toHaveAttribute('data-preview');
+    // Seen, not used: no sort buttons, nothing in the tab order but the card.
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(container.querySelector('[inert]')).toHaveTextContent('Rent');
+    await user.tab();
+    expect(card).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(onClick).toHaveBeenCalled();
+    await expectAccessible(container);
+  });
+
   it('shows the thing, its code and its changes; pins, goes full screen and closes', async () => {
     const user = userEvent.setup();
     const onPinned = vi.fn();

@@ -16,6 +16,7 @@ import { readPastChatRead, readPastChatsFound, severityFor } from '@conch/protoc
 
 import { Emitter } from '../../lib/emitter';
 import { hostToolText } from '../types';
+import { pretendFind } from './views';
 import type {
   Completion,
   CompletionInput,
@@ -730,6 +731,24 @@ export class MockEngine implements Engine {
         }
         yield { type: 'message-done', messageId: next };
         yield { type: 'done', outcome: 'success' };
+        return;
+      }
+      // What a tool found, drawn as it is (ADR 0060): the pretend apps' calendar,
+      // emails, files and messages, each with its view beside the text.
+      const found = chatOnly ? undefined : pretendFind(input.prompt);
+      if (found) {
+        const toolUseId = newId('tool');
+        const name = `mcp__conch__${found.tool}`;
+        yield { type: 'tool-start', toolUseId, name, input: found.input };
+        await wait(300);
+        yield {
+          type: 'tool-end',
+          toolUseId,
+          status: 'success',
+          output: found.text,
+          view: found.view,
+        };
+        yield* speak(found.reply);
         return;
       }
       if (/\bin parallel\b/i.test(input.prompt) && input.tools.some((t) => t.name === 'delegate')) {

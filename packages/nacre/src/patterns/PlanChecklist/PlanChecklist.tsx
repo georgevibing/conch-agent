@@ -142,7 +142,7 @@ export interface PlanChecklistProps extends Omit<ComponentProps<'section'>, 'tit
 
 /**
  * The assistant's plan for this reply, ticking itself off as it works (ADR
- * 0055). A calm card in the reply's flow: a heading with how far along it is,
+ * 0060). A calm card in the reply's flow: a heading with how far along it is,
  * a thin line that fills, and the steps — done ones checked and stepped back,
  * the one being done in full colour with a slow breath on its marker, the
  * rest waiting as hollow rings. A step that finishes draws its check in. A

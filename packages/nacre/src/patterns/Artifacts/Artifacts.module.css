@@ -41,6 +41,59 @@
       var(--nc-elevation-1);
   }
 
+  /* With a small picture of it: the picture above, the usual line below. */
+  .card[data-preview] {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--nc-space-2-5);
+    padding-block-start: var(--nc-space-2-5);
+  }
+
+  .cardPreview {
+    display: block;
+    position: relative;
+    block-size: 9.5rem;
+    overflow: hidden;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    pointer-events: none;
+    user-select: none;
+  }
+
+  /* What doesn't fit fades out at the foot, rather than stopping at a hard edge. */
+  .cardPreview::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0;
+    block-size: 1.25rem;
+    background: linear-gradient(to bottom, transparent, var(--nc-surface-sunken));
+  }
+
+  .cardPreview > * {
+    margin: 0;
+  }
+
+  .cardPreview > .chart[data-compact] {
+    padding: var(--nc-space-2) var(--nc-space-3) 0;
+  }
+
+  .cardPreview img {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: contain;
+    padding: var(--nc-space-2);
+  }
+
+  .cardLine {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    min-inline-size: 0;
+  }
+
   .cardIcon {
     display: grid;
     flex: none;

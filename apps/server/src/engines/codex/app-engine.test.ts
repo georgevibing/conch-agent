@@ -123,6 +123,29 @@ describe('Codex app-server parity', () => {
     expect(events.at(-1)).toMatchObject({ type: 'done', outcome: 'success' });
     expect((await fake.calls()).some((c) => c.method === 'thread/start')).toBe(true);
   });
+  it('passes on what a host tool found for the person, beside the text the model reads', async () => {
+    const { engine, turn } = await setup({
+      signedIn: true,
+      tool: 'mcp__conch__remember',
+      args: { text: 'tea' },
+    });
+    const view = { kind: 'files' as const, items: [{ name: 'Tea notes' }] };
+    const run = vi.fn(async () => ({ text: 'Saved.', view }));
+    const events = await collect(
+      engine.runTurn(
+        turn({
+          tools: [{ name: 'remember', description: 'Remember', input: { text: z.string() }, run }],
+        }),
+      ),
+    );
+    expect(events).toContainEqual({
+      type: 'tool-end',
+      toolUseId: 'tool1',
+      status: 'success',
+      output: 'Saved.',
+      view,
+    });
+  });
   it('never runs a denied tool, including in full trust', async () => {
     const { engine, turn } = await setup({
       signedIn: true,

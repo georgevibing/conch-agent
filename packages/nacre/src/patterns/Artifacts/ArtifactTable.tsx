@@ -11,6 +11,8 @@ export interface ArtifactTableProps extends Omit<ComponentProps<'div'>, 'childre
   /** What the table is, for screen readers: "Budget". */
   label: string;
   maxRows?: number;
+  /** A small picture of it, as a chat card shows it: the first rows, nothing to press. */
+  compact?: boolean;
 }
 
 const number = (cell: string) => {
@@ -26,6 +28,7 @@ export function ArtifactTable({
   csv,
   label,
   maxRows = 2000,
+  compact,
   className,
   ...props
 }: ArtifactTableProps) {
@@ -63,9 +66,9 @@ export function ArtifactTable({
   return (
     <div
       className={cx(styles.tableWrap, className)}
-      // Scrollable regions must be keyboard-focusable (WCAG 2.1.1).
-      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-      tabIndex={0}
+      data-compact={compact || undefined}
+      // Scrollable regions must be keyboard-focusable (WCAG 2.1.1); a compact one doesn't scroll.
+      tabIndex={compact ? undefined : 0}
       role="region"
       aria-label={label}
       {...props}
@@ -84,26 +87,30 @@ export function ArtifactTable({
                   aria-sort={dir ?? 'none'}
                   data-numeric={numeric[c] || undefined}
                 >
-                  <button
-                    type="button"
-                    className={styles.sort}
-                    onClick={() =>
-                      setSort(
-                        dir === 'ascending'
-                          ? { column: c, dir: 'descending' }
-                          : dir === 'descending'
-                            ? undefined
-                            : { column: c, dir: 'ascending' },
-                      )
-                    }
-                  >
-                    {name || `Column ${c + 1}`}
-                    <Icon
-                      aria-hidden
-                      className={styles.sortIcon}
-                      data-active={dir ? true : undefined}
-                    />
-                  </button>
+                  {compact ? (
+                    name || `Column ${c + 1}`
+                  ) : (
+                    <button
+                      type="button"
+                      className={styles.sort}
+                      onClick={() =>
+                        setSort(
+                          dir === 'ascending'
+                            ? { column: c, dir: 'descending' }
+                            : dir === 'descending'
+                              ? undefined
+                              : { column: c, dir: 'ascending' },
+                        )
+                      }
+                    >
+                      {name || `Column ${c + 1}`}
+                      <Icon
+                        aria-hidden
+                        className={styles.sortIcon}
+                        data-active={dir ? true : undefined}
+                      />
+                    </button>
+                  )}
                 </th>
               );
             })}
@@ -121,7 +128,7 @@ export function ArtifactTable({
           ))}
         </tbody>
       </table>
-      {rows.length > maxRows + 1 && (
+      {!compact && rows.length > maxRows + 1 && (
         <p className={styles.more}>
           Showing the first {maxRows.toLocaleString('en')} rows. Download it for the rest.
         </p>

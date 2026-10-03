@@ -191,6 +191,20 @@ describe('the tools', () => {
     expect(out.messages.at(-1)?.from).toBe('Eve Mallory');
   });
 
+  it('shows the person what it read as messages; the model reads the text', async () => {
+    const { ctx } = context();
+    const read = await tool(ctx, 'slack_read_channel').run({ channel: 'C0LAUNCH01', limit: 50 });
+    if (typeof read === 'string') throw new Error('no view');
+    expect(read.view).toMatchObject({ kind: 'messages', place: '#launch' });
+    expect(read.view?.kind === 'messages' && read.view.items[0]?.author).toBe('Sam Rivera');
+    const found = await tool(ctx, 'slack_search').run({ query: 'thursday', limit: 10 });
+    if (typeof found === 'string') throw new Error('no view');
+    expect(found.view?.kind === 'messages' && found.view.items).toHaveLength(2);
+    expect(found.view?.kind === 'messages' && found.view.items[0]?.url).toMatch(
+      /^https:\/\/mock\.slack\.com\//,
+    );
+  });
+
   it('searches, with Slack’s own links only', async () => {
     const { ctx } = context();
     const out = JSON.parse(

@@ -1,10 +1,11 @@
-import type { SlackToolName } from '@conch/protocol';
+import type { SlackToolName, ToolView } from '@conch/protocol';
 import { z } from 'zod';
 
 import type { ToolContext } from '../conversations/manager';
 import type { HostTool, HostToolResult } from '../engines/types';
 import { SlackApiError } from './api';
 import type { SlackService } from './service';
+import { channelView, searchView } from './views';
 
 /** A channel's id: public (C…) or private (G…), as Slack writes them. */
 const channelId = z.string().regex(/^[CG][A-Z0-9]{6,20}$/, 'Use a channel id from slack_channels.');
@@ -72,6 +73,7 @@ function failed(error: unknown): HostToolResult {
 export function slackTools(slack: SlackService, ctx: ToolContext): HostTool[] {
   const names = new Map<string, string>();
   const people = new Map<string, string>();
+  const person = (id: string) => people.get(id);
 
   const ask = async (name: SlackToolName, summary: string, input: Record<string, unknown>) => {
     const restricted = await ctx.restricted?.('apps', 'slack');
@@ -84,13 +86,18 @@ export function slackTools(slack: SlackService, ctx: ToolContext): HostTool[] {
     });
   };
 
-  /** A read, honouring Ask when the person chose it for this tool. */
+  /**
+   * A read, honouring Ask when the person chose it for this tool. `show` is
+   * what it found as the person would rather see it (ADR 0060); the model
+   * reads the text.
+   */
   const read = (
     name: SlackToolName,
     description: string,
     input: z.ZodRawShape,
     summary: (args: Record<string, unknown>) => string,
     run: (args: Record<string, unknown>) => Promise<unknown>,
+    show?: (result: unknown) => ToolView | undefined,
   ): HostTool => ({
     name,
     description,
@@ -103,7 +110,15 @@ export function slackTools(slack: SlackService, ctx: ToolContext): HostTool[] {
           if (decision === 'deny')
             return { text: 'The user said no, so Slack wasn’t read.', effect: 'not-executed' };
         }
-        return asText({ ...((await run(args)) as object), note: NOTE });
+        const result = await run(args);
+        const text = asText({ ...(result as object), note: NOTE });
+        let view: ToolView | undefined;
+        try {
+          view = show?.(result);
+        } catch {
+          // A view that can't be had is no reason to fail the read.
+        }
+        return view ? { text, view } : text;
       } catch (error) {
         return failed(error);
       }
@@ -249,6 +264,7 @@ export function slackTools(slack: SlackService, ctx: ToolContext): HostTool[] {
         })),
       };
     },
+    (result) => searchView(result, person),
   );
 
   const readChannel = read(
@@ -286,6 +302,7 @@ export function slackTools(slack: SlackService, ctx: ToolContext): HostTool[] {
         ...(answer.has_more && { more: true }),
       };
     },
+    (result) => channelView(result, person),
   );
 
   const send: HostTool = {

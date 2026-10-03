@@ -23,6 +23,7 @@ import type {
   TaskKind,
   TaskStatus,
   ToolStatus,
+  ToolView,
   TurnOptions,
   TurnProblem,
   PlanStep,
@@ -69,6 +70,8 @@ export type TranscriptItem =
       output?: string;
       durationMs?: number;
       startedAt: number;
+      /** What it found, drawn under its row (ADR 0060). */
+      view?: ToolView;
     }
   | {
       kind: 'permission';
@@ -185,7 +188,7 @@ export type TranscriptItem =
   | {
       /**
        * An offer to turn on what a request is missing, an app or a skill (ADR
-       * 0055). Taken, it moves to where the chat carried on from.
+       * 0060). Taken, it moves to where the chat carried on from.
        */
       kind: 'offer';
       /** The offer's id. */
@@ -471,6 +474,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         status: event.status,
         output: event.output,
         durationMs: event.durationMs,
+        ...(event.view && { view: event.view }),
       }));
       return updated ? { ...base, items: updated } : base;
     }

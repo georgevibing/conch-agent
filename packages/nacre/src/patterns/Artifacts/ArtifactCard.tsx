@@ -16,6 +16,11 @@ export interface ArtifactCardProps extends Omit<ComponentProps<'button'>, 'title
   /** It's the one showing in the panel now. */
   active?: boolean;
   pinned?: boolean;
+  /**
+   * A small picture of it above the line (a chart, a table, a diagram): only
+   * to see, never to use. Pressing anywhere still opens it beside the chat.
+   */
+  preview?: ReactNode;
 }
 
 /**
@@ -30,19 +35,13 @@ export function ArtifactCard({
   note,
   active,
   pinned,
+  preview,
   className,
   ...props
 }: ArtifactCardProps) {
   const k = ARTIFACT_KINDS[kind];
-  return (
-    <button
-      type="button"
-      className={cx(styles.card, className)}
-      data-active={active || undefined}
-      data-lustre
-      aria-current={active || undefined}
-      {...props}
-    >
+  const line = (
+    <>
       <span className={styles.cardIcon} aria-hidden>
         {k.icon}
       </span>
@@ -70,6 +69,29 @@ export function ArtifactCard({
         {active ? 'Showing' : 'Open'}
         <ChevronRight aria-hidden />
       </span>
+    </>
+  );
+  return (
+    <button
+      type="button"
+      className={cx(styles.card, className)}
+      data-active={active || undefined}
+      data-preview={preview != null || undefined}
+      data-lustre
+      aria-current={active || undefined}
+      {...props}
+    >
+      {preview != null ? (
+        <>
+          {/* Only to look at: nothing in it can be reached or pressed. */}
+          <span className={styles.cardPreview} aria-hidden inert>
+            {preview}
+          </span>
+          <span className={styles.cardLine}>{line}</span>
+        </>
+      ) : (
+        line
+      )}
     </button>
   );
 }

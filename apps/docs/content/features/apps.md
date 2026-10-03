@@ -28,6 +28,17 @@ An app's page starts with **What it does**: a plain switch for each thing, such 
 
 Setting up one part offers the other when it can. After you connect Slack, the dialog asks **Talk to Conch in Slack too?**. After you connect Gmail with an app password, it asks **Talk to Conch by email too?**, and one press uses the same password. Nothing is shared until you press it.
 
+## What it found, as it is
+
+When your assistant looks in Google Calendar, Gmail, Google Drive or Slack, what it found shows under that step in the chat, the way the app itself would show it:
+
+- **Google Calendar**: the days you asked about, Today first. Each event has its time, a line in its calendar's colour, a camera for a video call and the place. A day with nothing on says **Free**, and today shows where now is.
+- **Gmail**: who each email is from, the subject, its first line and when it came, with a dot for unread and a clip for attachments. **Reply** puts "Draft a reply to …" in the box you type in. Nothing is sent: you read it, change it and send it.
+- **Google Drive**: each file with its kind, whose it is and when it changed.
+- **Slack**: the channel, then who said what and when. A long message folds; **More** opens it.
+
+Press a row to open it in the app, in a new tab. Six rows show at first, and **Show all** has the rest. Your assistant still reads its own answer from the app, behind the step's arrow. Apps you connect by address show their results as text.
+
 ## Talk to me here
 
 **Talk to me here**, above the gallery, shows the apps you can message your assistant from: Slack, Gmail and email, Telegram, Discord, WhatsApp, Signal, iMessage, Microsoft Teams, Matrix and WeChat. Each has its own steps, beside a picture of what you'll see. See [Talk to me here](../channels/index.md).

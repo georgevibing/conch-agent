@@ -10,6 +10,7 @@ export * from './Prose';
 export * from './StreamingText';
 export * from './ThinkingIndicator';
 export * from './ToolCall';
+export * from './ToolViews';
 export * from './CommandMenu';
 export * from './ModelPicker';
 export * from './ModelSwitch';

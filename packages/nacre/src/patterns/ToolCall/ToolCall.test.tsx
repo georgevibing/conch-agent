@@ -54,4 +54,25 @@ describe('ToolCall', () => {
     expect(formatDuration(42_000)).toBe('42s');
     expect(formatDuration(125_000)).toBe('2m 5s');
   });
+
+  it('draws what the tool found under the row, open, with the raw output still behind the disclosure', async () => {
+    const user = userEvent.setup();
+    const { container } = renderNacre(
+      <ToolCall
+        name="Find files"
+        status="success"
+        output='{"files":[]}'
+        view={<section aria-label="Files, 1 file">Q4 launch deck</section>}
+      />,
+    );
+    expect(screen.getByRole('region', { name: 'Files, 1 file' })).toHaveTextContent(
+      'Q4 launch deck',
+    );
+    expect(container.querySelector('[data-status]')).toHaveAttribute('data-view');
+    expect(screen.queryByRole('region', { name: 'Output' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: /Find files/ }));
+    expect(screen.getByRole('region', { name: 'Output' })).toHaveTextContent('{"files":[]}');
+    expect(screen.getByRole('region', { name: 'Files, 1 file' })).toBeInTheDocument();
+    await expectAccessible(container);
+  });
 });
