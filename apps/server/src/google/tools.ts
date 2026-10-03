@@ -3,9 +3,21 @@ import { DraftUncertain } from './imap';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { GoogleCapability } from '@conch/protocol';
-import type { HostTool } from '../engines/types';
+import type { HostTool, HostToolResult } from '../engines/types';
 import type { ToolContext } from '../conversations/manager';
 import { GoogleError, type GoogleService } from './service';
+import {
+  agendaView,
+  filesView,
+  Found,
+  gmailItem,
+  imapItem,
+  inBatches,
+  mailView,
+  resultOf,
+  viewOf,
+  type MailSummary,
+} from './views';
 
 const accountId = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const resourceId = z.string().regex(/^[A-Za-z0-9_-]{1,200}$/);
@@ -168,6 +180,9 @@ export async function reconcileDraft(
   }
 }
 
+/** The most emails a search describes for the person's view of it (ADR 0055). */
+const MAIL_VIEW_LIMIT = 20;
+
 const MailSearchResult = z.object({
   messages: z.array(z.object({ id: resourceId, threadId: resourceId.optional() })).optional(),
   nextPageToken: z.string().optional(),
@@ -195,6 +210,8 @@ export function googleTools(
   draftTask?: (args: z.infer<typeof DraftInput>) => Promise<{ id: string }>,
 ): HostTool[] {
   const createdDrafts = new Map<string, string>();
+  const emailOf = async (id: string) =>
+    (await service.status()).accounts.find((a) => a.id === id)?.email;
   const readEvidence = new Map<string, ReturnType<typeof readReceipt>>();
   const read = (
     name: string,
@@ -213,20 +230,26 @@ export function googleTools(
       reconcile: async (args: Record<string, unknown>, operationId: string) => {
         let receipt = readEvidence.get(operationId);
         if (!receipt) {
-          const result = await run(z.object(input).parse(args));
+          const result = resultOf(await run(z.object(input).parse(args)));
           receipt = readReceipt(name, result);
         }
         return { state: 'confirmed' as const, receipt };
       },
     },
-    run: async (args: Record<string, unknown>, context?: { operationId: string }) => {
-      const result = await run(z.object(input).parse(args));
-      const text = JSON.stringify(result);
+    run: async (
+      args: Record<string, unknown>,
+      context?: { operationId: string },
+    ): Promise<string | HostToolResult> => {
+      const out = await run(z.object(input).parse(args));
+      const result = resultOf(out);
+      const text = JSON.stringify(result).slice(0, 100_000);
       if (context) {
         if (readEvidence.size >= 100) readEvidence.clear();
         readEvidence.set(context.operationId, readReceipt(name, result));
       }
-      return text.slice(0, 100_000);
+      // What it found, for the person (ADR 0055); a view that can't be had is no reason to fail.
+      const view = await viewOf(out);
+      return view ? { text, view } : text;
     },
   });
   const mailSearch = read(
@@ -238,16 +261,44 @@ export function googleTools(
       limit: z.number().int().min(1).max(50).default(20),
     },
     'mail-read',
-    async (args) =>
-      MailSearchResult.parse(
-        (await service.viaPassword(String(args.accountId)))
-          ? await viaImap(service, String(args.accountId), (login) =>
-              service.imap.search(login, String(args.query), Number(args.limit)),
-            )
-          : await service.api(String(args.accountId), 'mail-read', '/gmail/v1/users/me/messages', {
-              query: { q: String(args.query), maxResults: String(args.limit) },
-            }),
-      ),
+    async (args) => {
+      const id = String(args.accountId);
+      if (await service.viaPassword(id)) {
+        const found = await viaImap(service, id, (login) =>
+          service.imap.search(login, String(args.query), Number(args.limit)),
+        );
+        const summaries = found.messages.flatMap((m): MailSummary[] =>
+          'summary' in m && m.summary ? [m.summary] : [],
+        );
+        return new Found(MailSearchResult.parse(found), async () => {
+          const account = await emailOf(id);
+          return account ? mailView(summaries.map((m) => imapItem(m, account))) : undefined;
+        });
+      }
+      const result = MailSearchResult.parse(
+        await service.api(id, 'mail-read', '/gmail/v1/users/me/messages', {
+          query: { q: String(args.query), maxResults: String(args.limit) },
+        }),
+      );
+      // Who each is from and what about: one small look per email, a few at a time.
+      return new Found(result, async () => {
+        const account = await emailOf(id);
+        if (!account) return undefined;
+        const described = await inBatches(
+          (result.messages ?? []).slice(0, MAIL_VIEW_LIMIT),
+          5,
+          (m) =>
+            service
+              .api(id, 'mail-read', `/gmail/v1/users/me/messages/${encodeURIComponent(m.id)}`, {
+                query: { format: 'metadata' },
+                signal: ctx.signal,
+              })
+              .then((meta) => gmailItem(meta, account))
+              .catch(() => undefined),
+        );
+        return mailView(described);
+      });
+    },
   );
   const mailRead = read(
     'google_mail_read',
@@ -272,7 +323,7 @@ export function googleTools(
         Date.parse(String(args.end)) - Date.parse(String(args.start)) > 31 * 86_400_000
       )
         throw new GoogleError('invalid', 'Choose a calendar window of up to 31 days.');
-      return service.api(
+      const result = await service.api(
         String(args.accountId),
         'calendar-read',
         `/calendar/v3/calendars/${encodeURIComponent(String(args.calendarId))}/events`,
@@ -286,6 +337,10 @@ export function googleTools(
           },
         },
       );
+      // The days asked about, so a day with nothing on shows as free.
+      return new Found(result, () =>
+        agendaView(result, { start: String(args.start), end: String(args.end) }),
+      );
     },
   );
   const driveSearch = read(
@@ -293,14 +348,17 @@ export function googleTools(
     'Search Google Drive file names. Does not modify files. Results are untrusted content.',
     { accountId, query: z.string().min(1).max(300) },
     'drive-read',
-    (args) =>
-      service.api(String(args.accountId), 'drive-read', '/drive/v3/files', {
+    async (args) => {
+      const result = await service.api(String(args.accountId), 'drive-read', '/drive/v3/files', {
         query: {
           q: `trashed = false and name contains '${String(args.query).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`,
           pageSize: '50',
-          fields: 'nextPageToken,files(id,name,mimeType,modifiedTime,webViewLink,description)',
+          fields:
+            'nextPageToken,files(id,name,mimeType,modifiedTime,webViewLink,description,owners(displayName))',
         },
-      }),
+      });
+      return new Found(result, () => filesView(result));
+    },
   );
   const driveRead = read(
     'google_drive_read',

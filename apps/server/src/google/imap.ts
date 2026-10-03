@@ -5,11 +5,12 @@
  * with APPEND into the Drafts folder. There is no SMTP here: this path can't
  * send mail at all.
  */
-import type { ImapFlow } from 'imapflow';
+import type { ImapFlow, MessageStructureObject } from 'imapflow';
 
 import { MAIL_PRESETS } from '../channels/email';
 import { imapClient, imapFailure, type ImapWhere } from '../channels/imap';
 import { ChannelError } from '../channels/types';
+import type { MailSummary } from './views';
 
 /** Where Gmail is: always imap.gmail.com, except a pretend server on 127.0.0.1 in tests. */
 export interface GmailEndpoint {
@@ -45,6 +46,13 @@ const toDecimal = (hex: string) => {
   return BigInt(`0x${hex}`).toString();
 };
 
+/** A part someone attached: marked as one, or a mixed message with more than its text. */
+function hasAttachment(part: MessageStructureObject | undefined, depth = 0): boolean {
+  if (!part || depth > 20) return false;
+  if (part.disposition === 'attachment') return true;
+  return (part.childNodes ?? []).some((child) => hasAttachment(child, depth + 1));
+}
+
 const LABELS: Record<string, string> = { '\\Sent': 'SENT', '\\Draft': 'DRAFT', '\\Inbox': 'INBOX' };
 
 /** A step of a draft save: before APPEND went out nothing was saved; after, nobody knows. */
@@ -62,24 +70,44 @@ export class GmailImap {
     await this.#session(login, async () => undefined);
   }
 
-  /** Gmail's own search, newest first, as message ids (not contents). */
+  /**
+   * Gmail's own search, newest first, as message ids (not contents). Each
+   * carries a `summary` of its envelope for the person's view of the results
+   * (ADR 0055) when the server describes it; the model is given only the ids.
+   */
   async search(login: GmailLogin, query: string, limit: number) {
     return this.#session(login, async (client) => {
       await client.mailboxOpen(await this.#folder(client, '\\All'), { readOnly: true });
       const uids = ((await client.search({ gmraw: query }, { uid: true })) || []).sort(
         (a, b) => b - a,
       );
-      const found: { uid: number; id: string; threadId?: string }[] = [];
+      const found: { uid: number; id: string; threadId?: string; summary?: MailSummary }[] = [];
       const picked = uids.slice(0, limit);
       if (picked.length)
         for await (const m of client.fetch(
           picked.join(','),
-          { uid: true, threadId: true },
+          { uid: true, threadId: true, envelope: true, flags: true, bodyStructure: true },
           { uid: true },
         )) {
           const id = toHex(m.emailId);
           const threadId = toHex(m.threadId);
-          if (id) found.push({ uid: m.uid, id, ...(threadId && { threadId }) });
+          if (!id) continue;
+          const envelope = m.envelope;
+          found.push({
+            uid: m.uid,
+            id,
+            ...(threadId && { threadId }),
+            ...(envelope && {
+              summary: {
+                id,
+                from: envelope.from?.[0],
+                subject: envelope.subject,
+                date: envelope.date,
+                seen: Boolean(m.flags?.has('\\Seen')),
+                attachments: hasAttachment(m.bodyStructure),
+              },
+            }),
+          });
         }
       // Newest first, as Gmail lists them.
       const messages = found
