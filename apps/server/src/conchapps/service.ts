@@ -906,6 +906,7 @@ export class ConchAppService {
       const settings = this.#settingsFor(offer.manifest, body.settings ?? {});
       let pkg: AppPackage;
       let source: ConchAppSource = offer.source;
+      let signature: SkillSignature = offer.signature;
       if (offer.from === 'draft') {
         const info = offer.draftId
           ? await this.workshop.info(offer.draftId).catch(() => undefined)
@@ -940,13 +941,28 @@ export class ConchAppService {
           throw new ConchAppError('invalid', problemText(found.found.problems));
         pkg = found.pkg;
         source = held.source;
+        signature = found.found.signature;
       }
+      // What it would replace, as it is now: a card made before another app took its place
+      // (or before it went) mustn't replace that one with the card's words.
+      const installed = await this.store.get(pkg.manifest.id);
+      const otherNow = installed ? !sameHands(installed, { source, signature }) : false;
+      const asShown =
+        offer.action === (installed ? 'update' : 'add') &&
+        Boolean(offer.changes?.otherMaker) === otherNow &&
+        (!installed || offer.changes?.from === installed.manifest.version);
+      if (!asShown)
+        return this.#changedSince(
+          body.conversationId,
+          offer,
+          'What this would replace changed since the card was made, so nothing was added. Ask for a new card.',
+        );
       let app: ConchApp;
       try {
         app = await this.#install({
           pkg,
           source,
-          signature: offer.signature,
+          signature,
           tools: offer.tools,
           made: offer.from === 'draft',
           conversationId: body.conversationId,
@@ -977,8 +993,11 @@ export class ConchAppService {
     });
   }
 
-  async #changedSince(conversationId: string, offer: ConchAppOffer): Promise<never> {
-    const message = 'It changed since you saw it; ask for the card again.';
+  async #changedSince(
+    conversationId: string,
+    offer: ConchAppOffer,
+    message = 'It changed since you saw it; ask for the card again.',
+  ): Promise<never> {
     await this.deps.chats
       .note(conversationId, { ...offer, state: 'failed', message })
       .catch(() => undefined);

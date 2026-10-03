@@ -1469,3 +1469,51 @@ describe('looking at an app before adding it', () => {
     expect(await readdir(join(h.home, 'conch-apps', '.incoming')).catch(() => [])).toEqual([]);
   });
 });
+
+describe('a card made before things changed', () => {
+  it('won’t replace an app that another maker’s took the place of since', async () => {
+    const h = await harness();
+    // A card to add Tally, made here…
+    const { offer } = await makeTally(h);
+    expect(offer.action).toBe('add');
+    // …and meanwhile someone else's Tally was added from a file.
+    const files = { ...tallyFiles(), 'README.md': '# Theirs\n' };
+    const preview = await h.service.preview({
+      file: signedPackage(files, { fingerprint: 'MMMM', publisher: 'Mallory' }).toString('base64'),
+      name: 'tally.conchapp',
+    });
+    if (!preview?.apps[0]) throw new Error('nothing');
+    await h.service.install({
+      packageId: preview.packageId,
+      appId: 'tally',
+      hash: preview.apps[0].hash,
+      settings: {},
+    });
+    await expect(
+      h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' }),
+    ).rejects.toThrow(
+      'What this would replace changed since the card was made, so nothing was added. Ask for a new card.',
+    );
+    expect(h.latest(offer.offerId)?.state).toBe('failed');
+    expect((await h.service.get('tally')).source.kind).toBe('file');
+  });
+
+  it('won’t update an app that was replaced or removed since', async () => {
+    const h = await harness();
+    const first = await makeTally(h);
+    await h.service.acceptOffer(first.offer.offerId, { conversationId: 'c_chat' });
+    const draft = await h.service.editDraft('c_chat', 'tally');
+    await h.service.write(draft.id, 'conch-app.json', tallyFiles('1.1.0')['conch-app.json'] ?? '');
+    await h.service.check(draft.id);
+    await h.service.tryTool(draft.id, 'count', {});
+    await h.service.tryTool(draft.id, 'read_count', {});
+    await h.service.check(draft.id);
+    const offer = await h.service.present(h.chat(), draft.id, 'v1.1');
+    expect(offer.action).toBe('update');
+    await h.service.remove('tally', { keepData: false });
+    await expect(
+      h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' }),
+    ).rejects.toThrow(/Ask for a new card/);
+    expect(await h.service.list()).toEqual([]);
+  });
+});
