@@ -1,8 +1,16 @@
 ---
 title: Install
-description: One line, and nothing to install first. Conch gets what it needs, builds itself and opens.
+description: Download the app, or use one line in a terminal. Either way there is nothing to install first.
 order: 1
 ---
+
+## The app
+
+<!-- conch:download -->
+
+Open the file you downloaded, and Conch opens. Everything it needs comes with it. [The app](./app.md) says what's different about it, and what to do if your computer asks before opening it.
+
+## One line in a terminal
 
 <!-- conch:install -->
 

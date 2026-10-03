@@ -8,6 +8,12 @@ export const REPO_BRANCH = 'main';
  */
 export const AUTHOR = { name: 'giotiskl', url: 'https://github.com/giotiskl' } as const;
 
+/**
+ * Where the app is downloaded (ADR 0054): the newest release on GitHub, with
+ * the files for every system attached by the release workflow.
+ */
+export const DOWNLOADS = `${REPO_URL}/releases/latest`;
+
 /** The one-line installers (README § Quick start). */
 export const INSTALL = {
   unix: `curl -fsSL https://raw.githubusercontent.com/giotiskl/conch-agent/${REPO_BRANCH}/scripts/install.sh | sh`,

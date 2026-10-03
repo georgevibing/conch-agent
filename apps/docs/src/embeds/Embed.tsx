@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 
 import { AppsGallery } from './apps';
 import { ChannelFacts, ChannelGrid, ChannelScene } from './channels';
+import { DownloadApp } from './download';
 import { InstallCommand } from './install';
 import { ProviderFacts, ProviderGrid, ProviderMatrix, ServerFacts } from './providers';
 import {
@@ -34,6 +35,7 @@ const EMBEDS: Record<string, EmbedView> = {
   channels: ChannelGrid,
   cli: CliReference,
   decisions: DecisionList,
+  download: DownloadApp,
   efforts: EffortList,
   env: EnvReference,
   files: FilesReference,

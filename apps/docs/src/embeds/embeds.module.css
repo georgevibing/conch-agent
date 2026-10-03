@@ -237,3 +237,16 @@
     transform: rotate(90deg);
   }
 }
+
+/* ── The app's download ──────────────────────────────────────────────── */
+
+.download {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nc-space-2) var(--nc-space-4);
+}
+
+.downloadOthers {
+  margin: 0;
+}

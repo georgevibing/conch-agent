@@ -73,9 +73,9 @@ describe('a page', () => {
       'href',
       '#from-a-checkout',
     );
-    expect(screen.getByRole('link', { name: /Next:\s*Your first useful result/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Next:\s*The app/ })).toHaveAttribute(
       'href',
-      '/start/first-chat',
+      '/start/app',
     );
     expect(document.title).toBe('Install · Conch');
     await accessible(container);

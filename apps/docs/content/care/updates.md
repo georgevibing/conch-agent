@@ -47,6 +47,14 @@ If the new version doesn't start properly, Conch goes back to the one before by 
 
 Conch keeps the version you had beside the new one. **Go back to 0.3.0** switches back at once and restarts. Conch won't offer the version you left again.
 
+## In the app
+
+[The app](../start/app.md) updates the same way, from the same releases and channels. **Update Conch** downloads the new version, checks it against the release, and installs it. The app closes and opens again on the new version, and the page comes back by itself.
+
+A Mac app that isn't signed, and the `.deb` on Linux, can't replace themselves. There the card says **Download Conch** and opens the release page. Install the new version over the one you have. Your things stay.
+
+To go back a version in the app, install the one you want from its release page.
+
 ## A developer's copy
 
 A copy of Conch on another branch, or with changes of its own, follows every change on its branch instead of releases, as it always did. The card says why. If you changed files in Conch's own folder, it doesn't update by itself. It says why and shows the commands to run by hand, ready to copy.

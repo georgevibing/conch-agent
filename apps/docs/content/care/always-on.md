@@ -16,6 +16,10 @@ The section now says **Starts when you log in**, and where your computer lists i
 
 Turning the switch off never stops the Conch you're using. It only stops Conch starting by itself the next time you log in.
 
+## In the app
+
+In [the app](../start/app.md), closing the window already keeps Conch running in the menu bar. Always on adds the one thing left: it opens the app when you log in, with no window. Nothing moves and the page doesn't rest. The app's own icon is the pearl in the menu bar, and **Show Conch in the menu bar** shows or hides it.
+
 ## Open it like any app
 
 **Conch** is where your other apps are: Applications and Spotlight on a Mac, the Start menu on Windows, the app menu on Linux. Opening it opens Conch in your browser. If Conch isn't running, the app starts it first.

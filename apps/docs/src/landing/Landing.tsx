@@ -21,6 +21,7 @@ import { useEffect, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import reference from 'virtual:conch-reference';
 
+import { DownloadApp } from '../embeds/download';
 import { HowItWorks } from '../embeds/how';
 import { InstallCommand } from '../embeds/install';
 import { AUTHOR, REPO_URL } from '../site/config';
@@ -125,9 +126,10 @@ export function Landing() {
           lede={`Conch drives ${sentence(agents)}, a model on this machine and the keys you have, all at once, from one place. It sets itself up, fixes what breaks, and asks only when it matters.`}
           actions={
             <>
+              <DownloadApp />
               <InstallCommand typed />
               <div className={styles.buttons}>
-                <Button size="lg" trailingIcon={<ArrowRight />} asChild>
+                <Button size="lg" variant="surface" trailingIcon={<ArrowRight />} asChild>
                   <Link to={LANDING_LINKS.start}>Get started</Link>
                 </Button>
                 <Button
@@ -378,7 +380,7 @@ export function Landing() {
             <Bento.Tile
               span={2}
               title="It runs where you work"
-              text="macOS, Linux and Windows, with one line and nothing to install first."
+              text="An app for macOS, Linux and Windows, or one line in a terminal. Nothing to install first."
               picture="The systems Conch runs on: macOS, Linux and Windows"
             >
               <div className={styles.systems}>
@@ -436,12 +438,13 @@ export function Landing() {
             </p>
           </Statement>
           <Reveal className={styles.closingActions}>
+            <DownloadApp />
             <InstallCommand />
             <div className={styles.buttons}>
-              <Button size="lg" trailingIcon={<ArrowRight />} asChild>
+              <Button size="lg" variant="surface" trailingIcon={<ArrowRight />} asChild>
                 <Link to={LANDING_LINKS.start}>Get started</Link>
               </Button>
-              <Button size="lg" variant="surface" tone="neutral" asChild>
+              <Button size="lg" variant="ghost" tone="neutral" asChild>
                 <Link to={LANDING_LINKS.docs}>Read the documentation</Link>
               </Button>
             </div>
