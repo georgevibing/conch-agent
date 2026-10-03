@@ -34,6 +34,17 @@
     block-size: 240px;
   }
 
+  /* A card's small picture, while it loads or when it can't be drawn. */
+  .glanceWait {
+    block-size: 100%;
+  }
+
+  .glanceNote {
+    display: grid;
+    place-items: center;
+    block-size: 100%;
+  }
+
   .loadingPanel {
     block-size: 100%;
     min-block-size: 320px;

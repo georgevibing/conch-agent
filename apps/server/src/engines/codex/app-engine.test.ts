@@ -11,7 +11,7 @@ import { SettingsStore } from '../../settings/store';
 import { fakeCodexApp } from '../../test/fakeCodexApp';
 import type { LoginState } from '@conch/protocol';
 import type { EngineEvent, TurnInput } from '../types';
-import { CodexEngine } from './app-engine';
+import { CodexEngine, codexPlan } from './app-engine';
 
 const homes: string[] = [];
 afterEach(() => {
@@ -123,6 +123,29 @@ describe('Codex app-server parity', () => {
     expect(events.at(-1)).toMatchObject({ type: 'done', outcome: 'success' });
     expect((await fake.calls()).some((c) => c.method === 'thread/start')).toBe(true);
   });
+  it('passes on what a host tool found for the person, beside the text the model reads', async () => {
+    const { engine, turn } = await setup({
+      signedIn: true,
+      tool: 'mcp__conch__remember',
+      args: { text: 'tea' },
+    });
+    const view = { kind: 'files' as const, items: [{ name: 'Tea notes' }] };
+    const run = vi.fn(async () => ({ text: 'Saved.', view }));
+    const events = await collect(
+      engine.runTurn(
+        turn({
+          tools: [{ name: 'remember', description: 'Remember', input: { text: z.string() }, run }],
+        }),
+      ),
+    );
+    expect(events).toContainEqual({
+      type: 'tool-end',
+      toolUseId: 'tool1',
+      status: 'success',
+      output: 'Saved.',
+      view,
+    });
+  });
   it('never runs a denied tool, including in full trust', async () => {
     const { engine, turn } = await setup({
       signedIn: true,
@@ -176,6 +199,29 @@ describe('Codex app-server parity', () => {
     setTimeout(() => abort.abort(), 300);
     expect((await stream).at(-1)).toMatchObject({ type: 'done', outcome: 'interrupted' });
     expect(await readdir(join(home, 'codex-runtime'))).toEqual([]);
+  });
+  it('draws its plan updates as the plan, and keeps no update_plan of Conch’s', async () => {
+    const { engine, turn } = await setup({
+      signedIn: true,
+      plan: [
+        { step: 'Read the code', status: 'completed' },
+        { step: 'Fix it', status: 'inProgress' },
+        { step: 'Test it', status: 'pending' },
+      ],
+    });
+    expect(engine.plans).toBe('native');
+    expect(await collect(engine.runTurn(turn()))).toContainEqual({
+      type: 'plan',
+      steps: [
+        { title: 'Read the code', status: 'done' },
+        { title: 'Fix it', status: 'active' },
+        { title: 'Test it', status: 'pending' },
+      ],
+    });
+  });
+  it('reads only real plan steps', () => {
+    expect(codexPlan('nope')).toBeUndefined();
+    expect(codexPlan([{ step: 'A', status: 'paused' }, { status: 'pending' }])).toBeUndefined();
   });
   it('publishes account-listed models with honest effective capabilities', async () => {
     const { engine } = await setup({ signedIn: true });

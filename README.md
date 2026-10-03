@@ -1,69 +1,121 @@
-# Conch
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/pearl-dark.svg">
+    <img src=".github/assets/pearl-light.svg" alt="" width="360">
+  </picture>
+</p>
 
-[![CI](https://github.com/georgevibing/conch-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/georgevibing/conch-agent/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+<h1 align="center">Conch</h1>
 
-**A home for the AI assistants and models of your choosing, running on your own
-computer.**
+<p align="center">
+  <b>A calm home for your AI agents. On your own computer.</b>
+</p>
 
-Conch is a small gateway that runs on your machine and a web app you open from
-your laptop, tablet or phone, or as an app on your computer. It drives every provider you connect at once, from
-one model picker, and a conversation can move between them without losing its
-thread. Your chats, memories and settings stay on your computer as plain files in
-`~/.conch`. There's no Conch account and no telemetry.
+<p align="center">
+  Every model you use, the apps you live in and the chat apps you already have,<br>
+  in one place that sets itself up, fixes what breaks, and asks only when it matters.
+</p>
 
-It's made for people who have never opened a terminal: it sets itself up, repairs
-what breaks, and asks only for approvals that matter.
+<p align="center">
+  <a href="https://github.com/georgevibing/conch-agent/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/georgevibing/conch-agent/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-b9a7c4.svg"></a>
+  <img alt="Runs on macOS, Windows and Linux" src="https://img.shields.io/badge/runs_on-macOS_%C2%B7_Windows_%C2%B7_Linux-d9a48f.svg">
+  <img alt="No account, no telemetry" src="https://img.shields.io/badge/account-none_needed-8fb8c9.svg">
+</p>
+
+<p align="center">
+  <a href="#install"><b>Install</b></a>
+  &nbsp;·&nbsp;
+  <a href="#what-it-does"><b>What it does</b></a>
+  &nbsp;·&nbsp;
+  <a href="./apps/docs/content/start/first-chat.md"><b>Your first chat</b></a>
+  &nbsp;·&nbsp;
+  <a href="./apps/docs/content"><b>Documentation</b></a>
+  &nbsp;·&nbsp;
+  <a href="./CONTRIBUTING.md"><b>Contributing</b></a>
+</p>
+
+<br>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/showcase-dark.png">
+    <img src=".github/assets/showcase-light.png" alt="Conch on a computer and a phone: the assistant reads the calendar and mail, then lays out Thursday and what to get ready for it">
+  </picture>
+</p>
+
+## Why Conch
+
+- **One place for every model.** The plans you already pay for, a model on this
+  computer and the keys you have, all at once, from one picker. A chat can move
+  between them without losing its thread.
+- **Yours, and on your computer.** Chats, memories and settings are plain files
+  in `~/.conch`. There's no Conch account and no telemetry.
+- **Made for people who never open a terminal.** It installs what it needs,
+  repairs what breaks, and interrupts only for approvals that matter.
 
 ## What it does
 
-- **Every provider at once.** The plans you already pay for, each signed in with
-  its own program (Claude Code, Codex, GitHub Copilot, Gemini CLI, Grok). A model
-  on this computer (Ollama, LM Studio) or a server of your own. Keys from
-  OpenRouter, Anthropic, OpenAI, Google, Mistral, DeepSeek and more.
-- **Apps, skills and routines for every model.** Gmail, Google Calendar and
-  Drive, Slack, GitHub, Notion, Linear and more from one gallery, plus Agent Skills
-  (`SKILL.md`) and routines that run at a time you read in plain words, or when
-  something happens (an email, a meeting, a page that changed), free until it does.
-  When one that isn't on would help, the chat offers it, and carries on once it's on.
-- **Skills from what worked.** After the assistant works something out, one press
-  keeps how it did it as a skill. Nothing is saved or turned on until you say so.
-- **Memory you can read.** Memories are Markdown files you can edit or delete,
-  and search finds any line in months of chats. Your assistant can look through
-  them too: "like last time" finds the chat it means.
+### 💬 Talk to any model
+
+- **Every provider at once.** Claude Code, Codex, GitHub Copilot, Gemini CLI and
+  Grok through their own sign-in; Ollama, LM Studio or a server of your own; keys
+  from OpenRouter, Anthropic, OpenAI, Google, Mistral, DeepSeek and more.
+- **Long chats on any model.** When a chat outgrows what a model reads at once,
+  its start becomes a summary you can open, and what you said there is learned first.
 - **Questions you answer with a tap.** When the assistant needs your choice, it
   asks with options, days or a number to tap, and the reply carries on.
-- **A tidy list, nothing lost.** Archive a chat to take it out of your list
-  without deleting it. It stays searchable, waits under **Archived**, and comes
-  back by itself when you write in it or it needs you.
-- **Long chats on any model.** When a chat outgrows what a model reads at once,
-  its start becomes a summary you can open, and what you said there is learned
-  first. Nothing to set.
+- **Offline and at a limit.** A message waits until you're back, or the model on
+  this computer answers. At a usage limit, the provider you picked takes over.
+
+### 🧩 Get things done
+
+- **Apps and skills for every model.** Gmail, Google Calendar and Drive, Slack,
+  GitHub, Notion, Linear and more from one gallery, plus Agent Skills (`SKILL.md`).
+  When one that isn't on would help, the chat offers it, and carries on once it's on.
+  What they find shows as it is: a calendar as days, emails, files and messages.
+- **Routines that start Every… or When…** Every weekday at 7:30, or when an email arrives,
+  before a meeting, when a page changes. Watching is free until something happens,
+  each routine says what it costs, and a monthly limit keeps them from running up a bill.
 - **A browser and a terminal.** The assistant uses a browser you can watch and
   take over, and a real shell is a keystroke away.
-- **Reach it from your chat apps.** Telegram, Discord, Slack, WhatsApp, Signal,
-  iMessage, email, Microsoft Teams, Matrix and WeChat.
-- **On your phone.** An installable app over a private Tailscale address, with
-  notifications and voice.
-- **A desktop app.** Conch for macOS, Windows and Linux: its own window, the
-  pearl in the menu bar, and each new release one press away.
-- **Safe hands.** After a chat reads a web page or an email, anything risky asks
-  first. Commands run sealed off from your keys, **Activity** shows everything the
-  assistant did, and **Undo** puts back the files it changed.
-- **Show me.** Charts, pages and documents open beside the chat, sealed off from
-  your data, with every version kept.
+- **Show me.** Charts, pages and documents open beside the chat, with every version kept.
 - **Hand it off.** Send work to the background and keep chatting.
-- **Routines that can't run up a bill.** Each routine says what it costs. A run
-  that does far more than usual stops, routines pause at a monthly limit you set,
-  and on a plan they leave room for your own chats.
-- **Offline and at a limit.** A message waits until you're back online, or the
-  model on this computer answers. At a usage limit, the provider you picked takes
-  over.
-- **It looks after itself.** **Repair everything**, daily backups, and signed
-  releases with one-click updates that go back if something fails.
-- **Bring your things.** Memories, skills and routines from OpenClaw or Hermes.
+
+### 🧠 It learns you
+
+- **Memory you can read.** Memories are Markdown files you can edit or forget.
+  Search finds any line in months of chats, and "like last time" finds the chat it means.
+- **Skills from what worked.** After the assistant works something hard out, one
+  press keeps how it did it as a skill. Nothing is saved or turned on until you say so.
+
+### 📱 Wherever you are
+
+- **Your chat apps.** Telegram, Discord, Slack, WhatsApp, Signal, iMessage, email,
+  Microsoft Teams, Matrix and WeChat.
+- **Your phone.** An installable app over a private Tailscale address, with
+  notifications and voice.
+- **Your desktop.** Conch for macOS, Windows and Linux: its own window, the pearl
+  in the menu bar, and each new release one press away.
+
+### 🛡️ Safe hands, and it looks after itself
+
+- **Asks before anything risky.** After a chat reads a web page or an email,
+  anything risky asks first. Commands run sealed off from your keys.
+- **See it, undo it.** **Activity** shows everything the assistant did, and
+  **Undo** puts back the files it changed.
+- **Repair everything.** One button checks every part of Conch and fixes what it
+  can. Daily backups, and signed updates that go back if something fails.
+
+### 🏡 Make yourself at home
+
+- **Bring your things.** Memories, skills and routines from OpenClaw or Hermes,
+  shown to you first and undoable for a week.
 - **One box for everything.** <kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>K</kbd> finds
   chats, models, skills, apps and settings by name.
+
+There's much more, from archiving chats to passwords and attachments. The
+[documentation](./apps/docs/content) covers every feature, provider and chat app.
 
 ## Install
 
@@ -99,12 +151,61 @@ pnpm install
 pnpm start        # builds and opens http://localhost:4317
 ```
 
+> [!IMPORTANT]
 > **Conch runs as you.** It can read your files and run commands, so treat it like
 > an SSH server. Out of the box only this computer can open it. Read
 > [docs/SECURITY.md](./docs/SECURITY.md) before you put it on a network.
 
 **On your phone:** choose a password in **Settings → Security**, press **Add a
 device**, and scan the QR code. Conch sets up the private address for you.
+
+## Questions
+
+<details>
+<summary><b>What does it cost?</b></summary>
+
+Conch is free and open source. The models are whatever you connect: a plan you
+already pay for, a key you pay per use, or a model on your own computer, which
+costs nothing.
+
+</details>
+
+<details>
+<summary><b>Where do my chats go?</b></summary>
+
+They're kept on your computer, in `~/.conch`. What you send a model goes to the
+provider you chose for that chat, and a model on this computer keeps everything on
+this computer. Conch has no server of its own and sends no telemetry.
+
+</details>
+
+<details>
+<summary><b>Do I need to know how to use a terminal?</b></summary>
+
+No. Download the app and open it. Conch installs what a feature needs, offers the
+one button that finishes a setup, and says in plain words when only you can do
+something, like signing in.
+
+</details>
+
+<details>
+<summary><b>Is it safe to let an assistant work on my computer?</b></summary>
+
+It runs as you, so it's built to be careful: risky actions ask first, especially
+after a chat has read something from outside; commands can't reach your keys;
+everything it did is in **Activity**; and **Undo** puts files back.
+[docs/SECURITY.md](./docs/SECURITY.md) has the details.
+
+</details>
+
+<details>
+<summary><b>I use OpenClaw or Hermes. Can I bring my things?</b></summary>
+
+Yes. Conch finds them and shows you everything first: your memories, skills,
+routines, chat bots and model choice. Bring what you tick, and Undo takes it back
+for a week. It's in **Settings → Memory**, or `pnpm conch import`.
+
+</details>
 
 ## Documentation
 
@@ -152,3 +253,12 @@ vulnerability, see [SECURITY.md](./SECURITY.md) rather than opening an issue.
 ## License
 
 [MIT](./LICENSE). Third-party notices are in [NOTICE.md](./NOTICE.md).
+
+<br>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/pearl-dark.svg">
+    <img src=".github/assets/pearl-light.svg" alt="" width="140">
+  </picture>
+</p>

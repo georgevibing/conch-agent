@@ -1,0 +1,639 @@
+@layer nacre.components {
+  /* ── The frame: rows under a tool's row, no surface of their own ─────── */
+  .view {
+    --tv-pad: var(--nc-space-3);
+    --tv-inset: var(--nc-space-1-5);
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+    padding-block: var(--nc-space-1-5);
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text);
+  }
+
+  .heading {
+    padding-inline: var(--tv-pad);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text-muted);
+    overflow-wrap: anywhere;
+  }
+
+  .rows,
+  .events,
+  .band {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .empty,
+  .free {
+    margin: 0;
+    padding: var(--nc-space-1) var(--tv-pad);
+    color: var(--nc-text-muted);
+  }
+
+  .more {
+    padding-inline: calc(var(--tv-pad) - var(--nc-space-2));
+  }
+
+  .more svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  /* A row you can press: inset, so its wash has corners of its own. */
+  .rowLink,
+  .eventRow,
+  .fileRow,
+  .bandLink {
+    --nc-rim-hover: 0.25;
+    --nc-sheen-hover: 0.06;
+    --nc-sheen-size: 140px;
+
+    min-inline-size: 0;
+    margin-inline: var(--tv-inset);
+    padding: var(--nc-space-1-5) calc(var(--tv-pad) - var(--tv-inset));
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    color: inherit;
+    text-decoration: none;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  a.rowLink,
+  a.eventRow,
+  a.fileRow,
+  a.bandLink {
+    cursor: pointer;
+  }
+
+  @media (hover: hover) {
+    a.rowLink:hover,
+    a.eventRow:hover,
+    a.fileRow:hover,
+    a.bandLink:hover {
+      background-color: var(--nc-wash-1);
+    }
+  }
+
+  a.rowLink:focus-visible,
+  a.eventRow:focus-visible,
+  a.fileRow:focus-visible,
+  a.bandLink:focus-visible,
+  .reply:focus-visible,
+  .moreText:focus-visible,
+  .atLink:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 0;
+  }
+
+  .meta {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+  }
+
+  .metaGlyph {
+    flex: none;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .metaText {
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  /* ── Agenda ──────────────────────────────────────────────────────────── */
+  .agenda {
+    --tv-time: 2.75rem;
+
+    gap: var(--nc-space-2);
+  }
+
+  .agenda[data-clock='12'] {
+    --tv-time: 4rem;
+  }
+
+  .day {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+  }
+
+  .dayHead {
+    display: flex;
+    align-items: baseline;
+    gap: var(--nc-space-1-5);
+    padding-inline: var(--tv-pad);
+    font-size: var(--nc-text-xs);
+  }
+
+  .dayName {
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .day[data-today] .dayName {
+    color: var(--nc-accent-11);
+  }
+
+  .dayDate {
+    color: var(--nc-text-subtle);
+  }
+
+  .band {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1);
+    padding: var(--nc-space-0-5) var(--tv-pad);
+  }
+
+  .bandItem {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  .bandLink {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    padding: var(--nc-space-0-5) var(--nc-space-2) var(--nc-space-0-5) var(--nc-space-1-5);
+    background: color-mix(in oklab, var(--rail, var(--nc-accent-8)) 14%, var(--nc-surface));
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  @media (hover: hover) {
+    a.bandLink:hover {
+      background: color-mix(in oklab, var(--rail, var(--nc-accent-8)) 22%, var(--nc-surface));
+    }
+  }
+
+  .bandLink .rail {
+    align-self: stretch;
+    min-block-size: 0.875rem;
+  }
+
+  .bandTitle {
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .event {
+    position: relative;
+  }
+
+  .eventRow {
+    display: grid;
+    grid-template-columns: var(--tv-time) 3px minmax(0, 1fr);
+    align-items: start;
+    column-gap: var(--nc-space-2-5);
+    padding-block: var(--nc-space-1);
+  }
+
+  /* What's over today steps back, still readable: muted words, a paler rail. */
+  .event[data-past] .eventRow,
+  .event[data-past] .until,
+  .event[data-past] .meta {
+    color: var(--nc-text-muted);
+  }
+
+  .event[data-past] .rail {
+    opacity: 0.45;
+  }
+
+  .when {
+    display: flex;
+    flex-direction: column;
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--nc-weight-medium);
+    white-space: nowrap;
+  }
+
+  .until {
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-regular);
+    color: var(--nc-text-muted);
+  }
+
+  .rail {
+    display: block;
+    inline-size: 3px;
+    align-self: stretch;
+    border-radius: 999px;
+    background: var(--rail, var(--nc-accent-8));
+  }
+
+  .what {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    min-inline-size: 0;
+  }
+
+  .title {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .titleText {
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .callGlyph {
+    flex: none;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-muted);
+  }
+
+  /* Now: a thin accent line with a dot on the time column. */
+  .now {
+    position: relative;
+    block-size: 0;
+    margin-inline: var(--tv-pad);
+    border-block-start: 1.5px solid var(--nc-accent-9);
+  }
+
+  .now::before {
+    content: '';
+    position: absolute;
+    inset-block-start: -4.25px;
+    inset-inline-start: -3px;
+    inline-size: 7px;
+    block-size: 7px;
+    border-radius: 50%;
+    background: var(--nc-accent-9);
+  }
+
+  /* ── Mail ────────────────────────────────────────────────────────────── */
+  .mailRow {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .mail[data-replies] .mailRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .rowLink {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .mailTop {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+  }
+
+  .unread {
+    flex: none;
+    inline-size: 0.4375rem;
+    block-size: 0.4375rem;
+    border-radius: 50%;
+  }
+
+  .unread[data-unread] {
+    background: var(--nc-accent-9);
+  }
+
+  .sender {
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--nc-text-muted);
+  }
+
+  .mailRow[data-unread] .sender {
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .clip {
+    flex: none;
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .date {
+    flex: none;
+    margin-inline-start: auto;
+    padding-inline-start: var(--nc-space-2);
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-subtle);
+    white-space: nowrap;
+  }
+
+  .mailRow[data-unread] .date {
+    color: var(--nc-text-muted);
+  }
+
+  .mailLine {
+    display: block;
+    padding-inline-start: calc(0.4375rem + var(--nc-space-1-5));
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--nc-text-subtle);
+  }
+
+  .subject {
+    color: var(--nc-text);
+  }
+
+  .mailRow[data-unread] .subject {
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .reply {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    block-size: var(--nc-control-xs);
+    margin-inline-end: var(--tv-inset);
+    padding-inline: var(--nc-space-2);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text-muted);
+    font: inherit;
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    cursor: pointer;
+    transition:
+      opacity var(--nc-duration-fast) var(--nc-ease-out),
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .reply svg {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+  }
+
+  .reply:active {
+    transform: scale(0.975);
+    transition-duration: 0s;
+  }
+
+  /*
+   * Quiet: on touch it's always there, in a column of its own; with a pointer
+   * it waits for the row, then floats over the row's end as a small chip.
+   */
+  @media (hover: hover) {
+    .mail[data-replies] .mailRow {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .reply {
+      position: absolute;
+      inset-block-start: calc(var(--nc-space-1-5) - 0.25rem);
+      inset-inline-end: calc(var(--tv-inset) + var(--nc-space-1));
+      margin: 0;
+      background: var(--nc-surface);
+      box-shadow:
+        inset 0 0 0 1px var(--nc-border-subtle),
+        var(--nc-elevation-1);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .mailRow:hover .reply,
+    .mailRow:focus-within .reply {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* The chip takes the date's place while it's there. */
+    .mail[data-replies] .mailRow:hover .date,
+    .mail[data-replies] .mailRow:focus-within .date {
+      visibility: hidden;
+    }
+
+    .reply:hover {
+      background: var(--nc-surface-hi);
+      color: var(--nc-text);
+    }
+  }
+
+  /* ── Files ───────────────────────────────────────────────────────────── */
+  .fileRow {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: var(--nc-space-2-5);
+  }
+
+  .fileIcon {
+    --file-h: var(--nc-neutral-h);
+    --file-c: var(--nc-neutral-c);
+
+    display: grid;
+    place-items: center;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    color: light-dark(
+      oklch(0.5 calc(var(--file-c) * 0.95) var(--file-h)),
+      oklch(0.83 calc(var(--file-c) * 0.7) var(--file-h))
+    );
+    background: light-dark(
+      oklch(0.95 calc(var(--file-c) * 0.28) var(--file-h)),
+      oklch(0.3 calc(var(--file-c) * 0.4) var(--file-h))
+    );
+  }
+
+  .fileIcon svg {
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
+  }
+
+  .fileIcon[data-kind='doc'] {
+    --file-h: var(--nc-info-h);
+    --file-c: 0.13;
+  }
+
+  .fileIcon[data-kind='sheet'] {
+    --file-h: var(--nc-success-h);
+    --file-c: 0.13;
+  }
+
+  .fileIcon[data-kind='slides'] {
+    --file-h: var(--nc-warning-h);
+    --file-c: 0.15;
+  }
+
+  .fileIcon[data-kind='pdf'] {
+    --file-h: var(--nc-danger-h);
+    --file-c: 0.17;
+  }
+
+  .fileIcon[data-kind='image'] {
+    --file-h: var(--nc-accent-h);
+    --file-c: var(--nc-accent-c);
+  }
+
+  .fileText {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-inline-size: 0;
+  }
+
+  .fileName {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .open {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+  }
+
+  @media (hover: hover) {
+    .open {
+      opacity: 0;
+      transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+    }
+
+    a.fileRow:hover .open,
+    a.fileRow:focus-visible .open {
+      opacity: 1;
+    }
+  }
+
+  /* ── Messages ────────────────────────────────────────────────────────── */
+  .messages .rows {
+    gap: var(--nc-space-1-5);
+  }
+
+  .message {
+    display: grid;
+    grid-template-columns: 1.5rem minmax(0, 1fr);
+    column-gap: var(--nc-space-2);
+    padding-inline: var(--tv-pad);
+  }
+
+  .message[data-continued] {
+    margin-block-start: calc(-1 * var(--nc-space-1));
+  }
+
+  .avatar {
+    display: flex;
+    padding-block-start: 1px;
+  }
+
+  .body {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .byline {
+    display: flex;
+    align-items: baseline;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+  }
+
+  .author {
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  .at {
+    flex: none;
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-subtle);
+  }
+
+  .atLink {
+    border-radius: var(--nc-radius-xs);
+    color: inherit;
+    text-decoration: none;
+  }
+
+  @media (hover: hover) {
+    .atLink:hover {
+      color: var(--nc-text);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+  }
+
+  .text {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.45;
+  }
+
+  .text[data-clamped] {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+  }
+
+  .moreText {
+    align-self: flex-start;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--nc-radius-xs);
+    background: none;
+    color: var(--nc-accent-11);
+    font: inherit;
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    cursor: pointer;
+  }
+
+  @media (hover: hover) {
+    .moreText:hover {
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+  }
+}

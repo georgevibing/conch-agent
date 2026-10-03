@@ -7,8 +7,10 @@ import type {
   LoginMethod,
   LoginState,
   PermissionMode,
+  PlanStep,
   SkillSource,
   ToolStatus,
+  ToolView,
   TurnProblem,
   Usage,
   UsageKind,
@@ -25,6 +27,11 @@ export interface HostToolResult {
   /** Trusted tool guarantee: no write was attempted (e.g. approval declined). */
   effect?: 'not-executed';
   images?: { data: string; mimeType: 'image/jpeg' | 'image/png' }[];
+  /**
+   * What it found, drawn as it is for the person (an agenda, emails, files,
+   * messages: ADR 0060). Never shown to the model, which reads `text`.
+   */
+  view?: ToolView;
 }
 
 /**
@@ -225,8 +232,20 @@ export type EngineEvent =
   | { type: 'thinking'; messageId: string; delta: string }
   | { type: 'message-done'; messageId: string }
   | { type: 'tool-start'; toolUseId: string; name: string; input: unknown }
-  | { type: 'tool-end'; toolUseId: string; status: ToolStatus; output?: string }
+  | {
+      type: 'tool-end';
+      toolUseId: string;
+      status: ToolStatus;
+      output?: string;
+      /** A host tool's `HostToolResult.view`, passed on for the person (ADR 0060). */
+      view?: ToolView;
+    }
   | { type: 'notice'; code: string; message: string }
+  /**
+   * The engine's own plan for this turn, as it stands now (ADR 0060): Claude
+   * Code's todo list, Codex's plan updates. Each one replaces the one before.
+   */
+  | { type: 'plan'; steps: PlanStep[] }
   /** Integrations that failed to connect at the start of the turn. */
   | { type: 'mcp-status'; failed: { name: string; error: string }[] }
   /**
@@ -360,6 +379,12 @@ export interface Engine {
    * can't do.
    */
   readonly hostTools?: boolean;
+  /**
+   * The engine keeps a plan of its own and reports it as `plan` events
+   * (ADR 0060). Absent: Conch offers its `update_plan` tool instead, when the
+   * engine can use Conch's tools.
+   */
+  readonly plans?: 'native';
   /** Commands are always sealed by Conch, independent of the native-provider toggle. */
   readonly commandSandbox?: 'conch';
   /** Each turn uses Conch’s complete handoff, not a provider-native resume ID. */

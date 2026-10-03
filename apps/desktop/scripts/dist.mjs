@@ -65,7 +65,7 @@ const builderArch = builder.Arch[archName];
 
 /** @type {import('electron-builder').Configuration} */
 const config = {
-  appId: 'io.github.georgevibing.conch',
+  appId: 'com.conchagent.app',
   productName: 'Conch',
   copyright: 'Copyright © 2026 George Kal',
   directories: { output: join(here, 'out'), buildResources: join(here, 'build') },
@@ -76,7 +76,7 @@ const config = {
     version: root.version,
     description: root.description,
     // The .deb wants one; the Linux desktop links the window to its entry by desktopName.
-    homepage: `https://github.com/${owner}/${repo_}`,
+    homepage: root.homepage,
     desktopName: 'conch.desktop',
     main: 'dist/main.cjs',
     // Read by the app: a signed Mac app can replace itself (ADR 0054).
@@ -124,7 +124,8 @@ const config = {
   },
   dmg: { title: 'Conch ${version}' },
   win: {
-    icon,
+    // The pearl alone, drawn at every size Windows uses (scripts/icons.mjs).
+    icon: join(repo, 'apps', 'web', 'public', 'icons', 'conch.ico'),
     target: [{ target: 'nsis', arch: [archName] }],
   },
   nsis: {

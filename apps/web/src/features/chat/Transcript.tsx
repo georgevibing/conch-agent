@@ -31,6 +31,8 @@ import { ChatFiles, turnChanges } from '../undo/ChatFiles';
 import { TaskChatCard } from '../tasks/TaskChatCard';
 import { RoutineInstruction } from '../routines/RunBanner';
 import { NextReplies } from '../replies/NextReplies';
+import { endedPlans } from '../plans/fold';
+import { PlanApprovalItem, PlanItem, isPlanApproval } from '../plans/PlanItems';
 import styles from './Transcript.module.css';
 import { VaultApprovalItem, VaultRequestItem } from './VaultItems';
 import type { PendingMessage } from '../../live/store';
@@ -124,6 +126,20 @@ function placeSuggestions(items: TranscriptItem[], holdLast: boolean): Transcrip
     out.push(item);
   }
   return holdLast ? out : [...out, ...held];
+}
+
+/** Plan mode's question is its own card: the row of the tool that asked would say it twice. */
+function withoutPlanTools(items: TranscriptItem[]): TranscriptItem[] {
+  return items.filter((i) => !(i.kind === 'tool' && i.name === 'ExitPlanMode'));
+}
+
+/** The plan drawn in the same turn before an item, if any. */
+function planBefore(items: TranscriptItem[], id: string) {
+  const at = items.findIndex((i) => i.id === id);
+  const plan = items
+    .slice(0, at)
+    .findLast((i) => i.kind === 'plan' || i.kind === 'user' || i.kind === 'turn-end');
+  return plan?.kind === 'plan' ? plan.steps : undefined;
 }
 
 function timeOf(item: TranscriptItem): number | undefined {
@@ -221,6 +237,8 @@ export function Transcript({
   const lastUserId = items.findLast((i) => i.kind === 'user')?.id;
   const turnRunning = running || pending.length > 0;
   const lastFilesId = items.findLast((i) => i.kind === 'files')?.id;
+  // A plan folds to one line once its turn ends (ADR 0060).
+  const ended = endedPlans(items);
   // Between steps (a tool finished, a reply paused): a quieter wait that appears only if it lingers.
   const between =
     busy &&
@@ -236,6 +254,7 @@ export function Transcript({
       last?.kind === 'task' ||
       last?.kind === 'integration-issue' ||
       last?.kind === 'routed' ||
+      last?.kind === 'plan' ||
       (last?.kind === 'browser' && last.step.status !== 'running') ||
       (last?.kind === 'handoff' && last.handoff.state !== 'waiting') ||
       (last?.kind === 'permission' && Boolean(last.decision)) ||
@@ -245,7 +264,7 @@ export function Transcript({
   return (
     <MessageList className={styles.list} aria-label="Conversation" overlay={overlay}>
       <div ref={columnRef} className={styles.column}>
-        {blocks(placeSuggestions(items, turnRunning)).map((block) => (
+        {blocks(placeSuggestions(withoutPlanTools(items), turnRunning)).map((block) => (
           <Arrival key={block.key} live={block.at >= openedAt - CLOCK_SLACK_MS}>
             {block.tools && (
               <div className={styles.tools}>
@@ -294,11 +313,16 @@ export function Transcript({
             {block.item?.kind === 'vault-request' && (
               <VaultRequestItem item={block.item} name={name} />
             )}
-            {block.item?.kind === 'permission' && !block.item.browser && !block.item.vault && (
-              <PermissionCard
+            {block.item?.kind === 'plan' && (
+              <PlanItem item={block.item} ended={ended.has(block.item.id)} />
+            )}
+            {block.item && isPlanApproval(block.item) && block.item.kind === 'permission' && (
+              <PlanApprovalItem
                 item={block.item}
                 name={name}
+                steps={planBefore(items, block.item.id)}
                 onRespond={(d) => onRespond((block.item as { id: string }).id, d)}
+                focusComposer={focusComposer}
               />
             )}
             {block.item?.kind === 'question' && (
@@ -309,6 +333,16 @@ export function Transcript({
                 waiting={running}
               />
             )}
+            {block.item?.kind === 'permission' &&
+              !block.item.browser &&
+              !block.item.vault &&
+              !isPlanApproval(block.item) && (
+                <PermissionCard
+                  item={block.item}
+                  name={name}
+                  onRespond={(d) => onRespond((block.item as { id: string }).id, d)}
+                />
+              )}
             {block.item?.kind === 'taint' && (
               <TaintItem item={block.item} first={block.item.id === firstTaint} />
             )}

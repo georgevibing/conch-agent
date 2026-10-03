@@ -229,12 +229,20 @@ src/
   browser-bound consent state. Credentials stay in sealed `google.secrets.json`.
   Gmail is draft-only, Calendar read-only, Drive metadata-only. See
   [ADR 0037](./docs/adr/0037-direct-google-accounts.md).
+  What a host tool found can come back as `HostToolResult.view` (a `ToolView`:
+  agenda, mail, files, messages) beside the text the model reads: `google/views.ts`
+  and `slack/views.ts` fill it. Every engine passes it on with `tool-end` (Claude
+  Code by the MCP request's `claudecode/toolUseId`), and `conversations/views.ts`
+  checks it, drops non-web links, redacts it and gives the host tool a
+  `tool.finished` row only then; the web draws it with Nacre `AgendaView`,
+  `MailList`, `FileList` and `ChatMessages` (ADR 0060 §7).
   Outbound requests pass the SSRF guard (`integrations/net.ts`). See
   [ADR 0009](./docs/adr/0009-integrations.md).
 - **Connect from the chat** ([ADR 0021](./docs/adr/0021-connect-from-chat.md), [ADR 0060](./docs/adr/0060-the-chat-knows-conch.md)). Every offer goes through `OfferDesk` (`offers/desk.ts`). Before a turn, `IntegrationService.suggest` reads the person's words for catalog `cues` (`integrations/cues.ts`) and the desk logs at most one `offer` (`by: 'cue'`); the prompt says the app isn't connected (`notConnectedPrompt`). Providers with host tools also get the map, `## What Conch can turn on` (`offers/map.ts`: apps not connected and skills Off or When I ask, 2,400 characters at most), and the `offer` tool (`offers/tools.ts`, not in unattended runs). The desk drops an offer that isn't in the map, is muted (`preferences.mutedSuggestions`, skills as `skill:<id>`), was offered in the chat before, is the second this turn, comes from the assistant after the chat read something untrusted, or has nobody to press it.
   `POST /api/conversations/:id/offers/:offerId/accept` checks the app is connected or the skill on (`skill: 'on' | 'once'` turns it on or expands it once) and calls `ConversationManager.carryOn`: `offer.resolved accepted`, then a turn whose prompt repeats `resume.request`, the person's own words, with no new `user.message`. It runs once across devices and retries, and waits for a reply that's running. A newer message logs `offer.resolved expired`; **Not now** is `…/dismiss`. In a tab (phones), the OAuth flow carries `chat` and `offer` (`SignInReturn`), and `/oauth/callback` goes back to `/c/:id?offer=…`, where the web takes the offer by itself.
   The web draws Nacre `OfferCard` (`features/offers/OfferItem.tsx`) under the reply, with the connect dialog in place; a taken offer folds to a quiet line where the chat carried on, with `OfferAlsoTry` (the catalog's `examples`) under the answer. Older logs' `integration.suggestion` events are drawn as the same card.
 - **Replies to send next** ([ADR 0060](./docs/adr/0060-the-chat-knows-conch.md) §5, `replies/`). Each attended turn on a provider with Conch's tools gets the host tool `suggest_replies` (`replies/tools.ts`: one to three, trimmed, deduped, filler dropped; the last call wins). As a turn finishes, `TurnReplies.finish` (`replies/turn.ts`) picks one `replies` event, logged after `turn.completed`: the assistant's when the chat has no `taint`, else Conch's own rules over the turn's text (`replies/conch.ts`, an ordered `RULES` list: a Markdown table with a numeric column gets “Show it as a chart”, offered only to a model that can use tools), else none. Nothing for a turn that didn't succeed, an unattended run (`extras` or an `origin`), or while something in the turn still waits for the person (`waitingOnYou`: an open offer, question, approval, handoff, drafted routine, app issue). The web folds it into `ConversationView.replies` (`features/replies/latest.ts`), cleared by any newer event but the closing bookkeeping (`status: idle`, `title`, `options`, `notice`), and `NextReplies` draws Nacre `ReplyChips` under the reply while idle; a press sends through the composer's path with the draft kept.
+- **The plan, ticking itself off** ([ADR 0060](./docs/adr/0060-the-chat-knows-conch.md) §6, `plans/`). An engine that keeps its own plan declares `Engine.plans = 'native'` and yields `{ type: 'plan', steps }` stream events: Claude Code from `TodoWrite` or `TaskCreate`/`TaskUpdate` (`engines/claude-code/plan.ts`, the active step named by its `activeForm`, the tool rows kept out), Codex from `turn/plan/updated` (`codexPlan`), and an ACP program from its `plan` session update (`acpPlan`). Any other engine with host tools gets `update_plan` (`plans/tools.ts`). Either way `TurnPlan` (`plans/turn.ts`) cleans the steps (`plans/steps.ts`: one line each, at most 30) and logs a `plan` event per change. The web folds them into one `plan` item per turn, where it first appeared (`features/plans/fold.ts`), drawn by Nacre `PlanChecklist` and folded once a `turn-end` follows. Plan mode's `ExitPlanMode` permission is drawn as Nacre `PlanApproval` (`input.plan` as Markdown) with **Start** (allow) and **Keep planning** (deny, which tells Claude Code to stay in plan mode).
 - **Setup** (`setup/`): what a feature needs from this computer (an app, a program)
   and getting it. A need finds itself where it really lives (`PATH`, Windows app
   aliases, macOS app bundles), installs itself through winget/Homebrew with
@@ -941,6 +949,15 @@ files with `pnpm docs:build`. The front page is at `/`, the documentation at `/d
   named by a sentence; the chart is the one left live, so Chart and Table can be pressed. Counts and names come from `virtual:conch-reference`. The documentation
   (its guides, search and sidebar) is loaded only when someone goes there, so the front
   page doesn't carry it.
+- **Drawn ahead of time, for search.** `pnpm docs:build` builds the site twice, for the
+  browser and for Node (`src/prerender.tsx`), then `scripts/prerender.mjs` writes every
+  page as HTML at its own address (`start/install.html`, `404.html`) with its title,
+  description, canonical address, Open Graph tags and schema.org JSON-LD
+  (`src/site/head.ts`), plus `sitemap.xml`, `robots.txt`, `CNAME` and the installers.
+  In the browser, the page's code arrives first and the live page replaces the drawn one
+  in one go; `useHead` keeps `<head>` true as people move on. The site lives at
+  [conchagent.com](https://conchagent.com) (`SITE_URL`), published by
+  `.github/workflows/site.yml`.
 - **Checked** by `src/content.test.ts` in `pnpm check`: a provider or channel without a
   guide, a dead link, an unknown part or an unlisted keyboard shortcut fails with the
   fix in its message (AGENTS.md working agreement 13). `src/landing/Landing.test.tsx`

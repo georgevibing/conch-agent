@@ -17,6 +17,8 @@ Say what you want: "chart my spending by month", "make me a tip calculator", "dr
 
 A card appears in the chat and the panel opens beside it. On a phone it slides over the chat. Close the panel when you're done, and press **Open** on the card to bring it back.
 
+The card for a chart, a table, a diagram or a picture shows a small picture of it, right in the chat, so you can see what was made without opening anything. It's only to look at: press anywhere on the card to open it beside the chat. Pages and documents open to be seen.
+
 ## Use it and change it
 
 The panel has three tabs. **View** is the thing itself, called **Use** for a page. **Code** is its text. **Changes** shows what is different from the version before.

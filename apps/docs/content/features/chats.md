@@ -69,6 +69,21 @@ From there:
 
 Choose **Delete**, from the list or from **Archived chats**, and confirm. The chat and what was attached only to it are removed from Conch. Anything your assistant remembered from it stays in [memory](./memory.md), where you can forget it too.
 
+## Its plan, as it works
+
+When something takes a few steps, like tidying a folder or fixing a bug, your assistant writes its plan into the reply as a short checklist. You see where it's up to while it works: finished steps get a tick, the one it's doing now shows what it's doing (“Running the tests”), and the rest wait their turn. A long plan shows the steps around the work, with **Show all** for the rest.
+
+When the reply ends, the plan folds to one line, like **Plan · 5 of 5 done**. Press it to see the steps again. A reply you stopped keeps its plan as far as it got.
+
+Claude Code and Codex keep a plan of their own, and Conch draws it. Other providers that can use Conch's tools get the same checklist. A model that can only chat doesn't keep one.
+
+### Plan only
+
+In **Plan only** mode, your assistant looks around and plans, but changes nothing. With Claude Code, when the plan is ready it's shown to you in full, with two buttons:
+
+- **Start** begins the work.
+- **Keep planning** stays in plan mode, and puts you back in the message box to say what to change.
+
 ## Long chats
 
 A chat can go on as long as you like, with any model. Each model reads only so much at once, so when a chat grows past that, Conch writes a short summary of its start. The model reads the summary instead of the oldest messages, and carries on.

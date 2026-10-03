@@ -190,6 +190,40 @@ export const Card: Story = {
   ),
 };
 
+/**
+ * A chart, a table or a picture shows a small preview in its card, so the
+ * chat says what was made without opening anything. Only to look at:
+ * pressing anywhere opens it beside the chat.
+ */
+export const CardWithPreview: Story = {
+  parameters: { layout: 'padded' },
+  decorators: [
+    (Story) => (
+      <div style={{ display: 'grid', gap: 12, maxInlineSize: 480 }}>
+        <Story />
+      </div>
+    ),
+  ],
+  render: () => (
+    <>
+      <ArtifactCard
+        title="Visitors this week"
+        kind="chart"
+        version={1}
+        preview={<ArtifactChart chart={week} height={116} compact />}
+      />
+      <ArtifactCard
+        title="Budget"
+        kind="table"
+        version={2}
+        action="updated"
+        note="Added a total"
+        preview={<ArtifactTable csv={budget} label="Budget" maxRows={5} compact />}
+      />
+    </>
+  ),
+};
+
 export const Charts: Story = {
   parameters: { layout: 'padded' },
   decorators: [

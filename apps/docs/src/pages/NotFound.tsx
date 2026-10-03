@@ -1,15 +1,13 @@
 import { Button, EmptyState } from '@conch/nacre';
 import { Compass } from 'lucide-react';
-import { useEffect } from 'react';
 import { Link } from 'react-router';
 
+import { NOT_FOUND_HEAD, useHead } from '../site/head';
 import styles from './NotFound.module.css';
 
 /** An address with no page behind it: say so, and offer the way back. */
 export function NotFound() {
-  useEffect(() => {
-    document.title = 'Not here · Conch';
-  }, []);
+  useHead(NOT_FOUND_HEAD);
   return (
     <main id="content" className={styles.center}>
       <EmptyState

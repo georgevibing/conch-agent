@@ -75,6 +75,30 @@ by hand, with a live preview`, not what changed in the code.
 - `chore`, `test`, `docs`, `refactor`, `ci` and `build` never appear in the
   notes.
 
+## The website
+
+[conchagent.com](https://conchagent.com) is `apps/docs`: the front page, the
+documentation, and the installers at `/install.sh` and `/install.ps1`.
+`.github/workflows/site.yml` builds it and publishes it to GitHub Pages on every push to
+`main`, or from the Actions tab (**Website**).
+
+The first time:
+
+1. In the repository's **Settings → Pages**, set **Source** to **GitHub Actions**, then
+   enter `conchagent.com` as the **Custom domain**.
+2. At the domain's DNS provider, point the bare domain at GitHub Pages with four `A`
+   records (`185.199.108.153`, `185.199.109.153`, `185.199.110.153`,
+   `185.199.111.153`), four `AAAA` records (`2606:50c0:8000::153`,
+   `2606:50c0:8001::153`, `2606:50c0:8002::153`, `2606:50c0:8003::153`), and a
+   `CNAME` for `www` to `georgevibing.github.io`.
+3. Once the check passes, tick **Enforce HTTPS**. Verifying the domain in your GitHub
+   account's **Settings → Pages** keeps anyone else from claiming it.
+4. Add the site to Google Search Console and Bing Webmaster Tools, and submit
+   `https://conchagent.com/sitemap.xml`.
+
+The address lives in one place, `SITE_URL` in `apps/docs/src/site/config.ts`: canonical
+links, the sitemap, `CNAME` and the install lines all follow it.
+
 ## The desktop apps
 
 Pushing a release tag also builds the app for every platform
