@@ -74,6 +74,10 @@
   GitHub, Notion, Linear and more from one gallery, plus Agent Skills (`SKILL.md`).
   When one that isn't on would help, the chat offers it, and carries on once it's on.
   What they find shows as it is: a calendar as days, emails, files and messages.
+- **Apps it makes for you.** Say what you want ("remember when I water my plants"),
+  and Conch builds an app: tools every model can use, a page that looks like Conch,
+  sealed off from your files and the web. It's added when you press the button, shared
+  on GitHub or as a file in one press, and apps others shared are one link away.
 - **Routines that start Every… or When…** Every weekday at 7:30, or when an email arrives,
   before a meeting, when a page changes. Watching is free until something happens,
   each routine says what it costs, and a monthly limit keeps them from running up a bill.
