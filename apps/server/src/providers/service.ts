@@ -44,6 +44,15 @@ const SERVER_KEY: KeyForm = {
   canSignIn: false,
 };
 
+/** Where an address answers from (scheme, host and port), or nothing it could be. */
+function origin(url: string | undefined): string | undefined {
+  try {
+    return url ? new URL(url).origin : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Detection talks to other programs and other people's servers; don't hang on it. */
 const DETECT_TIMEOUT_MS = 30_000;
 /** Listing models can mean starting a CLI; one slow provider mustn't hold up the picker. */
@@ -394,13 +403,25 @@ export class ProviderService {
       throw new ProviderError('There’s no server like that here.', 'not-found');
     let url = current.url;
     let kind = current.kind;
+    let moved = false;
     if (body.url && body.url !== current.url) {
-      const saved = await this.deps.keys.value(id).catch(() => undefined);
-      const probe = await this.probeServer(body.url, saved);
+      // A key belongs to the server it was given for: the new address is looked at
+      // without it, and only a server at the same origin is shown it.
+      let probe = await this.probeServer(body.url);
+      const sameOrigin = Boolean(probe.url) && origin(probe.url) === origin(current.url);
+      if (!probe.ok && probe.needsKey && sameOrigin) {
+        const saved = await this.deps.keys.value(id).catch(() => undefined);
+        if (saved) probe = await this.probeServer(body.url, saved);
+      }
       if (!probe.ok || !probe.url)
-        throw new ProviderError(probe.message ?? 'Nothing answered there.');
+        throw new ProviderError(
+          probe.needsKey && !sameOrigin
+            ? 'That server asks for a key. Remove this one and add it again with its own key.'
+            : (probe.message ?? 'Nothing answered there.'),
+        );
       url = probe.url;
       kind = probe.kind;
+      moved = !sameOrigin;
     }
     const { kind: _old, ...rest } = current;
     const next: ServerConfig = {
@@ -409,6 +430,8 @@ export class ProviderService {
       url,
       ...(kind && { kind }),
     };
+    // Somewhere else now: the old server's key stays behind, never sent to the new one.
+    if (moved) await this.deps.keys.clear(id);
     this.#servers = await this.deps.settings.setServer(id, next);
     this.deps.engines.set(id, this.deps.makeServer(next));
     return this.list();
@@ -591,7 +614,14 @@ export class ProviderService {
     const status = await this.#detect(engine, true);
     if (status.state === 'signed-out' || status.state === 'error') {
       await this.#restore(id, previous);
-      throw new ProviderError(status.message ?? `${name} didn’t accept that key.`);
+      // Said where a key is being added: "add one in Settings" would point at this very page.
+      const said = (status.message ?? `${name} didn’t accept that key.`).replace(
+        /\s*Add a new one in Settings\.$/,
+        '',
+      );
+      throw new ProviderError(
+        status.state === 'signed-out' ? `${said} Check that you copied all of it.` : said,
+      );
     }
     return this.list();
   }

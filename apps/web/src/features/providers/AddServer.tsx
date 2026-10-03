@@ -23,6 +23,26 @@ import { SERVER_TILE } from './words';
 /** Long enough to stop typing; short enough to feel live. */
 const LOOK_AFTER_MS = 600;
 
+/** The host an address points at, however it was typed (`gpu-box:8000`, `https://…`). */
+function hostOf(address: string): string | undefined {
+  if (!address) return undefined;
+  try {
+    return new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(address) ? address : `http://${address}`).host;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Only this computer's own addresses: Ollama and LM Studio's cards talk to them, not to others. */
+function onThisComputer(address: string | undefined): boolean {
+  const name = address
+    ? hostOf(address)
+        ?.replace(/:\d+$/, '')
+        .replace(/^\[|\]$/g, '')
+    : '';
+  return name === 'localhost' || name === '::1' || /^127\./.test(name ?? '');
+}
+
 /** What the address line says, from what Conch found there. */
 function probeWords(probe: ServerProbe): string {
   if (probe.ok) {
@@ -58,12 +78,17 @@ export function AddServer({ presets, found, onBack, onAdded, onOpen }: AddServer
   const [name, setName] = useState('');
   const [key, setKey] = useState('');
   const [preset, setPreset] = useState<ServerPreset>();
+  /** The host the key was typed for: it's only ever shown to that one. */
+  const [keyHost, setKeyHost] = useState<string>();
   /** What Conch found, and for which address and key: an answer to an older question is no answer. */
   const [answer, setAnswer] = useState<{ ask: string; probe: ServerProbe }>();
   const add = useAddServer();
 
   const typed = url.trim();
-  const typedKey = key.trim();
+  const host = hostOf(typed);
+  // A key typed for one address isn't sent to look at another.
+  const keyElsewhere = Boolean(key.trim()) && keyHost !== undefined && keyHost !== host;
+  const typedKey = keyElsewhere ? '' : key.trim();
   const ask = `${typed}\n${typedKey}`;
   const lookable = typed.length >= 4;
   const probe = lookable && answer?.ask === ask ? answer.probe : undefined;
@@ -95,6 +120,11 @@ export function AddServer({ presets, found, onBack, onAdded, onOpen }: AddServer
   }, [ask, lookable, typed, typedKey]);
 
   const choose = (next: ServerPreset) => {
+    // Another service: the key typed for the last one stays out of it.
+    if (next.id !== preset?.id) {
+      setKey('');
+      setKeyHost(undefined);
+    }
     setPreset(next);
     setUrl(next.url);
     setName(next.name);
@@ -106,7 +136,7 @@ export function AddServer({ presets, found, onBack, onAdded, onOpen }: AddServer
       const { id } = await add.mutateAsync({
         url: url.trim(),
         ...(name.trim() && { name: name.trim() }),
-        ...(key.trim() && { key: key.trim() }),
+        ...(typedKey && { key: typedKey }),
       });
       toast.success(
         `${name.trim() || probe?.kind || 'Your server'} is connected. Its models are in the picker.`,
@@ -178,7 +208,7 @@ export function AddServer({ presets, found, onBack, onAdded, onOpen }: AddServer
               </Field.Description>
             )}
           </Field>
-          {probe?.kind && OWN_CARDS[probe.kind] && onOpen && (
+          {probe?.kind && OWN_CARDS[probe.kind] && onOpen && onThisComputer(probe.url) && (
             <div>
               <Button
                 type="button"
@@ -204,12 +234,17 @@ export function AddServer({ presets, found, onBack, onAdded, onOpen }: AddServer
             <Field.Label>{wantsKey ? 'Key' : 'Key, if it asks for one'}</Field.Label>
             <PasswordInput
               value={key}
-              onChange={(e) => setKey(e.target.value)}
+              onChange={(e) => {
+                setKey(e.target.value);
+                setKeyHost(host);
+              }}
               autoComplete="off"
               spellCheck={false}
             />
-            <Field.Description>
-              Sent to this server and nowhere else, and kept like every key in Conch.
+            <Field.Description aria-live="polite">
+              {keyElsewhere
+                ? `That key was typed for ${keyHost}. Type it again to use it with this address.`
+                : 'Sent to this server and nowhere else, and kept like every key in Conch.'}
               {preset?.keyUrl && (
                 <>
                   {' '}
@@ -224,7 +259,7 @@ export function AddServer({ presets, found, onBack, onAdded, onOpen }: AddServer
             <Button
               type="submit"
               loading={add.isPending}
-              disabled={!probe?.ok && !(probe?.needsKey && key.trim())}
+              disabled={!probe?.ok && !(probe?.needsKey && typedKey)}
             >
               Add server
             </Button>
@@ -248,7 +283,6 @@ export function AddServer({ presets, found, onBack, onAdded, onOpen }: AddServer
                 tagline={p.tagline}
                 local={p.local}
                 note={p.local ? 'On your computer' : 'Needs its key'}
-                connected={preset?.id === p.id}
                 onOpen={() => choose(p)}
               />
             </li>

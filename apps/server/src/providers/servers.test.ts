@@ -124,6 +124,15 @@ describe('looking at an address before adding it', () => {
     });
   });
 
+  it('isn’t ready to add a service that lists its models to anyone until it has a key', async () => {
+    const fetch = fakeFetch(() => jsonResponse({ data: [{ id: 'openai/gpt-oss-120b' }] }));
+    expect(await probeServer(fetch.fetch, 'https://router.huggingface.co/v1')).toMatchObject({
+      ok: false,
+      needsKey: true,
+      message: 'This service lists its models to anyone, but chatting needs its key.',
+    });
+  });
+
   it('sends Ollama and LM Studio to their own cards', async () => {
     const ollama = fakeFetch((call) =>
       call.url === 'http://127.0.0.1:11434/'

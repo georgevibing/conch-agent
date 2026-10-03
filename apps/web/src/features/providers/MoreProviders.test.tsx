@@ -222,6 +222,77 @@ describe('more providers', () => {
     }
   });
 
+  it('keeps a key with the service it was typed for', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const preset = (id: string, name: string, url: string) => ({
+        id,
+        name,
+        tagline: name,
+        url,
+        local: false,
+        keyUrl: `https://${id}.example/keys`,
+        color: '#123456',
+      });
+      const calls = mockFetch({
+        'GET /api/state': () => appState(),
+        'GET /api/providers': () =>
+          list({
+            serverPresets: [
+              preset('together', 'Together AI', 'https://api.together.ai/v1'),
+              preset('fireworks', 'Fireworks AI', 'https://api.fireworks.ai/inference/v1'),
+            ],
+          }),
+        'POST /api/providers/servers/probe': () => ({
+          ok: false,
+          needsKey: true,
+          message: 'This server asks for a key.',
+        }),
+      });
+      renderApp(<ProvidersTab />, { route: '/' });
+      const tile = await screen.findByRole('article', { name: 'Another server' });
+      await userEvent.click(within(tile).getByRole('button', { name: 'Another server' }));
+      await userEvent.click(await screen.findByRole('button', { name: 'Together AI' }));
+      fireEvent.change(screen.getByLabelText('Key'), { target: { value: 'tgp_v1_secret' } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(700);
+      });
+      const probes = () => calls.filter((c) => c.path === '/api/providers/servers/probe');
+      expect(probes().at(-1)?.body).toEqual({
+        url: 'https://api.together.ai/v1',
+        key: 'tgp_v1_secret',
+      });
+
+      // Another service: the key is gone, and Fireworks never sees it.
+      await userEvent.click(screen.getByRole('button', { name: 'Fireworks AI' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(700);
+      });
+      expect(screen.getByLabelText('Key')).toHaveValue('');
+      expect(
+        probes().some(
+          (c) =>
+            c.body &&
+            JSON.stringify(c.body).includes('tgp_v1_secret') &&
+            JSON.stringify(c.body).includes('fireworks'),
+        ),
+      ).toBe(false);
+
+      // Typed for one address, then the address changes host: looked at without it.
+      fireEvent.change(screen.getByLabelText('Key'), { target: { value: 'fw_secret' } });
+      fireEvent.change(screen.getByLabelText('Address'), {
+        target: { value: 'https://elsewhere.example/v1' },
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(700);
+      });
+      expect(probes().at(-1)?.body).toEqual({ url: 'https://elsewhere.example/v1' });
+      expect(screen.getByText(/That key was typed for api\.fireworks\.ai/)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('says what’s wrong with an address, and points Ollama to its own card', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
@@ -231,6 +302,7 @@ describe('more providers', () => {
         'POST /api/providers/servers/probe': () => ({
           ok: false,
           kind: 'Ollama',
+          url: 'http://localhost:11434/v1',
           message:
             'That’s Ollama, which has its own card in Providers — connect it there for the most it can do.',
         }),

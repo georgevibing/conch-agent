@@ -110,6 +110,30 @@ describe('servers you run yourself', () => {
     ).toBe(true);
   });
 
+  it('moving a server somewhere else leaves its key behind, unsent', async () => {
+    const { providers, keys, fetch } = await harness({
+      answers: (url, auth) =>
+        url.startsWith('http://10.0.0.5:8000')
+          ? auth === 'Bearer vllm-secret-key'
+            ? jsonResponse({ data: [{ id: 'llama', owned_by: 'vllm' }] })
+            : jsonResponse({ error: 'unauthorized' }, 401)
+          : url.startsWith('http://10.0.0.9:8000')
+            ? jsonResponse({ data: [{ id: 'llama', owned_by: 'vllm' }] })
+            : (() => {
+                throw new TypeError('fetch failed');
+              })(),
+    });
+    const { id } = await providers.addServer({ url: '10.0.0.5:8000', key: 'vllm-secret-key' });
+    const before = fetch.calls.length;
+
+    await providers.updateServer(id, { url: '10.0.0.9:8000' });
+
+    const after = fetch.calls.slice(before);
+    expect(after.some((c) => c.url.startsWith('http://10.0.0.9:8000'))).toBe(true);
+    expect(after.every((c) => !c.headers.authorization)).toBe(true);
+    expect(await keys.has(id)).toBe(false);
+  });
+
   it('gives two servers with the same name different names', async () => {
     const { providers } = await harness();
     const first = await providers.addServer({ url: 'localhost:8080', name: 'Home' });

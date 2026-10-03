@@ -283,8 +283,16 @@ export async function probeServer(
         continue;
       }
       if (!answer.list) continue;
-      const check = key ? keyCheckFor(base) : undefined;
-      if (check) {
+      const check = keyCheckFor(base);
+      // Its list is anyone's to read; chatting isn't. Without a key, it isn't ready to add.
+      if (check && !key)
+        return {
+          ok: false,
+          url: base,
+          needsKey: true,
+          message: 'This service lists its models to anyone, but chatting needs its key.',
+        };
+      if (check && key) {
         const proof = await send({
           fetchImpl,
           url: check,
