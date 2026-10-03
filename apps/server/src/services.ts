@@ -21,6 +21,8 @@ import { signingKeyCheck } from './skills/doctor';
 import { fingerprintOf } from './skills/signing';
 import { TASKS_PROMPT, TaskService } from './tasks/service';
 import { TaskStore } from './tasks/store';
+import { QuestionDesk } from './questions/desk';
+import { QUESTIONS_PROMPT, questionTools } from './questions/tools';
 import { AttachmentStore } from './attachments/store';
 import { type SystemKey, VaultService } from './vault/service';
 import { vaultTools } from './vault/tools';
@@ -184,6 +186,8 @@ export class Services {
   readonly vault: VaultService;
   readonly routines: RoutineService;
   readonly conversations: ConversationManager;
+  /** Questions the assistant asked, waiting for your answer (ADR 0055 §4). */
+  readonly questions = new QuestionDesk();
   readonly browser: BrowserService;
   readonly terminal: TerminalService;
   readonly engines: Map<EngineId, Engine>;
@@ -539,6 +543,7 @@ export class Services {
                 ctx,
               ),
               ...offeredSlackTools(this.slack, ctx),
+              ...questionTools(this.questions, ctx),
             ],
       context: async (engine, conversationId) =>
         [
@@ -551,6 +556,12 @@ export class Services {
           this.artifacts.promptSection(engine.hostTools !== false),
           await this.artifacts.editedSection(conversationId).catch(() => ''),
           engine.hostTools === false ? '' : TASKS_PROMPT,
+          // Only where someone is there to answer (not a routine, a task or a chat app).
+          engine.hostTools === false ||
+          (await this.conversations.detail(conversationId).catch(() => undefined))?.conversation
+            .origin
+            ? ''
+            : QUESTIONS_PROMPT,
         ]
           .filter(Boolean)
           .join('\n\n'),
@@ -585,6 +596,7 @@ export class Services {
             })
           : undefined,
       skillPermissions: (skillId) => this.skills.permissions(skillId),
+      questions: this.questions,
       // A spend that can't be saved is lost, not fatal: an unhandled rejection would stop Conch.
       onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
     });
