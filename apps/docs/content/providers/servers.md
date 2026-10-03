@@ -23,5 +23,6 @@ The page offers the ones people add most: llama.cpp, vLLM, Jan and LiteLLM on yo
 - **Plain http stays at home.** It works on this computer and your own network, including your tailnet. Anywhere else, the address must be `https`, so your key and your chats never cross the internet in the clear.
 - **A key goes to that server only,** and is kept like every key in Conch.
 - **On this computer means offline too.** A server at `localhost` answers with no internet, and Conch can hand a chat to it when the internet drops.
-- **Ollama and LM Studio have their own cards.** If you type their address, Conch sends you there: they can do more through their own cards.
+- **Ollama and LM Studio on this computer have their own cards.** If you type their address, Conch sends you there: they can do more through their own cards. One on another machine is added here like any server.
+- **Hugging Face and Venice need their key first.** They list their models to anyone, so Conch asks for the key before calling them ready.
 - **A backup names its servers.** Restoring a backup that adds a server shows it first, so an old or borrowed backup can’t quietly send your chats somewhere.
