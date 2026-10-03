@@ -10,6 +10,7 @@
 import type { ConchAppCheck } from '@conch/protocol';
 
 import { makerGuide } from './guide';
+import { plainLine, quoted } from './words';
 import type { ConchAppService } from './service';
 
 export const MAKING_APPS = `## Making apps
@@ -25,7 +26,7 @@ function checkLine(check: ConchAppCheck | undefined, hash: string): string {
   if (check.problems.length)
     return `The last app_check found ${check.problems.length} problem${check.problems.length === 1 ? '' : 's'}: ${check.problems
       .slice(0, 3)
-      .map((p) => p.message)
+      .map((p) => plainLine(p.message, 200))
       .join(' ')}`;
   if (untried.length) return `It passes so far; still to try with app_try: ${untried.join(', ')}.`;
   return 'It passes and every tool was tried: app_present when it does what was asked.';
@@ -48,7 +49,8 @@ export async function appsPrompt(
   for (const info of drafts.slice(0, 3)) {
     const draft = await service.draft(info).catch(() => undefined);
     if (!draft) continue;
-    const name = draft.manifest?.name ?? 'An app that doesn’t read yet';
+    // A change to an app from elsewhere carries its maker's name: one plain line.
+    const name = draft.manifest ? quoted(draft.manifest.name, 40) : 'An app that doesn’t read yet';
     const tried = info.tried[draft.hash] ?? [];
     const check = draft.check && { ...draft.check, tried };
     parts.push(
