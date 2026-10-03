@@ -62,7 +62,9 @@ export const conchAppsApi = {
   setSettings: (id: string, values: Record<string, string>) =>
     request(ConchApp, `${at(id)}/settings`, { method: 'PATCH', body: { values } }),
   updatePreview: (id: string) => request(ConchAppFound, `${at(id)}/update`),
-  applyUpdate: (id: string) => request(ConchApp, `${at(id)}/update`, { method: 'POST', body: {} }),
+  /** **Update**, to exactly the version the person looked at (`hash`): a newer one is refused. */
+  applyUpdate: (id: string, hash: string) =>
+    request(ConchApp, `${at(id)}/update`, { method: 'POST', body: { hash } }),
   rollback: (id: string, version: string) =>
     request(ConchApp, `${at(id)}/rollback`, { method: 'POST', body: { version } }),
   publishState: (id: string) => request(PublishState, `${at(id)}/publish`),
