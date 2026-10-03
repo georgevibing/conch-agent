@@ -238,8 +238,17 @@ export class ConchApps implements HostedApps {
         text: 'The user turned this off in Apps (or its app isn’t set up). Nothing was done; say so if it matters.',
         effect: 'not-executed',
       };
-    // The guard after reading (ADR 0028): a change asks once the chat has read something from outside.
-    const tainted = tool.changes ? ctx.untrusted?.() : undefined;
+    // The guard after reading (ADR 0028): once the chat has read something from outside, a
+    // change asks, and so does any tool of an app that reaches the web, even one that only
+    // looks: what it's asked for goes to those sites.
+    const reaches = app.manifest.reaches;
+    const sink = tool.changes
+      ? `change things in ${plainLine(app.manifest.name, 40)}`
+      : reaches.length
+        ? `send what it asks for to ${reaches.join(', ')}`
+        : undefined;
+    const untrusted = sink ? ctx.untrusted?.() : undefined;
+    const tainted = untrusted && `${untrusted} So I’m checking before I ${sink}.`;
     const restricted = await ctx.restricted?.('apps', id);
     const why = [tainted, restricted].filter(Boolean).join(' ');
     if (decision === 'ask' || why) {

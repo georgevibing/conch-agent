@@ -867,7 +867,7 @@ describe('its tools, for every model', () => {
     });
   });
 
-  it('after reading something untrusted, a change asks even when it’s allowed; an app that reaches the web taints the chat', async () => {
+  it('after reading something untrusted, even a read of an app that reaches the web asks first; one that doesn’t, doesn’t', async () => {
     const h = await harness();
     const manifest = JSON.parse(tallyFiles()['conch-app.json'] ?? '{}') as Record<string, unknown>;
     manifest.reaches = ['api.example.com'];
@@ -880,10 +880,25 @@ describe('its tools, for every model', () => {
     );
     const tools = h.service.hosted.tools(ctx);
     await tools.find((t) => t.name === 'app_tally__read_count')?.run({});
-    expect(asked).toHaveLength(0);
+    // What it's asked for goes to the web: the guard asks, in its own words.
+    expect(asked[0]?.taint).toBe(
+      'This chat read evil.example, which could be trying to steer me. So I’m checking before I send what it asks for to api.example.com.',
+    );
     expect(taints).toEqual([{ kind: 'app', label: 'Tally content' }]);
     await tools.find((t) => t.name === 'app_tally__count')?.run({});
-    expect(asked[0]?.taint).toMatch(/evil.example/);
+    expect(asked[1]?.taint).toBe(
+      'This chat read evil.example, which could be trying to steer me. So I’m checking before I change things in Tally.',
+    );
+    // An app that reaches nothing: its reads go by themselves, even now.
+    const plain = await harness();
+    const made = await makeTally(plain);
+    await plain.service.acceptOffer(made.offer.offerId, { conversationId: 'c_chat' });
+    const quiet = context([], 'This chat read evil.example, which could be trying to steer me.');
+    await plain.service.hosted
+      .tools(quiet.ctx)
+      .find((t) => t.name === 'app_tally__read_count')
+      ?.run({});
+    expect(quiet.asked).toEqual([]);
   });
 
   it('lists the apps for the prompt, with what they’re for in their maker’s words', async () => {
