@@ -80,6 +80,28 @@ describe('Memory patterns', () => {
     await expectAccessible(container);
   });
 
+  it('say where a skill from your work came from, and when it was learned after reading', async () => {
+    const { container } = renderNacre(
+      <SkillSuggestionCard
+        title="Cheapest train"
+        times={1}
+        fromChat={{ title: 'Trains to Lyon', steps: 11 }}
+        examples={['Find me the cheapest train to Lyon']}
+        untrusted="Learned in a chat that read trains.example."
+        actions={<button type="button">Look at the draft</button>}
+      />,
+    );
+    const card = screen.getByRole('region', {
+      name: 'From your chat “Trains to Lyon”. Save how it was done as “Cheapest train”?',
+    });
+    expect(card).toHaveTextContent('It took 11 steps and worked.');
+    expect(card).toHaveTextContent(
+      'Learned in a chat that read trains.example. Read the steps before you save it.',
+    );
+    expect(card).not.toHaveTextContent('You’ve asked for this');
+    await expectAccessible(container);
+  });
+
   it('offer meaning search in plain words, with its size and one button', async () => {
     const get = vi.fn();
     const { container } = renderNacre(

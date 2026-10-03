@@ -177,6 +177,51 @@ export const SkillSuggestion: Story = {
   ),
 };
 
+const fromChatActions = (
+  <>
+    <Button size="sm" variant="soft">
+      Look at the draft
+    </Button>
+    <Button size="sm" variant="ghost" tone="neutral">
+      Not now
+    </Button>
+    <Button size="sm" variant="ghost" tone="neutral">
+      Don’t suggest this
+    </Button>
+  </>
+);
+
+/** How a piece of work went well in one chat, offered as a skill (ADR 0058). */
+export const SkillFromChat: Story = {
+  render: () => (
+    <Stack gap={3} style={{ maxInlineSize: 560 }}>
+      <SkillSuggestionCard
+        title="Release notes"
+        times={1}
+        fromChat={{ title: 'Release notes for 1.3', steps: 14 }}
+        examples={['Write the release notes for 1.3 from the commits since the last tag']}
+        actions={fromChatActions}
+      />
+    </Stack>
+  ),
+};
+
+/** Learned in a chat that read a web page: offered, and it says so (ADR 0028). */
+export const SkillFromChatAfterReading: Story = {
+  render: () => (
+    <Stack gap={3} style={{ maxInlineSize: 560 }}>
+      <SkillSuggestionCard
+        title="Cheapest train"
+        times={1}
+        fromChat={{ title: 'Trains to Lyon', steps: 11 }}
+        examples={['Find me the cheapest train to Lyon next Friday morning']}
+        untrusted="Learned in a chat that read trains.example."
+        actions={fromChatActions}
+      />
+    </Stack>
+  ),
+};
+
 const getIt = (
   <Button size="sm" variant="surface">
     Get it

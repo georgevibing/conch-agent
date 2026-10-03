@@ -278,6 +278,18 @@
     padding-inline-start: var(--nc-space-6);
   }
 
+  .suggestionWords {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    min-inline-size: 0;
+  }
+
+  /* Learned in a chat that read something from outside: said under what you asked. */
+  .suggestionNote {
+    padding-inline-start: var(--nc-space-6);
+  }
+
   /* How search works, and getting the model that understands meaning */
   .meaning {
     display: flex;
