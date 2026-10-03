@@ -11,6 +11,7 @@ import {
 } from '@conch/nacre';
 import {
   Archive,
+  ArchiveRestore,
   BadgeCheck,
   BatteryMedium,
   Folder,
@@ -56,7 +57,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
+import { useConversations } from '../../api/queries';
 import { useUi, type SettingsTab } from '../../app/ui';
+import { ARCHIVE_PATH, isChat, useArchive } from '../archive/useArchive';
 import { COME_HOME_FOCUS } from '../import/api';
 import { doctorApi } from '../health/api';
 import { LIVE_DATA_FOCUS } from '../artifacts/LiveDataSection';
@@ -286,6 +289,9 @@ export function useFindables(query: string, conversationId: string | undefined):
   const { data: updates } = useUpdates();
   // What the open chat is held to (ADR 0047): each can be let go of by name.
   const holds = useLiveStore((s) => (conversationId ? s.views[conversationId]?.holds : undefined));
+  const { data: conversations } = useConversations();
+  const { archive, unarchive } = useArchive();
+  const here = conversations?.find((c) => c.id === conversationId);
   const q = query.trim();
   if (!q) return [];
 
@@ -680,6 +686,33 @@ export function useFindables(query: string, conversationId: string | undefined):
       icon: <History />,
       run: () => void navigate('/activity'),
     },
+    {
+      id: 'archived',
+      label: 'Archived chats',
+      keywords: 'archive archived put away hidden old chats conversations unarchive restore',
+      icon: <Archive />,
+      run: () => void navigate(ARCHIVE_PATH),
+    },
+    // The chat you're in: out of the list, or back into it.
+    ...(here && isChat(here)
+      ? [
+          here.archivedAt
+            ? {
+                id: 'unarchive-chat',
+                label: 'Unarchive this chat',
+                keywords: 'archived put back restore return list unhide',
+                icon: <ArchiveRestore />,
+                run: () => void unarchive(here, { quiet: true }),
+              }
+            : {
+                id: 'archive-chat',
+                label: 'Archive this chat',
+                keywords: 'archive put away hide tidy declutter remove from list',
+                icon: <Archive />,
+                run: () => void archive(here),
+              },
+        ]
+      : []),
     {
       id: 'skills',
       label: 'Skills',

@@ -640,6 +640,107 @@ describe('Palette search', () => {
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/memory'));
   });
 
+  it('finds archived chats by name, never as recent, and the archive by the words people use', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [
+        conversation('c1', 'Plan my week'),
+        { ...conversation('c2', 'Lisbon trip'), archivedAt: Date.now() },
+      ],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    renderApp(
+      <>
+        <Palette />
+        <Where />
+      </>,
+    );
+    act(() => useUi.getState().setPalette(true));
+    expect(await screen.findByRole('option', { name: /Plan my week/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Lisbon trip/ })).not.toBeInTheDocument();
+
+    await user.type(screen.getByRole('combobox'), 'lisbon');
+    expect(
+      await screen.findByRole('option', { name: /Lisbon trip.*Archived/ }),
+    ).toBeInTheDocument();
+
+    for (const words of ['archive', 'archived chats', 'put away', 'hidden chats']) {
+      await user.clear(screen.getByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(await screen.findByRole('option', { name: /^Archived chats/ })).toBeInTheDocument();
+    }
+    await user.click(screen.getByRole('option', { name: /^Archived chats/ }));
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/archived'));
+  });
+
+  it('archives the chat you’re in by name, and unarchives an archived one', async () => {
+    const user = userEvent.setup();
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [
+        conversation('c1', 'Plan my week'),
+        { ...conversation('c2', 'Lisbon trip'), archivedAt: Date.now() },
+      ],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'PATCH /api/conversations/c1': () => ({ ok: true }),
+      'PATCH /api/conversations/c2': () => ({ ok: true }),
+    });
+    const page = (
+      <>
+        <Palette />
+        <Where />
+      </>
+    );
+    renderApp(
+      <Routes>
+        <Route path="/c/:conversationId" element={page} />
+        <Route path="*" element={page} />
+      </Routes>,
+      { route: '/c/c1' },
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'tidy');
+    expect(await screen.findByRole('option', { name: /Archive this chat/ })).toBeInTheDocument();
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'archive this');
+    await user.click(await screen.findByRole('option', { name: /Archive this chat/ }));
+    await waitFor(() =>
+      expect(calls).toContainEqual(
+        expect.objectContaining({ path: '/api/conversations/c1', body: { archived: true } }),
+      ),
+    );
+    // It goes from the list, so you go to a new chat.
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(/^\/$/));
+  });
+
+  it('offers to unarchive the archived chat you’re reading', async () => {
+    const user = userEvent.setup();
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [
+        { ...conversation('c2', 'Lisbon trip'), archivedAt: Date.now() },
+      ],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'PATCH /api/conversations/c2': () => ({ ok: true }),
+    });
+    renderApp(
+      <Routes>
+        <Route path="/c/:conversationId" element={<Palette />} />
+      </Routes>,
+      { route: '/c/c2' },
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'archive');
+    expect(screen.queryByRole('option', { name: /Archive this chat/ })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('option', { name: /Unarchive this chat/ }));
+    await waitFor(() =>
+      expect(calls).toContainEqual(
+        expect.objectContaining({ path: '/api/conversations/c2', body: { archived: false } }),
+      ),
+    );
+  });
+
   it('finds Always on and quitting by the words people use, straight into Settings → Health', async () => {
     const user = userEvent.setup();
     mockFetch({

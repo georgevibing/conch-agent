@@ -18,6 +18,7 @@ import {
   type SearchPreviewMessage,
 } from '@conch/nacre';
 import {
+  Archive,
   Brain,
   CornerDownRight,
   Gauge,
@@ -266,7 +267,8 @@ export function Palette() {
         // Keywords help find an action, but only highlight what's visible.
         .map(({ item }) => item)
     : actions;
-  const recent = q ? [] : (conversations ?? []).slice(0, 6);
+  // Archived chats are put away: found by name, never offered as recent.
+  const recent = q ? [] : (conversations ?? []).filter((c) => !c.archivedAt).slice(0, 6);
   const groups: SearchGroup[] = search.data?.groups ?? [];
   const fuzzy = search.data?.mode === 'fuzzy';
   const titleById = new Map((conversations ?? []).map((c) => [c.id, c]));
@@ -427,8 +429,10 @@ export function Palette() {
             <CommandPalette.Item
               key={c.id}
               value={value.chat(c.id)}
-              icon={<MessageSquare />}
-              hint={relativeTime(c.updatedAt)}
+              icon={c.archivedAt ? <Archive /> : <MessageSquare />}
+              hint={
+                c.archivedAt ? `Archived · ${relativeTime(c.updatedAt)}` : relativeTime(c.updatedAt)
+              }
               onSelect={openChat(c.id)}
             >
               <Highlight text={c.title} ranges={match.ranges} />

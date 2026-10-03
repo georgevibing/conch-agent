@@ -35,6 +35,7 @@ import { useLive } from '../../live/LiveProvider';
 import { emptyView, lastUserMessage, type ConversationView } from '../../live/reducer';
 import { NEW, useLiveStore } from '../../live/store';
 import { useSlashCommands } from '../commands/useSlashCommands';
+import { ArchivedBanner } from '../archive/ArchivedBanner';
 import { ChannelBanner } from '../channels/ChannelBanner';
 import { useChannels } from '../channels/queries';
 import { RunBanner } from '../routines/RunBanner';
@@ -700,6 +701,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
       <RunBanner conversationId={conversationId} />
       <TaskBanner conversationId={conversationId} />
       <ChannelBanner conversationId={conversationId} />
+      <ArchivedBanner conversationId={conversationId} />
       <Transcript
         view={view}
         conversationId={conversationId}

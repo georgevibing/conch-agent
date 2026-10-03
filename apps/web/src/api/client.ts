@@ -174,6 +174,9 @@ export const api = {
   conversations: () => request(z.array(ConversationSummary), '/api/conversations'),
   renameConversation: (id: string, title: string) =>
     request(Ok, `/api/conversations/${id}`, { method: 'PATCH', body: { title } }),
+  /** Out of the chat list (still searchable), or back in it. */
+  archiveConversation: (id: string, archived: boolean) =>
+    request(Ok, `/api/conversations/${id}`, { method: 'PATCH', body: { archived } }),
   deleteConversation: (id: string) => request(Ok, `/api/conversations/${id}`, { method: 'DELETE' }),
   /**
    * A waiting message goes now — with `engine` (the model on this computer), if

@@ -111,6 +111,10 @@ or delete; every save shows in the chat with Undo. Search finds any line in mont
 of chats, typos and all. ([ADR 0003](./docs/adr/0003-memory.md),
 [0007](./docs/adr/0007-search.md))
 
+**A tidy list, nothing lost.** Archive a chat to take it out of your list without
+deleting it: it stays searchable, waits under **Archived**, and comes back by itself
+when you write in it or it needs you. Undo is one press.
+
 **It learns you — visibly.** Memory search understands meaning with a small model
 that runs on this computer, downloaded once when you press **Get it** (and forgives
 typos and knows a few everyday ideas before that), and the prompt carries the

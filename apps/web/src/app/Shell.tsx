@@ -5,6 +5,8 @@ import { useLocation, useNavigate, useParams } from 'react-router';
 
 import { useConversations } from '../api/queries';
 import { ActivityView } from '../features/activity/ActivityView';
+import { ArchiveView } from '../features/archive/ArchiveView';
+import { ARCHIVE_PATH } from '../features/archive/useArchive';
 import { AppView } from '../features/artifacts/AppView';
 import { useArtifact } from '../features/artifacts/queries';
 import { useUnsavedGuard } from '../features/artifacts/edits';
@@ -70,6 +72,7 @@ export function Shell() {
   const { data: app } = useArtifact(artifactId);
   const memoryArea = path.startsWith('/memory');
   const tasksArea = path.startsWith('/tasks');
+  const archiveArea = path === ARCHIVE_PATH;
 
   // Toasts and notifications raised outside the router ask us to navigate.
   useEffect(() => {
@@ -107,7 +110,9 @@ export function Shell() {
                   ? 'What Conch knows'
                   : tasksArea
                     ? 'Tasks'
-                    : (current?.title ?? (conversationId ? '' : 'New chat'));
+                    : archiveArea
+                      ? 'Archived chats'
+                      : (current?.title ?? (conversationId ? '' : 'New chat'));
 
   useEffect(() => {
     document.title = current ? `${current.title} · Conch` : 'Conch';
@@ -169,6 +174,7 @@ export function Shell() {
                 !passwordsArea &&
                 !pinnedArea &&
                 !tasksArea &&
+                !archiveArea &&
                 current?.titling
               }
             >
@@ -199,6 +205,8 @@ export function Shell() {
             <MemoryView />
           ) : tasksArea ? (
             <TasksView />
+          ) : archiveArea ? (
+            <ArchiveView />
           ) : activityArea ? (
             <ActivityView />
           ) : passwordsArea ? (

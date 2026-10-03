@@ -1,0 +1,26 @@
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nc-space-3);
+}
+
+.intro {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.none {
+  padding-inline: var(--nc-space-1);
+}
+
+/* The banner on an archived chat: what it is, and the way back to the list. */
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--nc-space-2);
+}
+
+.bannerText {
+  flex: 1;
+  min-inline-size: 0;
+}

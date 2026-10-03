@@ -90,6 +90,10 @@
   }
 
   .item {
+    /* The ⋯ button sits over the row's end; titles stop short of it, with room to breathe. */
+    --sb-more-end: var(--nc-space-1);
+    --sb-more-room: calc(var(--sb-more-end) + var(--nc-control-sm) + var(--nc-space-2));
+
     position: relative;
     display: flex;
     align-items: center;
@@ -106,7 +110,7 @@
     flex: 1;
     min-inline-size: 0;
     block-size: 2.125rem;
-    padding-inline: var(--nc-space-3) var(--nc-space-8);
+    padding-inline: var(--nc-space-3) var(--sb-more-room, var(--nc-space-3));
     border-radius: var(--nc-radius-md);
     corner-shape: var(--nc-corner-shape);
     font-size: var(--nc-text-md);
@@ -153,7 +157,7 @@
 
   .more {
     position: absolute;
-    inset-inline-end: var(--nc-space-1);
+    inset-inline-end: var(--sb-more-end);
     opacity: 0;
     transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
   }
@@ -168,6 +172,28 @@
     .more {
       opacity: 1;
     }
+  }
+
+  /* The way into the archive: after the last chat, quieter than any of them. */
+  .archived {
+    padding: 0 var(--nc-space-2) var(--nc-space-3);
+  }
+
+  .archivedLink {
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-sm);
+  }
+
+  .archivedIcon {
+    flex-shrink: 0;
+    inline-size: 0.95rem;
+    block-size: 0.95rem;
+  }
+
+  .count {
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
   }
 
   .footer {

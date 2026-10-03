@@ -1,6 +1,5 @@
 import type { ConversationSummary } from '@conch/protocol';
 import {
-  AlertDialog,
   Avatar,
   Button,
   DropdownMenu,
@@ -16,8 +15,8 @@ import {
   toast,
   Tooltip,
 } from '@conch/nacre';
-import { useQueryClient } from '@tanstack/react-query';
 import {
+  Archive,
   MoreHorizontal,
   PanelLeftClose,
   Pencil,
@@ -30,11 +29,13 @@ import { useState } from 'react';
 import { NavLink, useNavigate, useParams } from 'react-router';
 
 import { api } from '../../api/client';
-import { keys, useAppState, useConversations } from '../../api/queries';
+import { useAppState, useConversations } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { dayGroup, type DayGroup } from '../../lib/time';
 import { useAutoFocus } from '../../lib/useAutoFocus';
 import { ActivityLink } from '../activity/ActivityLink';
+import { DeleteChat } from '../archive/DeleteChat';
+import { ARCHIVE_PATH, archivedChats, isChat, useArchive } from '../archive/useArchive';
 import { PinnedApps } from '../artifacts/PinnedApps';
 import { PasswordsLink } from '../passwords/PasswordsLink';
 import { APPS } from '../channels/describe';
@@ -87,9 +88,7 @@ function ConversationRow({
   conversation: ConversationSummary;
   onNavigate?: () => void;
 }) {
-  const client = useQueryClient();
-  const navigate = useNavigate();
-  const { conversationId } = useParams();
+  const { archive, remove } = useArchive();
   // The draft is taken from the current title when renaming starts — never a copy
   // made at mount, which would be the first-line placeholder, not the generated title.
   const [draft, setDraft] = useState<string>();
@@ -103,18 +102,6 @@ function ConversationRow({
     if (!next || next === conversation.title) return;
     try {
       await api.renameConversation(conversation.id, next);
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  };
-
-  const remove = async () => {
-    try {
-      await api.deleteConversation(conversation.id);
-      client.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>
-        (list ?? []).filter((c) => c.id !== conversation.id),
-      );
-      if (conversationId === conversation.id) void navigate('/');
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -169,29 +156,54 @@ function ConversationRow({
           <DropdownMenu.Item icon={<Pencil />} onSelect={() => setDraft(conversation.title)}>
             Rename
           </DropdownMenu.Item>
+          <DropdownMenu.Item icon={<Archive />} onSelect={() => void archive(conversation)}>
+            Archive
+          </DropdownMenu.Item>
+          <DropdownMenu.Separator />
           <DropdownMenu.Item icon={<Trash2 />} tone="danger" onSelect={() => setConfirm(true)}>
             Delete
           </DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Root>
-      <AlertDialog.Root open={confirm} onOpenChange={setConfirm}>
-        <AlertDialog.Content tone="danger" icon={<Trash2 />}>
-          <AlertDialog.Header>
-            <AlertDialog.Title>Delete this conversation?</AlertDialog.Title>
-            <AlertDialog.Description>
-              “{conversation.title}” will be removed from Conch. Anything I remembered from it stays
-              in memory.
-            </AlertDialog.Description>
-          </AlertDialog.Header>
-          <AlertDialog.Footer>
-            <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-            <AlertDialog.Action tone="danger" onClick={() => void remove()}>
-              Delete
-            </AlertDialog.Action>
-          </AlertDialog.Footer>
-        </AlertDialog.Content>
-      </AlertDialog.Root>
+      <DeleteChat
+        chat={conversation}
+        open={confirm}
+        onOpenChange={setConfirm}
+        onDelete={() => void remove(conversation)}
+      />
     </li>
+  );
+}
+
+/**
+ * The quiet way into the archive, after the last of your chats. While an
+ * archived chat is open, this is where you are.
+ */
+function ArchivedLink({
+  count,
+  here,
+  onNavigate,
+}: {
+  count: number;
+  here: boolean;
+  onNavigate?: () => void;
+}) {
+  return (
+    <div className={styles.archived}>
+      <NavLink
+        to={ARCHIVE_PATH}
+        className={({ isActive }) =>
+          cx(styles.link, styles.archivedLink, (isActive || here) && styles.active)
+        }
+        onClick={onNavigate}
+      >
+        <Archive aria-hidden className={styles.archivedIcon} />
+        <span className={styles.title}>Archived</span>{' '}
+        <span className={styles.count}>
+          {count} <span className="nc-visually-hidden">{count === 1 ? 'chat' : 'chats'}</span>
+        </span>
+      </NavLink>
+    </div>
   );
 }
 
@@ -210,18 +222,20 @@ export function Sidebar({
   const openSettings = useUi((s) => s.openSettings);
   const setPalette = useUi((s) => s.setPalette);
   const navigate = useNavigate();
+  const { conversationId } = useParams();
   // Updates wait quietly: a dot on Settings, never a toast.
   const updates = updatesWaiting(useUpdates().data);
 
   const groups = new Map<DayGroup, ConversationSummary[]>();
-  // Routine runs live under Routines, and tasks under Tasks and refreshes under their app, not in your chat list.
-  for (const c of (conversations ?? []).filter(
-    (c) =>
-      c.origin?.kind !== 'routine' && c.origin?.kind !== 'artifact' && c.origin?.kind !== 'task',
-  )) {
+  // Routine runs live under Routines, tasks under Tasks, refreshes under their app, and
+  // archived chats under Archived: not in your chat list.
+  const chats = (conversations ?? []).filter((c) => isChat(c) && !c.archivedAt);
+  for (const c of chats) {
     const g = dayGroup(c.updatedAt);
     groups.set(g, [...(groups.get(g) ?? []), c]);
   }
+  const inArchive = archivedChats(conversations);
+  const archived = inArchive.length;
 
   return (
     <nav className={styles.sidebar} aria-label="Conversations">
@@ -277,7 +291,7 @@ export function Sidebar({
       </div>
       <ScrollArea className={styles.scroll}>
         <PinnedApps onNavigate={onNavigate} />
-        {!isPending && (conversations?.length ?? 0) === 0 && (
+        {!isPending && chats.length === 0 && (
           <Text size="sm" tone="subtle" className={styles.empty}>
             Your conversations will appear here.
           </Text>
@@ -298,6 +312,13 @@ export function Sidebar({
             </section>
           );
         })}
+        {archived > 0 && (
+          <ArchivedLink
+            count={archived}
+            here={inArchive.some((c) => c.id === conversationId)}
+            onNavigate={onNavigate}
+          />
+        )}
       </ScrollArea>
       <div className={styles.footer}>
         <button type="button" className={styles.me} onClick={() => openSettings('about')}>

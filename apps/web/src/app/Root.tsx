@@ -74,6 +74,7 @@ export function Root() {
         <Route path="/passwords" element={<Shell />} />
         <Route path="/activity" element={<Shell />} />
         <Route path="/memory" element={<Shell />} />
+        <Route path="/archived" element={<Shell />} />
         <Route path="/passwords/:itemId" element={<Shell />} />
         <Route path="*" element={<Shell />} />
       </Routes>

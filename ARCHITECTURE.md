@@ -454,6 +454,14 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   rename by the user. The cost goes to the usage ledger. Toggle it with
   `preferences.autoTitle`. The web app renders both states with Nacre's `LiveTitle`
   (a shimmer while pending, a write-in when the title lands).
+- **Archived chats.** `PATCH /api/conversations/:id` takes `{ title?, archived? }`.
+  Archiving sets `archivedAt` on the summary in `index.json` (no log event: a list
+  rebuilt from the logs shows every chat again, and nothing is lost). The web app
+  leaves archived chats out of the sidebar and ⌘K's recent list, and shows them at
+  `/archived` with Nacre's `ArchivedChats`. `ConversationManager` clears
+  `archivedAt` when a message is sent in the chat (from here or a channel) and when
+  it starts waiting for a permission, so nothing that needs you stays out of sight.
+  A turn keeps running in an archived chat.
 - API retries from the engine surface as live `notice` events ("Retrying in 4s…"),
   so a stalled provider is never a silent spinner.
 - **The browser** (`browser/`, [ADR 0014](./docs/adr/0014-browser.md)).
