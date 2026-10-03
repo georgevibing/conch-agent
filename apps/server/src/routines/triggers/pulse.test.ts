@@ -2,7 +2,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { Judge } from './onlyif';
 import {
@@ -333,11 +333,9 @@ describe('the pulse', () => {
     const { pulse } = await setup({ routines: [taskRoutine], sources: { task: pushed.source } });
     await pulse.sync();
     pushed.problem(new SourceError('needs-you', 'The folder “Inbox” isn’t there any more.'));
-    await new Promise((r) => setTimeout(r, 20));
-    expect((await pulse.state(taskRoutine)).state).toBe('needs-you');
+    await vi.waitFor(async () => expect((await pulse.state(taskRoutine)).state).toBe('needs-you'));
     pushed.problem(undefined);
-    await new Promise((r) => setTimeout(r, 20));
-    expect((await pulse.state(taskRoutine)).state).toBe('watching');
+    await vi.waitFor(async () => expect((await pulse.state(taskRoutine)).state).toBe('watching'));
     pulse.stop();
   });
 
