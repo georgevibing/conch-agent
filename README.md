@@ -26,6 +26,8 @@ what breaks, and asks only for approvals that matter.
   (`SKILL.md`) and routines that run on a schedule you read in plain words.
 - **Memory you can read.** Memories are Markdown files you can edit or delete,
   and search finds any line in months of chats.
+- **Questions you answer with a tap.** When the assistant needs your choice, it
+  asks with options, days or a number to tap, and the reply carries on.
 - **A tidy list, nothing lost.** Archive a chat to take it out of your list
   without deleting it. It stays searchable, waits under **Archived**, and comes
   back by itself when you write in it or it needs you.

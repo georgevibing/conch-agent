@@ -114,6 +114,29 @@ describe('notifications', () => {
     });
   });
 
+  it('says the assistant has a question, without a Deny (ADR 0055)', async () => {
+    const { push, sent } = setup();
+    const phone = browser();
+    await push.subscribe('device:phone', 'iPhone · Safari', phone.subscription);
+    await push.onEvent(
+      event({
+        type: 'question',
+        question: {
+          questionId: 'q_1',
+          fields: [{ id: 'when', label: 'Which day suits you?', kind: 'date', optional: false }],
+        },
+      }),
+    );
+    const shown = phone.read(sent[0]?.body ?? Buffer.alloc(0));
+    expect(shown).toMatchObject({
+      title: 'Pearl has a question',
+      body: 'Which day suits you? · Fix the build',
+      tag: 'ask-q_1',
+      url: '/c/c_chat',
+    });
+    expect(shown).not.toHaveProperty('deny');
+  });
+
   it('stays quiet while a Conch page is in front of someone', async () => {
     const { push, sent } = setup();
     await push.subscribe('device:phone', 'iPhone', browser().subscription);

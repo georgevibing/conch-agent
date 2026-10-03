@@ -1,0 +1,579 @@
+@layer nacre.components {
+  .shell {
+    display: grid;
+    /* Never wider than the chat: the day strip slides instead. */
+    grid-template-columns: minmax(0, 1fr);
+    inline-size: 100%;
+    max-inline-size: 36rem;
+  }
+
+  /* Answered: the card's rows close to nothing while it fades; the line takes its place. */
+  .fold {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 1fr;
+    transition:
+      grid-template-rows var(--nc-spring-soft-duration) var(--nc-spring-soft),
+      opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .shell[data-state='answered'] .fold,
+  .shell[data-state='skipped'] .fold {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+
+  /* ── The card ──────────────────────────────────────────────────── */
+  .card {
+    /* The rim only; a sheen over a whole card of controls would be noise. */
+    --nc-rim-hover: 0.35;
+    --nc-sheen-hover: 0;
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    min-block-size: 0;
+    padding: var(--nc-space-3) var(--nc-space-3-5) var(--nc-space-3-5);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow:
+      var(--nc-glaze-edge),
+      inset 0 0 0 1px var(--nc-border-subtle);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  /* Waiting on you: the pearl rim orbits, barely. */
+  .card[data-lustre-ambient]::before {
+    opacity: calc(var(--nc-lustre) * 0.55);
+  }
+
+  .shell[data-state='answered'] .card,
+  .shell[data-state='skipped'] .card {
+    overflow: hidden;
+  }
+
+  .card[aria-busy='true'] .fields {
+    opacity: 0.7;
+    transition: opacity var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .header {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2-5);
+  }
+
+  .mark {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-3);
+    color: var(--nc-accent-11);
+  }
+
+  .mark > svg {
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
+  }
+
+  .heading {
+    margin: 0;
+    padding-block-start: 0.25rem;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+    text-wrap: pretty;
+  }
+
+  .fields {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-4);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .label {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+  }
+
+  .optional {
+    font-weight: var(--nc-weight-regular);
+    color: var(--nc-text-subtle);
+  }
+
+  /* ── Options ───────────────────────────────────────────────────── */
+  .options {
+    display: grid;
+    gap: var(--nc-space-1-5);
+  }
+
+  .option {
+    --nc-rim-rest: 0;
+    --nc-rim-hover: 0.7;
+    --nc-sheen-size: 160px;
+    --nc-sheen-hover: 0.12;
+    --row-border: var(--nc-border-subtle);
+
+    appearance: none;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    inline-size: 100%;
+    min-block-size: 2.75rem;
+    margin: 0;
+    padding: var(--nc-space-2) var(--nc-space-3);
+    border: 0;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-hi);
+    color: var(--nc-text);
+    font: inherit;
+    text-align: start;
+    box-shadow:
+      inset 0 0 0 1px var(--row-border),
+      var(--nc-glaze-edge);
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      box-shadow var(--nc-duration-base) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  @media (hover: hover) {
+    .option:hover:not(:disabled) {
+      --row-border: var(--nc-border);
+
+      background: color-mix(in oklch, var(--nc-surface-hi), var(--nc-text) 3%);
+    }
+  }
+
+  .option:active:not(:disabled) {
+    transform: scale(0.985);
+    transition-duration: 0ms;
+  }
+
+  .option:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .option[data-state='checked'] {
+    --row-border: color-mix(in oklch, var(--nc-accent-9) 55%, transparent);
+
+    background: color-mix(in oklch, var(--nc-accent-9) 9%, var(--nc-surface-hi));
+  }
+
+  .option:disabled {
+    cursor: not-allowed;
+  }
+
+  .option:disabled:not([data-state='checked']) {
+    opacity: 0.55;
+  }
+
+  /* The number that picks it: for keyboards only. */
+  .key {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    border-radius: var(--nc-radius-sm);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-2xs);
+    color: var(--nc-text-subtle);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .option[data-state='checked'] .key {
+    color: var(--nc-accent-11);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--nc-accent-9) 40%, transparent);
+  }
+
+  @media (pointer: coarse) {
+    .key {
+      display: none;
+    }
+  }
+
+  .optionText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.0625rem;
+    min-inline-size: 0;
+  }
+
+  .optionLabel {
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    line-height: var(--nc-leading-snug);
+  }
+
+  .option[data-other] .optionLabel {
+    font-weight: var(--nc-weight-regular);
+    color: var(--nc-text-muted);
+  }
+
+  .optionDescription {
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+  }
+
+  /* Radio dot and tick box, at the row's end. */
+  .radio,
+  .box {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: round(1.125rem, 2px);
+    block-size: round(1.125rem, 2px);
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-strong);
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      box-shadow var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .radio {
+    border-radius: 50%;
+  }
+
+  .box {
+    border-radius: var(--nc-radius-xs);
+  }
+
+  .option[data-state='checked'] .radio,
+  .option[data-state='checked'] .box {
+    background: var(--nc-accent-9);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--nc-accent-9), black 14%);
+  }
+
+  .dot {
+    inline-size: round(0.4rem, 2px);
+    block-size: round(0.4rem, 2px);
+    border-radius: 50%;
+    background: var(--nc-accent-contrast);
+    transform: scale(0);
+    transition: transform var(--nc-duration-fast) var(--nc-ease-in);
+  }
+
+  .dot[data-state='checked'] {
+    transform: scale(1);
+    transition: transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .tick {
+    display: grid;
+    place-items: center;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .tick svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    fill: none;
+    stroke: var(--nc-accent-contrast);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .tick path {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    transition: stroke-dashoffset var(--nc-duration-fast) var(--nc-ease-in);
+  }
+
+  .tick[data-state='checked'] path {
+    stroke-dashoffset: 0;
+    transition: stroke-dashoffset var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .otherInput {
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  /* ── Days and times ────────────────────────────────────────────── */
+  .when {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2-5);
+    min-inline-size: 0;
+  }
+
+  .dayRow,
+  .timeRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  /* The coming days, in one row that slides sideways on a narrow screen. */
+  .strip {
+    display: flex;
+    flex: 1 1 100%;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+    margin: -3px;
+    padding: 3px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 3px;
+    /* A day cut off at the edge fades, so it reads as "more this way". */
+    mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+    scrollbar-width: none;
+  }
+
+  .strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .slots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1-5);
+  }
+
+  .day,
+  .slot {
+    --nc-rim-rest: 0;
+    --nc-rim-hover: 0.7;
+    --nc-sheen-size: 90px;
+    --nc-sheen-hover: 0.14;
+    --chip-border: var(--nc-border-subtle);
+
+    appearance: none;
+    flex: none;
+    margin: 0;
+    border: 0;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-hi);
+    color: var(--nc-text);
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    box-shadow:
+      inset 0 0 0 1px var(--chip-border),
+      var(--nc-glaze-edge);
+    cursor: pointer;
+    scroll-snap-align: start;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      box-shadow var(--nc-duration-base) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.0625rem;
+    min-inline-size: 3.5rem;
+    min-block-size: 3.25rem;
+    padding: var(--nc-space-1-5) var(--nc-space-2);
+  }
+
+  .slot {
+    min-block-size: var(--nc-control-sm);
+    padding-inline: var(--nc-space-3);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  @media (hover: hover) {
+    .day:hover:not(:disabled),
+    .slot:hover:not(:disabled) {
+      --chip-border: var(--nc-border);
+
+      background: color-mix(in oklch, var(--nc-surface-hi), var(--nc-text) 3%);
+    }
+  }
+
+  .day:active:not(:disabled),
+  .slot:active:not(:disabled) {
+    transform: scale(0.96);
+    transition-duration: 0ms;
+  }
+
+  .day:focus-visible,
+  .slot:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .day[data-state='on'],
+  .slot[data-state='on'] {
+    --chip-border: color-mix(in oklch, var(--nc-accent-9), black 12%);
+
+    background: var(--nc-accent-9);
+    color: var(--nc-accent-contrast);
+  }
+
+  .day:disabled,
+  .slot:disabled {
+    cursor: not-allowed;
+  }
+
+  .day:disabled:not([data-state='on']),
+  .slot:disabled:not([data-state='on']) {
+    opacity: 0.55;
+  }
+
+  .dayName {
+    font-size: var(--nc-text-2xs);
+    line-height: var(--nc-leading-tight);
+    color: var(--nc-text-muted);
+    white-space: nowrap;
+  }
+
+  .day[data-state='on'] .dayName {
+    color: inherit;
+    opacity: 0.85;
+  }
+
+  .dayNumber {
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-tight);
+  }
+
+  .picker {
+    flex: none;
+    inline-size: auto;
+  }
+
+  /* The exact time, beside the ones to tap. */
+  .timeRow .picker {
+    inline-size: 7.5rem;
+  }
+
+  .number {
+    max-inline-size: 13rem;
+  }
+
+  .srOnly {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* ── Send and Skip ─────────────────────────────────────────────── */
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  /* Skip: there, never asking to be pressed. */
+  .skip {
+    margin-inline-start: auto;
+    color: var(--nc-text-subtle);
+  }
+
+  .error {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-snug);
+    color: light-dark(oklch(0.52 0.18 var(--nc-danger-h)), oklch(0.78 0.13 var(--nc-danger-h)));
+  }
+
+  .error svg {
+    flex: none;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    margin-block-start: 0.0625rem;
+  }
+
+  /* ── Folded: the question, and what you said ───────────────────── */
+  .line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: var(--nc-space-2);
+    row-gap: 0.125rem;
+    margin: 0;
+    padding-inline: var(--nc-space-1);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+    animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) both;
+  }
+
+  .shell:has(.fold) .line {
+    animation-delay: var(--nc-duration-fast);
+  }
+
+  .line:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+    border-radius: var(--nc-radius-xs);
+  }
+
+  .lineIcon {
+    flex: none;
+    align-self: center;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .line[data-state='answered'] .lineIcon {
+    color: var(--nc-accent-11);
+  }
+
+  .lineQuestion {
+    color: var(--nc-text-muted);
+  }
+
+  .lineAnswer {
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .lineAnswer[data-in-message] {
+    font-weight: var(--nc-weight-regular);
+    color: var(--nc-text-subtle);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fold {
+      transition: none;
+    }
+
+    .card,
+    .line,
+    .otherInput {
+      animation: none;
+    }
+  }
+}

@@ -492,6 +492,7 @@ export class ClaudeCodeEngine implements Engine {
     }
 
     const translator = new Translator();
+    const asksItself = input.tools.some((t) => t.name === 'ask');
     let finished = false;
     try {
       const q = query({
@@ -516,9 +517,11 @@ export class ClaudeCodeEngine implements Engine {
           }),
           mcpServers: { conch },
           // Deny rules hold in every mode, Full trust included (`//` is an absolute path).
-          ...((input.disallowedTools?.length || input.protectedPaths?.length) && {
+          ...((input.disallowedTools?.length || input.protectedPaths?.length || asksItself) && {
             disallowedTools: [
               ...(input.disallowedTools ?? []),
+              // Conch's `ask` shows answers to tap (ADR 0055); Claude Code's own would be a bare prompt.
+              ...(asksItself ? ['AskUserQuestion'] : []),
               ...(input.protectedPaths ?? []).flatMap((p) => {
                 const rule = `/${p.replaceAll('\\', '/')}${/\.json$/.test(p) ? '' : '/**'}`;
                 return [`Read(${rule})`, `Edit(${rule})`, `Write(${rule})`];

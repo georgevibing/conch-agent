@@ -2,7 +2,13 @@ import { TalkMode, type TalkState } from '@conch/nacre';
 import { useEffect, useRef, useState } from 'react';
 
 import { useUi } from '../../app/ui';
-import { emptyView, type ConversationView } from '../../live/reducer';
+import {
+  emptyView,
+  pendingPermission,
+  pendingQuestion,
+  type ConversationView,
+} from '../../live/reducer';
+import { questionWords } from '../questions/words';
 import { useLiveStore } from '../../live/store';
 import { listen, type Listening } from './listen';
 import { languageOf, useVoicePrefs } from './prefs';
@@ -53,6 +59,8 @@ export function Talk({
     talking?.from !== undefined ? { from: talking.from, spoken: 0 } : undefined,
   );
   const queue = useRef<Promise<void>>(Promise.resolve());
+  /** The question already read out, so it's said once. */
+  const asked = useRef<string | undefined>(undefined);
 
   const stopAll = () => {
     listening.current?.cancel();
@@ -119,10 +127,40 @@ export function Talk({
     send(said);
   };
 
+  /** Say it, then listen again. */
+  const say = (words: string, then: () => void) => {
+    setState('speaking');
+    speaker.current ??= createSpeaker({
+      lang: languageOf(prefs),
+      voice: prefs.voice,
+      rate: prefs.rate,
+    });
+    const s = speaker.current;
+    queue.current = queue.current.then(() => s.say(words));
+    void queue.current.then(then);
+  };
+
   // The answer, spoken a sentence at a time as it arrives.
   const follow = (view: ConversationView) => {
     const t = turn.current;
     if (!t) return;
+    // A question with answers to tap (ADR 0055): read it out, and what's said back answers it.
+    const question = view.status === 'awaiting-permission' ? pendingQuestion(view) : undefined;
+    if (question && !pendingPermission(view)) {
+      if (asked.current === question.id) return;
+      asked.current = question.id;
+      const { text } = replySince(view, t.from);
+      const unsaid = sentences(speakable(text)).slice(t.spoken).join(' ');
+      setReply(speakable(text));
+      const mine = t;
+      say([unsaid, questionWords(question.question)].filter(Boolean).join(' '), () => {
+        if (turn.current !== mine) return;
+        turn.current = undefined;
+        useUi.setState({ talking: {} });
+        void startListening();
+      });
+      return;
+    }
     if (view.status === 'awaiting-permission') {
       setState('paused');
       setProblem(`${name} needs your OK for something. It’s on screen: type instead to answer.`);

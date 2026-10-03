@@ -21,7 +21,7 @@ In your phone's browser, add Conch to the Home Screen (in Safari: **Share → Ad
 
 ## Let it reach you
 
-Turn on notifications in **Settings → Notifications**. Conch tells you when it needs your OK (with **Deny** right there), when an answer is ready while you're away, and when a routine has run. It never notifies you while you're looking at it.
+Turn on notifications in **Settings → Notifications**. Conch tells you when it needs your OK (with **Deny** right there) or has a question for you, when an answer is ready while you're away, and when a routine has run. It never notifies you while you're looking at it.
 
 ## Talk to it
 

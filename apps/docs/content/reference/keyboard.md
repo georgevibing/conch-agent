@@ -19,6 +19,8 @@ order: 5
 | <kbd>mod+`</kbd>           | Open or close the terminal                                     |
 | <kbd>mod+shift+`</kbd>     | New terminal                                                   |
 
+In a question your assistant asks, <kbd>1</kbd> to <kbd>6</kbd> choose an option, <kbd>↑</kbd> and <kbd>↓</kbd> move between them, and <kbd>Enter</kbd> sends.
+
 In the browser panel, <kbd>shift+esc</kbd> gives the keyboard back to Conch.
 
 In Passwords, <kbd>/</kbd> goes to the search. There, <kbd>↓</kbd> and <kbd>↑</kbd> walk through what was found, <kbd>Enter</kbd> opens the first one, and <kbd>esc</kbd> puts an open item away.

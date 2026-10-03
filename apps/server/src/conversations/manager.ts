@@ -54,6 +54,7 @@ import { TurnReplies } from '../replies/turn';
 
 type SkillNeed = ReturnType<typeof needs>;
 import { generateTitle } from './title';
+import { unansweredOnRestart, type QuestionDesk } from '../questions/desk';
 
 /**
  * Why a turn failed, for engines that don't say: the key's in a locked
@@ -290,6 +291,10 @@ export interface ToolContext {
   untrusted?: () => string | undefined;
   /** A skill in use doesn't say it needs this (ADR 0031): why, in a sentence. */
   restricted?: (capability: SkillCapability, detail?: string) => Promise<string | undefined>;
+  /** Nobody is there to answer: a routine, a task, a chat from a chat app (ADR 0055). */
+  unattended?: boolean;
+  /** The chat waits for the person (a question, ADR 0055), or carries on; saved, so a restart knows. */
+  waitingForYou?: (waiting: boolean) => Promise<void>;
 }
 
 /** Tools every conversation gets from other parts of Conch (e.g. routines, skills, the browser). */
@@ -445,6 +450,8 @@ export class ConversationManager {
       skillPermissions?: (
         skillId: string,
       ) => Promise<{ title: string; permissions: SkillPermissions } | undefined>;
+      /** Questions waiting for the person's answer (ADR 0055 §4). */
+      questions?: QuestionDesk;
     },
   ) {}
 
@@ -543,6 +550,9 @@ export class ConversationManager {
     untrusted?: TaintSource;
   }) {
     const existing = input.conversationId ? await this.#get(input.conversationId) : undefined;
+    // A question waits (ADR 0055): what's typed answers it, as a message of yours.
+    if (existing?.abort && this.deps.questions?.waiting(existing.record.id))
+      return this.#answerTyped(existing, input);
     if (existing?.record.origin?.kind === 'task')
       throw new ConversationError(
         'busy',
@@ -863,8 +873,41 @@ export class ConversationManager {
     live.permissions.delete(permissionId);
     if (decision === 'allow-always' && pending.remember) live.alwaysAllow.add(pending.toolName);
     this.#append(live, { type: 'permission.resolved', permissionId, decision });
-    if (live.permissions.size === 0) this.#setStatus(live, 'running');
+    if (live.permissions.size === 0 && !this.deps.questions?.waiting(id))
+      this.#setStatus(live, 'running');
     pending.resolve(decision);
+  }
+
+  /**
+   * Words typed while a question waits (ADR 0055) answer it: logged as your
+   * message, so the chat reads as it happened, and handed to the question.
+   */
+  #answerTyped(
+    live: Live,
+    input: { clientMessageId: string; text: string; attachments?: readonly string[] },
+  ) {
+    if (input.attachments?.length || !input.text.trim())
+      throw new ConversationError('busy', 'Answer the question first, then send your files.');
+    this.#append(live, {
+      type: 'user.message',
+      messageId: input.clientMessageId,
+      text: input.text,
+    });
+    live.record = { ...live.record, preview: input.text.slice(0, 140), updatedAt: Date.now() };
+    this.deps.questions?.typed(live.record.id, input.text);
+    this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
+    return summary(live.record);
+  }
+
+  /** A question waits for the person, or was answered: the chat's status says so. */
+  async #waitingForYou(live: Live, waiting: boolean) {
+    if (!waiting) {
+      if (live.permissions.size === 0) this.#setStatus(live, 'running');
+      return;
+    }
+    this.#setStatus(live, 'awaiting-permission');
+    // Saved now, so a restart finds the question (and says it was skipped).
+    await this.#persist(live).catch(() => undefined);
   }
 
   /** Messages that were waiting for the internet go now, in the order they were sent. */
@@ -1074,6 +1117,8 @@ export class ConversationManager {
             ask: (request) => askUser({ ...request, remember: false }, abort.signal),
             signal: abort.signal,
             restricted: (capability, detail) => skillLimit({ capability, detail }),
+            unattended: Boolean(extras || live.record.origin),
+            waitingForYou: (waiting) => this.#waitingForYou(live, waiting),
             untrusted: () => {
               const tainted = settings.preferences.checkAfterReading ? this.#tainted(live) : [];
               return tainted.length ? describeTaint(tainted) : undefined;
@@ -1482,6 +1527,8 @@ export class ConversationManager {
       outcome = 'error';
       completed = { error: (error as Error).message || 'Something went wrong.' };
     } finally {
+      // A question still waiting can't be answered now: it's skipped (ADR 0055).
+      this.deps.questions?.close(live.record.id);
       // Whatever else the turn changed, kept before the turn closes.
       await tracker?.end().catch(() => undefined);
       // The closing events are persisted before they're broadcast, so a client
@@ -1786,6 +1833,8 @@ export class ConversationManager {
       permissions: new Map(),
       alwaysAllow: new Set(),
     };
+    // Conch restarted while a question waited: its answer went with the reply.
+    for (const skipped of unansweredOnRestart(events)) this.#append(live, skipped);
     this.#live.set(id, live);
     this.#evict();
     return live;

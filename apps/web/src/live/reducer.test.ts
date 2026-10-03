@@ -6,6 +6,7 @@ import {
   heldMessage,
   lastUserText,
   pendingPermission,
+  pendingQuestion,
   reduce,
   reduceAll,
 } from './reducer';
@@ -270,5 +271,61 @@ describe('what the chat is held to (ADR 0047)', () => {
       id: 'skill-ended-9',
       title: 'Quick setup',
     });
+  });
+});
+
+describe('questions answered with a tap (ADR 0055)', () => {
+  const question = {
+    questionId: 'q1',
+    fields: [
+      {
+        id: 'how',
+        label: 'How would you like to talk?',
+        kind: 'choice' as const,
+        optional: false,
+        multiple: false,
+        other: true,
+        options: [
+          { id: 'video', label: 'Video call' },
+          { id: 'phone', label: 'Phone call' },
+        ],
+      },
+    ],
+  };
+
+  it('shows the question where it was asked, waiting, then answered in place', () => {
+    const asked = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'book a call with Ada' },
+        { type: 'assistant.delta', messageId: 'm1', kind: 'thinking', delta: 'Need a time' },
+        { type: 'question', question },
+        { type: 'status', status: 'awaiting-permission' },
+      ),
+    );
+    expect(asked.items.at(-1)).toMatchObject({ kind: 'question', id: 'q1', question });
+    // The thinking before it ended where the question began.
+    expect(asked.items[1]).toMatchObject({ kind: 'assistant', thoughtEndedAt: 1200 });
+    expect(pendingQuestion(asked)?.id).toBe('q1');
+    const answered = reduce(asked, {
+      type: 'question.answered',
+      questionId: 'q1',
+      answer: { values: { how: 'phone' }, text: 'Phone call' },
+      conversationId: 'c1',
+      seq: 9,
+      at: 2000,
+    });
+    expect(answered.items.at(-1)).toMatchObject({ answer: { text: 'Phone call' } });
+    expect(pendingQuestion(answered)).toBeUndefined();
+  });
+
+  it('skipped (or stopped) is an answer of nothing', () => {
+    const view = reduceAll(
+      log(
+        { type: 'question', question },
+        { type: 'question.answered', questionId: 'q1', answer: null },
+      ),
+    );
+    expect(view.items.at(-1)).toMatchObject({ kind: 'question', answer: null });
+    expect(pendingQuestion(view)).toBeUndefined();
   });
 });

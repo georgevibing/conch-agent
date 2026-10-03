@@ -326,6 +326,23 @@ export class PushService {
       });
       return;
     }
+    // A question with answers to tap (ADR 0055): waiting for you, like an OK.
+    if (e.type === 'question') {
+      const name = await this.deps.persona();
+      const chat = await this.deps.conversation(e.conversationId);
+      const asked = e.question.title ?? e.question.fields[0]?.label ?? '';
+      await this.notify('approvals', {
+        title: `${name} has a question`,
+        body: clip(chat?.title ? `${asked} · ${chat.title}` : asked),
+        quiet: 'Open Conch to answer.',
+        url,
+        tag: `ask-${e.question.questionId}`,
+        actions: [{ action: 'open', title: 'Answer' }],
+        requireInteraction: true,
+        urgency: 'high',
+      });
+      return;
+    }
     if (e.type === 'vault.request' && e.request.state === 'waiting') {
       const name = await this.deps.persona();
       await this.notify('approvals', {

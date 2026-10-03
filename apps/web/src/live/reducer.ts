@@ -13,6 +13,8 @@ import type {
   BrowserStep,
   ConversationEvent,
   ConversationStatus,
+  Question,
+  QuestionAnswer,
   SkillHold,
   EngineId,
   TaskKind,
@@ -76,6 +78,17 @@ export type TranscriptItem =
       vault?: VaultPermission;
       /** Asked because the chat read something untrusted (ADR 0028): why. No "always". */
       taint?: string;
+    }
+  | {
+      /**
+       * A question with answers to tap (ADR 0055): the reply waits for it.
+       * `answer` is absent while it waits, `null` once skipped (or stopped).
+       */
+      kind: 'question';
+      id: string;
+      question: Question;
+      answer?: QuestionAnswer | null;
+      at: number;
     }
   | {
       /** Files the assistant created, changed or deleted, which can be put back (ADR 0030). */
@@ -289,6 +302,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
   const items =
     event.type === 'tool.started' ||
     event.type === 'permission.requested' ||
+    event.type === 'question' ||
     event.type === 'memory.saved'
       ? sealThinking(view.items, event.at)
       : view.items;
@@ -624,8 +638,25 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
     case 'offer.resolved':
       return base;
     case 'question':
-    case 'question.answered':
-      return base;
+      return {
+        ...base,
+        items: [
+          ...items,
+          {
+            kind: 'question',
+            id: event.question.questionId,
+            question: event.question,
+            at: event.at,
+          },
+        ],
+      };
+    case 'question.answered': {
+      const updated = updateItem(items, 'question', event.questionId, (item) => ({
+        ...item,
+        answer: event.answer,
+      }));
+      return updated ? { ...base, items: updated } : base;
+    }
     // Folded into `replies` with every event (they go when anything newer comes).
     case 'replies':
       return base;
@@ -780,6 +811,12 @@ export function lastUserMessage(
     if (item?.kind === 'user') return { text: item.text, attachments: item.attachments ?? [] };
   }
   return undefined;
+}
+
+/** A question waiting for your answer (ADR 0055), if the chat has one. */
+export function pendingQuestion(view: ConversationView) {
+  const last = view.items.findLast((i) => i.kind === 'question');
+  return last?.kind === 'question' && last.answer === undefined ? last : undefined;
 }
 
 /** Is anything still waiting on the user? */

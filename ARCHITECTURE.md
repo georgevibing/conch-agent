@@ -119,6 +119,7 @@ src/
   import/                     Come home: OpenClaw and Hermes read-only, a plan, a ledger for Undo (ADR 0035)
   artifacts/                  things made beside the chat: store, tools, fenced blocks, the sealed frame (ADR 0034); edits, drafts, live data (`live.ts`, ADR 0046)
   tasks/                      background tasks and helpers side by side (`delegate`), queue, worktrees (ADR 0033)
+  questions/                  `ask`: a question answered with a tap, the one waiting per chat, its answer route (ADR 0055)
   doctor/                     Repair everything: every part's `DoctorCheck`, run at once (`doctor.report`)
   network/watch.ts            online or not (`network.status`); offline routing (ADR 0023)
   lib/path.ts                 the PATH as it is now (Windows registry), refreshed before lookups
@@ -363,6 +364,16 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   changed); their taint comes back to the parent, the turn's abort stops them, and over
   budget it refuses. A restart marks running tasks `interrupted` (one-press retry); a limit
   carries on once on `limitFallback`. Push topic `tasks`; doctor check `tasks`.
+
+- **Questions** ([ADR 0055](./docs/adr/0055-the-chat-knows-conch.md) §4). The host tool `ask`
+  (`questions/tools.ts`; not offered when `ToolContext.unattended`: routines, tasks, chats
+  from a chat app) hands a `Question` to `QuestionDesk`, which logs `question`, sets the
+  chat `awaiting-permission` (saved at once) and waits. `POST …/questions/:questionId/answer`
+  checks the values against the fields and writes the `text` itself (protocol
+  `checkAnswer`, `answerText`). `ConversationManager.send` turns words typed meanwhile into
+  a `user.message` and an answer with no values. Skip, Stop and the end of the turn answer
+  `null`, and `#get` closes a question that a restart left open. Push says "… has a
+  question". Claude Code's own `AskUserQuestion` is off while `ask` is there.
 
 - **Skill trust** ([ADR 0031](./docs/adr/0031-skill-trust.md)). `skills/permissions.ts`
   turns `allowed-tools` or `permissions:` into capabilities shown in words. A chat is
