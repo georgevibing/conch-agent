@@ -1155,6 +1155,19 @@ describe('an app’s skills', () => {
   });
 });
 
+describe('the map of what Conch can turn on (ADR 0060)', () => {
+  it('lists an app you switched off, in one plain line, and not one that’s on', async () => {
+    const h = await harness();
+    const { offer } = await makeTally(h);
+    await h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' });
+    expect(await h.service.offerable()).toEqual([]);
+    await h.service.hosted.update('capp_tally', { enabled: false });
+    expect(await h.service.offerable()).toEqual([
+      expect.objectContaining({ id: 'capp_tally', name: 'Tally', featured: false }),
+    ]);
+  });
+});
+
 describe('the workshop', () => {
   it('tidies drafts whose chat is gone after 30 days, and keeps the rest', async () => {
     const h = await harness();

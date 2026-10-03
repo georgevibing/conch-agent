@@ -603,19 +603,24 @@ export class Services {
       muted,
       // What this provider could turn on now: apps not connected, skills off or waiting to be asked.
       map: async (engine) => {
-        const [apps, skills] = await Promise.all([
+        const [apps, skills, yours] = await Promise.all([
           this.integrations.connectable(engine).catch(() => undefined),
           this.skills.offerable(engine).catch(() => []),
+          // Apps you made or added, switched off (ADR 0061).
+          this.conchApps.offerable().catch(() => []),
         ]);
         return {
-          apps: (apps ?? []).map((a) => ({
-            id: a.id,
-            name: a.name,
-            tagline: a.tagline,
-            description: a.description,
-            ...(a.color && { color: a.color }),
-            featured: a.featured,
-          })),
+          apps: [
+            ...(apps ?? []).map((a) => ({
+              id: a.id,
+              name: a.name,
+              tagline: a.tagline,
+              description: a.description,
+              ...(a.color && { color: a.color }),
+              featured: a.featured,
+            })),
+            ...yours,
+          ],
           skills,
         };
       },

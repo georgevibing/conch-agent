@@ -62,6 +62,7 @@ import {
   type AppRuntime,
   SourceError,
 } from './types';
+import { plainLine } from './words';
 import { type DraftInfo, Workshop, WorkshopError } from './workshop';
 
 export class ConchAppError extends Error {
@@ -1620,6 +1621,33 @@ export class ConchAppService {
   }
 
   /** Your apps whose name, tagline or description has these words. */
+  /**
+   * Apps you have but switched off, for the map of what Conch can turn on
+   * (ADR 0060 §1): the assistant may offer one back when it would help.
+   * Their words may be someone else's, so each is one plain line.
+   */
+  async offerable(): Promise<
+    { id: string; name: string; tagline: string; description: string; featured: false }[]
+  > {
+    const [cards, apps] = await Promise.all([this.hosted.list(), this.list()]);
+    return cards
+      .filter((card) => card.enabled === false && card.conchApp)
+      .flatMap((card) => {
+        const app = apps.find((a) => a.id === card.conchApp);
+        if (!app) return [];
+        const tagline = plainLine(app.manifest.tagline, 80);
+        return [
+          {
+            id: card.id,
+            name: plainLine(app.manifest.name, 40),
+            tagline,
+            description: plainLine(app.manifest.description || tagline, 300),
+            featured: false as const,
+          },
+        ];
+      });
+  }
+
   async findMine(query: string): Promise<AppRecord[]> {
     await this.load();
     const words = query
