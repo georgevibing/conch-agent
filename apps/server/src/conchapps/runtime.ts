@@ -16,6 +16,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdir, readdir, realpath, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { Readable } from 'node:stream';
 
 import { APP_LIMITS, ConchAppTool } from '@conch/protocol';
 import { z } from 'zod';
@@ -416,13 +417,16 @@ export class SealedRuntime implements AppRuntime {
     const settings = await this.options.settings();
     this.#tools = undefined;
     const child = spawn(process.execPath, sealedArgs({ host, appDir, dataDir }), {
-      stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+      // Messages in on stdin, out on fd 3, as lines of JSON. Not Node's IPC
+      // channel: it reads a whole message before anyone can measure it.
+      stdio: ['pipe', 'ignore', 'pipe', 'pipe'],
       // Nothing of the gateway's: no PATH, no keys, no NODE_OPTIONS.
       env: sealedEnv(),
       cwd: dataDir,
       windowsHide: true,
-      serialization: 'json',
     });
+    // Writing to a process that just stopped is nothing to fail over: its exit says what happened.
+    child.stdin?.on('error', () => undefined);
     this.#child = child;
     child.stderr?.setEncoding('utf8');
     child.stderr?.on('data', (chunk: string) => {
@@ -437,7 +441,7 @@ export class SealedRuntime implements AppRuntime {
           ),
         );
       }, this.#callMs);
-      child.on('message', (raw: unknown) => {
+      this.#lines(child, (raw) => {
         const message = this.#read(child, raw);
         if (!message) return;
         if (message.t === 'ready') {
@@ -511,17 +515,56 @@ export class SealedRuntime implements AppRuntime {
   }
 
   /** A message from the process, checked; anything else stops it. */
+  /**
+   * Lines of JSON from the process's fd 3, counted as they arrive: a line
+   * that runs past `MAX_MESSAGE` stops the process there, before the rest of
+   * it is read, let alone parsed.
+   */
+  #lines(child: ChildProcess, take: (raw: unknown) => void) {
+    const out = child.stdio[3] as Readable | null | undefined;
+    if (!out) return;
+    let partial: Buffer[] = [];
+    let partialBytes = 0;
+    out.on('error', () => undefined);
+    out.on('data', (chunk: Buffer) => {
+      let start = 0;
+      while (start <= chunk.length) {
+        const end = chunk.indexOf(10, start);
+        if (end === -1) {
+          partial.push(chunk.subarray(start));
+          partialBytes += chunk.length - start;
+          if (partialBytes > MAX_MESSAGE) {
+            partial = [];
+            partialBytes = 0;
+            out.destroy();
+            if (this.#child === child) this.#kill('too-much');
+          }
+          return;
+        }
+        if (partialBytes + end - start > MAX_MESSAGE) {
+          out.destroy();
+          if (this.#child === child) this.#kill('too-much');
+          return;
+        }
+        partial.push(chunk.subarray(start, end));
+        const line = Buffer.concat(partial).toString('utf8');
+        partial = [];
+        partialBytes = 0;
+        start = end + 1;
+        let raw: unknown;
+        try {
+          raw = JSON.parse(line);
+        } catch {
+          // It only ever writes JSON: anything else means something's wrong in there.
+          if (this.#child === child) this.#kill('crashed');
+          return;
+        }
+        take(raw);
+      }
+    });
+  }
+
   #read(child: ChildProcess, raw: unknown): z.infer<typeof FromHost> | undefined {
-    let size = 0;
-    try {
-      size = JSON.stringify(raw)?.length ?? 0;
-    } catch {
-      size = Infinity;
-    }
-    if (size > MAX_MESSAGE) {
-      if (this.#child === child) this.#kill('too-much');
-      return undefined;
-    }
     const parsed = FromHost.safeParse(raw);
     if (!parsed.success) {
       // It only ever speaks through host.mjs: anything else means something's wrong in there.
@@ -532,11 +575,10 @@ export class SealedRuntime implements AppRuntime {
   }
 
   #send(child: ChildProcess, message: unknown) {
-    if (!child.connected) return;
+    const stdin = child.stdin;
+    if (!stdin?.writable) return;
     try {
-      child.send(message as object, (error) => {
-        if (error && this.#child === child) this.#kill('crashed');
-      });
+      stdin.write(`${JSON.stringify(message)}\n`);
     } catch {
       if (this.#child === child) this.#kill('crashed');
     }
