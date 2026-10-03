@@ -2,6 +2,7 @@ import {
   Routine,
   RoutineDetail,
   RoutineRun,
+  RoutineSpending,
   SchedulePreview,
   type CreateRoutineBody,
   type Schedule,
@@ -23,6 +24,13 @@ export const routinesApi = {
   remove: (id: string) => request(Ok, `/api/routines/${id}`, { method: 'DELETE' }),
   runNow: (id: string) =>
     request(RoutineRun, `/api/routines/${id}/run`, { method: 'POST', body: {} }),
+  /** What routines spent this month, and its limit (ADR 0057). */
+  spending: () => request(RoutineSpending, '/api/routines/spending'),
+  /** A person sets the monthly limit; `null` turns it off. */
+  setSpendingLimit: (limitUsd: number | null) =>
+    request(RoutineSpending, '/api/routines/spending', { method: 'PUT', body: { limitUsd } }),
+  keepPaused: () =>
+    request(RoutineSpending, '/api/routines/spending/keep-paused', { method: 'POST', body: {} }),
   preview: (schedule: Schedule, timezone: string) =>
     request(SchedulePreview, '/api/routines/preview', {
       method: 'POST',

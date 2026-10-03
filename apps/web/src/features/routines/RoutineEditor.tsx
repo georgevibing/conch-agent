@@ -1,8 +1,15 @@
-import type { CreateRoutineBody, Routine, RoutineTrust, Schedule } from '@conch/protocol';
+import type {
+  CreateRoutineBody,
+  Routine,
+  RoutineTrust,
+  Schedule,
+  TurnOptions,
+} from '@conch/protocol';
 import {
   Button,
   Field,
   Input,
+  ModelPicker,
   RadioGroup,
   ScheduleEditor,
   Sheet,
@@ -19,8 +26,13 @@ import { useNavigate } from 'react-router';
 import type { z } from 'zod';
 
 import { ApiError } from '../../api/client';
+import { useAppState, useModels } from '../../api/queries';
+import { pickerProviders } from '../models/catalog';
+import { findModel, modelKey, parseModelKey } from '../models/useTurnOptions';
+import { fuzzyMatch } from '../search/fuzzy';
 import { browserTimezone, routinesApi } from './api';
 import { routineKeys } from './queries';
+import { runLimitText } from './spendWords';
 import styles from './Routines.module.css';
 import { useSchedulePreview } from './useSchedulePreview';
 
@@ -47,6 +59,82 @@ const trustOptions: { value: RoutineTrust; label: string; description: string }[
 
 const defaultSchedule: Schedule = { type: 'daily', time: '09:00' };
 
+/** `null` = Conch's own limit; `undefined` = not a valid amount (yet). */
+function parseLimit(text: string): number | null | undefined {
+  if (text.trim() === '') return null;
+  const amount = Number(text.replace(/[$,\s]/g, ''));
+  return Number.isFinite(amount) && amount > 0 && amount <= 1000 ? amount : undefined;
+}
+
+/**
+ * Which model runs it: the person's default unless they pick one. Every
+ * connected provider's models, so a simple job can go to a smaller, cheaper
+ * one (ADR 0057).
+ */
+function ModelField({
+  options,
+  onChange,
+}: {
+  options: TurnOptions;
+  onChange: (options: TurnOptions) => void;
+}) {
+  const { data: app } = useAppState();
+  const { data: catalog } = useModels(Boolean(app));
+  const [open, setOpen] = useState(false);
+  const providers = catalog?.providers ?? [];
+  const engine = options.engine ?? catalog?.default;
+  const provider = providers.find((p) => p.engine === engine);
+  const chosen =
+    options.model ?? (engine === catalog?.default ? app?.preferences.model : undefined);
+  const model = findModel(provider, chosen);
+  return (
+    <Field>
+      <Field.Label id="routine-model">Model</Field.Label>
+      <Stack direction="row" gap={2} align="center" wrap>
+        <ModelPicker
+          modelOnly
+          side="bottom"
+          providers={pickerProviders(providers, catalog?.default, modelKey)}
+          model={provider && model ? modelKey(provider.engine, model.id) : ''}
+          onModelChange={(key) => {
+            const choice = parseModelKey(key);
+            if (choice) onChange({ ...options, engine: choice.engine, model: choice.model });
+            setOpen(false);
+          }}
+          match={fuzzyMatch}
+          open={open}
+          onOpenChange={setOpen}
+          loading={!catalog}
+          effort="auto"
+          efforts={[]}
+          onEffortChange={() => {}}
+          fastMode={false}
+          fastModeAvailable={false}
+          onFastModeChange={() => {}}
+          isDefault={!options.model}
+        />
+        {options.model && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              const { engine: _engine, model: _model, ...rest } = options;
+              onChange(rest);
+            }}
+          >
+            Use my default
+          </Button>
+        )}
+      </Stack>
+      <Field.Description>
+        {options.model
+          ? 'This routine always uses this model.'
+          : 'Your default model. Something simple, like a reminder, can use a smaller, cheaper one.'}
+      </Field.Description>
+    </Field>
+  );
+}
+
 /**
  * Create or edit a routine. Everything a person needs is up front in plain
  * words; the exact instruction and schedule are right there too, never hidden.
@@ -71,6 +159,11 @@ export function RoutineEditor({
   const [schedule, setSchedule] = useState<Schedule>(initial.schedule ?? defaultSchedule);
   const [trust, setTrust] = useState<RoutineTrust>(initial.trust ?? 'ask');
   const [catchUp, setCatchUp] = useState(initial.catchUp ?? true);
+  const [options, setOptions] = useState<TurnOptions>(initial.options ?? {});
+  const [limitText, setLimitText] = useState(
+    routine?.runLimitUsd ? String(routine.runLimitUsd) : '',
+  );
+  const limit = parseLimit(limitText);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
   const timezone = routine?.timezone ?? browserTimezone();
@@ -84,19 +177,24 @@ export function RoutineEditor({
     : !prompt.trim()
       ? 'Tell Conch what to do.'
       : undefined;
-  const canSave = !missing && preview?.valid !== false && !saving;
+  const canSave = !missing && preview?.valid !== false && limit !== undefined && !saving;
+  const spend = routine?.spend;
+  const conchLimit =
+    spend?.runLimit && !spend.runLimit.custom ? runLimitText(spend.runLimit) : undefined;
 
   const save = async (status: 'active' | 'paused') => {
     setSaving(true);
     setError(undefined);
     try {
-      const body = { title, summary, prompt, schedule, timezone, trust, catchUp };
+      const body = { title, summary, prompt, schedule, timezone, trust, catchUp, options };
       const saved = routine
         ? await routinesApi.update(routine.id, {
             ...body,
+            // What a run may spend is a person's choice, made here (ADR 0057).
+            ...(limit !== undefined && { runLimitUsd: limit }),
             ...(routine.status === 'draft' && { status }),
           })
-        : await routinesApi.create({ ...body, status });
+        : await routinesApi.create({ ...body, ...(limit && { runLimitUsd: limit }), status });
       await client.invalidateQueries({ queryKey: routineKeys.all });
       client.setQueryData(routineKeys.detail(saved.id), (d: unknown) =>
         d ? { ...(d as object), routine: saved } : d,
@@ -186,9 +284,35 @@ export function RoutineEditor({
               loading={loading}
             />
 
+            <ModelField options={options} onChange={setOptions} />
+
+            {spend?.billing !== 'free' && (
+              <Field invalid={limit === undefined}>
+                <Field.Label optional>Most one run may spend</Field.Label>
+                <Input
+                  inputMode="decimal"
+                  leading="$"
+                  value={limitText}
+                  placeholder={conchLimit?.replace(/^\$/, '') ?? 'Conch decides'}
+                  onChange={(e) => setLimitText(e.target.value)}
+                />
+                {limit === undefined ? (
+                  <Field.Error>
+                    Enter an amount between $0.01 and $1,000, or leave it empty.
+                  </Field.Error>
+                ) : (
+                  <Field.Description>
+                    {spend?.text ? `${spend.text}. ` : ''}
+                    Leave it empty and a run stops if it uses about three times its usual
+                    {conchLimit ? ` (${conchLimit} now)` : ''}.
+                  </Field.Description>
+                )}
+              </Field>
+            )}
+
             <Stack gap={2}>
               <Text as="span" size="sm" weight="medium" id="routine-trust">
-                If Claude needs permission while you’re away
+                If it needs permission while you’re away
               </Text>
               <RadioGroup
                 variant="card"

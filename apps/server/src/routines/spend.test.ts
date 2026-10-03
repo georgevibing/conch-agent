@@ -218,9 +218,7 @@ describe('RoutineSpend: what a routine will cost', () => {
     const { spend } = await setup(plan);
     expect((await spend.view(daily, [])).text).toBe('Runs on your Claude Max plan');
     const runs = [3, 4, 5].map((planPercent) => run({ cost: { billing: 'plan', planPercent } }));
-    expect((await spend.view(daily, runs)).text).toBe(
-      'Uses about 4% of your Claude Max limit each run',
-    );
+    expect((await spend.view(daily, runs)).text).toBe('About 4% of your Claude Max limit a run');
     const tiny = [run({ cost: { billing: 'plan', planPercent: 0.3 } })];
     expect((await spend.view(daily, tiny)).text).toBe('Uses a little of your Claude Max plan');
   });

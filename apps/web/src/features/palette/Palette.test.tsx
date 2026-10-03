@@ -334,6 +334,13 @@ describe('Palette search', () => {
       await screen.findByRole('option', { name: /When a provider can’t answer/ }),
     ).toBeInTheDocument();
 
+    // What routines may spend (ADR 0057): Settings → Usage, where the limit is.
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'routine spending');
+    expect(
+      await screen.findByRole('option', { name: /What routines may spend/ }),
+    ).toBeInTheDocument();
+
     // Keywords count by whole-word prefix, not scattered letters.
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'forget');

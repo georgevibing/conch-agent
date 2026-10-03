@@ -258,6 +258,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         case 'routine.changed':
         case 'routine.deleted':
         case 'routine.run':
+        case 'routines.spending':
           // LiveProvider sits outside the router; the Shell performs navigations.
           applyRoutineEvent(client, event, (to) =>
             window.dispatchEvent(new CustomEvent('conch:navigate', { detail: to })),

@@ -457,7 +457,7 @@ export class RoutineSpend {
           ? `Runs on your ${source} plan`
           : share < 1
             ? `Uses a little of your ${source} plan`
-            : `Uses about ${Math.round(share)}% of your ${source} limit ${once ? '' : 'each run'}`.trim();
+            : `About ${Math.round(share)}% of your ${source} limit${once ? '' : ' a run'}`;
       return { billing: 'plan', text, runLimit };
     }
 

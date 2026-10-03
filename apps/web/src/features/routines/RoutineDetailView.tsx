@@ -18,6 +18,7 @@ import {
   Surface,
   Switch,
   Text,
+  toast,
 } from '@conch/nacre';
 import { ArrowLeft, Copy, MessageSquare, MoreHorizontal, Pencil, Play, Trash2 } from 'lucide-react';
 import { useState } from 'react';
@@ -28,6 +29,8 @@ import { routineIcon } from './icon';
 import { useDeleteRoutine, useRoutine, useRunRoutine, useUpdateRoutine } from './queries';
 import { RoutineEditor } from './RoutineEditor';
 import styles from './Routines.module.css';
+import { moreRoom, runCostText, runLimitText } from './spendWords';
+import { ROUTINES_SPEND_FOCUS } from './SpendingSection';
 import { useSchedulePreview } from './useSchedulePreview';
 import { AlwaysOnHint } from '../background/AlwaysOnHint';
 
@@ -121,7 +124,24 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
     outcome: r.outcome,
     error: r.error,
     durationMs: r.finishedAt ? r.finishedAt - r.startedAt : undefined,
+    cost: runCostText(r.cost),
   }));
+  const latest = runs[0];
+  const spend = routine.spend;
+  const limitText = runLimitText(spend?.runLimit);
+  /** “Let it use more”: a person's choice, for this routine only. */
+  const letItUseMore = () => {
+    const usd = moreRoom(spend?.runLimit, latest?.cost?.usd);
+    update.mutate(
+      { id: routine.id, patch: { runLimitUsd: usd } },
+      {
+        onSuccess: () =>
+          toast.success(`Each run of “${routine.title}” may now use up to $${usd}`, {
+            description: 'You can change it in Edit.',
+          }),
+      },
+    );
+  };
 
   return (
     <Page gap={6}>
@@ -140,6 +160,7 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
           {routine.summary && <Text tone="muted">{routine.summary}</Text>}
           <Text size="sm" tone="subtle">
             {routine.scheduleText} · {statusLine(routine, now)}
+            {spend?.text && ` · ${spend.text}`}
           </Text>
         </Stack>
         <Stack direction="row" gap={2} align="center" className={styles.detailActions}>
@@ -228,7 +249,39 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
           {runs[0].error}
         </Callout>
       )}
-      {runs[0]?.status === 'needs-you' && (
+      {latest?.guard === 'run' && latest.status === 'needs-you' && (
+        <Callout
+          tone="warning"
+          title="Stopped at its limit"
+          action={
+            <Button size="sm" onClick={letItUseMore} loading={update.isPending}>
+              Let it use more
+            </Button>
+          }
+        >
+          {latest.outcome}
+        </Callout>
+      )}
+      {latest?.guard === 'month' && (
+        <Callout
+          tone="info"
+          title="Paused for the rest of the month"
+          action={
+            <Button size="sm" onClick={() => openSettings('usage', ROUTINES_SPEND_FOCUS)}>
+              Raise the limit
+            </Button>
+          }
+        >
+          {latest.outcome}
+        </Callout>
+      )}
+      {latest?.guard === 'plan-room' && (
+        // It goes by itself once there's room: nothing to do.
+        <Callout tone="info" title="Leaving room for your own chats">
+          {latest.outcome}
+        </Callout>
+      )}
+      {runs[0]?.status === 'needs-you' && !runs[0].guard && (
         <Callout
           tone="warning"
           title={running ? 'Waiting for you' : 'Worth a look'}
@@ -278,6 +331,25 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
                     {routine.prompt}
                   </Text>
                 </Stack>
+                {(spend?.text || limitText) && (
+                  <Stack gap={1}>
+                    <Text size="xs" weight="medium" tone="subtle">
+                      What it costs
+                    </Text>
+                    {spend?.text && (
+                      <Text size="sm">
+                        {spend.text}
+                        {spend.basis === 'estimate' && ', a guess until it has run'}
+                      </Text>
+                    )}
+                    {limitText && (
+                      <Text size="sm" tone="muted">
+                        A run stops if it uses more than {limitText}
+                        {spend?.runLimit?.custom ? ' (you set this)' : ''}.
+                      </Text>
+                    )}
+                  </Stack>
+                )}
                 <Stack gap={1}>
                   <Text size="xs" weight="medium" tone="subtle">
                     Permissions
@@ -317,6 +389,7 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
                       trust: routine.trust,
                       catchUp: routine.catchUp,
                       options: routine.options,
+                      ...(routine.runLimitUsd && { runLimitUsd: routine.runLimitUsd }),
                     },
                     null,
                     2,

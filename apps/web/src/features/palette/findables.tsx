@@ -51,6 +51,7 @@ import {
   SquareSlash,
   User,
   WandSparkles,
+  Wallet,
   WifiOff,
   Wrench,
   House,
@@ -67,6 +68,7 @@ import { doctorApi } from '../health/api';
 import { LIVE_DATA_FOCUS } from '../artifacts/LiveDataSection';
 import { DEVICES_FOCUS } from '../auth/focus';
 import { FALLBACK_FOCUS } from '../settings/FallbackSection';
+import { ROUTINES_SPEND_FOCUS } from '../routines/SpendingSection';
 import { APP_WORDS, APPS } from '../channels/describe';
 import { useChannels } from '../channels/queries';
 import { isManager } from '../integrations/apps';
@@ -146,6 +148,14 @@ const settingsPlaces: {
   },
   { tab: 'commands', label: 'Commands', keywords: 'slash prompts', icon: <SquareSlash /> },
   { tab: 'usage', label: 'Usage', keywords: 'limits spend budget plan', icon: <BatteryMedium /> },
+  {
+    tab: 'usage',
+    focus: ROUTINES_SPEND_FOCUS,
+    label: 'What routines may spend',
+    keywords:
+      'routines routine spending spend limit monthly month cost costs money bill budget cap paused pause raise unattended',
+    icon: <Wallet />,
+  },
   {
     tab: 'health',
     label: 'Health',

@@ -45,6 +45,11 @@ export function RoutineChatCard({
         status={routine.status}
         nextRunAt={routine.nextRunAt}
         icon={routineIcon(routine.schedule)}
+        cost={
+          routine.spend?.text
+            ? { text: routine.spend.text, billing: routine.spend.billing }
+            : undefined
+        }
         lastRun={
           routine.lastRun && {
             status: routine.lastRun.status,

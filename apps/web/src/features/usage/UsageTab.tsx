@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 import { api } from '../../api/client';
 import { keys, useUsage } from '../../api/queries';
+import { SpendingSection } from '../routines/SpendingSection';
 import { Section, SaveStatus } from '../settings/Section';
 import { useAutosave } from '../settings/useAutosave';
 import styles from './Usage.module.css';
@@ -63,9 +64,7 @@ export function UsageTab() {
     <Stack gap={6}>
       <Section
         title="What’s left"
-        description={
-          usage.kind === 'unknown' ? 'Connect Claude Code to see your usage.' : undefined
-        }
+        description={usage.kind === 'unknown' ? 'Connect a provider to see your usage.' : undefined}
       >
         {usage.kind !== 'unknown' && (
           <UsagePanel
@@ -77,6 +76,7 @@ export function UsageTab() {
         )}
       </Section>
       {usage.kind === 'metered' && <BudgetField initial={usage.spend.budget} />}
+      <SpendingSection />
     </Stack>
   );
 }

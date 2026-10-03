@@ -75,7 +75,7 @@ describe('routines and spending', () => {
     const run = await settled(s, r.id);
     expect(run.cost).toMatchObject({ billing: 'plan', planPercent: 4 });
     expect((await s.routines.detail(r.id)).routine.spend?.text).toBe(
-      'Uses about 4% of your Claude Max limit each run',
+      'About 4% of your Claude Max limit a run',
     );
   });
 

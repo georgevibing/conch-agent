@@ -2,21 +2,26 @@ import type { Routine } from '@conch/protocol';
 import {
   Button,
   EmptyState,
+  formatMoney,
   Heading,
   Page,
   Pearl,
   RoutineCard,
+  RoutinesPaused,
   Skeleton,
   Stack,
   Text,
 } from '@conch/nacre';
-import { Bell, Plus } from 'lucide-react';
+import { Bell, Plus, Wallet } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
+import { useUi } from '../../app/ui';
+import { ROUTINES_SPEND_FOCUS } from './SpendingSection';
+
 import { routineIcon } from './icon';
 import { NewRoutine } from './NewRoutine';
-import { useRoutines, useUpdateRoutine } from './queries';
+import { useKeepPaused, useRoutines, useRoutineSpending, useUpdateRoutine } from './queries';
 import styles from './Routines.module.css';
 
 function needsYou(r: Routine) {
@@ -65,6 +70,14 @@ export function RoutinesView() {
   const update = useUpdateRoutine();
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
+  const { data: spending } = useRoutineSpending();
+  const keepPaused = useKeepPaused();
+  const openSettings = useUi((s) => s.openSettings);
+  const raiseLimit = () => openSettings('usage', ROUTINES_SPEND_FOCUS);
+  // Say what routines spend only once there's something to say.
+  const spends = Boolean(
+    spending && (spending.monthUsd > 0 || routines?.some((r) => r.spend?.billing === 'metered')),
+  );
 
   const card = (r: Routine) => (
     <li key={r.id}>
@@ -75,6 +88,7 @@ export function RoutinesView() {
         status={r.status}
         nextRunAt={r.nextRunAt}
         icon={routineIcon(r.schedule)}
+        cost={r.spend?.text ? { text: r.spend.text, billing: r.spend.billing } : undefined}
         lastRun={
           r.lastRun && {
             status: r.lastRun.status,
@@ -109,6 +123,16 @@ export function RoutinesView() {
           </Button>
         )}
       </header>
+
+      {spending?.paused && !spending.paused.dismissed && (
+        <RoutinesPaused
+          monthUsd={spending.monthUsd}
+          until={spending.paused.until}
+          onRaise={raiseLimit}
+          onKeepPaused={() => keepPaused.mutate()}
+          busy={keepPaused.isPending}
+        />
+      )}
 
       {isPending ? (
         <Stack gap={3}>
@@ -159,7 +183,20 @@ export function RoutinesView() {
         <Text size="xs" tone="subtle">
           Routines run on this computer while Conch is open. If it’s closed, they catch up when
           you’re back.
+          {spends && spending && (
+            <>
+              {' '}
+              {spending.limitUsd === null
+                ? `They’ve spent ${formatMoney(spending.monthUsd)} this month.`
+                : `They’ve spent ${formatMoney(spending.monthUsd)} of this month’s ${formatMoney(spending.limitUsd)}.`}
+            </>
+          )}
         </Text>
+        {spends && (
+          <Button variant="ghost" size="sm" leadingIcon={<Wallet />} onClick={raiseLimit}>
+            Spending limit
+          </Button>
+        )}
         <NotifyButton />
       </footer>
 
