@@ -37,6 +37,10 @@ Knobs per component: `--nc-rim-rest`, `--nc-rim-hover`, `--nc-sheen-size`,
 `--nc-sheen-hover`, `--nc-sheen-blend`. Global intensity: `--nc-lustre` (0–1), set
 from `NacreProvider lustre={…}`.
 
+Lustre is for things you press: cards, buttons, dialogs. A page is canvas, not a
+card, so nothing that fills the window carries it (a `full` Dialog doesn't): a
+press on empty space never ripples the screen.
+
 The pearl spectrum (`--nc-pearl-1…5`) is an accent-tinted pearl followed by aqua,
 periwinkle, lilac and rose, interpolated in Oklab so transitions pass through
 pearly near-white instead of mud.

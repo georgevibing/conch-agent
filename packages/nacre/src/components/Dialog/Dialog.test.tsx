@@ -89,6 +89,8 @@ describe('Dialog', () => {
     );
     const dialog = await screen.findByRole('dialog', { name: 'Settings' });
     expect(dialog).toHaveAttribute('data-size', 'full');
+    // A page isn't a card: a press on its empty canvas doesn't ripple the window.
+    expect(dialog).not.toHaveAttribute('data-lustre');
     expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Back' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());

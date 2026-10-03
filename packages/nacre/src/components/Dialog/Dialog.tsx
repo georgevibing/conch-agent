@@ -44,7 +44,8 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         data-size={size}
-        data-lustre=""
+        // A full-window page is canvas, not a card: only what's on it ripples.
+        data-lustre={size === 'full' ? undefined : ''}
         className={cx(styles.content, className)}
         {...props}
       >
