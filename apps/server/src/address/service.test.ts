@@ -96,7 +96,15 @@ describe('AddressService', () => {
       certificate: { issuer: 'Pretend Encrypt' },
     });
     expect(status.certificate?.notAfter).toBeGreaterThan(Date.now() + 80 * DAY);
-    expect(seen).toEqual(['checking', 'checking', 'getting-certificate', 'ready', 'ready']);
+    // "checking" at once (whoever asked sees it start), then as each step begins.
+    expect(seen).toEqual([
+      'checking',
+      'checking',
+      'checking',
+      'getting-certificate',
+      'ready',
+      'ready',
+    ]);
     expect(listeners.startHttp).toHaveBeenCalled();
     expect(listeners.startHttps).toHaveBeenCalledTimes(1);
     expect(acme.orders()).toBe(1);
@@ -267,5 +275,76 @@ describe('AddressService', () => {
     expect(b.state).toBe('ready');
     // The second found the certificate the first got.
     expect(acme.orders()).toBe(1);
+  });
+});
+
+describe('what review found (ADR 0064)', () => {
+  it('says “checking” at once, before anything is read or written', async () => {
+    const { service } = await setup();
+    const pending = service.set(NAME);
+    expect(service.status()).toMatchObject({ state: 'checking', name: NAME });
+    await pending;
+  });
+
+  it('turns a dropped connection into a problem to retry, never a crash', async () => {
+    const tasks: (() => void)[] = [];
+    const { service } = await setup({
+      deps: {
+        acme: () => ({
+          issue: async () => {
+            throw new TypeError('terminated');
+          },
+          renewalWindow: async () => undefined,
+        }),
+        schedule: (_ms, fn) => {
+          tasks.push(fn);
+          return () => undefined;
+        },
+      },
+    });
+    const status = await service.set(NAME);
+    expect(status).toMatchObject({ state: 'problem', problem: { kind: 'ca-unavailable' } });
+    expect(status.problem?.message).toContain('terminated');
+    // The retry it scheduled runs into the same, and still doesn't throw.
+    tasks.at(-1)?.();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(service.status().state).toBe('problem');
+  });
+
+  it('keeps an unexpected error out of the gateway, and keeps trying', async () => {
+    const { service } = await setup({
+      listeners: Object.assign(fakeListeners(), {
+        startHttp: vi.fn(async () => {
+          throw new Error('disk full');
+        }),
+      }),
+    });
+    const status = await service.set(NAME);
+    expect(status).toMatchObject({ state: 'problem', problem: { kind: 'other' } });
+    expect(status.problem?.message).toContain('disk full');
+  });
+
+  it('never brings back an address that was turned off meanwhile', async () => {
+    const tasks: (() => void)[] = [];
+    const { service, acme, store } = await setup({
+      reach: {
+        ok: false,
+        why: 'refused',
+        problem: { kind: 'unreachable', message: 'Port 80 is shut.' },
+      },
+      deps: {
+        schedule: (_ms, fn) => {
+          tasks.push(fn);
+          return () => undefined;
+        },
+      },
+    });
+    await service.set(NAME);
+    await service.remove();
+    for (const task of tasks) task();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(service.status().state).toBe('off');
+    expect((await store.read()).name).toBeUndefined();
+    expect(acme.orders()).toBe(0);
   });
 });

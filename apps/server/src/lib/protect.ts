@@ -89,7 +89,7 @@ export const PROTECTED_MESSAGE =
  * behind it.
  */
 const CONCH_POWERS =
-  /\b(?:conch|cli\.[cm]?[jt]s)["']?\s+(?:skills\s+(?:sign|trust|forget|key)|devices\s+(?:approve|on|off|reject|remove)|passkeys\s+remove|open|hello|setup|address|phone|password|key|revoke|pair|reset|sign-out-everywhere)\b/i;
+  /\b(?:conch(?:\.cmd|\.exe|\.ps1)?|cli\.[cm]?[jt]s)["']?(?:\s+-\S*)*\s+(?:skills\s+(?:sign|trust|forget|key)|devices\s+(?:approve|on|off|reject|remove)|passkeys\s+remove|open|hello|setup|address|phone|password|key|revoke|pair|reset|sign-out-everywhere)\b/i;
 
 export function runsConchPower(toolName: string, input: unknown): boolean {
   if (toolName !== 'Bash') return false;

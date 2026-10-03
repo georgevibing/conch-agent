@@ -262,7 +262,13 @@ export class AcmeClient {
       });
     } catch (error) {
       // An authority that won't take `replaces` (or already saw it) still issues without it.
-      if (!(options.replaces && error instanceof AcmeError && error.status === 400)) throw error;
+      // RFC 9773 answers an already-replaced certificate with 409 alreadyReplaced.
+      if (!(
+        options.replaces &&
+        error instanceof AcmeError &&
+        (error.status === 400 || error.status === 409)
+      ))
+        throw error;
       created = await this.#post<Order>(directory.newOrder, { identifiers });
     }
     let order = created.body;

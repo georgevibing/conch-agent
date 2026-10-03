@@ -652,15 +652,26 @@ export class AccessStore {
    * Remove a passkey, unless it's the last way in. Every device signed in
    * with it is signed out, as revoking a key does. Returns the ended sessions.
    */
-  async removePasskey(id: string): Promise<string[]> {
+  async removePasskey(id: string, here?: string): Promise<string[]> {
     return this.#update((file) => {
-      if (!file.passkeys.some((p) => p.id === id))
-        throw new AccessError('not-found', 'No such passkey.');
+      const gone = file.passkeys.find((p) => p.id === id);
+      if (!gone) throw new AccessError('not-found', 'No such passkey.');
       const rest = file.passkeys.filter((p) => p.id !== id);
       if (file.method === 'passkey' && rest.length === 0)
         throw new AccessError(
           'invalid',
           'This passkey is your only way to sign in. Add another passkey or a password first.',
+        );
+      // Passkeys only, asked from `here`: the last one for this address would lock this page out.
+      if (
+        file.method === 'passkey' &&
+        here !== undefined &&
+        gone.rpId === here &&
+        !rest.some((p) => p.rpId === here)
+      )
+        throw new AccessError(
+          'invalid',
+          `This is your only passkey for ${here}. Add another one here, or a password, first.`,
         );
       file.passkeys = rest;
       const ended = file.sessions.filter((s) => s.passkeyId === id).map((s) => s.id);

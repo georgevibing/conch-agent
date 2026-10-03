@@ -275,6 +275,41 @@ describe('passkeys, signed in', () => {
     expect(await phone.status()).toMatchObject({ signedIn: false });
   });
 
+  it('never lets a script’s access key add a passkey (it would let its own device in)', async () => {
+    const { app, store } = await setup();
+    await claimWithPasskey(app, store);
+    const { key } = await store.addKey('Script');
+    const asScript = (url: string, payload: object) =>
+      app.inject({
+        method: 'POST',
+        url,
+        remoteAddress: '127.0.0.1',
+        headers: {
+          host: HOST,
+          'x-forwarded-for': '198.51.100.66',
+          'x-forwarded-proto': 'https',
+          'x-conch-here': '',
+          authorization: `Bearer ${key}`,
+        },
+        payload,
+      });
+    // The script is let in first (as the person would, in the terminal)…
+    const asked = await asScript('/api/access/passkeys/options', { purpose: 'add' });
+    expect(asked.json().error).toBe('approval-required');
+    await store.approve(asked.json().code, 'terminal');
+    // …and may use Conch, but never to mint a way in.
+    const options = await asScript('/api/access/passkeys/options', { purpose: 'add' });
+    expect(options.statusCode).toBe(403);
+    expect(options.json().error).toBe('approver-only');
+    const forged = new PretendAuthenticator().create(
+      { rp: { id: HOST }, user: { id: 'AAAA' }, challenge: 'x' },
+      ORIGIN,
+    );
+    const added = await asScript('/api/access/passkeys', { response: forged });
+    expect(added.json().error).toBe('approver-only');
+    expect(await store.passkeyRecords()).toHaveLength(1);
+  });
+
   it('doesn’t offer passkeys where browsers can’t use them', async () => {
     const { app } = await setup();
     const res = await app.inject({

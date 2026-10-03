@@ -54,6 +54,12 @@ describe('`pnpm conch` powers that are the person’s to use', () => {
       'conch devices approve K7M-Q2X',
       'conch open --link',
       'echo reset | conch reset',
+      // Windows' shim, and flags before the command (review).
+      'conch.cmd hello',
+      '%LOCALAPPDATA%\\Conch\\bin\\conch.cmd setup --domain x.example.com',
+      'conch.exe reset',
+      'conch --verbose hello',
+      'pnpm conch -- open --link',
     ])
       expect(bash(command), command).toBe(true);
     for (const command of [

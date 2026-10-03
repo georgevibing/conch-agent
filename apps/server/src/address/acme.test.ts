@@ -137,6 +137,27 @@ describe('AcmeClient', () => {
     await client.issue('conch.example.com', box, { replaces: id });
     expect(acme.state.replaces).toBe(id);
   });
+
+  it('still renews when the old certificate was already replaced (409)', async () => {
+    const box = responder();
+    const acme = await fakeAcme({
+      answer: async (t) => box.answers.get(t),
+      renewalInfo: { start: '2030-01-10T00:00:00.000Z', end: '2030-01-12T00:00:01.000Z' },
+      alreadyReplaced: true,
+    });
+    const client = new AcmeClient({
+      directoryUrl: acme.directoryUrl,
+      accountKey: await newAccountKey(),
+      fetch: acme.fetch,
+      sleep: instant,
+    });
+    const first = await client.issue('conch.example.com', box);
+    const again = await client.issue('conch.example.com', box, {
+      replaces: renewalId(first.certPem),
+    });
+    expect(again.certPem).toContain('BEGIN CERTIFICATE');
+    expect(acme.orders()).toBe(2);
+  });
 });
 
 describe('renewalId', () => {

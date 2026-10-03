@@ -577,6 +577,25 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
 
   // ── Passkeys (ADR 0065) ────────────────────────────────────────────────
 
+  /**
+   * Adding a passkey adds a way in, and a passkey lets its own device in (ADR 0065), so
+   * only a person may: in a browser that's let in (or this computer), never a script's
+   * access key, which would otherwise turn into a session that approves devices.
+   */
+  const mayAddPasskey = async (request: FastifyRequest, reply: FastifyReply) => {
+    const session = request.access?.kind === 'session' ? request.access.session : undefined;
+    const allowed =
+      gate.isLocal(request) ||
+      (session !== undefined &&
+        (!(await store.approvalOn()) || (await store.deviceApproved(session.deviceId))));
+    if (allowed) return true;
+    void reply.code(403).send({
+      error: 'approver-only',
+      message: 'Add a passkey from Conch itself, on a device you’ve let in.',
+    });
+    return false;
+  };
+
   const NO_PASSKEYS_HERE = {
     error: 'no-passkeys-here',
     message:
@@ -595,7 +614,13 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
     const place = passkeyPlace(request);
     if (!place) return reply.code(409).send(NO_PASSKEYS_HERE);
     if (body.purpose === 'sign-in')
-      return { options: await gate.passkeys.authenticationOptions({ place, purpose: 'sign-in' }) };
+      return {
+        options: await gate.passkeys.authenticationOptions({
+          place,
+          purpose: 'sign-in',
+          client: gate.clientKey(request),
+        }),
+      };
     if (body.purpose === 'hello') {
       const check = await store.checkHello(body.code);
       if (!check.ok) {
@@ -608,6 +633,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
           purpose: 'hello',
           helloCode: body.code,
           userName: suggestedUsername(),
+          client: gate.clientKey(request),
         }),
       };
     }
@@ -629,6 +655,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
         }),
       };
     if (body.purpose === 'add') {
+      if (!(await mayAddPasskey(request, reply))) return;
       const file = await store.get();
       return {
         options: await gate.passkeys.registrationOptions({
@@ -646,6 +673,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
   app.post('/api/access/passkeys', async (request, reply) => {
     const body = parse(AddPasskeyBody, request.body, reply);
     if (!body) return;
+    if (!(await mayAddPasskey(request, reply))) return;
     if (!requireVerified(request, reply)) return;
     const place = passkeyPlace(request);
     if (!place) return reply.code(409).send(NO_PASSKEYS_HERE);
@@ -696,7 +724,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
     if (!id) return;
     if (!requireVerified(request, reply)) return;
     try {
-      const ended = await store.removePasskey(id);
+      const ended = await store.removePasskey(id, passkeyPlace(request)?.rpId);
       gate.disconnect(ended);
       if (ended.includes(currentSessionId(request) ?? ''))
         reply.header('set-cookie', gate.clearCookies());

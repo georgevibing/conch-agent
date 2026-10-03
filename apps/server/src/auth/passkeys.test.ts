@@ -265,6 +265,56 @@ describe('making and using a passkey', () => {
   });
 });
 
+describe('a flood of challenges (review)', () => {
+  it('can’t push out a hello, or another kind, by asking to sign in over and over', async () => {
+    const { store, ceremonies } = await setup();
+    const { code } = await store.createHello();
+    const hello = await ceremonies.registrationOptions({
+      place: PLACE,
+      purpose: 'hello',
+      helloCode: code,
+      userName: 'george',
+      client: '203.0.113.10',
+    });
+    for (let i = 0; i < 300; i++)
+      await ceremonies.authenticationOptions({
+        place: PLACE,
+        purpose: 'sign-in',
+        client: `198.51.100.${i % 250}`,
+      });
+    const made = await ceremonies.verifyRegistration({
+      response: new PretendAuthenticator().create(hello, PLACE.origin),
+      place: PLACE,
+      purpose: 'hello',
+      helloCode: code,
+      deviceName: 'Safari on Mac',
+    });
+    expect(made.passkey.id).toBeTruthy();
+  });
+
+  it('keeps only a few sign-in challenges per client, so one can’t crowd out the rest', async () => {
+    const { store, ceremonies } = await setup();
+    const { authenticator } = await addOne(store, ceremonies);
+    const mine = await ceremonies.authenticationOptions({
+      place: PLACE,
+      purpose: 'sign-in',
+      client: '203.0.113.10',
+    });
+    for (let i = 0; i < 50; i++)
+      await ceremonies.authenticationOptions({
+        place: PLACE,
+        purpose: 'sign-in',
+        client: '198.51.100.66',
+      });
+    // Someone else asking fifty times left the owner's challenge alone.
+    await ceremonies.verifyAuthentication({
+      response: authenticator.get(mine, PLACE.origin),
+      place: PLACE,
+      purpose: 'sign-in',
+    });
+  });
+});
+
 describe('keeping passkeys', () => {
   it('won’t remove the last way in', async () => {
     const { store, ceremonies } = await setup();
@@ -283,6 +333,19 @@ describe('keeping passkeys', () => {
     expect(await store.method()).toBe('key');
     await store.revokeKey(info.id);
     expect(await store.method()).toBe('passkey');
+  });
+
+  it('won’t remove the last passkey for the address it’s asked from, when passkeys are the only way', async () => {
+    const { store, ceremonies } = await setup();
+    const { passkey } = await addOne(store, ceremonies);
+    // Another passkey, for this computer only.
+    await store.addPasskey({ ...passkey, id: 'local-only-passkey-id-0001', rpId: 'localhost' });
+    await expect(store.removePasskey(passkey.id, PLACE.rpId)).rejects.toThrow(
+      'only passkey for conch.example.com',
+    );
+    // From this computer (localhost), the public one can go: localhost keeps its own.
+    await store.removePasskey(passkey.id, 'localhost');
+    expect((await store.passkeyRecords()).map((p) => p.rpId)).toEqual(['localhost']);
   });
 
   it('forgets every passkey on reset', async () => {

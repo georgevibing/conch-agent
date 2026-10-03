@@ -133,6 +133,38 @@ describe('AddressListeners', () => {
     expect(head).toMatch(/^HTTP\/1\.1 101/);
   });
 
+  it('stops promptly with a WebSocket still open, and ends it', async () => {
+    await listeners.startHttps(await leafFor(NAME));
+    const port = listeners.ports().https ?? 0;
+    const socket = tlsConnect({
+      host: '127.0.0.1',
+      port,
+      servername: NAME,
+      rejectUnauthorized: false,
+    });
+    await new Promise<void>((resolve) => socket.once('secureConnect', () => resolve()));
+    socket.write(
+      [
+        'GET /ws HTTP/1.1',
+        `Host: ${NAME}`,
+        'Upgrade: websocket',
+        'Connection: Upgrade',
+        'Sec-WebSocket-Version: 13',
+        'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==',
+        '',
+        '',
+      ].join('\r\n'),
+    );
+    await new Promise((resolve) => socket.once('data', resolve));
+    const closed = new Promise((resolve) => socket.once('close', resolve));
+    const stopped = await Promise.race([
+      listeners.stop().then(() => 'stopped'),
+      new Promise((resolve) => setTimeout(() => resolve('hung'), 3000)),
+    ]);
+    expect(stopped).toBe('stopped');
+    await closed;
+  });
+
   it('swaps a renewed certificate in without a restart', async () => {
     await listeners.startHttps(await leafFor(NAME));
     const port = listeners.ports().https ?? 0;

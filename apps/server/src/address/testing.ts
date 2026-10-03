@@ -81,6 +81,8 @@ export interface FakeAcmeOptions {
   answer: (token: string) => Promise<string | undefined>;
   /** Answer newOrder with this problem instead. */
   orderProblem?: { status: number; type: string; detail: string; retryAfter?: string };
+  /** Answer a newOrder that says `replaces` with 409 alreadyReplaced (RFC 9773). */
+  alreadyReplaced?: boolean;
   /** The first N signed requests get a badNonce. */
   badNonces?: number;
   renewalInfo?: { start: string; end: string };
@@ -169,6 +171,8 @@ export async function fakeAcme(options: FakeAcmeOptions) {
       return json(201, { status: 'valid' }, { location: kid });
     }
     if (path === '/order') {
+      if (options.alreadyReplaced && (payload as { replaces?: string } | undefined)?.replaces)
+        return problem(409, 'urn:ietf:params:acme:error:alreadyReplaced', 'Already replaced.');
       if (options.orderProblem) {
         const p = options.orderProblem;
         return problem(

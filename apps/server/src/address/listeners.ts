@@ -66,6 +66,12 @@ const isDoorPath = (url: string | undefined) =>
 export class AddressListeners {
   #http?: Server;
   #https?: HttpsServer;
+  /**
+   * Sockets handed to the gateway as WebSocket upgrades. The server lets go of
+   * them, so closing it never ends them: stop() does, or turning the address off
+   * would wait for the last page to close.
+   */
+  readonly #upgraded = new Set<Duplex>();
 
   constructor(
     /** The gateway's own server (Fastify's `app.server`). */
@@ -107,6 +113,8 @@ export class AddressListeners {
         socket.end('HTTP/1.1 421 Misdirected Request\r\nconnection: close\r\n\r\n');
         return;
       }
+      this.#upgraded.add(socket);
+      socket.once('close', () => this.#upgraded.delete(socket));
       this.gateway.emit('upgrade', req, socket, head);
     });
     // A client that never finishes its handshake is dropped, not kept.
@@ -127,6 +135,8 @@ export class AddressListeners {
         server.close(() => resolve());
         server.closeAllConnections();
       });
+    for (const socket of this.#upgraded) socket.destroy();
+    this.#upgraded.clear();
     await Promise.all([close(this.#http), close(this.#https)]);
     this.#http = undefined;
     this.#https = undefined;

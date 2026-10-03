@@ -293,7 +293,15 @@ async function passkeys() {
       process.exitCode = 1;
       return;
     }
-    const found = (await store.passkeyRecords()).find((p) => p.id === id || p.id.startsWith(id));
+    const records = await store.passkeyRecords();
+    const exact = records.find((p) => p.id === id);
+    const starting = records.filter((p) => p.id.startsWith(id));
+    if (!exact && starting.length > 1)
+      throw new AccessError(
+        'invalid',
+        `That fits ${starting.length} passkeys. Type more of its id (conch passkeys shows them).`,
+      );
+    const found = exact ?? starting[0];
     if (!found) throw new AccessError('not-found', 'No passkey has that id. See conch passkeys.');
     const ended = await store.removePasskey(found.id);
     ui.ok(`Forgot “${found.label ?? found.name}”. ${plural(ended.length, 'device')} signed out.`);

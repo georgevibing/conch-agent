@@ -17,10 +17,15 @@ import type { AccessStore, PasskeyRecord } from './store';
 
 /** A challenge is answered within five minutes, once. */
 export const CHALLENGE_TTL_MS = 5 * 60 * 1000;
-/** At most this many wait at once; the oldest go first. Nobody can fill the gateway's memory. */
+/** At most this many of one kind wait at once; the oldest go first. Nobody can fill the gateway's memory. */
 const MAX_CHALLENGES = 100;
 /** How long the browser's own prompt waits for a touch. */
 const PROMPT_MS = 2 * 60 * 1000;
+/**
+ * At most this many public challenges (signing in, the hello link) per client at once:
+ * one person's tabs, never a flood that pushes everyone else's out.
+ */
+const PER_CLIENT = 5;
 
 /** Where a passkey ceremony happens: the address the page is open at. */
 export interface PasskeyPlace {
@@ -62,6 +67,8 @@ interface Binding {
   hello?: string;
   /** For a hello: the user handle the new passkey is made for. */
   ownerId?: string;
+  /** Who asked, for the public ones (`Gatekeeper.clientKey`). */
+  client?: string;
   expiresAt: number;
 }
 
@@ -88,7 +95,14 @@ function challengeOf(clientDataJSON: string): string | undefined {
  * remembers the challenges it gave out, and keeps what was proven.
  */
 export class PasskeyCeremonies {
-  readonly #challenges = new Map<string, Binding>();
+  /** One pool per purpose: a flood of sign-in challenges can't push out a hello or a confirmation. */
+  readonly #pools = new Map<PasskeyPurpose, Map<string, Binding>>();
+
+  #pool(purpose: PasskeyPurpose): Map<string, Binding> {
+    let pool = this.#pools.get(purpose);
+    if (!pool) this.#pools.set(purpose, (pool = new Map()));
+    return pool;
+  }
 
   constructor(
     private readonly store: AccessStore,
@@ -97,14 +111,21 @@ export class PasskeyCeremonies {
 
   #remember(challenge: string, binding: Omit<Binding, 'expiresAt'>) {
     const now = this.now();
-    for (const [key, value] of this.#challenges)
-      if (value.expiresAt <= now) this.#challenges.delete(key);
-    while (this.#challenges.size >= MAX_CHALLENGES) {
-      const oldest = this.#challenges.keys().next().value;
-      if (oldest === undefined) break;
-      this.#challenges.delete(oldest);
+    const pool = this.#pool(binding.purpose);
+    for (const [key, value] of pool) if (value.expiresAt <= now) pool.delete(key);
+    if (binding.client !== undefined) {
+      const theirs = [...pool].filter(([, value]) => value.client === binding.client);
+      while (theirs.length >= PER_CLIENT) {
+        const [oldest] = theirs.shift() ?? [];
+        if (oldest !== undefined) pool.delete(oldest);
+      }
     }
-    this.#challenges.set(challenge, { ...binding, expiresAt: now + CHALLENGE_TTL_MS });
+    while (pool.size >= MAX_CHALLENGES) {
+      const oldest = pool.keys().next().value;
+      if (oldest === undefined) break;
+      pool.delete(oldest);
+    }
+    pool.set(challenge, { ...binding, expiresAt: now + CHALLENGE_TTL_MS });
   }
 
   /** Used once, whatever happens next; only for what it was made for. */
@@ -113,9 +134,10 @@ export class PasskeyCeremonies {
     want: { purpose: PasskeyPurpose; rpId: string; sessionId?: string; hello?: string },
   ): { challenge: string; binding: Binding } {
     const challenge = challengeOf(clientDataJSON);
-    const binding = challenge === undefined ? undefined : this.#challenges.get(challenge);
+    const pool = this.#pool(want.purpose);
+    const binding = challenge === undefined ? undefined : pool.get(challenge);
     if (challenge === undefined || !binding) throw new PasskeyError(STALE);
-    this.#challenges.delete(challenge);
+    pool.delete(challenge);
     if (binding.expiresAt <= this.now()) throw new PasskeyError(STALE);
     const same = (a: string | undefined, b: string | undefined) =>
       a === undefined || b === undefined ? a === b : safeEqual(a, b);
@@ -140,6 +162,7 @@ export class PasskeyCeremonies {
     sessionId?: string;
     helloCode?: string;
     userName: string;
+    client?: string;
   }): Promise<Record<string, unknown>> {
     const ownerId = input.purpose === 'hello' ? randomToken(16) : await this.store.ownerHandle();
     const existing = (await this.store.passkeyRecords()).filter((p) => p.rpId === input.place.rpId);
@@ -167,6 +190,7 @@ export class PasskeyCeremonies {
       ...(input.sessionId && { sessionId: input.sessionId }),
       ...(input.helloCode && { hello: hashToken(input.helloCode.trim()) }),
       ...(input.purpose === 'hello' && { ownerId }),
+      ...(input.client !== undefined && { client: input.client }),
     });
     return options as unknown as Record<string, unknown>;
   }
@@ -229,6 +253,7 @@ export class PasskeyCeremonies {
     place: PasskeyPlace;
     purpose: 'sign-in' | 'verify';
     sessionId?: string;
+    client?: string;
   }): Promise<Record<string, unknown>> {
     const mine = (await this.store.passkeyRecords()).filter((p) => p.rpId === input.place.rpId);
     const options = await generateAuthenticationOptions({
@@ -246,6 +271,7 @@ export class PasskeyCeremonies {
       purpose: input.purpose,
       rpId: input.place.rpId,
       ...(input.sessionId && { sessionId: input.sessionId }),
+      ...(input.client !== undefined && { client: input.client }),
     });
     return options as unknown as Record<string, unknown>;
   }

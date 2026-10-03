@@ -226,6 +226,7 @@ export class AddressService {
   /** Answer at this name from now on: checked, certified, served. */
   async set(raw: string): Promise<AddressStatus> {
     const name = normaliseName(raw);
+    this.#set({ state: 'checking', name, url: this.#url(name) });
     return this.#single(async () => {
       const before = await this.store.read();
       if (before.name !== name) {
@@ -245,6 +246,8 @@ export class AddressService {
 
   /** A backup from another computer: the person says this is the one now. */
   async turnOnHere(): Promise<AddressStatus> {
+    if (this.#status.name)
+      this.#set({ state: 'checking', name: this.#status.name, url: this.#url(this.#status.name) });
     return this.#single(async () => {
       const file = await this.store.read();
       if (!file.name) return this.#set({ state: 'off' });
@@ -267,6 +270,9 @@ export class AddressService {
 
   /** Get a new certificate now (Repair everything), unless the authority said to wait. */
   async renew(): Promise<AddressStatus> {
+    // Renewing keeps serving the certificate it has; it says it's at work meanwhile.
+    if (this.#status.name && this.#status.state === 'ready')
+      this.#set({ ...this.#status, state: 'getting-certificate' });
     return this.#single(async () => {
       const file = await this.store.read();
       if (!file.name) return this.#set({ state: 'off' });
@@ -305,10 +311,41 @@ export class AddressService {
 
   /** One change at a time: a second caller waits for the first and then runs. */
   #single(task: () => Promise<AddressStatus>): Promise<AddressStatus> {
-    const run = (this.#busy ?? Promise.resolve(this.#status)).catch(() => undefined).then(task);
+    const run = (this.#busy ?? Promise.resolve(this.#status))
+      .catch(() => undefined)
+      .then(task)
+      .catch((error: unknown) => this.#crashed(error));
     this.#busy = run;
     return run.finally(() => {
       if (this.#busy === run) this.#busy = undefined;
+    });
+  }
+
+  /**
+   * Something nobody planned for (a dropped connection mid-answer, a full disk):
+   * it's said in a sentence, the certificate that works keeps serving, and Conch
+   * tries again within the hour. It never reaches the gateway as a crash.
+   */
+  async #crashed(error: unknown): Promise<AddressStatus> {
+    const name = this.#status.name ?? (await this.store.read().catch(() => undefined))?.name;
+    if (!name) return this.#set({ state: 'off' });
+    this.#later(HOUR, () => this.#retry(name));
+    const message = `Something went wrong with ${name} (${(error as Error).message || 'no reason given'}). Conch tries again within the hour.`;
+    return this.#set({
+      ...this.#status,
+      state: this.#status.certificate ? 'ready' : 'problem',
+      name,
+      url: this.#url(name),
+      problem: { kind: 'other', message, retryAt: this.#now() + HOUR },
+    });
+  }
+
+  /** A retry Conch scheduled: only while the address is still the one it was for (review #8). */
+  #retry(name: string): void {
+    void this.#single(async () => {
+      const file = await this.store.read();
+      if (file.name !== name) return this.status();
+      return this.#obtain(name, false);
     });
   }
 
@@ -444,10 +481,7 @@ export class AddressService {
     const now = this.#now();
     const state = await this.store.state();
     if (state.nextAttempt && state.nextAttempt > now) {
-      this.#later(
-        state.nextAttempt - now,
-        () => void this.#single(() => this.#obtain(name, false)),
-      );
+      this.#later(state.nextAttempt - now, () => this.#retry(name));
       return;
     }
     if (at <= now) {
@@ -461,6 +495,7 @@ export class AddressService {
       Math.min(at - now, CHECK_EVERY_MS, Math.max(askAgain, HOUR)),
       () =>
         void this.#single(async () => {
+          if ((await this.store.read()).name !== name) return this.status();
           const current = await this.store.certificate();
           if (current) await this.#plan(name, current);
           return this.status();
@@ -480,10 +515,7 @@ export class AddressService {
     const old = await this.store.certificate();
     const serving = old && this.#usable(old, name) ? old : undefined;
     if (!force && state.nextAttempt && state.nextAttempt > now) {
-      this.#later(
-        state.nextAttempt - now,
-        () => void this.#single(() => this.#obtain(name, false)),
-      );
+      this.#later(state.nextAttempt - now, () => this.#retry(name));
       const problem = state.error && {
         kind: state.error.kind as AddressProblem['kind'],
         message: state.error.message,
@@ -530,10 +562,17 @@ export class AddressService {
         replaces ? { replaces } : {},
       );
     } catch (error) {
-      if (!(error instanceof AddressProblemError)) throw error;
-      return this.#failed(name, error.problem, state.failures, {
+      const problem =
+        error instanceof AddressProblemError
+          ? error.problem
+          : {
+              kind: 'ca-unavailable' as const,
+              message: `Let’s Encrypt couldn’t be reached just now (${(error as Error).message || 'no reason given'}). Conch tries again by itself.`,
+            };
+      return this.#failed(name, problem, state.failures, {
         short: false,
-        ...(error instanceof AcmeError && { retryAt: error.problem.retryAt }),
+        ...(error instanceof AcmeError &&
+          error.problem.retryAt && { retryAt: error.problem.retryAt }),
       });
     }
     await this.store.saveCertificate(issued);
@@ -584,7 +623,7 @@ export class AddressService {
         ...(full.command && { command: full.command }),
       },
     });
-    this.#later(nextAttempt - now, () => void this.#single(() => this.#obtain(name, false)));
+    this.#later(nextAttempt - now, () => this.#retry(name));
     const old = await this.store.certificate();
     const serving = old && this.#usable(old, name) ? old : undefined;
     return this.#set({
