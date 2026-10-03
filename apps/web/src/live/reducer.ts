@@ -23,6 +23,8 @@ import type {
   Usage,
 } from '@conch/protocol';
 
+import { latestReplies, type LatestReplies } from '../features/replies/latest';
+
 /** Everything the transcript renders, folded from the append-only event log. */
 export type TranscriptItem =
   | {
@@ -236,6 +238,8 @@ export interface ConversationView {
   options?: TurnOptions;
   /** The skills this chat is held to (ADR 0047), as the gateway reads them from the same log. */
   holds?: readonly SkillHold[];
+  /** Replies to send next under the latest reply (ADR 0055); gone once anything newer arrives. */
+  replies?: LatestReplies;
 }
 
 export const emptyView: ConversationView = { lastSeq: -1, items: [], status: 'idle' };
@@ -277,6 +281,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
     ...view,
     lastSeq: event.seq,
     notice: progressed ? undefined : view.notice,
+    replies: latestReplies(view.replies, event),
     ...((event.type === 'skill.used' || event.type === 'skill.hold.ended') && {
       holds: foldHolds(view.holds ?? [], event),
     }),
@@ -621,6 +626,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
     case 'question':
     case 'question.answered':
       return base;
+    // Folded into `replies` with every event (they go when anything newer comes).
     case 'replies':
       return base;
     case 'plan':

@@ -27,6 +27,7 @@ import { RoutineChatCard } from '../routines/RoutineChatCard';
 import { ChatFiles, turnChanges } from '../undo/ChatFiles';
 import { TaskChatCard } from '../tasks/TaskChatCard';
 import { RoutineInstruction } from '../routines/RunBanner';
+import { NextReplies } from '../replies/NextReplies';
 import styles from './Transcript.module.css';
 import { VaultApprovalItem, VaultRequestItem } from './VaultItems';
 import type { PendingMessage } from '../../live/store';
@@ -50,6 +51,8 @@ export interface TranscriptProps {
   onAskAgain?: (messageId: string) => void;
   /** Give the message box focus back (something that had it went away). */
   focusComposer?: () => void;
+  /** Send a reply chip's words (ADR 0055), as the message box would. */
+  onReply?: (text: string) => void;
 }
 
 /** Tolerance for the gateway's clock running a little behind this device's. */
@@ -137,6 +140,7 @@ export function Transcript({
   taskChat,
   onAskAgain,
   focusComposer,
+  onReply,
 }: TranscriptProps & {
   /** This conversation is a routine run: its first message is the routine's instruction. */
   routineRun?: boolean;
@@ -347,6 +351,14 @@ export function Transcript({
           <div className={styles.between}>
             <Waiting wait={afterTool} compact />
           </div>
+        )}
+        {onReply && (
+          <NextReplies
+            view={view}
+            waiting={pending.length > 0}
+            openedAt={openedAt}
+            onSend={onReply}
+          />
         )}
         {footer}
       </div>

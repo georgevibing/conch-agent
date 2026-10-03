@@ -1,0 +1,13 @@
+@layer nacre.components {
+  /* Under the reply they answer: lined up with its words, a little closer than the next message. */
+  .replies {
+    margin-block-start: calc(var(--nc-space-3) * -1);
+    margin-inline-start: 2.75rem;
+  }
+
+  @media (max-width: 640px) {
+    .replies {
+      margin-inline-start: 0;
+    }
+  }
+}
