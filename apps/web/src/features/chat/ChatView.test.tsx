@@ -98,6 +98,46 @@ describe('ChatView', () => {
     expect(useLiveStore.getState().created[sent.clientMessageId]).toBe('c1');
   });
 
+  it('never shows the greeting again between the server naming a new chat and its address', async () => {
+    mockFetch({ 'GET /api/state': () => appState(), 'GET /api/conversations': () => [] });
+    renderApp(<ChatView />);
+    await screen.findByRole('heading', { name: /, Ada\.$/ });
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'Message Conch' }),
+      'Hello there{Enter}',
+    );
+    const socket = FakeSocket.last;
+    await waitFor(() =>
+      expect(socket?.sent.some((m) => (m as { type: string }).type === 'conversation.send')).toBe(
+        true,
+      ),
+    );
+    const sent = socket?.sent.find((m) => (m as { type: string }).type === 'conversation.send') as {
+      clientMessageId: string;
+    };
+    const bubble = screen.getByText('Hello there');
+    // Named, before any event of the chat and before the address follows: the
+    // message moves to the chat at that instant, and the splash must not come back.
+    act(() => {
+      socket?.push({
+        type: 'conversation.created',
+        clientMessageId: sent.clientMessageId,
+        conversation: {
+          id: 'c9',
+          title: 'Hello there',
+          preview: '',
+          createdAt: 1,
+          updatedAt: 1,
+          status: 'running',
+          options: {},
+        },
+      });
+    });
+    expect(screen.queryByRole('heading', { name: /, Ada\.$/ })).toBeNull();
+    // The same bubble, not a new one drawn again.
+    expect(screen.getByText('Hello there')).toBe(bubble);
+  });
+
   it('shows a fix-it callout and keeps the draft when Claude Code is signed out', async () => {
     mockFetch({
       'GET /api/state': () =>

@@ -26,22 +26,26 @@ function browsing(view: ConversationView) {
  * The chat with its browser beside it. The panel opens by itself when the
  * assistant starts browsing (unless you closed it since), always when it needs
  * you, and with ⌘⇧B. On narrow screens it slides over the chat instead.
+ *
+ * A new chat has no id until its first message is saved; it's wrapped all the
+ * same (with nothing to open), so the chat inside isn't rebuilt, and nothing in
+ * it replays, the moment the id arrives.
  */
 export function BrowserDock({
   conversationId,
   view,
   children,
 }: {
-  conversationId: string;
+  conversationId: string | undefined;
   view: ConversationView;
   children: ReactNode;
 }) {
-  const open = useUi((s) => s.browserFor === conversationId);
+  const open = useUi((s) => conversationId !== undefined && s.browserFor === conversationId);
   const openBrowser = useUi((s) => s.openBrowser);
   const closeBrowser = useUi((s) => s.closeBrowser);
   const width = useUi((s) => s.browserWidth);
   const setWidth = useUi((s) => s.setBrowserWidth);
-  const dismissedAt = useUi((s) => s.browserDismissed[conversationId] ?? 0);
+  const dismissedAt = useUi((s) => (conversationId && s.browserDismissed[conversationId]) || 0);
   const { data: status } = useBrowserStatus();
   const narrow = useMediaQuery('(max-width: 1100px)');
   const row = useRef<HTMLDivElement>(null);
@@ -51,17 +55,25 @@ export function BrowserDock({
   const { step, handoff } = browsing(view);
   const seenHandoff = useRef<string | undefined>(undefined);
 
-  useHotkey('mod+shift+b', () => (open ? closeBrowser() : openBrowser(conversationId)));
+  useHotkey('mod+shift+b', () => {
+    if (open) closeBrowser();
+    else if (conversationId) openBrowser(conversationId);
+  });
 
   useEffect(() => {
-    if (!step || open || status?.settings.autoOpen === false) return;
+    if (!conversationId || !step || open || status?.settings.autoOpen === false) return;
     const fresh = step.at >= openedAt - 1_500 && step.at > dismissedAt;
     if (fresh && step.step.status === 'running') openBrowser(conversationId);
   }, [step, open, openedAt, dismissedAt, status?.settings.autoOpen, conversationId, openBrowser]);
 
   // The assistant needs you: open, whatever you closed before, and say so once.
   useEffect(() => {
-    if (handoff?.handoff.state !== 'waiting' || seenHandoff.current === handoff.id) return;
+    if (
+      !conversationId ||
+      handoff?.handoff.state !== 'waiting' ||
+      seenHandoff.current === handoff.id
+    )
+      return;
     seenHandoff.current = handoff.id;
     openBrowser(conversationId);
     toast('Your turn in the browser', { description: handoff.handoff.reason });
@@ -84,7 +96,10 @@ export function BrowserDock({
         {children}
         <Sheet.Root
           open={open}
-          onOpenChange={(next) => (next ? openBrowser(conversationId) : closeBrowser())}
+          onOpenChange={(next) => {
+            if (!next) closeBrowser();
+            else if (conversationId) openBrowser(conversationId);
+          }}
         >
           <Sheet.Content
             side="right"
@@ -94,7 +109,9 @@ export function BrowserDock({
             className={styles.sheet}
           >
             <Sheet.Title className={styles.srOnly}>Browser</Sheet.Title>
-            <BrowserPanel conversationId={conversationId} onClose={closeBrowser} />
+            {conversationId && (
+              <BrowserPanel conversationId={conversationId} onClose={closeBrowser} />
+            )}
           </Sheet.Content>
         </Sheet.Root>
       </>
@@ -116,7 +133,9 @@ export function BrowserDock({
             className={styles.handle}
           />
           <aside className={styles.pane} style={{ inlineSize: size }} aria-label="Browser panel">
-            <BrowserPanel conversationId={conversationId} onClose={closeBrowser} />
+            {conversationId && (
+              <BrowserPanel conversationId={conversationId} onClose={closeBrowser} />
+            )}
           </aside>
         </>
       )}

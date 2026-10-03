@@ -281,15 +281,20 @@ function useTurnRecovery(
   };
 }
 
-export function ChatView({ conversationId }: { conversationId?: string }) {
+export function ChatView({ conversationId: routeId }: { conversationId?: string }) {
   const live = useLive();
   const navigate = useNavigate();
   const { data: app } = useAppState();
+  const [sentId, setSentId] = useState<string>();
+  const created = useLiveStore((s) => s.created);
+  // A new chat is its conversation from the moment the server names it, before
+  // the address follows: its first message moves there at that instant, and
+  // the splash must not come back for the frame in between.
+  const conversationId = routeId ?? (sentId ? created[sentId] : undefined);
   const key = conversationId ?? NEW;
   const view =
     useLiveStore((s) => (conversationId ? s.views[conversationId] : undefined)) ?? emptyView;
   const pending = useLiveStore((s) => s.pending[key]) ?? [];
-  const created = useLiveStore((s) => s.created);
   const engineIssue = useLiveStore((s) => s.engineIssue);
   const setEngineIssue = useLiveStore((s) => s.setEngineIssue);
   const openSettings = useUi((s) => s.openSettings);
@@ -298,7 +303,6 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   const [draft, setDraft] = useState(
     () => (location.state as { draft?: string } | null)?.draft ?? '',
   );
-  const [sentId, setSentId] = useState<string>();
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const columnRef = useRef<HTMLDivElement>(null);
   const attachments = useDraftAttachments();
@@ -350,12 +354,13 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
     return live.watch(conversationId);
   }, [conversationId, live]);
 
-  // A new chat becomes a real conversation once the server confirms it.
+  // A new chat becomes a real conversation once the server confirms it. It's the
+  // same chat (`fromNew`): the view stays as it is, only its address changes.
   useEffect(() => {
-    if (!conversationId && sentId && created[sentId]) {
-      void navigate(`/c/${created[sentId]}`, { replace: true });
+    if (!routeId && sentId && created[sentId]) {
+      void navigate(`/c/${created[sentId]}`, { replace: true, state: { fromNew: true } });
     }
-  }, [conversationId, sentId, created, navigate]);
+  }, [routeId, sentId, created, navigate]);
 
   useEffect(() => {
     // Arriving from search, the find field has focus; don't take it away.
@@ -789,14 +794,14 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
       <div className={styles.dock}>{composer}</div>
     </div>
   );
-  return conversationId ? (
+  // Wrapped the same before and after a new chat gets its id, so the transcript
+  // and the composer stay where they are and nothing in them plays twice.
+  return (
     <BrowserDock conversationId={conversationId} view={view}>
       <ArtifactDock conversationId={conversationId} view={view}>
         {chat}
       </ArtifactDock>
     </BrowserDock>
-  ) : (
-    chat
   );
 }
 

@@ -1,6 +1,6 @@
 import { IconButton, LiveTitle, Sheet, Spinner, Text, useMediaQuery } from '@conch/nacre';
 import { Menu, PanelLeftOpen, TextSearch } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 
 import { useConversations } from '../api/queries';
@@ -62,7 +62,22 @@ export function Shell() {
   const { conversationId, routineId, appId, pageId, skillId, channelId, channelKind, itemId } =
     useParams();
   const navigate = useNavigate();
-  const path = useLocation().pathname;
+  const location = useLocation();
+  const path = location.pathname;
+  // Which chat view is on screen. A new chat that has just been given its id is
+  // the same chat: it keeps its view, so its first message and the reply's
+  // wait aren't drawn a second time. Any other change of chat starts afresh.
+  const [chat, setChat] = useState({ id: conversationId, key: conversationId ?? 'new' });
+  if (chat.id !== conversationId) {
+    const adopted =
+      chat.id === undefined &&
+      conversationId !== undefined &&
+      (location.state as { fromNew?: boolean } | null)?.fromNew === true;
+    setChat({
+      id: conversationId,
+      key: adopted ? chat.key : (conversationId ?? `new:${location.key}`),
+    });
+  }
   const routinesArea = path.startsWith('/routines');
   // `/apps/a_…` is something pinned (ADR 0034); every other `/apps…` is Apps (ADR 0052).
   const pinnedArea = isPinnedId(appId);
@@ -247,7 +262,7 @@ export function Shell() {
               <RoutinesView />
             )
           ) : (
-            <ChatView key={conversationId ?? 'new'} conversationId={conversationId} />
+            <ChatView key={chat.key} conversationId={conversationId} />
           )}
         </div>
         <TerminalDock />

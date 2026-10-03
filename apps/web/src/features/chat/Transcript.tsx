@@ -280,8 +280,15 @@ export function Transcript({
         : '';
   // Waiting on you (a question, a handoff): no "working…" while it's your move.
   const handingOff = last?.kind === 'handoff' && last.handoff.state === 'waiting';
+  // A message just sent here and confirmed, before the gateway says the turn is
+  // running (it picks the model and the apps first): still waiting for the
+  // answer, so the wait stays up instead of leaving and coming back.
+  const starting =
+    view.status === 'idle' && last?.kind === 'user' && last.at >= openedAt - CLOCK_SLACK_MS;
   const busy =
-    (running || pending.length > 0) && view.status !== 'awaiting-permission' && !handingOff;
+    (running || pending.length > 0 || starting) &&
+    view.status !== 'awaiting-permission' &&
+    !handingOff;
   const startedAt = view.turnStartedAt ?? pending[0]?.at;
   const wait: Wait = {
     verbs: verbsFor(prompt, 'starting'),

@@ -160,6 +160,17 @@ describe('a long chat’s summary (ADR 0055)', () => {
 });
 
 describe('Transcript', () => {
+  it('keeps the wait up between your message being saved and the turn starting', () => {
+    // The gateway saves the message, then picks the model and the apps, then runs.
+    show({ status: 'idle', items: [{ ...user, at: Date.now() }] });
+    expect(screen.getByRole('status')).toHaveTextContent('Claude is thinking');
+  });
+
+  it('doesn’t wait on a message from before the chat was opened', () => {
+    show({ status: 'idle', items: [user] });
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
   it('keeps the wait up while the model reasons in private (empty deltas)', () => {
     show({ status: 'running', turnStartedAt: 1, items: [user, assistant('', false)] });
     expect(screen.getByRole('status')).toHaveTextContent('Claude is thinking');
