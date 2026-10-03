@@ -6,7 +6,7 @@ import type { HealArea } from '@conch/protocol';
 import { z } from 'zod';
 
 import { writeFileAtomic, writeJson } from './fs';
-import { openIfSealed, sealerFor } from './sealed';
+import { KeyUnavailableError, openIfSealed, sealerFor } from './sealed';
 
 /**
  * Say what Conch fixed on its own, in one plain sentence (`Healed.note`).
@@ -213,7 +213,10 @@ export async function readStore<S extends z.ZodType>(
     const opened = await openIfSealed(path, bytes);
     toSeal = opened.wasPlain && sealerFor(path) !== undefined;
     raw = JSON.parse(opened.plain.toString('utf8'));
-  } catch {
+  } catch (error) {
+    // A key file whose key can't be had right now isn't damaged: setting it
+    // aside would start an empty list over keys that are all still there.
+    if (error instanceof KeyUnavailableError) throw error;
     parsedJson = false;
   }
   if (parsedJson) {

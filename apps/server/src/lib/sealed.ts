@@ -63,6 +63,13 @@ export function isSealed(text: string): boolean {
 export class SealedError extends Error {}
 
 /**
+ * The file is fine, but the key that opens it can't be had right now: the
+ * keychain or DPAPI didn't answer, or this home's sealer isn't registered yet.
+ * Never a reason to treat the file as damaged; try again later.
+ */
+export class KeyUnavailableError extends Error {}
+
+/**
  * A sealer from a device key: one subkey per file name (HKDF), the name as
  * associated data, a fresh nonce each write.
  */
@@ -96,7 +103,14 @@ export function deviceSealer(deviceKey: () => Promise<Buffer>): Sealer {
       }
       if (typeof parsed.n !== 'string' || typeof parsed.c !== 'string')
         throw new SealedError('damaged');
-      const key = await keyFor(name);
+      let key: Buffer;
+      try {
+        key = await keyFor(name);
+      } catch (error) {
+        throw new KeyUnavailableError('This computer’s key for your saved keys couldn’t be had.', {
+          cause: error,
+        });
+      }
       try {
         const body = Buffer.from(parsed.c, 'base64url');
         const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(parsed.n, 'base64url'));
@@ -125,6 +139,7 @@ export async function openIfSealed(
   const text = bytes.toString('utf8');
   if (!isSealed(text)) return { plain: bytes, wasPlain: true };
   const sealer = sealerFor(path) ?? sealers.get(resolve(dirname(path)));
-  if (!sealer) throw new SealedError('These keys are sealed, and nothing here can open them.');
+  if (!sealer)
+    throw new KeyUnavailableError('These keys are sealed, and nothing here can open them yet.');
   return { plain: await sealer.open(basename(path), text), wasPlain: false };
 }

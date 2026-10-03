@@ -5,7 +5,9 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
+import { writeJson } from './fs';
 import { brokenPath, isBrokenCopy, readStore, salvage, setAside } from './recover';
+import { deviceSealer, KeyUnavailableError, registerSealer, unregisterSealer } from './sealed';
 
 const home = () => mkdtemp(join(tmpdir(), 'conch-recover-'));
 const copiesIn = async (dir: string) => (await readdir(dir)).filter(isBrokenCopy).sort();
@@ -148,5 +150,58 @@ describe('readStore', () => {
       state: 'reset',
       value: { name: 'Conch' },
     });
+  });
+});
+
+describe('readStore on a sealed key file', () => {
+  it('leaves the file alone when the key that opens it can’t be had right now', async () => {
+    const dir = await home();
+    let away = false;
+    registerSealer(
+      dir,
+      deviceSealer(async () => {
+        // Windows' DPAPI through PowerShell can fail for a moment (a busy
+        // computer, a console that won't attach); the key itself is fine.
+        if (away) throw new Error('Windows wouldn’t open the key for your passwords.');
+        return Buffer.alloc(32, 7);
+      }),
+    );
+    try {
+      const path = join(dir, 'secrets.json');
+      await writeJson(path, { keys: { openrouter: { value: 'sk-or-kept' } } });
+      const sealed = await readFile(path, 'utf8');
+      const onRepair = vi.fn();
+
+      away = true;
+      await expect(readStore(path, Prefs, { onRepair })).rejects.toBeInstanceOf(
+        KeyUnavailableError,
+      );
+      // Not damage: nothing set aside, nothing reset, the keys still there.
+      expect(onRepair).not.toHaveBeenCalled();
+      expect(await copiesIn(dir)).toEqual([]);
+      expect(await readFile(path, 'utf8')).toBe(sealed);
+
+      away = false;
+      const read = await readStore(path, Prefs);
+      expect(read.value.keys).toEqual({ openrouter: { value: 'sk-or-kept' } });
+    } finally {
+      unregisterSealer(dir);
+    }
+  });
+
+  it('leaves it alone when nothing here can open it yet', async () => {
+    const dir = await home();
+    registerSealer(
+      dir,
+      deviceSealer(async () => Buffer.alloc(32, 7)),
+    );
+    const path = join(dir, 'secrets.json');
+    await writeJson(path, { keys: { a: { value: 'b' } } });
+    unregisterSealer(dir);
+    const sealed = await readFile(path, 'utf8');
+
+    await expect(readStore(path, Prefs)).rejects.toBeInstanceOf(KeyUnavailableError);
+    expect(await copiesIn(dir)).toEqual([]);
+    expect(await readFile(path, 'utf8')).toBe(sealed);
   });
 });
