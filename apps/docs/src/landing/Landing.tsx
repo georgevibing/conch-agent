@@ -33,6 +33,7 @@ import {
   ChatDemo,
   HealedDemo,
   KnowsDemo,
+  MakerDemo,
   MemoryDemo,
   PhoneDemo,
   ProvidersDemo,
@@ -52,6 +53,7 @@ export const LANDING_LINKS = {
   channels: '/channels',
   apps: '/features/apps',
   chats: '/features/chats',
+  makeApps: '/features/make-apps',
   decisions: '/project/decisions',
   nacre: '/project/nacre',
 } as const;
@@ -216,6 +218,33 @@ export function Landing() {
         </Scene>
 
         <Scene
+          kicker="Make it yours"
+          title={
+            <>
+              Ask for an app. <em>It builds one.</em>
+            </>
+          }
+          stage={<MakerDemo />}
+          points={[
+            'Every model you use can use it, and its page looks like Conch, in light and dark.',
+            'It runs sealed off: its own notes, and only the websites its card names.',
+            'Nothing is added until you press the button.',
+            'Share it on GitHub in one press, or add one someone else made from a link.',
+          ]}
+          action={
+            <TextLink arrow="forward" asChild>
+              <Link to={LANDING_LINKS.makeApps}>Make an app</Link>
+            </TextLink>
+          }
+        >
+          <p>
+            When nothing you have does what you need, say what you want in your own words. Conch
+            writes the app, checks it, tries every part of it and shows it to you as a card.
+          </p>
+        </Scene>
+
+        <Scene
+          flip
           kicker="Safe hands"
           title={
             <>
@@ -242,7 +271,6 @@ export function Landing() {
         </Scene>
 
         <Scene
-          flip
           kicker="The web"
           title={
             <>
@@ -264,6 +292,7 @@ export function Landing() {
         </Scene>
 
         <Scene
+          flip
           kicker="In your pocket"
           title={
             <>
