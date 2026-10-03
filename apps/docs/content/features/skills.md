@@ -21,7 +21,7 @@ Each skill has one of three settings:
 
 - **Automatically.** Your assistant uses it whenever a request fits.
 - **When I ask.** Only when you type `/` and its name, such as `/weekly-review`, followed by whatever it should work on.
-- **Off.** Never.
+- **Off.** Never. An off skill is kept, and in every backup. **Off** at the top of the list shows them all, and <kbd>mod+k</kbd> finds them as **Skills that are off**.
 
 Either way, a line in the chat names the skill that shaped the reply. Skills are in <kbd>mod+k</kbd> too: choosing one puts it in the message box, ready to send.
 
@@ -62,6 +62,34 @@ When you've asked for the same thing in three different chats, the Skills page o
 - **Don't suggest this** hides it for good.
 
 Nothing is saved or turned on unless you do it.
+
+## Save how I did this
+
+Sometimes your assistant has to work something out: many steps, a false start or two, then it works. Conch can keep that know-how as a skill, so next time it goes straight there.
+
+When a piece of work goes well, a line appears under the reply: **Save how I did this as a skill**. It appears when:
+
+- a task you sent to the background finished, and Conch checked it really happened;
+- a routine ran and did its job;
+- you said it worked, like "perfect, thanks", right after a few steps;
+- or it took many steps and ended well.
+
+Press it to open a draft, written from the chat. It keeps the steps that worked and leaves out the dead ends. Things that were only true this once, like a file name or a date, become something to ask for next time. The draft starts as **When I ask**, and it says what the skill can do: only what the work needed. Read it, change anything, and press **Create skill** if you want it.
+
+It's offered once per chat, never while an answer is being written, and never for work that failed. **Not now** puts it away. The offer waits on the Skills page too, with **Not now** and **Don't suggest this**. It's in <kbd>mod+k</kbd> while you're in that chat.
+
+If the chat read a web page, an email or a file from outside, the offer says so: "Learned in a chat that read trains.example." Read each step before you save it. A page can try to slip in a step of its own, so Conch reads the draft the way it reads any skill, and drops one that looks wrong. Work from a chat with someone else's messages in it is never offered.
+
+The draft is written by the provider that answered the chat, which has seen it already. Nothing goes anywhere new.
+
+## A tidy shelf
+
+Skills Conch suggested, saved from your work, or brought in from another app can sit unused. When one hasn't been used for two months, the Skills page says **You haven't used these in two months**:
+
+- **Turn them off** turns them off. They stay in your list under **Off**, and in every backup. One switch brings each back.
+- **Keep them** leaves them on. Conch asks again only after another two months.
+
+Nothing changes until you press. A skill you wrote yourself is never on this card, and neither is another app's.
 
 ## Good to know
 

@@ -352,6 +352,20 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   skill to review. Routes: `/api/memories/{search,export,:id/keep}`,
   `/api/memory/{index,index/model,tidy}`, `/api/skills/suggestions`.
 
+- **Skills from what worked** ([ADR 0058](./docs/adr/0058-skills-from-what-worked.md)).
+  `SkillLearner` (`skills/learn.ts`) listens to the broadcast: a turn that ended well, a
+  task `verified`, a routine's run `succeeded`. `assess` reads the chat's log as turns
+  and decides whether the last one ended a piece of work worth keeping (a verdict, your
+  thanks, or a long run of steps; failures, a skill already in use and someone else's
+  words rule it out). The provider that answered the chat (else one on this computer)
+  drafts it with its cheapest model; `checkDraft` reads the reply like a skill
+  (`scanText`, secrets, the vault's redactor, replayed specifics; stricter after
+  reading). `permissionsOf` declares only what the successful steps needed. Offers live
+  in `skill-learned.json`, once per chat (or routine), and `skills.offered` tells the web.
+  `SkillUsage` (`skills/usage.ts`) counts every `skill.used` and remembers which skills
+  Conch put on the shelf; `SkillService.shelf`/`tidyShelf` offer the ones unused for 60
+  days and only ever turn them off. Routes: `/api/skills/suggestions/{work,shelf}`.
+
 - **Hand it off** ([ADR 0033](./docs/adr/0033-hand-it-off.md)). `TaskService` runs each
   task as a conversation with origin `task` (as routines do), at most 3 background and 4
   helpers at once, the rest `queued`. A task reports with `report_result`; its status,
@@ -636,7 +650,7 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   [ADR 0059 — Looking through earlier chats](./docs/adr/0059-looking-through-earlier-chats.md).
 - Local data lives in `~/.conch/` (`CONCH_HOME`): `settings.json`, `secrets.json`
   (the API key and a key per provider, or a 1Password reference to one),
-  `memory/*.md` (+ derived `memory-index.db`, `memory-tidy.json`, `models/`; `skill-suggestions.json`), `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `search.db`,
+  `memory/*.md` (+ derived `memory-index.db`, `memory-tidy.json`, `models/`; `skill-suggestions.json`, `skill-learned.json`, `skill-usage.json`), `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `search.db`,
   `integrations.json` + `integrations.secrets.json`, `skills/<name>/SKILL.md` +
   `skills.json` (modes for skills Conch doesn't own), `local.json` (the local model chosen, the last download speed), `api-sessions/<id>.json` (the
   transcript a plain model API needs, since it keeps no session of its own),
