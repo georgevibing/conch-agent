@@ -19,7 +19,6 @@ test.describe.configure({ mode: 'serial' });
 
 const run = promisify(execFile);
 const root = join(import.meta.dirname, '..');
-const KEY = process.env.CONCH_E2E_HERE_KEY ?? '';
 const PASSWORD = 'seven lanterns over quiet harbours';
 
 /** What `conch hello` and `conch reset` do to the gateway's home, from its own store. */
@@ -66,11 +65,15 @@ const composer = (page: Page) => page.getByRole('textbox', { name: 'Message Conc
 
 test.beforeAll(async ({ baseURL }) => {
   // Onboarding is another journey's: this one starts with Conch ready to chat.
+  // As this computer: the project's cookie (ADR 0063), the only proof there is.
   const launcher = await playwrightRequest.newContext({
     baseURL,
-    extraHTTPHeaders: { 'x-conch-here': KEY },
+    storageState: test.info().project.use.storageState,
   });
-  await launcher.patch('/api/settings', { data: { onboarded: true, profile: { name: 'Ada' } } });
+  const res = await launcher.patch('/api/settings', {
+    data: { onboarded: true, profile: { name: 'Ada' } },
+  });
+  expect(res.status()).toBe(200);
   await launcher.dispose();
 });
 
