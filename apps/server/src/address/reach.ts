@@ -7,7 +7,9 @@
  * matches means the record, the firewall and the port all lead here.
  */
 import { randomBytes } from 'node:crypto';
+import { request as httpRequest } from 'node:http';
 
+import { chosenResolvers, lookupName } from './dns';
 import { FIREWALL_HINT, type AddressProblem } from './problems';
 
 export type ReachResult =
@@ -18,6 +20,34 @@ const CODE = (error: unknown): string => {
   const cause = (error as { cause?: { code?: string } }).cause;
   return cause?.code ?? (error as { code?: string }).code ?? (error as Error).name;
 };
+
+/** GET `path` from `name` at the address the chosen resolvers give it. */
+async function viaChosen(
+  name: string,
+  port: number,
+  path: string,
+  timeoutMs: number,
+): Promise<string> {
+  const found = await lookupName(name);
+  const address = found.v4[0] ?? found.v6[0];
+  if (!address) throw Object.assign(new Error('not found'), { code: 'ENOTFOUND' });
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(
+      { host: address, port, path, headers: { host: name }, timeout: timeoutMs },
+      (response) => {
+        let text = '';
+        response.setEncoding('utf8');
+        response.on('data', (chunk: string) => (text += chunk));
+        response.on('end', () => resolve(response.statusCode === 200 ? text.trim() : ''));
+      },
+    );
+    request.on('timeout', () =>
+      request.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })),
+    );
+    request.on('error', reject);
+    request.end();
+  });
+}
 
 export async function checkReach(
   name: string,
@@ -35,11 +65,19 @@ export async function checkReach(
   deps.checks.set(nonce, token);
   const port = deps.port && deps.port !== 80 ? `:${deps.port}` : '';
   try {
-    const response = await (deps.fetch ?? fetch)(
-      `http://${name}${port}/.well-known/conch-check/${nonce}`,
-      { redirect: 'manual', signal: AbortSignal.timeout(deps.timeoutMs ?? 8000) },
-    );
-    const body = response.ok ? (await response.text()).trim() : '';
+    const path = `/.well-known/conch-check/${nonce}`;
+    // With resolvers of its own (`CONCH_DNS_SERVERS`, a test network), the name is looked up
+    // there and asked for by address, as the internet would reach it.
+    const body =
+      chosenResolvers() && !deps.fetch
+        ? await viaChosen(name, deps.port ?? 80, path, deps.timeoutMs ?? 8000)
+        : await (async () => {
+            const response = await (deps.fetch ?? fetch)(`http://${name}${port}${path}`, {
+              redirect: 'manual',
+              signal: AbortSignal.timeout(deps.timeoutMs ?? 8000),
+            });
+            return response.ok ? (await response.text()).trim() : '';
+          })();
     if (body === token) return { ok: true };
     return {
       ok: false,

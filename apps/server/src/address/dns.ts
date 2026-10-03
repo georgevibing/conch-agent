@@ -42,6 +42,14 @@ export const resolveWithNode: Resolve = async (name, family, servers) => {
   }
 };
 
+/** Resolvers to ask instead of the public ones (`CONCH_DNS_SERVERS`): a test network's. */
+export function chosenResolvers(env: NodeJS.ProcessEnv = process.env): string[] | undefined {
+  const servers = env.CONCH_DNS_SERVERS?.split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return servers?.length ? servers : undefined;
+}
+
 /** A name's A and AAAA records, from the public resolvers, else the system's. */
 export async function lookupName(name: string, resolve: Resolve = resolveWithNode): Promise<Found> {
   const both = (servers?: string[]) =>
@@ -49,6 +57,8 @@ export async function lookupName(name: string, resolve: Resolve = resolveWithNod
       v4,
       v6,
     }));
+  const chosen = chosenResolvers();
+  if (chosen) return both(chosen);
   try {
     return await both(PUBLIC_RESOLVERS);
   } catch {
@@ -168,6 +178,9 @@ async function ask(fetcher: typeof fetch, url: string, read: (text: string) => s
 export async function publicAddresses(
   deps: { fetch?: typeof fetch; interfaces?: ReturnType<typeof networkInterfaces> } = {},
 ): Promise<Mine> {
+  // Said outright (`CONCH_PUBLIC_IP`): behind a NAT Conch can't see past, or a test network.
+  const said = process.env.CONCH_PUBLIC_IP?.trim();
+  if (said && isIP(said)) return isIP(said) === 4 ? { v4: said } : { v6: said };
   const mine = interfaceAddresses(deps.interfaces);
   const fetcher = deps.fetch ?? fetch;
   const trace = (text: string) => /^ip=(.+)$/m.exec(text)?.[1]?.trim();

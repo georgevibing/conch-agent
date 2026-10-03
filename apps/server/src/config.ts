@@ -43,6 +43,8 @@ export const Env = z.object({
   CONCH_LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
+  CONCH_PUBLIC_IP: z.string().optional(),
+  CONCH_DNS_SERVERS: z.string().optional(),
   CONCH_APP: z.string().optional(),
   CONCH_APP_UPDATES: AppUpdates.optional(),
 });
@@ -156,6 +158,17 @@ export const ENV_ABOUT: Record<keyof Config, EnvAbout> = {
   },
   CONCH_LOG_LEVEL: {
     about: 'How much Conch logs. Logs never hold query strings, headers or bodies.',
+  },
+  CONCH_PUBLIC_IP: {
+    about:
+      'This server’s public address, for the DNS record conch setup shows (ADR 0064), when Conch can’t see it itself: behind a NAT it can’t look past.',
+    unset: 'its own public address, else what the internet sees',
+  },
+  CONCH_DNS_SERVERS: {
+    about:
+      'Resolvers to look your address up at, comma separated, instead of the public ones: a test network’s (ADR 0064).',
+    unset: '1.1.1.1 and 8.8.8.8, then this computer’s own',
+    internal: true,
   },
   CONCH_APP: {
     about:
