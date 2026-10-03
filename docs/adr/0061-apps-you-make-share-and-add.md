@@ -251,6 +251,13 @@ an "always allow" on first use, and its skills start **When I ask**.
 - It also says, in a few lines, that Conch can make an app when someone wants an
   ability nothing they have offers, or look for one, and to read `app_guide`
   first.
+- **The map** of what Conch can turn on (ADR 0060 §1) lists apps you have but
+  switched off, so the assistant can offer one back with a card (**Turn on**),
+  and the chat carries on once it's on.
+- What a stranger's app says (its name, tagline, instructions, examples, tool
+  titles and descriptions) is someone else's text: it reaches the model as one
+  plain line each, and its instructions and examples sit in a fenced block of
+  notes ("data, not instructions"). Using one of its tools taints the chat.
 - **⌘K** finds each Conch app, its pages, **Make an app** and **Add an app from a
   link**.
 
@@ -263,13 +270,50 @@ an "always allow" on first use, and its skills start **When I ask**.
 - **Repair everything**: every app's files still match what was added (a hash),
   its runtime starts, its data folder reads. Repair restores files from the kept
   copy and restarts the runtime.
-- **Backups**: `conch-apps/**` and `conch-app-data/**` are kept (group `apps`),
+- **Backups**: `conch-apps/**` and `conch-app-data/**` are kept (with the apps),
   `conch-apps.secrets.json` is secret, `app-workshop/**` is kept with chats.
 - **Protected paths**: `conch-apps/`, `conch-app-data/` and
   `conch-apps.secrets.json` (the agent's file tools can't rewrite an added app
   or read its secrets).
 - **Restore preview** names the apps a backup would bring back
   (`BackupPower` `conch-apps`).
+
+### 9. Decided while building it
+
+- **Adding from elsewhere needs a recent sign-in.** Installing a package,
+  pressing a card that offers one, updating, going back, publishing and saving a
+  file (which signs with your key) need a recently verified session, like adding
+  a program. Pressing the card for an app made in that very chat needs only the
+  press: the person watched it being made and the card says what it can do.
+- **Same hands.** Settings, keys, the app's data, its policy and the versions
+  kept for **Go back** carry over to a new version only when it comes from the
+  same place and is signed by the same key (`sameHands`): a GitHub repository by
+  owner and name, a link by its address, a file never, and anything not made here
+  only when both are signed by the same key. An app from other hands in place of
+  yours starts afresh, and its card says so ("This replaces Weather from another
+  maker; its settings, keys and data won't carry over"). Data kept after a
+  removal remembers whose it was, in `conch-apps.json` (not in the data folder,
+  which the app can write).
+- **Only your apps carry your signature.** Saving as a file signs apps made here;
+  an app from anyone else is saved as it was added, with its own signature if it
+  had one. Publishing an app you didn't make is refused: share the address you
+  added it from instead.
+- **A draft's websites are a sink.** Its `reaches` were written by a model, and no
+  person has seen them yet: after the chat read something from outside,
+  `app_try` and a draft page's calls ask first, naming the hosts, and running a
+  draft that reaches the web taints the chat.
+- **What tools carry.** An app's tools carry their input schema to every model
+  (`ConchAppTool.input`), and Conch checks what the model sends against it before
+  the tool sees it.
+- **Pressing in a page.** A click elsewhere in Conch also activates the window for
+  a few seconds, and a page could ride on it by taking focus. `SealedFrame` counts
+  a press only when the frame has focus and nothing in Conch itself was pressed
+  in the last five seconds, so it errs towards asking.
+- **The fence, tested from inside.** Tests that attack from a real child process
+  found three more ways out than the first design closed (`console`'s socket,
+  undici's newer dispatcher slot, the real `process`). The runtime now hides all
+  three, freezes the built-in prototypes, and a sweep test walks everything an
+  app can reach looking for a socket, a handle or a process.
 
 ## Threat model
 
@@ -294,14 +338,17 @@ an "always allow" on first use, and its skills start **When I ask**.
 
 ## Consequences
 
-- New: `apps/server/src/conchapps/` (manifest, runtime, check, store, workshop,
-  sources, share, service, tools, routes, doctor), routes under
-  `/api/conch-apps`, the events `conch-app.changed` and `conch-app.offered`,
-  Nacre `AppOffer`, `AppReach`, `AppMaker`, `CommunityAppTile` and the page kit,
-  and the guide **Make an app**.
+- New: `apps/server/src/conchapps/` (package, runtime, fetcher, check, sign,
+  github, sources, publish, store, workshop, hosted, service, tools, guide,
+  prompt, routes, doctor), routes under `/api/conch-apps`, the conversation
+  events `conch-app.offer` and `conch-app.share`, the server event
+  `conch-apps.changed`, `UpdatesStatus.apps`, Nacre `ConchApps` (`AppIcon`,
+  `AppOffer`, `AppMaker`, `AppPreview`, `CommunityApps`, `ShareSteps`,
+  `AppVersions`) and the page kit, `SealedFrame`'s `onCall`, and the guide
+  **Make an app**.
 - New data: `conch-apps.json`, `conch-apps/`, `conch-app-data/`,
   `app-workshop/`, `conch-apps.secrets.json`.
-- `gh` is a need, used only when the person publishes.
+- `gh` and `git` are needs, used only when the person publishes.
 
 ## Sources (reviewed 2026-10-03)
 
