@@ -36,3 +36,26 @@ jobs:
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore
+
+  # The desktop app (ADR 0054), driven for real: it opens Conch, keeps it
+  # running with its window closed, restarts a crashed gateway, and quits.
+  desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Ubuntu 24.04 keeps apps from making the namespaces Chromium's sandbox uses.
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - run: xvfb-run -a pnpm desktop:e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-e2e-results
+          path: test-results/desktop/
+          retention-days: 7
+          if-no-files-found: ignore
