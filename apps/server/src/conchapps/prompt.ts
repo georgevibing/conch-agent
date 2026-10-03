@@ -17,7 +17,8 @@ export const MAKING_APPS = `## Making apps
 When the person wants an ability nothing they have offers (keep a diary, track something, read a site's data), offer to make them a Conch app, or look for one first with \`app_find\`.
 Read \`app_guide\` before you build or change one. Build first, and ask only what you can't sensibly assume.
 Always \`app_check\` and \`app_try\` every tool before \`app_present\`.
-The person adds it from the card \`app_present\` (or \`app_get\`) puts under your reply. Never say it's added, installed or ready to use before the card says so.`;
+The person adds it from the card \`app_present\` (or \`app_get\`) puts under your reply. Never say it's added, installed or ready to use before the card says so.
+Their apps are listed under ## Apps: use them by name when they fit, without being asked. A link to an app (GitHub, a .conchapp) goes to \`app_get\`; "share it" or "put it on GitHub" goes to \`app_share\`, whose card they press.`;
 
 function checkLine(check: ConchAppCheck | undefined, hash: string): string {
   if (!check) return 'Not checked yet: run app_check.';
