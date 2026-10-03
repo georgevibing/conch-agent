@@ -78,6 +78,26 @@ describe('what in a backup can act for you', () => {
     for (const power of powers) expect(BackupPower.safeParse(power).success).toBe(true);
   });
 
+  it('names the apps it brings back, with the websites each reaches (ADR 0061)', () => {
+    expect(previewReads('conch-apps.json')).toBe(true);
+    const powers = powersOf(
+      ['conch-apps.json'],
+      reader({
+        'conch-apps.json': {
+          apps: [
+            { id: 'tally', enabled: true, manifest: { name: 'Tally', reaches: [] } },
+            { id: 'weather', manifest: { name: 'Weather', reaches: ['api.weather.example'] } },
+            { id: 'off', enabled: false, manifest: { name: 'Off', reaches: [] } },
+          ],
+        },
+      }),
+    );
+    expect(powers).toEqual([
+      { kind: 'conch-apps', names: ['Tally', 'Weather (reaches api.weather.example)'], more: 0 },
+    ]);
+    for (const power of powers) expect(BackupPower.safeParse(power).success).toBe(true);
+  });
+
   it('names whose skills it trusts, so a backup can’t quietly vouch for someone (ADR 0031)', () => {
     const powers = powersOf(
       ['skills.trust.json'],
