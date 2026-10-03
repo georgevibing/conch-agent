@@ -1,0 +1,405 @@
+@layer nacre.components {
+  .root {
+    --pc-success: light-dark(
+      oklch(0.55 0.13 var(--nc-success-h)),
+      oklch(0.76 0.13 var(--nc-success-h))
+    );
+    --pc-marker: 1rem;
+    --pc-pad-x: var(--nc-space-3-5);
+
+    min-inline-size: 0;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge);
+    animation: nc-surface-in var(--nc-duration-slow) var(--nc-ease-out) both;
+  }
+
+  /* ── Heading: what it is, and how far along ─────────────────────────── */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-3) var(--pc-pad-x) var(--nc-space-2-5);
+  }
+
+  .icon {
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
+    flex-shrink: 0;
+    color: var(--nc-text-muted);
+  }
+
+  .heading {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    letter-spacing: -0.003em;
+    color: var(--nc-text);
+  }
+
+  .count {
+    margin-inline-start: auto;
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-muted);
+  }
+
+  /* ── The thin line that fills ─────────────────────────────────────── */
+  .line {
+    display: block;
+    block-size: 2px;
+    margin-inline: var(--pc-pad-x);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-gray-4);
+    overflow: hidden;
+  }
+
+  .fill {
+    display: block;
+    block-size: 100%;
+    border-radius: inherit;
+    background: var(--nc-accent-9);
+    transform: scaleX(var(--pc-progress));
+    transform-origin: left center;
+    transition:
+      transform var(--nc-spring-soft-duration) var(--nc-spring-soft),
+      background-color var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .fill:dir(rtl) {
+    transform-origin: right center;
+  }
+
+  .root[data-finished] .fill {
+    background: var(--pc-success);
+  }
+
+  /* ── Steps ─────────────────────────────────────────────────────────── */
+  .body {
+    padding: var(--nc-space-2) var(--pc-pad-x) var(--nc-space-3);
+  }
+
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .step {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2-5);
+    padding-block: var(--nc-space-1);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+  }
+
+  .title {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+    text-wrap: pretty;
+    transition: color var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .step[data-status='done'] .title {
+    color: var(--nc-text-muted);
+  }
+
+  .step[data-status='active'] .title {
+    font-weight: var(--nc-weight-medium);
+  }
+
+  /* Waiting: a step back from the one being done, a step ahead of the finished ones. */
+  .step[data-status='pending'] .title {
+    color: color-mix(in oklch, var(--nc-text) 72%, var(--nc-text-muted));
+  }
+
+  .more {
+    margin: 0 0 var(--nc-space-1);
+    padding-inline-start: calc(var(--pc-marker) + var(--nc-space-2-5));
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  /* ── Markers ───────────────────────────────────────────────────────── */
+  .marker {
+    position: relative;
+    display: inline-grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: var(--pc-marker);
+    block-size: var(--pc-marker);
+    /* Sits on the first line of its words. */
+    margin-block-start: calc((1lh - var(--pc-marker)) / 2);
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1.5px var(--nc-gray-7);
+    transition:
+      background-color var(--nc-duration-base) var(--nc-ease-out),
+      box-shadow var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .marker[data-status='active'] {
+    box-shadow: inset 0 0 0 1.5px var(--nc-accent-9);
+  }
+
+  /* The one being done breathes: a dot in the ring, and a soft halo around it. */
+  .marker[data-status='active']::before {
+    content: '';
+    inline-size: 0.375rem;
+    block-size: 0.375rem;
+    border-radius: 50%;
+    background: var(--nc-accent-9);
+    animation: nc-breathe calc(var(--nc-duration-slower) * 4) var(--nc-ease-in-out) infinite;
+  }
+
+  .marker[data-status='active']::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px var(--nc-accent-6);
+    opacity: 0;
+    animation: pc-halo calc(var(--nc-duration-slower) * 4) var(--nc-ease-out) infinite;
+  }
+
+  @keyframes pc-halo {
+    0% {
+      transform: scale(0.85);
+      opacity: 0.9;
+    }
+    70%,
+    100% {
+      transform: scale(1.35);
+      opacity: 0;
+    }
+  }
+
+  .marker[data-status='done'] {
+    background: var(--pc-success);
+    box-shadow: none;
+    color: var(--nc-surface);
+  }
+
+  .check {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* Ticked off just now: the disc settles in and the check draws itself. */
+  .marker[data-fresh] {
+    animation: pc-settle var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both;
+  }
+
+  .marker[data-fresh] .check path {
+    stroke-dasharray: 1;
+    animation: pc-draw var(--nc-duration-slower) var(--nc-ease-out) var(--nc-duration-fast) both;
+  }
+
+  @keyframes pc-settle {
+    from {
+      transform: scale(0.6);
+    }
+    to {
+      transform: none;
+    }
+  }
+
+  @keyframes pc-draw {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  /* ── Show all ──────────────────────────────────────────────────────── */
+  .showAll {
+    appearance: none;
+    margin: var(--nc-space-1-5) 0 0;
+    margin-inline-start: calc(var(--pc-marker) + var(--nc-space-2-5) - var(--nc-space-1-5));
+    padding: var(--nc-space-0-5) var(--nc-space-1-5);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    background: transparent;
+    color: var(--nc-accent-11);
+    font: inherit;
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    cursor: pointer;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .showAll:hover {
+      background: var(--nc-wash-1);
+    }
+  }
+
+  .showAll:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  /* ── Folded: one quiet line once the reply ended ─────────────────── */
+  .root[data-state-plan='folded'] {
+    background: var(--nc-surface);
+    animation: none;
+  }
+
+  .fold {
+    --nc-rim-hover: 0.5;
+    --nc-sheen-hover: 0.12;
+    --nc-sheen-size: 160px;
+
+    appearance: none;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    inline-size: 100%;
+    min-block-size: 2.5rem;
+    margin: 0;
+    padding: 0 var(--pc-pad-x);
+    border: 0;
+    border-radius: inherit;
+    corner-shape: inherit;
+    background: transparent;
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    text-align: start;
+    cursor: pointer;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .fold:hover {
+      background-color: var(--nc-wash-1);
+    }
+  }
+
+  .fold:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .fold:active {
+    transform: scale(0.99);
+    transition: transform 0s;
+  }
+
+  .root[data-state='open'] > .fold {
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+  }
+
+  .foldMarker {
+    margin-block-start: 0;
+  }
+
+  .foldText {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .foldText .heading {
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .foldText .count {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+  }
+
+  .dot {
+    color: var(--nc-text-subtle);
+  }
+
+  .chevron {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    flex-shrink: 0;
+    color: var(--nc-text-subtle);
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .root[data-state='open'] .chevron {
+    transform: rotate(90deg);
+  }
+
+  .chevron:dir(rtl) {
+    transform: scaleX(-1);
+  }
+
+  .content {
+    overflow: hidden;
+  }
+
+  .content[data-state='open'] {
+    animation: pc-expand var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .content[data-state='closed'] {
+    animation: pc-collapse var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .content .body {
+    border-block-start: 1px solid var(--nc-border-subtle);
+    padding-block-start: var(--nc-space-2-5);
+  }
+
+  @keyframes pc-expand {
+    from {
+      block-size: 0;
+      opacity: 0;
+    }
+    to {
+      block-size: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+  }
+
+  @keyframes pc-collapse {
+    from {
+      block-size: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+    to {
+      block-size: 0;
+      opacity: 0;
+    }
+  }
+
+  /* ── Reduced motion: everything where it ends, nothing breathing ──── */
+  @media (prefers-reduced-motion: reduce) {
+    .marker[data-status='active']::before,
+    .marker[data-status='active']::after,
+    .marker[data-fresh],
+    .marker[data-fresh] .check path {
+      animation: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .marker[data-status='active']::before,
+  :global([data-nacre-motion='reduced']) .marker[data-status='active']::after,
+  :global([data-nacre-motion='reduced']) .marker[data-fresh],
+  :global([data-nacre-motion='reduced']) .marker[data-fresh] .check path {
+    animation: none;
+  }
+}

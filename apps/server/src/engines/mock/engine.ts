@@ -1066,6 +1066,86 @@ export class MockEngine implements Engine {
         }
       }
 
+      // The plan, ticking itself off (ADR 0060): "tidy up this folder" is four steps, done
+      // one after another with Conch's own update_plan (the mock has no plan of its own).
+      // In plan mode it plans first and asks to start, as Claude Code's ExitPlanMode does.
+      if (/\btidy up this folder\b/i.test(said) && !chatOnly) {
+        const titles = [
+          'Look through the folder',
+          'Sort everything by kind',
+          'Give the screenshots clear names',
+          'Clear out the duplicates',
+        ];
+        const steps = (done: number) =>
+          titles.map((title, i) => ({
+            title,
+            status: i < done ? 'done' : i === done ? 'active' : 'pending',
+          }));
+        if (input.options.permissionMode === 'plan') {
+          const plan = [
+            'Here’s how I’d tidy it up:',
+            '',
+            ...titles.map((title, i) => `${i + 1}. ${title}`),
+            '',
+            'Nothing is deleted for good: duplicates go to the bin.',
+          ].join('\n');
+          for (const chunk of bursts('I’ve looked around and have a plan.')) {
+            await wait(chunk.pause);
+            yield { type: 'text', messageId, delta: chunk.text };
+          }
+          yield { type: 'message-done', messageId };
+          const toolUseId = newId('tool');
+          yield { type: 'tool-start', toolUseId, name: 'ExitPlanMode', input: { plan } };
+          const decision = await input.requestPermission(
+            { toolName: 'ExitPlanMode', toolUseId, input: { plan } },
+            input.signal,
+          );
+          yield {
+            type: 'tool-end',
+            toolUseId,
+            status: decision === 'deny' ? 'error' : 'success',
+            output: decision === 'deny' ? 'Keep planning.' : 'Approved.',
+          };
+          if (decision === 'deny') {
+            const again = newId('msg');
+            for (const chunk of bursts(
+              'Sure, let’s keep planning. What would you like done differently?',
+            )) {
+              await wait(chunk.pause);
+              yield { type: 'text', messageId: again, delta: chunk.text };
+            }
+            yield { type: 'message-done', messageId: again };
+            yield { type: 'done', outcome: 'success' };
+            return;
+          }
+        }
+        const looks = [
+          { name: 'Glob', input: { pattern: '**/*' } },
+          { name: 'Grep', input: { pattern: 'Screenshot' } },
+          { name: 'Glob', input: { pattern: 'Screenshot*.png' } },
+          { name: 'Glob', input: { pattern: '**/* copy*' } },
+        ];
+        for (const [done, look] of looks.entries()) {
+          yield* hostTool('update_plan', { steps: steps(done) });
+          const toolUseId = newId('tool');
+          yield { type: 'tool-start', toolUseId, name: look.name, input: look.input };
+          // A real second whatever the speed, so each tick can be seen (and tested).
+          await sleep(1000, input.signal);
+          yield { type: 'tool-end', toolUseId, status: 'success', output: 'ok' };
+        }
+        yield* hostTool('update_plan', { steps: steps(titles.length) });
+        const after = newId('msg');
+        for (const chunk of bursts(
+          'All tidy. Everything is sorted by kind, the screenshots have names you can find, and the duplicates are in the bin.',
+        )) {
+          await wait(chunk.pause);
+          yield { type: 'text', messageId: after, delta: chunk.text };
+        }
+        yield { type: 'message-done', messageId: after };
+        yield { type: 'done', outcome: 'success' };
+        return;
+      }
+
       // Reading a page (ADR 0028): what it brings back is untrusted, so the chat is too.
       const page = /\bread (https?:\/\/\S+)/i.exec(input.prompt)?.[1];
       if (page) {

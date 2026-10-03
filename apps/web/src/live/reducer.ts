@@ -25,10 +25,12 @@ import type {
   ToolStatus,
   TurnOptions,
   TurnProblem,
+  PlanStep,
   Usage,
 } from '@conch/protocol';
 
 import { latestReplies, type LatestReplies } from '../features/replies/latest';
+import { foldPlan } from '../features/plans/fold';
 
 /** Everything the transcript renders, folded from the append-only event log. */
 export type TranscriptItem =
@@ -255,6 +257,12 @@ export type TranscriptItem =
       to: EngineId;
       reason: 'offline' | 'limit';
       message: string;
+    }
+  | {
+      /** The assistant's plan for one turn (ADR 0060): kept current in place, folded once it ends. */
+      kind: 'plan';
+      id: string;
+      steps: PlanStep[];
     }
   | {
       kind: 'turn-end';
@@ -773,7 +781,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
     case 'replies':
       return base;
     case 'plan':
-      return base;
+      return { ...base, items: foldPlan(items, event) };
     case 'skill.used':
       return {
         ...base,

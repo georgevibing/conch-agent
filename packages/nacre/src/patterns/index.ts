@@ -16,6 +16,7 @@ export * from './ModelSwitch';
 export * from './ReplyChips';
 export * from './QuestionCard';
 export * from './Offer';
+export * from './PlanChecklist';
 export * from './ModePicker';
 export * from './Routines';
 export * from './Safety';
