@@ -27,7 +27,7 @@ export const FILE_CLASSES: readonly { id: FileRef['class']; title: string; about
   },
 ];
 
-/** The groups `pnpm conch` commands come in, in the order they're listed. */
+/** The groups `conch` commands come in, in the order they're listed. */
 export const CLI_GROUPS: readonly string[] = [
   ...new Set(reference.cli.map((command) => command.group)),
 ];

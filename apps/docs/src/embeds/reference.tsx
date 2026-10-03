@@ -29,7 +29,7 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-/** Every `pnpm conch` command, grouped as `cliCommands.ts` groups them. */
+/** Every `conch` command, grouped as `cliCommands.ts` groups them. */
 export function CliReference() {
   return (
     <div className={styles.stack}>

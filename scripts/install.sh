@@ -7,7 +7,10 @@
 #
 # It gets what Conch needs (Node.js and Git, when they're missing), puts
 # Conch in its own folder, builds it, keeps it running in the background,
-# adds "Conch" to your apps and opens it. System packages ask for permission;
+# puts the conch command on your PATH, adds "Conch" to your apps and opens it.
+# On a computer with no screen of its own (a server, over SSH) it asks how
+# you'll reach Conch instead, and ends with a link that makes it yours
+# (`conch setup`, ADR 0064). System packages ask for permission;
 # Conch itself always runs as you.
 # It installs the newest stable release (ADR 0051), checked against the
 # signing keys Conch ships; after that Conch updates itself.
@@ -15,7 +18,8 @@
 #
 #   sh install.sh [--no-background] [--no-shortcut] [--no-open] [--dir PATH]
 #   sh install.sh --no-system-packages   skip optional system-package setup
-#   sh install.sh --server     a little computer: headless, keeps running, your phone's address
+#   sh install.sh --server     a little computer: headless, keeps running, then conch setup
+#   sh install.sh --domain conch.example.com   on a server at an address of your own (ADR 0064)
 #   sh install.sh --uninstall [--delete-data]
 #
 # Settings from the environment: CONCH_REPO, CONCH_DIR, CONCH_HOME,
@@ -35,6 +39,7 @@ OPEN=1
 UNINSTALL=
 DELETE_DATA=
 SERVER=
+DOMAIN=
 SYSTEM_PACKAGES=1
 
 case "$(uname -s)" in
@@ -54,6 +59,8 @@ while [ $# -gt 0 ]; do
     --dir=*) DIR=${1#--dir=} ;;
     --uninstall) UNINSTALL=1 ;;
     --server) SERVER=1; OPEN=; SHORTCUT= ;;
+    --domain) shift; DOMAIN=${1:-}; SERVER=1; OPEN=; SHORTCUT= ;;
+    --domain=*) DOMAIN=${1#--domain=}; SERVER=1; OPEN=; SHORTCUT= ;;
     --delete-data) DELETE_DATA=1 ;;
     -h|--help)
       printf '%s\n' 'Conch installer: --no-background --no-shortcut --no-open --dir PATH' \
@@ -61,6 +68,7 @@ while [ $# -gt 0 ]; do
         '  CONCH_BRANCH=main for a developer'"'"'s copy that follows every change.' \
         '  --no-system-packages  Skip optional system packages (Git must already be installed)' \
         '  --server             Headless setup for a computer that stays on' \
+        '  --domain NAME        On a server, at an address of your own (HTTPS by Conch itself)' \
         '  --uninstall [--delete-data]'; exit 0 ;;
     *) echo "Unknown option: $1 (try --help)" >&2; exit 1 ;;
   esac
@@ -71,6 +79,15 @@ case "$CHANNEL" in
   stable|beta|alpha) ;;
   *) echo "CONCH_CHANNEL can be stable, beta or alpha (not $CHANNEL)." >&2; exit 1 ;;
 esac
+
+# A computer with no screen of its own: a server, or someone here over SSH. Nothing
+# to open a browser on, so the installer asks how you'll reach Conch instead.
+HEADLESS=$SERVER
+if [ -z "$HEADLESS" ]; then
+  if [ "$OS" = linux ] && [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; then HEADLESS=1; fi
+  if [ -n "${SSH_CONNECTION:-}" ] && [ -z "${DISPLAY:-}" ]; then HEADLESS=1; fi
+fi
+if [ -n "$HEADLESS" ]; then OPEN=; SHORTCUT=; fi
 
 # ── Saying things ────────────────────────────────────────────────────────
 
@@ -308,6 +325,7 @@ if [ -n "$UNINSTALL" ]; then
     conch background off >/dev/null 2>&1 || true
     conch tray off >/dev/null 2>&1 || true
     conch shortcut remove >/dev/null 2>&1 || true
+    conch command off >/dev/null 2>&1 || true
     ok "Conch has stopped and won't start at login"
   fi
   rm -rf "$DIR"
@@ -431,25 +449,33 @@ if [ -n "$BACKGROUND" ]; then
   fi
 fi
 
-# A little computer (ADR 0029): keeps going with nobody logged in, and your phone can reach it.
-if [ -n "$SERVER" ]; then
+# The conch command, in every terminal from now on.
+if conch command on >"$LOG" 2>&1; then ok "The conch command is ready"
+else warn "The conch command couldn't be added; pnpm conch works in $DIR."; fi
+
+# A little computer (ADR 0029): keeps going with nobody logged in.
+if [ -n "$HEADLESS" ] && [ -n "$BACKGROUND" ]; then
   if [ "$OS" = linux ]; then
     if conch background after-logout on >"$LOG" 2>&1; then ok "Conch keeps running after you log out"
     else sed 's/^/  /' "$LOG"; fi
   else
     say "${DIM}A Mac stops Conch when you log out: turn on automatic login in System Settings → Users & Groups.${RESET}"
   fi
-  if [ -r /dev/tty ] && conch status 2>/dev/null | grep -q 'No sign-in'; then
-    say "Your phone signs in with a password. Choose one now:"
-    conch password < /dev/tty || true
-  fi
-  if conch phone >"$LOG" 2>&1; then
-    sed 's/^/  /' "$LOG"
-    conch pair || true
+fi
+
+# No screen here: the conversation (ADR 0064). How will you reach Conch, and the
+# link that makes it yours, opened on your own computer.
+if [ -n "$HEADLESS" ]; then
+  printf '\n'
+  if has_keyboard; then
+    conch setup ${DOMAIN:+--domain "$DOMAIN"} < /dev/tty || true
+  elif [ -n "$DOMAIN" ]; then
+    conch setup --domain "$DOMAIN" --yes < /dev/null || true
   else
-    sed 's/^/  /' "$LOG"
-    say "${DIM}When that's done: pnpm conch phone, then pnpm conch pair.${RESET}"
+    say "Conch is installed. When you're at a keyboard, run ${BOLD}conch setup${RESET} to choose how you'll reach it."
   fi
+  printf '\n'
+  exit 0
 fi
 
 printf '\n  %sConch is ready%s at %s\n' "$BOLD" "$RESET" "$URL"

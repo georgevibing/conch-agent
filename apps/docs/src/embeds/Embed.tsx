@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { AppsGallery } from './apps';
 import { ChannelFacts, ChannelGrid, ChannelScene } from './channels';
 import { DownloadApp } from './download';
-import { InstallCommand } from './install';
+import { InstallCommand, ServerInstallCommand } from './install';
 import { ProviderFacts, ProviderGrid, ProviderMatrix, ServerFacts } from './providers';
 import {
   CliReference,
@@ -41,6 +41,7 @@ const EMBEDS: Record<string, EmbedView> = {
   files: FilesReference,
   how: HowItWorks,
   install: InstallCommand,
+  'install-server': ServerInstallCommand,
   modes: ModeList,
   needs: NeedsReference,
   'password-managers': PasswordManagers,
