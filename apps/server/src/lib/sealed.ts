@@ -31,6 +31,8 @@ export const SEALED_FILES = new Set([
   'push.secrets.json',
   'routines.secrets.json',
   'skills.signing.json',
+  // The keys your Conch apps use (ADR 0061).
+  'conch-apps.secrets.json',
 ]);
 
 const MAGIC = 'conch-sealed';

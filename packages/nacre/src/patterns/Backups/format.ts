@@ -37,6 +37,7 @@ export type BackupPowerInfo =
   | { kind: 'terminal-remote' }
   | { kind: 'channel-people'; name: string; people: string[]; more?: number }
   | { kind: 'trusted-publishers'; names: string[]; more?: number }
+  | { kind: 'conch-apps'; names: string[]; more?: number }
   | { kind: 'page-data-sites'; sites: string[]; more?: number }
   | { kind: 'provider-servers'; servers: string[]; more?: number };
 
@@ -120,6 +121,11 @@ export function powerWords(power: BackupPowerInfo): PowerWords {
       return {
         subject: 'Skills',
         text: `Trusts skills signed by ${named(power.names, power.more)}, and their updates`,
+      };
+    case 'conch-apps':
+      return {
+        subject: 'Apps',
+        text: `Adds ${named(power.names, power.more)}, with the websites each may reach`,
       };
     case 'channel-people':
       return {

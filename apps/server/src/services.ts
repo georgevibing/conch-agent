@@ -15,6 +15,13 @@ import { importCheck } from './import/doctor';
 import { ImportService } from './import/service';
 import { fetchLive, LiveDataAccess } from './artifacts/live';
 import { ArtifactService } from './artifacts/service';
+import { conchAppParts, type ConchAppParts } from './conchapps/deps';
+import { pickPath } from './lib/picker';
+import { PICK_PURPOSES } from './pick/routes';
+import { conchAppsCheck } from './conchapps/doctor';
+import { appsPrompt } from './conchapps/prompt';
+import { ConchAppService } from './conchapps/service';
+import { makerTools } from './conchapps/tools';
 import { ArtifactStore } from './artifacts/store';
 import { tasksCheck } from './tasks/doctor';
 import { signingKeyCheck } from './skills/doctor';
@@ -268,6 +275,8 @@ export class Services {
   readonly undo: UndoService;
   /** Things the assistant makes to see and use (ADR 0034). */
   readonly artifacts: ArtifactService;
+  /** Apps you make, share and add (ADR 0061). */
+  readonly conchApps: ConchAppService;
   /** The pretend Telegram and Discord used with the mock engine. */
   readonly mockTelegram?: MockTelegram;
   readonly mockDiscord?: MockDiscord;
@@ -288,7 +297,11 @@ export class Services {
   #sweeper?: NodeJS.Timeout;
   #vaultDoctor?: NodeJS.Timeout;
 
-  constructor(readonly config: Config) {
+  constructor(
+    readonly config: Config,
+    /** Tests: stand-ins for the parts of Conch apps (`conchapps/deps.ts`). */
+    overrides: { conchAppParts?: ConchAppParts } = {},
+  ) {
     this.healed = new Healed(config.CONCH_HOME, (note) =>
       this.broadcast.emit({ type: 'healed', note }),
     );
@@ -400,9 +413,39 @@ export class Services {
     });
     // With the mock engine, integrations talk to a pretend vendor on this machine too.
     this.mockVendor = config.CONCH_ENGINE === 'mock' ? new MockVendor() : undefined;
+    // Apps you make, share and add (ADR 0061): an app like any other on the Apps page.
+    this.conchApps = new ConchAppService({
+      home: config.CONCH_HOME,
+      parts:
+        overrides.conchAppParts ??
+        conchAppParts({
+          home: config.CONCH_HOME,
+          heal: (message) => void this.healed.note('integrations', message),
+          gatewayPort: config.CONCH_PORT,
+        }),
+      emit: (event) => this.broadcast.emit(event),
+      heal: (message) => void this.healed.note('integrations', message),
+      chats: {
+        events: async (id) => (await this.conversations.detail(id)).events,
+        note: (id, offer) => this.conversations.noteAppOffer(id, offer),
+        exists: async (id) =>
+          this.conversations.detail(id).then(
+            () => true,
+            () => false,
+          ),
+        taints: (id) => this.conversations.taintOf(id),
+      },
+      skillsChanged: () => {
+        this.skills.store.invalidate();
+        this.broadcast.emit({ type: 'skills.changed' });
+      },
+      updatesChanged: () => this.updates.changed(),
+      pick: () => pickPath(PICK_PURPOSES['conch-app']),
+      manualChecks: config.CONCH_ENGINE === 'mock',
+    });
     this.integrations = new IntegrationService({
       // Conch's own apps, kept by their own services and shown like every other (ADR 0052).
-      hosted: hostedApps(this.googleApps, this.slackApps),
+      hosted: hostedApps(this.googleApps, this.slackApps, this.conchApps.hosted),
       home: config.CONCH_HOME,
       heal,
       emit: (event) => this.broadcast.emit(event),
@@ -435,6 +478,10 @@ export class Services {
         if (this.learner.owns(id)) await this.learner.saved(id);
       },
     });
+    // Each Conch app's own skills, read where the app keeps them (ADR 0061).
+    this.skills.store.appRoots = () => this.conchApps.skillRoots();
+    this.doctor.register(conchAppsCheck(this.conchApps));
+    void this.conchApps.load();
     // A signing key written in the clear (an older Conch, a restored backup) is locked now (ADR 0047).
     void this.skillTrust
       .lockIfClear()
@@ -611,6 +658,15 @@ export class Services {
                 ctx,
               ),
               ...offeredSlackTools(this.slack, ctx),
+              // Apps you made or added, and making them: never where nobody can press the card.
+              ...this.conchApps.hosted.tools(ctx),
+              ...makerTools(this.conchApps, {
+                ...ctx,
+                lastMessage: async () =>
+                  (
+                    await this.conversations.detail(ctx.conversationId).catch(() => undefined)
+                  )?.events.findLast((e) => e.type === 'user.message')?.text,
+              }),
               ...questionTools(this.questions, ctx),
               // Offer what this request is missing (ADR 0060): never to nobody.
               ...(ctx.unattended ? [] : offerTools(this.offers, ctx)),
@@ -635,6 +691,13 @@ export class Services {
             ? ''
             : await this.offers.section(engine, conversationId).catch(() => ''),
           engine.hostTools === false ? '' : await this.slack.promptSection().catch(() => ''),
+          // Making apps (ADR 0061): only where the maker's tools are, and someone can press the card.
+          engine.hostTools === false
+            ? ''
+            : await appsPrompt(this.conchApps, conversationId, {
+                tools: !(await this.conversations.detail(conversationId).catch(() => undefined))
+                  ?.conversation.origin,
+              }).catch(() => ''),
           engine.hostTools === false ? '' : this.vault.promptSection(),
           this.artifacts.promptSection(engine.hostTools !== false),
           await this.artifacts.editedSection(conversationId).catch(() => ''),
@@ -1049,6 +1112,8 @@ export class Services {
       version: SERVER_VERSION,
       bootId: BOOT_ID,
       emit: (status) => this.broadcast.emit({ type: 'updates.changed', status }),
+      // Apps from GitHub with an update waiting, beside the programs (ADR 0061).
+      apps: () => this.conchApps.updateNotices(),
       heal: (message) => void this.healed.note('updates', message),
       busy: () => this.conversations.busy(),
       landed: (id) => this.#recheckWaiting(id),
@@ -1631,6 +1696,16 @@ export class Services {
           reveal: async () => value,
         });
     }
+    // The keys your Conch apps use (ADR 0061), typed into each app's settings.
+    for (const key of await this.conchApps.systemKeys().catch(() => []))
+      out.push({
+        id: id('conch-app', key.appId, key.label),
+        title: `${key.name} · ${key.label}`,
+        usedBy: `${key.name} app`,
+        hint: tail(key.value),
+        manage: { label: 'Open Apps', place: 'integrations', focus: `capp_${key.appId}` },
+        reveal: async () => key.value,
+      });
     // Your key for signing skills (ADR 0047): shown, never copied out.
     const signing = await this.skillTrust.signingKey({ lock: false }).catch(() => undefined);
     if (signing?.state === 'locked' || signing?.state === 'clear')
@@ -1689,6 +1764,7 @@ export class Services {
     );
     this.#sweeper.unref();
     this.updates.start();
+    this.conchApps.start();
     this.slack.start();
     void this.tasks.start().catch((error: unknown) => console.error('[tasks]', error));
     this.backups.start();
@@ -1696,6 +1772,7 @@ export class Services {
 
   async stop() {
     this.googleApps.stop();
+    void this.conchApps.stop();
     this.slack.stop();
     this.channels.stop();
     this.channelLinking.stop();

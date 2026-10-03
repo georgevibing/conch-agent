@@ -66,6 +66,11 @@ export const RULES: readonly BackupRule[] = [
     class: 'derived',
     why: 'Provider-native sessions; Conch’s conversation transcript is the durable record.',
   },
+  {
+    match: 'conch-apps/.incoming/**',
+    class: 'derived',
+    why: 'An app on its way in, or one Conch was only looking at: tidied away on start.',
+  },
   // ── Outside: not Conch's to back up ────────────────────────────────────
   {
     match: 'backups/**',
@@ -307,6 +312,30 @@ export const RULES: readonly BackupRule[] = [
     why: 'What’s connected and how, with your per-tool choices (not its tokens).',
   },
   {
+    match: 'conch-apps.json',
+    class: 'kept',
+    group: 'integrations',
+    why: 'The apps you made or added (ADR 0061): where each came from, who signed it, its versions and your choices. Not its keys.',
+  },
+  {
+    match: 'conch-apps/**',
+    class: 'kept',
+    group: 'integrations',
+    why: 'Each app’s files, and the earlier versions kept for Go back.',
+  },
+  {
+    match: 'conch-app-data/**',
+    class: 'kept',
+    group: 'integrations',
+    why: 'What each app keeps for you: its notes, its counts, its lists.',
+  },
+  {
+    match: 'app-workshop/**',
+    class: 'kept',
+    group: 'chats',
+    why: 'Apps being made in a chat: their files and scratch data, kept with the chat they belong to.',
+  },
+  {
     match: 'channels.json',
     class: 'kept',
     group: 'integrations',
@@ -402,6 +431,12 @@ export const RULES: readonly BackupRule[] = [
     class: 'secret',
     group: 'secrets',
     why: 'Your bots’ keys, and your email’s app password.',
+  },
+  {
+    match: 'conch-apps.secrets.json',
+    class: 'secret',
+    group: 'secrets',
+    why: 'The keys your apps use (ADR 0061), like an API key you typed into one.',
   },
   {
     match: 'routines.secrets.json',
@@ -544,7 +579,8 @@ export const GROUP_DIRS: Partial<Record<BackupGroup, string[]>> = {
   commands: ['commands'],
   routines: ['routines'],
   skills: ['skills'],
-  chats: ['conversations', 'attachments', 'api-sessions', 'browser/shots'],
+  chats: ['conversations', 'attachments', 'api-sessions', 'browser/shots', 'app-workshop'],
+  integrations: ['conch-apps', 'conch-app-data'],
 };
 
 /** What a set of files holds, counted for the preview. Reads `integrations.json` from `read`. */

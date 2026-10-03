@@ -171,9 +171,29 @@ export const ProgramUpdate = z.object({
 });
 export type ProgramUpdate = z.infer<typeof ProgramUpdate>;
 
+/**
+ * A newer version of an app you added from GitHub (ADR 0061). Nothing
+ * updates by itself: the app's page shows what changed, and **Update** is
+ * the person's press (`POST /api/conch-apps/:id/update`).
+ */
+export const AppUpdateNotice = z.object({
+  /** The app's id in `GET /api/conch-apps`. */
+  appId: z.string(),
+  name: z.string(),
+  installed: z.string(),
+  latest: z.string(),
+  /** Signed by the key it was added with. */
+  sameSigner: z.boolean(),
+  /** Websites the new version reaches that this one doesn't: shown first. */
+  reachesAdded: z.array(z.string()).default([]),
+});
+export type AppUpdateNotice = z.infer<typeof AppUpdateNotice>;
+
 export const UpdatesStatus = z.object({
   conch: ConchUpdate,
   programs: z.array(ProgramUpdate),
+  /** Apps you added from GitHub with a newer version waiting (ADR 0061); absent: none. */
+  apps: z.array(AppUpdateNotice).optional(),
   /** A check is running now. */
   checking: z.boolean(),
   /** When the last full check finished. */

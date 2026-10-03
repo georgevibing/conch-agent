@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { PickerUnavailable, type PickOptions, pickPath } from '../lib/picker';
 
 /** What each purpose asks for: the page names one, never a prompt or file types. */
-const PURPOSES: Record<PickPurpose, PickOptions> = {
+export const PICK_PURPOSES: Record<PickPurpose, PickOptions> = {
   'keepassxc-database': {
     prompt: 'Choose your KeePassXC database',
     kind: 'file',
@@ -35,7 +35,7 @@ export function registerPickRoutes(
         message: 'The Open dialog shows on the computer Conch runs on. Choose it there.',
       });
     try {
-      const path = await pick(PURPOSES[body.data.purpose]);
+      const path = await pick(PICK_PURPOSES[body.data.purpose]);
       return PickResult.parse(path ? { path } : {});
     } catch (error) {
       if (error instanceof PickerUnavailable)

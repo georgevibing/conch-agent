@@ -6,6 +6,7 @@ import {
   MessageCircle,
   MessagesSquare,
   MonitorSmartphone,
+  Puzzle,
   Repeat,
   Router,
   Server,
@@ -42,6 +43,7 @@ const ICONS: Record<BackupPowerInfo['kind'], ReactNode> = {
   'terminal-remote': <MonitorSmartphone />,
   'channel-people': <MessageCircle />,
   'trusted-publishers': <BadgeCheck />,
+  'conch-apps': <Puzzle />,
   'page-data-sites': <AppWindow />,
   'provider-servers': <Server />,
 };

@@ -137,6 +137,15 @@ export const BackupPower = z.discriminatedUnion('kind', [
     names: z.array(PowerText).max(20),
     more: z.number().int().nonnegative().default(0),
   }),
+  /**
+   * Apps you made or added (ADR 0061): code that runs sealed off, with the
+   * websites each may reach. An old backup mustn't quietly bring back one you removed.
+   */
+  z.object({
+    kind: z.literal('conch-apps'),
+    names: z.array(PowerText).max(20),
+    more: z.number().int().nonnegative().default(0),
+  }),
   /** Pages that read live data from these sites without asking again (ADR 0046). */
   z.object({
     kind: z.literal('page-data-sites'),

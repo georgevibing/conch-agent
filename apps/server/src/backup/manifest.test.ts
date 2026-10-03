@@ -57,6 +57,8 @@ describe('what’s in a backup', () => {
       'healed.json',
       'gateway.json',
       'search.db',
+      'conch-apps.json',
+      'conch-apps.secrets.json',
     ])
       expect(paths).toContain(expected);
     for (const prefix of [
@@ -70,6 +72,9 @@ describe('what’s in a backup', () => {
       'browser/profile/',
       'workspace/',
       'backups/',
+      'conch-apps/tally/current/',
+      'conch-app-data/tally/',
+      'app-workshop/',
     ])
       expect(
         paths.some((p) => p.startsWith(prefix)),
