@@ -123,7 +123,7 @@ describe('back up, restore on another computer, undo', () => {
         settings: true,
         memories: 1,
         commands: expect.any(Number),
-        routines: 1,
+        routines: 3,
         skills: 2,
         integrations: 1,
         integrationsSigningIn: 1,
@@ -186,7 +186,11 @@ describe('back up, restore on another computer, undo', () => {
     expect((await b.services.memory.list()).map((m) => m.content)).toEqual([
       'Ada takes her tea with lemon.',
     ]);
-    expect((await b.services.routines.list()).map((r) => r.title)).toEqual(['Morning briefing']);
+    expect((await b.services.routines.list()).map((r) => r.title).sort()).toEqual([
+      'After the briefing',
+      'From my shop',
+      'Morning briefing',
+    ]);
     expect((await b.services.commands.list()).map((c) => c.name)).toContain('standup');
     expect((await b.services.skills.list()).skills.map((s) => s.id)).toContain(
       'summarise-invoices',
@@ -632,9 +636,14 @@ describe('the preview before a restore', () => {
       ),
     );
     expect(preview.contents).toEqual(daily?.contents);
-    // What `useConch` lets act: the linked WhatsApp and Signal answer their owner,
-    // and a page reads a site you allowed. A restore names them.
+    // What `useConch` lets act: its two Conch apps, a routine started from its
+    // own address, a limit on what routines spend, a page that reads a site you
+    // allowed, and the linked WhatsApp and Signal answering their owner. A
+    // restore names them.
     expect(preview.powers).toEqual([
+      { kind: 'conch-apps', names: ['Tally', 'Weather (reaches api.weather.example)'], more: 0 },
+      { kind: 'routine-address', name: 'From my shop' },
+      { kind: 'routines-spend', limitUsd: 30 },
       { kind: 'page-data-sites', sites: ['api.weather.example'], more: 0 },
       { kind: 'channel-people', name: 'Ada Lovelace on WhatsApp', people: ['Ada'], more: 0 },
       { kind: 'channel-people', name: 'Ada Lovelace on Signal', people: ['Ada'], more: 0 },
