@@ -176,15 +176,10 @@ const problemText = (problems: readonly AppCheckItem[]) =>
 /** The same place, identity by identity: a file is never the same as another. */
 const sameSource = (a: ConchAppSource, b: ConchAppSource): boolean => {
   if (a.kind === 'made' && b.kind === 'made') {
-    // Yours, untouched by anything from outside, on both sides; or changes to the same stranger's app.
-    if (madeHere(a) && madeHere(b)) return true;
-    return Boolean(
-      a.basedOn &&
-      b.basedOn &&
-      !a.afterReading?.length &&
-      !b.afterReading?.length &&
-      sameSource(a.basedOn.source, b.basedOn.source),
-    );
+    // Both made here, whatever the chats read (the card shows new reach, and adding one made
+    // after reading asks that it's you); a change to an outside app stays tied to that source.
+    if (!a.basedOn && !b.basedOn) return true;
+    return Boolean(a.basedOn && b.basedOn && sameSource(a.basedOn.source, b.basedOn.source));
   }
   if (a.kind === 'github' && b.kind === 'github')
     return (
@@ -218,6 +213,13 @@ export const sameHands = (
  * to someone else's app is still that maker's, whatever was changed.
  */
 const yours = (source: ConchAppSource) => source.kind === 'made' && !source.basedOn;
+
+/** Whose hands a new version is in, for its card: another maker's, or yours (what you saved goes with it). */
+const hands = (
+  existing: Pick<AppRecord, 'source' | 'signature'>,
+  next: { source: ConchAppSource; signature: SkillSignature },
+): { otherMaker: true } | { carriesOver: true } =>
+  sameHands(existing, next) ? { carriesOver: true } : { otherMaker: true };
 
 /** The words a card or a preview shows when an app replaces one from another maker. */
 export const otherMakerWarning = (name: string) =>
@@ -866,7 +868,7 @@ export class ConchAppService {
       ...(installed && {
         changes: {
           ...changesOf(installed, { manifest, tools: check.tools }),
-          ...(!sameHands(installed, { source, signature }) && { otherMaker: true }),
+          ...hands(installed, { source, signature }),
         },
       }),
       ...(summary && { summary: summary.slice(0, 300) }),
@@ -1058,6 +1060,7 @@ export class ConchAppService {
     const existing = await this.store.get(id);
     // Settings and keys carry over only in the same hands (the same source and signer).
     const keep = existing ? sameHands(existing, { source, signature }) : false;
+    const trusted = keep && !!existing && (madeHere(source) || !madeHere(existing.source));
     const hadSkills = existing ? await this.#hasSkills(id) : false;
     await this.#stop(id);
     this.#updates.delete(id);
@@ -1131,9 +1134,10 @@ export class ConchAppService {
               ([key, value]) => declared.has(key) && value !== '',
             ),
           ),
-          // Someone else's app in place of yours starts again at its own default policy.
-          policy: keep ? existing.policy : defaultPolicy({ source }),
-          toolPolicies: keep
+          // Someone else's app in place of yours starts again at its own default policy, and
+          // so does yours once it was made after reading something: it never keeps more trust.
+          policy: trusted ? existing.policy : defaultPolicy({ source }),
+          toolPolicies: trusted
             ? Object.fromEntries(
                 Object.entries(existing.toolPolicies).filter(([name]) =>
                   tools.some((t) => t.name === name),
@@ -1333,7 +1337,7 @@ export class ConchAppService {
             installed: installed.manifest.version,
             changes: {
               ...changesOf(installed, { manifest: pkg.manifest, tools: check.tools }),
-              ...(otherMaker && { otherMaker }),
+              ...hands(installed, { source, signature }),
             },
           }),
         },
@@ -1484,7 +1488,10 @@ export class ConchAppService {
         signature,
         sameSigner,
         // Its tools are known once it's opened; until then, what its manifest says.
-        changes: changesOf(app, { manifest: held.pkg.manifest, tools: app.tools }),
+        changes: {
+          ...changesOf(app, { manifest: held.pkg.manifest, tools: app.tools }),
+          ...hands(app, { source: held.source, signature }),
+        },
       };
       record.updateHash = held.pkg.hash;
     });

@@ -1561,3 +1561,45 @@ describe('names that are also built-in words', () => {
     expect(await h.service.store.keptData('constructor')).toBeUndefined();
   });
 });
+
+describe('your own app, changed in a chat that read something', () => {
+  it('keeps your key and data, and its card says plainly that they go to its new website', async () => {
+    const h = await harness();
+    const manifest = JSON.parse(tallyFiles()['conch-app.json'] ?? '{}') as Record<string, unknown>;
+    manifest.settings = [{ key: 'apiKey', label: 'API key', secret: true }];
+    const first = await makeTally(h, '1.0.0', { 'conch-app.json': JSON.stringify(manifest) });
+    await h.service.acceptOffer(first.offer.offerId, { conversationId: 'c_chat' });
+    await h.service.setSettings('tally', { apiKey: 'sk-mine-0001' });
+    await h.service.callFromPage({ appId: 'tally' }, 'count', { by: 4 }, true);
+    // Changed in a chat that read the service's own docs.
+    const ctx = h.chat('c_docs');
+    ctx.append({ type: 'taint', source: { kind: 'web', label: 'docs.api.example' } });
+    const draft = await h.service.editDraft('c_docs', 'tally');
+    await h.service.write(
+      draft.id,
+      'conch-app.json',
+      JSON.stringify({ ...manifest, version: '1.1.0', reaches: ['api.example'] }),
+    );
+    await h.service.check(draft.id);
+    await h.service.tryTool(draft.id, 'count', {});
+    await h.service.tryTool(draft.id, 'read_count', {});
+    await h.service.check(draft.id);
+    const offer = await h.service.present(ctx, draft.id, 'Now it reaches the API.');
+    expect(offer.source).toMatchObject({ afterReading: ['docs.api.example'] });
+    expect(offer.changes).toMatchObject({ carriesOver: true, reachesAdded: ['api.example'] });
+    expect(offer.changes?.otherMaker).toBeUndefined();
+    const { describeChanges } = await import('@conch/protocol');
+    expect(describeChanges(offer.changes ?? ({} as never))[0]).toBe(
+      'Your saved settings will go with it, and it now also reaches api.example',
+    );
+    const updated = await h.service.acceptOffer(offer.offerId, { conversationId: 'c_docs' });
+    expect(updated.saved).toEqual(['apiKey']);
+    expect(await h.service.callFromPage({ appId: 'tally' }, 'read_count', {}, false)).toMatchObject(
+      {
+        json: { total: 4 },
+      },
+    );
+    // Still from outside in every other way.
+    expect((await h.service.hosted.get('capp_tally')).policy).toBe('ask');
+  });
+});
