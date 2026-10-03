@@ -33,10 +33,10 @@ async function connectLinear(page: Page) {
   await dialog.getByRole('button', { name: 'Continue with Linear' }).click();
   const popup = await popupOpened;
   await popup.getByRole('button', { name: 'Allow' }).click();
-  await expect(page.getByRole('dialog', { name: 'Linear is connected' })).toBeVisible();
   await popup.waitForEvent('close', { timeout: 5000 }).catch(() => undefined);
-  await page.keyboard.press('Escape');
+  // Connected: the dialog closes and the chat carries on by itself (ADR 0055).
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByText('I found 3 results')).toBeVisible({ timeout: 20_000 });
 }
 
 test('a chat-only model offers one that can use the app, switches, and sends it once', async ({
