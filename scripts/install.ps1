@@ -15,7 +15,8 @@
 # $env:CONCH_NO_OPEN, $env:CONCH_UNINSTALL, $env:CONCH_DIR, $env:CONCH_REPO,
 # $env:CONCH_CHANNEL (beta or alpha: also take those releases),
 # $env:CONCH_BRANCH (a developer's copy: follow a branch, every change),
-# $env:CONCH_SERVER (a little computer: no browser, your phone's secure address and code).
+# $env:CONCH_SERVER (a little computer: no browser; then `conch setup` asks how you'll reach it),
+# $env:CONCH_DOMAIN (on a server, at an address of your own, over HTTPS by Conch itself: ADR 0064).
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -29,6 +30,7 @@ if ($Channel -notin @('stable', 'beta', 'alpha')) { throw "CONCH_CHANNEL can be 
 $ConchHome = if ($env:CONCH_HOME) { $env:CONCH_HOME } else { Join-Path $HOME '.conch' }
 $Dir = if ($env:CONCH_DIR) { $env:CONCH_DIR } else { Join-Path $env:LOCALAPPDATA 'Conch\app' }
 $Runtime = Join-Path $ConchHome 'runtime'
+if ($env:CONCH_DOMAIN) { $env:CONCH_SERVER = '1' }
 if ($env:CONCH_SERVER) { $env:CONCH_NO_OPEN = '1'; $env:CONCH_NO_SHORTCUT = '1' }
 
 function Say($text) { Write-Host "  $text" }
@@ -214,6 +216,7 @@ if ($env:CONCH_UNINSTALL) {
     Invoke-Conch @('background', 'off') | Out-Null
     Invoke-Conch @('shortcut', 'remove') | Out-Null
     Invoke-Conch @('tray', 'off') | Out-Null
+    Invoke-Conch @('command', 'off') | Out-Null
     Ok "Conch has stopped and won't start when you sign in"
   }
   if (Test-Path $Dir) { Remove-Item $Dir -Recurse -Force }
@@ -300,6 +303,10 @@ try {
 } finally { Pop-Location }
 Ok 'Installed'
 
+# The conch command, in every terminal from now on.
+if ((Invoke-Conch @('command', 'on')).Ok) { Ok 'The conch command is ready' }
+else { Warn "The conch command couldn't be added; corepack pnpm conch works in $Dir." }
+
 if (-not $env:CONCH_NO_SHORTCUT) {
   $result = Invoke-Conch @('shortcut')
   if ($result.Ok) { Ok 'Conch is in the Start menu' } else { Warn "Conch couldn't add itself to the Start menu; open it at http://localhost:4317." }
@@ -318,18 +325,26 @@ if (-not $env:CONCH_NO_BACKGROUND) {
 }
 
 if ($env:CONCH_SERVER) {
+  # The conversation (ADR 0064): how you'll reach Conch, and the link that makes it yours.
+  # It talks to you directly, so nothing here catches what it says.
   Say 'Windows stops Conch when you sign out: lock the screen instead.'
-  $phone = Invoke-Conch @('phone')
-  $phone.Output -split "`n" | ForEach-Object { Write-Host "  $_" }
-  if ($phone.Ok) { (Invoke-Conch @('pair')).Output -split "`n" | ForEach-Object { Write-Host "  $_" } }
-}
-
-Write-Host ''
-Write-Host "  Conch is ready at $url" -ForegroundColor White
-if (-not $env:CONCH_NO_BACKGROUND) { Say 'Open it any time from the Start menu: just type Conch.' }
-else { Say "Start it with: cd `"$Dir`"; corepack pnpm start" }
-Write-Host ''
-# It opens as this computer (ADR 0063): `pnpm conch open` hands the browser a one-time link.
-if (-not $env:CONCH_NO_OPEN -and -not $env:CONCH_NO_BACKGROUND) {
-  if (-not (Invoke-Conch @('open')).Ok) { Start-Process $url }
+  Write-Host ''
+  $setupArgs = @('setup')
+  if ($env:CONCH_DOMAIN) { $setupArgs += @('--domain', $env:CONCH_DOMAIN) }
+  Push-Location $RunDir
+  try {
+    $env:COREPACK_ENABLE_DOWNLOAD_PROMPT = '0'
+    & (Join-Path (Split-Path $script:Node) 'corepack.cmd') pnpm --silent --filter '@conch/server' conch @setupArgs
+  } finally { Pop-Location }
+  Write-Host ''
+} else {
+  Write-Host ''
+  Write-Host "  Conch is ready at $url" -ForegroundColor White
+  if (-not $env:CONCH_NO_BACKGROUND) { Say 'Open it any time from the Start menu: just type Conch.' }
+  else { Say "Start it with: cd `"$Dir`"; corepack pnpm start" }
+  Write-Host ''
+  # It opens as this computer (ADR 0063): `conch open` hands the browser a one-time link.
+  if (-not $env:CONCH_NO_OPEN -and -not $env:CONCH_NO_BACKGROUND) {
+    if (-not (Invoke-Conch @('open')).Ok) { Start-Process $url }
+  }
 }
