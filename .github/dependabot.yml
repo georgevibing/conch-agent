@@ -1,0 +1,14 @@
+# Keeps the workflows' actions current. npm packages are updated on purpose,
+# not by a bot (AGENTS.md working agreement 3); Dependabot's security updates
+# still open a pull request when a dependency has a known vulnerability.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+    commit-message:
+      prefix: ci
