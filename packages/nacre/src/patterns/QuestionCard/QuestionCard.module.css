@@ -338,11 +338,30 @@
     padding: 3px;
     overflow-x: auto;
     overscroll-behavior-x: contain;
-    scroll-snap-type: x proximity;
+    scroll-snap-type: x mandatory;
     scroll-padding-inline: 3px;
-    /* A day cut off at the edge fades, so it reads as "more this way". */
-    mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
     scrollbar-width: none;
+    --fade: 2.5rem;
+  }
+
+  /* More days that way: the edge fades, so it reads as "slide for more", and
+     only where there is more. */
+  .strip[data-more='end'] {
+    mask-image: linear-gradient(to right, #000 calc(100% - var(--fade)), transparent);
+  }
+
+  .strip[data-more='start'] {
+    mask-image: linear-gradient(to left, #000 calc(100% - var(--fade)), transparent);
+  }
+
+  .strip[data-more='start end'] {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 var(--fade),
+      #000 calc(100% - var(--fade)),
+      transparent
+    );
   }
 
   .strip::-webkit-scrollbar {
@@ -465,9 +484,29 @@
     inline-size: auto;
   }
 
-  /* The exact time, beside the ones to tap. */
+  /* “Another time…”: a chip like the slots, but quiet, since it's the way to
+     any other time rather than a time itself. */
+  .another {
+    background: transparent;
+    color: var(--nc-text-muted);
+    box-shadow: inset 0 0 0 1px var(--chip-border);
+  }
+
+  @media (hover: hover) {
+    .another:hover:not(:disabled) {
+      background: var(--nc-wash-1);
+      color: var(--nc-text);
+    }
+  }
+
+  /* The exact time, in place of “Another time…”. */
+  .exact {
+    display: contents;
+  }
+
   .timeRow .picker {
     inline-size: 7.5rem;
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
   }
 
   .number {
