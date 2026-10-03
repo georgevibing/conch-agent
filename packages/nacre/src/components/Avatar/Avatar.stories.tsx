@@ -55,7 +55,9 @@ export const Sizes: Story = {
 
 export const WithImage: Story = {
   args: {
-    src: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=160&h=160&fit=crop',
+    src: `data:image/svg+xml,${encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#f4c7b8"/><stop offset="1" stop-color="#7f9cc9"/></linearGradient></defs><rect width="160" height="160" fill="url(#g)"/><circle cx="80" cy="64" r="28" fill="#fff" fill-opacity=".85"/><path d="M28 160c4-34 26-52 52-52s48 18 52 52z" fill="#fff" fill-opacity=".85"/></svg>',
+    )}`,
     name: 'Mira Chen',
     size: 'xl',
     status: 'online',

@@ -117,12 +117,12 @@ describe('ranking what was found', () => {
 
   it('puts a title that starts with what was typed above one that only contains it', () => {
     const list = [
-      item({ id: '1', title: 'Panama Papers' }),
+      item({ id: '1', title: 'Panama trip' }),
       item({ id: '2', title: 'Amazon' }),
       item({ id: '3', title: 'Shop', domains: ['amazon.de'] }),
       item({ id: '4', title: 'My Amazon seller' }),
     ];
-    expect(found('ama', list)).toEqual(['Amazon', 'My Amazon seller', 'Panama Papers', 'Shop']);
+    expect(found('ama', list)).toEqual(['Amazon', 'My Amazon seller', 'Panama trip', 'Shop']);
   });
 
   it('keeps favourites first among equally good matches', () => {

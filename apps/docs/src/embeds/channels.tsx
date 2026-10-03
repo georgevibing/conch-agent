@@ -138,7 +138,7 @@ const PERSONAL: Record<string, string[]> = {
 };
 
 const BOT = 'Conch';
-const KEY = '7312945602:AAHf3kX9…';
+const KEY = '123456789:AAH-example…';
 /** What your assistant writes in the chat with yourself once linked (`channels/service.ts`). */
 const SELF_WELCOME = `Hi Ada! 👋 I’m ${BOT}, and I’m connected to Conch on your computer. Write to me here, in the chat with yourself.`;
 

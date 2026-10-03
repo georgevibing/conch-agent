@@ -30,7 +30,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const TOKEN = '7312945602:' + 'AAHf3kX9-2mQpLr8TzV1bN4cWd7YeUo0sJg';
+const TOKEN = '123456789:' + 'AAH-example-not-a-real-token-000000';
 
 const catalog = [
   {

@@ -192,7 +192,7 @@ export const stepState = (index: number, at: number) =>
 
 // ── Telegram ─────────────────────────────────────────────────────────────
 
-const FAKE_TOKEN = '7312945602:' + 'AAHf3kX9-2mQpLr8TzV1bN4cWd7YeUo0sJg';
+const FAKE_TOKEN = '123456789:' + 'AAH-example-not-a-real-token-000000';
 
 function TelegramSetup() {
   const navigate = useNavigate();
