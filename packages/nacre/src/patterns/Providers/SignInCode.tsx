@@ -12,6 +12,12 @@ export interface SignInCodeProps extends Omit<ComponentProps<'section'>, 'childr
   code: string;
   /** The sign-in page it's entered on. */
   url: string;
+  /** Says where the code goes: “Enter this code on GitHub”. */
+  title?: string;
+  /** The button, named for the page it opens: “Open GitHub”. */
+  openLabel?: string;
+  /** The line that says Conch is watching: “Conch carries on by itself when you’re done.” */
+  waiting?: string;
 }
 
 /**
@@ -22,7 +28,15 @@ export interface SignInCodeProps extends Omit<ComponentProps<'section'>, 'childr
  * underneath says what just happened, so nobody wonders whether the code is on
  * their clipboard.
  */
-export function SignInCode({ code, url, className, ...props }: SignInCodeProps) {
+export function SignInCode({
+  code,
+  url,
+  title = 'Enter this code on the sign-in page',
+  openLabel = 'Copy code and open sign-in page',
+  waiting = 'Waiting for you to sign in. This updates by itself.',
+  className,
+  ...props
+}: SignInCodeProps) {
   const titleId = useId();
   // Unset until someone copies; then whether the code reached the clipboard.
   const [copied, setCopied] = useState<boolean>();
@@ -40,7 +54,7 @@ export function SignInCode({ code, url, className, ...props }: SignInCodeProps) 
   return (
     <section className={cx(styles.root, className)} aria-labelledby={titleId} {...props}>
       <p id={titleId} className={styles.title}>
-        Enter this code on the sign-in page
+        {title}
       </p>
 
       <div className={styles.well} data-lustre="" data-lustre-ambient="">
@@ -65,7 +79,7 @@ export function SignInCode({ code, url, className, ...props }: SignInCodeProps) 
       <Button asChild size="lg" trailingIcon={<ExternalLink />}>
         {/* A real link, so no browser blocks the new tab; the copy rides along on the click. */}
         <a href={url} target="_blank" rel="noreferrer" onClick={() => void copy()}>
-          Copy code and open sign-in page
+          {openLabel}
         </a>
       </Button>
 
@@ -79,7 +93,7 @@ export function SignInCode({ code, url, className, ...props }: SignInCodeProps) 
 
       <p className={styles.status}>
         <span className={styles.dot} aria-hidden />
-        Waiting for you to sign in. This updates by itself.
+        {waiting}
       </p>
     </section>
   );

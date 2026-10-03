@@ -1,0 +1,536 @@
+@layer nacre.components {
+  /* ── Shared words ─────────────────────────────────────────────────── */
+  .sectionLabel {
+    margin: 0 0 var(--nc-space-1-5);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--nc-text-subtle);
+  }
+
+  .dot {
+    margin-inline: 0.4em;
+    color: var(--nc-text-subtle);
+  }
+
+  /* ── What it can do ───────────────────────────────────────────────── */
+  .abilities {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .ability {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+    text-wrap: pretty;
+    overflow-wrap: anywhere;
+  }
+
+  /* What it can't do is reassurance, said a shade quieter. */
+  .ability[data-kind='nothing-else'] {
+    color: var(--nc-text-muted);
+  }
+
+  .abilityIcon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .abilityIcon svg {
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
+    stroke-width: 1.9;
+  }
+
+  .ability[data-kind='reach'] .abilityIcon {
+    color: var(--nc-text-accent);
+  }
+
+  .ability[data-kind='reach'][data-none] .abilityIcon {
+    color: var(--nc-text-subtle);
+  }
+
+  .ability[data-kind='nothing-else'] .abilityIcon {
+    color: light-dark(oklch(0.55 0.12 var(--nc-success-h)), oklch(0.78 0.11 var(--nc-success-h)));
+  }
+
+  /* ── Its tools ────────────────────────────────────────────────────── */
+  .tools {
+    margin-block-start: var(--nc-space-2);
+  }
+
+  /* The chevron lines up with the icons above it, the words with their words. */
+  .toolsTrigger {
+    gap: var(--nc-space-2-5);
+    margin-inline-start: calc(var(--nc-space-1) * -1);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-muted);
+  }
+
+  .toolList {
+    display: flex;
+    flex-direction: column;
+    margin: var(--nc-space-2) 0 0;
+    padding: 0;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    list-style: none;
+  }
+
+  .tool {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    padding: var(--nc-space-2) var(--nc-space-3);
+  }
+
+  .tool + .tool {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .toolHead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-1) var(--nc-space-2);
+  }
+
+  .toolTitle {
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .toolAbout {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  /* ── What changed ─────────────────────────────────────────────────── */
+  .changeList {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .change {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-1) 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+    overflow-wrap: anywhere;
+  }
+
+  /* New reach, or a tool that now changes things: said first, on a calm wash. */
+  .change[data-marked] {
+    padding: var(--nc-space-1-5) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: light-dark(
+      oklch(0.97 0.03 var(--nc-warning-h)),
+      oklch(0.27 0.035 var(--nc-warning-h))
+    );
+    box-shadow: inset 0 0 0 1px
+      light-dark(oklch(0.88 0.06 var(--nc-warning-h)), oklch(0.38 0.05 var(--nc-warning-h)));
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .changeIcon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .changeIcon svg {
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
+  }
+
+  .change[data-marked] .changeIcon {
+    color: light-dark(oklch(0.52 0.12 var(--nc-warning-h)), oklch(0.85 0.11 var(--nc-warning-h)));
+  }
+
+  .changeNone {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  /* ── What it needs from you ───────────────────────────────────────── */
+  .settings {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+  }
+
+  .settings .sectionLabel {
+    margin-block-end: calc(var(--nc-space-1) * -1);
+  }
+
+  .setting {
+    gap: var(--nc-space-1-5);
+  }
+
+  .settingHead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+  }
+
+  .getIt {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--nc-space-1);
+    border-radius: var(--nc-radius-xs);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-accent);
+    text-decoration: none;
+  }
+
+  .getIt svg {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  .getIt:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  @media (hover: hover) {
+    .getIt:hover {
+      text-decoration: underline;
+      text-underline-offset: 0.2em;
+    }
+  }
+
+  /* ── The card under a reply ───────────────────────────────────────── */
+  .offer {
+    --nc-rim-rest: 0;
+    --nc-rim-hover: 0.3;
+    --nc-sheen-hover: 0.14;
+
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-4);
+    max-inline-size: 36rem;
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-xl);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  .offerHead {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-3);
+  }
+
+  .offerIcon {
+    margin-block-start: 0.125rem;
+  }
+
+  .offerHeadText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-inline-size: 0;
+  }
+
+  .offerTitle {
+    margin: 0;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    letter-spacing: -0.008em;
+    color: var(--nc-text);
+    text-wrap: balance;
+  }
+
+  .offerTagline {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  .offerMeta {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    margin: var(--nc-space-0-5) 0 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .offerMeta svg {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  .offerSummary {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text);
+    text-wrap: pretty;
+  }
+
+  .offerSection {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Your part: what only you can type, and the press. Set apart by a hairline. */
+  .offerYours {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-4);
+    margin-inline: calc(var(--nc-space-4) * -1);
+    padding: var(--nc-space-4) var(--nc-space-4) 0;
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .offerActions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  /* Saying no is quiet and out of the way. */
+  .notNow {
+    margin-inline-start: auto;
+    color: var(--nc-text-muted);
+  }
+
+  .offerProblem {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+  }
+
+  .offerProblem svg {
+    flex: none;
+    inline-size: 1rem;
+    block-size: 1rem;
+    margin-block-start: 0.0625rem;
+    color: light-dark(oklch(0.56 0.2 var(--nc-danger-h)), oklch(0.74 0.16 var(--nc-danger-h)));
+  }
+
+  /* ── Added: the welcome ───────────────────────────────────────────── */
+  .offer[data-state='added'],
+  .offer[data-state='updated'] {
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-3) var(--nc-space-3) var(--nc-space-3) var(--nc-space-3-5);
+  }
+
+  .welcome {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+  }
+
+  .welcomeHead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2) var(--nc-space-3);
+  }
+
+  .welcomeHead .offerHeadText {
+    flex: 1 1 14rem;
+  }
+
+  .welcomeMark {
+    position: relative;
+    display: grid;
+    flex: none;
+    place-items: center;
+  }
+
+  .welcomeRing {
+    position: absolute;
+    inset: -3px;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .welcomeOpen {
+    flex: none;
+  }
+
+  .welcomeChips {
+    padding-inline-start: calc(2.5rem + var(--nc-space-3));
+  }
+
+  /*
+   * Just added: the icon lands on the bouncy spring while one ring of pearl
+   * light passes out from it, and the words settle in after. Played once,
+   * only when it happened in front of you.
+   */
+  .welcome[data-arrived] .welcomeMark > :last-child {
+    animation: nc-app-land var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both;
+  }
+
+  .welcome[data-arrived] .welcomeRing {
+    background: conic-gradient(from 210deg in oklab, var(--nc-pearl-spectrum));
+    mask:
+      linear-gradient(#000 0 0) content-box exclude,
+      linear-gradient(#000 0 0);
+    padding: 2px;
+    animation: nc-app-ring 900ms var(--nc-ease-out) 120ms both;
+  }
+
+  .welcome[data-arrived] .offerHeadText {
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) 140ms both;
+  }
+
+  .welcome[data-arrived] .welcomeOpen {
+    animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) 260ms both;
+  }
+
+  @keyframes nc-app-land {
+    from {
+      transform: scale(0.55) translateY(4px);
+      opacity: 0;
+    }
+
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+
+  @keyframes nc-app-ring {
+    0% {
+      transform: scale(0.9);
+      opacity: 0;
+    }
+
+    25% {
+      opacity: calc(0.9 * var(--nc-lustre));
+    }
+
+    100% {
+      transform: scale(1.65);
+      opacity: 0;
+    }
+  }
+
+  /* ── Folded to one quiet line ─────────────────────────────────────── */
+  .offerLine {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    max-inline-size: 100%;
+    padding-block: var(--nc-space-1);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-subtle);
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out) both;
+  }
+
+  .offerLine > :first-child {
+    filter: grayscale(0.85);
+    opacity: 0.75;
+  }
+
+  .offerLineText {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .offerLineText strong {
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-muted);
+  }
+
+  @media (max-width: 30rem) {
+    .offer {
+      padding: var(--nc-space-3-5);
+    }
+
+    .offerYours {
+      margin-inline: calc(var(--nc-space-3-5) * -1);
+      padding-inline: var(--nc-space-3-5);
+    }
+
+    .welcomeChips {
+      padding-inline-start: 0;
+    }
+
+    .welcomeOpen {
+      inline-size: 100%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .offer,
+    .offerLine,
+    .welcome[data-arrived] .welcomeMark > :last-child,
+    .welcome[data-arrived] .offerHeadText,
+    .welcome[data-arrived] .welcomeOpen {
+      animation: none;
+    }
+
+    .welcome[data-arrived] .welcomeRing {
+      animation: none;
+      opacity: 0;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .welcome[data-arrived] .welcomeRing {
+    animation: none;
+    opacity: 0;
+  }
+}

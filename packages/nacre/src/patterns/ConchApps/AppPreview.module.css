@@ -1,0 +1,276 @@
+@layer nacre.components {
+  .preview {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-4);
+    min-inline-size: 0;
+  }
+
+  /* ── Looking ──────────────────────────────────────────────────────── */
+  .looking {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+    overflow-wrap: anywhere;
+  }
+
+  .skeleton {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+  }
+
+  .skeletonText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+  }
+
+  /* ── One app ──────────────────────────────────────────────────────── */
+  .found {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-4);
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3-5);
+  }
+
+  .headText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-inline-size: 0;
+  }
+
+  .name {
+    margin: 0;
+    font-size: var(--nc-text-xl);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-tight);
+    letter-spacing: -0.012em;
+    color: var(--nc-text);
+    text-wrap: balance;
+  }
+
+  .tagline {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  .meta {
+    margin: var(--nc-space-0-5) 0 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+
+  .description {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text);
+    text-wrap: pretty;
+  }
+
+  .installed {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  .installed svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  .label {
+    margin: 0 0 var(--nc-space-1-5);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--nc-text-subtle);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-2);
+  }
+
+  .done {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .done svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: light-dark(oklch(0.55 0.13 var(--nc-success-h)), oklch(0.78 0.12 var(--nc-success-h)));
+  }
+
+  /* What stops it: said plainly, on a calm wash, never only in colour. */
+  .problems {
+    padding: var(--nc-space-3) var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: light-dark(
+      oklch(0.97 0.025 var(--nc-danger-h)),
+      oklch(0.26 0.04 var(--nc-danger-h))
+    );
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+  }
+
+  .problems ul {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    margin: var(--nc-space-1-5) 0 0;
+    padding-inline-start: var(--nc-space-6);
+  }
+
+  .problemsTitle {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    margin: 0;
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  .problemsTitle svg {
+    flex: none;
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: light-dark(oklch(0.56 0.2 var(--nc-danger-h)), oklch(0.74 0.16 var(--nc-danger-h)));
+  }
+
+  .where {
+    color: var(--nc-text-muted);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+  }
+
+  /* ── A collection ─────────────────────────────────────────────────── */
+  .collectionTitle {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-muted);
+    overflow-wrap: anywhere;
+  }
+
+  .collection {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+    list-style: none;
+  }
+
+  .row {
+    padding: var(--nc-space-3);
+  }
+
+  .row + .row {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .rowHead {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+  }
+
+  .rowText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-inline-size: 0;
+  }
+
+  .rowName {
+    margin: 0;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+  }
+
+  .rowTagline {
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .chevron {
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .row[data-open] .chevron {
+    transform: rotate(180deg);
+  }
+
+  .rowDetails {
+    margin-block-start: var(--nc-space-3);
+    padding-block-start: var(--nc-space-3);
+    padding-inline-start: calc(2.5rem + var(--nc-space-3));
+    border-block-start: 1px dashed var(--nc-border-subtle);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  @media (max-width: 30rem) {
+    .rowDetails {
+      padding-inline-start: 0;
+    }
+
+    .actions > * {
+      flex: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rowDetails {
+      animation: none;
+    }
+
+    .chevron {
+      transition: none;
+    }
+  }
+}

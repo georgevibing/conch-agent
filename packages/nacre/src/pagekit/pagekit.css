@@ -1,0 +1,609 @@
+/*
+ * Nacre page kit — Conch's look for the pages a Conch app ships (ADR 0061).
+ *
+ * Plain HTML looks like Conch with no CSS of its own: type, colour, links,
+ * buttons, fields, checkboxes, tables, lists, code, details, progress, in
+ * the person's light or dark and accent. Built on tokens.css (every value
+ * is a `--nc-*` token), in a layer, so a page's own styles always win.
+ *
+ * Buttons    <button> · <button class="primary"> · class="danger" · class="quiet"
+ * Fields     <label>Name <input></label> · <textarea> · <select>
+ *            <label><input type="checkbox"> Done</label>
+ * Layout     .nc-card     a raised surface for a group of things
+ *            .nc-stack    a column with even gaps
+ *            .nc-row      a row that wraps, centred
+ *            .nc-grid     tiles that fill the width
+ *            .nc-toolbar  a title with its buttons at the end
+ * Content    .nc-list     <ul class="nc-list">: rows with dividers
+ *            .nc-stat     <div class="nc-stat"><b>12</b> plants</div>
+ *            .nc-badge    a small label; .ok and .warn colour it
+ *            .nc-muted    quieter, smaller words
+ *            .nc-empty    nothing here yet: a sentence, and what to do
+ *
+ * Colours: var(--nc-text), --nc-text-muted, --nc-text-accent, --nc-surface,
+ * --nc-canvas, --nc-border, --nc-accent-9. Never type a colour: tokens follow
+ * light, dark and the person's accent (--nc-accent-h, --nc-accent-c).
+ */
+
+@layer nacre.tokens, nacre.pagekit;
+
+@layer nacre.pagekit {
+  /* ── The page ─────────────────────────────────────────────────────── */
+  html {
+    background: var(--nc-canvas);
+    color: var(--nc-text);
+    font-family: var(--nc-font-sans);
+    font-size: var(--nc-text-md);
+    line-height: var(--nc-leading-normal);
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  body {
+    max-inline-size: var(--nc-page-width);
+    margin: 0 auto;
+    padding: var(--nc-space-5) var(--nc-space-4);
+  }
+
+  ::selection {
+    background: var(--nc-selection);
+  }
+
+  h1,
+  h2,
+  h3 {
+    margin: 0 0 var(--nc-space-2);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-tight);
+    text-wrap: balance;
+  }
+
+  h1 {
+    font-size: var(--nc-text-2xl);
+    letter-spacing: -0.02em;
+  }
+
+  h2 {
+    margin-block-start: var(--nc-space-6);
+    font-size: var(--nc-text-xl);
+    letter-spacing: -0.014em;
+  }
+
+  h3 {
+    margin-block-start: var(--nc-space-4);
+    font-size: var(--nc-text-lg);
+    letter-spacing: -0.01em;
+  }
+
+  p,
+  ul,
+  ol,
+  table,
+  pre,
+  details,
+  fieldset {
+    margin: 0 0 var(--nc-space-3);
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  small {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+  }
+
+  a {
+    border-radius: var(--nc-radius-xs);
+    color: var(--nc-text-accent);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in oklab, currentColor 40%, transparent);
+    text-underline-offset: 0.2em;
+  }
+
+  a:hover {
+    text-decoration-color: currentColor;
+  }
+
+  ul,
+  ol {
+    padding-inline-start: var(--nc-space-5);
+  }
+
+  li + li {
+    margin-block-start: var(--nc-space-1);
+  }
+
+  hr {
+    margin: var(--nc-space-5) 0;
+    border: 0;
+    border-block-start: 1px solid var(--nc-border);
+  }
+
+  img,
+  svg,
+  video,
+  canvas {
+    max-inline-size: 100%;
+    block-size: auto;
+  }
+
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--nc-font-mono);
+    font-size: 0.9em;
+  }
+
+  code,
+  kbd {
+    padding: 0.1em 0.35em;
+    border-radius: var(--nc-radius-xs);
+    background: var(--nc-wash-2);
+  }
+
+  pre {
+    padding: var(--nc-space-3);
+    overflow: auto;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    line-height: var(--nc-leading-snug);
+  }
+
+  pre code {
+    padding: 0;
+    background: none;
+  }
+
+  /* ── Focus and disabled, everywhere ───────────────────────────────── */
+  :focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  :disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  /* ── Buttons ──────────────────────────────────────────────────────── */
+  button,
+  input[type='button'],
+  input[type='submit'],
+  input[type='reset'] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--nc-space-1-5);
+    min-block-size: var(--nc-control-md);
+    padding: 0 var(--nc-space-3-5);
+    border: 0;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+    color: var(--nc-text);
+    font: inherit;
+    font-weight: var(--nc-weight-medium);
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  button:not(:disabled):active {
+    transform: scale(0.975);
+    transition-duration: 0ms;
+  }
+
+  button.primary,
+  input.primary {
+    background: var(--nc-accent-9);
+    box-shadow:
+      inset 0 1px 0 0 oklch(1 0 0 / 0.18),
+      var(--nc-elevation-1);
+    color: var(--nc-accent-contrast);
+  }
+
+  button.danger,
+  input.danger {
+    background: light-dark(oklch(0.56 0.2 var(--nc-danger-h)), oklch(0.66 0.17 var(--nc-danger-h)));
+    box-shadow: var(--nc-elevation-1);
+    color: light-dark(oklch(0.99 0 0), oklch(0.16 0.03 var(--nc-danger-h)));
+  }
+
+  button.quiet,
+  input.quiet {
+    background: transparent;
+    box-shadow: none;
+    color: var(--nc-text-muted);
+  }
+
+  @media (hover: hover) {
+    button:not(:disabled, .primary, .danger):hover {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+
+    button.primary:not(:disabled):hover {
+      background: var(--nc-accent-10);
+    }
+
+    button.danger:not(:disabled):hover {
+      filter: brightness(1.06);
+    }
+  }
+
+  /* ── Fields ───────────────────────────────────────────────────────── */
+  label {
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  /* A label around its field stacks above it; around a checkbox, sits beside it. */
+  label:has(> input:not([type='checkbox'], [type='radio']), > select, > textarea) {
+    display: grid;
+    gap: var(--nc-space-1-5);
+    margin-block-end: var(--nc-space-3);
+  }
+
+  label:has(> input[type='checkbox'], > input[type='radio']) {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    font-weight: var(--nc-weight-regular);
+    cursor: pointer;
+  }
+
+  input:not(
+    [type='checkbox'],
+    [type='radio'],
+    [type='range'],
+    [type='button'],
+    [type='submit'],
+    [type='reset'],
+    [type='color'],
+    [type='file']
+  ),
+  select,
+  textarea {
+    inline-size: 100%;
+    min-block-size: var(--nc-control-md);
+    padding: var(--nc-space-1-5) var(--nc-space-3);
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    color: var(--nc-text);
+    font: inherit;
+    font-weight: var(--nc-weight-regular);
+    transition:
+      border-color var(--nc-duration-fast) var(--nc-ease-out),
+      box-shadow var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  textarea {
+    min-block-size: 5.5rem;
+    line-height: var(--nc-leading-normal);
+    resize: vertical;
+  }
+
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+    border-color: var(--nc-accent-8);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--nc-ring) 28%, transparent);
+  }
+
+  ::placeholder {
+    color: var(--nc-text-subtle);
+    opacity: 1;
+  }
+
+  input[type='checkbox'],
+  input[type='radio'],
+  input[type='range'],
+  progress,
+  meter {
+    accent-color: var(--nc-accent-9);
+  }
+
+  input[type='checkbox'],
+  input[type='radio'] {
+    inline-size: 1.05rem;
+    block-size: 1.05rem;
+    margin: 0;
+    cursor: pointer;
+  }
+
+  fieldset {
+    padding: var(--nc-space-3) var(--nc-space-4);
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+  }
+
+  legend {
+    padding-inline: var(--nc-space-1);
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  progress,
+  meter {
+    inline-size: 100%;
+    block-size: 0.5rem;
+  }
+
+  /* A soft track and an accent fill, rounded, the way Nacre draws progress. */
+  progress {
+    appearance: none;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-wash-2);
+  }
+
+  progress::-webkit-progress-bar {
+    background: transparent;
+  }
+
+  progress::-webkit-progress-value {
+    border-radius: inherit;
+    background: var(--nc-accent-9);
+  }
+
+  progress::-moz-progress-bar {
+    border-radius: inherit;
+    background: var(--nc-accent-9);
+  }
+
+  /* ── Tables ───────────────────────────────────────────────────────── */
+  table {
+    inline-size: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+  }
+
+  th,
+  td {
+    padding: var(--nc-space-2) var(--nc-space-3);
+    border-block-end: 1px solid var(--nc-border-subtle);
+    text-align: start;
+    vertical-align: top;
+  }
+
+  th {
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text-muted);
+  }
+
+  th:first-child,
+  td:first-child {
+    padding-inline-start: 0;
+  }
+
+  th:last-child,
+  td:last-child {
+    padding-inline-end: 0;
+  }
+
+  /* ── Details ──────────────────────────────────────────────────────── */
+  details {
+    padding: var(--nc-space-2) var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  summary {
+    border-radius: var(--nc-radius-xs);
+    font-weight: var(--nc-weight-medium);
+    cursor: pointer;
+  }
+
+  details[open] > summary {
+    margin-block-end: var(--nc-space-2);
+  }
+
+  /* ── The few classes ──────────────────────────────────────────────── */
+  .nc-card {
+    margin-block-end: var(--nc-space-3);
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+  }
+
+  .nc-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+  }
+
+  .nc-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .nc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+    gap: var(--nc-space-3);
+  }
+
+  .nc-stack > *,
+  .nc-row > *,
+  .nc-grid > * {
+    margin-block: 0;
+  }
+
+  .nc-row > label {
+    flex: 1 1 10rem;
+  }
+
+  .nc-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2);
+    margin-block-end: var(--nc-space-4);
+  }
+
+  .nc-toolbar > :is(h1, h2, h3) {
+    margin: 0 auto 0 0;
+  }
+
+  .nc-muted {
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  .nc-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    padding: 0.125rem var(--nc-space-2);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-wash-2);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    line-height: var(--nc-leading-snug);
+    white-space: nowrap;
+  }
+
+  .nc-badge.ok {
+    background: light-dark(
+      oklch(0.95 0.045 var(--nc-success-h)),
+      oklch(0.32 0.06 var(--nc-success-h))
+    );
+    color: light-dark(oklch(0.42 0.11 var(--nc-success-h)), oklch(0.86 0.1 var(--nc-success-h)));
+  }
+
+  .nc-badge.warn {
+    background: light-dark(
+      oklch(0.95 0.06 var(--nc-warning-h)),
+      oklch(0.33 0.06 var(--nc-warning-h))
+    );
+    color: light-dark(oklch(0.45 0.1 var(--nc-warning-h)), oklch(0.88 0.1 var(--nc-warning-h)));
+  }
+
+  .nc-list {
+    margin: 0 0 var(--nc-space-3);
+    padding: 0;
+    list-style: none;
+  }
+
+  .nc-list > li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-1) var(--nc-space-3);
+    margin: 0;
+    padding: var(--nc-space-2-5) 0;
+  }
+
+  .nc-list > li + li {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .nc-card > .nc-list:last-child {
+    margin-block-end: calc(var(--nc-space-2) * -1);
+  }
+
+  .nc-stat {
+    display: inline-flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+  }
+
+  .nc-stat > :is(b, strong) {
+    color: var(--nc-text);
+    font-size: var(--nc-text-3xl);
+    font-weight: var(--nc-weight-semibold);
+    line-height: 1;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .nc-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--nc-space-2);
+    margin-block-end: var(--nc-space-3);
+    padding: var(--nc-space-8) var(--nc-space-4);
+    border: 1px dashed var(--nc-border);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    color: var(--nc-text-muted);
+    text-align: center;
+    text-wrap: balance;
+  }
+
+  .nc-empty > * {
+    margin: 0;
+  }
+
+  .nc-empty > :is(h2, h3, strong, b) {
+    color: var(--nc-text);
+    font-size: var(--nc-text-lg);
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  /* ── Phones and touch ─────────────────────────────────────────────── */
+  @media (max-width: 30rem) {
+    body {
+      padding: var(--nc-space-4) var(--nc-space-3);
+    }
+
+    h1 {
+      font-size: var(--nc-text-xl);
+    }
+  }
+
+  @media (pointer: coarse) {
+    button,
+    input,
+    select {
+      min-block-size: var(--nc-control-lg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition: none !important;
+      animation: none !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

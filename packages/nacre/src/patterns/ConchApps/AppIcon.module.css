@@ -1,0 +1,77 @@
+@layer nacre.components {
+  /*
+   * The tile is an integration logo's (size, corners, glaze, status dot); only
+   * the colour is the app's, deepening a little towards the bottom edge like a
+   * glazed home-screen icon.
+   */
+  .icon[data-app-color] {
+    --il-bg: linear-gradient(
+      172deg,
+      color-mix(in oklab, var(--ai-color) 84%, oklch(1 0 0)),
+      var(--ai-color) 52%,
+      color-mix(in oklab, var(--ai-color) 88%, oklch(0.2 0.02 var(--nc-neutral-h)))
+    );
+
+    color: oklch(1 0 0);
+  }
+
+  .icon[data-app-color='red'] {
+    --ai-color: var(--nc-app-red);
+  }
+  .icon[data-app-color='orange'] {
+    --ai-color: var(--nc-app-orange);
+  }
+  .icon[data-app-color='amber'] {
+    --ai-color: var(--nc-app-amber);
+  }
+  .icon[data-app-color='yellow'] {
+    --ai-color: var(--nc-app-yellow);
+  }
+  .icon[data-app-color='lime'] {
+    --ai-color: var(--nc-app-lime);
+  }
+  .icon[data-app-color='green'] {
+    --ai-color: var(--nc-app-green);
+  }
+  .icon[data-app-color='teal'] {
+    --ai-color: var(--nc-app-teal);
+  }
+  .icon[data-app-color='cyan'] {
+    --ai-color: var(--nc-app-cyan);
+  }
+  .icon[data-app-color='blue'] {
+    --ai-color: var(--nc-app-blue);
+  }
+  .icon[data-app-color='indigo'] {
+    --ai-color: var(--nc-app-indigo);
+  }
+  .icon[data-app-color='violet'] {
+    --ai-color: var(--nc-app-violet);
+  }
+  .icon[data-app-color='pink'] {
+    --ai-color: var(--nc-app-pink);
+  }
+  .icon[data-app-color='slate'] {
+    --ai-color: var(--nc-app-slate);
+  }
+
+  /* White would wash out on the three light hues: a deep glyph of the same hue instead. */
+  .icon[data-app-color='amber'] {
+    color: oklch(0.36 0.08 70);
+  }
+  .icon[data-app-color='yellow'] {
+    color: oklch(0.38 0.08 90);
+  }
+  .icon[data-app-color='lime'] {
+    color: oklch(0.36 0.09 130);
+  }
+
+  .icon[data-app-color] svg {
+    stroke-width: 2.1;
+  }
+
+  .icon[data-app-color][data-size='xs'] svg,
+  .icon[data-app-color][data-size='sm'] svg {
+    stroke-width: 2.4;
+  }
+}
