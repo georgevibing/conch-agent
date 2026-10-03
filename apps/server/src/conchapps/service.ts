@@ -322,7 +322,8 @@ export class ConchAppService {
       id: app.id,
       integrationId: integrationIdOf(app.id),
       manifest: app.manifest,
-      tools: app.tools.map(cardTool),
+      // With their input schemas: the app's page in Apps and every model read the same tools.
+      tools: app.tools,
       source: app.source,
       signature: app.signature,
       hash: app.hash,
@@ -864,7 +865,7 @@ export class ConchAppService {
           .catch(() => undefined);
       await this.deps.chats.note(body.conversationId, {
         ...offer,
-        tools: app.tools,
+        tools: app.tools.map(cardTool),
         state: offer.action === 'update' ? 'updated' : 'added',
       });
       return app;

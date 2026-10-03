@@ -12,6 +12,7 @@ import type { ConversationEvent, ConversationEventInput } from '@conch/protocol'
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { tallyFiles } from '../engines/mock/tally';
+import { deviceSealer } from '../lib/sealed';
 import { SkillTrust } from '../skills/trust';
 import { conchAppParts } from './deps';
 import { ConchAppService } from './service';
@@ -26,7 +27,8 @@ afterEach(async () => {
 async function real() {
   const home = await mkdtemp(join(tmpdir(), 'conch-apps-real-'));
   homes.push(home);
-  const trust = new SkillTrust(home);
+  // This computer's key, as `sign.test.ts` gives it: the keychain isn't there in every test run.
+  const trust = new SkillTrust(home, { sealer: deviceSealer(async () => Buffer.alloc(32, 7)) });
   const logs = new Map<string, ConversationEvent[]>();
   let seq = 0;
   const push = (id: string, input: ConversationEventInput) => {

@@ -203,6 +203,9 @@ describe('the card’s press', () => {
       source: { kind: 'made', conversationId: 'c_chat' },
     });
     expect(app.tools.map((t) => t.name).sort()).toEqual(['count', 'read_count']);
+    // The app keeps its tools' input schemas; the card shows them without.
+    expect(app.tools.find((t) => t.name === 'count')?.input).toMatchObject({ type: 'object' });
+    expect(h.offers().at(-1)?.tools.every((t) => t.input === undefined)).toBe(true);
     expect(h.latest(offer.offerId)?.state).toBe('added');
     const [integration] = await h.service.hosted.list();
     expect(integration).toMatchObject({
