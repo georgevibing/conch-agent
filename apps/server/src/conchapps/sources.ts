@@ -6,7 +6,15 @@
  */
 import { z } from 'zod';
 
-import { GitHub, GitHubLimited, isRef, isRepoName, parseLink, treeUrl } from './github';
+import {
+  GitHub,
+  GitHubLimited,
+  isRef,
+  isRepoName,
+  parseLink,
+  type Resolved,
+  treeUrl,
+} from './github';
 import { type AppSources, type CommunityRepo, type FetchedPackage, SourceError } from './types';
 
 export interface SourcesDeps {
@@ -86,6 +94,29 @@ function toRepo(raw: unknown): CommunityRepo | undefined {
   };
 }
 
+/**
+ * Where an app from GitHub came from, as updates will follow it. Only a ref
+ * someone asked for is kept, in the ref and in the link: otherwise the link
+ * is the repository's own, which always means the newest release (or the
+ * default branch), and the folder rides in `path`. A link to the tag it
+ * happened to resolve to would download that same version every day.
+ */
+export function sourceOf(
+  owner: string,
+  repo: string,
+  found: Resolved,
+): Extract<FetchedPackage['source'], { kind: 'github' }> {
+  return {
+    kind: 'github',
+    owner,
+    repo,
+    ...(found.path && { path: found.path }),
+    ...(found.ref && { ref: found.ref }),
+    commit: found.commit,
+    url: found.ref ? treeUrl(owner, repo, found.ref, found.path) : treeUrl(owner, repo),
+  };
+}
+
 export function createSources(deps: SourcesDeps): AppSources {
   const now = deps.now ?? Date.now;
   const github = new GitHub({ fetch: deps.fetch, version: deps.version, now });
@@ -117,18 +148,7 @@ export function createSources(deps: SourcesDeps): AppSources {
       return {
         archive,
         ...(found.path && { path: found.path }),
-        source: {
-          kind: 'github',
-          owner,
-          repo,
-          ...(found.path && { path: found.path }),
-          ...(found.ref && { ref: found.ref }),
-          commit: found.commit,
-          url:
-            found.path || found.ref
-              ? treeUrl(owner, repo, found.at, found.path)
-              : treeUrl(owner, repo),
-        },
+        source: sourceOf(owner, repo, found),
       };
     },
 
