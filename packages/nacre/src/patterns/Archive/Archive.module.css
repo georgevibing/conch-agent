@@ -1,0 +1,144 @@
+@layer nacre.components {
+  .list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    overflow: hidden;
+    container-type: inline-size;
+  }
+
+  .item {
+    display: flex;
+    align-items: stretch;
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .item + .item {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .row {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--nc-space-3);
+    min-inline-size: 0;
+    padding: var(--nc-space-3) var(--nc-space-3) var(--nc-space-3) var(--nc-space-4);
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+    transition: background var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .item:hover .row {
+      background: var(--nc-surface-hi);
+    }
+  }
+
+  .row:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  .icon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    inline-size: 2rem;
+    block-size: 2rem;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    color: var(--nc-text-subtle);
+  }
+
+  .icon > svg {
+    inline-size: 0.95rem;
+    block-size: 0.95rem;
+  }
+
+  .text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    min-inline-size: 0;
+  }
+
+  .title {
+    overflow: hidden;
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .meta {
+    overflow: hidden;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .preview {
+    color: var(--nc-text-muted);
+  }
+
+  /* The ways out sit beside the row (never inside its button), with room to
+     breathe from the edge. */
+  .actions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--nc-space-1);
+    padding-inline: var(--nc-space-1) var(--nc-space-3);
+    transition: background var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .item:hover .actions {
+      background: var(--nc-surface-hi);
+    }
+  }
+
+  .delete {
+    color: var(--nc-text-subtle);
+  }
+
+  @media (hover: hover) {
+    .delete:hover {
+      color: light-dark(oklch(0.52 0.15 var(--nc-danger-h)), oklch(0.8 0.12 var(--nc-danger-h)));
+    }
+  }
+
+  /* Narrow: Unarchive keeps its icon and its name, but not the room for the word. */
+  @container (max-width: 28rem) {
+    /* Square, like an icon button: the button's own minimum width holds the icon. */
+    .unarchive {
+      --btn-px: 0;
+      --btn-gap: 0;
+    }
+
+    .unarchiveLabel {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+  }
+}

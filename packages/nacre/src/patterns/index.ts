@@ -40,6 +40,7 @@ export * from './Offline';
 export * from './Undo';
 export * from './Updates';
 export * from './Activity';
+export * from './Archive';
 export * from './AlwaysOn';
 export * from './Backups';
 export * from './PathPicker';
