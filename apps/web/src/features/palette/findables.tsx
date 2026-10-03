@@ -55,6 +55,7 @@ import {
   WifiOff,
   Wrench,
   House,
+  Zap,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -779,6 +780,15 @@ export function useFindables(query: string, conversationId: string | undefined):
       keywords: 'schedule cron',
       icon: <Repeat />,
       run: () => void navigate('/routines'),
+    },
+    {
+      // When… (ADR 0056): a routine that starts from what happens, not a time.
+      id: 'new-when-routine',
+      label: 'New routine that starts when…',
+      keywords:
+        'when something happens tell me let me know watch notify alert email arrives replies meeting calendar page changes website folder file task finishes webhook trigger heartbeat monitor',
+      icon: <Zap />,
+      run: () => void navigate('/routines', { state: { create: 'when' } }),
     },
     {
       // What used to be the Channels page: a filter of Apps now (ADR 0052).

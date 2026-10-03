@@ -180,4 +180,21 @@ describe('RoutineCard (proposal)', () => {
     expect(screen.getByText(/· Free until something happens/)).toBeInTheDocument();
     expect(screen.queryByText(/first run/)).toBeNull();
   });
+
+  it('asks for the one choice it still needs instead of turning on', async () => {
+    const onActivate = vi.fn();
+    renderNacre(
+      <RoutineCard
+        {...base}
+        variant="proposal"
+        scheduleText="When an email arrives"
+        status="draft"
+        activateLabel="Choose who"
+        onActivate={onActivate}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Choose who' }));
+    expect(onActivate).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Turn on' })).toBeNull();
+  });
 });

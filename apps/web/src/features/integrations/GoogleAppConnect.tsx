@@ -34,6 +34,7 @@ import { useNavigate } from 'react-router';
 
 import { ApiError } from '../../api/client';
 import { relativeTime } from '../../lib/time';
+import { WhenStarters } from '../routines/WhenStarters';
 import { TryIt } from './ConnectDialog';
 import { GoogleConnect } from './GoogleConnect';
 import { googleApi } from './googleApi';
@@ -116,6 +117,8 @@ export function GoogleAppConnect({
           {connected ? (
             <Stack gap={5}>
               {app === 'gmail' && <TalkByEmail />}
+              {/* Routines that start from it, offered once (ADR 0056). Not in a chat: you're mid-way through something. */}
+              <WhenStarters app={app} />
               <TryIt entry={entry} onPick={tryIt} />
             </Stack>
           ) : path === 'password' ? (

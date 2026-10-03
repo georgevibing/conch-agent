@@ -1,10 +1,43 @@
 import type { CreateRoutineBody } from '@conch/protocol';
 import type { z } from 'zod';
 
-type Template = Omit<z.input<typeof CreateRoutineBody>, 'timezone'> & { id: string };
+export type Template = Omit<z.input<typeof CreateRoutineBody>, 'timezone'> & { id: string };
 
 /** Starting points written the way we want every routine to read. */
 export const templates: Template[] = [
+  // When… (ADR 0056): routines that start from what happens, free until it does.
+  {
+    id: 'meeting-brief',
+    title: 'Meeting brief',
+    summary: 'A short brief before each meeting: who, what it’s about, and what to bring.',
+    prompt:
+      'Before this meeting, write me a short brief: who I’m meeting (and anything I know about them from recent email), what it’s about, and anything I should prepare. Keep it under 120 words. If it’s a routine meeting with nothing to prepare, report nothing-to-do.',
+    when: { kind: 'calendar', minutesBefore: 15, withOthers: true, words: [] },
+  },
+  {
+    id: 'waiting-on',
+    title: 'When they reply',
+    summary: 'Tells you as soon as someone you’re waiting on writes back.',
+    prompt:
+      'Tell me in one or two lines what this email says and whether it needs an answer from me. If it’s an automatic reply or a newsletter, report nothing-to-do.',
+    when: { kind: 'mail', from: [], words: [] },
+  },
+  {
+    id: 'page-watch',
+    title: 'Page watch',
+    summary: 'Tells you what changed on a page you care about.',
+    prompt:
+      'Tell me in a sentence or two what changed on this page and whether it matters to me. If only small wording changed, report nothing-to-do.',
+    when: { kind: 'page', url: '', every: 60 },
+  },
+  {
+    id: 'task-done',
+    title: 'When a big task finishes',
+    summary: 'A short note when a background task is done, with what to check.',
+    prompt:
+      'A background task just finished. Tell me in two lines what it did and the one thing I should check. If it failed, say why and what to try next.',
+    when: { kind: 'task' },
+  },
   {
     id: 'briefing',
     title: 'Morning briefing',

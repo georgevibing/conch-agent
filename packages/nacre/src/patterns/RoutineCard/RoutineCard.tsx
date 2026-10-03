@@ -65,6 +65,11 @@ export interface RoutineCardProps extends Omit<ComponentProps<'article'>, 'title
   onOpen?: () => void;
   onToggle?: (active: boolean) => void;
   onActivate?: () => void;
+  /**
+   * The proposal's first button, when turning it on needs one more choice
+   * first (“Choose who”). “Turn on” by default.
+   */
+  activateLabel?: string;
   onTryNow?: () => void;
   onEdit?: () => void;
   onDismiss?: () => void;
@@ -127,6 +132,7 @@ export function RoutineCard({
   onOpen,
   onToggle,
   onActivate,
+  activateLabel = 'Turn on',
   onTryNow,
   onEdit,
   onDismiss,
@@ -220,8 +226,13 @@ export function RoutineCard({
 
         {!settled && (
           <div className={styles.actions}>
-            <Button size="sm" onClick={onActivate} loading={busy} leadingIcon={<Check />}>
-              Turn on
+            <Button
+              size="sm"
+              onClick={onActivate}
+              loading={busy}
+              leadingIcon={activateLabel === 'Turn on' ? <Check /> : undefined}
+            >
+              {activateLabel}
             </Button>
             {onTryNow && (
               <Button size="sm" variant="surface" onClick={onTryNow} disabled={busy}>

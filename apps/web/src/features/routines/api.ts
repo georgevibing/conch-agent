@@ -1,11 +1,15 @@
 import {
+  HookSecret,
+  MailPeople,
   Routine,
   RoutineDetail,
   RoutineRun,
   RoutineSpending,
   SchedulePreview,
+  WhenPreview,
   type CreateRoutineBody,
   type Schedule,
+  type Trigger,
   type UpdateRoutineBody,
 } from '@conch/protocol';
 import { z } from 'zod';
@@ -36,6 +40,16 @@ export const routinesApi = {
       method: 'POST',
       body: { schedule, timezone },
     }),
+  // When… (ADR 0056)
+  previewWhen: (when: Trigger, onlyIf?: string) =>
+    request(WhenPreview, '/api/routines/when/preview', {
+      method: 'POST',
+      body: { when, ...(onlyIf?.trim() && { onlyIf: onlyIf.trim() }) },
+    }),
+  people: () => request(MailPeople, '/api/routines/people'),
+  /** A new secret for another app's address, shown once. */
+  newSecret: (id: string) =>
+    request(HookSecret, `/api/routines/${id}/secret`, { method: 'POST', body: {} }),
 };
 
 /** The browser's timezone — routines created here run on this clock. */

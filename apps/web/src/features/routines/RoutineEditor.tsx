@@ -3,6 +3,7 @@ import type {
   Routine,
   RoutineTrust,
   Schedule,
+  Trigger,
   TurnOptions,
 } from '@conch/protocol';
 import {
@@ -12,29 +13,35 @@ import {
   ModelPicker,
   RadioGroup,
   ScheduleEditor,
+  SegmentedControl,
   Sheet,
   Stack,
   Switch,
   Text,
   Textarea,
   toast,
+  TriggerEditor,
   type ScheduleValue,
+  type TriggerValue,
 } from '@conch/nacre';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { z } from 'zod';
 
 import { ApiError } from '../../api/client';
 import { useAppState, useModels } from '../../api/queries';
+import { canPickHere, pickPath } from '../../lib/pick';
 import { pickerProviders } from '../models/catalog';
 import { findModel, modelKey, parseModelKey } from '../models/useTurnOptions';
 import { fuzzyMatch } from '../search/fuzzy';
 import { browserTimezone, routinesApi } from './api';
-import { routineKeys } from './queries';
+import { WAITING_TEXT } from './icon';
+import { routineKeys, useRoutines } from './queries';
 import { runLimitText } from './spendWords';
 import styles from './Routines.module.css';
 import { useSchedulePreview } from './useSchedulePreview';
+import { useWhenPreview } from './useWhenPreview';
 
 export type RoutineDraft = Partial<Omit<z.input<typeof CreateRoutineBody>, 'status'>>;
 
@@ -58,6 +65,17 @@ const trustOptions: { value: RoutineTrust; label: string; description: string }[
 ];
 
 const defaultSchedule: Schedule = { type: 'daily', time: '09:00' };
+const defaultWhen: Trigger = { kind: 'mail', from: [], words: [] };
+
+/** People you write to, for picking whose mail starts a routine (read from Sent, by the gateway). */
+function usePeople(enabled: boolean) {
+  return useQuery({
+    queryKey: ['routines', 'people'],
+    queryFn: routinesApi.people,
+    enabled,
+    staleTime: 10 * 60_000,
+  });
+}
 
 /** `null` = Conch's own limit; `undefined` = not a valid amount (yet). */
 function parseLimit(text: string): number | null | undefined {
@@ -137,7 +155,8 @@ function ModelField({
 
 /**
  * Create or edit a routine. Everything a person needs is up front in plain
- * words; the exact instruction and schedule are right there too, never hidden.
+ * words; the exact instruction, and when it starts — at a time, or when
+ * something happens — are right there too, never hidden.
  */
 export function RoutineEditor({
   open,
@@ -156,7 +175,12 @@ export function RoutineEditor({
   const [title, setTitle] = useState(initial.title ?? '');
   const [summary, setSummary] = useState(initial.summary ?? '');
   const [prompt, setPrompt] = useState(initial.prompt ?? '');
-  const [schedule, setSchedule] = useState<Schedule>(initial.schedule ?? defaultSchedule);
+  const [starts, setStarts] = useState<'every' | 'when'>(initial.when ? 'when' : 'every');
+  const [schedule, setSchedule] = useState<Schedule>(
+    (routine?.when ? undefined : initial.schedule) ?? defaultSchedule,
+  );
+  const [when, setWhen] = useState<Trigger>((initial.when as Trigger | undefined) ?? defaultWhen);
+  const [onlyIf, setOnlyIf] = useState(initial.onlyIf ?? '');
   const [trust, setTrust] = useState<RoutineTrust>(initial.trust ?? 'ask');
   const [catchUp, setCatchUp] = useState(initial.catchUp ?? true);
   const [options, setOptions] = useState<TurnOptions>(initial.options ?? {});
@@ -167,7 +191,11 @@ export function RoutineEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
   const timezone = routine?.timezone ?? browserTimezone();
-  const { preview, loading } = useSchedulePreview(schedule, timezone);
+  const schedulePreview = useSchedulePreview(schedule, timezone);
+  const whenPreview = useWhenPreview(starts === 'when' ? when : undefined, onlyIf);
+  const { preview } = starts === 'when' ? whenPreview : schedulePreview;
+  const people = usePeople(open && starts === 'when' && when.kind === 'mail');
+  const { data: routines } = useRoutines();
   const client = useQueryClient();
   const navigate = useNavigate();
   const nameRef = useRef<HTMLInputElement>(null);
@@ -186,15 +214,25 @@ export function RoutineEditor({
     setSaving(true);
     setError(undefined);
     try {
-      const body = { title, summary, prompt, schedule, timezone, trust, catchUp, options };
+      const common = { title, summary, prompt, timezone, trust, catchUp, options };
       const saved = routine
         ? await routinesApi.update(routine.id, {
-            ...body,
+            ...common,
+            ...(starts === 'when'
+              ? { when, onlyIf: onlyIf.trim() }
+              : { schedule, ...(routine.when && { when: null }) }),
             // What a run may spend is a person's choice, made here (ADR 0057).
             ...(limit !== undefined && { runLimitUsd: limit }),
             ...(routine.status === 'draft' && { status }),
           })
-        : await routinesApi.create({ ...body, ...(limit && { runLimitUsd: limit }), status });
+        : await routinesApi.create({
+            ...common,
+            ...(starts === 'when'
+              ? { when, ...(onlyIf.trim() && { onlyIf: onlyIf.trim() }) }
+              : { schedule }),
+            ...(limit && { runLimitUsd: limit }),
+            status,
+          });
       await client.invalidateQueries({ queryKey: routineKeys.all });
       client.setQueryData(routineKeys.detail(saved.id), (d: unknown) =>
         d ? { ...(d as object), routine: saved } : d,
@@ -206,7 +244,11 @@ export function RoutineEditor({
             ? `“${saved.title}” is on`
             : `“${saved.title}” saved`,
         {
-          description: saved.nextRunAt ? `${saved.scheduleText}.` : saved.scheduleText,
+          description: saved.when
+            ? `${saved.scheduleText}. ${WAITING_TEXT}.`
+            : saved.nextRunAt
+              ? `${saved.scheduleText}.`
+              : saved.scheduleText,
         },
       );
       onOpenChange(false);
@@ -233,7 +275,9 @@ export function RoutineEditor({
       >
         <Sheet.Header>
           <Sheet.Title>{routine ? 'Edit routine' : 'New routine'}</Sheet.Title>
-          <Sheet.Description>Something Conch does for you, on a schedule.</Sheet.Description>
+          <Sheet.Description>
+            Something Conch does for you, at a time or when something happens.
+          </Sheet.Description>
         </Sheet.Header>
         <Sheet.Body>
           <Stack gap={6}>
@@ -266,23 +310,58 @@ export function RoutineEditor({
                 minRows={4}
                 maxRows={14}
                 value={prompt}
-                placeholder="Check the weather where I am and my calendar for today, then write me a short, friendly briefing."
+                placeholder={
+                  starts === 'when'
+                    ? 'Tell me in a line what it says, and whether it needs me.'
+                    : 'Check the weather where I am and my calendar for today, then write me a short, friendly briefing.'
+                }
                 onChange={(e) => setPrompt(e.target.value)}
               />
               <Field.Description>
                 Write it like you’d brief a helpful assistant. Each run starts fresh, so include
                 everything it needs to know.
+                {starts === 'when' && ' What happened is given to it with each run.'}
               </Field.Description>
             </Field>
 
-            <ScheduleEditor
-              label="When should it run?"
-              value={schedule as ScheduleValue}
-              onChange={(v) => setSchedule(v as Schedule)}
-              timezone={timezone}
-              preview={preview}
-              loading={loading}
-            />
+            <Stack gap={3}>
+              <Text as="span" size="sm" weight="medium" id="routine-starts">
+                Starts
+              </Text>
+              <SegmentedControl
+                aria-labelledby="routine-starts"
+                value={starts}
+                onValueChange={(v) => v && setStarts(v as 'every' | 'when')}
+              >
+                <SegmentedControl.Item value="every">Every…</SegmentedControl.Item>
+                <SegmentedControl.Item value="when">When…</SegmentedControl.Item>
+              </SegmentedControl>
+              {starts === 'every' ? (
+                <ScheduleEditor
+                  label="When should it run?"
+                  value={schedule as ScheduleValue}
+                  onChange={(v) => setSchedule(v as Schedule)}
+                  timezone={timezone}
+                  preview={schedulePreview.preview}
+                  loading={schedulePreview.loading}
+                />
+              ) : (
+                <TriggerEditor
+                  value={when as TriggerValue}
+                  onChange={(v) => setWhen(v as Trigger)}
+                  onlyIf={onlyIf}
+                  onOnlyIfChange={setOnlyIf}
+                  preview={whenPreview.preview}
+                  loading={whenPreview.loading}
+                  people={people.data?.people ?? []}
+                  {...(people.data?.note && { peopleNote: people.data.note })}
+                  routines={(routines ?? [])
+                    .filter((r) => r.id !== routine?.id && r.status !== 'completed')
+                    .map((r) => ({ id: r.id, title: r.title }))}
+                  {...(canPickHere() && { onChooseFolder: () => pickPath('watch-folder') })}
+                />
+              )}
+            </Stack>
 
             <ModelField options={options} onChange={setOptions} />
 
@@ -314,6 +393,12 @@ export function RoutineEditor({
               <Text as="span" size="sm" weight="medium" id="routine-trust">
                 If it needs permission while you’re away
               </Text>
+              {starts === 'when' && (
+                <Text size="xs" tone="subtle">
+                  What it starts from was written by someone else, so anything that could send
+                  things out or change your computer asks you first, whatever you choose here.
+                </Text>
+              )}
               <RadioGroup
                 variant="card"
                 aria-labelledby="routine-trust"
@@ -331,12 +416,14 @@ export function RoutineEditor({
               </RadioGroup>
             </Stack>
 
-            <Switch
-              checked={catchUp}
-              onCheckedChange={setCatchUp}
-              label="Catch up if Conch was off"
-              description="If Conch wasn’t running at the scheduled time, run it once as soon as it’s back."
-            />
+            {starts === 'every' && (
+              <Switch
+                checked={catchUp}
+                onCheckedChange={setCatchUp}
+                label="Catch up if Conch was off"
+                description="If Conch wasn’t running at the scheduled time, run it once as soon as it’s back."
+              />
+            )}
             {error && (
               <Text tone="danger" size="sm" role="alert">
                 {error}

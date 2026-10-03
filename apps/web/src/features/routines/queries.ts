@@ -207,7 +207,10 @@ export function useDeleteRoutine() {
                 title: routine.title,
                 summary: routine.summary,
                 prompt: routine.prompt,
-                schedule: routine.schedule,
+                // A routine that started when something happened comes back the same way.
+                ...(routine.when
+                  ? { when: routine.when, ...(routine.onlyIf && { onlyIf: routine.onlyIf }) }
+                  : { schedule: routine.schedule }),
                 timezone: routine.timezone,
                 trust: routine.trust,
                 catchUp: routine.catchUp,

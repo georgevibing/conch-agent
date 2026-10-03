@@ -205,6 +205,18 @@ export const WhenSomethingHappens: Story = {
         onDismiss={() => {}}
       />
       <RoutineCard
+        variant="proposal"
+        title="When they reply"
+        summary="Tells you as soon as someone you’re waiting on writes back."
+        scheduleText="When an email arrives"
+        waitingText="Free until something happens"
+        status="draft"
+        icon={<Mail />}
+        activateLabel="Choose who"
+        onActivate={() => {}}
+        onDismiss={() => {}}
+      />
+      <RoutineCard
         title="Meeting brief"
         summary="A short brief on who you’re meeting and what it’s about."
         scheduleText="15 minutes before each meeting with other people"
@@ -226,7 +238,7 @@ export const WhenSomethingHappens: Story = {
         waitingText="Free until something happens"
         status="active"
         icon={<Globe />}
-        problem="Gmail needs you to sign in again."
+        problem="example.com hasn’t answered since yesterday. Conch keeps trying."
         onOpen={() => {}}
         onToggle={() => {}}
       />
