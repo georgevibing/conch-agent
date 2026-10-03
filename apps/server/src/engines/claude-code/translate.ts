@@ -2,6 +2,7 @@ import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { TurnProblem } from '@conch/protocol';
 
 import type { EngineEvent } from '../types';
+import { ClaudePlan } from './plan';
 
 const friendlyErrors: Record<string, string> = {
   authentication_failed:
@@ -56,6 +57,9 @@ export class Translator {
   #current?: string;
   #error?: string;
   #problem?: TurnProblem;
+  /** Its own plan (todos or tasks), drawn as Conch's checklist instead of tool rows. */
+  #plan = new ClaudePlan();
+  #planCalls = new Set<string>();
 
   translate(msg: SDKMessage): EngineEvent[] {
     switch (msg.type) {
@@ -119,6 +123,10 @@ export class Translator {
         for (const block of msg.message.content) {
           if (block.type === 'text' && !streamed && block.text) {
             out.push({ type: 'text', messageId: id, delta: block.text });
+          } else if (block.type === 'tool_use' && this.#plan.owns(block.name)) {
+            this.#planCalls.add(block.id);
+            const steps = this.#plan.use(block.id, block.name, block.input);
+            if (steps) out.push({ type: 'plan', steps });
           } else if (block.type === 'tool_use' || block.type === 'server_tool_use') {
             out.push({
               type: 'tool-start',
@@ -139,8 +147,19 @@ export class Translator {
         if (msg.parent_tool_use_id) return [];
         const content = msg.message.content;
         if (!Array.isArray(content)) return [];
-        return content.flatMap((block): EngineEvent[] =>
-          block.type === 'tool_result'
+        const results = content.filter((block) => block.type === 'tool_result').length;
+        return content.flatMap((block): EngineEvent[] => {
+          if (block.type === 'tool_result' && this.#planCalls.delete(block.tool_use_id)) {
+            const steps = this.#plan.result(
+              block.tool_use_id,
+              toolOutput(block.content),
+              Boolean(block.is_error),
+              // The structured result belongs to the message's one tool call.
+              results === 1 ? msg.tool_use_result : undefined,
+            );
+            return steps ? [{ type: 'plan', steps }] : [];
+          }
+          return block.type === 'tool_result'
             ? [
                 {
                   type: 'tool-end',
@@ -149,8 +168,8 @@ export class Translator {
                   output: toolOutput(block.content).slice(0, 20_000),
                 },
               ]
-            : [],
-        );
+            : [];
+        });
       }
 
       case 'result': {

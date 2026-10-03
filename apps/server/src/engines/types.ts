@@ -7,6 +7,7 @@ import type {
   LoginMethod,
   LoginState,
   PermissionMode,
+  PlanStep,
   SkillSource,
   ToolStatus,
   TurnProblem,
@@ -221,6 +222,11 @@ export type EngineEvent =
   | { type: 'tool-start'; toolUseId: string; name: string; input: unknown }
   | { type: 'tool-end'; toolUseId: string; status: ToolStatus; output?: string }
   | { type: 'notice'; code: string; message: string }
+  /**
+   * The engine's own plan for this turn, as it stands now (ADR 0055): Claude
+   * Code's todo list, Codex's plan updates. Each one replaces the one before.
+   */
+  | { type: 'plan'; steps: PlanStep[] }
   /** Integrations that failed to connect at the start of the turn. */
   | { type: 'mcp-status'; failed: { name: string; error: string }[] }
   | {
@@ -308,6 +314,12 @@ export interface Engine {
    * can't do.
    */
   readonly hostTools?: boolean;
+  /**
+   * The engine keeps a plan of its own and reports it as `plan` events
+   * (ADR 0055). Absent: Conch offers its `update_plan` tool instead, when the
+   * engine can use Conch's tools.
+   */
+  readonly plans?: 'native';
   /** Commands are always sealed by Conch, independent of the native-provider toggle. */
   readonly commandSandbox?: 'conch';
   /** Each turn uses Conch’s complete handoff, not a provider-native resume ID. */

@@ -14,6 +14,8 @@ export async function fakeCodexApp(
     fail?: boolean;
     malformed?: boolean;
     loginUrl?: string;
+    /** Steps of a `turn/plan/updated`, sent before the answer. */
+    plan?: unknown[];
   } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), 'conch-app-server-'));
@@ -31,6 +33,7 @@ const auth = path.join(process.env.CODEX_HOME, 'auth.json');
 fs.appendFileSync(LOG, JSON.stringify({spawn:true, home: process.env.CODEX_HOME, secretLeaked: Boolean(process.env.CONCH_TOKEN || process.env.OPENAI_API_KEY || process.env.OP_SERVICE_ACCOUNT_TOKEN)})+'\\n');
 const complete = () => {
  if (OPTIONS.hang) return;
+ if (OPTIONS.plan) note('turn/plan/updated',{threadId:'t1',turnId:'turn1',explanation:null,plan:OPTIONS.plan});
  note('item/agentMessage/delta',{threadId:'t1',itemId:'m1',delta:'Finished.'});
  note('item/completed',{threadId:'t1',item:{type:'agentMessage',id:'m1'}});
  note('turn/completed',{threadId:'t1',turn:{id:'turn1',status:OPTIONS.fail?'failed':'completed'}});

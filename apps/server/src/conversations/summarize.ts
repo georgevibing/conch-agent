@@ -18,6 +18,9 @@ export function summarizeToolUse(toolName: string, input: Record<string, unknown
       return `Open ${str('url') ?? 'a web page'}`;
     case 'WebSearch':
       return `Search the web for “${str('query') ?? ''}”`;
+    // Plan mode's question (ADR 0055): the card shows the plan, with Start and Keep planning.
+    case 'ExitPlanMode':
+      return 'Start on the plan';
     default: {
       const mcp = /^mcp__(.+?)__(.+)$/.exec(toolName);
       if (mcp) return `Use ${mcp[2]} from ${mcp[1]}`;

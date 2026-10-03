@@ -94,6 +94,8 @@ export class ClaudeCodeEngine implements Engine {
   readonly smallModel = 'haiku';
   /** It loads `~/.claude/skills` by itself, whatever Conch says. */
   readonly skillSources = ['claude'] as const;
+  /** It keeps its own plan (its todos or tasks), translated into Conch's checklist. */
+  readonly plans = 'native' as const;
   /**
    * Claude Code runs MCP servers itself, and loads the connectors from your
    * Claude account by itself. Conch brings the ones it can connect into
@@ -592,6 +594,13 @@ export class ClaudeCodeEngine implements Engine {
               signal,
             );
             if (decision === 'deny') {
+              // "Keep planning": the plan isn't wrong, it isn't finished.
+              if (toolName === 'ExitPlanMode')
+                return {
+                  behavior: 'deny',
+                  message:
+                    'The person chose Keep planning: stay in plan mode and don’t start the work yet. Ask what they’d like changed, or refine the plan and present it again.',
+                };
               return { behavior: 'deny', message: 'The user declined this action.' };
             }
             // "Always allow" lasts for this conversation only (the manager

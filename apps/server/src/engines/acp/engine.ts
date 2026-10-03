@@ -20,6 +20,7 @@ import {
   type LoginMethod,
   type LoginState,
   type ModelInfo,
+  type PlanStep,
   type TurnProblem,
   type Usage,
 } from '@conch/protocol';
@@ -27,6 +28,7 @@ import { z } from 'zod';
 
 import { sandboxSupport } from '../../conversations/sandbox';
 import { newId } from '../../lib/ids';
+import { cleanPlan, stepStatus } from '../../plans/steps';
 import { agentEnv, launch, run } from '../../lib/proc';
 import type { SettingsStore } from '../../settings/store';
 import { buildTools, type Callable } from '../api/engine';
@@ -114,6 +116,17 @@ const Update = z
     messageId: z.string().nullish(),
   })
   .passthrough();
+/** An ACP plan (`entries`: content and status), as Conch's checklist (ADR 0055). */
+export function acpPlan(entries: unknown): PlanStep[] | undefined {
+  if (!Array.isArray(entries)) return undefined;
+  return cleanPlan(
+    entries.flatMap((entry) => {
+      const { content, status } = (entry ?? {}) as { content?: unknown; status?: unknown };
+      const state = stepStatus(status);
+      return typeof content === 'string' && state ? [{ title: content, status: state }] : [];
+    }),
+  );
+}
 const Notification = z.object({ sessionId: z.string(), update: Update });
 
 const PermissionRequest = z.object({
@@ -809,6 +822,12 @@ export class AcpEngine implements Engine {
       const offer = offerOf(started, this.agent.modelAtStart);
       running.sessions.set(sessionId, {
         update: (update) => {
+          // Some programs share their plan (ACP's `plan` update): drawn as Conch's checklist.
+          if (update.sessionUpdate === 'plan') {
+            const steps = acpPlan(update.entries);
+            if (steps) push({ type: 'plan', steps });
+            return;
+          }
           const text = update.content?.type === 'text' ? (update.content.text ?? '') : '';
           if (!text) return;
           if (update.sessionUpdate === 'agent_message_chunk') {

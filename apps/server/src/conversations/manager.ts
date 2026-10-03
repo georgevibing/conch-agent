@@ -51,6 +51,7 @@ import { didWhat } from '../activity/service';
 import { changedFiles, type UndoService } from '../undo/service';
 import { shownPath } from '../undo/tracker';
 import { TurnReplies } from '../replies/turn';
+import { TurnPlan } from '../plans/turn';
 
 type SkillNeed = ReturnType<typeof needs>;
 import { generateTitle } from './title';
@@ -984,6 +985,8 @@ export class ConversationManager {
     // Replies to send next (ADR 0055): the assistant's tool now, the chips as the turn ends.
     const turnSeq = live.seq;
     const replies = new TurnReplies({ engine, unattended: Boolean(extras || live.record.origin) });
+    // The plan, ticking itself off (ADR 0055): the engine's own, or `update_plan`.
+    const plan = new TurnPlan(engine, (steps) => this.#append(live, { type: 'plan', steps }));
     let finalText = '';
     let finalMessageId: string | undefined;
 
@@ -1081,6 +1084,7 @@ export class ConversationManager {
           }) ?? [])),
       ...(extras?.tools ?? []),
       ...replies.tools,
+      ...plan.tools,
     );
     // Scoped tasks may use the common connector/artifact tools, never the rest
     // of the normal chat's powers. Guards enforce this again at execution time.
@@ -1461,6 +1465,9 @@ export class ConversationManager {
             await tracker?.after(event.toolUseId).catch(() => undefined);
             break;
           }
+          case 'plan':
+            plan.update(event.steps);
+            break;
           case 'notice':
             this.#append(live, { type: 'notice', code: event.code, message: event.message });
             break;
