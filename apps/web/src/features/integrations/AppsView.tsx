@@ -522,7 +522,8 @@ export function AppsView() {
       {!loading && lookingAtCommunity && !talking && (
         <CommunityApps
           apps={community.data?.apps ?? []}
-          loading={community.isFetching && !community.data}
+          // Until GitHub answers, never a flash of “Nobody has shared…”.
+          loading={!community.data && !community.isError}
           limited={community.data?.limited}
           offline={community.data?.offline ?? community.isError}
           query={needle || undefined}
