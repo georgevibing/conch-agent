@@ -1,0 +1,112 @@
+@layer nacre.components {
+  /* A row of quiet chips that wraps: as many lines as a narrow screen needs. */
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .chip {
+    /* Barely-there Lustre: felt under the pointer, never seen at rest. */
+    --nc-rim-rest: 0;
+    --nc-rim-hover: 0.45;
+    --nc-sheen-size: 64px;
+    --nc-sheen-hover: 0.22;
+
+    appearance: none;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    max-inline-size: 100%;
+    min-block-size: var(--nc-control-sm);
+    margin: 0;
+    padding: 0.3125rem var(--nc-space-3);
+    border: 0;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow:
+      var(--nc-glaze-edge),
+      inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text-muted);
+    font-family: inherit;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    line-height: var(--nc-leading-snug);
+    letter-spacing: -0.003em;
+    text-align: start;
+    text-wrap: pretty;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+    user-select: none;
+    touch-action: manipulation;
+    /* Backwards only: once risen, the chip's own styles (and their transitions) hold. */
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) backwards;
+    animation-delay: calc(var(--rc-i, 0) * 70ms + 90ms);
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      box-shadow var(--nc-duration-base) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      opacity var(--nc-duration-base) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy),
+      --nc-rim-near var(--nc-duration-slow) var(--nc-ease-out),
+      --nc-sheen var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .chips[data-state='open'] .chip:hover {
+      background: var(--nc-surface-hi);
+      box-shadow:
+        var(--nc-glaze-edge),
+        inset 0 0 0 1px var(--nc-border),
+        var(--nc-elevation-1);
+      color: var(--nc-text);
+    }
+  }
+
+  .chips[data-state='open'] .chip:active {
+    transform: scale(0.975);
+    transition-duration:
+      var(--nc-duration-instant), var(--nc-duration-instant), var(--nc-duration-instant),
+      var(--nc-duration-instant), 120ms, var(--nc-duration-slow), var(--nc-duration-slow);
+    transition-timing-function: var(--nc-ease-out);
+  }
+
+  .chip:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  /* Pressed: the one going out lights up in the accent; the rest step aside. */
+  .chips[data-state='sent'] .chip {
+    cursor: default;
+    opacity: 0;
+    transform: scale(0.97);
+  }
+
+  .chips[data-state='sent'] .chip[data-sent] {
+    opacity: 1;
+    transform: none;
+    background: var(--nc-accent-3);
+    box-shadow:
+      var(--nc-glaze-edge),
+      inset 0 0 0 1px var(--nc-accent-6);
+    color: var(--nc-accent-11);
+  }
+
+  .chips[data-entrance='none'] .chip {
+    animation: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chip {
+      animation: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .chip {
+    animation: none;
+  }
+}

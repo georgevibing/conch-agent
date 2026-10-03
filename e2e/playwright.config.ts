@@ -75,6 +75,8 @@ const scenarios = {
   attachments: { port: 4389, env: { CONCH_MOCK_STATE: 'ready' } },
   passwords: { port: 4386, env: { CONCH_MOCK_STATE: 'ready' } },
   suggest: { port: 4383, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Replies to send next (ADR 0055): the assistant's under a table, Conch's own, none after reading.
+  replies: { port: 4352, env: { CONCH_MOCK_STATE: 'ready' } },
   // A model that can only chat (ADR 0050): a message that needs an app offers one that can.
   'chat-only': { port: 4358, env: { CONCH_MOCK_STATE: 'ready' } },
   // Every app with every model (ADR 0049): Slack as Conch's own, and what a provider set up

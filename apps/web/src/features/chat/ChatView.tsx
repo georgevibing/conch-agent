@@ -345,8 +345,15 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   const isRoutineRun = origin?.kind === 'routine';
   const continuingTask = useRef(false);
 
-  /** Send words, and whatever is attached (the draft's cards unless given). */
-  const send = (text: string, attached: Attachment[] = attachments.ready) => {
+  /**
+   * Send words, and whatever is attached (the draft's cards unless given).
+   * `keepDraft`: words from elsewhere (a reply chip) leave what you're writing alone.
+   */
+  const send = (
+    text: string,
+    attached: Attachment[] = attachments.ready,
+    { keepDraft = false }: { keepDraft?: boolean } = {},
+  ) => {
     const trimmed = text.trim();
     if (!trimmed && !attached.length) return;
     setEngineIssue(undefined);
@@ -362,7 +369,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
       void tasksApi
         .continue(origin.taskId, trimmed, crypto.randomUUID())
         .then(() => {
-          setDraft('');
+          if (!keepDraft) setDraft('');
         })
         .catch((error: unknown) => {
           toast.error(
@@ -378,7 +385,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
     }
     const id = live.send(trimmed, conversationId, turn.takeDraft(), attached);
     if (!conversationId) setSentId(id);
-    setDraft('');
+    if (!keepDraft) setDraft('');
     if (attached === attachments.ready) attachments.clear();
   };
 
@@ -731,6 +738,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
           if (asked?.kind === 'user') send(asked.text, asked.attachments ?? []);
         }}
         focusComposer={() => composerRef.current?.focus()}
+        onReply={(text) => send(text, [], { keepDraft: true })}
         recover={recover}
       />
       <div className={styles.dock}>{composer}</div>

@@ -1135,6 +1135,62 @@ export class MockEngine implements Engine {
         return;
       }
 
+      // Replies to send next (ADR 0055): the assistant offers some under a table; a
+      // table on its own gets Conch's chart chip; after reading a page, none of its own.
+      const repliesScript = /\b(sales by month|team sizes|summari[sz]e the news)\b/i.exec(
+        said,
+      )?.[1];
+      if (repliesScript) {
+        const news = /news/i.test(repliesScript);
+        if (news) {
+          const toolUseId = newId('tool');
+          const url = 'https://news.example.com/today';
+          yield { type: 'tool-start', toolUseId, name: 'WebFetch', input: { url } };
+          await wait(300);
+          yield { type: 'tool-end', toolUseId, status: 'success', output: 'Three stories.' };
+        }
+        const reply = news
+          ? 'Three things happened today: the bridge reopened, the library extended its hours, and the market moves to Saturdays.'
+          : /sales/i.test(repliesScript)
+            ? [
+                'Here are this year’s sales by month:',
+                '',
+                '| Month | Orders | Revenue |',
+                '| --- | ---: | ---: |',
+                '| April | 112 | $4,480 |',
+                '| May | 138 | $5,520 |',
+                '| June | 161 | $6,440 |',
+                '',
+                'June was the best month so far.',
+              ].join('\n')
+            : [
+                'Here’s how big each team is:',
+                '',
+                '| Team | People |',
+                '| --- | ---: |',
+                '| Design | 6 |',
+                '| Engineering | 14 |',
+                '| Support | 9 |',
+              ].join('\n');
+        for (const chunk of bursts(reply)) {
+          await wait(chunk.pause);
+          yield { type: 'text', messageId, delta: chunk.text };
+        }
+        yield { type: 'message-done', messageId };
+        if (news || /sales/i.test(repliesScript))
+          yield* hostTool('suggest_replies', {
+            replies: news
+              ? [{ text: 'Send this to Sam' }]
+              : [
+                  { text: 'Compare it with last year' },
+                  { text: 'Which month had the most new customers?' },
+                  { text: 'Add a column for profit' },
+                ],
+          });
+        yield { type: 'done', outcome: 'success' };
+        return;
+      }
+
       // "Take your time" writes until it's stopped (a minute at most), so a test
       // of Stop never races the end of a short scripted reply on a slow machine.
       if (/\btake your time\b/i.test(said)) {
