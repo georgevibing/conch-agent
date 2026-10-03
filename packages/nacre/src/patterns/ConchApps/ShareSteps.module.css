@@ -1,0 +1,185 @@
+@layer nacre.components {
+  .share {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    max-inline-size: 36rem;
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-xl);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+  }
+
+  /* ── Two ways ─────────────────────────────────────────────────────── */
+  .ways {
+    display: flex;
+    flex-direction: column;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .way {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2) var(--nc-space-3);
+    padding: var(--nc-space-3);
+  }
+
+  .way + .way {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .wayIcon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge);
+    color: var(--nc-text-muted);
+  }
+
+  .wayIcon svg {
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
+  }
+
+  .wayText {
+    display: flex;
+    flex: 1 1 14rem;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-inline-size: 0;
+  }
+
+  .wayTitle {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .wayAbout,
+  .stepAbout {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  .file {
+    font-family: var(--nc-font-mono);
+    font-size: 0.95em;
+    color: var(--nc-text);
+  }
+
+  .fine {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  /* ── One step at a time ───────────────────────────────────────────── */
+  .step {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+  }
+
+  .stepTitle {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-2);
+    margin-block-start: var(--nc-space-1);
+  }
+
+  .done {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .done svg {
+    flex: none;
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: light-dark(oklch(0.55 0.13 var(--nc-success-h)), oklch(0.78 0.12 var(--nc-success-h)));
+  }
+
+  .address {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    padding: var(--nc-space-1) var(--nc-space-1) var(--nc-space-1) var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .link {
+    display: inline-flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+    overflow: hidden;
+    border-radius: var(--nc-radius-xs);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text);
+    text-decoration: none;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .link svg {
+    flex: none;
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .link:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  @media (hover: hover) {
+    a.link:hover {
+      text-decoration: underline;
+      text-underline-offset: 0.2em;
+    }
+  }
+}

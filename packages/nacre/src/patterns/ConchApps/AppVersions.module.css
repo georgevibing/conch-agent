@@ -1,0 +1,74 @@
+@layer nacre.components {
+  .versions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    max-inline-size: 36rem;
+  }
+
+  .title {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .title svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge);
+    list-style: none;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    min-block-size: var(--nc-control-lg);
+    padding: var(--nc-space-1) var(--nc-space-2) var(--nc-space-1) var(--nc-space-3-5);
+  }
+
+  .row + .row {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .version {
+    min-inline-size: 4.5rem;
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-sm);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text);
+  }
+
+  .row[data-current] .version {
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  .when {
+    flex: 1;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  .note {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+}
