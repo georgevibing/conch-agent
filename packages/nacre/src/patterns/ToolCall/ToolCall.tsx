@@ -43,6 +43,11 @@ export interface ToolCallProps extends Omit<
   outputLanguage?: string;
   /** Custom body (e.g. a `<Diff>`), rendered after input/output. */
   children?: ReactNode;
+  /**
+   * What the tool found, drawn as it is (an agenda, emails, files): always
+   * shown under the row. Input and output stay behind the disclosure.
+   */
+  view?: ReactNode;
   /** Override the icon inferred from `name`. */
   icon?: LucideIcon;
   /** Replaces the icon and server name — e.g. an integration's logo and name. */
@@ -145,6 +150,7 @@ export function ToolCall({
   output,
   outputLanguage = 'text',
   children,
+  view,
   icon,
   leading,
   open,
@@ -190,7 +196,12 @@ export function ToolCall({
       disabled={!hasBody}
       asChild
     >
-      <div data-status={status} className={cx(styles.root, className)} {...props}>
+      <div
+        data-status={status}
+        data-view={view != null || undefined}
+        className={cx(styles.root, className)}
+        {...props}
+      >
         {hasBody ? (
           <Collapsible.Trigger className={styles.header} data-lustre="">
             {header}
@@ -198,6 +209,7 @@ export function ToolCall({
         ) : (
           <div className={styles.header}>{header}</div>
         )}
+        {view != null && <div className={styles.view}>{view}</div>}
         {hasBody && (
           <Collapsible.Content className={styles.content}>
             <div className={styles.body}>
