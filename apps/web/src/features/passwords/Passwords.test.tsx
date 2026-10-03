@@ -1,5 +1,6 @@
 import type { VaultItemDetail, VaultItemSummary, VaultList, VaultSource } from '@conch/protocol';
-import { screen, waitFor } from '@testing-library/react';
+import { Toaster } from '@conch/nacre';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes, useLocation, useParams } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -8,7 +9,10 @@ import { mockFetch, renderApp } from '../../test/harness';
 import { PasswordsLink } from './PasswordsLink';
 import { PasswordsView } from './PasswordsView';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  localStorage.clear();
+});
 
 const summary = (over: Partial<VaultItemSummary>): VaultItemSummary => ({
   id: 'pw_1',
@@ -80,6 +84,7 @@ function Page() {
     <>
       <output data-testid="where">{pathname}</output>
       <PasswordsView itemId={itemId} />
+      <Toaster />
     </>
   );
 }
@@ -87,10 +92,16 @@ function Page() {
 function open(
   items: VaultItemSummary[],
   /** `slow`: an item whose fields don't come until `answer()` (another app taking its time). */
-  options: { route?: string; sources?: VaultSource[]; slow?: string } = {},
+  options: {
+    route?: string;
+    sources?: VaultSource[];
+    slow?: string;
+    routes?: Record<string, (body: unknown) => unknown>;
+  } = {},
 ) {
   const calls = mockFetch({
     'GET /api/vault': () => list(items, options.sources),
+    ...options.routes,
     ...Object.fromEntries(
       items.map((item) => [`GET /api/vault/items/${item.id}`, () => detail(item)]),
     ),
@@ -153,14 +164,14 @@ describe('a long list of passwords', () => {
     await waitFor(() => expect(screen.queryByText('Favourites')).not.toBeInTheDocument());
   });
 
-  it('wears a manager’s mark only when there is more than one manager to tell apart', async () => {
+  it('wears where each item lives only when the list holds more than one place', async () => {
     const onePassword = source({ id: '1password', name: '1Password', writable: false });
     const first = open(
       many(5, (i) => ({ id: `op_v_${i}`, source: '1password', readOnly: true })),
       { sources: [source({}), onePassword] },
     );
     await screen.findByRole('button', { name: /^Site 0000, user0, from 1Password/ });
-    expect(inList('[aria-label="1Password"]')).toBeNull();
+    expect(inList('[title="1Password"]')).toBeNull();
     first.unmount();
 
     open(
@@ -177,8 +188,8 @@ describe('a long list of passwords', () => {
       },
     );
     await screen.findByRole('button', { name: /^Bank, from 1Password/ });
-    expect(inList('[aria-label="1Password"]')).not.toBeNull();
-    expect(inList('[aria-label="Bitwarden"]')).not.toBeNull();
+    expect(inList('[title="1Password"]')).not.toBeNull();
+    expect(inList('[title="Bitwarden"]')).not.toBeNull();
   });
 });
 
@@ -314,5 +325,186 @@ describe('another password manager’s own approval window', () => {
     const elsewhere = mockFetch({ 'GET /api/vault': () => list(many(2)) });
     renderApp(<PasswordsLink />, { route: '/' });
     await waitFor(() => expect(elsewhere.map((c) => c.path)).toEqual(['/api/vault']));
+  });
+});
+
+describe('where items live, and doing things to several', () => {
+  const onePassword = (over: Partial<VaultSource> = {}) =>
+    source({ id: '1password', name: '1Password', writable: false, ...over });
+  const mixed = () => [
+    summary({ id: 'pw_1', title: 'Bank', subtitle: 'ada', source: 'conch' }),
+    summary({ id: 'pw_2', title: 'Forum', subtitle: 'ada', source: 'conch' }),
+    summary({
+      id: 'op_v_1',
+      title: 'Mail',
+      subtitle: 'ada',
+      source: '1password',
+      container: 'Private',
+      readOnly: true,
+    }),
+  ];
+
+  it('says on every row where it lives, and shows one place at a press', async () => {
+    const user = userEvent.setup();
+    open(mixed(), { sources: [source({}), onePassword()] });
+    expect(await screen.findByRole('button', { name: /^Bank, ada, in Conch/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /^Mail, ada, from 1Password, Private/ }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: '1Password, 1 item' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /^Bank,/ })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: /^Mail,/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: 'Conch, 2 items' }));
+    await screen.findByRole('button', { name: /^Bank,/ });
+    expect(screen.queryByRole('button', { name: /^Mail,/ })).not.toBeInTheDocument();
+  });
+
+  it('chooses several with ⌘/Ctrl- and Shift-click, deletes Conch’s own, and can undo', async () => {
+    const user = userEvent.setup();
+    const { calls } = open(mixed(), {
+      sources: [source({}), onePassword()],
+      routes: {
+        'POST /api/vault/trash': () => ({ ok: true }),
+        'POST /api/vault/restore': () => ({ ok: true }),
+      },
+    });
+    const bank = await screen.findByRole('button', { name: /^Bank,/ });
+    await user.keyboard('{Control>}');
+    await user.click(bank);
+    await user.keyboard('{/Control}');
+    await user.keyboard('{Shift>}');
+    await user.click(screen.getByRole('button', { name: /^Mail,/ }));
+    await user.keyboard('{/Shift}');
+    const bar = screen.getByRole('toolbar', { name: 'Chosen items' });
+    expect(bar).toHaveTextContent('3 chosen');
+    // Choosing doesn't open anything.
+    expect(where()).toBe('/passwords');
+    expect(screen.getByRole('button', { name: /^Bank,/ })).toHaveAttribute('aria-pressed', 'true');
+
+    // A manager's item isn't deleted here: the button says how many of Conch's it deletes.
+    await user.click(within(bar).getByRole('button', { name: 'Delete 2 items' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/api/vault/trash')?.body).toEqual({
+        ids: ['pw_1', 'pw_2'],
+      }),
+    );
+    expect(screen.queryByRole('toolbar', { name: 'Chosen items' })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Undo' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/api/vault/restore')?.body).toEqual({
+        ids: ['pw_1', 'pw_2'],
+      }),
+    );
+  });
+
+  it('copies a manager’s item into Conch from its right-click menu', async () => {
+    const user = userEvent.setup();
+    const { calls } = open(mixed(), {
+      sources: [source({}), onePassword()],
+      routes: {
+        'POST /api/vault/sources/1password/transfer': () => ({
+          jobId: 'vjob_1',
+          source: '1password',
+          sourceName: '1Password',
+          state: 'done',
+          total: 1,
+          done: 1,
+          copied: 1,
+          updated: 0,
+          skipped: 0,
+          failed: [],
+          startedAt: 1,
+        }),
+      },
+    });
+    const mail = await screen.findByRole('button', { name: /^Mail,/ });
+    await user.pointer({ keys: '[MouseRight]', target: mail });
+    await user.click(await screen.findByRole('menuitem', { name: 'Copy into Conch' }));
+    await waitFor(() =>
+      expect(
+        calls.find((c) => c.path === '/api/vault/sources/1password/transfer')?.body,
+      ).toMatchObject({ ids: ['op_v_1'], commit: true, skipDuplicates: true, keepSynced: false }),
+    );
+    expect(await screen.findByText('“Mail” copied into Conch')).toBeInTheDocument();
+  });
+
+  it('copies Conch’s own to a manager that takes them, into the vault chosen', async () => {
+    const user = userEvent.setup();
+    const { calls } = open(mixed(), {
+      sources: [
+        source({}),
+        onePassword({
+          accepts: true,
+          places: [
+            { id: 'vprivate', name: 'Private' },
+            { id: 'vwork', name: 'Work' },
+          ],
+        }),
+      ],
+      routes: {
+        'POST /api/vault/sources/1password/copy': () => ({ copied: 1, skipped: 0, failed: [] }),
+      },
+    });
+    const bank = await screen.findByRole('button', { name: /^Bank,/ });
+    await user.pointer({ keys: '[MouseRight]', target: bank });
+    (await screen.findByRole('menuitem', { name: 'Copy to 1Password' })).focus();
+    await user.keyboard('{ArrowRight}');
+    await screen.findByRole('menuitem', { name: 'Work' });
+    await user.keyboard('{ArrowDown}{Enter}');
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/api/vault/sources/1password/copy')?.body).toEqual({
+        ids: ['pw_1'],
+        place: 'vwork',
+        skipDuplicates: true,
+      }),
+    );
+    expect(await screen.findByText('“Bank” copied to 1Password (Work)')).toBeInTheDocument();
+    // A manager's own item has no Copy to; Conch's has no Copy into Conch.
+    await user.keyboard('{Escape}');
+  });
+
+  it('copies the password of the open item with ⌘/Ctrl+C, revealed for that one copy', async () => {
+    const user = userEvent.setup();
+    const { calls } = open(mixed(), {
+      route: '/passwords/pw_1',
+      routes: {
+        'POST /api/vault/items/pw_1/reveal': () => ({ value: 'river-otter-copper' }),
+      },
+    });
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText, readText: async () => '' },
+    });
+    await screen.findByRole('heading', { name: 'Bank' });
+    await user.keyboard('{Control>}c{/Control}');
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('river-otter-copper'));
+    expect(calls.find((c) => c.path === '/api/vault/items/pw_1/reveal')?.body).toEqual({
+      fieldId: 'password',
+      copy: true,
+    });
+  });
+
+  it('points to the same account in another place', async () => {
+    open(
+      [
+        summary({ id: 'pw_1', title: 'Mail', subtitle: 'ada', domains: ['mail.example'] }),
+        summary({
+          id: 'op_v_1',
+          title: 'Mail (1P)',
+          subtitle: 'ada',
+          domains: ['mail.example'],
+          source: '1password',
+          readOnly: true,
+        }),
+      ],
+      { route: '/passwords/pw_1', sources: [source({}), onePassword()] },
+    );
+    const other = await screen.findByRole('button', { name: 'Open the one in 1Password' });
+    await userEvent.click(other);
+    await waitFor(() => expect(where()).toBe('/passwords/op_v_1'));
   });
 });

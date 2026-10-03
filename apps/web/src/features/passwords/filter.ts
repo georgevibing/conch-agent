@@ -14,6 +14,9 @@ export type VaultFilter =
 
 export type VaultSort = 'name' | 'recent' | 'used';
 
+/** Whose items the list shows: everyone's, Conch's own, or one password manager's. */
+export type VaultFrom = VaultSourceId | 'all';
+
 export const TYPE_NAMES: Record<VaultItemType, { one: string; many: string }> = {
   login: { one: 'Login', many: 'Logins' },
   card: { one: 'Card', many: 'Cards' },
@@ -129,11 +132,15 @@ function rank(title: string, words: string[]): number {
 
 export function visibleItems(
   index: IndexedItem[],
-  options: { query: string; filter: VaultFilter; sort: VaultSort },
+  options: { query: string; filter: VaultFilter; sort: VaultSort; from?: VaultFrom },
 ): VaultItemSummary[] {
   const words = wordsOf(options.query);
+  const from = options.from ?? 'all';
   const found = index.filter(
-    (e) => inFilter(e.item, options.filter) && words.every((w) => e.hay.includes(w)),
+    (e) =>
+      (from === 'all' || e.item.source === from) &&
+      inFilter(e.item, options.filter) &&
+      words.every((w) => e.hay.includes(w)),
   );
   const order = (a: VaultItemSummary, b: VaultItemSummary) =>
     options.filter.kind === 'deleted'
@@ -223,9 +230,15 @@ export function listRows(
   return rows;
 }
 
-/** Counts for the filter menu. */
-export function counts(items: VaultItemSummary[]) {
-  const live = items.filter((i) => !i.deletedAt);
+/**
+ * Counts for the filter menu, within one place's items (`from`). `sources`
+ * counts every place, for the row of places itself.
+ */
+export function counts(items: VaultItemSummary[], from: VaultFrom = 'all') {
+  const sources = new Map<VaultSourceId, number>();
+  for (const i of items) if (!i.deletedAt) sources.set(i.source, (sources.get(i.source) ?? 0) + 1);
+  const mine = from === 'all' ? items : items.filter((i) => i.source === from);
+  const live = mine.filter((i) => !i.deletedAt);
   const types = new Map<VaultItemType, number>();
   const tags = new Map<string, number>();
   for (const i of live) {
@@ -233,10 +246,12 @@ export function counts(items: VaultItemSummary[]) {
     for (const t of i.tags) tags.set(t, (tags.get(t) ?? 0) + 1);
   }
   return {
+    sources,
+    everywhere: [...sources.values()].reduce((a, b) => a + b, 0),
     all: live.length,
     favorites: live.filter((i) => i.favorite).length,
     codes: live.filter((i) => i.totp).length,
-    deleted: items.length - live.length,
+    deleted: items.filter((i) => i.deletedAt).length,
     types,
     tags: [...tags.entries()].sort((a, b) => collator.compare(a[0], b[0])),
   };
@@ -280,4 +295,40 @@ export function ago(at: number | undefined, now = Date.now()): string {
     month: 'short',
     year: 'numeric',
   });
+}
+
+/**
+ * The same account in two places (Conch and 1Password, say): the same site,
+ * or title when there's none, and the same account. Names only: no password
+ * is compared.
+ */
+export function twinKey(item: VaultItemSummary): string {
+  return `${(item.domains[0] ?? item.title).toLowerCase().replace(/^www\./, '')}\0${item.subtitle.trim().toLowerCase()}`;
+}
+
+/** Each item's twins in other places, by id. */
+export function twins(items: VaultItemSummary[]): Map<string, VaultItemSummary[]> {
+  const byKey = new Map<string, VaultItemSummary[]>();
+  for (const i of items) {
+    if (i.deletedAt || i.source === 'system') continue;
+    const key = twinKey(i);
+    byKey.set(key, [...(byKey.get(key) ?? []), i]);
+  }
+  const out = new Map<string, VaultItemSummary[]>();
+  for (const group of byKey.values()) {
+    if (group.length < 2) continue;
+    for (const i of group) {
+      const others = group.filter((o) => o.source !== i.source);
+      if (others.length) out.set(i.id, others);
+    }
+  }
+  return out;
+}
+
+/** The ids from `from` to `to` in the list's order, both included, for Shift-click. */
+export function range(shown: VaultItemSummary[], from: string, to: string): string[] {
+  const a = shown.findIndex((i) => i.id === from);
+  const b = shown.findIndex((i) => i.id === to);
+  if (a === -1 || b === -1) return b === -1 ? [] : [to];
+  return shown.slice(Math.min(a, b), Math.max(a, b) + 1).map((i) => i.id);
 }
