@@ -15,6 +15,7 @@ import { z } from 'zod';
 
 import type { HostTool, HostToolResult } from '../engines/types';
 import { makerGuide } from './guide';
+import { plainLine, quoted, sourceName } from './words';
 import { ConchAppError, type ConchAppService } from './service';
 
 export interface MakerContext {
@@ -55,15 +56,6 @@ const safely =
       return words(error);
     }
   };
-
-/** Someone else's words, as one short line of data: never a heading, a fence or a second line. */
-export const quoted = (text: string, max = 160): string => {
-  const plain = [...text]
-    .map((c) => (c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127 || c === '`' ? ' ' : c))
-    .join('');
-  const line = plain.replace(/\s+/g, ' ').trim();
-  return `“${line.length > max ? `${line.slice(0, max - 1)}…` : line}”`;
-};
 
 const hostOf = (link: string) => {
   try {
@@ -109,6 +101,16 @@ const draftArg = z
 export function makerTools(service: ConchAppService, ctx: MakerContext): HostTool[] {
   if (ctx.unattended) return [];
   const draftOf = (draft?: string) => service.draftFor(ctx.conversationId, draft);
+  /** An app from somewhere else is someone else's words: reading its files taints the chat. */
+  const fromOutside = async (appId: string | undefined) => {
+    if (!appId) return;
+    const app = await service.get(appId).catch(() => undefined);
+    if (app && app.source.kind !== 'made')
+      ctx.taint?.({
+        kind: 'app',
+        label: `${plainLine(app.manifest.name, 60)} (from ${sourceName(app.source)})`,
+      });
+  };
 
   const guide: HostTool = {
     name: 'app_guide',
@@ -207,6 +209,7 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
     },
     run: safely(async ({ draft, path }) => {
       const info = await draftOf(draft);
+      await fromOutside(info.appId);
       if (!path) return `The draft ${info.id} has:\n${listFiles(await service.files(info.id))}`;
       return service.read(info.id, path);
     }),
@@ -235,10 +238,10 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
     },
     run: safely(async ({ draft, tool, input }) => {
       const info = await draftOf(draft);
+      const manifest = (await service.draft(info)).manifest;
       // A draft that reaches the web is a way out (ADR 0028): after reading something untrusted, ask first.
       const tainted = ctx.untrusted?.();
       if (tainted) {
-        const manifest = (await service.draft(info)).manifest;
         if (manifest?.reaches.length) {
           const answer = await ctx.ask({
             toolName: 'app_try',
@@ -254,6 +257,9 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
         }
       }
       const { outcome, untried } = await service.tryTool(info.id, tool, input ?? {}, ctx.signal);
+      // What it fetched came from outside, as for an added app (`hosted.ts`).
+      if (manifest?.reaches.length)
+        ctx.taint?.({ kind: 'app', label: `${plainLine(manifest.name, 60)} content` });
       const next = untried.length
         ? `Still to try: ${untried.join(', ')}.`
         : 'Every tool has been tried. Run app_check, then app_present.';
@@ -291,6 +297,7 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
     input: { app: z.string().min(1).max(40).describe('The app’s id, from app_find or the prompt') },
     run: safely(async ({ app }) => {
       const draft = await service.editDraft(ctx.conversationId, app);
+      await fromOutside(draft.appId);
       return `The draft ${draft.id} holds ${app}’s files:\n${listFiles(await service.files(draft.id))}\nRead what you need with app_read, change it with app_write (raise the version), then app_check.`;
     }),
   };

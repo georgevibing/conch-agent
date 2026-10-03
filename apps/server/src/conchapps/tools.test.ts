@@ -182,6 +182,50 @@ describe('the maker’s tools (ADR 0061 §4)', () => {
     expect(taints.at(-1)).toEqual({ kind: 'download', label: 'example.com' });
   });
 
+  it('taint the chat after trying a draft that reaches the web, and when reading an app from elsewhere', async () => {
+    const taints: unknown[] = [];
+    const { run, service } = await setup({}, { taint: (s) => void taints.push(s) });
+    await run('app_new', { name: 'Tally', id: 'tally' });
+    for (const [path, content] of Object.entries(tallyFiles()))
+      await run('app_write', { path, content });
+    await run('app_try', { tool: 'read_count' });
+    // No websites: nothing came in from outside.
+    expect(taints).toEqual([]);
+    const manifest = JSON.parse(tallyFiles()['conch-app.json'] ?? '{}') as Record<string, unknown>;
+    manifest.reaches = ['api.example.com'];
+    await run('app_write', { path: 'conch-app.json', content: JSON.stringify(manifest) });
+    await run('app_try', { tool: 'read_count' });
+    expect(taints).toEqual([{ kind: 'app', label: 'Tally content' }]);
+
+    // An app added from a file: its files are someone else's words.
+    const weather = {
+      ...tallyFiles(),
+      'conch-app.json': JSON.stringify({
+        ...manifest,
+        id: 'weather',
+        name: 'Weather',
+        reaches: [],
+      }),
+    };
+    const preview = await service.preview({
+      file: fakePack(textFiles(weather)).toString('base64'),
+      name: 'weather.conchapp',
+    });
+    if (!preview?.apps[0]) throw new Error('nothing');
+    await service.install({
+      packageId: preview.packageId,
+      appId: 'weather',
+      hash: preview.apps[0].hash,
+      settings: {},
+    });
+    taints.length = 0;
+    expect(await run('app_edit', { app: 'weather' })).toMatch(/holds weather’s files/);
+    expect(taints).toEqual([{ kind: 'app', label: 'Weather (from weather.conchapp)' }]);
+    const draft = (await service.workshop.ofChat('c_chat')).find((d) => d.appId === 'weather');
+    await run('app_read', { draft: draft?.id, path: 'tools.mjs' });
+    expect(taints).toHaveLength(2);
+  });
+
   it('the prompt says how making works, and in a chat with a draft, where it stands and the guide', async () => {
     const { service, run } = await setup();
     expect(await appsPrompt(service, 'c_chat', { tools: false })).toBe('');
