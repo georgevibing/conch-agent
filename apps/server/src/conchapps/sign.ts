@@ -86,6 +86,142 @@ export async function signApp(
   return Buffer.from(`${JSON.stringify(file, null, 2)}\n`);
 }
 
+/**
+ * Letters from other scripts that look like Latin ones, and a few other
+ * stand-ins (digits, symbols), each with the Latin letter it passes for.
+ * Read after NFKC, so full-width and styled letters are already plain.
+ */
+const CAPITALS: Record<string, string> = {
+  // Cyrillic and Greek capitals that pass for Latin ones (before lower case changes what they look like).
+  А: 'A',
+  В: 'B',
+  Е: 'E',
+  К: 'K',
+  М: 'M',
+  Н: 'H',
+  О: 'O',
+  Р: 'P',
+  С: 'C',
+  Т: 'T',
+  Х: 'X',
+  У: 'Y',
+  Ѕ: 'S',
+  І: 'I',
+  Ј: 'J',
+  Ԁ: 'D',
+  Ԛ: 'Q',
+  Ԝ: 'W',
+  Α: 'A',
+  Β: 'B',
+  Ε: 'E',
+  Ζ: 'Z',
+  Η: 'H',
+  Ι: 'I',
+  Κ: 'K',
+  Μ: 'M',
+  Ν: 'N',
+  Ο: 'O',
+  Ρ: 'P',
+  Τ: 'T',
+  Υ: 'Y',
+  Χ: 'X',
+  // A capital I is a small l in most typefaces.
+  I: 'l',
+};
+
+const CONFUSABLES: Record<string, string> = {
+  // Cyrillic
+  а: 'a',
+  в: 'b',
+  е: 'e',
+  ё: 'e',
+  к: 'k',
+  м: 'm',
+  н: 'h',
+  о: 'o',
+  р: 'p',
+  с: 'c',
+  т: 't',
+  у: 'y',
+  х: 'x',
+  ѕ: 's',
+  і: 'i',
+  ї: 'i',
+  ј: 'j',
+  ԁ: 'd',
+  һ: 'h',
+  ӏ: 'l',
+  ԛ: 'q',
+  ԝ: 'w',
+  ь: 'b',
+  г: 'r',
+  п: 'n',
+  ц: 'u',
+  ш: 'w',
+  ү: 'y',
+  ҡ: 'k',
+  ո: 'n',
+  ս: 'u',
+  // Greek
+  α: 'a',
+  β: 'b',
+  γ: 'y',
+  ε: 'e',
+  ζ: 'z',
+  η: 'n',
+  ι: 'i',
+  κ: 'k',
+  ν: 'v',
+  ο: 'o',
+  ρ: 'p',
+  σ: 'o',
+  τ: 't',
+  υ: 'u',
+  χ: 'x',
+  ω: 'w',
+  ϲ: 'c',
+  ϳ: 'j',
+  ς: 'c',
+  // Latin look-alikes and stand-ins
+  ı: 'i',
+  ȷ: 'j',
+  ɑ: 'a',
+  ɡ: 'g',
+  ɩ: 'i',
+  ʟ: 'l',
+  ᴏ: 'o',
+  ꞵ: 'b',
+  ł: 'l',
+  ø: 'o',
+  đ: 'd',
+  '0': 'o',
+  '1': 'l',
+  '3': 'e',
+  '5': 's',
+  '|': 'l',
+  '!': 'i',
+  $: 's',
+  '@': 'a',
+};
+
+/** Characters nobody sees: joiners, marks for text direction, variation selectors. */
+const INVISIBLE = /[\p{Default_Ignorable_Code_Point}\p{Cf}\p{Mn}]/gu;
+
+/**
+ * A name as it looks rather than as it's spelled: NFKC, nothing invisible,
+ * accents off, look-alike letters as the Latin ones (capitals first), lower case, and
+ * `rn`/`vv` as the `m`/`w` they pass for. Two names with the same skeleton
+ * read the same to a person, so an untrusted key using one is a look-alike.
+ */
+export function nameSkeleton(name: string): string {
+  let capitals = '';
+  for (const char of name.normalize('NFKC').normalize('NFD').replace(INVISIBLE, ''))
+    capitals += CAPITALS[char] ?? char;
+  let out = '';
+  for (const char of capitals.toLowerCase()) out += CONFUSABLES[char] ?? char;
+  return out.replaceAll('rn', 'm').replaceAll('vv', 'w').replace(/\s+/g, ' ').trim();
+}
+
 const UNREADABLE = 'Its signature file isn’t one Conch can read, so it can’t say who made it.';
 
 /** Whether an app's signature holds, and whether you trust who made it. */
@@ -127,7 +263,7 @@ export async function verifyAppWith(app: AppPackage, trust: SkillTrust): Promise
     return invalid(`It was changed after ${parsed.publisher.name} signed it.`, who);
   const publishers = await trust.list();
   if (publishers.some((p) => p.fingerprint === fingerprint)) return { state: 'verified', ...who };
-  const name = parsed.publisher.name.trim().toLowerCase();
-  const lookalike = publishers.some((p) => p.name.trim().toLowerCase() === name);
+  const name = nameSkeleton(parsed.publisher.name);
+  const lookalike = Boolean(name) && publishers.some((p) => nameSkeleton(p.name) === name);
   return { state: 'untrusted', ...who, ...(lookalike && { lookalike }) };
 }

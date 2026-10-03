@@ -15,7 +15,13 @@ import { deviceSealer, isSealed } from '../lib/sealed';
 import { newSigner, publicKeyFrom, signedMessage, type Signer } from '../skills/signing';
 import { SIGNER_FILE, SkillTrust } from '../skills/trust';
 import { appHash, readFiles, SIGNATURE_FILE } from './package';
-import { appSignedMessage, signApp, verifyAppWith, type AppSignatureFile } from './sign';
+import {
+  appSignedMessage,
+  nameSkeleton,
+  signApp,
+  verifyAppWith,
+  type AppSignatureFile,
+} from './sign';
 import type { AppPackage } from './types';
 
 const thisComputer = deviceSealer(async () => Buffer.alloc(32, 7));
@@ -137,6 +143,47 @@ describe('signing an app', () => {
       state: 'verified',
       publisher: 'Ada',
     });
+  });
+});
+
+describe('a look-alike name', () => {
+  it('is caught however it’s spelled: other scripts, invisible characters, wide letters', async () => {
+    const you = await home();
+    const ada = await home();
+    await you.trust.trust({ key: (await ada.trust.signer('Ada')).publicKey, name: 'Ada' });
+    const plant = app();
+    const as = async (name: string) => {
+      const mallory = await home();
+      const sig = await signApp(plant, mallory.dir, { trust: mallory.trust, name });
+      return verifyAppWith(withSignature(plant, sig), you.trust);
+    };
+    for (const name of [
+      '\u0410da', // a Cyrillic А
+      'A\u200Dda', // a zero-width joiner
+      '\u0391DA', // a Greek Α, in capitals
+      'A\u0501\u0430', // Cyrillic ԁ and а
+      '\uFF21\uFF44\uFF41', // full-width letters
+      'A\u202Eda', // a right-to-left override
+      'Ada\uFE0F', // a variation selector
+      'Adá', // an accent
+    ])
+      expect(await as(name), JSON.stringify(name)).toMatchObject({
+        state: 'untrusted',
+        lookalike: true,
+      });
+    for (const name of ['Bob', 'Adam', 'Ida'])
+      expect((await as(name)).lookalike, name).toBeUndefined();
+  });
+
+  it('reads names as they look', () => {
+    expect(nameSkeleton('\u0410da')).toBe('ada');
+    expect(nameSkeleton('A\u200Bd\u2060a')).toBe('ada');
+    expect(nameSkeleton('\u0397elen')).toBe('helen');
+    expect(nameSkeleton('Mo\u0440\u0441h')).toBe('mopch');
+    expect(nameSkeleton('Ma\u0442\u0442')).toBe('matt');
+    expect(nameSkeleton('rnary  ann')).toBe('mary ann');
+    expect(nameSkeleton('B0B')).toBe('bob');
+    expect(nameSkeleton('\u200D\u200D')).toBe('');
   });
 });
 
