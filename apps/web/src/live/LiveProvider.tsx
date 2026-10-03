@@ -20,6 +20,7 @@ import { healthKeys } from '../features/health/api';
 import { backupKeys } from '../features/health/backups';
 import { useImportProgress } from '../features/import/api';
 import { applyArtifactEvent } from '../features/artifacts/queries';
+import { applyConchAppsEvent } from '../features/conchapps/queries';
 import { applyRoutineEvent } from '../features/routines/queries';
 import { applyTaskEvent, taskKeys } from '../features/tasks/queries';
 import { skillKeys } from '../features/skills/queries';
@@ -244,6 +245,9 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         case 'integration.changed':
         case 'integration.deleted':
           applyIntegrationEvent(client, event);
+          break;
+        case 'conch-apps.changed':
+          applyConchAppsEvent(client);
           break;
         case 'artifact.changed':
         case 'artifact.deleted':
