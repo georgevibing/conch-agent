@@ -412,8 +412,8 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
     }),
   };
 
-  return [
-    guide,
+  // Each step of making an app shows as a row while it runs; reading the guide doesn't.
+  const steps = [
     create,
     write,
     read,
@@ -425,4 +425,5 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
     get,
     share,
   ] as HostTool[];
+  return [guide as HostTool, ...steps.map((tool): HostTool => ({ ...tool, row: true }))];
 }

@@ -38,6 +38,20 @@ export function toolSummary(name: string, raw: unknown): string | undefined {
     case 'TaskCreate':
     case 'TaskUpdate':
       return str(input, 'subject') ?? 'Plan';
+    // The steps of making an app (ADR 0061): what each is about, in a few words.
+    case 'mcp__conch__app_new':
+      return str(input, 'name');
+    case 'mcp__conch__app_try':
+      return str(input, 'tool');
+    case 'mcp__conch__app_find':
+      return str(input, 'query');
+    case 'mcp__conch__app_get':
+      return str(input, 'link');
+    case 'mcp__conch__app_check':
+    case 'mcp__conch__app_present':
+    case 'mcp__conch__app_share':
+    case 'mcp__conch__app_edit':
+      return undefined;
     default:
       return str(input, 'description') ?? file;
   }

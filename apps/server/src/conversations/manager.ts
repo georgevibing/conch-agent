@@ -1177,6 +1177,8 @@ export class ConversationManager {
       ...replies.tools,
       ...plan.tools,
     );
+    // Conch's own tools that are worth a row as they run: an app's tools, the maker's steps.
+    const rowTools = new Set(tools.filter((t) => t.row).map((t) => `mcp__conch__${t.name}`));
     // Scoped tasks may use the common connector/artifact tools, never the rest
     // of the normal chat's powers. Guards enforce this again at execution time.
     if (extras?.toolAllowed)
@@ -1516,7 +1518,8 @@ export class ConversationManager {
             break;
           case 'tool-start':
             if (isHostTool(event.name)) {
-              hostRows.start(event);
+              for (const shown of hostRows.start(event, rowTools.has(event.name)))
+                this.#append(live, shown);
               break;
             }
             if (event.name.startsWith('mcp__'))

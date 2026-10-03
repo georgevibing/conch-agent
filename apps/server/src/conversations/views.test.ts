@@ -136,6 +136,40 @@ describe('Conch’s own tool calls in the transcript', () => {
   });
 });
 
+describe('a tool that asks for a row (ADR 0061)', () => {
+  it('shows running at once, and finishes in place, failed or not', () => {
+    let now = 0;
+    const rows = new HostToolRows(undefined, () => now);
+    expect(
+      rows.start(
+        { toolUseId: 'w', name: 'mcp__conch__app_write', input: { path: 'tools.mjs' } },
+        true,
+      ),
+    ).toEqual([
+      {
+        type: 'tool.started',
+        toolUseId: 'w',
+        name: 'mcp__conch__app_write',
+        input: { path: 'tools.mjs' },
+      },
+    ]);
+    now = 120;
+    expect(rows.end({ toolUseId: 'w', status: 'success', output: 'Wrote tools.mjs.' })).toEqual([
+      {
+        type: 'tool.finished',
+        toolUseId: 'w',
+        status: 'success',
+        output: 'Wrote tools.mjs.',
+        durationMs: 120,
+      },
+    ]);
+    rows.start({ toolUseId: 'c', name: 'mcp__conch__app_tally__count', input: {} }, true);
+    expect(rows.end({ toolUseId: 'c', status: 'error', output: 'No.' })).toEqual([
+      { type: 'tool.finished', toolUseId: 'c', status: 'error', output: 'No.', durationMs: 0 },
+    ]);
+  });
+});
+
 /** A provider whose turn calls Conch's own tools, the way every engine reports them. */
 class Scripted implements Engine {
   readonly id = 'mock' as const;

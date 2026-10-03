@@ -43,6 +43,12 @@ export interface HostTool<Shape extends z.ZodRawShape = z.ZodRawShape> {
   name: string;
   description: string;
   input: Shape;
+  /**
+   * Show a row for each call as it runs, even when it finds nothing to draw
+   * (ADR 0060 shows Conch's own tools only for what they found): an app's own
+   * tools, and the steps of making one, are what the person wants to see.
+   */
+  row?: boolean;
   run(
     args: z.infer<z.ZodObject<Shape>>,
     context?: { operationId: string },
