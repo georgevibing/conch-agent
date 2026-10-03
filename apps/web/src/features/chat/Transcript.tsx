@@ -21,6 +21,7 @@ import {
 import { BrowserApprovalItem, BrowserTrailItem, HandoffItem } from '../browser/ChatCards';
 import { IntegrationIssue, IntegrationSuggestion } from '../integrations/ChatBits';
 import { NeedsAppsItem } from './NeedsApps';
+import { PastChatsItem } from './PastChatsItem';
 import { HeldItem, RoutedItem } from './OfflineBits';
 import { ArtifactChatCard } from '../artifacts/ArtifactChatCard';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
@@ -118,7 +119,7 @@ function placeSuggestions(items: TranscriptItem[], holdLast: boolean): Transcrip
 function timeOf(item: TranscriptItem): number | undefined {
   if (item.kind === 'user') return item.at;
   if (item.kind === 'assistant' || item.kind === 'tool') return item.startedAt;
-  if (item.kind === 'browser' || item.kind === 'artifact') return item.at;
+  if (item.kind === 'browser' || item.kind === 'artifact' || item.kind === 'looked') return item.at;
   return undefined;
 }
 
@@ -200,6 +201,7 @@ export function Transcript({
     !placeholder &&
     ((last?.kind === 'tool' && last.status !== 'running' && last.status !== 'pending') ||
       last?.kind === 'memory' ||
+      last?.kind === 'looked' ||
       last?.kind === 'files' ||
       last?.kind === 'skill' ||
       last?.kind === 'skill-ended' ||
@@ -286,6 +288,7 @@ export function Transcript({
               />
             )}
             {block.item?.kind === 'memory' && <MemoryPill item={block.item} />}
+            {block.item?.kind === 'looked' && <PastChatsItem item={block.item} name={name} />}
             {block.item?.kind === 'skill' && (
               <SkillUsedLine item={block.item} carriedFrom={taskChat ? 'chat' : 'helper'} />
             )}

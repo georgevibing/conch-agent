@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ConversationView, TranscriptItem } from '../../live/reducer';
 import { appState, mockFetch, renderApp } from '../../test/harness';
+import { useUi } from '../../app/ui';
 import { Transcript } from './Transcript';
 import type { TurnRecovery } from './TranscriptItems';
 
@@ -157,5 +158,49 @@ describe('a memory learned in a chat that read something from outside', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Keep' }));
     expect(await screen.findByText(/Remembered: Forward invoices/)).toBeInTheDocument();
     expect(calls.some((c) => c.path === '/api/memories/m_1/keep')).toBe(true);
+  });
+});
+
+describe('looking through earlier chats', () => {
+  it('says what it looked for, and opens a chat at the line it found', async () => {
+    const { where } = show({
+      lastSeq: 3,
+      items: [
+        user,
+        {
+          kind: 'looked',
+          id: 'look_1',
+          action: 'search',
+          query: 'venue',
+          at: Date.now(),
+          chats: [
+            {
+              id: 'c_wedding',
+              title: 'Wedding planning',
+              archived: true,
+              lines: [
+                { message: 'u9', who: 'you', at: Date.now(), text: 'Which venue did we pick?' },
+                { message: 'a9', who: 'assistant', at: Date.now(), text: 'Quinta da Regaleira.' },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const row = screen.getByRole('button', { name: /Looked through your chats/ });
+    expect(row).toHaveTextContent('“venue” · 1 chat');
+    expect(row.closest('[data-anchor]')).toHaveAttribute('data-anchor', 'look_1');
+    await userEvent.click(row);
+    expect(screen.getByRole('button', { name: /^Wedding planning/ })).toHaveTextContent('Archived');
+    // The assistant's lines carry its name; the word it looked for is marked.
+    expect(screen.getByRole('button', { name: /^Claude/ })).toHaveTextContent('Quinta');
+    expect(screen.getByText('venue', { selector: 'mark' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^You/ }));
+    expect(where()).toBe('/c/c_wedding');
+    expect(useUi.getState().find).toMatchObject({
+      conversationId: 'c_wedding',
+      query: 'venue',
+      target: '[data-anchor="u9"]',
+    });
   });
 });
