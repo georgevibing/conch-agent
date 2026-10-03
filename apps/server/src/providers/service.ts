@@ -437,6 +437,7 @@ export class ProviderService {
     const engine = this.#engineOrThrow(id);
     const server = isServerId(id) ? this.#servers.find((s) => s.id === id) : undefined;
     const status = await this.#detect(engine, options.force);
+    const before = (await this.connected().catch(() => new Set<EngineId>())).has(id);
     if (status.state === 'ready')
       // Remembering is best-effort: a settings file that won't write mustn't fail a page.
       await this.deps.settings.setConnected(id, true).catch(() => undefined);
@@ -471,6 +472,7 @@ export class ProviderService {
         featured: false,
         brand: 'server',
         server,
+        connectedBefore: true,
       };
     return {
       id,
@@ -499,6 +501,7 @@ export class ProviderService {
       group: copy?.group ?? 'key',
       featured: copy?.featured ?? false,
       ...(copy?.free && { free: copy.free }),
+      connectedBefore: before || status.state === 'ready',
     };
   }
 

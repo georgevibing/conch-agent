@@ -223,6 +223,8 @@ export const Provider = z.object({
   brand: z.string().optional(),
   /** For a server you added: where it is and what it is. */
   server: ServerConfig.optional(),
+  /** It has worked on this computer and you haven't removed it: it belongs with your providers, even while it needs you. */
+  connectedBefore: z.boolean().default(false),
 });
 export type Provider = z.infer<typeof Provider>;
 
