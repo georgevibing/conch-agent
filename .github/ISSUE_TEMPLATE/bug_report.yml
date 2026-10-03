@@ -1,0 +1,47 @@
+name: Something doesn't work
+description: Conch did something wrong, or couldn't fix something by itself.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please leave out keys, passwords and anything personal.
+        A security problem? Don't file it here: see SECURITY.md.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what Conch did instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen again
+      placeholder: |
+        1. Open …
+        2. Press …
+        3. See …
+  - type: input
+    id: version
+    attributes:
+      label: Conch version
+      description: In Settings → Health → Updates, or `version` in package.json.
+  - type: dropdown
+    id: os
+    attributes:
+      label: Computer Conch runs on
+      options: [macOS, Windows, Linux, Other]
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: Provider and model, if it matters
+      placeholder: e.g. Codex, Ollama qwen3.5:9b
+  - type: textarea
+    id: logs
+    attributes:
+      label: What Conch said
+      description: Error messages, or lines from the gateway's output. Check them for keys first.
+      render: text

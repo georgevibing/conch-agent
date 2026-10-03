@@ -1,6 +1,7 @@
 {
   "name": "@conch/tsconfig",
   "private": true,
+  "license": "MIT",
   "files": [
     "*.json"
   ]

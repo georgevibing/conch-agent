@@ -1,6 +1,7 @@
 {
   "name": "@conch/docs",
   "private": true,
+  "license": "MIT",
   "description": "Conch's documentation: guides in Markdown, reference generated from the code.",
   "type": "module",
   "scripts": {

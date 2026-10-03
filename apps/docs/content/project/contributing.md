@@ -43,6 +43,12 @@ pnpm e2e          # whole journeys in a real browser
 - **Decisions are written down.** A change to the architecture starts as a record in [Decisions](./decisions.md).
 - **Security is a review, every time.** Conch runs commands as you.
 
+## Sending a change
+
+Small fixes can go straight to a pull request. For anything bigger, open an issue first so the approach is agreed before the work. Commits follow Conventional Commits, and `feat` and `fix` subjects are written in the words of the person using Conch, because they become the release notes. [CONTRIBUTING.md](../../../../CONTRIBUTING.md) has the details, and contributions are under the [MIT License](../../../../LICENSE).
+
+A security problem goes through [private reporting](../../../../SECURITY.md), never an issue.
+
 ## These pages
 
 Guides are Markdown in `apps/docs/content`. Everything the code can list (providers, channels, commands, settings) is read from the code when the pages are built, so it can't fall behind. A test fails when a provider or channel has no page, or a link leads nowhere. [How to write a page](../README.md).

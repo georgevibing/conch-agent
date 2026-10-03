@@ -312,8 +312,9 @@ computer (ADR 0041). It's only downloaded when you press **Get it**, and:
 
 ## Reporting a vulnerability
 
-Please report privately to the maintainers rather than opening a public issue.
-See [ARCHITECTURE.md § Security model](../ARCHITECTURE.md#security-model) and
+Please don't open a public issue. Report it privately through
+[GitHub's private vulnerability reporting](https://github.com/georgevibing/conch-agent/security/advisories/new);
+[SECURITY.md](../SECURITY.md) has the details. See [ARCHITECTURE.md § Security model](../ARCHITECTURE.md#security-model) and
 [ADR 0008](./adr/0008-access-and-hardening.md) for the technical design.
 
 ## When the assistant reads something untrusted

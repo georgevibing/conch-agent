@@ -1,0 +1,16 @@
+name: An idea
+description: Something Conch could do, or do better.
+labels: [idea]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you'd like to do
+      description: The thing you're trying to get done, in your own words. What gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How Conch could help
+      description: Optional. What it might look like, or how another app does it.

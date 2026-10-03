@@ -1,6 +1,7 @@
 {
   "name": "@conch/nacre",
   "private": true,
+  "license": "MIT",
   "description": "Nacre — Conch's design language and React component library.",
   "type": "module",
   "sideEffects": [

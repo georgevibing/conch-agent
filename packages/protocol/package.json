@@ -1,6 +1,7 @@
 {
   "name": "@conch/protocol",
   "private": true,
+  "license": "MIT",
   "description": "Typed, validated wire protocol between the Conch web app and gateway.",
   "type": "module",
   "exports": {

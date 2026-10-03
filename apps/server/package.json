@@ -1,6 +1,7 @@
 {
   "name": "@conch/server",
   "private": true,
+  "license": "MIT",
   "description": "Conch gateway — bridges the web app to the local Claude Code install.",
   "type": "module",
   "scripts": {
