@@ -1,7 +1,7 @@
 import { MessageList, SkillHoldEnded } from '@conch/nacre';
 import { useState, type ReactNode, type Ref } from 'react';
 
-import type { ConversationView, TranscriptItem } from '../../live/reducer';
+import { isTurnStart, type ConversationView, type TranscriptItem } from '../../live/reducer';
 import { verbsFor } from './stream';
 import {
   AssistantMessage,
@@ -19,7 +19,8 @@ import {
   type Wait,
 } from './TranscriptItems';
 import { BrowserApprovalItem, BrowserTrailItem, HandoffItem } from '../browser/ChatCards';
-import { IntegrationIssue, IntegrationSuggestion } from '../integrations/ChatBits';
+import { IntegrationIssue } from '../integrations/ChatBits';
+import { OfferAlsoTryItem, OfferItem } from '../offers/OfferItem';
 import { NeedsAppsItem } from './NeedsApps';
 import { HeldItem, RoutedItem } from './OfflineBits';
 import { ArtifactChatCard } from '../artifacts/ArtifactChatCard';
@@ -46,8 +47,10 @@ export interface TranscriptProps {
   columnRef?: Ref<HTMLDivElement>;
   /** For the browser's thumbnails and buttons. */
   conversationId?: string;
-  /** Send a message of yours again (an offer to connect an app: “Ask again”). */
+  /** Send a message of yours again (an offer from an older log: “Carry on”). */
   onAskAgain?: (messageId: string) => void;
+  /** Send these words, exactly (“Also try” under a reply that carried on). */
+  onSend?: (text: string) => void;
   /** Give the message box focus back (something that had it went away). */
   focusComposer?: () => void;
 }
@@ -93,20 +96,23 @@ function blocks(items: TranscriptItem[]): Block[] {
   return out;
 }
 
+/** An offer waits under the reply it came with; one that was taken is where the chat carried on. */
+const heldOffer = (item: TranscriptItem) => item.kind === 'offer' && item.resolution !== 'accepted';
+
 /**
- * An offer to connect an app is logged as the turn starts, but it belongs
- * under the reply: the answer says what it can do without the app, and the
- * offer is right there after it. While the turn runs it waits.
+ * An offer is logged as the turn starts (or mid-reply), but it belongs under
+ * the reply: the answer says what it can do without it, and the offer is
+ * right there after it. While the turn runs it waits.
  */
 function placeSuggestions(items: TranscriptItem[], holdLast: boolean): TranscriptItem[] {
   const out: TranscriptItem[] = [];
   let held: TranscriptItem[] = [];
   for (const item of items) {
-    if (item.kind === 'integration-suggestion') {
+    if (heldOffer(item)) {
       held.push(item);
       continue;
     }
-    if (item.kind === 'user' && held.length) {
+    if (isTurnStart(item) && held.length) {
       out.push(...held);
       held = [];
     }
@@ -136,6 +142,7 @@ export function Transcript({
   routineRun,
   taskChat,
   onAskAgain,
+  onSend,
   focusComposer,
 }: TranscriptProps & {
   /** This conversation is a routine run: its first message is the routine's instruction. */
@@ -161,19 +168,22 @@ export function Transcript({
   ];
   // The model's hidden reasoning arrives as empty items that render nothing, so they
   // mustn't count as "something arrived" — the wait stays until there's something to see.
-  // Offers to connect an app wait for the reply, so they don't count either.
+  // Offers wait for the reply, so they don't count either.
   const last = items
-    .filter(
-      (i) =>
-        !(i.kind === 'assistant' && !i.text && !i.thinking) && i.kind !== 'integration-suggestion',
-    )
+    .filter((i) => !(i.kind === 'assistant' && !i.text && !i.thinking) && !heldOffer(i))
     .at(-1);
   const lastErrorId = [...items].reverse().find((i) => i.kind === 'turn-end')?.id;
   // The first time a chat reads something from outside says what changes; the rest are brief.
   const firstTaint = items.find((i) => i.kind === 'taint')?.id;
   const turns = turnChanges(items);
-  const turnStart = items.findLastIndex((i) => i.kind === 'user');
-  const prompt = turnStart === -1 ? '' : (items[turnStart] as { text: string }).text;
+  const turnStart = items.findLastIndex(isTurnStart);
+  const started = items[turnStart];
+  const prompt =
+    started?.kind === 'user'
+      ? started.text
+      : started?.kind === 'offer'
+        ? (started.offer.resume?.request ?? '')
+        : '';
   // Waiting on you (a question, a handoff): no "working…" while it's your move.
   const handingOff = last?.kind === 'handoff' && last.handoff.state === 'waiting';
   const busy =
@@ -190,7 +200,12 @@ export function Transcript({
     srLabel: `${name} is working`,
   };
   // Nothing from the assistant yet this turn: hold its place with the wait.
-  const placeholder = busy && last?.kind === 'user';
+  const placeholder = busy && last !== undefined && isTurnStart(last);
+  // What else an app just connected can do, once the reply that carried on is done.
+  const alsoTry =
+    started?.kind === 'offer' && started.offer.kind === 'app' && !(running || pending.length)
+      ? started.offer.target
+      : undefined;
   const lastUserId = items.findLast((i) => i.kind === 'user')?.id;
   const turnRunning = running || pending.length > 0;
   const lastFilesId = items.findLast((i) => i.kind === 'files')?.id;
@@ -319,18 +334,18 @@ export function Transcript({
             {block.item?.kind === 'needs-apps' && (
               <NeedsAppsItem item={block.item} conversationId={conversationId} />
             )}
-            {block.item?.kind === 'integration-suggestion' && (
-              <IntegrationSuggestion
+            {block.item?.kind === 'offer' && (
+              <OfferItem
                 item={block.item}
                 conversationId={conversationId}
                 className={styles.suggestion}
                 onAskAgain={
-                  // Only for the latest question, and not while a reply is being written.
+                  // An older offer: only for the latest question, and not while a reply is being written.
                   !turnRunning && block.item.askedIn && block.item.askedIn === lastUserId
                     ? () => onAskAgain?.((block.item as { askedIn: string }).askedIn)
                     : undefined
                 }
-                onGone={focusComposer}
+                focusComposer={focusComposer}
               />
             )}
             {block.item?.kind === 'turn-end' && (
@@ -343,6 +358,9 @@ export function Transcript({
           </Arrival>
         ))}
         {placeholder && <AssistantPlaceholder name={name} wait={wait} />}
+        {alsoTry && onSend && (
+          <OfferAlsoTryItem target={alsoTry} onSend={onSend} className={styles.alsoTry} />
+        )}
         {between && (
           <div className={styles.between}>
             <Waiting wait={afterTool} compact />

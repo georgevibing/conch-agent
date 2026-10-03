@@ -730,6 +730,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
           const asked = view.items.find((i) => i.kind === 'user' && i.id === messageId);
           if (asked?.kind === 'user') send(asked.text, asked.attachments ?? []);
         }}
+        onSend={(text) => send(text, [])}
         focusComposer={() => composerRef.current?.focus()}
         recover={recover}
       />

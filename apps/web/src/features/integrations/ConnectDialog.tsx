@@ -17,7 +17,7 @@ import { ArrowUpRight, Check, CornerDownLeft, KeyRound, MessageSquare } from 'lu
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 
-import { integrationsApi } from './api';
+import { integrationsApi, type SignInReturn } from './api';
 import styles from './Integrations.module.css';
 import { useLocalSetup } from './LocalSetup';
 import {
@@ -107,6 +107,7 @@ function StandardConnectDialog({
   onOpenChange,
   inChat,
   onAskAgain,
+  back,
   onCloseAutoFocus,
 }: {
   entry: CatalogEntry | undefined;
@@ -120,6 +121,8 @@ function StandardConnectDialog({
   inChat?: boolean;
   /** Send the chat's question again (closes the dialog first). */
   onAskAgain?: () => void;
+  /** Opened from a chat's offer: signing in in this tab comes back to that chat (ADR 0055). */
+  back?: SignInReturn;
   /** Where focus goes when it closes (the button that opened it may be gone by then). */
   onCloseAutoFocus?: (event: Event) => void;
 }) {
@@ -135,6 +138,7 @@ function StandardConnectDialog({
             onClose={() => onOpenChange(false)}
             inChat={inChat}
             onAskAgain={onAskAgain}
+            back={back}
           />
         )}
       </Dialog.Content>
@@ -148,12 +152,14 @@ function ConnectFlow({
   onClose,
   inChat,
   onAskAgain,
+  back,
 }: {
   entry: CatalogEntry;
   existingId?: string;
   onClose: () => void;
   inChat?: boolean;
   onAskAgain?: () => void;
+  back?: SignInReturn;
 }) {
   const client = useQueryClient();
   const navigate = useNavigate();
@@ -199,8 +205,8 @@ function ConnectFlow({
     if (!current) createdHere.current = true;
     const result = await signIn((display) =>
       current
-        ? integrationsApi.connect(current.id, display)
-        : integrationsApi.create({ catalogId: entry.id }, display),
+        ? integrationsApi.connect(current.id, display, back)
+        : integrationsApi.create({ catalogId: entry.id }, display, back),
     );
     if (result) setStartedId(result.integration.id);
   };

@@ -36,6 +36,12 @@
     margin-block-start: calc(var(--nc-space-6) * -1);
   }
 
+  /* “Also try” under the reply that carried on, in line with its words. */
+  .alsoTry {
+    margin-block-start: var(--nc-space-1);
+    margin-inline-start: 2.75rem;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .suggestion {
       transition: none;
@@ -288,7 +294,8 @@
     .memory,
     .aside,
     .skillUsed,
-    .suggestion {
+    .suggestion,
+    .alsoTry {
       margin-inline-start: 0;
     }
 

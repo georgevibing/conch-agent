@@ -15,6 +15,8 @@ import type {
   ConversationStatus,
   SkillHold,
   EngineId,
+  Offer,
+  OfferOutcome,
   TaskKind,
   TaskStatus,
   ToolStatus,
@@ -153,16 +155,22 @@ export type TranscriptItem =
       message: string;
     }
   | {
-      /** An offer to connect an app the message was about (connect-from-chat). */
-      kind: 'integration-suggestion';
+      /**
+       * An offer to turn on what a request is missing, an app or a skill (ADR
+       * 0055). Taken, it moves to where the chat carried on from.
+       */
+      kind: 'offer';
+      /** The offer's id. */
       id: string;
-      catalogId: string;
-      name: string;
-      description: string;
-      color?: string;
-      /** “Not now” was pressed. */
-      dismissed: boolean;
-      /** The message that brought it up: what “Ask again” sends. */
+      offer: Offer;
+      /** How it ended, once it did. */
+      resolution?: OfferOutcome;
+      /**
+       * From an older log (`integration.suggestion`, ADR 0021): the chat can't
+       * carry on from it, so once connected it asks the question again.
+       */
+      legacy?: boolean;
+      /** The message that brought it up. */
       askedIn?: string;
     }
   | {
@@ -239,6 +247,46 @@ export interface ConversationView {
 }
 
 export const emptyView: ConversationView = { lastSeq: -1, items: [], status: 'idle' };
+
+/** An offer from an older log has no id of its own: one per app per chat. */
+export const legacyOfferId = (catalogId: string) => `legacy-${catalogId}`;
+
+/**
+ * Where a turn begins: a message of yours, or an offer you took (the chat
+ * carries on with no new message, ADR 0055).
+ */
+export const isTurnStart = (item: TranscriptItem) =>
+  item.kind === 'user' || (item.kind === 'offer' && item.resolution === 'accepted');
+
+function addOffer(
+  base: ConversationView,
+  items: TranscriptItem[],
+  { offer, legacy }: { offer: Offer; legacy?: boolean },
+): ConversationView {
+  if (
+    items.some(
+      (i) =>
+        i.kind === 'offer' &&
+        (i.id === offer.offerId ||
+          (legacy && i.offer.kind === 'app' && i.offer.target === offer.target)),
+    )
+  )
+    return base;
+  const asked = items.findLast((i) => i.kind === 'user');
+  return {
+    ...base,
+    items: [
+      ...items,
+      {
+        kind: 'offer',
+        id: offer.offerId,
+        offer,
+        ...(legacy && { legacy }),
+        ...(asked && { askedIn: asked.id }),
+      },
+    ],
+  };
+}
 
 function updateItem<K extends TranscriptItem['kind']>(
   items: TranscriptItem[],
@@ -320,7 +368,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         };
         return { ...base, items: next };
       }
-      const turnStart = items.findLastIndex((i) => i.kind === 'user');
+      const turnStart = items.findLastIndex(isTurnStart);
       const earlier = items.slice(turnStart + 1).filter((i) => i.kind === 'assistant');
       const segment = earlier.filter(
         (i) => i.kind === 'assistant' && i.messageId === event.messageId,
@@ -584,40 +632,46 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         ],
       };
     }
-    case 'integration.suggestion': {
-      if (items.some((i) => i.kind === 'integration-suggestion' && i.catalogId === event.catalogId))
-        return base;
-      const asked = items.findLast((i) => i.kind === 'user');
-      return {
-        ...base,
-        items: [
-          ...items,
-          {
-            kind: 'integration-suggestion',
-            id: `suggest-${event.catalogId}`,
-            catalogId: event.catalogId,
-            name: event.name,
-            description: event.description,
-            ...(event.color && { color: event.color }),
-            dismissed: false,
-            ...(asked && { askedIn: asked.id }),
-          },
-        ],
-      };
+    // The chat knows Conch (ADR 0055).
+    case 'offer':
+      return addOffer(base, items, { offer: event.offer });
+    case 'offer.resolved': {
+      const index = items.findLastIndex((i) => i.kind === 'offer' && i.id === event.offerId);
+      const item = items[index];
+      if (item?.kind !== 'offer' || item.resolution) return base;
+      const resolved = { ...item, resolution: event.outcome };
+      // Taken: the quiet line goes where the chat carries on from, and a new turn starts.
+      if (event.outcome === 'accepted')
+        return {
+          ...base,
+          turnStartedAt: event.at,
+          items: [...items.slice(0, index), ...items.slice(index + 1), resolved],
+        };
+      const next = items.slice();
+      next[index] = resolved;
+      return { ...base, items: next };
     }
+    // Older logs (ADR 0021) draw the same card.
+    case 'integration.suggestion':
+      return addOffer(base, items, {
+        legacy: true,
+        offer: {
+          offerId: legacyOfferId(event.catalogId),
+          kind: 'app',
+          target: event.catalogId,
+          name: event.name,
+          description: event.description,
+          ...(event.color && { color: event.color }),
+          by: 'cue',
+        },
+      });
     case 'integration.suggestion.dismissed': {
-      const updated = updateItem(
-        items,
-        'integration-suggestion',
-        `suggest-${event.catalogId}`,
-        (item) => ({ ...item, dismissed: true }),
-      );
+      const updated = updateItem(items, 'offer', legacyOfferId(event.catalogId), (item) => ({
+        ...item,
+        resolution: item.resolution ?? 'dismissed',
+      }));
       return updated ? { ...base, items: updated } : base;
     }
-    // The chat knows Conch (ADR 0055): each is drawn by its own feature.
-    case 'offer':
-    case 'offer.resolved':
-      return base;
     case 'question':
     case 'question.answered':
       return base;
