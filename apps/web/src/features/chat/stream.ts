@@ -66,10 +66,28 @@ export function closeOpenMarkdown(text: string): string {
       .split(/\n\s*\n/)
       .at(-1) ?? '';
   const withoutCode = lastParagraph.replace(/`[^`]*`/g, '');
-  let suffix = '';
-  if ((lastParagraph.match(/`/g)?.length ?? 0) % 2 === 1) suffix += '`';
-  else if ((withoutCode.match(/\*\*/g)?.length ?? 0) % 2 === 1) suffix += '**';
-  return suffix ? text.trimEnd() + suffix : text;
+  if ((lastParagraph.match(/`/g)?.length ?? 0) % 2 === 1) return text.trimEnd() + '`';
+  // What's still open, innermost first: an italic or a bold, then a strikethrough.
+  const open: { mark: string; at: number }[] = [];
+  const bold = [...withoutCode.matchAll(/\*\*/g)];
+  if (bold.length % 2 === 1) open.push({ mark: '**', at: bold.at(-1)?.index ?? 0 });
+  // A single `*` that opens an italic: not a list bullet, not "2 * 3".
+  const italic = [
+    ...withoutCode.replace(/\*\*/g, '  ').matchAll(/(?<=^|[^\s*])\*|\*(?=[^\s*])/gm),
+  ].filter(
+    (m) => !/^[ \t]*\*[ \t]/.test(withoutCode.slice(withoutCode.lastIndexOf('\n', m.index) + 1)),
+  );
+  if (italic.length % 2 === 1) open.push({ mark: '*', at: italic.at(-1)?.index ?? 0 });
+  const strike = [...withoutCode.matchAll(/~~/g)];
+  if (strike.length % 2 === 1) open.push({ mark: '~~', at: strike.at(-1)?.index ?? 0 });
+  if (!open.length) return text;
+  return (
+    text.trimEnd() +
+    open
+      .sort((a, b) => b.at - a.at)
+      .map((o) => o.mark)
+      .join('')
+  );
 }
 
 /* ── Verbs: what the wait says ──────────────────────────────────────────── */

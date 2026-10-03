@@ -88,6 +88,13 @@ describe('revealWords', () => {
     expect(pre?.children).toHaveLength(1);
   });
 
+  it('stamps when each fresh word was revealed, for settling it only once', () => {
+    const t = tree();
+    revealWords({ freshFrom: 4, revealedAt: (offset) => 1_000 + offset })(t);
+    const p = (t.children[0] as { children: { properties?: Record<string, unknown> }[] }).children;
+    expect(p.map((c) => c.properties?.dataNcAt)).toEqual([undefined, '1004', '1008']);
+  });
+
   it('honours a block offset and marks nothing without freshFrom', () => {
     const t = tree();
     revealWords({ freshFrom: 108, offset: 100 })(t);

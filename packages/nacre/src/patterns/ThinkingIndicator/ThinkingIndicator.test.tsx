@@ -46,3 +46,24 @@ describe('ThinkingIndicator', () => {
     expect(verbAt(99_000, 1, 3000).index).toBe(0);
   });
 });
+
+describe('ThinkingIndicator taking over from another', () => {
+  it('carries the verb, the bubbles and the orb on from where they were', () => {
+    const startedAt = Date.now() - 1_000;
+    const { container } = renderNacre(
+      <ThinkingIndicator verbs={['Listening', 'Thinking']} startedAt={startedAt} />,
+    );
+    const root = screen.getByRole('status');
+    expect(Number.parseInt(root.style.getPropertyValue('--age'), 10)).toBeGreaterThanOrEqual(1_000);
+    const word = container.querySelector<HTMLElement>('[style*="--since"]');
+    // One second into "Listening": its letters are already in.
+    expect(
+      Number.parseInt(word?.style.getPropertyValue('--since') ?? '', 10),
+    ).toBeGreaterThanOrEqual(1_000);
+  });
+
+  it('plays a new verb’s entrance from the start', () => {
+    const { container } = renderNacre(<ThinkingIndicator verbs={['Listening', 'Thinking']} />);
+    expect(container.querySelector('[style*="--since"]')).toBeNull();
+  });
+});

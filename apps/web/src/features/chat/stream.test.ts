@@ -27,6 +27,19 @@ describe('closeOpenMarkdown', () => {
     expect(closeOpenMarkdown('Run `npm')).toBe('Run `npm`');
   });
 
+  it('closes an open italic and strikethrough, innermost first', () => {
+    expect(closeOpenMarkdown('It runs *fast')).toBe('It runs *fast*');
+    expect(closeOpenMarkdown('It runs ~~slow')).toBe('It runs ~~slow~~');
+    expect(closeOpenMarkdown('**bold and *both')).toBe('**bold and *both***');
+    expect(closeOpenMarkdown('*mock · auto effort')).toBe('*mock · auto effort*');
+  });
+
+  it('never takes a list bullet or a sum for an italic', () => {
+    expect(closeOpenMarkdown('* one\n* two')).toBe('* one\n* two');
+    expect(closeOpenMarkdown('So 2 * 3 is six')).toBe('So 2 * 3 is six');
+    expect(closeOpenMarkdown('*done* and more')).toBe('*done* and more');
+  });
+
   it('leaves balanced text alone', () => {
     const text = '**done** and `code`\n\n```\nx\n```\n';
     expect(closeOpenMarkdown(text)).toBe(text);

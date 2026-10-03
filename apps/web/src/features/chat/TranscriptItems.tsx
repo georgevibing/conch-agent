@@ -138,6 +138,7 @@ export function AssistantPlaceholder({ name, wait }: { name: string; wait: Wait 
       author={name}
       status="streaming"
       timestamp={wait.startedAt === undefined ? undefined : new Date(wait.startedAt)}
+      since={wait.startedAt}
     >
       <Waiting wait={wait} />
     </Message>
@@ -204,6 +205,8 @@ export function AssistantMessage({
       timestamp={new Date(item.startedAt)}
       status={streaming ? 'streaming' : 'complete'}
       entrance={entrance}
+      // The turn's clock, shared with the placeholder this takes over from.
+      since={wait?.startedAt ?? item.startedAt}
       attached={attached}
       actions={
         item.done && said ? (
