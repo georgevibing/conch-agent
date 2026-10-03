@@ -74,6 +74,15 @@ export function named(name: string): RegExp {
   );
 }
 
+/**
+ * A made-up name that's no word in any language (Todoist, Airtable): in any
+ * case, anywhere in a sentence, even first. Never inside a word, a handle
+ * (`@vercel`), a package (`supabase-js`) or an address.
+ */
+export function coined(name: string): RegExp {
+  return new RegExp(`(?<![\\p{L}\\p{N}_@./-])${escape(name)}(?![\\p{L}\\p{N}_@-])`, 'iu');
+}
+
 export interface Read {
   /** What the person wrote, minus code, links, addresses and file names. */
   words: string;

@@ -1,7 +1,7 @@
 import { CatalogEntry } from '@conch/protocol';
 import type { z } from 'zod';
 
-import { type Cues, named } from './cues';
+import { coined, type Cues, named } from './cues';
 
 /** How a catalog entry turns into an MCP server, given what the user typed. */
 export type Blueprint =
@@ -104,6 +104,7 @@ const raw: CatalogItem[] = [
     access: ['Read and search email', 'Create drafts'],
     cues: {
       match: [
+        coined('Gmail'),
         /\bmy\s+(?:g-?mail|e-?mail\s+inbox|inbox)\b/i,
         /\b(?:in|from|check|search|open|through)\s+(?:my\s+)?g-?mail\b/i,
         /\bg-?mail\s+(?:inbox|threads?|messages?|e-?mails?|labels?|drafts?|search)\b/i,
@@ -355,6 +356,7 @@ const raw: CatalogItem[] = [
     blueprint: { type: 'http', url: 'https://mcp.canva.com/mcp' },
     cues: {
       match: [
+        coined('Canva'),
         /\b(?:in|on|into|to|from|with|using|via)\s+(?:my\s+)?canva\b/i,
         /\b(?:my|a)\s+canva\b/i,
         /\bcanva\s+(?:designs?|templates?|presentations?|posts?|decks?|slides?|docs?|whiteboards?|account|projects?|brand\s+kits?|folders?|graphics?|flyers?|logos?|videos?|banners?|thumbnails?|stories)\b/i,
@@ -600,6 +602,7 @@ const raw: CatalogItem[] = [
     blueprint: { type: 'http', url: 'https://ai.todoist.net/mcp' },
     cues: {
       match: [
+        coined('Todoist'),
         named('Todoist'),
         /\btodoist\s+(?:tasks?|projects?|inbox|labels?|filters?|lists?|reminders?|karma)\b/i,
         /\b(?:in|into|to|from|on)\s+(?:my\s+|our\s+)?todoist\b/i,
@@ -622,6 +625,7 @@ const raw: CatalogItem[] = [
     blueprint: { type: 'http', url: 'https://mcp.airtable.com/mcp' },
     cues: {
       match: [
+        coined('Airtable'),
         named('Airtable'),
         /\bairtable\s+(?:bases?|tables?|records?|views?|grids?|rows?|fields?|workspaces?|interfaces?)\b/i,
         /\b(?:in|into|to|from|on)\s+(?:my\s+|our\s+)?airtable\b/i,
@@ -644,6 +648,7 @@ const raw: CatalogItem[] = [
     blueprint: { type: 'http', url: 'https://mcp.clickup.com/mcp' },
     cues: {
       match: [
+        coined('ClickUp'),
         named('ClickUp'),
         /\bclickup\s+(?:tasks?|lists?|spaces?|docs?|folders?|sprints?|workspaces?|boards?|goals?)\b/i,
         /\b(?:in|into|to|from|on)\s+(?:my\s+|our\s+)?clickup\b/i,
@@ -688,6 +693,7 @@ const raw: CatalogItem[] = [
     blueprint: { type: 'http', url: 'https://mcp.calendly.com' },
     cues: {
       match: [
+        coined('Calendly'),
         named('Calendly'),
         /\bcalendly\s+(?:links?|events?|bookings?|meetings?|event\s+types?|availability|invitees?|account)\b/i,
         /\b(?:in|on|from|to|through|via)\s+(?:my\s+|our\s+)?calendly\b/i,
@@ -730,6 +736,7 @@ const raw: CatalogItem[] = [
     blueprint: { type: 'http', url: 'https://mcp.evernote.com/mcp' },
     cues: {
       match: [
+        coined('Evernote'),
         named('Evernote'),
         /\bevernote\s+(?:notes?|notebooks?|tags?|account)\b/i,
         /\b(?:in|into|to|from|on)\s+(?:my\s+)?evernote\b/i,
@@ -912,6 +919,7 @@ const raw: CatalogItem[] = [
     blueprint: { type: 'http', url: 'https://mcp.attio.com/mcp' },
     cues: {
       match: [
+        coined('Attio'),
         named('Attio'),
         /\battio\s+(?:records?|deals?|companies|people|lists?|notes?|crm|workspaces?|pipelines?)\b/i,
         /\b(?:in|into|to|from|on)\s+(?:my\s+|our\s+)?attio\b/i,

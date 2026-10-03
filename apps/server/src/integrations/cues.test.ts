@@ -11,6 +11,18 @@ const cued = (text: string) => cuedApps(text, apps).map((item) => item.id);
  * in the catalog has some here (a test below makes sure a new one does too).
  */
 const positives: [text: string, app: string][] = [
+  // Personal apps whose names are no word in any language read in any case,
+  // anywhere, even first: "what about todoist?" is about Todoist (ADR 0060).
+  // Names people also code against (GitHub, Vercel) or that are words
+  // (Dropbox) don't: see the negatives.
+  ['what about todoist?', 'todoist'],
+  ['todoist: anything due today?', 'todoist'],
+  ['can you look at airtable for the guest list', 'airtable'],
+  ['clickup has my sprint, can you see it?', 'clickup'],
+  ['calendly link for next week please', 'calendly'],
+  ['find my evernote about the kitchen plans', 'evernote'],
+  ['canva has my poster, can you check it', 'canva'],
+  ['what deals moved in attio this week?', 'attio'],
   // Linear
   ['what’s assigned to me in Linear this week?', 'linear'],
   ['What’s assigned to me in linear this week?', 'linear'],
@@ -216,6 +228,16 @@ const positives: [text: string, app: string][] = [
  * don't need them connected. None of these may suggest anything.
  */
 const negatives: string[] = [
+  // Coined names only count as themselves: not inside a word, a handle, a
+  // package or a file, and not when comparing apps.
+  'todoistic is not a word but it sounds like one',
+  'the dropboxes by the front door are full',
+  '@vercel posted a funny thread about deploys',
+  'supabase-js throws when I insert a row',
+  'Todoist vs TickTick: which one is better for students?',
+  'should we use Airtable or just a spreadsheet?',
+  'paypalish checkout flows are everywhere now',
+  'mixpanelists and other made-up words',
   // monday, the day
   'What should I do on Monday about the board meeting?',
   'Remind me on Monday to call the bank',
