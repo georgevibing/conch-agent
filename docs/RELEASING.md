@@ -101,8 +101,8 @@ giotiskl/conch-agent`).
   once before opening the app, and a Mac app can't replace itself (it offers the
   download instead). Add these repository secrets to sign:
   - `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`: a Developer ID Application certificate
-    (`.p12`, base64), and `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` to
-    notarize.
+    (`.p12`, base64), and to notarize, an App Store Connect API key: `APPLE_API_KEY`
+    (the `.p8` file's text), `APPLE_API_KEY_ID` and `APPLE_API_ISSUER`.
   - `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD`: a code-signing certificate.
 - **To build without releasing**, run **Desktop app** from the Actions tab: the files
   stay with the run for two weeks. Give it a tag to attach the apps to a release that
