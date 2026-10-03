@@ -1473,8 +1473,8 @@ export class ConchAppService {
     return this.get(id);
   }
 
-  /** The app's current files, read and signed with the person's key. */
-  async #signed(id: string): Promise<{ app: AppRecord; files: AppFiles }> {
+  /** The app's current files, exactly as they were added (with the signature they came with). */
+  async #added(id: string): Promise<{ app: AppRecord; read: AppPackage }> {
     const app = await this.#record(id);
     if (!(await this.#heal(app)))
       throw new ConchAppError('unavailable', this.#failures.get(id) ?? 'Its files are missing.');
@@ -1489,8 +1489,19 @@ export class ConchAppService {
         'unavailable',
         'Its files aren’t what was added. Open Settings → Health and press Repair, then try again.',
       );
+    return { app, read: read.app };
+  }
+
+  /** An app made here, signed with the person's key: only what they made is vouched for as theirs. */
+  async #signed(id: string): Promise<{ app: AppRecord; files: AppFiles }> {
+    const { app, read } = await this.#added(id);
+    if (app.source.kind !== 'made')
+      throw new ConchAppError(
+        'invalid',
+        'Only apps you made can be published as yours. Share the address you added it from instead.',
+      );
     try {
-      return { app, files: await this.deps.parts.signApp(read.app, this.deps.home) };
+      return { app, files: await this.deps.parts.signApp(read, this.deps.home) };
     } catch (error) {
       throw new ConchAppError(
         'unavailable',
@@ -1499,13 +1510,21 @@ export class ConchAppService {
     }
   }
 
-  /** **Save as a file**: `<id>.conchapp`, signed. */
+  /**
+   * **Save as a file**: `<id>.conchapp`. One you made is signed with your
+   * key; anyone else's goes as it was added, with its own signature if it
+   * had one, so it still says who really made it.
+   */
   async exportFile(id: string): Promise<{ name: string; bytes: Buffer }> {
-    const { app, files } = await this.#signed(id);
+    const app = await this.#record(id);
+    const files =
+      app.source.kind === 'made'
+        ? (await this.#signed(id)).files
+        : (await this.#added(id)).read.files;
     return { name: `${app.id}.conchapp`, bytes: await this.deps.parts.packApp(files) };
   }
 
-  /** **Publish on GitHub**: signed first, then GitHub's own program, one step at a time. */
+  /** **Publish on GitHub**: only an app you made, signed first, then GitHub's own program. */
   async publish(id: string): Promise<PublishState> {
     const { app, files } = await this.#signed(id);
     const sig = files.get(SIG);

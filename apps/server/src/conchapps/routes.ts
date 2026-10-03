@@ -227,8 +227,10 @@ export function registerConchAppRoutes(
     return guarded(reply, () => service.rollback(request.params.id, body.version));
   });
 
-  app.get<{ Params: { id: string } }>('/api/conch-apps/:id/export', (request, reply) =>
-    guarded(reply, async () => {
+  // An app you made is signed with your key on the way out, so it asks that it's you, like publishing.
+  app.get<{ Params: { id: string } }>('/api/conch-apps/:id/export', (request, reply) => {
+    if (verifyRequired(request, reply)) return reply;
+    return guarded(reply, async () => {
       const file = await service.exportFile(request.params.id);
       // Always a download, never shown here.
       reply.headers({
@@ -239,8 +241,8 @@ export function registerConchAppRoutes(
         'cache-control': 'no-store',
       });
       return reply.send(file.bytes);
-    }),
-  );
+    });
+  });
 
   app.get<{ Params: { id: string } }>('/api/conch-apps/:id/publish', (request, reply) =>
     guarded(reply, async () => noStore(reply).send(await service.publishState(request.params.id))),

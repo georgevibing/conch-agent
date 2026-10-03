@@ -205,7 +205,12 @@ describe('the card’s press', () => {
     expect(app.tools.map((t) => t.name).sort()).toEqual(['count', 'read_count']);
     // The app keeps its tools' input schemas; the card shows them without.
     expect(app.tools.find((t) => t.name === 'count')?.input).toMatchObject({ type: 'object' });
-    expect(h.offers().at(-1)?.tools.every((t) => t.input === undefined)).toBe(true);
+    expect(
+      h
+        .offers()
+        .at(-1)
+        ?.tools.every((t) => t.input === undefined),
+    ).toBe(true);
     expect(h.latest(offer.offerId)?.state).toBe('added');
     const [integration] = await h.service.hosted.list();
     expect(integration).toMatchObject({
@@ -955,6 +960,47 @@ describe('sharing', () => {
     expect(await h.service.publishState('tally')).toEqual({ state: 'idle' });
     expect(await h.service.publish('tally')).toMatchObject({ state: 'published' });
     expect((await h.service.get('tally')).published).toBe('https://github.com/ada/tally');
+  });
+
+  it('never signs someone else’s app as yours: a file goes as it came, and it can’t be published', async () => {
+    const h = await harness();
+    const bea = { fingerprint: 'BBBB 2222', publisher: 'Bea' };
+    const preview = await h.service.preview({
+      file: signedPackage(keyed(), bea).toString('base64'),
+      name: 'w.conchapp',
+    });
+    const found = preview?.apps[0];
+    if (!preview || !found) throw new Error('nothing');
+    await h.service.install({
+      packageId: preview.packageId,
+      appId: 'weather',
+      hash: found.hash,
+      settings: {},
+    });
+    const file = await h.service.exportFile('weather');
+    const again = await h.service.preview({ file: file.bytes.toString('base64'), name: file.name });
+    // Still Bea's signature, over the same files.
+    expect(again?.apps[0]?.signature).toMatchObject({ fingerprint: 'BBBB 2222', publisher: 'Bea' });
+    expect(again?.apps[0]?.hash).toBe(found.hash);
+    await expect(h.service.publish('weather')).rejects.toThrow(
+      'Only apps you made can be published as yours. Share the address you added it from instead.',
+    );
+    expect(h.parts.published.size).toBe(0);
+    // Unsigned, it stays unsigned.
+    const plain = await h.service.preview({
+      file: signedPackage(keyed('2.0.0')).toString('base64'),
+      name: 'p',
+    });
+    if (!plain?.apps[0]) throw new Error('nothing');
+    await h.service.install({
+      packageId: plain.packageId,
+      appId: 'weather',
+      hash: plain.apps[0].hash,
+      settings: {},
+    });
+    const out = await h.service.exportFile('weather');
+    const read = await h.service.preview({ file: out.bytes.toString('base64'), name: out.name });
+    expect(read?.apps[0]?.signature).toEqual({ state: 'unsigned' });
   });
 });
 

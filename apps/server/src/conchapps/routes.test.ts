@@ -241,6 +241,16 @@ describe('Conch apps over HTTP: the attacks', () => {
         (await g.app.inject({ method: 'POST', url, headers: { cookie }, payload: {} })).json()
           .error,
       ).toBe('verify-required');
+    // Saving it as a file can sign with your key: it asks too.
+    expect(
+      (
+        await g.app.inject({
+          method: 'GET',
+          url: '/api/conch-apps/weather/export',
+          headers: { cookie },
+        })
+      ).json().error,
+    ).toBe('verify-required');
     expect(
       (
         await g.app.inject({
