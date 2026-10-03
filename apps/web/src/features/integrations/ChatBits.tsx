@@ -1,4 +1,6 @@
+import { appToolLine, type ToolView } from '@conch/protocol';
 import { humanizeTool, IntegrationIssueCard, IntegrationLogo } from '@conch/nacre';
+import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
 import type { TranscriptItem } from '../../live/reducer';
@@ -39,15 +41,37 @@ export function IntegrationIssue({ item }: { item: Issue }) {
 }
 
 /**
- * The tool-row label for an integration's tool: its logo and name instead
- * of `mcp__notion__…`. Undefined for anything that isn't a connected integration.
+ * The tool-row label for an app's tool: its logo and what it did, instead of
+ * `mcp__notion__…`. Conch's own apps (Google, Slack) always say it in a
+ * person's words, connected or not (`@conch/protocol` `appToolLine`):
+ * "Looked at your calendar", "Read #design". Any other app shows its logo and
+ * name while it's connected. Undefined for everything else.
  */
 export function useToolLabel() {
   const { data } = useIntegrations();
-  return (toolName: string) => {
+  return (
+    toolName: string,
+    call: { running: boolean; input?: unknown; view?: ToolView | undefined } = { running: false },
+  ): { title: string; leading: ReactNode; summary?: string } | undefined => {
+    const own = appToolLine(toolName, call);
+    if (own) {
+      const entry = data?.catalog.find((c) => c.id === own.app);
+      return {
+        title: own.title,
+        ...(own.summary && { summary: own.summary }),
+        leading: (
+          <IntegrationLogo
+            brand={own.app}
+            name={entry?.name ?? own.app}
+            color={entry?.color}
+            size="xs"
+          />
+        ),
+      };
+    }
     const match = /^mcp__([a-z0-9_-]+?)__(.+)$/.exec(toolName);
     if (!match) return undefined;
-    // Conch's own apps (Google, Slack) run as Conch's tools: found by the tool's name.
+    // Conch's other tools of its own (`ask`, `offer`…) are found by the tool's name.
     const integration =
       match[1] === 'conch'
         ? data?.integrations.find((i) => i.tools.some((t) => t.name === match[2]))
@@ -58,7 +82,7 @@ export function useToolLabel() {
         : undefined;
     const tool = integration.tools.find((t) => t.name === match[2]);
     const entry = data?.catalog.find((c) => c.id === integration.catalogId);
-    const prefix = new RegExp(`^${integration.server.replace(/[-_]\d+$/, '')}[-_]`, 'i');
+    const prefix = new RegExp(`^${integration.server.replace(/[-_]d+$/, '')}[-_]`, 'i');
     return {
       title: tool?.title ?? humanizeTool((match[2] ?? '').replace(prefix, '')),
       leading: (

@@ -30,7 +30,7 @@ test('a calendar comes back as days, with today first', async ({ page }) => {
   await expect(page.getByText('Today you have standup at 9:30')).toBeVisible();
   // What the model read is still there, behind the row.
   await expect(page.getByText('"summary":"Standup"')).toHaveCount(0);
-  await page.getByRole('button', { name: /calendar briefing/i }).click();
+  await page.getByRole('button', { name: /Looked at your calendar/ }).click();
   await expect(page.getByRole('region', { name: 'Output' })).toContainText('Standup');
 });
 

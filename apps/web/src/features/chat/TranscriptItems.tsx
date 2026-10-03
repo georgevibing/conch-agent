@@ -231,7 +231,11 @@ const toolStatus: Record<Of<'tool'>['status'], ToolCallStatus> = {
 };
 
 export function ToolItem({ item }: { item: Of<'tool'> }) {
-  const label = useToolLabel()(item.name);
+  const label = useToolLabel()(item.name, {
+    running: item.status === 'running' || item.status === 'pending',
+    input: item.input,
+    view: item.view,
+  });
   const diff = toolDiff(item.name, item.input);
   const stopped = item.status === 'error' && item.output === 'Stopped.';
   return (
@@ -239,7 +243,7 @@ export function ToolItem({ item }: { item: Of<'tool'> }) {
       data-anchor={item.id}
       name={label ? label.title : item.name}
       leading={label?.leading}
-      summary={toolSummary(item.name, item.input)}
+      summary={label?.summary ?? toolSummary(item.name, item.input)}
       status={stopped ? 'cancelled' : toolStatus[item.status]}
       duration={item.durationMs}
       input={diff ? undefined : formatInput(item.input)}
