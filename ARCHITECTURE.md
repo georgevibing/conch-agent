@@ -185,7 +185,12 @@ src/
   and runs executed as ordinary conversations via `ConversationManager.start()` with a
   `report_outcome` tool. Chats get `create_routine` / `list_routines` /
   `update_routine` / `delete_routine`; drafts only run once the user turns them on.
-  See [ADR 0006](./docs/adr/0006-routines.md).
+  See [ADR 0006](./docs/adr/0006-routines.md). `RoutineSpend` (`routines/spend.ts`)
+  prices every run (the provider's figure, else `usage/prices.ts`), stops one past
+  three times its usual (engines report `usage` mid-turn), pauses runs that cost money
+  at a monthly limit, and holds runs while a plan window is 80% used; event-started
+  runs and pre-run checks go through the same `allow` / `record`. See
+  [ADR 0057](./docs/adr/0057-routines-cant-run-up-a-bill.md).
 - **Integrations** (`integrations/`): MCP servers the user connects from a catalog
   (one-click OAuth, tokens, local programs) or adds by address/command. The service
   keeps health (probe → plain-language state + one fix action), refreshes tokens
@@ -958,8 +963,8 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
     nosniff, no-referrer, COOP/CORP and no-store on the API.
 - **Agent containment:**
   - `CONCH_*` variables never reach the agent;
-  - the agent can draft routines but can't enable them or grant trust, and
-    rewriting an active routine pauses it;
+  - the agent can draft routines but can't enable them, grant trust or raise what
+    they may spend, and rewriting an active routine pauses it;
   - unattended runs get no routine tools, and their permission prompts expire;
   - "Always allow" lasts for the conversation only and is never written to
     Claude Code's settings;

@@ -45,6 +45,28 @@ Open a routine to see its **History**: every run, with one line saying what happ
 
 **Run now** on the routine's page runs it straight away, whatever its schedule.
 
+## What it costs
+
+Each routine says what it costs, beside its schedule.
+
+- **About $1.20 a month** with a provider you pay as you go, from what its runs cost and how often it runs. Before its first run it says **Roughly**, from a typical run on its model. If Conch doesn't know the model's price, it says nothing rather than guess.
+- With a subscription, that it **runs on your plan**, and once it has run, how much of your plan's limit a run takes.
+- **Free on this computer** with a model on this computer.
+
+Each run in **History** shows what it cost, too.
+
+**Edit** shows the **Model** a routine runs on, and lets you choose another. Something simple, like a reminder, can use a smaller, cheaper one. When your assistant drafts a simple routine, it may choose your provider's small model, never a bigger one.
+
+## It won't run up a bill
+
+Three things keep routines from spending your money or your plan while you're away. They're on from the start, with nothing to set.
+
+- **A run that does far more than usual stops.** That's about three times what the routine usually costs (before it has run, three times a typical briefing on its model), and never less than $1. The run ends under **Needs you** with one line saying why. **Let it use more** lets that routine's runs go further. **Edit** sets an exact amount under **Most one run may spend**.
+- **A monthly limit.** Routines that cost money may spend $20 a month until you change it. Every run counts, whatever started it, and so do the checks a routine makes before it runs. At the limit they pause until the 1st, and Conch tells you once: on the Routines page, in a notification, and in your chat apps. Choose **Raise the limit** or **Keep paused**. Routines on a plan, or on this computer, carry on.
+- **Room for your own chats.** With a subscription, a routine doesn't start while any of your plan's limits is 80% used. Its run says **Waited so your own chats have room**, and goes by itself once the limit resets.
+
+The monthly limit is in **Settings → Usage**, under **Routines**, or type "what routines may spend" in <kbd>mod+k</kbd>. Only you can change it, or how much one run may spend. Your assistant can't, whatever it reads.
+
 ## Good to know
 
 - Each run starts fresh. It doesn't see the chat that created it, so the instruction should say everything it needs.

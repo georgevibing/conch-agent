@@ -49,6 +49,9 @@ what breaks, and asks only for approvals that matter.
 - **Show me.** Charts, pages and documents open beside the chat, sealed off from
   your data, with every version kept.
 - **Hand it off.** Send work to the background and keep chatting.
+- **Routines that can't run up a bill.** Each routine says what it costs. A run
+  that does far more than usual stops, routines pause at a monthly limit you set,
+  and on a plan they leave room for your own chats.
 - **Offline and at a limit.** A message waits until you're back online, or the
   model on this computer answers. At a usage limit, the provider you picked takes
   over.
