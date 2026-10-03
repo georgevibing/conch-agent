@@ -198,6 +198,13 @@ src/
   browser-bound consent state. Credentials stay in sealed `google.secrets.json`.
   Gmail is draft-only, Calendar read-only, Drive metadata-only. See
   [ADR 0037](./docs/adr/0037-direct-google-accounts.md).
+  What a host tool found can come back as `HostToolResult.view` (a `ToolView`:
+  agenda, mail, files, messages) beside the text the model reads: `google/views.ts`
+  and `slack/views.ts` fill it. Every engine passes it on with `tool-end` (Claude
+  Code by the MCP request's `claudecode/toolUseId`), and `conversations/views.ts`
+  checks it, drops non-web links, redacts it and gives the host tool a
+  `tool.finished` row only then; the web draws it with Nacre `AgendaView`,
+  `MailList`, `FileList` and `ChatMessages` (ADR 0055 §7).
   Outbound requests pass the SSRF guard (`integrations/net.ts`). See
   [ADR 0009](./docs/adr/0009-integrations.md).
 - **Connect from the chat** ([ADR 0021](./docs/adr/0021-connect-from-chat.md)). Before a turn, `IntegrationService.suggest` reads the person's words for catalog `cues` (`integrations/cues.ts`) and appends `integration.suggestion` once per app per conversation — never for what's connected, what the provider reaches itself, retired or muted apps — and the prompt says the app isn't connected.
