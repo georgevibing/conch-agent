@@ -93,11 +93,28 @@ const visible = (electronApp: ElectronApplication) =>
     ({ BrowserWindow }) => BrowserWindow.getAllWindows().filter((w) => w.isVisible()).length,
   );
 
+/**
+ * Ask the gateway as the window does: the window opened Conch as this computer
+ * (ADR 0063), and only its cookie says so. Without it, the gateway answers 401.
+ */
+async function asTheWindow(page: Page) {
+  const proof = async () =>
+    (await page.context().cookies()).filter((cookie) => cookie.name === `conch_here_${port}`);
+  await expect.poll(async () => (await proof()).length, { timeout: 30_000 }).toBe(1);
+  return request.newContext({
+    baseURL: address(),
+    storageState: { cookies: await proof(), origins: [] },
+  });
+}
+
 /** Past the welcome, as a person who has used Conch before. */
 async function onboard(page: Page) {
   await expect.poll(() => page.url(), { timeout: 60_000 }).toContain(address());
-  const api = await request.newContext({ baseURL: address() });
-  await api.patch('/api/settings', { data: { onboarded: true, profile: { name: 'Ada' } } });
+  const api = await asTheWindow(page);
+  const saved = await api.patch('/api/settings', {
+    data: { onboarded: true, profile: { name: 'Ada' } },
+  });
+  expect(saved.status()).toBe(200);
   await api.dispose();
   await page.reload();
   await expect(page.getByRole('textbox', { name: 'Message Conch' })).toBeVisible();
@@ -114,7 +131,7 @@ test('opens Conch in its window, on the gateway it carries, and talks', async ()
   // The gateway runs on the app's own Node, and says the app started it.
   const record = JSON.parse(readFileSync(join(home, 'gateway.json'), 'utf8')) as { port: number };
   expect(record.port).toBe(port);
-  const api = await request.newContext({ baseURL: address() });
+  const api = await asTheWindow(page);
   const background = (await (await api.get('/api/background')).json()) as { running: string };
   expect(background.running).toBe('app');
   await api.dispose();
