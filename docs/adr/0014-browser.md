@@ -80,7 +80,9 @@ The tools are `browser_open`, `browser_read`, `browser_click`, `browser_type`,
 `browser_press`, `browser_select`, `browser_scroll`, `browser_back`,
 `browser_screenshot`, `browser_wait` and `browser_handoff`. Pages are read as
 Playwright's AI accessibility snapshot, with element refs, so the agent acts on
-`ref`s rather than guessing coordinates. Each action returns what changed.
+`ref`s rather than guessing coordinates. Each action returns only what changed
+since the agent last read the page, as a small diff; a new page, a big change or
+`browser_read` returns it whole (ADR 0069).
 `browser_handoff` asks you to take over (sign in, solve a captcha, pay) and waits
 until you hand back. `browser_screenshot`'s picture reaches every engine that can
 see it, in its own shape, and a model that can't gets it described by one that can
