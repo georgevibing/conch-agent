@@ -261,7 +261,8 @@ const settingsPlaces: {
   {
     tab: 'browser',
     label: 'Browser',
-    keywords: 'web browse chrome edge sites cookies sign out local localhost repair',
+    keywords:
+      'web browse chrome edge sites cookies sign out local localhost repair my chrome remote debugging cloud browserbase steel cdp devtools where it runs',
     icon: <Globe />,
   },
   {

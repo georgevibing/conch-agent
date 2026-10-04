@@ -171,6 +171,102 @@
     }
   }
 
+  /* Where it runs, when it isn't the assistant's own browser: "In your Chrome". */
+  .where {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    padding: var(--nc-space-0-5) var(--nc-space-2);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-3);
+    color: var(--nc-accent-11);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    white-space: nowrap;
+  }
+
+  .where > svg {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+  }
+
+  /* ── Tabs ──────────────────────────────────────────────────────────── */
+  .tabs {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    padding: var(--nc-space-1) var(--nc-space-2);
+    border-block-end: 1px solid var(--nc-border-subtle);
+    background: var(--nc-surface);
+  }
+
+  .tabList {
+    display: flex;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    overflow-x: auto;
+    list-style: none;
+    scrollbar-width: thin;
+  }
+
+  .tab {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    max-inline-size: 13rem;
+    border-radius: var(--nc-radius-md);
+    color: var(--nc-text-muted);
+  }
+
+  .tab[data-active] {
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text);
+  }
+
+  .tabButton {
+    appearance: none;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+    padding: var(--nc-space-1) var(--nc-space-1) var(--nc-space-1) var(--nc-space-2);
+    border: 0;
+    border-radius: var(--nc-radius-md);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: var(--nc-text-xs);
+    cursor: pointer;
+  }
+
+  .tabButton:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 1px;
+  }
+
+  .tabIcon {
+    flex-shrink: 0;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .tabTitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @media (hover: hover) {
+    .tab:not([data-active]):hover {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+  }
+
   /* ── Handoff bar ───────────────────────────────────────────────────── */
   .handoffBar {
     display: flex;

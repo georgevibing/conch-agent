@@ -1,5 +1,6 @@
 import { ResizeHandle, Sheet, toast, useMediaQuery } from '@conch/nacre';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router';
 
 import { useUi } from '../../app/ui';
 import { useHotkey } from '../../app/useHotkey';
@@ -54,6 +55,20 @@ export function BrowserDock({
   const [openedAt] = useState(() => Date.now());
   const { step, handoff } = browsing(view);
   const seenHandoff = useRef<string | undefined>(undefined);
+  const [params, setParams] = useSearchParams();
+
+  // Opened from a notification ("Take over"): straight to the page.
+  useEffect(() => {
+    if (!conversationId || params.get('browser') !== '1') return;
+    openBrowser(conversationId);
+    setParams(
+      (next) => {
+        next.delete('browser');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [conversationId, params, setParams, openBrowser]);
 
   useHotkey('mod+shift+b', () => {
     if (open) closeBrowser();

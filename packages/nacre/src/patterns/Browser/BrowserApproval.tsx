@@ -1,4 +1,4 @@
-import { Check, Download, Globe, KeyRound, ShieldAlert, X } from 'lucide-react';
+import { Check, Download, Globe, KeyRound, ShieldAlert, Upload, X } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 
 import { Button } from '../../components/Button';
@@ -7,7 +7,7 @@ import { GuardNote } from '../Safety';
 import styles from './Browser.module.css';
 import type { BrowserBox } from './BrowserWindow';
 
-export type BrowserApprovalKind = 'site' | 'high-stakes' | 'download' | 'fill';
+export type BrowserApprovalKind = 'site' | 'high-stakes' | 'download' | 'fill' | 'upload';
 export type BrowserApprovalDecision = 'allow' | 'allow-always' | 'deny';
 
 export interface BrowserApprovalProps extends Omit<ComponentProps<'div'>, 'title'> {
@@ -29,6 +29,8 @@ export interface BrowserApprovalProps extends Omit<ComponentProps<'div'>, 'title
   guard?: ReactNode;
   /** The answer is on its way. */
   busy?: boolean;
+  /** It's your own signed-in Chrome (ADR 0080): said on the card, and never "Always". */
+  ownChrome?: boolean;
   onDecide?: (decision: BrowserApprovalDecision) => void;
 }
 
@@ -37,12 +39,17 @@ function heading(kind: BrowserApprovalKind, site: string, action: string, name: 
   if (kind === 'fill') return `${action} on ${site}?`;
   if (kind === 'download')
     return `${name} wants to ${action.charAt(0).toLowerCase()}${action.slice(1)}`;
+  if (kind === 'upload') return `${action} to ${site}?`;
   return `${action}?`;
 }
 
-function detail(kind: BrowserApprovalKind, site: string, name: string) {
+function detail(kind: BrowserApprovalKind, site: string, name: string, ownChrome: boolean) {
   if (kind === 'site')
-    return `${name} will click and type on ${site} for this task. You can watch, and take over at any time.`;
+    return ownChrome
+      ? `${name} will click and type on ${site} in your own Chrome, where you’re signed in, in a tab it opened. You can watch, and take over at any time.`
+      : `${name} will click and type on ${site} for this task. You can watch, and take over at any time.`;
+  if (kind === 'upload')
+    return `The file leaves this computer and goes to ${site}. Nothing is sent until you decide.`;
   if (kind === 'download') return `It goes to the Downloads folder in your working folder.`;
   if (kind === 'fill')
     return `Conch types it into the page itself, from your Passwords. ${name} never sees it.`;
@@ -81,6 +88,7 @@ export function BrowserApproval({
   decision,
   guard,
   busy = false,
+  ownChrome = false,
   onDecide,
   className,
   ...props
@@ -104,9 +112,11 @@ export function BrowserApproval({
       ? Globe
       : kind === 'download'
         ? Download
-        : kind === 'fill'
-          ? KeyRound
-          : ShieldAlert;
+        : kind === 'upload'
+          ? Upload
+          : kind === 'fill'
+            ? KeyRound
+            : ShieldAlert;
   return (
     <div
       role="group"
@@ -115,7 +125,9 @@ export function BrowserApproval({
           ? `Allow ${site}?`
           : kind === 'fill'
             ? `Fill a saved password on ${site}?`
-            : 'Confirm an action in the browser'
+            : kind === 'upload'
+              ? `Upload files to ${site}?`
+              : 'Confirm an action in the browser'
       }
       className={cx(styles.approval, className)}
       data-kind={kind}
@@ -147,7 +159,7 @@ export function BrowserApproval({
           <p className={styles.approvalTitle}>{heading(kind, site, action, name)}</p>
         </div>
         {kind === 'site' && <p className={styles.approvalAction}>First: {action}</p>}
-        <p className={styles.approvalDetail}>{detail(kind, site, name)}</p>
+        <p className={styles.approvalDetail}>{detail(kind, site, name, ownChrome)}</p>
         {guard && <GuardNote>{guard}</GuardNote>}
         <div className={styles.approvalActions}>
           <Button size="sm" variant="ghost" disabled={busy} onClick={() => onDecide?.('deny')}>
@@ -155,9 +167,11 @@ export function BrowserApproval({
               ? 'Not now'
               : kind === 'download'
                 ? 'Don’t download'
-                : 'Don’t'}
+                : kind === 'upload'
+                  ? 'Don’t upload'
+                  : 'Don’t'}
           </Button>
-          {(kind === 'site' || kind === 'fill') && !guard && (
+          {(kind === 'site' || kind === 'fill') && !guard && !(ownChrome && kind === 'site') && (
             <Button
               size="sm"
               variant="surface"
@@ -177,9 +191,11 @@ export function BrowserApproval({
               ? 'Allow in this chat'
               : kind === 'download'
                 ? 'Download'
-                : kind === 'fill'
-                  ? 'Fill'
-                  : 'Allow once'}
+                : kind === 'upload'
+                  ? 'Upload'
+                  : kind === 'fill'
+                    ? 'Fill'
+                    : 'Allow once'}
           </Button>
         </div>
       </div>

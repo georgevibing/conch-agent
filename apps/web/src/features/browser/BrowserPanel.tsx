@@ -65,7 +65,12 @@ export function BrowserPanel({
 
   return (
     <BrowserWindow
-      tab={live.tab}
+      tab={
+        live.tab && {
+          ...live.tab,
+          backend: live.tab.backend === 'local' ? undefined : live.tab.backend,
+        }
+      }
       phase={phaseOf(status, live.state)}
       install={status?.install}
       problem={
@@ -81,6 +86,7 @@ export function BrowserPanel({
       onTakeOver={() => live.control('user')}
       onHandBack={() => live.control('agent')}
       onFit={fit}
+      onTab={(action, id) => live.send({ type: 'tab', action, ...(id && { id }) })}
       onClose={onClose}
     />
   );

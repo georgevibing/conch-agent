@@ -49,6 +49,7 @@ export function HandoffItem({
     <BrowserHandoff
       reason={item.handoff.reason}
       state={item.handoff.state === 'waiting' && done ? 'done' : item.handoff.state}
+      auto={item.handoff.auto}
       name={name}
       onShow={() => openBrowser(conversationId)}
       onDone={() => {
@@ -89,6 +90,7 @@ export function BrowserApprovalItem({
       name={name}
       decision={item.decision}
       guard={item.taint}
+      ownChrome={detail.ownChrome}
       busy={busy}
       onDecide={(decision) => {
         setBusy(true);

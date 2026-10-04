@@ -19,6 +19,7 @@ import { useVerify } from '../auth/useVerify';
 import { useAssistantName } from '../integrations/queries';
 import { Section } from '../settings/Section';
 import { browserApi } from './api';
+import { WhereItRuns } from './WhereItRuns';
 import styles from './BrowserSettings.module.css';
 import {
   browserKeys,
@@ -92,6 +93,13 @@ export function BrowserSettings() {
             </Field>
           )}
         </BrowserStatusCard>
+      </Section>
+
+      <Section
+        title="Where it runs"
+        description={`${name} can browse in a browser of its own, in your own Chrome where you’re signed in, or in a browser in the cloud. If the one you choose can’t be reached, it uses its own meanwhile.`}
+      >
+        <WhereItRuns status={status} name={name} guard={guard} />
       </Section>
 
       <Section title="While it browses">

@@ -34,6 +34,7 @@ export type BackupPowerInfo =
   | { kind: 'routine-address'; name: string }
   | { kind: 'browser-sites'; sites: string[]; more?: number }
   | { kind: 'browser-local' }
+  | { kind: 'browser-own-chrome' }
   | { kind: 'terminal-remote' }
   | { kind: 'channel-people'; name: string; people: string[]; more?: number }
   | { kind: 'trusted-publishers'; names: string[]; more?: number }
@@ -106,6 +107,8 @@ export function powerWords(power: BackupPowerInfo): PowerWords {
       };
     case 'browser-local':
       return { subject: 'The browser', text: 'Can open apps on this computer and your network' };
+    case 'browser-own-chrome':
+      return { subject: 'The browser', text: 'Uses your own Chrome, where you’re signed in' };
     case 'terminal-remote':
       return { text: 'Other devices can open a terminal on this computer' };
     case 'page-data-sites':

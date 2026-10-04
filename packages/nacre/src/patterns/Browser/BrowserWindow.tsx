@@ -1,10 +1,13 @@
 import {
+  AppWindowMac,
   ArrowLeft,
   ArrowRight,
+  Cloud,
   Globe,
   Hand,
   Lock,
   MousePointerClick,
+  Plus,
   RotateCw,
   TriangleAlert,
   X,
@@ -57,6 +60,17 @@ export interface BrowserWindowTab {
   control: BrowserControl;
   /** The assistant is waiting for you to do something (sign in, a captcha…). */
   handoff?: { reason: string };
+  /** Every tab in the chat; a strip shows them once there's more than one. */
+  tabs?: BrowserWindowTabEntry[];
+  /** Where it runs, when it isn't the assistant's own browser here. */
+  backend?: 'chrome' | 'browserbase' | 'steel' | 'cdp';
+}
+
+export interface BrowserWindowTabEntry {
+  id: string;
+  title: string;
+  url: string;
+  active: boolean;
 }
 
 /** What the assistant is about to do, for its cursor and caption. Change `key` for each new action. */
@@ -95,6 +109,8 @@ export interface BrowserWindowProps extends Omit<ComponentProps<'section'>, 'onI
   onHandBack?: () => void;
   /** The screen's room changed (CSS px): the page can take its shape. */
   onFit?: (size: { width: number; height: number }) => void;
+  /** Show a tab, close one, or open a new one. */
+  onTab?: (action: 'switch' | 'close' | 'new', id?: string) => void;
   onClose?: () => void;
   /** Extra controls at the end of the toolbar. */
   actions?: ReactNode;
@@ -134,6 +150,7 @@ export function BrowserWindow({
   onTakeOver,
   onHandBack,
   onFit,
+  onTab,
   onClose,
   actions,
   className,
@@ -365,6 +382,7 @@ export function BrowserWindow({
         )}
 
         <div className={styles.tools}>
+          {tab?.backend && <WhereItRuns backend={tab.backend} />}
           {control === 'agent' && (
             <span className={styles.driver} role="status">
               <Pearl size="xs" state="thinking" label={null} />
@@ -402,6 +420,8 @@ export function BrowserWindow({
         </div>
         <span className={styles.loading} data-on={tab?.loading ? '' : undefined} aria-hidden />
       </header>
+
+      {tab?.tabs && tab.tabs.length > 1 && <TabStrip tabs={tab.tabs} onTab={onTab} />}
 
       {handoff && (
         <div className={styles.handoffBar} role="status">
@@ -552,6 +572,81 @@ export function BrowserWindow({
         </p>
       </div>
     </section>
+  );
+}
+
+const WHERE: Record<NonNullable<BrowserWindowTab['backend']>, string> = {
+  chrome: 'In your Chrome',
+  browserbase: 'In the cloud',
+  steel: 'In the cloud',
+  cdp: 'On another browser',
+};
+
+/** Where the page really is, when it isn't the assistant's own browser here. */
+function WhereItRuns({ backend }: { backend: NonNullable<BrowserWindowTab['backend']> }) {
+  const Icon = backend === 'chrome' ? AppWindowMac : Cloud;
+  return (
+    <span className={styles.where} data-backend={backend}>
+      <Icon aria-hidden />
+      {WHERE[backend]}
+    </span>
+  );
+}
+
+function titleOf(entry: BrowserWindowTabEntry): string {
+  if (entry.title) return entry.title;
+  if (!entry.url) return 'New tab';
+  try {
+    return new URL(entry.url).host.replace(/^www./, '');
+  } catch {
+    return entry.url;
+  }
+}
+
+/** The chat's tabs, when there's more than one: the one in view is marked, any can close. */
+function TabStrip({
+  tabs,
+  onTab,
+}: {
+  tabs: BrowserWindowTabEntry[];
+  onTab?: BrowserWindowProps['onTab'];
+}) {
+  return (
+    <nav aria-label="Tabs" className={styles.tabs}>
+      <ul className={styles.tabList}>
+        {tabs.map((entry) => {
+          const title = titleOf(entry);
+          return (
+            <li key={entry.id} className={styles.tab} data-active={entry.active ? '' : undefined}>
+              <button
+                type="button"
+                className={styles.tabButton}
+                aria-current={entry.active ? 'page' : undefined}
+                title={entry.url || title}
+                onClick={() => onTab?.('switch', entry.id)}
+              >
+                <Globe aria-hidden className={styles.tabIcon} />
+                <span className={styles.tabTitle}>{title}</span>
+              </button>
+              <IconButton
+                size="sm"
+                variant="ghost"
+                label={`Close tab: ${title}`}
+                className={styles.tabClose}
+                onClick={() => onTab?.('close', entry.id)}
+              >
+                <X />
+              </IconButton>
+            </li>
+          );
+        })}
+      </ul>
+      {onTab && (
+        <IconButton size="sm" variant="ghost" label="New tab" onClick={() => onTab('new')}>
+          <Plus />
+        </IconButton>
+      )}
+    </nav>
   );
 }
 

@@ -1,4 +1,8 @@
-import { BrowserStatus, type UpdateBrowserSettingsBody } from '@conch/protocol';
+import {
+  BrowserStatus,
+  type SetBrowserBackendBody,
+  type UpdateBrowserSettingsBody,
+} from '@conch/protocol';
 import { z } from 'zod';
 
 import { request } from '../../api/client';
@@ -9,6 +13,11 @@ export const browserApi = {
   status: () => request(BrowserStatus, '/api/browser'),
   updateSettings: (body: UpdateBrowserSettingsBody) =>
     request(BrowserStatus, '/api/browser/settings', { method: 'PATCH', body }),
+  /** Where it runs (ADR 0080). Anything but its own needs a recent sign-in. */
+  setBackend: (body: SetBrowserBackendBody) =>
+    request(BrowserStatus, '/api/browser/backend', { method: 'PUT', body }),
+  forgetBackend: (kind: 'browserbase' | 'steel' | 'cdp') =>
+    request(BrowserStatus, `/api/browser/backend/${kind}`, { method: 'DELETE' }),
   revokeSite: (site: string) =>
     request(BrowserStatus, `/api/browser/sites/${encodeURIComponent(site)}`, { method: 'DELETE' }),
   repair: () => request(BrowserStatus, '/api/browser/repair', { method: 'POST', body: {} }),

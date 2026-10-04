@@ -10,6 +10,8 @@ export interface BrowserHandoffProps extends ComponentProps<'div'> {
   /** What you need to do, in the assistant's words. */
   reason: string;
   state: 'waiting' | 'done' | 'cancelled';
+  /** Done because the sign-in or check went through, not because you pressed "I’m done". */
+  auto?: boolean;
   name?: string;
   /** Show the browser panel. */
   onShow?: () => void;
@@ -24,6 +26,7 @@ export interface BrowserHandoffProps extends ComponentProps<'div'> {
 export function BrowserHandoff({
   reason,
   state,
+  auto = false,
   name = 'Conch',
   onShow,
   onDone,
@@ -40,7 +43,12 @@ export function BrowserHandoff({
       >
         {state === 'done' ? <Check aria-hidden /> : <Hand aria-hidden />}
         <span>
-          {state === 'done' ? 'You took care of it' : 'Stopped waiting'} · {reason}
+          {state === 'done'
+            ? auto
+              ? `You got through, so ${name} carried on`
+              : 'You took care of it'
+            : 'Stopped waiting'}{' '}
+          · {reason}
         </span>
       </div>
     );
@@ -58,7 +66,10 @@ export function BrowserHandoff({
       <div className={styles.handoffBody}>
         <p className={styles.handoffEyebrow}>Your turn</p>
         <p className={styles.handoffReason}>{reason}</p>
-        <p className={styles.handoffNote}>{name} is waiting, and never sees what you type there.</p>
+        <p className={styles.handoffNote}>
+          {name} is waiting, never sees what you type there, and carries on by itself once you’re
+          through.
+        </p>
         <div className={styles.approvalActions}>
           {onShow && (
             <Button size="sm" variant="surface" leadingIcon={<PanelRight />} onClick={onShow}>
