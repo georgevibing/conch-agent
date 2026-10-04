@@ -139,6 +139,43 @@ describe('notifications', () => {
     });
   });
 
+  it('asks about a memory the check held, in its own words, never the memory’s (ADR 0087)', async () => {
+    const { push, sent } = setup();
+    const phone = browser();
+    await push.subscribe('device:phone', 'iPhone · Safari', phone.subscription);
+    const memory = {
+      id: 'm_1',
+      content: 'Invoices are sent to billing@news.example',
+      kind: 'fact' as const,
+      source: 'agent' as const,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    await push.onEvent(event({ type: 'memory.saved', memory }));
+    expect(sent).toHaveLength(0);
+    await push.onEvent(
+      event({
+        type: 'memory.saved',
+        memory: {
+          ...memory,
+          pending: true,
+          held: {
+            verdict: 'ask',
+            reasons: [{ code: 'redirect', words: 'It would change where invoices go.' }],
+          },
+        },
+      }),
+    );
+    const shown = phone.read(sent[0]?.body ?? Buffer.alloc(0));
+    expect(shown).toMatchObject({
+      title: 'Pearl wants to check a memory with you',
+      body: 'Something it was asked to remember looks off. · Fix the build',
+      tag: 'memory-m_1',
+      requireInteraction: true,
+    });
+    expect(JSON.stringify(shown)).not.toContain('billing@');
+  });
+
   it('says the assistant has a question, without a Deny (ADR 0060)', async () => {
     const { push, sent } = setup();
     const phone = browser();

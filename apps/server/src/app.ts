@@ -223,12 +223,19 @@ export async function buildApp(services: Services) {
     () => services.trayInfo(),
   );
   // Keep and Undo on a memory a chat learned are written into that chat, so it shows them after a reload.
-  const memoryDecided = async (memory: { id: string; conversationId?: string }, kept: boolean) => {
+  const memoryDecided = async (
+    memory: { id: string; conversationId?: string; content: string },
+    kept: boolean,
+    how: { edited?: boolean; anyway?: boolean } = {},
+  ) => {
     if (memory.conversationId)
       await services.conversations.note(memory.conversationId, {
         type: 'memory.decided',
         memoryId: memory.id,
         kept,
+        content: memory.content.slice(0, 500),
+        ...(how.edited && { edited: true }),
+        ...(how.anyway && { anyway: true }),
       });
   };
   registerLearningRoutes(app, {
@@ -371,7 +378,9 @@ export async function buildApp(services: Services) {
     if (!body) return;
     // Lowering a safety guard is a change that grants trust (ADR 0028): it asks that it's you.
     const lowering =
-      body.preferences?.checkAfterReading === false || body.preferences?.sealedCommands === false;
+      body.preferences?.checkAfterReading === false ||
+      body.preferences?.sealedCommands === false ||
+      body.preferences?.checkMemories === false;
     if (lowering && !gate.verified(request.access))
       return reply.code(403).send({
         error: 'verify-required',

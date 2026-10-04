@@ -589,8 +589,8 @@ describe('Repair everything', () => {
       repair: false,
       signal,
     });
-    expect(on.map((i) => i.state)).toEqual(['ok', 'ok']);
-    await settings.update({ preferences: { checkAfterReading: false } });
+    expect(on.map((i) => i.state)).toEqual(['ok', 'ok', 'ok']);
+    await settings.update({ preferences: { checkAfterReading: false, checkMemories: false } });
     const linux = await safetyCheck(settings, () => ({
       available: false,
       reason: 'Needs bubblewrap.',
@@ -598,6 +598,8 @@ describe('Repair everything', () => {
     })).run({ repair: false, signal });
     expect(linux).toMatchObject([
       { id: 'safety:reading', state: 'warning', action: { kind: 'open', place: 'security' } },
+      // The memory check (ADR 0087): off is a warning, with the way back.
+      { id: 'safety:memories', state: 'warning', action: { kind: 'open', place: 'security' } },
       { id: 'safety:sealed', state: 'needs-you', action: { kind: 'command' } },
     ]);
   });

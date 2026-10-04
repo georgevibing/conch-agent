@@ -27,6 +27,7 @@ import { writeJson } from '../lib/fs';
 import { newId } from '../lib/ids';
 import { readStore } from '../lib/recover';
 import { tokens } from './embed';
+import { checkMemory, holdOf, withoutHidden, type ReadThing } from './guard';
 import type { MemoryStore } from './store';
 
 /** How much of what you said goes to the model in one tidy-up. */
@@ -54,6 +55,8 @@ export interface Said {
   at: number;
   /** The chat read something untrusted: why, in a sentence (ADR 0028). */
   untrusted?: string;
+  /** What it read, by where (ADR 0087): the memory check names it. */
+  read?: readonly ReadThing[];
 }
 
 export interface TidyModel {
@@ -68,7 +71,7 @@ export interface TidyDeps {
   model: () => Promise<TidyModel | undefined>;
   /** What you said in chats changed since `since` (your own words only). */
   said: (since: number) => Promise<Said[]>;
-  settings: () => Promise<{ autoMemory: boolean; tidyMemory: boolean }>;
+  settings: () => Promise<{ autoMemory: boolean; tidyMemory: boolean; checkMemories?: boolean }>;
   /** A chat is working: nightly tidy-ups wait for a quiet moment. */
   busy: () => boolean;
   emit?: (status: TidyStatus) => void;
@@ -192,6 +195,19 @@ interface Learning {
   autoMemory: boolean;
   touched: Set<string>;
   changes: TidyChange[];
+  /** The memory check is on (ADR 0087). */
+  check: boolean;
+}
+
+/** The memory check on something learned from these chats (ADR 0087). */
+function verdictFor(content: string, chats: readonly Said[], on: boolean) {
+  return checkMemory({
+    content,
+    via: 'tidy',
+    read: chats.flatMap((s) => s.read ?? []),
+    said: chats.map((s) => s.text),
+    on,
+  });
 }
 
 /** "This chat read …" as the reason a change waits: "Learned in a chat that read …". */
@@ -262,9 +278,16 @@ export class MemoryTidy {
     const touched = new Set<string>();
     let problem: string | undefined;
 
+    const { checkMemories = true } = await this.deps.settings();
     const merge = async (group: Memory[], content: string, why: string) => {
       const live = group.filter((m) => byId.has(m.id) && !touched.has(m.id));
       if (live.length < 2) return;
+      // A merge says what they said (ADR 0087): words that look planted aren't merged in.
+      if (
+        checkMemory({ content, via: 'tidy', said: live.map((m) => m.content), on: checkMemories })
+          .verdict !== 'ok'
+      )
+        return;
       const [keep, ...drop] = [...live].sort((a, b) => b.updatedAt - a.updatedAt);
       if (!keep) return;
       for (const m of live) touched.add(m.id);
@@ -308,7 +331,14 @@ export class MemoryTidy {
     for (const group of repeats(memories.filter((m) => !touched.has(m.id))))
       await merge(group, group[0]?.content ?? '', 'They said the same thing.');
 
-    await this.#learnFrom(reply, { memories, said, autoMemory, touched, changes });
+    await this.#learnFrom(reply, {
+      memories,
+      said,
+      autoMemory,
+      touched,
+      changes,
+      check: checkMemories,
+    });
 
     const run: TidyRun = {
       id: newId('tr'),
@@ -334,16 +364,20 @@ export class MemoryTidy {
   /** Updates and new memories from a reply, by the rules: what came from an untrusted chat waits. */
   async #learnFrom(reply: z.infer<typeof Reply> | undefined, learning: Learning) {
     const { store } = this.deps;
-    const { memories, said, autoMemory, touched, changes } = learning;
+    const { memories, said, autoMemory, touched, changes, check } = learning;
     const byId = new Map(memories.map((m) => [m.id, m]));
     const fromChat = new Map(said.map((s) => [s.conversationId, s]));
     for (const u of reply?.update ?? []) {
       const current = byId.get(u.id);
       if (!current || touched.has(u.id) || current.content === u.content.trim()) continue;
       touched.add(u.id);
-      const untrusted = u.from
-        ? fromChat.get(u.from)?.untrusted
-        : said.find((s) => s.untrusted)?.untrusted;
+      const chats = u.from ? said.filter((s) => s.conversationId === u.from) : said;
+      const held = holdOf(verdictFor(u.content.trim(), chats, check));
+      const untrusted = held
+        ? held.reasons[0]?.words
+        : u.from
+          ? fromChat.get(u.from)?.untrusted
+          : said.find((s) => s.untrusted)?.untrusted;
       const proposed = {
         ...current,
         content: u.content.trim(),
@@ -358,7 +392,7 @@ export class MemoryTidy {
           before: [current],
           after: proposed,
           state: 'pending',
-          untrusted: learnedIn(untrusted),
+          untrusted: held ? untrusted : learnedIn(untrusted),
         });
         continue;
       }
@@ -383,8 +417,16 @@ export class MemoryTidy {
         : said.length && said.every((s) => s.conversationId === said[0]?.conversationId)
           ? said[0]
           : undefined;
-      const untrusted = chat?.untrusted ? learnedIn(chat.untrusted) : undefined;
+      const chats = chat ? said.filter((s) => s.conversationId === chat.conversationId) : said;
+      const verdict = verdictFor(content, chats, check);
+      const held = holdOf(verdict);
+      const untrusted = held
+        ? held.reasons[0]?.words
+        : chat?.untrusted
+          ? learnedIn(chat.untrusted)
+          : undefined;
       const waits = Boolean(untrusted) || !autoMemory;
+      const read = [...new Set(chats.flatMap((s) => s.read ?? []).map((r) => r.label))];
       const after = await store.add({
         content,
         kind: a.kind,
@@ -395,6 +437,12 @@ export class MemoryTidy {
           untrusted:
             untrusted ?? 'Remember things automatically is off, so this waits for your OK.',
         }),
+        ...(held && { held }),
+        provenance: {
+          via: 'tidy',
+          ...(read.length > 0 && { read: read.slice(0, 12) }),
+          ...(verdict.yours && { yours: true }),
+        },
       });
       known.push(after);
       changes.push({
@@ -454,7 +502,15 @@ export class MemoryTidy {
     }
     if (!reply) return undefined;
     const changes: TidyChange[] = [];
-    await this.#learnFrom(reply, { memories, said, autoMemory, touched: new Set(), changes });
+    const { checkMemories = true } = await this.deps.settings();
+    await this.#learnFrom(reply, {
+      memories,
+      said,
+      autoMemory,
+      touched: new Set(),
+      changes,
+      check: checkMemories,
+    });
     file.learned = { ...file.learned, [conversationId]: Math.max(...said.map((s) => s.at)) };
     if (!changes.length) {
       await this.#save(file);
@@ -490,7 +546,9 @@ export class MemoryTidy {
     } else if (change.state === 'applied' && answer === 'keep') {
       change.state = 'kept';
     } else if (change.state === 'pending' && answer === 'keep') {
-      if (change.kind === 'added' && change.after) await store.keep(change.after.id);
+      if (change.kind === 'added' && change.after)
+        // Keep on the card is the person's own choice, with the why in front of them.
+        await store.keep(change.after.id, { anyway: true, clean: withoutHidden });
       if (change.kind === 'updated' && change.after)
         await store.update(change.after.id, { content: change.after.content });
       change.state = 'kept';

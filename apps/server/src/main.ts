@@ -198,6 +198,7 @@ const findings = checkup({
   channels: await services.channels.checkupCopy(),
   safety: {
     checkAfterReading: (await services.settings.get()).preferences.checkAfterReading,
+    checkMemories: (await services.settings.get()).preferences.checkMemories,
     sealedCommands: (await services.settings.get()).preferences.sealedCommands,
     sandboxAvailable: sandboxSupport().available,
   },

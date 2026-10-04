@@ -1,6 +1,6 @@
 import { readdir, readFile, rm } from 'node:fs/promises';
 
-import { Memory, type MemoryKind } from '@conch/protocol';
+import { Memory, type MemoryHold, type MemoryKind, type MemoryProvenance } from '@conch/protocol';
 
 import { Emitter } from '../lib/emitter';
 import { Mutex, safeJoin, writeFileAtomic } from '../lib/fs';
@@ -46,6 +46,10 @@ export class MemoryStore {
     /** Waiting for the person's OK (ADR 0032), and why. */
     pending?: boolean;
     untrusted?: string;
+    /** The memory check held it (ADR 0087): it waits, with why. */
+    held?: MemoryHold;
+    /** Where it came from (ADR 0087). */
+    provenance?: MemoryProvenance;
   }): Promise<Memory> {
     return this.#mutex.run(async () => {
       const memories = await this.#load();
@@ -66,8 +70,10 @@ export class MemoryStore {
           conversationId: input.conversationId,
           createdAt: now,
           updatedAt: now,
-          ...(input.pending && { pending: true }),
+          ...((input.pending || input.held) && { pending: true }),
           ...(input.untrusted && { untrusted: input.untrusted.slice(0, 300) }),
+          ...(input.held && { held: input.held }),
+          ...(input.provenance && { provenance: input.provenance }),
         }),
       );
     });
@@ -86,13 +92,43 @@ export class MemoryStore {
     });
   }
 
-  /** You looked at a memory waiting for your OK, and keep it. */
-  keep(id: string): Promise<Memory | undefined> {
+  /**
+   * You looked at a memory waiting for your OK, and keep it: as it is, or in
+   * your own words (`content`). One the check refused (ADR 0087) needs
+   * `anyway`, and is kept without the hidden characters you couldn't see.
+   */
+  keep(
+    id: string,
+    options: { content?: string; anyway?: boolean; clean?: (text: string) => string } = {},
+  ): Promise<Memory | undefined | 'needs-anyway'> {
     return this.#mutex.run(async () => {
       const current = (await this.#load()).get(id);
       if (!current) return undefined;
-      const { pending: _p, untrusted: _u, ...kept } = current;
-      return this.#write({ ...kept, updatedAt: Date.now() });
+      if (current.held?.verdict === 'refuse' && !options.anyway && options.content === undefined)
+        return 'needs-anyway';
+      const { pending: _p, untrusted: _u, held: _h, ...kept } = current;
+      const words = options.content ?? options.clean?.(current.content) ?? current.content;
+      return this.#write({
+        ...kept,
+        content: normalise(words),
+        // Kept by you: its words are yours now, wherever they came from.
+        ...((options.content !== undefined || current.held) && {
+          provenance: { ...(current.provenance ?? { via: 'chat' as const }), yours: true },
+        }),
+        updatedAt: Date.now(),
+      });
+    });
+  }
+
+  /**
+   * Hold a memory already remembered (ADR 0087): with what came next, it adds
+   * up to something to ask about. It waits again, and isn't used meanwhile.
+   */
+  hold(id: string, held: MemoryHold): Promise<Memory | undefined> {
+    return this.#mutex.run(async () => {
+      const current = (await this.#load()).get(id);
+      if (!current) return undefined;
+      return this.#write({ ...current, pending: true, held, updatedAt: Date.now() });
     });
   }
 
@@ -167,6 +203,9 @@ export function serialise(m: Memory): string {
     ...(m.conversationId ? [`conversationId: ${m.conversationId}`] : []),
     ...(m.pending ? ['pending: true'] : []),
     ...(m.untrusted ? [`untrusted: ${m.untrusted.replace(/\s+/g, ' ')}`] : []),
+    // One line of JSON each: an older Conch reads past what it doesn't know.
+    ...(m.held ? [`held: ${JSON.stringify(m.held)}`] : []),
+    ...(m.provenance ? [`provenance: ${JSON.stringify(m.provenance)}`] : []),
     `createdAt: ${m.createdAt}`,
     `updatedAt: ${m.updatedAt}`,
   ];
@@ -184,10 +223,19 @@ export function parse(text: string): Memory | undefined {
     const value = line.slice(i + 1).trim();
     meta[key] = /At$/.test(key) ? Number(value) : value;
   }
-  const { pending, ...rest } = meta;
+  const { pending, held, provenance, ...rest } = meta;
+  const json = (value: unknown) => {
+    try {
+      return typeof value === 'string' ? (JSON.parse(value) as unknown) : undefined;
+    } catch {
+      return undefined;
+    }
+  };
   const result = Memory.safeParse({
     ...rest,
     ...(pending === 'true' && { pending: true }),
+    ...(held !== undefined && { held: json(held) }),
+    ...(provenance !== undefined && { provenance: json(provenance) }),
     content: normalise(match[2] ?? ''),
   });
   return result.success ? result.data : undefined;

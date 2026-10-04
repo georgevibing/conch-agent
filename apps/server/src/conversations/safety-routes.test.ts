@@ -75,7 +75,7 @@ describe('Repair everything, on trust (ADR 0031)', () => {
         },
       ],
     }).run({ repair: false, signal: new AbortController().signal });
-    expect(items.slice(2)).toMatchObject([
+    expect(items.slice(3)).toMatchObject([
       {
         id: 'safety:sealed:codex-agent',
         state: 'warning',

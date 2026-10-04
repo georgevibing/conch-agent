@@ -221,6 +221,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
           }),
         safety: {
           checkAfterReading: preferences.checkAfterReading,
+          checkMemories: preferences.checkMemories,
           sealedCommands: preferences.sealedCommands,
           sandboxAvailable: sandboxSupport().available,
         },

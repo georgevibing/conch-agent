@@ -40,12 +40,14 @@ import type {
   PermissionDecision,
   ResolvedOptions,
 } from '../engines/types';
+import { hostToolText } from '../engines/types';
 import { forTurn as attachmentsForTurn } from '../attachments/prompt';
 import type { AttachmentStore } from '../attachments/store';
 import { Emitter } from '../lib/emitter';
 import { newId } from '../lib/ids';
 import { buildSystemAppend, systemParts } from '../memory/prompt';
 import type { MemoryStore } from '../memory/store';
+import type { LookModel, ReadThing } from '../memory/guard';
 import { memoryTools } from '../memory/tools';
 import type { SettingsStore } from '../settings/store';
 import { handoff } from './handoff';
@@ -418,6 +420,33 @@ interface Live {
   setTurnMode?: (mode: PermissionMode) => void;
   /** Waiting for the chat to be free (a message sent while a stopped turn winds down). */
   waiters?: (() => void)[];
+  /**
+   * What Conch's own tools brought in from outside this run, by where (ADR
+   * 0087): the memory check compares a memory with it. Others' results are in
+   * the log (`tool.finished`); these aren't, so a restart forgets them.
+   */
+  read?: Map<string, string>;
+}
+
+/** How much of what one place brought in the memory check keeps to compare with (ADR 0087). */
+const READ_KEPT = 200_000;
+
+/** What this chat remembered (or wanted to) in the last hour: a plant may come in pieces (ADR 0087). */
+export function recentMemories(
+  events: readonly ConversationEvent[],
+  now = Date.now(),
+): { id: string; content: string; held?: boolean }[] {
+  const out = new Map<string, { id: string; content: string; held?: boolean }>();
+  for (const e of events)
+    if (e.type === 'memory.saved' && now - e.at < 3_600_000)
+      out.set(e.memory.id, {
+        id: e.memory.id,
+        content: e.memory.content,
+        ...(e.memory.held && { held: true }),
+      });
+    else if (e.type === 'memory.forgotten' || (e.type === 'memory.decided' && !e.kept))
+      out.delete(e.memoryId);
+  return [...out.values()];
 }
 
 /** How long a Stop pressed just before a turn starts still counts. */
@@ -588,6 +617,8 @@ export class ConversationManager {
         forPrompt(said: string): Promise<{ memories: Memory[]; total: number }>;
         search(query: string, limit?: number): Promise<{ memory: Memory }[]>;
       };
+      /** A cheap model for the memory check's second look (ADR 0087); it can only raise a flag. */
+      memoryLook?: () => Promise<LookModel | undefined>;
       /** The provider for a turn: the one a conversation chose, else the default. */
       engine: (id?: EngineId) => Engine;
       tools?: ToolProvider;
@@ -1675,6 +1706,14 @@ export class ConversationManager {
         return tainted.length ? describeTaint(tainted) : undefined;
       },
       waits: () => !watched || this.#tainted(live).some((source) => source.kind === 'person'),
+      // The memory check (ADR 0087): what it read, what you said, what it remembered just now.
+      check: {
+        read: () => this.#readThings(live),
+        said: () => this.#yourWords(live),
+        recent: () => recentMemories(live.events),
+        on: async () => (await this.deps.settings.get()).preferences.checkMemories,
+        ...(this.deps.memoryLook && { look: this.deps.memoryLook }),
+      },
       onSaved: (memory) => {
         this.#append(live, { type: 'memory.saved', memory });
       },
@@ -1737,7 +1776,9 @@ export class ConversationManager {
         ...tool,
         run: async (args, context) => {
           const result = await tool.run(args, context);
-          this.#taint(live, taintFrom(tool.name, args) ?? source);
+          const read = taintFrom(tool.name, args) ?? source;
+          this.#taint(live, read);
+          this.#noteRead(live, read.label, hostToolText(result));
           return result;
         },
       };
@@ -2646,6 +2687,46 @@ export class ConversationManager {
   async #persist(live: Live) {
     await this.deps.store.upsert(live.record);
     await this.deps.store.saveEvents(live.record.id, live.events);
+  }
+
+  /** Keep what a tool of Conch's own brought in, for the memory check (ADR 0087). */
+  #noteRead(live: Live, label: string, text: string) {
+    live.read ??= new Map();
+    const before = live.read.get(label) ?? '';
+    live.read.set(label, `${before}\n${text}`.slice(-READ_KEPT));
+  }
+
+  /** What this chat read from outside, with what it brought back where Conch has it (ADR 0087). */
+  #readThings(live: Live): ReadThing[] {
+    const outputs = new Map<string, string>();
+    for (const e of live.events)
+      if (e.type === 'tool.finished' && e.output) outputs.set(e.toolUseId, e.output);
+    const texts = new Map<string, string>(live.read);
+    for (const e of live.events)
+      if (e.type === 'taint' && e.toolUseId) {
+        const output = outputs.get(e.toolUseId);
+        if (output)
+          texts.set(
+            e.source.label,
+            `${texts.get(e.source.label) ?? ''}\n${output}`.slice(-READ_KEPT),
+          );
+      }
+    return this.#tainted(live).map((source) => ({
+      kind: source.kind,
+      label: source.label,
+      ...(texts.has(source.label) && { text: texts.get(source.label) }),
+    }));
+  }
+
+  /**
+   * The person's own words in this chat (ADR 0087). None where they could be
+   * someone else's: a routine's run carries what happened, and a chat app
+   * with other people in it carries theirs.
+   */
+  #yourWords(live: Live): string[] {
+    if (live.extras || live.record.origin?.kind === 'routine') return [];
+    if (this.#tainted(live).some((source) => source.kind === 'person')) return [];
+    return live.events.flatMap((e) => (e.type === 'user.message' ? [e.text] : []));
   }
 
   /** What untrusted things this chat has read, from its own log (so it survives a restart). */

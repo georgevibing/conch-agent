@@ -706,7 +706,11 @@ export class Services {
       said: (since) => yourWords(conversationStore, since),
       settings: async () => {
         const { preferences } = await this.settings.get();
-        return { autoMemory: preferences.autoMemory, tidyMemory: preferences.tidyMemory };
+        return {
+          autoMemory: preferences.autoMemory,
+          tidyMemory: preferences.tidyMemory,
+          checkMemories: preferences.checkMemories,
+        };
       },
       busy: () => this.conversations.busy(),
       emit: () => this.broadcast.emit({ type: 'memory.changed' }),
@@ -795,6 +799,8 @@ export class Services {
       settings: this.settings,
       memory: this.memory,
       memoryIndex: this.memoryIndex,
+      // The memory check's second look (ADR 0087): the default provider's cheapest model.
+      memoryLook: () => cheapModel(this.providers.engine()),
       engine: (id) => this.providers.engineFor(id),
       route: (engine, context) => this.route(engine, context),
       describe: (engine, model) => this.describer.for(engine, model),
@@ -984,6 +990,7 @@ export class Services {
       conversations: this.conversations,
       engineId: () => this.engine().id,
       memory: this.memory,
+      checkMemories: async () => (await this.settings.get()).preferences.checkMemories,
       search: (query) => this.memoryIndex.search(query),
       skills: this.skills,
       apps: {
@@ -1714,6 +1721,7 @@ export class Services {
       targets: {
         settings: this.settings,
         memory: this.memory,
+        checkMemories: async () => (await this.settings.get()).preferences.checkMemories,
         skills: {
           // Conch's own: another app's skills are only read in place, and go with it.
           names: async () =>

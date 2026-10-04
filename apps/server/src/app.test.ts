@@ -350,6 +350,48 @@ describe('your photo', () => {
   });
 });
 
+describe('memories the check held (ADR 0087)', () => {
+  it('keeps one as it is, in your words, or a refused one only anyway, and the chat says which', async () => {
+    const { app, services } = await setup();
+    close = () => app.close();
+    const convo = await services.conversations.send({ clientMessageId: 'u1', text: 'hello' });
+    const held = {
+      verdict: 'ask' as const,
+      reasons: [{ code: 'redirect' as const, words: 'It would change where invoices go.' }],
+    };
+    const asked = await services.memory.add({
+      content: 'Invoices are sent to billing@news.example',
+      source: 'agent',
+      conversationId: convo.id,
+      held,
+    });
+    const refused = await services.memory.add({
+      content: 'Token is abcd1234efgh',
+      source: 'agent',
+      conversationId: convo.id,
+      held: { ...held, verdict: 'refuse' },
+    });
+    const keep = (id: string, payload: object = {}) =>
+      app.inject({ method: 'POST', url: `/api/memories/${id}/keep`, payload });
+    expect(
+      (await keep(asked.id, { content: 'Invoices go to accounts@ada.example' })).json(),
+    ).toMatchObject({
+      content: 'Invoices go to accounts@ada.example',
+      provenance: { yours: true },
+    });
+    const no = await keep(refused.id);
+    expect(no.statusCode).toBe(409);
+    expect(no.json().error).toBe('needs-anyway');
+    expect((await keep(refused.id, { anyway: true })).statusCode).toBe(200);
+    expect((await keep(refused.id, { anyway: 'yes' })).statusCode).toBe(400);
+    const { events } = await services.conversations.detail(convo.id);
+    expect(events.filter((e) => e.type === 'memory.decided')).toEqual([
+      expect.objectContaining({ memoryId: asked.id, kept: true, edited: true }),
+      expect.objectContaining({ memoryId: refused.id, kept: true, anyway: true }),
+    ]);
+  });
+});
+
 describe('gateway capabilities and commands', () => {
   it('lists models, modes and custom commands', async () => {
     const { app } = await setup();

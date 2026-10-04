@@ -70,6 +70,10 @@ export function entriesOf(
       e.type === 'files.changed' && e.toolUseId ? [[e.toolUseId, e.changeSetId] as const] : [],
     ),
   );
+  // Memories you've since answered (ADR 0087): a hold stops waiting.
+  const answeredMemories = new Set(
+    events.flatMap((e) => (e.type === 'memory.decided' ? [e.memoryId] : [])),
+  );
   for (const e of events) {
     const base = { conversation };
     switch (e.type) {
@@ -208,12 +212,33 @@ export function entriesOf(
           id: `${chat.id}:${e.seq}`,
           at: e.at,
           kind: 'memory',
-          // Learned in a chat that read something untrusted: it waits for an OK (ADR 0032).
-          title: `${e.memory.pending ? 'Wants to remember, waiting for your OK' : 'Remembered'}: ${e.memory.content.slice(0, 120)}`,
-          status: 'done',
+          // Held by the memory check (ADR 0087), with why; or waiting for an OK (ADR 0032).
+          title: e.memory.held
+            ? `${e.memory.held.verdict === 'refuse' ? 'Refused to remember' : 'Held to ask you'}: ${e.memory.content.slice(0, 120)}. ${e.memory.held.reasons[0]?.words ?? ''}`.trim()
+            : `${e.memory.pending ? 'Wants to remember, waiting for your OK' : 'Remembered'}: ${e.memory.content.slice(0, 120)}`,
+          status: e.memory.held && !answeredMemories.has(e.memory.id) ? 'waiting' : 'done',
           memory: { id: e.memory.id, content: e.memory.content, action: 'saved' },
         });
         break;
+      // What you chose about a memory it learned (ADR 0087): kept, in your words, anyway, or not.
+      case 'memory.decided': {
+        const what = e.content ? `: ${e.content.slice(0, 120)}` : '';
+        out.push({
+          ...base,
+          id: `${chat.id}:${e.seq}`,
+          at: e.at,
+          kind: 'memory',
+          title: !e.kept
+            ? `You didn’t keep a memory${what}`
+            : e.anyway
+              ? `You remembered it anyway${what}`
+              : e.edited
+                ? `You kept a memory in your own words${what}`
+                : `You kept a memory${what}`,
+          status: e.kept ? 'allowed' : 'denied',
+        });
+        break;
+      }
       // Looking back through your other chats, like what it remembers (ADR 0059).
       case 'chats.looked': {
         const [first] = e.chats;

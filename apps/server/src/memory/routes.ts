@@ -1,9 +1,16 @@
-import { DismissSuggestionBody, GetMeaningBody, Memory, TidyAnswerBody } from '@conch/protocol';
+import {
+  DismissSuggestionBody,
+  GetMeaningBody,
+  KeepMemoryBody,
+  Memory,
+  TidyAnswerBody,
+} from '@conch/protocol';
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 
 import type { SkillLearner } from '../skills/learn';
 import type { SkillSuggester } from '../skills/suggest';
+import { withoutHidden } from './guard';
 import type { MemoryIndex } from './index';
 import type { MemoryStore } from './store';
 import type { MemoryTidy } from './tidy';
@@ -26,8 +33,12 @@ export function registerLearningRoutes(
     /** Get Conch's own model for meaning (ADR 0041), and how far it got. */
     getMeaningModel: (languages: string[]) => Promise<void>;
     meaningState: () => { getting?: number; problem?: string };
-    /** A memory a chat learned was kept: the chat's own log says so. */
-    decided?: (memory: { id: string; conversationId?: string }, kept: boolean) => Promise<void>;
+    /** A memory a chat learned was kept: the chat's own log says so (and Activity, ADR 0087). */
+    decided?: (
+      memory: { id: string; conversationId?: string; content: string },
+      kept: boolean,
+      how?: { edited?: boolean; anyway?: boolean },
+    ) => Promise<void>;
   },
 ): void {
   const { store, index, tidy, suggester } = deps;
@@ -37,14 +48,36 @@ export function registerLearningRoutes(
     return { results: (await index.search(q, 50)).map((r) => r.memory) };
   });
 
+  // Keep a memory that waits: as it is, in your words (Edit first), or, for one
+  // the memory check refused, only with `anyway` (ADR 0087). Only a person gets here.
   app.post<{ Params: { id: string } }>('/api/memories/:id/keep', async (request, reply) => {
-    const kept = await store.keep(request.params.id);
+    const body = KeepMemoryBody.safeParse(request.body ?? {});
+    if (!body.success)
+      return reply.code(400).send({ error: 'bad-request', message: body.error.issues[0]?.message });
+    const before = await store.get(request.params.id);
+    const kept = await store.keep(request.params.id, {
+      ...(body.data.content !== undefined && { content: body.data.content }),
+      ...(body.data.anyway && { anyway: true }),
+      // What you saw is what's kept: hidden characters don't come with it.
+      clean: withoutHidden,
+    });
+    if (kept === 'needs-anyway')
+      return reply.code(409).send({
+        error: 'needs-anyway',
+        message: 'This one was refused. Choose Remember anyway if you’re sure.',
+      });
     if (!kept)
       return reply
         .code(404)
         .send({ error: 'not-found', message: 'That memory isn’t there any more.' });
     void index.sync();
-    await deps.decided?.(kept, true).catch(() => undefined);
+    await deps
+      .decided?.(kept, true, {
+        ...(body.data.content !== undefined &&
+          body.data.content !== before?.content && { edited: true }),
+        ...(before?.held?.verdict === 'refuse' && { anyway: true }),
+      })
+      .catch(() => undefined);
     return kept;
   });
 

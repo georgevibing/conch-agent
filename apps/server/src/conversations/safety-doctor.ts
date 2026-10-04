@@ -42,6 +42,17 @@ export function safetyCheck(
           ? undefined
           : { kind: 'open', label: 'Turn it on', place: 'security' },
       );
+      item(
+        'safety:memories',
+        'Checking what it remembers',
+        preferences.checkMemories ? 'ok' : 'warning',
+        preferences.checkMemories
+          ? 'A memory that looks planted is held and asked about before it’s used.'
+          : 'Memories that look planted are remembered without asking.',
+        preferences.checkMemories
+          ? undefined
+          : { kind: 'open', label: 'Turn it on', place: 'security' },
+      );
       const sandbox = support();
       if (!sandbox.available)
         item(

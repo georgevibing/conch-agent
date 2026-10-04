@@ -143,6 +143,14 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
   const settings = json(read, 'settings.json');
   if (record(settings?.preferences)?.permissionMode === 'bypassPermissions')
     powers.push({ kind: 'chats-never-ask' });
+  // A safety check off (ADR 0028, ADR 0087) isn't brought back quietly either.
+  const prefs = record(settings?.preferences);
+  const off = [
+    ...(prefs?.checkAfterReading === false ? ['checking after it reads something'] : []),
+    ...(prefs?.sealedCommands === false ? ['sealed commands'] : []),
+    ...(prefs?.checkMemories === false ? ['checking what it remembers'] : []),
+  ];
+  if (off.length) powers.push({ kind: 'safety-off', checks: off });
   // A server you added gets your chats when it answers: an old or someone else's
   // backup mustn't quietly point Conch at an address you didn't choose.
   const servers = (Array.isArray(settings?.servers) ? settings.servers : [])

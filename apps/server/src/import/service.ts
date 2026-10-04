@@ -42,6 +42,7 @@ import type {
   ImportSource,
   ImportSourceId,
   ImportStatus,
+  MemoryProvenance,
   Persona,
   Profile,
   Routine,
@@ -50,6 +51,7 @@ import { EngineId as EngineIdSchema } from '@conch/protocol';
 import { z } from 'zod';
 
 import { Mutex, readJson, writeJson } from '../lib/fs';
+import { checkMemory } from '../memory/guard';
 import { describe } from '../routines/schedule';
 import { scanSkill, scanText, unsmuggle } from '../skills/scan';
 import {
@@ -129,9 +131,12 @@ export interface ImportTargets {
       content: string;
       kind?: 'fact' | 'preference' | 'project' | 'person';
       source: 'user';
+      provenance?: MemoryProvenance;
     }): Promise<{ id: string }>;
     remove(id: string): Promise<unknown>;
   };
+  /** Settings → Safety → Check what it remembers (ADR 0087). */
+  checkMemories?: () => Promise<boolean>;
   skills: {
     names(): Promise<string[]>;
     adopt(folder: string, base: string): Promise<{ id: string }>;
@@ -206,6 +211,26 @@ function steering(text: string, file: string): Pick<ImportItem, 'review' | 'warn
   return {
     review,
     warning: 'Left unticked: it reads like orders to the assistant. Read it before bringing it.',
+  };
+}
+
+/**
+ * A memory from another assistant, looked at by the memory check too (ADR
+ * 0087): one that would change where money goes, claims authority or hides
+ * something starts unticked, saying why.
+ */
+function memorySteering(
+  text: string,
+  file: string,
+  on: boolean,
+): Pick<ImportItem, 'review' | 'warning'> | undefined {
+  const odd = steering(text, file);
+  if (odd) return odd;
+  const verdict = checkMemory({ content: text, via: 'import', on });
+  const why = verdict.reasons[0]?.words;
+  if (verdict.verdict === 'ok' || !why) return undefined;
+  return {
+    warning: `Left unticked: ${why.charAt(0).toLowerCase()}${why.slice(1)} Read it before bringing it.`,
   };
 }
 
@@ -360,9 +385,10 @@ export class ImportService {
       });
     }
 
+    const checkOn = (await this.deps.targets.checkMemories?.().catch(() => true)) ?? true;
     found.memories.forEach((m, i) => {
       const duplicate = known.has(norm(m.text));
-      const odd = steering(m.text, m.from);
+      const odd = memorySteering(m.text, m.from, checkOn);
       items.push({
         id: `memory:${i}`,
         group: 'memories',
@@ -504,6 +530,7 @@ export class ImportService {
     const prefix = `agent:${agent.id}`;
     const items: ImportItem[] = [];
     const main = new Set(found.memories.map((m) => norm(m.text)));
+    const checkOn = (await this.deps.targets.checkMemories?.().catch(() => true)) ?? true;
     const skillNames = new Set(
       (await this.deps.targets.skills.names()).map((n) => n.toLowerCase()),
     );
@@ -538,7 +565,7 @@ export class ImportService {
       // The main agent has it too: it comes over once, from there.
       if (main.has(norm(m.text))) return;
       const duplicate = known.has(norm(m.text));
-      const odd = steering(m.text, m.from);
+      const odd = memorySteering(m.text, m.from, checkOn);
       items.push({
         id: `${prefix}:memory:${i}`,
         group: 'memories',
@@ -638,6 +665,18 @@ export class ImportService {
         done += 1;
       };
 
+      // What you ticked comes, noting where from (ADR 0087); the plan already
+      // left anything that looks planted unticked, with why.
+      const bringIn = async (text: string, from: string) => {
+        const memory = await t.memory.add({
+          content: unsmuggle(text),
+          source: 'user',
+          provenance: { via: 'import', read: [from.slice(0, 120)] },
+        });
+        created.memories.push(memory.id);
+        return undefined;
+      };
+
       // Persona and about you: what they replace is kept for Undo.
       if (found.persona?.name)
         await step('persona:name', 'persona', `Name: ${found.persona.name}`, async () => {
@@ -667,9 +706,7 @@ export class ImportService {
         await step(`memory:${i}`, 'memories', m.text.slice(0, 80), async () => {
           const known = new Set((await t.memory.list()).map((x) => norm(x.content)));
           if (known.has(norm(m.text))) return 'Already remembered.';
-          const memory = await t.memory.add({ content: unsmuggle(m.text), source: 'user' });
-          created.memories.push(memory.id);
-          return undefined;
+          return bringIn(m.text, found.label);
         });
 
       for (const s of found.skills)
@@ -720,9 +757,7 @@ export class ImportService {
           await step(`${prefix}:memory:${i}`, 'memories', m.text.slice(0, 80), async () => {
             const known = new Set((await t.memory.list()).map((x) => norm(x.content)));
             if (known.has(norm(m.text))) return 'Already remembered.';
-            const memory = await t.memory.add({ content: unsmuggle(m.text), source: 'user' });
-            created.memories.push(memory.id);
-            return undefined;
+            return bringIn(m.text, `${agent.name} in ${found.label}`);
           });
         for (const s of agent.skills)
           await step(`${prefix}:skill:${s.name}`, 'skills', s.name, async () => {

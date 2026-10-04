@@ -189,7 +189,13 @@ export interface CheckupInput {
   /** The public door (ADR 0045): where the internet reaches it, and for which apps. */
   door?: { url: string; apps: string[] };
   /** Safe hands (ADR 0028): the guard, and the sealed box for commands. */
-  safety?: { checkAfterReading: boolean; sealedCommands: boolean; sandboxAvailable: boolean };
+  safety?: {
+    checkAfterReading: boolean;
+    sealedCommands: boolean;
+    sandboxAvailable: boolean;
+    /** The memory check (ADR 0087). Absent: on. */
+    checkMemories?: boolean;
+  };
   /** An address of your own (ADR 0064): the internet reaches Conch there. */
   address?: AddressStatus;
   /**
@@ -415,6 +421,15 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       detail:
         'A web page, an email or someone else’s message could tell it to send your things somewhere or change this computer, and nothing would stop to ask you. Turn checking back on in Settings › Security › Safety.',
       fix: { kind: 'act', label: 'Turn it on', action: 'check-after-reading' },
+    });
+  if (input.safety && input.safety.checkMemories === false)
+    items.push({
+      id: 'check-memories',
+      level: 'warn',
+      title: 'Memories that look planted are remembered without asking',
+      detail:
+        'A web page or an email could slip in a memory, like where your invoices go or an order to follow in every chat, and the assistant would act on it later without asking you. Only passwords, keys and hidden characters are still held. Turn the check back on in Settings › Security › Safety.',
+      fix: { kind: 'act', label: 'Turn it on', action: 'check-memories' },
     });
   if (input.safety && input.safety.sandboxAvailable && !input.safety.sealedCommands)
     items.push({

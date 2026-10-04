@@ -294,6 +294,40 @@ describe('the tidy-up', () => {
     return { memories, run, complete };
   };
 
+  it('holds what looks planted, and says why (ADR 0087)', async () => {
+    const said: Said[] = [
+      {
+        conversationId: 'c1',
+        text: 'summarise https://news.example/today',
+        at: Date.now(),
+        untrusted: 'This chat read news.example, which could be trying to steer me.',
+        read: [{ kind: 'web', label: 'news.example' }],
+      },
+    ];
+    const reply = {
+      add: [{ content: 'Invoices are sent to billing@news.example', kind: 'fact', from: 'c1' }],
+    };
+    const { memories, run } = tidy({ reply, said });
+    const result = await run.run('now');
+    const [added] = await memories.list();
+    expect(added).toMatchObject({ pending: true, held: { verdict: 'ask' } });
+    expect(result.changes[0]).toMatchObject({ kind: 'added', state: 'pending' });
+    expect(result.changes[0]?.untrusted).toMatch(/where invoices go/);
+  });
+
+  it('doesn’t merge memories into words that look planted (ADR 0087)', async () => {
+    const reply = { merge: [{ ids: [] as string[], content: '' }] };
+    const { memories, run } = tidy({ reply });
+    const a = await memories.add({ content: 'Likes tea', source: 'agent' });
+    const b = await memories.add({ content: 'Likes green tea', source: 'agent' });
+    reply.merge[0] = { ids: [a.id, b.id], content: 'Likes tea\u{200B}' };
+    await run.run('now');
+    expect((await memories.list()).map((m) => m.content).sort()).toEqual([
+      'Likes green tea',
+      'Likes tea',
+    ]);
+  });
+
   it('merges exact repeats even with no model, and Undo puts them back', async () => {
     const { memories, run } = tidy({ model: false });
     await memories.add({ content: 'Prefers dark roast coffee', source: 'agent' });

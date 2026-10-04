@@ -47,7 +47,7 @@ export function chatWords(
         conversationId: chat.id,
         text: e.text,
         at: e.at,
-        ...(untrusted && { untrusted }),
+        ...(untrusted && { untrusted, read: taint }),
       });
   return out;
 }
