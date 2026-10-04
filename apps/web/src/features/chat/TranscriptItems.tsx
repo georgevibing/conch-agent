@@ -371,8 +371,9 @@ export function PermissionCard({
         <Button variant="ghost" onClick={() => respond('deny')} disabled={Boolean(sent)}>
           {draft ? 'Don’t save' : 'Deny'}
         </Button>
-        {/* Asked because of what it read: this once, never always (ADR 0028). */}
-        {!item.taint && allowAlways && !draft && (
+        {/* Asked because of what it read, "always" lets this tool through for the rest of
+            the chat; asked for leaving the sealed box or a skill's list, it's this once. */}
+        {(!item.taint || item.afterReading) && allowAlways && !draft && (
           <Button
             variant="surface"
             onClick={() => respond('allow-always')}

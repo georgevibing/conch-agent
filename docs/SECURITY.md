@@ -436,8 +436,16 @@ Please don't open a public issue. Report it privately through
 A web page, an email or a message from someone else can contain instructions
 aimed at your assistant. Conch can't tell a hostile page from a friendly one, so
 it doesn't try: once a chat has read something from outside, anything that could
-send your things somewhere or change this computer **asks you first**, in every
-mode (Full trust included), and the question says why. Reading on is free.
+send your things somewhere or change this computer **asks you first**, and the
+question says why. Reading on is free. **Always allow** on that question lets
+that kind of step through for the rest of the chat, as it does anywhere else.
+
+**Full trust** is the one mode that doesn't stop to ask: you chose to let the
+assistant act, and a web page it reads could trick it (the mode picker says so).
+The chat still notes what it read. Some things hold even then: a routine running
+by itself, or a chat where someone else is talking to the assistant (a chat
+app), still asks; so does a command that wants out of the sealed box, or a
+step a skill's list doesn't cover.
 
 Your assistant can look through your earlier chats. When what it finds comes
 from a chat that read something from outside, or has someone else's words, this

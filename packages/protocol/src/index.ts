@@ -448,10 +448,15 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     /** The agent asks to read or fill something from Passwords (ADR 0025). */
     vault: VaultPermission.optional(),
     /**
-     * Asked because the chat read something untrusted (ADR 0028): why, in a
-     * sentence. Such a question offers no "always".
+     * Asked because the chat read something untrusted, or for another reason
+     * that holds in every mode (ADR 0028): why, in a sentence.
      */
     taint: z.string().optional(),
+    /**
+     * Asked only because of what the chat read: "Always allow" lets this tool
+     * through for the rest of the chat. Without it, a `taint` question is this once.
+     */
+    afterReading: z.boolean().optional(),
   }),
   z.object({
     ...logged,

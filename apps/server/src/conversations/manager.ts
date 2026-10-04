@@ -114,6 +114,11 @@ interface PendingPermission {
    * on, it's asking only because of the mode.
    */
   remember: boolean;
+  /**
+   * Asked only because the chat read something from outside (ADR 0028):
+   * "Always allow" lets this tool through for the rest of the chat, read or not.
+   */
+  afterReading?: boolean;
 }
 
 /**
@@ -388,6 +393,8 @@ interface Live {
   permissions: Map<string, PendingPermission>;
   /** Tools the user said "always allow" for, in this conversation. */
   alwaysAllow: Set<string>;
+  /** Of those, the ones allowed even after the chat read something from outside (ADR 0028). */
+  readingTrusted: Set<string>;
   /** Cancels an in-flight title (e.g. the user renamed it first). */
   titling?: AbortController;
   /** When Stop was pressed with no turn running yet: the one about to start stops. */
@@ -839,7 +846,14 @@ export class ConversationManager {
         ...(input.origin && { origin: input.origin }),
         ...(autoTitle && { titling: true }),
       };
-      live = { record, events: [], seq: 0, permissions: new Map(), alwaysAllow: new Set() };
+      live = {
+        record,
+        events: [],
+        seq: 0,
+        permissions: new Map(),
+        alwaysAllow: new Set(),
+        readingTrusted: new Set(),
+      };
       this.#live.set(record.id, live);
       await this.deps.store.upsert(record);
       this.events.emit({
@@ -1009,6 +1023,7 @@ export class ConversationManager {
       if (live.abort) throw new ConversationError('busy', 'This task is already running.');
       // Approval grants are turn-scoped. Never replay a previous turn's answers.
       live.alwaysAllow.clear();
+      live.readingTrusted.clear();
       live.permissions.clear();
       this.#applyOptions(live, input.options ?? {});
       const engine = input.engine ?? this.deps.engine(live.record.options.engine);
@@ -1043,6 +1058,7 @@ export class ConversationManager {
       seq: 0,
       permissions: new Map(),
       alwaysAllow: new Set(),
+      readingTrusted: new Set(),
     };
     this.#live.set(record.id, live);
     await this.deps.store.upsert(record);
@@ -1166,7 +1182,10 @@ export class ConversationManager {
     const pending = live.permissions.get(permissionId);
     if (!pending) return;
     live.permissions.delete(permissionId);
-    if (decision === 'allow-always' && pending.remember) live.alwaysAllow.add(pending.toolName);
+    if (decision === 'allow-always' && pending.remember) {
+      live.alwaysAllow.add(pending.toolName);
+      if (pending.afterReading) live.readingTrusted.add(pending.toolName);
+    }
     this.#append(live, { type: 'permission.resolved', permissionId, decision });
     if (live.permissions.size === 0 && !this.deps.questions?.waiting(live.record.id))
       this.#setStatus(live, 'running');
@@ -1560,6 +1579,8 @@ export class ConversationManager {
     const modes = await honouredModes(engine);
     resolved.permissionMode = honouredMode(resolved.permissionMode, modes);
     const nativeTools = engine.integrations.mode === 'native';
+    /** Someone is in this chat to answer: not a routine's run, not a message from a chat app. */
+    const watched = !extras && !live.record.origin;
     // A mode picked mid-turn holds from the next step, not the next message
     // (a routine keeps its own). What's waiting that it would have let through, goes.
     const modeListeners: ((mode: PermissionMode) => void)[] = [];
@@ -1569,14 +1590,18 @@ export class ConversationManager {
       resolved.permissionMode = mode;
       for (const listener of modeListeners) listener(mode);
       for (const [permissionId, pending] of live.permissions)
-        if (pending.remember && trustAllows(mode, pending.toolName, nativeTools))
+        if (
+          pending.remember &&
+          (!pending.afterReading || watched) &&
+          trustAllows(mode, pending.toolName, nativeTools)
+        )
           this.#resolvePermission(live, permissionId, 'allow');
     };
     if (!extras?.permissionMode) live.setTurnMode = setTurnMode;
 
     /** Puts a question to the user and waits; expires (deny) if the turn stops first. */
     const askUser = (
-      request: AskRequest & { toolUseId?: string; remember: boolean },
+      request: AskRequest & { toolUseId?: string; remember: boolean; afterReading?: boolean },
       signal: AbortSignal,
     ): Promise<PermissionDecision> => {
       const permissionId = newId('perm');
@@ -1585,6 +1610,7 @@ export class ConversationManager {
           resolve,
           toolName: request.toolName,
           remember: request.remember,
+          ...(request.afterReading && { afterReading: true }),
         });
         const expire = () => {
           if (!live.permissions.delete(permissionId)) return;
@@ -1612,6 +1638,7 @@ export class ConversationManager {
           browser: request.browser,
           ...(request.vault && { vault: request.vault }),
           ...(request.taint && { taint: request.taint }),
+          ...(request.afterReading && { afterReading: true }),
         });
         this.#setStatus(live, 'awaiting-permission');
       });
@@ -1776,9 +1803,12 @@ export class ConversationManager {
     const mustAsk = async (request: {
       toolName: string;
       input: Record<string, unknown>;
-    }): Promise<string | undefined> => {
+    }): Promise<{ reason: string; afterReading?: true } | undefined> => {
       if (leavesSandbox(request.toolName, request.input))
-        return 'This command wants to run outside the sealed box, where it could reach anything on this computer.';
+        return {
+          reason:
+            'This command wants to run outside the sealed box, where it could reach anything on this computer.',
+        };
       // Google draft creation and Slack sending always ask inside their trusted
       // tool, after it has resolved the real account/channel and the full words.
       // That one card also carries taint and skill restrictions; a generic
@@ -1791,8 +1821,16 @@ export class ConversationManager {
       const limited = await skillLimit(
         needs(request.toolName, request.input, { workspace, server }),
       );
-      if (limited) return limited;
-      const tainted = guardOn ? this.#tainted(live) : [];
+      if (limited) return { reason: limited };
+      // Full trust is yours to give: a chat you're in doesn't stop to check
+      // after reading. One that runs by itself (a routine, a chat app) still
+      // does, and so does one where someone else is talking to the assistant.
+      const trusting = watched && resolved.permissionMode === 'bypassPermissions';
+      // "Always allow" for this tool, said after the chat read before, holds the same way.
+      const waived = trusting || live.readingTrusted.has(request.toolName);
+      const tainted = guardOn
+        ? this.#tainted(live).filter((source) => !waived || source.kind === 'person')
+        : [];
       if (!tainted.length) return undefined;
       const described = request.toolName.startsWith('mcp__')
         ? await integrations?.describeTool(request.toolName).catch(() => undefined)
@@ -1802,7 +1840,15 @@ export class ConversationManager {
         access: described?.access,
         app: described?.integration,
       });
-      return sink ? `${describeTaint(tainted)} So I’m checking before I ${sink}.` : undefined;
+      return sink
+        ? {
+            reason: `${describeTaint(tainted)} So I’m checking before I ${sink}.`,
+            // What it read can be waived; someone else talking to the assistant can't.
+            ...(tainted.every((source) => source.kind !== 'person') && {
+              afterReading: true as const,
+            }),
+          }
+        : undefined;
     };
 
     const requestPermission = async (
@@ -1820,8 +1866,9 @@ export class ConversationManager {
       // Your choices in Apps come first: "Don't ask", or a tool you turned off.
       const policy = await integrations?.decide(request.toolName).catch(() => undefined);
       if (policy === 'off') return 'deny';
-      const taint = await mustAsk(request);
-      if (!taint) {
+      const asked = await mustAsk(request);
+      const taint = asked?.reason;
+      if (!asked) {
         if (policy === 'allow') return 'allow';
         // Full trust picked mid-turn, for an engine still running the mode it started in.
         if (trustAllows(resolved.permissionMode, request.toolName, nativeTools)) return 'allow';
@@ -1836,8 +1883,10 @@ export class ConversationManager {
           summary: described
             ? `${described.tool.charAt(0).toLowerCase()}${described.tool.slice(1)} in ${described.integration}`
             : summarizeToolUse(request.toolName, request.input),
-          // Asked because of what it read: yes this once, never "always".
-          remember: !taint,
+          // Asked because of what it read, "always" lets this tool through from now on;
+          // asked for leaving the sealed box or a skill's list, it's this once.
+          remember: !asked || Boolean(asked.afterReading),
+          ...(asked?.afterReading && { afterReading: true }),
           ...(taint && { taint }),
         },
         signal,
@@ -1868,8 +1917,8 @@ export class ConversationManager {
           decision: 'deny',
           message: 'The user turned this tool off in Apps.',
         };
-      const taint = await mustAsk(request);
-      return taint ? { decision: 'ask', reason: taint } : undefined;
+      const asked = await mustAsk(request);
+      return asked ? { decision: 'ask', reason: asked.reason } : undefined;
     };
 
     // Attachments go in front of the words, as each provider can take them (ADR 0017).
@@ -2645,6 +2694,7 @@ export class ConversationManager {
       seq: (events.at(-1)?.seq ?? -1) + 1,
       permissions: new Map(),
       alwaysAllow: new Set(),
+      readingTrusted: new Set(),
     };
     // Conch restarted while a question waited: its answer went with the reply.
     for (const skipped of unansweredOnRestart(events)) this.#append(live, skipped);

@@ -8,8 +8,10 @@
  * page from a friendly one, so it doesn't try. Once a chat has *read*
  * something from outside — a web page, an email, a message from someone who
  * isn't you — anything that could send your things out or change your
- * computer asks you first, whatever mode the chat is in, and the card says
- * why in a sentence. Reading on stays free.
+ * computer asks you first, and the card says why in a sentence. Reading on
+ * stays free. Full trust, in a chat you're in, is the exception you chose
+ * (and "Always allow" on the card, per tool); a routine, a chat app, or
+ * someone else's words still ask.
  *
  * Pure functions: the manager keeps the state (a `taint` event in the chat's
  * log, so it survives restarts) and asks; engines only call `guard`.

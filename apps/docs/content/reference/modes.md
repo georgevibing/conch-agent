@@ -8,4 +8,4 @@ Change it from the composer, or with `/mode`. A provider that can't honour a mod
 
 <!-- conch:modes -->
 
-Whatever the mode, some things always ask: anything that sends, spends or deletes after the chat has [read something from outside](../security/signing-in.md#when-the-assistant-reads-something-untrusted), and anything significant in [the browser](../features/browser.md).
+In every mode but **Full trust**, anything that sends, spends or deletes asks first once the chat has [read something from outside](../security/signing-in.md#when-the-assistant-reads-something-untrusted); **Always allow** on that question lets it through for the rest of the chat. Whatever the mode, a command that wants out of the sealed box asks, and so does anything significant in [the browser](../features/browser.md).

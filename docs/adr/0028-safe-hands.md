@@ -204,3 +204,21 @@ stand. The verdict is `clean`, `caution` or `danger`.
   Ask, with Conch answering each ask itself, so the SDK's skip-permissions flag is
   only ever set for turns that start in Full trust. What asks whatever the mode
   still asks.
+
+## Update (2026-10-04): Full trust means it, and "always" means always
+
+Asking after reading in every mode made Full trust stop on every command once
+a chat had searched the web, which is most research. People who chose Full
+trust read that as Conch ignoring their choice, and approved without reading.
+Now:
+
+- In **Full trust**, a chat someone is in doesn't ask after reading; it still
+  records what it read. The mode's own words already warn that a page it reads
+  could trick it.
+- It still asks in Full trust when nobody is there to choose (a routine, a chat
+  started from a chat app), when someone else's words are in the chat, for a
+  command that wants out of the sealed box, and for a step outside a skill's list.
+- In the other modes the card offers **Always allow** (`afterReading` on
+  `permission.requested`), which lets that tool through for the rest of the chat,
+  read or not. It isn't offered for the sealed box, a skill's list, or someone
+  else's words, where "always" would be untrue.
