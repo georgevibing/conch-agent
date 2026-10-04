@@ -150,7 +150,13 @@ src/
   last event it saw; when a conversation moves to another provider, that provider
   resumes its own session and is handed the transcript it missed
   (`conversations/handoff.ts`, newest first within 60,000 characters, with the chat's
-  latest summary for what that leaves out). `turn.completed` says which provider and
+  latest summary for what that leaves out): the words, what was done between them
+  (each tool and its result in brief, the browser's steps, files, memories,
+  questions) and where things stand (the browser's page, an open plan). An engine
+  that can't continue its session starts a new one with `TurnInput.freshPrompt`,
+  the whole conversation ([ADR 0069](./docs/adr/0069-carrying-a-chat-on.md)): Codex
+  keeps its threads in `codex-sessions/` and resumes them while the tools are the
+  same; ACP programs `session/load`. `turn.completed` says which provider and
   model answered.
 - **Long chats** ([ADR 0055](./docs/adr/0055-long-chats-on-every-model.md)). An engine
   that keeps the transcript itself declares `Engine.context`: the model APIs fit each
@@ -506,8 +512,11 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   - _Your plans_: Copilot, Gemini CLI and Grok run as the vendor's own program over
     ACP (`engines/acp/`), signed in with its own sign-in. Conch never reads their
     credentials. Conch's tools reach them through a per-turn loopback MCP door
-    (`door.ts`: no `Origin`, loopback `Host`, a random bearer key), and their own
-    changing tools are declined, as Codex's are.
+    (`door.ts`: no `Origin`, loopback `Host`, a random bearer key; over stdio
+    through `shim.mjs` for a program without HTTP), and their own changing tools
+    are declined, as Codex's are. Conch's instructions go where each program takes
+    them (`AcpAgent.instructions`), and their own tool calls show as rows
+    (`calls.ts`, ADR 0069).
   - _Servers of your own_ (`providers/servers.ts`, `engines/api/server.ts`): each
     is a `server-xxxxxxxx` engine. `probeServer` looks at the address as it is typed.
     Plain http is allowed only to private addresses (`local/host.ts`

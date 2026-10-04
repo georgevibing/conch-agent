@@ -3,6 +3,7 @@
 - Status: accepted
 - Date: 2026-10-02
 - Amends: 0010, 0012, 0028 and 0031 (Codex exec limitations; API host capabilities)
+- Amended by: [ADR 0069](./0069-carrying-a-chat-on.md) (a thread carried on while its tools are the same)
 
 ## Decision
 
@@ -22,7 +23,7 @@ This is the supported **Codex-managed ChatGPT** route, not the separate SIWC dyn
 
 Dynamic tools are an explicitly experimental app-server surface. The minimum supported CLI is 0.159.0. Codex native environment access, shell, web, apps, browsing, hooks and child agents are disabled; native tool requests for greater privileges are declined. Native execution stays read-only with protected paths denied. Useful actions go through the Conch dynamic registry, not an unguarded second path. Tool execution is serialized, duplicate call IDs refused, and event-consumption acknowledgments wait for manager taint/Undo processing before the next call.
 
-Codex starts a fresh thread each turn because the current supported resume schema cannot replace persisted dynamic-tool definitions. The manager supplies its bounded full transcript via `conversationHistory`; this handles old exec-era chats as well. Tradeoff: more input tokens, but no stale app/permission capability retained by a native session. Requests never silently substitute a different model.
+Codex starts a fresh thread each turn because the current supported resume schema cannot replace persisted dynamic-tool definitions. The manager supplies its bounded full transcript via `conversationHistory`; this handles old exec-era chats as well. Tradeoff: more input tokens, but no stale app/permission capability retained by a native session. Requests never silently substitute a different model. _Amended by [ADR 0069](./0069-carrying-a-chat-on.md): a thread is now resumed while the turn's tools are exactly the ones it was started with (a digest in the resume id), so no stale capability is retained; otherwise a fresh thread, as here.
 
 ## Threat model and recovery
 

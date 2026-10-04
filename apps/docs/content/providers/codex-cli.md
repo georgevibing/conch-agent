@@ -28,7 +28,9 @@ Commands always run in an operating-system sandbox, with no network access and w
 
 Conch uses Codex’s supported app-server interface, not `codex exec`. Codex 0.159.0 or newer is required. Dynamic tool definitions are an experimental app-server surface; unsupported versions fail with an update/reconnect action rather than silently dropping tools or approvals.
 
-Each turn receives the latest Conch tool list and a bounded handoff of the conversation. Old native Codex resume IDs are not reused, so disconnected apps or changed permissions cannot survive in an old thread’s tool definitions. This may use more input tokens than a native resumed thread.
+A chat carries on in the same Codex thread from one message to the next, so Codex remembers what it did and what its tools found, not only what was said. Conch keeps the thread between messages, out of reach of the assistant’s own tools and out of backups, and deletes it with the chat.
+
+When the chat’s tools change (you connect or remove an app, or turn a tool off), the next message starts a new thread with the whole conversation, so Codex never sees a tool that’s gone. If a thread can’t be picked up again, Conch does the same by itself and notes it under **Settings → Health → Fixed on its own**.
 
 For credential-refresh safety, turns on this Codex connection run one at a time. Other providers can still run concurrently. Cancel stops the active request and its child process.
 

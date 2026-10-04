@@ -3,6 +3,7 @@
 - Status: accepted
 - Date: 2026-10-04
 - Amends: [ADR 0036](./0036-provider-consistency.md) (Codex runs Conch's tools only),
+- Amended by: [ADR 0069](./0069-carrying-a-chat-on.md) (a thread carried on while its tools are the same)
   [ADR 0053](./0053-more-providers.md) (the provider groups)
 
 ## Context
@@ -80,6 +81,10 @@ Conch doesn't add an "Anthropic subscription" provider. A Claude Pro or Max plan
 through Claude Code, Anthropic's own program, signed in by `claude auth login`. Conch never reads
 Claude Code's credentials (ADR 0005). The Claude Code card says it uses your Claude plan. The
 Anthropic API card says it's pay as you go.
+
+### Carrying on
+
+Both Codex providers carry a chat on in the same thread while its tools are the same ([ADR 0069](./0069-carrying-a-chat-on.md)). Every resume asks with `approvalPolicy: "untrusted"` in the `conch` profile, exactly as a new thread does.
 
 ## Consequences
 

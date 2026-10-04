@@ -6,6 +6,8 @@
   [ADR 0012](./0012-every-provider-at-once.md), [ADR 0020](./0020-backups.md) (a new power),
   [ADR 0036](./0036-provider-consistency.md) (declining a program's own tools),
   [ADR 0042](./0042-come-home-the-rest.md) (keys brought home)
+- Amended by: [ADR 0069](./0069-carrying-a-chat-on.md) (sessions loaded again, instructions where each
+  program takes them, its own tool calls shown, the door over stdio)
 
 ## Context
 
@@ -105,6 +107,10 @@ environment.
   action is sealed, guarded and can be undone.
 - **A warm program, a fresh session per turn.** The program stays running; each turn is a new session
   carrying Conch's handoff, so switching provider mid-chat works the same as everywhere else.
+  _Amended by [ADR 0069](./0069-carrying-a-chat-on.md): a chat's session is loaded again where the
+  program can (`session/load`); Conch's instructions go where each program takes them, not in the
+  message; the program's own tool calls show as rows; and a program without HTTP gets the door over
+  stdio._
 
 ### On this computer
 
