@@ -123,6 +123,11 @@ export class UsageService {
     return this.#reading;
   }
 
+  /** What's been spent through Conch, from the ledger alone: no provider read, nothing published. */
+  async spend(): Promise<UsageSnapshot['spend']> {
+    return spendOf(await this.#mutex.run(() => this.#load()), this.#now);
+  }
+
   /** Called when a turn finishes: add its cost, then look at the provider again. */
   async recordTurn(usage: Usage | undefined): Promise<void> {
     const cost = usage?.costUsd ?? 0;

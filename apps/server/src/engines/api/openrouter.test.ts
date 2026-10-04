@@ -254,10 +254,15 @@ describe('an OpenRouter turn', () => {
     const body = calls[0]?.body as Record<string, unknown>;
     expect(body['stream']).toBe(true);
     expect(body['tool_choice']).toBe('auto');
+    // A Claude model is asked to cache: the system prompt, then the conversation by itself.
     expect(body['messages']).toEqual([
-      { role: 'system', content: 'You are Pearl.' },
+      {
+        role: 'system',
+        content: [{ type: 'text', text: 'You are Pearl.', cache_control: { type: 'ephemeral' } }],
+      },
       { role: 'user', content: 'Remember I like tea' },
     ]);
+    expect(body['cache_control']).toEqual({ type: 'ephemeral' });
     // Attribution, without claiming a public URL this install doesn't have.
     expect(calls[0]?.headers['x-openrouter-title']).toBe('Conch');
     expect(calls[0]?.headers['x-openrouter-app-visibility']).toBe('hidden');

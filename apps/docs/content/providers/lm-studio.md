@@ -18,6 +18,7 @@ Conch runs the conversation itself: it keeps the thread, hands the model the too
 
 ## Good to know
 
+- **A small model gets a lean setup.** When the model reads little at once (LM Studio often loads one with a small window), Conch gives it short instructions and hands it tools as it needs them. Load the model with a bigger context length in LM Studio, and Conch uses it.
 - **The first answer waits for the model.** LM Studio loads a model when it’s first asked. Conch says so in the chat while it loads.
 - **A key, only if you turned one on.** If **Require Authentication** is on in LM Studio, create a token under **Developer → Server Settings → Manage Tokens** and paste it on LM Studio’s page.
 - **It answers offline.** When the internet drops, Conch can hand the chat to it. See [Offline and at a limit](../care/offline.md).
