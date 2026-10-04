@@ -36,6 +36,7 @@ export const ChannelKind = z.enum([
   'microsoftteams',
   'matrix',
   'wechat',
+  'sms',
 ]);
 export type ChannelKind = z.infer<typeof ChannelKind>;
 
@@ -275,6 +276,9 @@ export const ChannelField = z.enum([
   'server',
   'accessToken',
   'secret',
+  'accountSid',
+  'authToken',
+  'number',
 ]);
 export type ChannelField = z.infer<typeof ChannelField>;
 
@@ -329,6 +333,28 @@ const wechat = {
   secret,
   token: short.optional(),
   aesKey: short.optional(),
+  hookId: hookId.optional(),
+};
+
+// Twilio: an Account SID is AC and 32 hex digits; an Auth Token is 32 hex digits.
+export const TWILIO_ACCOUNT_SID = /\b(AC[0-9a-f]{32})\b/;
+export const TWILIO_AUTH_TOKEN = /\b([0-9a-f]{32})\b/;
+
+/**
+ * SMS (ADR 0076): a phone number of the assistant's own, rented from Twilio.
+ * Texts come in through the public door, signed with the Auth Token; Conch
+ * points the number at its address itself. `provider` leaves room for others.
+ */
+const sms = {
+  kind: z.literal('sms'),
+  provider: z.enum(['twilio']),
+  accountSid: secret,
+  authToken: secret,
+  /** The number it texts from, `+15005550006`: the account's only one when unset. */
+  number: z
+    .string()
+    .regex(/^\+\d{6,15}$/)
+    .optional(),
   hookId: hookId.optional(),
 };
 
@@ -387,6 +413,7 @@ export const ChannelSecrets = z.discriminatedUnion('kind', [
   z.object(teams),
   z.object(matrix),
   z.object(wechat),
+  z.object(sms),
 ]);
 export type ChannelSecrets = z.infer<typeof ChannelSecrets>;
 
@@ -406,6 +433,7 @@ export const CheckChannelBody = z.discriminatedUnion('kind', [
   z.object({ ...teams, appId: secret.optional(), appPassword: secret.optional() }),
   z.object(matrix),
   z.object({ ...wechat, appId: secret.optional(), secret: secret.optional() }),
+  z.object({ ...sms, accountSid: secret.optional(), authToken: secret.optional() }),
 ]);
 export type CheckChannelBody = z.infer<typeof CheckChannelBody>;
 
@@ -446,6 +474,8 @@ export type UpdateChannelBody = z.infer<typeof UpdateChannelBody>;
 export const ReplaceChannelTokenBody = z.union([
   ChannelSecrets,
   z.object({ kind: z.literal('email'), password: secret }),
+  // A new Twilio Auth Token: the account and its number stay as they were.
+  z.object({ kind: z.literal('sms'), authToken: secret }),
 ]);
 export type ReplaceChannelTokenBody = z.infer<typeof ReplaceChannelTokenBody>;
 

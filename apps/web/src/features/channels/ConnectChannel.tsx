@@ -56,6 +56,7 @@ import { LinkedSetup } from './LinkedSetup';
 import { TALK_PATH } from '../integrations/paths';
 import { MatrixSetup } from './MatrixSetup';
 import { TeamsSetup } from './TeamsSetup';
+import { SmsSetup } from './SmsSetup';
 import { WeChatSetup } from './WeChatSetup';
 import { useKeyCheck, usePasteAnywhere, usePointerFine } from './hooks';
 import { errorText, putChannel, useChannel } from './queries';
@@ -75,6 +76,7 @@ export function ConnectChannel({ kind }: { kind: string }) {
   if (kind === 'microsoftteams') return <TeamsSetup />;
   if (kind === 'matrix') return <MatrixSetup />;
   if (kind === 'wechat') return <WeChatSetup />;
+  if (kind === 'sms') return <SmsSetup />;
   return <SlackSetup />;
 }
 

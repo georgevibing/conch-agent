@@ -100,6 +100,15 @@ export const CHANNEL_CATALOG: ChannelCatalogEntry[] = [
     minutes: 5,
     available: true,
   },
+  {
+    id: 'sms',
+    name: 'SMS',
+    tagline: 'A phone number of its own. Text it from any phone.',
+    short: 'Text it from any phone',
+    color: '#F22F46',
+    minutes: 5,
+    available: true,
+  },
 ];
 
 export const CHANNEL_NAMES: Record<ChannelKind, string> = {
@@ -113,6 +122,7 @@ export const CHANNEL_NAMES: Record<ChannelKind, string> = {
   microsoftteams: 'Microsoft Teams',
   matrix: 'Matrix',
   wechat: 'WeChat',
+  sms: 'SMS',
 };
 
 /** Channels that only work on some systems: elsewhere the tile says so and can't be chosen. */

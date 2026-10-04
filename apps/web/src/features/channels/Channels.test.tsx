@@ -891,3 +891,78 @@ describe('Connecting WeChat', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('Connecting SMS (ADR 0076)', () => {
+  const SID = 'AC' + '0a1b2c3d4e5f60718293a4b5c6d7e8f9';
+  const TOKEN = 'f0e1d2c3b4a59687' + '7869504a3b2c1d0e';
+  it('takes both keys, finds the number, then opens the address: nothing to paste in Twilio', async () => {
+    const made = channel({
+      kind: 'sms',
+      bot: { id: '+15005550006', name: '(500) 555-0006', phone: '+15005550006' },
+      hook: {},
+      health: { state: 'error', message: 'Twilio can’t reach Conch yet.' },
+    });
+    let doorState: object = { state: 'off', apps: ['sms'] };
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'POST /api/channels/check': () => ({ ok: true, bot: made.bot, checked: [] }),
+      'POST /api/channels': () => made,
+      'GET /api/channels/door': () => doorState,
+      'POST /api/channels/door/tailscale': () => {
+        doorState = {
+          state: 'ready',
+          apps: ['sms'],
+          url: 'https://mac.tail1.ts.net/conch',
+          via: 'tailscale',
+        };
+        return doorState;
+      },
+      'GET /api/auth': () => ({ method: 'none' }),
+    });
+    renderApp(<ConnectChannel kind="sms" />, { route: '/channels/new/sms' });
+    expect(await screen.findByRole('heading', { name: 'Connect SMS' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'I have a number' }));
+    await userEvent.type(screen.getByLabelText('Account SID'), `Account SID ${SID}`);
+    expect(screen.getByLabelText('Account SID')).toHaveValue(SID);
+    await userEvent.type(screen.getByLabelText('Auth Token'), TOKEN);
+    // Found by Twilio, and shown once connected: the step closes on the number.
+    expect(await screen.findByText(/Texts from \+1 500 555 0006/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST' && c.path === '/api/channels')?.body).toEqual({
+        kind: 'sms',
+        provider: 'twilio',
+        accountSid: SID,
+        authToken: TOKEN,
+      }),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Turn on with Tailscale' }));
+    expect(await screen.findByText(/At https:\/\/mac\.tail1\.ts\.net\/conch/)).toBeInTheDocument();
+    expect(screen.queryByText(/Endpoint address/)).toBeNull();
+  });
+
+  it('asks for the new Auth Token on its own when Twilio stops taking it', async () => {
+    const broken = channel({
+      kind: 'sms',
+      people: [ada],
+      bot: { id: '+15005550006', name: '(500) 555-0006', phone: '+15005550006' },
+      health: { state: 'needs-token', message: 'Twilio doesn’t accept that Auth Token.' },
+    });
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [broken], catalog }),
+      'GET /api/channels/door': () => ({ state: 'off', apps: [] }),
+      'PUT /api/channels/ch_1/token': () => ({ ...broken, health: { state: 'online' } }),
+    });
+    renderApp(<ChannelDetailView channelId="ch_1" />, { route: '/channels/ch_1' });
+    expect(await screen.findByText('It needs the new Auth Token')).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Auth Token'), TOKEN);
+    await userEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({
+        kind: 'sms',
+        authToken: TOKEN,
+      }),
+    );
+  });
+});

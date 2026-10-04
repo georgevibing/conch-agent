@@ -871,7 +871,7 @@ export function useFindables(query: string, conversationId: string | undefined):
       id: 'talk',
       label: 'Talk to me here',
       keywords:
-        'channels chat apps telegram discord slack whatsapp signal imessage email teams matrix wechat phone mobile message reach bot remote',
+        'channels chat apps telegram discord slack whatsapp signal imessage email teams matrix wechat sms text phone mobile message reach bot remote',
       icon: <MessagesSquare />,
       run: () => void navigate('/apps?show=talk'),
     },

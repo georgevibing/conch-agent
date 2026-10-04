@@ -74,6 +74,7 @@ import { MockTeams } from './channels/mock/teams';
 import { MockTelegram } from './channels/mock/telegram';
 import { linkedChannels, type LinkedChannels } from './channels/linked-setup';
 import { ChannelLinking } from './channels/linking';
+import { MockTwilio } from './channels/mock/twilio';
 import { MockWeChat } from './channels/mock/wechat';
 import { CHANNEL_NAMES, ChannelService } from './channels/service';
 import { ChannelStore } from './channels/store';
@@ -309,6 +310,7 @@ export class Services {
   readonly mockTeams?: MockTeams;
   readonly mockMatrix?: MockMatrix;
   readonly mockWeChat?: MockWeChat;
+  readonly mockTwilio?: MockTwilio;
   /** The public door, for the channels that only deliver to a web address (ADR 0045). */
   readonly door: ChannelDoorService;
   /** Your own address, over HTTPS by Conch itself (ADR 0064). Started by main.ts, never by tests. */
@@ -991,6 +993,7 @@ export class Services {
     this.mockTeams = config.CONCH_ENGINE === 'mock' ? new MockTeams() : undefined;
     this.mockMatrix = config.CONCH_ENGINE === 'mock' ? new MockMatrix() : undefined;
     this.mockWeChat = config.CONCH_ENGINE === 'mock' ? new MockWeChat() : undefined;
+    this.mockTwilio = config.CONCH_ENGINE === 'mock' ? new MockTwilio() : undefined;
     // In mock mode the "internet" is this computer: what's sent to the public address reaches the door.
     const door: ChannelDoorService = new ChannelDoorService({
       home: config.CONCH_HOME,
@@ -1014,6 +1017,7 @@ export class Services {
     this.door = door;
     if (this.mockTeams) this.mockTeams.resolve = (url) => door.localFor(url);
     if (this.mockWeChat) this.mockWeChat.resolve = (url) => door.localFor(url);
+    if (this.mockTwilio) this.mockTwilio.resolve = (url) => door.localFor(url);
     this.mockMail = config.CONCH_ENGINE === 'mock' ? new MockMail() : undefined;
     this.mockMessages = config.CONCH_ENGINE === 'mock' ? new MockMessages() : undefined;
     this.linked = linkedChannels({
@@ -1172,6 +1176,10 @@ export class Services {
         endpoints.wechat = this.mockWeChat.base;
         endpoints.wecom = this.mockWeChat.socket;
         endpoints.wechatFiles = [this.mockWeChat.base];
+      }
+      if (this.mockTwilio) {
+        await this.mockTwilio.start(Number(process.env.CONCH_MOCK_TWILIO_PORT ?? 0));
+        endpoints.twilio = this.mockTwilio.api;
       }
     })();
   }

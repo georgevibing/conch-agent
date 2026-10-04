@@ -1,4 +1,4 @@
-import { Globe, Laptop, Mail, Plug, Server } from 'lucide-react';
+import { Globe, Laptop, Mail, MessageSquareText, Plug, Server } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 
 import { cx } from '../../utils/cx';
@@ -33,6 +33,8 @@ const glyphs: Record<string, ReactNode> = {
   ollama: <Laptop />,
   // Email isn't one company: an envelope says what it is.
   email: <Mail />,
+  // Texting isn't one company either: a speech bubble (ADR 0076).
+  sms: <MessageSquareText />,
   // A server someone runs themselves (llama.cpp, vLLM, a gateway at work).
   server: <Server />,
 };

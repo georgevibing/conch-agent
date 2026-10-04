@@ -48,6 +48,7 @@ import {
   type StateDetail,
   personId,
 } from './types';
+import { normalizeSms } from './sms';
 import { normalizeWeChat } from './wechat';
 
 /** A hello link works this long. */
@@ -168,6 +169,7 @@ export function normalizeSecrets(secrets: ChannelSecrets, kept?: ChannelSecrets)
     return normalizeMatrix(secrets, kept?.kind === 'matrix' ? kept : undefined);
   if (secrets.kind === 'wechat')
     return normalizeWeChat(secrets, kept?.kind === 'wechat' ? kept : undefined);
+  if (secrets.kind === 'sms') return normalizeSms(secrets, kept?.kind === 'sms' ? kept : undefined);
   const pick = (value: string, pattern: RegExp) => pattern.exec(value)?.[1] ?? value.trim();
   if (secrets.kind === 'telegram')
     return { kind: 'telegram', token: pick(secrets.token, TELEGRAM_TOKEN) };
@@ -753,14 +755,19 @@ export class ChannelService {
         'invalid',
         `${CHANNEL_NAMES[current.kind]} has no key to paste: link it again with the code on its page.`,
       );
-    // Only a new app password for an email account: everything else stays as it was.
+    // Only a new app password for an email account, or a new Auth Token for SMS:
+    // everything else stays as it was.
     const kept = await this.deps.store.secrets(id);
     const merged: ChannelSecrets | undefined =
-      'address' in input || input.kind !== 'email'
-        ? input
-        : kept?.kind === 'email'
-          ? { ...kept, password: input.password }
-          : undefined;
+      input.kind === 'sms' && !('accountSid' in input)
+        ? kept?.kind === 'sms'
+          ? { ...kept, authToken: input.authToken }
+          : undefined
+        : input.kind === 'email' && !('address' in input)
+          ? kept?.kind === 'email'
+            ? { ...kept, password: input.password }
+            : undefined
+          : (input as ChannelSecrets);
     if (!merged)
       throw new ChannelServiceError('invalid', 'Connect this email account again.', 'password');
     if (merged.kind !== current.kind)

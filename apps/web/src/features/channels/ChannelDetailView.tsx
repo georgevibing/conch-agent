@@ -467,9 +467,11 @@ function Detail({ channel }: { channel: Channel }) {
                   ? `${assistant} stops answering in ${app.name}, and Conch forgets its keys. Your conversations stay here. Remove Conch under Linked devices in Signal too.`
                   : channel.kind === 'email'
                     ? `${assistant} stops answering ${whoOf(channel)}, and Conch forgets its app password. Your conversations stay here, and your mail stays as it is.`
-                    : channel.kind === 'imessage'
-                      ? `${assistant} stops answering ${whoOf(channel)}. Your conversations stay here, and Messages stays as it is.`
-                      : `${assistant} stops answering ${whoOf(channel)}, and Conch forgets its key. Your conversations stay here. The bot itself stays in ${app.name} until you delete it there.`}
+                    : channel.kind === 'sms'
+                      ? `${assistant} stops answering texts to ${whoOf(channel)}, and Conch forgets its Twilio keys. Your conversations stay here, and the number stays yours in Twilio until you release it there.`
+                      : channel.kind === 'imessage'
+                        ? `${assistant} stops answering ${whoOf(channel)}. Your conversations stay here, and Messages stays as it is.`
+                        : `${assistant} stops answering ${whoOf(channel)}, and Conch forgets its key. Your conversations stay here. The bot itself stays in ${app.name} until you delete it there.`}
             </AlertDialog.Description>
           </AlertDialog.Header>
           <AlertDialog.Footer>
@@ -574,7 +576,8 @@ function ReplaceKey({ channel }: { channel: Channel }) {
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const slack = channel.kind === 'slack';
-  const email = channel.kind === 'email';
+  // An email's app password, or a Twilio Auth Token: only that changes, the rest stays.
+  const email = channel.kind === 'email' || channel.kind === 'sms';
   const body =
     email || !token.trim()
       ? undefined
@@ -601,16 +604,19 @@ function ReplaceKey({ channel }: { channel: Channel }) {
     microsoftteams: '',
     matrix: '',
     wechat: '',
+    sms: 'On the Twilio Console’s first page, under Account Info, copy the Auth Token (it was probably changed).',
   };
 
   const save = async () => {
     const secrets: ReplaceChannelTokenBody = slack
       ? { kind: 'slack', botToken: token, appToken }
-      : email
-        ? { kind: 'email', password: token }
-        : channel.kind === 'discord'
-          ? { kind: 'discord', token }
-          : { kind: 'telegram', token };
+      : channel.kind === 'sms'
+        ? { kind: 'sms', authToken: token }
+        : email
+          ? { kind: 'email', password: token }
+          : channel.kind === 'discord'
+            ? { kind: 'discord', token }
+            : { kind: 'telegram', token };
     setBusy(true);
     setError(undefined);
     try {
@@ -626,13 +632,30 @@ function ReplaceKey({ channel }: { channel: Channel }) {
   };
 
   return (
-    <Callout tone="warning" title={email ? 'It needs a new app password' : 'It needs a new key'}>
+    <Callout
+      tone="warning"
+      title={
+        channel.kind === 'email'
+          ? 'It needs a new app password'
+          : channel.kind === 'sms'
+            ? 'It needs the new Auth Token'
+            : 'It needs a new key'
+      }
+    >
       <Stack gap={3}>
         <Text size="sm">
           {channel.health.message} {where[channel.kind]}
         </Text>
         <KeyField
-          label={slack ? 'Bot token' : email ? 'New app password' : 'New key'}
+          label={
+            slack
+              ? 'Bot token'
+              : channel.kind === 'sms'
+                ? 'Auth Token'
+                : email
+                  ? 'New app password'
+                  : 'New key'
+          }
           value={token}
           onValueChange={setToken}
           status={error ? 'error' : status}

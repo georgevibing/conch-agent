@@ -47,6 +47,7 @@ const APP_NAMES: Record<string, string> = {
   microsoftteams: 'Microsoft Teams',
   matrix: 'Matrix',
   wechat: 'WeChat',
+  sms: 'SMS',
 };
 
 const text = (value: unknown, fallback: string) => {

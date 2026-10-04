@@ -15,7 +15,7 @@ A channel is a bot you make in the chat app, connected to the Conch on your comp
 
 Conch connects **outward** to the app. Nothing on your computer is opened to the internet, and you need no public address and no tunnel.
 
-Two apps only deliver to a web address: **Microsoft Teams**, and a WeChat **Official Account**. For them, Conch can open one public address with one press (through Tailscale Funnel), or use an address of your own. It leads to a small door of its own, not to Conch: the door lets in only messages the app signed, for the channels you connected. A WeChat **WeCom bot** and **Matrix** connect outward like the others.
+Some apps only deliver to a web address: **Microsoft Teams**, a WeChat **Official Account**, and **SMS** through Twilio. For them, Conch can open one public address with one press (through Tailscale Funnel), or use an address of your own. It leads to a small door of its own, not to Conch: the door lets in only messages the app signed, for the channels you connected. A WeChat **WeCom bot** and **Matrix** connect outward like the others.
 
 Setting one up is a short numbered path in Conch, from **Apps → Talk to me here**, beside a picture of exactly what you'll see in the other app. Keys are checked the moment you paste them, anywhere on the page.
 
@@ -49,7 +49,7 @@ Turn a group off, and your assistant goes quiet there at once. **Forget** takes 
 ## What works from a chat
 
 - **Everything your assistant can do.** A message becomes a Conch chat with your default provider. It shows in the sidebar, wearing the app's logo.
-- **Approvals, as buttons.** When your assistant asks, the question arrives with **Allow**, **Always in this chat** and **Don't allow**. Answer it anywhere, and the message updates to say what was decided. WhatsApp, Signal, iMessage and email have no buttons, so you reply with the answer's number.
+- **Approvals, as buttons.** When your assistant asks, the question arrives with **Allow**, **Always in this chat** and **Don't allow**. Answer it anywhere, and the message updates to say what was decided. WhatsApp, Signal, iMessage, email and SMS have no buttons, so you reply with the answer's number.
 - **Photos and files** you send become attachments.
 - **Routine results**, and a routine's questions, come to you there when the channel has **Routine results** on.
 - **Three commands:** `/new` starts a fresh conversation, `/stop` stops the answer, `/help` explains. Any other `/name` runs your skill of that name.

@@ -101,7 +101,7 @@
 ### 📱 Wherever you are
 
 - **Your chat apps.** Telegram, Discord, Slack, WhatsApp, Signal, iMessage, email,
-  Microsoft Teams, Matrix and WeChat. In a group you turn on, it answers when
+  Microsoft Teams, Matrix, WeChat, and plain text messages to a number of its own. In a group you turn on, it answers when
   mentioned: you as in private, everyone else in words only.
 - **Your phone.** An installable app over a private Tailscale address, with
   notifications and voice.
