@@ -125,7 +125,12 @@ test('a link to a new tab is a tab you can see and switch', async ({ page }) => 
   await tabs.getByRole('button', { name: 'Staylight blog', exact: true }).click();
   await expect(panel.getByRole('button', { name: /Address: .*\/blog/ })).toBeVisible();
   await tabs.getByRole('button', { name: 'Close tab: Staylight blog' }).click();
-  await expect(tabs).toBeHidden();
+  // One tab left: the strip stays, as in any browser, and its one tab can't be closed.
+  await expect(tabs.getByRole('button', { name: 'Staylight blog', exact: true })).toHaveCount(0);
+  await expect(
+    tabs.getByRole('button', { name: 'Staylight · Hotels in Lisbon', exact: true }),
+  ).toHaveAttribute('aria-current', 'page');
+  await expect(tabs.getByRole('button', { name: /^Close tab/ })).toHaveCount(0);
   await expect(panel.getByRole('button', { name: /Address: .*\/blog/ })).toBeHidden();
 });
 
