@@ -24,7 +24,12 @@ export function ComposerControls({
   const setPicker = useUi((s) => s.setPicker);
   const { catalog, capabilities, options, model } = turn;
   const { data: list } = useProviders();
-  const listed = pickerProviders(catalog?.providers ?? [], catalog?.default, modelKey);
+  const listed = pickerProviders(
+    catalog?.providers ?? [],
+    catalog?.default,
+    modelKey,
+    options.engine,
+  );
   const selected = options.engine ? modelKey(options.engine, model?.id ?? options.model) : '';
   // The chat's own provider while it's away: shown as it is, with why, never swapped for another.
   const providers =

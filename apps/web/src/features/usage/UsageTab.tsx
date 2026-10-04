@@ -1,4 +1,4 @@
-import type { EngineId } from '@conch/protocol';
+import type { EngineId, UsageSnapshot } from '@conch/protocol';
 import { Field, Input, ProviderLogo, Stack, Text, UsagePanel } from '@conch/nacre';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -85,6 +85,10 @@ function ProviderUsage({ engine, name }: { engine: EngineId; name: string }) {
   );
 }
 
+/** What a provider's limits say, apart from when they were read. */
+const limitsOf = (u: UsageSnapshot) =>
+  JSON.stringify([u.source, u.kind, u.windows, u.extra, u.blocked]);
+
 /**
  * Settings → Usage: what's left with every provider you've connected (each
  * chat's header shows its own), plus a budget for pay-as-you-go sign-ins.
@@ -102,6 +106,13 @@ export function UsageTab() {
   if (!list) return null;
   // Spend is Conch-wide: any provider's numbers carry it.
   const spend = usages.find((u) => u.data)?.data?.spend;
+  // Codex and Codex CLI are one ChatGPT plan: when their limits read the same, show Codex once.
+  const codex = ready.findIndex((p) => p.id === 'codex-cli');
+  const codexLimits = codex >= 0 && usages[codex]?.data ? limitsOf(usages[codex].data) : undefined;
+  const shown = ready.filter((p, i) => {
+    const data = usages[i]?.data;
+    return !(p.id === 'codex-agent' && data && codexLimits === limitsOf(data));
+  });
   return (
     <Stack gap={6}>
       <Section
@@ -109,7 +120,7 @@ export function UsageTab() {
         description={ready.length ? undefined : 'Connect a provider to see your usage.'}
       >
         <Stack gap={5}>
-          {ready.map((p) => (
+          {shown.map((p) => (
             <ProviderUsage key={p.id} engine={p.id} name={p.name} />
           ))}
         </Stack>

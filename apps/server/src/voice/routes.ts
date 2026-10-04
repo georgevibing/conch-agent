@@ -104,20 +104,22 @@ export function registerVoiceRoutes(
     throw error;
   };
 
+  // `:voice`, not `:id`: ids like `piper:en_US-amy-medium` carry a colon, which the
+  // gateway's id check (app.ts) would turn away with a 404.
   app.get('/api/voice/speech', () => speech.status());
-  app.post<{ Params: { id: string } }>('/api/voice/speech/:id', async (request, reply) => {
+  app.post<{ Params: { voice: string } }>('/api/voice/speech/:voice', async (request, reply) => {
     try {
-      return await speech.getVoice(request.params.id);
+      return await speech.getVoice(request.params.voice);
     } catch (error) {
       return speechFailed(reply, error);
     }
   });
-  app.post<{ Params: { id: string } }>('/api/voice/speech/:id/pause', (request) => {
-    speech.pause(request.params.id);
+  app.post<{ Params: { voice: string } }>('/api/voice/speech/:voice/pause', (request) => {
+    speech.pause(request.params.voice);
     return speech.status();
   });
-  app.delete<{ Params: { id: string } }>('/api/voice/speech/:id', (request) =>
-    speech.forget(request.params.id),
+  app.delete<{ Params: { voice: string } }>('/api/voice/speech/:voice', (request) =>
+    speech.forget(request.params.voice),
   );
 
   app.post('/api/voice/speak', async (request, reply) => {
