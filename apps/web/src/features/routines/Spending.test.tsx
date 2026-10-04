@@ -119,6 +119,9 @@ describe('what routines spend', () => {
       { timeout: 3000 },
     );
     await user.click(screen.getByRole('switch', { name: /Limit what routines spend/ }));
+    // The gauge follows the switch at once, not when the save comes back.
+    expect(screen.getByText('$3.20 spent')).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
     await waitFor(
       () =>
         expect(calls.filter((c) => c.method === 'PUT').at(-1)?.body).toEqual({ limitUsd: null }),
