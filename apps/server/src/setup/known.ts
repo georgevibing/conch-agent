@@ -224,7 +224,17 @@ const list: NeedSpec[] = [
       darwin: 'https://github.com/anthropics/sandbox-runtime#prerequisites',
     },
     hint: () =>
-      'Linux needs bubblewrap, socat and ripgrep, plus kernel/container permission to create their sandbox. Commands stay unavailable until the sandbox is ready; files and connected apps still work.',
+      'Sealing keeps the assistant’s commands to your work folder, with no network or secrets. Until it’s set up, each command runs with your access and asks first.',
+    admin: (platform) => {
+      if (platform !== 'linux') return undefined;
+      const support = sandboxSupport(undefined, platform);
+      return !support.available && support.command
+        ? {
+            command: support.command,
+            what: 'Installs bubblewrap, socat and ripgrep with your system’s packages, lets bubblewrap make its sandbox where the system restricts it, and checks it works.',
+          }
+        : undefined;
+    },
   },
   {
     id: '1password-app',

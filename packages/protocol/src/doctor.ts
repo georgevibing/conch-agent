@@ -69,8 +69,16 @@ export const DoctorAction = z.discriminatedUnion('kind', [
     need: z.string(),
     mode: z.enum(['install', 'update', 'open']),
   }),
-  /** Something only a person can run, to copy. */
-  z.object({ kind: z.literal('command'), label: z.string(), command: z.string() }),
+  /**
+   * Something only a person can run: typed into Conch's terminal for them (or
+   * copied). `watch`: the need it brings, which Conch watches for.
+   */
+  z.object({
+    kind: z.literal('command'),
+    label: z.string(),
+    command: z.string(),
+    watch: z.string().optional(),
+  }),
 ]);
 export type DoctorAction = z.infer<typeof DoctorAction>;
 

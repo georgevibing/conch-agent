@@ -423,6 +423,7 @@ ok "Conch $(conch_version "$RUN_DIR") ${DIM}(in $RUN_DIR)${RESET}"
 if [ -f "$RUN_DIR/scripts/install-prerequisites.sh" ]; then
   . "$RUN_DIR/scripts/install-prerequisites.sh"
   ensure_terminal_prerequisites
+  if command -v ensure_command_sandbox >/dev/null 2>&1; then ensure_command_sandbox; fi
 fi
 
 step "Installing what Conch uses (a minute or two the first time)"

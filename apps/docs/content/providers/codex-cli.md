@@ -22,7 +22,7 @@ Codex can use Conch’s memory, browser, skills, routines and connected apps. Co
 - **Edit freely:** work-folder file edits need no extra question; commands ask.
 - **Full trust:** ordinary work-folder actions need no extra question. Protected paths, disabled tools and read-then-act checks still apply.
 
-Commands run in an operating-system sandbox where this computer can make one: no network access, and writes limited to this chat’s work folder. A command that needs more, like cloning a repository or installing something, asks to run with your access first (in Full trust it just runs). On Linux, **Settings → Health** explains any missing bubblewrap, socat or ripgrep dependency; until then, and on Windows, every command runs with your access and asks the same way. File tools reject links outside the workspace, hard links and protected credential locations.
+Commands run in an operating-system sandbox where this computer can make one: no network access, and writes limited to this chat’s work folder. A command that needs more, like cloning a repository or installing something, asks to run with your access first (in Full trust it just runs). On Linux, sealing needs bubblewrap, a small sandbox program: the installer offers it, and **Settings → Health** has **Seal commands**, which types the one command into Conch's terminal for you. Until then, and on Windows, every command runs with your access and asks the same way. File tools reject links outside the workspace, hard links and protected credential locations.
 
 ## Conversations and compatibility
 
@@ -34,4 +34,4 @@ When the chat’s tools change (you connect or remove an app, or turn a tool off
 
 For credential-refresh safety, turns on this Codex connection run one at a time. Other providers can still run concurrently. Cancel stops the active request and its child process.
 
-The host must also permit OS sandbox creation, not merely have its executables installed. Container/kernel restrictions can prevent Bubblewrap from creating namespaces (for example, a loopback permission error). Conch omits commands and does not retry without isolation; text inference, scoped file tools and connected apps remain available through the environment-free Codex connection. The host administrator must provide supported sandbox permissions to enable commands.
+The computer must also let bubblewrap make its sandbox. Ubuntu 23.10 and later restrict that until it's allowed, and the same command allows it. A container often can't allow it at all; then commands run with your access and ask first.

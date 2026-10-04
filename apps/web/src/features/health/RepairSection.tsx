@@ -1,8 +1,9 @@
 import type { DoctorAction, DoctorItem } from '@conch/protocol';
-import { Button, CopyButton, RepairPanel } from '@conch/nacre';
+import { Button, RepairPanel } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { useUi, type SettingsTab } from '../../app/ui';
+import { AdminCommand } from '../setup/AdminCommand';
 import { useNeed } from '../setup/useNeed';
 import { doctorApi, healthKeys } from './api';
 import { useDoctor } from './queries';
@@ -20,7 +21,10 @@ function NeedButton({ action }: { action: Extract<DoctorAction, { kind: 'need' }
 function ActionButton({ action }: { action: DoctorAction }) {
   const openSettings = useUi((s) => s.openSettings);
   if (action.kind === 'need') return <NeedButton action={action} />;
-  if (action.kind === 'command') return <CopyButton value={action.command} label={action.label} />;
+  if (action.kind === 'command')
+    return (
+      <AdminCommand compact command={action.command} label={action.label} watch={action.watch} />
+    );
   return (
     <Button
       size="sm"

@@ -2,7 +2,6 @@ import {
   AlertDialog,
   Callout,
   Collapsible,
-  CopyButton,
   SealCoverage,
   Stack,
   Switch,
@@ -18,6 +17,7 @@ import { keys, useAppState, useUpdateSettings } from '../../api/queries';
 import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
 import { Section } from '../settings/Section';
+import { AdminCommand } from '../setup/AdminCommand';
 import { safetyApi, safetyKeys } from './api';
 
 type Guard = 'checkAfterReading' | 'sealedCommands';
@@ -87,14 +87,16 @@ export function SafetySection() {
           />
           {sandbox && !sandbox.available && (
             <Callout tone="info">
-              {sandbox.reason}
-              {sandbox.command && (
-                <span>
-                  {' '}
-                  <code>{sandbox.command}</code>{' '}
-                  <CopyButton value={sandbox.command} label="Copy command" />
-                </span>
-              )}
+              <Stack gap={3}>
+                <span>{sandbox.reason}</span>
+                {sandbox.command && (
+                  <AdminCommand
+                    command={sandbox.command}
+                    label="Seal commands"
+                    watch="command-sandbox"
+                  />
+                )}
+              </Stack>
             </Callout>
           )}
           {safety?.providers && <SealCoverage providers={safety.providers} />}

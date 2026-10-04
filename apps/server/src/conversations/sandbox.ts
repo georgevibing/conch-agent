@@ -10,9 +10,10 @@
  * the places installs and builds need, and take away where keys live.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { homedir, platform, tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const home = homedir();
 const lib = (...parts: string[]) => join(home, 'Library', ...parts);
@@ -131,6 +132,29 @@ export function sandboxRuntimeReady(os: NodeJS.Platform = platform()): boolean {
 }
 
 /**
+ * Conch's own script that seals commands on Linux (`setup/seal-commands.sh`):
+ * installs bubblewrap, socat and ripgrep with the system's package manager,
+ * lets bubblewrap make its sandbox where Ubuntu restricts it, and checks.
+ */
+export const SEAL_SCRIPT = fileURLToPath(new URL('../setup/seal-commands.sh', import.meta.url));
+
+/** The one line that runs it: typed into Conch's terminal for you, never run by itself. */
+export function sealCommand(script = SEAL_SCRIPT): string {
+  return `sudo sh '${script.replaceAll("'", "'\\''")}'`;
+}
+
+/** Ubuntu 23.10+ keeps programs from making their own sandbox until AppArmor allows it. */
+function userNamespacesRestricted(): boolean {
+  try {
+    return (
+      readFileSync('/proc/sys/kernel/apparmor_restrict_unprivileged_userns', 'utf8').trim() === '1'
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Whether this computer can seal commands, and what's missing when it can't:
  * macOS needs Seatbelt; Linux needs bubblewrap, socat and ripgrep; Windows cannot yet.
  */
@@ -138,6 +162,7 @@ export function sandboxSupport(
   has: (program: string) => boolean = onPath,
   os: NodeJS.Platform = platform(),
   ready: (os: NodeJS.Platform) => boolean = sandboxRuntimeReady,
+  restricted: () => boolean = userNamespacesRestricted,
 ): { available: true } | { available: false; reason: string; command?: string } {
   const blocked = {
     available: false as const,
@@ -147,15 +172,23 @@ export function sandboxSupport(
   if (os === 'darwin') return ready(os) ? { available: true } : blocked;
   if (os === 'linux') {
     const missing = ['bwrap', 'socat', 'rg'].filter((p) => !has(p));
-    return missing.length
+    if (missing.length)
+      return {
+        available: false,
+        reason:
+          'Sealing commands needs bubblewrap, a small sandbox program this system doesn’t come with. One command installs it; it needs your password once.',
+        command: sealCommand(),
+      };
+    if (ready(os)) return { available: true };
+    // Installed, but Ubuntu won't let it make its sandbox yet: the same command allows it.
+    return restricted()
       ? {
           available: false,
-          reason: 'Sealing commands on Linux needs bubblewrap, socat and ripgrep.',
-          command: 'sudo apt install bubblewrap socat ripgrep   # or your system’s package manager',
+          reason:
+            'This system keeps bubblewrap from making its sandbox until it’s allowed. One command allows it; it needs your password once.',
+          command: sealCommand(),
         }
-      : ready(os)
-        ? { available: true }
-        : blocked;
+      : blocked;
   }
   return {
     available: false,

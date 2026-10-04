@@ -50,7 +50,12 @@ export function safetyCheck(
           sandbox.command ? 'needs-you' : 'off',
           sandbox.reason,
           sandbox.command
-            ? { kind: 'command', label: 'Copy', command: sandbox.command }
+            ? {
+                kind: 'command',
+                label: 'Seal commands',
+                command: sandbox.command,
+                watch: 'command-sandbox',
+              }
             : undefined,
         );
       else

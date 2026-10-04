@@ -2,6 +2,7 @@ import { Button, Callout, Progress, Stack, Text } from '@conch/nacre';
 import { ArrowUpRight, Download, RefreshCw } from 'lucide-react';
 import type { ReactNode } from 'react';
 
+import { AdminCommand } from './AdminCommand';
 import { useNeed } from './useNeed';
 
 /**
@@ -31,6 +32,21 @@ export function GetIt({
   const label = kind === 'update' ? `Update ${name}` : `Install ${name}`;
   // Nothing Conch can run here (no winget, Homebrew or npm): the website it is.
   const canRun = kind === 'update' || Boolean(need?.install);
+  // Only an administrator can get it here: typed into the terminal for them.
+  if (need?.admin && kind === 'install' && !running)
+    return (
+      <Stack gap={3}>
+        {lead && <Text tone="muted">{lead}</Text>}
+        <AdminCommand
+          command={need.admin.command}
+          what={need.admin.what}
+          label={`Set up ${name}`}
+          watch={needId}
+        />
+        {children}
+        {dialog}
+      </Stack>
+    );
   // Just finished: say so while the next step arrives, never the button again.
   if (justDone)
     return (

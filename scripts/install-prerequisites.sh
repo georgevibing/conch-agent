@@ -136,3 +136,39 @@ ensure_terminal_prerequisites() {
   fi
   terminal_fallback
 }
+
+# Sealed commands on Linux (ADR 0028): bubblewrap, socat and ripgrep. Only an
+# administrator can install them, so it's asked once here, with the exact
+# command; Conch offers the same command again from its Health page later.
+ensure_command_sandbox() {
+  [ "$OS" = linux ] || return 0
+  sandbox_script="$RUN_DIR/apps/server/src/setup/seal-commands.sh"
+  [ -f "$sandbox_script" ] || return 0
+  if command -v bwrap >/dev/null 2>&1 && command -v socat >/dev/null 2>&1 &&
+    command -v rg >/dev/null 2>&1 &&
+    bwrap --unshare-user --unshare-pid --unshare-net --ro-bind / / -- /bin/true >/dev/null 2>&1; then
+    ok "Sealed commands ready"
+    return 0
+  fi
+  step "Sealing the assistant's commands"
+  say "Conch keeps the assistant's commands to your work folder, with no network or secrets, using bubblewrap."
+  say "It needs your administrator password once. The command is:"
+  say "sudo sh $sandbox_script"
+  if [ -z "$SYSTEM_PACKAGES" ] || ! command -v sudo >/dev/null 2>&1 || ! has_keyboard; then
+    say "Skipped for now. Conch offers it again under Settings → Health; until then each command asks first."
+    return 0
+  fi
+  if ask "Set it up now? [Y/n]"; then
+    case "$REPLY" in ''|[yY]|[yY][eE][sS]) ;; *)
+      say "Skipped. Conch offers it again under Settings → Health."
+      return 0 ;;
+    esac
+  else
+    return 0
+  fi
+  if terminal_command sudo sh "$sandbox_script"; then
+    ok "Sealed commands ready"
+  else
+    warn "Commands aren't sealed yet. Conch carries on, asks before each one, and offers this again under Settings → Health."
+  fi
+}

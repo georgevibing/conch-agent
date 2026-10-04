@@ -14,6 +14,7 @@ import { appIdOf } from '../features/conchapps/words';
 import { useUnsavedGuard } from '../features/artifacts/edits';
 import { MemoryView } from '../features/memory/MemoryView';
 import { RestartWatch } from '../features/health/RestartWatch';
+import { NeedWatcher } from '../features/setup/NeedWatcher';
 import { PushKeeper } from '../features/notifications/PushKeeper';
 import { UndoHost } from '../features/undo/UndoHost';
 import { UpdateNotice } from '../features/updates/UpdateNotice';
@@ -283,6 +284,7 @@ export function Shell() {
       </main>
       <Palette />
       <RestartWatch />
+      <NeedWatcher />
       <RestoredNotice />
       <PushKeeper />
       <UndoHost />

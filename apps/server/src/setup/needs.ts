@@ -100,6 +100,12 @@ export interface NeedSpec {
   comesWith?: string;
   /** What to say while it's missing, given what else is here. */
   hint?: (has: (id: string) => boolean) => string | undefined;
+  /**
+   * Only an administrator can get it here: the one command that does, and in
+   * a sentence what it changes. Conch types it into its terminal for the
+   * person, who presses Enter and types their own password.
+   */
+  admin?: (platform: Platform) => { command: string; what: string } | undefined;
 }
 
 type Spawn = typeof nodeSpawn;
@@ -221,10 +227,12 @@ export class Setup {
     const recipe = await this.#recipe(spec);
     const download = spec.download?.[this.platform];
     const failed = this.#failed.get(spec.id);
+    const admin = spec.admin?.(this.platform);
     return {
       ...base,
       state: failed ? 'failed' : 'missing',
       message: failed ?? spec.hint?.(has),
+      ...(admin && { admin }),
       install: recipe && {
         label: `Install ${spec.short}`,
         command: await this.#command(recipe),

@@ -126,6 +126,9 @@ interface UiState {
   terminalPaste: string | null;
   /** Bumped to ask the drawer for a new terminal. */
   terminalNew: number;
+  /** Something the person is setting up in the terminal (a need), watched until it lands. */
+  watchingNeed: string | null;
+  watchNeed(id: string | null): void;
   setTerminalOpen(open: boolean): void;
   toggleTerminal(): void;
   setTerminalHeight(height: number): void;
@@ -268,6 +271,8 @@ export const useUi = create<UiState>((set) => ({
   terminalActive: null,
   terminalPaste: null,
   terminalNew: 0,
+  watchingNeed: null,
+  watchNeed: (watchingNeed) => set({ watchingNeed }),
   setTerminalOpen: (terminalOpen) => set({ terminalOpen, paletteOpen: false }),
   toggleTerminal: () => set((s) => ({ terminalOpen: !s.terminalOpen, paletteOpen: false })),
   setTerminalHeight: (terminalHeight) => {

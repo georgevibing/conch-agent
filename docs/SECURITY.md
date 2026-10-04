@@ -467,6 +467,17 @@ Both are in **Settings → Security → Safety**, on unless you turn them off. T
 one off asks that it's you, and the checkup will say so. **Activity** (in the
 sidebar) shows everything the assistant did, in every chat and routine.
 
+On Linux, sealing needs **bubblewrap** (a small sandbox program), with socat
+and ripgrep. Server systems don't come with them and only an administrator can
+install them, so the installer asks once, and **Settings → Health** and
+**Safety** offer **Seal commands**: Conch types one command into its own
+terminal (`sudo sh …/seal-commands.sh`), you press Enter and type your
+password there, and Conch says when it's done. The script installs the three
+with the system's package manager, lets bubblewrap make its sandbox where
+Ubuntu restricts it (an AppArmor profile, `/etc/apparmor.d/conch-bwrap`), and
+checks it works as you. Conch never sees the password and never runs it by
+itself.
+
 Sealing works with Claude Code on macOS and Linux, and with Codex (fully from
 Codex 0.159; an older Codex keeps to the work folder but can still read where keys
 live, and Safety says so). Providers that talk to a model over the internet run no

@@ -235,3 +235,25 @@ command runs that way. Leaving the box asks with **Always allow** (`box:<tool>`)
 and in Full trust, in a chat someone is in, it just runs. A command naming
 Conch's keys or sign-ins is refused, but unsealed that is a speed bump, not a
 boundary, and the documentation says so.
+
+### Sealing set up in one press (same day)
+
+On Linux, sealing needs bubblewrap, socat and ripgrep, which server systems
+don't ship and only an administrator can install; Ubuntu 23.10+ also keeps
+bubblewrap from making its sandbox until AppArmor allows it. Conch can't do
+either by itself, so it makes the one step a person must take as short as it
+can be:
+
+- `apps/server/src/setup/seal-commands.sh`: installs the three with apt, dnf,
+  pacman, zypper or apk, writes an AppArmor profile for bubblewrap where the
+  kernel restricts it (unless one already allows it), and checks the sandbox
+  as the person who asked. Each step is printed before it runs.
+- The installer offers it on Linux, next to Git and the terminal tools.
+- In the app, a need may carry `admin: { command, what }`, and a Health
+  action of kind `command` a `watch`. `AdminCommand` types the command into
+  Conch's terminal (never with Enter), Settings steps aside, and `NeedWatcher`
+  says when the need lands, wherever the person is. Without a terminal there,
+  it's the command to copy.
+- `sandboxSupport` offers the command only where it can help: missing
+  programs, or Ubuntu's restriction. A container that refuses namespaces gets
+  no command, because none would work.

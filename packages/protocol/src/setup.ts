@@ -39,6 +39,12 @@ export const Need = z.object({
   install: z.object({ label: z.string(), command: z.string() }).optional(),
   /** Where a person gets it when Conch can't install it here. */
   download: z.string().optional(),
+  /**
+   * Only an administrator can get it here. `command` is the one line that does
+   * (Conch types it into its terminal; the person presses Enter and types
+   * their own password); `what` says what it changes.
+   */
+  admin: z.object({ command: z.string(), what: z.string() }).optional(),
   /** An app Conch can open, so you can flip a switch in it. */
   openable: z.boolean().default(false),
   /** While installing. `percent` is unset when the installer doesn't say. */

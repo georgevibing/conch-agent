@@ -516,13 +516,13 @@ export function registerCoreChecks(services: Services) {
             message: support.available
               ? 'API and Codex commands run in an OS sandbox without network access.'
               : support.reason,
-            ...(!support.available && process.platform !== 'win32'
+            ...(!support.available && support.command
               ? {
                   action: {
-                    kind: 'need' as const,
-                    label: 'Set up safe commands',
-                    need: 'command-sandbox',
-                    mode: 'install' as const,
+                    kind: 'command' as const,
+                    label: 'Seal commands',
+                    command: support.command,
+                    watch: 'command-sandbox',
                   },
                 }
               : {}),

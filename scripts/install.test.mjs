@@ -563,3 +563,82 @@ test('the Windows installer follows the same releases', () => {
   ])
     assert.ok(ps.includes(piece), piece);
 });
+
+test(
+  'offers to seal commands once on Linux, shows the exact command, and runs it only on a yes',
+  { skip: process.platform === 'win32' },
+  () => {
+    const run = (answer, keyboard = 'yes') => {
+      const root = mkdtempSync(join(tmpdir(), 'conch-seal-'));
+      try {
+        const bin = join(root, 'bin');
+        mkdirSync(bin);
+        const script = join(root, 'app', 'apps/server/src/setup/seal-commands.sh');
+        mkdirSync(join(root, 'app', 'apps/server/src/setup'), { recursive: true });
+        writeFileSync(
+          script,
+          `echo "sealed by $(id -u >/dev/null 2>&1; echo script)" >> "${root}/calls"\n`,
+        );
+        // Not installed yet; `sudo` only records and hands over (never a real password prompt).
+        writeFileSync(
+          join(bin, 'sudo'),
+          `#!/bin/sh\necho "sudo $*" >> "${root}/calls"\nexec "$@"\n`,
+          { mode: 0o755 },
+        );
+        const output = execFileSync(
+          '/bin/sh',
+          [
+            '-c',
+            `
+        set -eu
+        say() { printf '%s\n' "$*"; }
+        ok() { say "OK $*"; }
+        warn() { say "WARN $*"; }
+        step() { say "$*"; }
+        has_keyboard() { [ "$KEYBOARD" = yes ]; }
+        ask() { say "$1"; REPLY=$ANSWER; true; }
+        . "$HELPER"
+        terminal_command() { "$@"; }
+        ensure_command_sandbox
+        say FINISHED
+      `,
+          ],
+          {
+            encoding: 'utf8',
+            env: {
+              PATH: `${bin}:/usr/bin:/bin`,
+              HELPER: helper,
+              OS: 'linux',
+              RUN_DIR: join(root, 'app'),
+              SYSTEM_PACKAGES: '1',
+              KEYBOARD: keyboard,
+              ANSWER: answer,
+            },
+          },
+        );
+        let calls = '';
+        try {
+          calls = readFileSync(join(root, 'calls'), 'utf8');
+        } catch {
+          /* Nothing ran. */
+        }
+        return { output, calls, script };
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    };
+    // bwrap on this machine may be real; only when it isn't is there anything to offer.
+    const probe = execFileSync('/bin/sh', ['-c', 'command -v bwrap || true'], { encoding: 'utf8' });
+    if (probe.trim()) return;
+    const yes = run('');
+    assert.match(yes.output, /sudo sh .*seal-commands\.sh/);
+    assert.match(yes.calls, /^sudo sh .*seal-commands\.sh\nsealed by script/);
+    assert.match(yes.output, /FINISHED/);
+    const no = run('n');
+    assert.equal(no.calls, '');
+    assert.match(no.output, /Settings → Health/);
+    const unattended = run('', 'no');
+    assert.equal(unattended.calls, '');
+    assert.match(unattended.output, /Skipped for now/);
+  },
+);
