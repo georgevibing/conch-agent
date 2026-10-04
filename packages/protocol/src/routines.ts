@@ -118,6 +118,14 @@ export const RoutineSpend = z.object({
 });
 export type RoutineSpend = z.infer<typeof RoutineSpend>;
 
+/**
+ * Room for your own chats (ADR 0057): once a plan's window is this full,
+ * routines on it wait until it resets. A person's choice; Conch starts here.
+ */
+export const PLAN_ROOM_DEFAULT = 80;
+/** The fullest a person can set it to wait at, short of “never wait”. */
+export const PlanRoomPercent = z.number().int().min(50).max(99);
+
 /** `GET /api/routines/spending`: what everything that runs unattended spent this month. */
 export const RoutineSpending = z.object({
   /** The monthly limit (USD); `null` when there is none. */
@@ -128,6 +136,27 @@ export const RoutineSpending = z.object({
   monthUsd: z.number().nonnegative(),
   /** Every active routine's projected spend per month (USD), when Conch can say. */
   projectedUsd: z.number().nonnegative().optional(),
+  /**
+   * How full a plan may get before routines on it wait for it to reset;
+   * `null`: they never wait. Absent from older gateways (then it's the default).
+   */
+  planRoomPercent: PlanRoomPercent.nullable().optional(),
+  /**
+   * The plans the routines that are on run with, how full each is now, and
+   * how many runs wait for it: what the choice above means today.
+   */
+  plans: z
+    .array(
+      z.object({
+        /** "Claude Max", "ChatGPT Plus". */
+        source: z.string().max(120),
+        usedPercent: z.number().min(0).max(100),
+        resetsAt: z.number().optional(),
+        /** Runs waiting for this plan to have room. */
+        waiting: z.number().int().nonnegative(),
+      }),
+    )
+    .optional(),
   /** Routines that cost money are paused until `until` (the 1st of next month). */
   paused: z
     .object({
@@ -140,10 +169,17 @@ export const RoutineSpending = z.object({
 export type RoutineSpending = z.infer<typeof RoutineSpending>;
 
 /** `PUT /api/routines/spending` — a person's choice in the UI, never the agent's. */
-export const RoutineSpendingBody = z.object({
-  /** USD per month; `null` turns the limit off. */
-  limitUsd: z.number().positive().max(100_000).nullable(),
-});
+export const RoutineSpendingBody = z
+  .object({
+    /** USD per month; `null` turns the limit off. */
+    limitUsd: z.number().positive().max(100_000).nullable(),
+    /** When routines leave a plan to you (`null`: never, they always run). */
+    planRoomPercent: PlanRoomPercent.nullable(),
+  })
+  .partial()
+  .refine((body) => body.limitUsd !== undefined || body.planRoomPercent !== undefined, {
+    message: 'Nothing to change.',
+  });
 export type RoutineSpendingBody = z.infer<typeof RoutineSpendingBody>;
 
 export const RoutineRun = z.object({
@@ -212,6 +248,11 @@ export const Routine = z.object({
    * more”). Unset: Conch's default (ADR 0057).
    */
   runLimitUsd: z.number().positive().max(1000).optional(),
+  /**
+   * It runs even when its plan is nearly used, instead of leaving the room to
+   * your own chats (a reminder that must go). Only a person sets it (ADR 0057).
+   */
+  runOnFullPlan: z.boolean().optional(),
   // Computed by the server:
   /** What it costs, in plain words (ADR 0057). */
   spend: RoutineSpend.optional(),
@@ -244,6 +285,7 @@ const editable = {
   options: TurnOptions,
   /** `null` goes back to Conch's default. Only a person sets it (ADR 0057). */
   runLimitUsd: z.number().positive().max(1000).nullable(),
+  runOnFullPlan: z.boolean(),
 };
 
 export const CreateRoutineBody = z
@@ -254,6 +296,7 @@ export const CreateRoutineBody = z
     catchUp: editable.catchUp.default(true),
     options: editable.options.default({}),
     runLimitUsd: editable.runLimitUsd.optional(),
+    runOnFullPlan: editable.runOnFullPlan.optional(),
     status: z.enum(['active', 'paused', 'draft']).default('active'),
     // When… (ADR 0056): a trigger instead of a schedule.
     schedule: Schedule.optional(),

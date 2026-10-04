@@ -88,6 +88,7 @@ import { MockRocketChat } from './channels/mock/rocketchat';
 import { MockTwilio } from './channels/mock/twilio';
 import { MockWeChat } from './channels/mock/wechat';
 import { CHANNEL_NAMES, ChannelService } from './channels/service';
+import { channelTools } from './channels/tools';
 import { ChannelStore } from './channels/store';
 import { TerminalService } from './terminal/service';
 import { Gatekeeper } from './security';
@@ -816,6 +817,8 @@ export class Services {
                 ctx,
               ),
               ...offeredSlackTools(this.slack, ctx),
+              // Writing to you in your chat apps: Telegram, WhatsApp, Slack… (any that's connected).
+              ...channelTools(this.channels, ctx),
               // Apps you made or added, and making them: never where nobody can press the card.
               ...this.conchApps.hosted.tools(ctx),
               ...makerTools(this.conchApps, {

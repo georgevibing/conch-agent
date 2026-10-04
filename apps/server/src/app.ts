@@ -631,7 +631,12 @@ export async function buildApp(services: Services) {
   app.put('/api/routines/spending', async (request, reply) => {
     const body = parse(RoutineSpendingBody, request.body, reply);
     if (!body) return;
-    await services.routineSpend.setLimit(body.limitUsd);
+    if (body.limitUsd !== undefined) await services.routineSpend.setLimit(body.limitUsd);
+    if (body.planRoomPercent !== undefined) {
+      await services.routineSpend.setPlanRoom(body.planRoomPercent);
+      // Runs that waited for room look again: they may go now.
+      void services.routines.recheckHeld();
+    }
     return services.routines.spending();
   });
   app.post('/api/routines/spending/keep-paused', async () => {

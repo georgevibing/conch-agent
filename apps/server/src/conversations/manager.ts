@@ -163,6 +163,12 @@ export interface TurnExtras {
     phase?: 'guard' | 'permission',
   ) => Promise<string | undefined>;
   toolAllowed?: (name: string) => boolean;
+  /**
+   * An unattended run that still gets Conch's own tools (a routine): what a
+   * chat from a chat app gets — your apps, the browser, a message to your
+   * Telegram — but never the routine tools (`ToolContext.origin` says why).
+   */
+  hostTools?: boolean;
   /** Persist the task→chat link before any tool can execute. */
   onConversation?: (id: string) => Promise<void>;
   /** Overrides the conversation's permission mode for this turn. */
@@ -365,6 +371,10 @@ export interface ToolContext {
   restricted?: (capability: SkillCapability, detail?: string) => Promise<string | undefined>;
   /** Nobody is there to answer: a routine, a task, a chat from a chat app (ADR 0060). */
   unattended?: boolean;
+  /** Where the conversation came from, when not from the person in Conch: a routine run, a chat app… */
+  origin?: ConversationSummary['origin'];
+  /** The model answering this turn, when one was chosen. */
+  model?: string;
   /** The chat waits for the person (a question, ADR 0060), or carries on; saved, so a restart knows. */
   waitingForYou?: (waiting: boolean) => Promise<void>;
   /** This turn's work folder (a task's own, or the chat's). */
@@ -1679,9 +1689,10 @@ export class ConversationManager {
     });
 
     tools.push(
-      // Unattended runs (routines) don't get the routine tools: a run that read
-      // something hostile must not be able to reschedule or rewrite routines.
-      ...(extras && !extras.toolAllowed
+      // A scoped run gets only its own tools, unless it asks for Conch's. A
+      // routine run does, without the routine tools (`RoutineService.tools`):
+      // a run that read something hostile must not reschedule or rewrite routines.
+      ...(extras && !extras.toolAllowed && !extras.hostTools
         ? []
         : (this.deps.tools?.({
             conversationId,
@@ -1692,6 +1703,8 @@ export class ConversationManager {
             signal: abort.signal,
             restricted: (capability, detail) => skillLimit({ capability, detail }),
             unattended: Boolean(extras || live.record.origin),
+            ...(live.record.origin && { origin: live.record.origin }),
+            ...(resolved.model && { model: resolved.model }),
             waitingForYou: (waiting) => this.#waitingForYou(live, waiting),
             untrusted: () => {
               const tainted = settings.preferences.checkAfterReading ? this.#tainted(live) : [];

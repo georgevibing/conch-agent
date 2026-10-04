@@ -641,6 +641,26 @@ export class MockEngine implements Engine {
         yield { type: 'done', outcome: 'success' } as const;
       };
 
+      // Writing to you in a chat app: `send "hi" to my Telegram`, `message me "hi"`.
+      const sendTo =
+        /\b(?:send|message|text)(?: me)? ["“]([^"”]+)["”](?: (?:to|on) my (\w+))?/i.exec(
+          input.prompt,
+        );
+      if (sendTo?.[1] && input.tools.some((t) => t.name === 'message_user')) {
+        const out = yield* hostTool('message_user', {
+          text: sendTo[1],
+          ...(sendTo[2] && { app: sendTo[2] }),
+        });
+        await input.tools
+          .find((t) => t.name === 'report_outcome')
+          ?.run({
+            status: out.startsWith('Sent') ? 'done' : 'needs-attention',
+            summary: out.slice(0, 120),
+          } as never);
+        yield* speak(out);
+        return;
+      }
+
       // Earlier chats (ADR 0059): find the line, then read around it.
       const lookBack =
         /\b(?:look through|search) (?:my|our) (?:earlier |past |old )?chats for (.+?)[.?!]*$/i.exec(

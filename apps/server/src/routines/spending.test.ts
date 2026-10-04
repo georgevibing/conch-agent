@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { loadConfig } from '../config';
 import type { EngineUsage } from '../engines/types';
 import { Services } from '../services';
+import { RoutineStore } from './store';
 
 const HOUR = 3_600_000;
 let services: Services | undefined;
@@ -193,6 +194,106 @@ describe('routines and spending', () => {
     }
   });
 
+  it('keeps a one-off waiting for room on, and runs it once there is', async () => {
+    const s = await setup('exhausted');
+    const engine = s.providers.engineFor(undefined);
+    const at = new Date(Date.now() + 60_000).toISOString();
+    const r = await s.routines.create(
+      { ...base, title: 'Say hi', schedule: { type: 'once', at } },
+      { createdBy: 'user' },
+    );
+    const realNow = Date.now;
+    try {
+      Date.now = () => realNow() + 61_000;
+      await s.routines.checkNow();
+      const [held] = await runs(s, r.id, 1);
+      expect(held).toMatchObject({ status: 'skipped', guard: 'plan-room' });
+      // Waiting is not done: it stays on, and says when it goes.
+      const waiting = (await s.routines.detail(r.id)).routine;
+      expect(waiting.status).toBe('active');
+      expect(waiting.nextRunAt).toBeGreaterThan(Date.now());
+      expect((await s.routines.spending())?.plans).toEqual([
+        expect.objectContaining({ usedPercent: 100, waiting: 1 }),
+      ]);
+
+      vi.spyOn(engine, 'usage').mockResolvedValue({
+        kind: 'plan',
+        source: 'Claude Max',
+        windows: [{ id: 'session', label: 'Now', usedPercent: 10, severity: 'normal' }],
+      });
+      // It goes when the plan resets.
+      Date.now = () => realNow() + 61_000 + 0.7 * HOUR;
+      await s.routines.checkNow();
+      await runs(s, r.id, 2);
+      expect(await settled(s, r.id)).toMatchObject({ trigger: 'catch-up', status: 'succeeded' });
+      expect((await s.routines.detail(r.id)).routine.status).toBe('completed');
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  it('waits at the fullness a person chose, or never; and a routine can run regardless', async () => {
+    const s = await setup('exhausted');
+    expect((await s.routines.spending())?.planRoomPercent).toBe(80);
+    const r = await s.routines.create(base, { createdBy: 'user' });
+    await s.routines.runNow(r.id); // a person's Run now always goes
+    await settled(s, r.id);
+    const realNow = Date.now;
+    try {
+      Date.now = () => realNow() + HOUR + 1000;
+      await s.routines.checkNow();
+      expect((await runs(s, r.id, 2))[0]).toMatchObject({ guard: 'plan-room' });
+
+      // "Run it anyway": the held run goes now, without waiting for the next tick.
+      await s.routines.update(r.id, { runOnFullPlan: true });
+      await runs(s, r.id, 3);
+      expect(await settled(s, r.id)).toMatchObject({ status: 'succeeded' });
+      expect(s.routines.waitingForRoom()).toEqual([]);
+
+      // "Never wait", for every routine.
+      await s.routines.update(r.id, { runOnFullPlan: false });
+      const state = await s.routineSpend.setPlanRoom(null);
+      expect(state.planRoomPercent).toBeNull();
+      Date.now = () => realNow() + 2 * HOUR + 2000;
+      await s.routines.checkNow();
+      await runs(s, r.id, 4);
+      expect(await settled(s, r.id)).toMatchObject({ status: 'succeeded' });
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  it('remembers a run waiting for room across a restart, and puts back a one-off marked done', async () => {
+    const s = await setup('exhausted');
+    const at = new Date(Date.now() + 60_000).toISOString();
+    const r = await s.routines.create(
+      { ...base, title: 'Say hi', schedule: { type: 'once', at } },
+      { createdBy: 'user' },
+    );
+    const realNow = Date.now;
+    try {
+      Date.now = () => realNow() + 61_000;
+      await s.routines.checkNow();
+      await runs(s, r.id, 1);
+      s.routines.stop();
+      // What an older Conch did: marked it done while it waited.
+      const store = new RoutineStore(join(s.config.CONCH_HOME, 'routines'));
+      const stored = await store.get(r.id);
+      if (!stored) throw new Error('gone');
+      await store.save({ ...stored, status: 'completed' });
+
+      process.env.CONCH_MOCK_USAGE = 'exhausted';
+      const again = new Services(s.config);
+      delete process.env.CONCH_MOCK_USAGE;
+      services = again;
+      await again.routines.start();
+      expect((await again.routines.detail(r.id)).routine.status).toBe('active');
+      expect(again.routines.waitingForRoom()).toEqual([r.id]);
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
   it('never lets the agent change what routines may spend', async () => {
     const s = await setup('metered');
     const tools = s.routines.tools({ conversationId: 'c_test', append: () => undefined });
@@ -206,10 +307,17 @@ describe('routines and spending', () => {
     expect(Object.keys(update.input)).not.toContain('runLimitUsd');
     expect(Object.keys(create.input)).not.toContain('runLimitUsd');
     // …and a call that slips it in anyway changes nothing.
-    await create.run({ ...base, runLimitUsd: 500 } as never);
+    await create.run({ ...base, runLimitUsd: 500, runOnFullPlan: true } as never);
     const [draft] = await s.routines.list();
     expect(draft?.runLimitUsd).toBeUndefined();
-    await update.run({ id: draft?.id ?? '', title: 'Briefing', runLimitUsd: 500 } as never);
+    expect(draft?.runOnFullPlan).toBeUndefined();
+    await update.run({
+      id: draft?.id ?? '',
+      title: 'Briefing',
+      runLimitUsd: 500,
+      runOnFullPlan: true,
+    } as never);
+    expect((await s.routines.list())[0]?.runOnFullPlan).toBeUndefined();
     expect((await s.routines.list())[0]).toMatchObject({ title: 'Briefing' });
     expect((await s.routines.list())[0]?.runLimitUsd).toBeUndefined();
     expect(z.object(update.input).strict().safeParse({ id: 'x', runLimitUsd: 5 }).success).toBe(

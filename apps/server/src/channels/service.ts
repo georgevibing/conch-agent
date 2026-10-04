@@ -7,6 +7,7 @@ import {
   type ChannelField,
   type ChannelHealth,
   type ChannelHookSecrets,
+  type ChannelKind,
   type ChannelList,
   type ChannelSecrets,
   type ChannelState,
@@ -122,6 +123,8 @@ export interface SlackCheck {
 }
 
 interface LiveChannel {
+  /** Which app it is, known without reading the store (tools are made in a moment). */
+  kind: ChannelKind;
   adapter: ChannelAdapter;
   connection: ChannelConnection;
   health: ChannelHealth;
@@ -275,6 +278,8 @@ export class ChannelService {
   /** When people other than you were answered in each group, this past hour (ADR 0075). */
   #guestTurns = new Map<string, number[]>();
   #notified = new Map<string, string>();
+  /** The chat apps each conversation wrote to you on itself, so a routine's result isn't said twice. */
+  #messaged = new Map<string, Set<string>>();
   #started = false;
   /** The Slack app id behind each Slack channel, once asked ('' when Slack wouldn't say). */
   #slackApps = new Map<string, string>();
@@ -1137,6 +1142,7 @@ export class ChannelService {
   #deadLive(stored: StoredChannel, secrets: ChannelSecrets, message: string): LiveChannel {
     const adapter = this.deps.adapter(secrets);
     return {
+      kind: stored.kind,
       adapter,
       connection: {
         send: () => Promise.reject(new ChannelError('auth', message)),
@@ -1157,6 +1163,7 @@ export class ChannelService {
     const id = stored.id;
     const adapter = this.deps.adapter(secrets);
     const live: LiveChannel = {
+      kind: stored.kind,
       adapter,
       health: { state: 'connecting', since: this.#now },
       connection: undefined as unknown as ChannelConnection,
@@ -2495,6 +2502,60 @@ export class ChannelService {
     await press.ack(decision === 'deny' ? 'Not allowed' : 'Allowed');
   }
 
+  // ── Messages Conch starts ──────────────────────────────────────────────
+
+  /** The chat apps that are on and connected now: where the assistant can write to you. */
+  reachable(): { id: string; kind: ChannelKind; name: string }[] {
+    return [...this.#live]
+      .filter(([, live]) => live.health.state === 'online')
+      .map(([id, live]) => ({ id, kind: live.kind, name: CHANNEL_NAMES[live.kind] }));
+  }
+
+  /**
+   * Write to you in one of your chat apps (the assistant's `message_user`):
+   * always your own private chat with Conch there, never anyone else. `app`
+   * is the app's name or kind; without one, the app you wrote from last.
+   */
+  async messageOwner(
+    text: string,
+    options: { app?: string; conversationId?: string } = {},
+  ): Promise<{ app: string }> {
+    const online = new Set(this.reachable().map((c) => c.id));
+    const all = (await this.deps.store.all()).filter(
+      (c) => c.enabled && c.people.length && online.has(c.id),
+    );
+    if (!all.length)
+      throw new ChannelServiceError(
+        'unavailable',
+        'None of the user’s chat apps is connected right now.',
+      );
+    const wanted = options.app?.trim().toLowerCase();
+    const matches = wanted
+      ? all.filter((c) => c.kind === wanted || CHANNEL_NAMES[c.kind].toLowerCase() === wanted)
+      : all;
+    if (!matches.length)
+      throw new ChannelServiceError(
+        'unavailable',
+        `${options.app ?? 'That app'} isn’t connected. The user can be reached on ${all.map((c) => CHANNEL_NAMES[c.kind]).join(', ')}.`,
+      );
+    // The one they wrote from last is the one they're likely to see.
+    const channel = [...matches].sort((a, b) => (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0))[0];
+    const live = channel && this.#live.get(channel.id);
+    const owner = channel?.people[0];
+    if (!channel || !live || !owner)
+      throw new ChannelServiceError('unavailable', 'That chat app isn’t connected right now.');
+    const chat = await live.connection.directChat(owner.id);
+    await live.connection.send(chat, text);
+    if (options.conversationId) {
+      const sent = this.#messaged.get(options.conversationId) ?? new Set<string>();
+      sent.add(channel.id);
+      this.#messaged.set(options.conversationId, sent);
+      if (this.#messaged.size > 200)
+        this.#messaged.delete(this.#messaged.keys().next().value ?? '');
+    }
+    return { app: CHANNEL_NAMES[channel.kind] };
+  }
+
   // ── Routines ───────────────────────────────────────────────────────────
 
   /**
@@ -2548,7 +2609,14 @@ export class ChannelService {
       if (!live || !owner) continue;
       const chat = await live.connection.directChat(owner.id).catch(() => undefined);
       if (!chat) continue;
-      if (run.status === 'needs-you' && run.conversationId) {
+      // The run already wrote to you here itself: its result needn't be said again.
+      if (
+        run.status === 'succeeded' &&
+        run.conversationId &&
+        this.#messaged.get(run.conversationId)?.has(channel.id)
+      )
+        continue;
+      if (run.status === 'needs-you' && run.conversationId && pending.length) {
         for (const question of pending)
           await this.#ask(
             channel.id,
@@ -2563,7 +2631,9 @@ export class ChannelService {
       const text =
         run.status === 'succeeded'
           ? `🗓️ **${title}** — ${run.outcome ?? 'done.'}`
-          : `⚠️ **${title}** didn’t finish: ${run.error ?? run.outcome ?? 'something went wrong.'}`;
+          : run.status === 'needs-you'
+            ? `👋 **${title}** needs a look: ${run.outcome ?? 'open it in Conch.'}`
+            : `⚠️ **${title}** didn’t finish: ${run.error ?? run.outcome ?? 'something went wrong.'}`;
       await live.connection
         .send(chat, text)
         .catch((error: unknown) => this.#log(`routine: ${explain(error)}`));

@@ -9,8 +9,9 @@
  *   they run. It counts only pay-as-you-go money; a plan or a model on this
  *   computer costs nothing here. At the limit, runs that cost money pause
  *   until the 1st, and the person hears about it once.
- * - **Room on a plan.** A subscription's window that's nearly used up is left
- *   to the person's own chats: a run waits until it resets.
+ * - **Room on a plan.** A subscription's window that's nearly used up (80%,
+ *   or what the person chose, or never) is left to the person's own chats: a
+ *   run waits until it resets, unless its routine is set to run regardless.
  *
  * The ledger is `~/.conch/routine-spend.json`. Changing the limit is a
  * person's action in the UI (`PUT /api/routines/spending`); no tool the
@@ -18,6 +19,7 @@
  */
 import { join } from 'node:path';
 
+import { PLAN_ROOM_DEFAULT } from '@conch/protocol';
 import type {
   Billing,
   EngineId,
@@ -50,8 +52,8 @@ export const RUN_LIMIT_FALLBACK_USD = 3;
 export const RUN_LIMIT_TOKENS =
   RUN_LIMIT_TIMES * (TYPICAL_RUN.inputTokens + TYPICAL_RUN.outputTokens);
 export const RUN_LIMIT_MIN_TOKENS = 300_000;
-/** A plan window this full is left to the person. */
-export const PLAN_ROOM_PERCENT = 80;
+/** A plan window this full is left to the person, until they choose otherwise. */
+export const PLAN_ROOM_PERCENT = PLAN_ROOM_DEFAULT;
 const DAYS_PER_MONTH = 30.4;
 /** How many recent runs say what's usual. */
 const RECENT = 5;
@@ -66,6 +68,8 @@ const SpendFile = z.object({
   told: z.string().optional(),
   /** The month the person chose “Keep paused”. */
   dismissed: z.string().optional(),
+  /** How full a plan gets before routines wait; `null`: never; absent: the default. */
+  planRoom: z.number().int().min(50).max(99).nullable().optional(),
 });
 type SpendFile = z.infer<typeof SpendFile>;
 
@@ -108,6 +112,7 @@ export function mergeRoutineSpend(current: Buffer | undefined, restored: Buffer)
   return {
     version: 1,
     ...(back.limit !== undefined && { limit: back.limit }),
+    ...(back.planRoom !== undefined && { planRoom: back.planRoom }),
     months,
     ...(now.told && { told: now.told }),
     ...(now.dismissed && { dismissed: now.dismissed }),
@@ -308,7 +313,12 @@ export class RoutineSpend {
    * May a run start now? A run that costs money waits at the monthly limit;
    * one on a nearly-used plan waits for it to reset. Free runs always go.
    */
-  async allow(_routineId: string, engine?: Engine): Promise<Allowed> {
+  async allow(
+    _routineId: string,
+    engine?: Engine,
+    /** `planRoom: false`: this routine runs even on a nearly-used plan (a person chose it). */
+    { planRoom = true }: { planRoom?: boolean } = {},
+  ): Promise<Allowed> {
     const target = engine ?? this.deps.engine();
     const info = await this.billing(target);
     if (info.billing === 'metered') {
@@ -328,8 +338,9 @@ export class RoutineSpend {
     if (info.billing === 'plan') {
       // Read again now: a window fills while nobody's looking.
       const usage = (await this.billing(target, { fresh: true })).usage;
+      const room = planRoom ? await this.#planRoom() : null;
       const full = usage?.windows
-        .filter((w) => w.usedPercent >= PLAN_ROOM_PERCENT)
+        .filter((w) => room !== null && w.usedPercent >= room)
         .sort((a, b) => (b.resetsAt ?? Infinity) - (a.resetsAt ?? Infinity))[0];
       if (full) {
         const source = info.source ?? target.label;
@@ -474,6 +485,7 @@ export class RoutineSpend {
       isDefault: file.limit === undefined,
       monthUsd: Math.round((file.months[month] ?? 0) * 100) / 100,
       ...(projectedUsd !== undefined && { projectedUsd: Math.round(projectedUsd * 100) / 100 }),
+      planRoomPercent: file.planRoom === undefined ? PLAN_ROOM_PERCENT : file.planRoom,
       ...(this.#pausedIn(file, month) && {
         paused: { until: nextMonth(this.#now), dismissed: file.dismissed === month },
       }),
@@ -491,6 +503,26 @@ export class RoutineSpend {
     const state = await this.state();
     this.deps.changed?.(state);
     return state;
+  }
+
+  /**
+   * A person chose how full a plan gets before routines wait for it to
+   * reset (`null`: they never wait). Never reachable by the agent.
+   */
+  async setPlanRoom(percent: number | null): Promise<RoutineSpending> {
+    await this.#mutex.run(async () => {
+      const file = await this.#load();
+      file.planRoom = percent;
+      await writeJson(this.#path, file);
+    });
+    const state = await this.state();
+    this.deps.changed?.(state);
+    return state;
+  }
+
+  async #planRoom(): Promise<number | null> {
+    const file = await this.#mutex.run(() => this.#load());
+    return file.planRoom === undefined ? PLAN_ROOM_PERCENT : file.planRoom;
   }
 
   /** “Keep paused”: the card goes away until next month. */
