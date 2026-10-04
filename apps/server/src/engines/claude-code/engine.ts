@@ -31,6 +31,7 @@ import type {
   LoginHandle,
   TurnInput,
 } from '../types';
+import { checkHostArgs, lenientShape, withNotes } from '../tools/args';
 import { detectClaude } from './detect';
 import { PROTECTED_MESSAGE, touchesProtected } from '../../lib/protect';
 import { childEnv } from './env';
@@ -494,9 +495,17 @@ export class ClaudeCodeEngine implements Engine {
         tool(
           t.name,
           t.description,
-          t.input,
-          async (args, extra) => {
-            const result = await t.run(args);
+          // Advertised exactly as declared, read forgivingly and checked by Conch (ADR 0069).
+          lenientShape(t.input),
+          async (raw, extra) => {
+            const checked = checkHostArgs(t, raw);
+            if (!checked.ok)
+              return { content: [{ type: 'text' as const, text: checked.message }], isError: true };
+            const ran = await t.run(checked.args);
+            const result =
+              typeof ran === 'string'
+                ? withNotes(ran, checked.notes)
+                : { ...ran, text: withNotes(ran.text, checked.notes) };
             const id = toolUseIdOf(extra);
             if (id && typeof result !== 'string' && result.view) views.set(id, result.view);
             // The model gets the text (and pictures); the view is never sent to it.

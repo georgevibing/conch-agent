@@ -19,7 +19,6 @@ import type {
   TurnProblem,
   Usage,
 } from '@conch/protocol';
-import { z } from 'zod';
 import { sandboxSupport } from '../../conversations/sandbox';
 import { authorizeTool, hostComputerTools, HOST_NAMES } from '../host';
 
@@ -43,6 +42,7 @@ import {
   type ToolImage,
   type TurnInput,
 } from '../types';
+import { checkBridgedArgs, checkHostArgs, readArgs, withNotes } from '../tools/args';
 import { bridgedSchema, hostToolSpec, wireName } from './jsonschema';
 import {
   budgetFor,
@@ -176,10 +176,6 @@ interface Notice {
   message: string;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 /** The key couldn't be had: none saved, or 1Password wouldn't hand it over. */
 class KeyProblem extends Error {
   constructor(
@@ -262,13 +258,14 @@ export function buildTools(input: TurnInput, { computer = true } = {}): Map<stri
     add(display, (name) => ({
       spec: hostToolSpec(host, name),
       display,
-      run: async (args, id) => {
-        const parsed = z.object(host.input).strict().safeParse(args);
-        if (!parsed.success)
-          return { text: 'The tool arguments do not match its schema.', isError: true };
-        const denied = await authorizeTool(input, display, parsed.data, id);
+      run: async (raw, id) => {
+        // Read forgivingly, checked strictly; what's authorised is what runs (ADR 0069).
+        const checked = checkHostArgs(host, raw, name);
+        if (!checked.ok) return { text: checked.message, isError: true };
+        const denied = await authorizeTool(input, display, checked.args, id);
         if (denied) return { text: denied, isError: true };
-        return { ...(await run(host, parsed.data)), isError: false };
+        const result = await run(host, checked.args);
+        return { ...result, text: withNotes(result.text, checked.notes), isError: false };
       },
     }));
   }
@@ -277,12 +274,16 @@ export function buildTools(input: TurnInput, { computer = true } = {}): Map<stri
       spec: { name, description: bridged.description, schema: bridgedSchema(bridged.inputSchema) },
       display: bridged.name,
       // Already wrapped in the user's permission rules by the caller.
-      run: async (args, toolUseId) => {
+      run: async (raw, toolUseId) => {
         input.signal.throwIfAborted();
+        const checked = checkBridgedArgs(name, bridgedSchema(bridged.inputSchema), raw);
+        if (!checked.ok) return { text: checked.message, isError: true };
+        const args = checked.args;
         const decision = await input.guard?.({ toolName: bridged.name, toolUseId, input: args });
         if (decision?.decision === 'deny') return { text: decision.message, isError: true };
         // The bridge's requestPermission evaluates ask/taint again immediately before execution.
-        return bridged.run(args, toolUseId);
+        const result = await bridged.run(args, toolUseId);
+        return { ...result, text: withNotes(result.text, checked.notes) };
       },
     }));
   }
@@ -879,7 +880,8 @@ export class ApiEngine implements Engine {
             continue;
           }
           const tool = tools.get(call.name);
-          const args = parseArgs(call.argumentsJson);
+          const read = readArgs(call.argumentsJson);
+          const args = 'args' in read ? read.args : undefined;
           yield {
             type: 'tool-start',
             // The provider's own id, so Conch can match start to end.
@@ -887,7 +889,7 @@ export class ApiEngine implements Engine {
             name: tool?.display ?? call.name,
             input: args ?? { arguments: call.argumentsJson.slice(0, 2_000) },
           };
-          const { text, status, view, images } = await this.#call(tool, args, call, input);
+          const { text, status, view, images } = await this.#call(tool, read, call, input);
           results.push({
             id: call.id,
             name: call.name,
@@ -1171,16 +1173,11 @@ export class ApiEngine implements Engine {
   /** Run one tool call. A tool that fails is an answer to the model, not an exception. */
   async #call(
     tool: Callable | undefined,
-    args: Record<string, unknown> | undefined,
+    read: ReturnType<typeof readArgs>,
     call: { name: string; id: string },
     input: TurnInput,
   ): Promise<{ text: string; status: ToolStatus; view?: ToolView; images?: ToolImage[] }> {
-    if (!args) {
-      return {
-        text: 'Those arguments were not valid JSON. Call the tool again with a JSON object.',
-        status: 'error',
-      };
-    }
+    if ('problem' in read) return { text: read.problem, status: 'error' };
     if (!tool) {
       return {
         text: `There is no tool called ${call.name}. Use one of the tools in this request.`,
@@ -1188,9 +1185,9 @@ export class ApiEngine implements Engine {
       };
     }
     try {
-      const result = await tool.run(args, call.id);
+      const result = await tool.run(read.args, call.id);
       return {
-        text: result.text,
+        text: withNotes(result.text, read.notes),
         status: result.isError ? 'error' : 'success',
         ...(result.view && !result.isError && { view: result.view }),
         ...(result.images?.length && { images: result.images }),
@@ -1235,14 +1232,11 @@ export class ApiEngine implements Engine {
   }
 }
 
-/** Arguments from the model are untrusted text: a bad one is a tool error, not a crash. */
+/**
+ * Arguments from the model are untrusted text: a bad one is a tool error, not
+ * a crash. Almost-JSON is mended (ADR 0069); undefined when there's nothing to read.
+ */
 export function parseArgs(json: string): Record<string, unknown> | undefined {
-  const trimmed = json.trim();
-  if (!trimmed) return {};
-  try {
-    const parsed: unknown = JSON.parse(trimmed);
-    return isRecord(parsed) ? parsed : undefined;
-  } catch {
-    return undefined;
-  }
+  const read = readArgs(json);
+  return 'args' in read ? read.args : undefined;
 }

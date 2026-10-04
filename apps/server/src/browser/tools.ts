@@ -50,10 +50,24 @@ const WATCHED_PAUSE_MS = 420;
 /** How long a handoff waits for you before the agent is told to move on. */
 const HANDOFF_WAIT_MS = 30 * 60_000;
 
-const Ref = z
-  .string()
-  .regex(/^[a-z0-9]{1,16}$/i, 'Use a ref from the page text, like e12.')
-  .describe('The element’s ref from the page text, e.g. "e12".');
+/**
+ * A ref the way a model copied it from the page text: `[ref=e12]`, `ref=e12`,
+ * `e12]`, `"e12"`. Only the wrapping goes; what's left must still be a bare ref
+ * (ADR 0069), so nothing else can reach the locator.
+ */
+export function unwrapRef(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  const bare = /^\s*\[?\s*(?:ref\s*[=:]\s*)?["'`]?([a-z0-9]{1,16})["'`]?\s*\]?\s*$/i.exec(value);
+  return bare ? bare[1] : value;
+}
+
+const Ref = z.preprocess(
+  unwrapRef,
+  z
+    .string()
+    .regex(/^[a-z0-9]{1,16}$/i, 'Use a ref from the page text, like e12.')
+    .describe('The element’s ref from the page text, e.g. "e12".'),
+);
 const Element = z
   .string()
   .max(120)
