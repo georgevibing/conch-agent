@@ -6,7 +6,7 @@ const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
 
 /**
  * It learns you, end to end (ADR 0032): a memory learned after reading a page
- * waits for an OK; the tidy-up merges repeats and updates what changed, with
+ * is remembered where you can see it, with Undo; the tidy-up merges repeats and updates what changed, with
  * Undo; what Conch knows is searchable and exportable; something asked for in
  * three chats is offered as a skill, never saved by itself.
  */
@@ -14,35 +14,29 @@ test.beforeEach(async ({ request }) => {
   await request.patch('/api/settings', { data: { onboarded: true, profile: { name: 'Ada' } } });
 });
 
-test('remembering after reading a page waits for an OK, and isn’t used until kept', async ({
+test('remembering after reading a page says so in the chat, and Undo forgets it', async ({
   page,
   request,
 }) => {
+  const recall = async () =>
+    (await (await request.get('/api/memories/search?q=invoices')).json()).results.length;
   await page.goto('/');
   await say(page, 'read https://news.example/today and summarise it', /Ask me to/);
   await expect(page.getByText(/Read news\.example\./)).toBeVisible();
   // "Sent to", not "go to": the pretend assistant takes "go to" and an address as a page to open.
   await say(page, 'remember that invoices are sent to billing@news.example', /Got it/);
-  const pill = page.getByText(/Wants to remember: invoices are sent to billing@news\.example/);
-  await expect(pill).toContainText('waits for your OK');
 
-  // Not in what recall finds while it waits.
-  const found = await (await request.get('/api/memories/search?q=invoices')).json();
-  expect(found.results).toEqual([]);
+  // Someone is watching this chat, so it's remembered at once, where they can see it and undo it.
+  await expect(page.getByText('Remembered', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Keep' })).toHaveCount(0);
+  await expect.poll(recall).toBe(1);
 
-  await page.keyboard.press(`${mod}+k`);
-  await page.getByRole('combobox').fill('what conch knows');
-  await page.getByRole('option', { name: /What Conch knows about you/ }).click();
-  await expect(
-    page.getByRole('heading', { name: 'What Conch knows about you', level: 1 }),
-  ).toBeVisible();
-  const waiting = page.getByRole('list', { name: 'Waiting for your OK' });
-  await expect(waiting).toContainText('Learned in a chat that read news.example.');
-  await waiting.getByRole('button', { name: 'Keep' }).click();
-  await expect(page.getByRole('list', { name: 'Waiting for your OK' })).toHaveCount(0);
-  await expect(page.getByRole('list', { name: 'Memories' })).toContainText('invoices are sent to');
-  const kept = await (await request.get('/api/memories/search?q=invoices')).json();
-  expect(kept.results).toHaveLength(1);
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByText('Forgot', { exact: true })).toBeVisible();
+  await expect.poll(recall).toBe(0);
+  // What you pressed is written into the chat, so a reload shows it again.
+  await page.reload();
+  await expect(page.getByText('Forgot', { exact: true })).toBeVisible();
 });
 
 test('the tidy-up merges repeats and updates what changed, every change with Undo', async ({
