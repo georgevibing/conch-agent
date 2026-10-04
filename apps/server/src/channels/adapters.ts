@@ -6,6 +6,7 @@ import type { SignalDaemon } from './signal-cli';
 import { EmailAdapter, type MailEndpoints } from './email';
 import { ImessageAdapter, type ImessageOptions } from './imessage';
 import type { ChannelDoorService } from './door';
+import { GoogleChatAdapter } from './googlechat';
 import { LineAdapter } from './line';
 import { MattermostAdapter } from './mattermost';
 import { RocketChatAdapter } from './rocketchat';
@@ -46,6 +47,11 @@ export interface ChannelEndpoints {
   /** LINE's Messaging API, and where it serves content (the pretend LINE in tests). */
   line?: string;
   lineData?: string;
+  /** Google Chat's API, Google's token endpoint, its signing keys and token issuers (the pretend Google in tests). */
+  googleChat?: string;
+  googleToken?: string;
+  googleCerts?: string;
+  googleIssuers?: string[];
   /** The public door (Teams, Official Accounts), and where channels keep what they remember. */
   door?: ChannelDoorService;
   home?: string;
@@ -93,6 +99,8 @@ export function adapterFor(
       return new LineAdapter(secrets, endpoints);
     case 'rocketchat':
       return new RocketChatAdapter(secrets);
+    case 'googlechat':
+      return new GoogleChatAdapter(secrets, endpoints);
   }
 }
 

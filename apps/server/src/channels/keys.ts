@@ -29,6 +29,8 @@ export function channelKeys(secrets: ChannelSecrets): [string, string][] {
       return [['Auth Token', secrets.authToken]];
     case 'mattermost':
       return [['bot access token', secrets.token]];
+    case 'googlechat':
+      return [['service account key', secrets.serviceAccount]];
     case 'rocketchat':
       return [['personal access token', secrets.token]];
     case 'line':

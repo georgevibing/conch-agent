@@ -196,6 +196,11 @@ export function HelloStep({
               : add <b>{channel.bot.name}</b> as a friend and send it anything, like “hi”. Then
               press <b>That’s me</b> here.
             </p>
+          ) : channel.kind === 'googlechat' ? (
+            <p>
+              In Google Chat, press <b>New chat</b>, find your app by its name, and send it
+              anything, like “hi”. Then press <b>That’s me</b> here.
+            </p>
           ) : channel.kind === 'rocketchat' ? (
             <p>
               In Rocket.Chat, start a direct message with <b>{who}</b> and send it anything, like

@@ -77,6 +77,7 @@ import { MockTeams } from './channels/mock/teams';
 import { MockTelegram } from './channels/mock/telegram';
 import { linkedChannels, type LinkedChannels } from './channels/linked-setup';
 import { ChannelLinking } from './channels/linking';
+import { MockGoogleChat } from './channels/mock/googlechat';
 import { MockLine } from './channels/mock/line';
 import { MockMattermost } from './channels/mock/mattermost';
 import { MockRocketChat } from './channels/mock/rocketchat';
@@ -334,6 +335,7 @@ export class Services {
   readonly mockMattermost?: MockMattermost;
   readonly mockLine?: MockLine;
   readonly mockRocketChat?: MockRocketChat;
+  readonly mockGoogleChat?: MockGoogleChat;
   /** The public door, for the channels that only deliver to a web address (ADR 0045). */
   readonly door: ChannelDoorService;
   /** Your own address, over HTTPS by Conch itself (ADR 0064). Started by main.ts, never by tests. */
@@ -1074,6 +1076,7 @@ export class Services {
     this.mockMattermost = config.CONCH_ENGINE === 'mock' ? new MockMattermost() : undefined;
     this.mockLine = config.CONCH_ENGINE === 'mock' ? new MockLine() : undefined;
     this.mockRocketChat = config.CONCH_ENGINE === 'mock' ? new MockRocketChat() : undefined;
+    this.mockGoogleChat = config.CONCH_ENGINE === 'mock' ? new MockGoogleChat() : undefined;
     // In mock mode the "internet" is this computer: what's sent to the public address reaches the door.
     const door: ChannelDoorService = new ChannelDoorService({
       home: config.CONCH_HOME,
@@ -1099,6 +1102,7 @@ export class Services {
     if (this.mockWeChat) this.mockWeChat.resolve = (url) => door.localFor(url);
     if (this.mockTwilio) this.mockTwilio.resolve = (url) => door.localFor(url);
     if (this.mockLine) this.mockLine.resolve = (url) => door.localFor(url);
+    if (this.mockGoogleChat) this.mockGoogleChat.resolve = (url) => door.localFor(url);
     this.mockMail = config.CONCH_ENGINE === 'mock' ? new MockMail() : undefined;
     this.mockMessages = config.CONCH_ENGINE === 'mock' ? new MockMessages() : undefined;
     this.linked = linkedChannels({
@@ -1302,6 +1306,14 @@ export class Services {
       // The Mattermost server is whatever's typed: the pretend one says where it is.
       if (this.mockMattermost)
         await this.mockMattermost.start(Number(process.env.CONCH_MOCK_MATTERMOST_PORT ?? 0));
+      if (this.mockGoogleChat) {
+        const base = await this.mockGoogleChat.start(
+          Number(process.env.CONCH_MOCK_GOOGLECHAT_PORT ?? 0),
+        );
+        endpoints.googleChat = base;
+        endpoints.googleToken = `${base}/token`;
+        endpoints.googleCerts = `${base}/certs`;
+      }
       if (this.mockRocketChat)
         await this.mockRocketChat.start(Number(process.env.CONCH_MOCK_ROCKETCHAT_PORT ?? 0));
       if (this.mockLine) {
@@ -2078,6 +2090,7 @@ export class Services {
     void this.mockMattermost?.stop();
     void this.mockLine?.stop();
     void this.mockRocketChat?.stop();
+    void this.mockGoogleChat?.stop();
     clearInterval(this.#sweeper);
     clearInterval(this.#hereSweeper);
     this.#stopAsks?.();

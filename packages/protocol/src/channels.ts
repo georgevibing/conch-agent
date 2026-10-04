@@ -40,6 +40,7 @@ export const ChannelKind = z.enum([
   'mattermost',
   'line',
   'rocketchat',
+  'googlechat',
 ]);
 export type ChannelKind = z.infer<typeof ChannelKind>;
 
@@ -329,6 +330,7 @@ export const ChannelField = z.enum([
   'number',
   'channelSecret',
   'userId',
+  'serviceAccount',
 ]);
 export type ChannelField = z.infer<typeof ChannelField>;
 
@@ -444,6 +446,17 @@ const rocketchat = {
 };
 
 /**
+ * Google Chat (ADR 0084): a Chat app in a Google Workspace account. Events
+ * come in through the public door with a Google-signed token; answers go
+ * out as the app, with a service account's key (the whole JSON key file).
+ */
+const googlechat = {
+  kind: z.literal('googlechat'),
+  serviceAccount: z.string().trim().min(1).max(12_000),
+  hookId: hookId.optional(),
+};
+
+/**
  * Mail services Conch knows the settings of (ADR 0044). `other` takes the
  * server names by hand.
  */
@@ -502,6 +515,7 @@ export const ChannelSecrets = z.discriminatedUnion('kind', [
   z.object(mattermost),
   z.object(line),
   z.object(rocketchat),
+  z.object(googlechat),
 ]);
 export type ChannelSecrets = z.infer<typeof ChannelSecrets>;
 
@@ -524,6 +538,7 @@ export const CheckChannelBody = z.discriminatedUnion('kind', [
   z.object({ ...sms, accountSid: secret.optional(), authToken: secret.optional() }),
   z.object({ ...mattermost, server: short.optional(), token: secret.optional() }),
   z.object({ ...line, channelSecret: secret.optional(), accessToken: secret.optional() }),
+  z.object(googlechat),
   z.object({
     ...rocketchat,
     server: short.optional(),

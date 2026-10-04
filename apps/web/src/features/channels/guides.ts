@@ -13,6 +13,13 @@ export const TEAMS_BOTS_URL = 'https://dev.teams.microsoft.com/bots';
 export const TWILIO_CONSOLE_URL = 'https://console.twilio.com/';
 /** LINE: where an Official Account is made, and where its channel's keys are. */
 export const LINE_MANAGER_URL = 'https://manager.line.biz/';
+/** Google Chat: the API to turn on, service accounts, and the Chat app's configuration. */
+export const GOOGLE_CHAT_API_URL =
+  'https://console.cloud.google.com/apis/library/chat.googleapis.com';
+export const GOOGLE_SERVICE_ACCOUNTS_URL =
+  'https://console.cloud.google.com/iam-admin/serviceaccounts';
+export const GOOGLE_CHAT_CONFIG_URL =
+  'https://console.cloud.google.com/apis/api/chat.googleapis.com/hangouts-chat';
 export const LINE_CONSOLE_URL = 'https://developers.line.biz/console/';
 export const TWILIO_NUMBERS_URL =
   'https://console.twilio.com/us1/develop/phone-numbers/manage/search?capabilities[sms]=true';

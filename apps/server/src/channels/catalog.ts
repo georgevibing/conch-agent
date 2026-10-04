@@ -139,6 +139,16 @@ export const CHANNEL_CATALOG: ChannelCatalogEntry[] = [
     available: true,
     groups: true,
   },
+  {
+    id: 'googlechat',
+    name: 'Google Chat',
+    tagline: 'A Chat app of your own, in your Google Workspace.',
+    short: 'A Chat app at work',
+    color: '#00AC47',
+    minutes: 12,
+    available: true,
+    groups: true,
+  },
 ];
 
 export const CHANNEL_NAMES: Record<ChannelKind, string> = {
@@ -156,6 +166,7 @@ export const CHANNEL_NAMES: Record<ChannelKind, string> = {
   mattermost: 'Mattermost',
   line: 'LINE',
   rocketchat: 'Rocket.Chat',
+  googlechat: 'Google Chat',
 };
 
 /** Channels that only work on some systems: elsewhere the tile says so and can't be chosen. */

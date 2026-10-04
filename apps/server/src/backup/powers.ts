@@ -51,6 +51,7 @@ const APP_NAMES: Record<string, string> = {
   mattermost: 'Mattermost',
   line: 'LINE',
   rocketchat: 'Rocket.Chat',
+  googlechat: 'Google Chat',
 };
 
 const text = (value: unknown, fallback: string) => {

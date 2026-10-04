@@ -105,7 +105,7 @@
 ### 📱 Wherever you are
 
 - **Your chat apps.** Telegram, Discord, Slack, WhatsApp, Signal, iMessage, email,
-  Microsoft Teams, Matrix, WeChat, LINE, Mattermost, Rocket.Chat, and plain text
+  Microsoft Teams, Google Chat, Matrix, WeChat, LINE, Mattermost, Rocket.Chat, and plain text
   messages to a number of its own. In a group you turn on, it answers when
   mentioned: you as in private, everyone else in words only. Voice notes are
   heard on your own computer.

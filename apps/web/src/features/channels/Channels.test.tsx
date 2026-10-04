@@ -1234,3 +1234,51 @@ describe('Connecting Rocket.Chat (ADR 0083)', () => {
     );
   });
 });
+
+describe('Connecting Google Chat (ADR 0084)', () => {
+  it('takes the key file pasted anywhere, then the address, then where to paste it', async () => {
+    const keyFile = JSON.stringify({
+      type: 'service_account',
+      project_id: 'conch-chat-123',
+      client_email: 'conch@conch-chat-123.iam.gserviceaccount.com',
+      private_key: '-----BEGIN PRIVATE KEY-----\nMIIE…\n-----END PRIVATE KEY-----\n',
+    });
+    const made = channel({
+      kind: 'googlechat',
+      bot: {
+        id: 'conch@conch-chat-123.iam.gserviceaccount.com',
+        name: 'Chat app in conch-chat-123',
+      },
+      hook: { url: 'https://mac.tail1.ts.net/conch/hooks/abcdefghijklmnopqrstuvwx' },
+      health: { state: 'online' },
+    });
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'POST /api/channels/check': () => ({ ok: true, bot: made.bot, checked: [] }),
+      'POST /api/channels': () => made,
+      'GET /api/channels/door': () => ({
+        state: 'ready',
+        apps: ['googlechat'],
+        url: 'https://mac.tail1.ts.net/conch',
+        via: 'tailscale',
+      }),
+      'GET /api/auth': () => ({ method: 'none' }),
+    });
+    renderApp(<ConnectChannel kind="googlechat" />, { route: '/channels/new/googlechat' });
+    expect(await screen.findByRole('heading', { name: 'Connect Google Chat' })).toBeInTheDocument();
+    const paste = new Event('paste', { bubbles: true }) as Event & { clipboardData: unknown };
+    paste.clipboardData = { getData: () => keyFile };
+    act(() => {
+      document.body.dispatchEvent(paste);
+    });
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST' && c.path === '/api/channels')?.body).toEqual({
+        kind: 'googlechat',
+        serviceAccount: keyFile,
+      }),
+    );
+    expect(await screen.findByDisplayValue(made.hook?.url ?? '')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'I saved it' })).toBeInTheDocument();
+  });
+});

@@ -207,6 +207,15 @@ export function normalizeSecrets(secrets: ChannelSecrets, kept?: ChannelSecrets)
   if (secrets.kind === 'sms') return normalizeSms(secrets, kept?.kind === 'sms' ? kept : undefined);
   if (secrets.kind === 'mattermost') return normalizeMattermost(secrets);
   if (secrets.kind === 'rocketchat') return normalizeRocketChat(secrets);
+  if (secrets.kind === 'googlechat')
+    return {
+      kind: 'googlechat',
+      serviceAccount: secrets.serviceAccount.trim(),
+      hookId:
+        (kept?.kind === 'googlechat' ? kept.hookId : undefined) ??
+        secrets.hookId ??
+        randomBytes(18).toString('base64url'),
+    };
   if (secrets.kind === 'line')
     return normalizeLine(secrets, kept?.kind === 'line' ? kept : undefined);
   const pick = (value: string, pattern: RegExp) => pattern.exec(value)?.[1] ?? value.trim();
@@ -1164,7 +1173,10 @@ export class ChannelService {
           void this.#onPress(id, press).catch((error: unknown) =>
             this.#log(`button on ${stored.kind}: ${explain(error)}`),
           ),
-        state: (state, detail) => this.#setHealth(id, state, detail),
+        // A connection that was replaced (repaired, a new key) never speaks for the channel again.
+        state: (state, detail) => {
+          if (this.#live.get(id) === live) this.#setHealth(id, state, detail);
+        },
         stop: (chatId) => this.#quietly(this.#stopFromApp(id, chatId), 'stop'),
         healed: (message) => this.deps.onHeal(message),
         joined: () => this.#quietly(this.#refreshBot(id), 'refresh'),

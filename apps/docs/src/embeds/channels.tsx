@@ -637,6 +637,38 @@ const SCENES: Record<string, Record<string, () => ReactNode>> = {
       />
     ),
   },
+  googlechat: {
+    key: () => (
+      <PortalSketch
+        label="Google Cloud, configuring the Google Chat API"
+        address="console.cloud.google.com/apis/api/chat.googleapis.com"
+        nav={['Overview', 'Credentials', 'Configuration']}
+        active="Configuration"
+        title="Configuration"
+        color={colorOf('googlechat')}
+      >
+        <PortalSketch.Field label="App name">{BOT}</PortalSketch.Field>
+        <PortalSketch.Field label="HTTP endpoint URL">https://…/conch/hooks/…</PortalSketch.Field>
+        <PortalSketch.Row>
+          <PortalSketch.Button>Save</PortalSketch.Button>
+        </PortalSketch.Row>
+      </PortalSketch>
+    ),
+    hello: () => (
+      <Handset
+        label="Your Chat app in Google Chat, once Conch knows it’s you"
+        brand="googlechat"
+        color={colorOf('googlechat')}
+        title={BOT}
+        subtitle="App"
+        messages={[
+          { id: '1', from: 'you', text: 'hi' },
+          { id: '2', from: 'them', text: WELCOME },
+        ]}
+        footer={<Handset.Composer placeholder="History is on" />}
+      />
+    ),
+  },
 };
 
 function colorOf(id: string): string | undefined {

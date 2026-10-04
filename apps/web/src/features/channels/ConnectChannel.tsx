@@ -56,6 +56,7 @@ import { LinkedSetup } from './LinkedSetup';
 import { TALK_PATH } from '../integrations/paths';
 import { MatrixSetup } from './MatrixSetup';
 import { TeamsSetup } from './TeamsSetup';
+import { GoogleChatSetup } from './GoogleChatSetup';
 import { LineSetup } from './LineSetup';
 import { MattermostSetup } from './MattermostSetup';
 import { RocketChatSetup } from './RocketChatSetup';
@@ -83,6 +84,7 @@ export function ConnectChannel({ kind }: { kind: string }) {
   if (kind === 'mattermost') return <MattermostSetup />;
   if (kind === 'line') return <LineSetup />;
   if (kind === 'rocketchat') return <RocketChatSetup />;
+  if (kind === 'googlechat') return <GoogleChatSetup />;
   return <SlackSetup />;
 }
 

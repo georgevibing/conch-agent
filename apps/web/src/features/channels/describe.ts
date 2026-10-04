@@ -19,6 +19,7 @@ export const APPS: Record<ChannelKind, { name: string; color: string }> = {
   mattermost: { name: 'Mattermost', color: '#1E325C' },
   line: { name: 'LINE', color: '#06C755' },
   rocketchat: { name: 'Rocket.Chat', color: '#F5455C' },
+  googlechat: { name: 'Google Chat', color: '#00AC47' },
 };
 
 /** More words people would type to find each app (⌘K). */
@@ -34,6 +35,7 @@ export const APP_WORDS: Partial<Record<string, string>> = {
   mattermost: 'mattermost self-hosted team chat server bot',
   line: 'line official account messaging api japan taiwan thailand',
   rocketchat: 'rocket chat rocketchat self-hosted team chat server bot',
+  googlechat: 'google chat hangouts workspace gsuite spaces',
 };
 
 export const isKind = (value: string | undefined): value is ChannelKind =>
