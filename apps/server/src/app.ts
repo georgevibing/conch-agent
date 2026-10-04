@@ -34,6 +34,8 @@ import {
   type CompactResult,
   ServerId,
   ReleaseTurnBody,
+  CappedChoiceBody,
+  ChatSpendLimitBody,
   SchedulePreviewBody,
   UpdateRoutineBody,
   WhenPreviewBody,
@@ -80,6 +82,8 @@ import { registerUndoRoutes } from './undo/routes';
 import { registerArtifactRoutes } from './artifacts/routes';
 import { registerConchAppRoutes } from './conchapps/routes';
 import { registerTaskRoutes } from './tasks/routes';
+import { registerMcpEndpoint } from './mcp/endpoint';
+import { registerMcpRoutes } from './mcp/routes';
 import { registerQuestionRoutes } from './questions/routes';
 import { registerFirstJobRoutes } from './onboarding/first-job';
 import { registerBackgroundRoutes } from './background/routes';
@@ -195,6 +199,9 @@ export async function buildApp(services: Services) {
   registerAuthRoutes(app, services, gate);
   registerHereRoutes(app, gate);
   registerAddressRoutes(app, services.address, gate);
+  // Other apps using Conch (ADR 0073): the door they knock on, and pairing them from Settings.
+  registerMcpEndpoint(app, services.mcp, gate, services.mcpSessions);
+  registerMcpRoutes(app, services.mcpPairing, gate);
   registerBrowserRoutes(app, services, gate);
   registerTerminalRoutes(app, services, gate);
   registerLocalRoutes(app, services, gate);
@@ -222,7 +229,7 @@ export async function buildApp(services: Services) {
   });
   registerPhoneRoutes(app, { tailscale: services.tailscale, gate });
   registerPushRoutes(app, { push: services.push, conversations: services.conversations });
-  registerVoiceRoutes(app, services.voice);
+  registerVoiceRoutes(app, services.voice, services.speech, services.wake);
   registerSafetyRoutes(app, services.activity, {
     providers: () => services.providers.ready(),
     sealing: async () => (await services.settings.get()).preferences.sealedCommands,
@@ -248,6 +255,7 @@ export async function buildApp(services: Services) {
         microsoftteams: services.mockTeams?.base,
         matrix: services.mockMatrix?.base,
         wechat: services.mockWeChat?.base,
+        sms: services.mockTwilio?.base,
       })),
     services.door,
     // Gmail's app password, offered for talking by email too (ADR 0052).
@@ -1085,6 +1093,36 @@ export async function buildApp(services: Services) {
       return sendError(reply, error);
     }
   });
+  /**
+   * A message at a spending limit goes on as the person chose (ADR 0079): raise
+   * the limit, carry on with a model that costs less, or stop. Only from the UI.
+   */
+  app.post<{ Params: { id: string } }>('/api/conversations/:id/capped', async (request, reply) => {
+    const body = parse(CappedChoiceBody, request.body, reply);
+    if (!body) return;
+    try {
+      if (await services.conversations.settleCapped(request.params.id, body.choice))
+        return { ok: true };
+      return reply
+        .code(409)
+        .send({ error: 'conflict', message: 'Nothing is waiting at a limit in this chat now.' });
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  /** This chat's own spending limit (ADR 0079), or none. Only from the UI. */
+  app.put<{ Params: { id: string } }>(
+    '/api/conversations/:id/spend-limit',
+    async (request, reply) => {
+      const body = parse(ChatSpendLimitBody, request.body, reply);
+      if (!body) return;
+      try {
+        return await services.conversations.setSpendLimit(request.params.id, body.capUsd);
+      } catch (error) {
+        return sendError(reply, error);
+      }
+    },
+  );
   /** `/compact`: summarise the start of a long chat now (ADR 0055). */
   app.post<{ Params: { id: string } }>('/api/conversations/:id/compact', async (request, reply) => {
     const body = parse(CompactBody, request.body ?? {}, reply);

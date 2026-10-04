@@ -79,7 +79,7 @@ export function ChannelFacts({ id }: { id: string }) {
         PERSONAL[channel.id] ?? [
           'A bot of your own',
           'No public address',
-          'Private chats only',
+          channel.groups ? 'Groups only if you turn them on' : 'Private chats only',
           'Nobody gets in unless you let them',
         ]
       ).map((fact) => (
@@ -127,6 +127,12 @@ const PERSONAL: Record<string, string[]> = {
     'An account of its own',
     'No public address',
     'End-to-end encrypted',
+    'Nobody gets in unless you let them',
+  ],
+  sms: [
+    'A number of its own, from Twilio',
+    'A public address, just for its texts',
+    'Plain text, from any phone',
     'Nobody gets in unless you let them',
   ],
   wechat: [
@@ -498,6 +504,40 @@ const SCENES: Record<string, Record<string, () => ReactNode>> = {
           { id: '2', from: 'them', text: WELCOME },
         ]}
         footer={<Handset.Composer placeholder="发消息" />}
+      />
+    ),
+  },
+  sms: {
+    key: () => (
+      <PortalSketch
+        label="The Twilio Console’s first page, with Account Info"
+        address="console.twilio.com"
+        nav={['Account Dashboard', 'Phone Numbers', 'Messaging']}
+        active="Account Dashboard"
+        title="Account Info"
+        color={colorOf('sms')}
+      >
+        <PortalSketch.Field label="Account SID">AC0a1b2c3d…</PortalSketch.Field>
+        <PortalSketch.Field label="Auth Token">••••••••••••</PortalSketch.Field>
+        <PortalSketch.Row>
+          <PortalSketch.Button quiet>Show</PortalSketch.Button>
+          <PortalSketch.Button>Copy</PortalSketch.Button>
+        </PortalSketch.Row>
+        <PortalSketch.Field label="My Twilio phone number">+1 500 555 0006</PortalSketch.Field>
+      </PortalSketch>
+    ),
+    hello: () => (
+      <Handset
+        label="Messages on your phone, texting your assistant’s number"
+        brand="sms"
+        color={colorOf('sms')}
+        title="+1 500 555 0006"
+        subtitle="Text message"
+        messages={[
+          { id: '1', from: 'you', text: 'hi' },
+          { id: '2', from: 'them', text: WELCOME },
+        ]}
+        footer={<Handset.Composer placeholder="Text message" />}
       />
     ),
   },

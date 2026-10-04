@@ -23,6 +23,8 @@ const lookup: LatestLookup = {
   npm: async () => '0.160.0',
   winget: async () => undefined,
   brew: async () => undefined,
+  pypi: async () => undefined,
+  github: async () => undefined,
 };
 
 /**

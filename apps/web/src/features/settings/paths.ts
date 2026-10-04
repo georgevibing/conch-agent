@@ -18,6 +18,7 @@ export const SETTINGS_TABS = [
   'usage',
   'browser',
   'terminal',
+  'other-apps',
   'security',
   'health',
 ] as const;

@@ -2,6 +2,7 @@ import { readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
+  ChatSpend,
   ConversationEvent,
   ConversationStatus,
   ConversationSummary,
@@ -47,6 +48,7 @@ const StoredRecord = z.object({
   options: TurnOptions.catch({}),
   origin: ConversationSummary.shape.origin.catch(undefined),
   archivedAt: z.number().optional().catch(undefined),
+  spend: ChatSpend.optional().catch(undefined),
   engine: EngineId.catch('claude-code'),
   resumeId: z.string().optional().catch(undefined),
   sessions: z

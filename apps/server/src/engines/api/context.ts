@@ -22,6 +22,7 @@
  * of the first user message at request time, and only Conch's own text (what
  * the person sent, what a tool returned) is ever shortened.
  */
+import { isToolPictures } from './pictures';
 import { startsTurn } from './session';
 import type { WireMessage } from './types';
 
@@ -339,7 +340,12 @@ function called(name: unknown, args: unknown): string {
 export function readable(message: WireMessage): string[] {
   const lines: string[] = [];
   const content = message.content;
-  if (message.role === 'user') {
+  if (isToolPictures(message)) {
+    lines.push('Tool result: [a picture]');
+  } else if (message.role === 'user' && !startsTurn(message) && typeof content === 'string') {
+    // Tool answers to calls asked for in words (ADR 0072).
+    lines.push(`Tool result: ${clipMiddle(content.trim(), TOOL_CLIP)}`);
+  } else if (message.role === 'user') {
     const said = blocksText(content);
     const pictures = Array.isArray(message.images) && message.images.length ? '[a picture]' : '';
     const text = [said, pictures].filter(Boolean).join('\n').trim();

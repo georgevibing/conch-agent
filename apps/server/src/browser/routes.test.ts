@@ -87,6 +87,68 @@ describe('browser routes', () => {
     expect(off.statusCode).toBe(200);
   });
 
+  it('needs a recent password to use your Chrome or a cloud browser, and never shows the key', async () => {
+    const { app, services } = await setup();
+    const set = await app.inject({
+      method: 'PUT',
+      url: '/api/access/password',
+      payload: { username: 'ada', password: PASSWORD },
+    });
+    const cookie = cookieOf(set);
+    // A PATCH can't change where it runs, whatever it says.
+    await app.inject({
+      method: 'PATCH',
+      url: '/api/browser/settings',
+      headers: { cookie },
+      payload: { backend: 'chrome' },
+    });
+    expect((await services.browser.store.settings()).backend).toBe('local');
+    // Freshly signed in: a cloud browser, with its key.
+    const key = 'bb_live_' + 'routes-secret-1';
+    const chosen = await app.inject({
+      method: 'PUT',
+      url: '/api/browser/backend',
+      headers: { cookie },
+      payload: { kind: 'browserbase', key },
+    });
+    expect(chosen.statusCode).toBe(200);
+    expect(chosen.body).not.toContain(key);
+    expect(BrowserStatus.parse(chosen.json()).backend).toMatchObject({
+      chosen: 'browserbase',
+      saved: { browserbase: true, steel: false },
+    });
+    expect((await app.inject({ url: '/api/browser', headers: { cookie } })).body).not.toContain(
+      key,
+    );
+    // Ten minutes on: your Chrome needs the password again; Conch's own never does.
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 11 * 60 * 1000);
+    const blocked = await app.inject({
+      method: 'PUT',
+      url: '/api/browser/backend',
+      headers: { cookie },
+      payload: { kind: 'chrome' },
+    });
+    expect(blocked.statusCode).toBe(403);
+    expect(blocked.json().error).toBe('verify-required');
+    const back = await app.inject({
+      method: 'PUT',
+      url: '/api/browser/backend',
+      headers: { cookie },
+      payload: { kind: 'local' },
+    });
+    expect(back.statusCode).toBe(200);
+    vi.restoreAllMocks();
+    // A bad address is refused in words.
+    const bad = await app.inject({
+      method: 'PUT',
+      url: '/api/browser/backend',
+      headers: { cookie },
+      payload: { kind: 'cdp', address: 'file:///etc/passwd' },
+    });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json().message).toMatch(/isn’t a browser address/);
+  });
+
   it('keeps the live view to this site, signed-in people and real chats', async () => {
     const { app } = await setup();
     const upgrade = { upgrade: 'websocket', connection: 'upgrade' };

@@ -231,7 +231,8 @@ what part 1 gives a phone.
   takes the first sentence to arrive.
 - **Not done yet:**
   - **Telegram voice notes.** They arrive as Opus, which whisper.cpp can't read
-    without a converter.
+    without a converter. Done in [ADR 0077](./0077-voice-notes-and-a-natural-voice.md),
+    for every channel that has voice notes, with FFmpeg as the converter.
   - **A wake word.**
   - **Allow from a lock screen.** Deliberately left out.
 - **Not verified on a real device yet:** iOS Home Screen push, and Chrome's

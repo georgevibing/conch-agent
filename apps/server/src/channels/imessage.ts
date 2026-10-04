@@ -22,6 +22,7 @@ import {
   type SendOptions,
   type SentRef,
   pause,
+  capOf,
 } from './types';
 
 /** Where Messages keeps everything, for the person running Conch. */
@@ -368,6 +369,8 @@ export class ImessageAdapter implements ChannelAdapter {
                     ...(f.mime && { mimeType: f.mime }),
                     ...(f.size && { size: f.size }),
                     ref: f.filename,
+                    // Messages records audio messages as Core Audio files.
+                    ...(/\.caf$/i.test(f.filename) && { voice: true }),
                   },
                 ]
               : [],
@@ -419,7 +422,7 @@ export class ImessageAdapter implements ChannelAdapter {
       },
       // AppleScript can't show typing… in Messages.
       typing: () => Promise.resolve(),
-      download: (file) => this.#download(file),
+      download: (file, options) => this.#download(file, options),
       directChat: (userId) =>
         Promise.resolve(
           this.options.mode === 'self'
@@ -517,8 +520,9 @@ export class ImessageAdapter implements ChannelAdapter {
     if (result.code !== 0) throw sendError(result);
   }
 
-  async #download(file: ChannelFile) {
-    if (file.size && file.size > FILE_LIMIT)
+  async #download(file: ChannelFile, options?: { maxBytes?: number }) {
+    const cap = capOf(FILE_LIMIT, options);
+    if (file.size && file.size > cap)
       throw new ChannelError('refused', 'That file is over 25 MB, the most Conch takes.');
     const path = file.ref.replace(/^~(?=\/)/, homedir());
     // Only Messages' own attachments: a name in the database can't point anywhere else.
@@ -527,7 +531,7 @@ export class ImessageAdapter implements ChannelAdapter {
     if (!real || !(real === root || real.startsWith(root + sep)))
       throw new ChannelError('refused', 'Messages doesn’t have that file any more.');
     const size = (await stat(real)).size;
-    if (size > FILE_LIMIT)
+    if (size > cap)
       throw new ChannelError('refused', 'That file is over 25 MB, the most Conch takes.');
     if (/heic|heif/i.test(`${file.mimeType ?? ''} ${real}`)) {
       const jpeg = await (this.options.convert ?? sips)(real).catch(() => undefined);

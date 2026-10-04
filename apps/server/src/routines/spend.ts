@@ -31,9 +31,10 @@ import type {
 } from '@conch/protocol';
 import { z } from 'zod';
 
-import type { Engine, EngineUsage } from '../engines/types';
+import type { Engine } from '../engines/types';
 import { Mutex, writeJson } from '../lib/fs';
 import { readStore, type Heal } from '../lib/recover';
+import { Billings, priceUsage, type BillingInfo } from '../usage/billing';
 import { costAt, priceOf, TYPICAL_RUN } from '../usage/prices';
 import { perDay } from './schedule';
 
@@ -54,8 +55,6 @@ export const PLAN_ROOM_PERCENT = 80;
 const DAYS_PER_MONTH = 30.4;
 /** How many recent runs say what's usual. */
 const RECENT = 5;
-/** What a provider's billing is, read at most this often. */
-const BILLING_MS = 60_000;
 
 const SpendFile = z.object({
   version: z.literal(1).default(1),
@@ -85,13 +84,6 @@ export interface RunLimit {
   usd?: number;
   tokens?: number;
   custom: boolean;
-}
-
-interface BillingInfo {
-  billing?: Billing;
-  /** Who meters it, in words: "Claude Max". */
-  source?: string;
-  usage?: EngineUsage;
 }
 
 /**
@@ -195,7 +187,7 @@ function usual(runs: readonly RoutineRun[], model: string | undefined): RoutineR
 export class RoutineSpend {
   #mutex = new Mutex();
   #file?: SpendFile;
-  #billing = new Map<EngineId, { at: number; value: BillingInfo }>();
+  #billings: Billings;
 
   constructor(
     private readonly deps: {
@@ -208,8 +200,12 @@ export class RoutineSpend {
       paused?: (spending: RoutineSpending) => void;
       now?: () => number;
       heal?: Heal;
+      /** How providers charge, shared with chats (ADR 0079). */
+      billings?: Billings;
     },
-  ) {}
+  ) {
+    this.#billings = deps.billings ?? new Billings(() => this.#now);
+  }
 
   get #now() {
     return this.deps.now?.() ?? Date.now();
@@ -225,29 +221,13 @@ export class RoutineSpend {
    * Free (it runs on this computer), a plan (a subscription's allowance) or
    * money. Asked of the engine, never assumed from which engine it is.
    */
-  async billing(engine: Engine, { fresh = false } = {}): Promise<BillingInfo> {
-    if (engine.local) return { billing: 'free' };
-    const cached = this.#billing.get(engine.id);
-    if (!fresh && cached && this.#now - cached.at < BILLING_MS) return cached.value;
-    const status = await engine.detect().catch(() => undefined);
-    let value: BillingInfo = {};
-    if (status?.state === 'ready') {
-      const usage = engine.usage ? await engine.usage().catch(() => undefined) : undefined;
-      const account = status.auth?.description.split(' · ')[0]?.trim() || engine.label;
-      if (usage?.kind === 'plan') value = { billing: 'plan', source: usage.source, usage };
-      else if (usage?.kind === 'metered') value = { billing: 'metered', source: usage.source };
-      else if (status.auth?.method === 'subscription') value = { billing: 'plan', source: account };
-      else value = { billing: 'metered', source: account };
-    }
-    this.#billing.set(engine.id, { at: this.#now, value });
-    return value;
+  billing(engine: Engine, { fresh = false } = {}): Promise<BillingInfo> {
+    return this.#billings.of(engine, { fresh });
   }
 
   /** Money for these tokens: the provider's own figure, else list price, else unknown. */
   price(usage: Usage, model: string | undefined): { usd?: number; priced?: 'provider' | 'list' } {
-    if (usage.costUsd !== undefined) return { usd: usage.costUsd, priced: 'provider' };
-    const price = priceOf(model);
-    return price ? { usd: costAt(price, usage), priced: 'list' } : {};
+    return priceUsage(usage, model);
   }
 
   /** What a run (or a check before one) cost. */

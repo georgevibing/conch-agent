@@ -1,0 +1,126 @@
+# The eval suite on real models (ADR 0071): nightly, on demand, and a cheap
+# smoke run on pushes to main when the `EVALS_SMOKE` repository variable is
+# `true`. It spends money and holds real keys, so:
+# - it never runs for pull requests (no `pull_request` or `pull_request_target`),
+#   so a fork's code never sees a key, and only runs in this repository;
+# - every action is pinned to a full commit, with its version beside it;
+# - the keys reach only the one step that runs `pnpm eval`, never the job;
+# - checkout keeps no credentials.
+# A model whose key isn't set is skipped, and the report says so.
+name: Evals
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      models:
+        description: 'Models (ids from apps/server/src/evals/models.ts, comma-separated; empty = all)'
+        required: false
+        default: ''
+      tasks:
+        description: 'Tasks (ids from apps/server/src/evals/tasks.ts, comma-separated; empty = all)'
+        required: false
+        default: ''
+      max_usd:
+        description: 'Stop starting tasks once the run has spent this many dollars'
+        required: false
+        default: '10'
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-${{ github.event_name == 'push' && 'smoke' || 'full' }}
+  cancel-in-progress: false
+
+jobs:
+  full:
+    if: github.repository == 'georgevibing/conch-agent' && github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      # To download the last full run's results, to compare with.
+      actions: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Ubuntu 24.04 keeps apps from making the namespaces Chromium's sandbox uses.
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      # Codex CLI, which runs on the OpenAI key; without the key its row is skipped.
+      - run: npm install -g @openai/codex@0.159.1
+      - name: Fetch the previous results
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id=$(gh run list --workflow evals.yml --branch main --status success --limit 20 \
+            --json databaseId,event --jq '[.[] | select(.event != "push")][0].databaseId // empty')
+          if [ -n "$id" ]; then gh run download "$id" --name eval-results --dir previous || true; fi
+      # Inputs reach the command as variables, never pasted into the script;
+      # the keys reach this step alone.
+      - name: Run the evals
+        env:
+          MODELS: ${{ inputs.models }}
+          TASKS: ${{ inputs.tasks }}
+          MAX_USD: ${{ inputs.max_usd || '10' }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          args=(--concurrency 3 --max-usd "$MAX_USD" --out .evals)
+          if [ -n "$MODELS" ]; then args+=(--models "$MODELS"); fi
+          if [ -n "$TASKS" ]; then args+=(--tasks "$TASKS"); fi
+          if [ -f previous/latest.json ]; then args+=(--previous previous/latest.json); fi
+          pnpm eval "${args[@]}"
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: eval-results
+          path: .evals/
+          retention-days: 90
+          if-no-files-found: ignore
+
+  smoke:
+    if: >-
+      github.repository == 'georgevibing/conch-agent' && github.event_name == 'push' &&
+      vars.EVALS_SMOKE == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      # Without the key, the smoke model is skipped and the summary says so.
+      - name: Run the smoke evals
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: pnpm eval --smoke --max-usd 1 --out .evals
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: eval-smoke-results
+          path: .evals/
+          retention-days: 14
+          if-no-files-found: ignore

@@ -47,6 +47,7 @@ const APP_NAMES: Record<string, string> = {
   microsoftteams: 'Microsoft Teams',
   matrix: 'Matrix',
   wechat: 'WeChat',
+  sms: 'SMS',
 };
 
 const text = (value: unknown, fallback: string) => {
@@ -196,6 +197,7 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
       more: Math.max(0, sites.length - MAX_LISTED),
     });
   if (record(browser?.settings)?.allowLocal === true) powers.push({ kind: 'browser-local' });
+  if (record(browser?.settings)?.backend === 'chrome') powers.push({ kind: 'browser-own-chrome' });
 
   if (record(json(read, 'terminal.json')?.settings)?.allowRemote === true)
     powers.push({ kind: 'terminal-remote' });
@@ -224,9 +226,16 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
   for (const raw of Array.isArray(channels) ? channels : []) {
     const channel = record(raw);
     if (!channel || !on(channel.enabled)) continue;
-    const people = (Array.isArray(channel.people) ? channel.people : [])
-      .map(record)
-      .map((person) => text(person?.name ?? person?.username, 'Someone'));
+    const people = [
+      ...(Array.isArray(channel.people) ? channel.people : [])
+        .map(record)
+        .map((person) => text(person?.name ?? person?.username, 'Someone')),
+      // A group it answers in (ADR 0075): everyone there can reach it.
+      ...(Array.isArray(channel.groups) ? channel.groups : [])
+        .map(record)
+        .filter((group) => group?.on === true)
+        .map((group) => `Everyone in ${text(group?.name, 'a group')}`),
+    ];
     if (!people.length) continue;
     const bot = text(record(channel.bot)?.name, 'A bot');
     const app = APP_NAMES[String(channel.kind)] ?? 'a chat app';

@@ -12,6 +12,11 @@ interface Stored extends Attachment {
   /** The file's name in its folder (the shown name, made safe to write). */
   file: string;
   conversations: string[];
+  /**
+   * Kept for a message that's waiting (a voice note Conch can't hear yet,
+   * ADR 0077): not swept with unsent uploads until it goes.
+   */
+  held?: boolean;
 }
 
 export class AttachmentError extends Error {
@@ -25,6 +30,8 @@ export class AttachmentError extends Error {
 
 /** How long an upload that was never sent is kept (the tab closed, the draft was dropped). */
 export const UNSENT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+/** How long one held for a waiting message is kept (a voice note waits at most a week). */
+export const HELD_MAX_AGE_MS = 8 * 24 * 60 * 60 * 1000;
 
 const PASTED_NAME = 'Pasted text';
 
@@ -52,6 +59,10 @@ export class AttachmentStore {
     bytes: Buffer;
     claimedType?: string;
     pasted?: boolean;
+    /** A voice note's words (ADR 0077). */
+    transcript?: string;
+    /** It waits for something before it's sent: kept until then. */
+    held?: boolean;
   }): Promise<Attachment> {
     const { bytes } = input;
     if (bytes.length > ATTACHMENT_LIMITS.maxBytes)
@@ -75,14 +86,33 @@ export class AttachmentStore {
       ...(pasted && { pasted: true }),
       ...(found.text !== undefined && { lines: countLines(found.text) }),
       ...(found.width && found.height && { width: found.width, height: found.height }),
+      ...(input.transcript && { transcript: input.transcript.slice(0, 20_000) }),
       createdAt: Date.now(),
     };
     const file = pasted ? 'pasted-text.txt' : cleanName(shown);
     const folder = this.folder(id);
     await mkdir(folder, { recursive: true, mode: 0o700 });
     await writeFile(safeJoin(folder, file), bytes, { mode: 0o600 });
-    await writeJson(join(folder, 'meta.json'), { ...attachment, file, conversations: [] });
+    await writeJson(join(folder, 'meta.json'), {
+      ...attachment,
+      file,
+      conversations: [],
+      ...(input.held && { held: true }),
+    });
     return Attachment.parse(attachment);
+  }
+
+  /** A waiting voice note was heard: keep its words with it, and let it go out. */
+  transcribed(id: string, transcript: string): Promise<Attachment | undefined> {
+    return this.#mutex.run(async () => {
+      const found = await this.#read(id);
+      if (!found) return undefined;
+      found.transcript = transcript.slice(0, 20_000);
+      delete found.held;
+      await writeJson(join(this.folder(id), 'meta.json'), found);
+      const { file: _f, conversations: _c, held: _h, ...attachment } = found;
+      return Attachment.parse(attachment);
+    });
   }
 
   async #read(id: string): Promise<Stored | undefined> {
@@ -96,7 +126,7 @@ export class AttachmentStore {
   async get(id: string): Promise<{ attachment: Attachment; path: string } | undefined> {
     const stored = await this.#read(id);
     if (!stored) return undefined;
-    const { file, conversations: _, ...attachment } = stored;
+    const { file, conversations: _, held: _held, ...attachment } = stored;
     const parsed = Attachment.safeParse(attachment);
     if (!parsed.success) return undefined;
     return { attachment: parsed.data, path: safeJoin(this.folder(id), file) };
@@ -127,11 +157,13 @@ export class AttachmentStore {
         stored.push(found);
       }
       for (const found of stored) {
-        if (!found.conversations.includes(conversationId)) {
+        if (!found.conversations.includes(conversationId) || found.held) {
           found.conversations.push(conversationId);
+          found.conversations = [...new Set(found.conversations)];
+          delete found.held;
           await writeJson(join(this.folder(found.id), 'meta.json'), found);
         }
-        const { file: _f, conversations: _c, ...attachment } = found;
+        const { file: _f, conversations: _c, held: _h, ...attachment } = found;
         out.push(Attachment.parse(attachment));
       }
       return out;
@@ -175,7 +207,11 @@ export class AttachmentStore {
         const age = found
           ? now - found.createdAt
           : now - ((await stat(this.folder(name)).catch(() => undefined))?.mtimeMs ?? now);
-        if ((found?.conversations.length ?? 0) > 0 || age < UNSENT_MAX_AGE_MS) continue;
+        if (
+          (found?.conversations.length ?? 0) > 0 ||
+          age < (found?.held ? HELD_MAX_AGE_MS : UNSENT_MAX_AGE_MS)
+        )
+          continue;
         await rm(this.folder(name), { recursive: true, force: true });
         removed++;
       }

@@ -1,9 +1,11 @@
 import type {
+  BrowserBackendKind,
   BrowserBox,
   BrowserControl,
   BrowserHandoff,
   BrowserLiveCommand,
   BrowserLiveEvent,
+  BrowserTabEntry,
   BrowserTab as TabState,
 } from '@conch/protocol';
 import type { CDPSession, Locator, Page } from 'playwright-core';
@@ -33,10 +35,37 @@ const MODIFIER_KEYS: [keyof Modifiers, string][] = [
   ['shift', 'Shift'],
 ];
 
+/** Most tabs one chat keeps open. A new one past this closes the one unused longest. */
+export const MAX_TABS = 8;
+
+/** One page in a chat's browser: "t1", "t2"… for the agent and the strip. */
+export interface TabEntry {
+  id: string;
+  page: Page;
+  /** The tab that opened it (a popup, a link to a new tab). */
+  opener?: string;
+  /** When it was last the one in view. */
+  seen: number;
+}
+
+export interface TabHooks {
+  /** The tab's address, title, loading or driver changed. */
+  changed: (tab: Tab) => void;
+  /** A page finished loading (decline cookie banners etc.). */
+  loaded: (page: Page) => void;
+  /** A page crashed and was reloaded. */
+  crashed: () => void;
+  /** A new page joined (a popup, a new tab): contain it, watch its downloads. */
+  adopted?: (page: Page) => void | Promise<void>;
+  /** The oldest tab was closed to make room: said in the agent's next result. */
+  evicted?: (entry: TabEntry) => void;
+}
+
 /**
- * One conversation's tab. Popups (a "Sign in with Google" window) stack on
- * top and the view follows the newest; when one closes, the view returns to
- * the page that opened it.
+ * One conversation's browser: its tabs, which one is in view, who's driving,
+ * and the picture. Popups ("Sign in with Google") and links that open a new
+ * tab become tabs of their own and come into view; closing one goes back to
+ * the tab that opened it. The agent and the panel see the same tabs.
  */
 export class Tab {
   control: BrowserControl = 'idle';
@@ -48,7 +77,15 @@ export class Tab {
   lastUsed = Date.now();
   /** The page's size: desktop-wide, shaped like the panel watching it (see `fit`). */
   viewport = { ...VIEWPORT };
-  #pages: Page[] = [];
+  /** The viewport when the agent last looked at a screenshot: its x,y are in this space. */
+  shotViewport?: { width: number; height: number };
+  /** Tabs that opened since the agent last heard: said in its next result. */
+  readonly opened: string[] = [];
+  /** Tabs closed to make room since the agent last heard. */
+  readonly evicted: string[] = [];
+  #tabs: TabEntry[] = [];
+  #active?: TabEntry;
+  #next = 1;
   #cdp?: { page: Page; session: CDPSession };
   #waiters = new Set<() => void>();
   #closed = false;
@@ -57,37 +94,63 @@ export class Tab {
     readonly conversationId: string,
     page: Page,
     private readonly watchers: () => Set<Watcher>,
-    private readonly hooks: {
-      /** The tab's address, title, loading or driver changed. */
-      changed: (tab: Tab) => void;
-      /** A page finished loading (decline cookie banners etc.). */
-      loaded: (page: Page) => void;
-      /** A page crashed and was reloaded. */
-      crashed: () => void;
-    },
+    private readonly hooks: TabHooks,
+    private readonly options: {
+      /** Resize pages to the panel's shape. Never in your own Chrome: its windows are yours. */
+      emulate: boolean;
+      /** Where it runs, for the panel: undefined for Conch's own here. */
+      backend?: BrowserBackendKind;
+    } = { emulate: true },
   ) {
     this.#adopt(page);
   }
 
   get page(): Page {
-    const page = this.#pages.at(-1);
+    const page = this.#active?.page;
     if (!page) throw new Error('This tab has no page.');
     return page;
   }
 
   /** The page in view, if the tab still has one. */
   get current(): Page | undefined {
-    return this.#pages.at(-1);
+    return this.#active?.page;
   }
 
   get closed(): boolean {
     return this.#closed;
   }
 
-  #adopt(page: Page): void {
-    this.#pages.push(page);
-    if (page.viewportSize()?.height !== this.viewport.height)
-      void page.setViewportSize(this.viewport).catch(() => undefined);
+  /** Every tab, in the order they opened. */
+  get tabs(): readonly TabEntry[] {
+    return this.#tabs;
+  }
+
+  get activeId(): string | undefined {
+    return this.#active?.id;
+  }
+
+  entry(id: string): TabEntry | undefined {
+    return this.#tabs.find((t) => t.id === id.trim().toLowerCase());
+  }
+
+  /** A page that belongs to this chat now: shown at once. */
+  add(page: Page, opener?: string): TabEntry {
+    return this.#adopt(page, opener);
+  }
+
+  #adopt(page: Page, opener?: string): TabEntry {
+    const existing = this.#tabs.find((t) => t.page === page);
+    if (existing) return existing;
+    const entry: TabEntry = { id: `t${this.#next++}`, page, opener, seen: Date.now() };
+    this.#tabs.push(entry);
+    void this.hooks.adopted?.(page);
+    this.#show(entry);
+    if (this.options.emulate) {
+      if (page.viewportSize()?.height !== this.viewport.height)
+        void page.setViewportSize(this.viewport).catch(() => undefined);
+    } else {
+      void this.#measure(page);
+    }
     page.on('framenavigated', (frame) => {
       if (frame === page.mainFrame()) this.hooks.changed(this);
     });
@@ -96,23 +159,98 @@ export class Tab {
       this.hooks.loaded(page);
     });
     page.on('popup', (popup) => {
-      this.#adopt(popup);
-      void this.refresh();
+      if (this.#closed) return;
+      const child = this.#adopt(popup, entry.id);
+      this.opened.push(child.id);
+      this.#makeRoom(child);
       this.hooks.changed(this);
     });
     page.on('close', () => {
-      this.#pages = this.#pages.filter((p) => p !== page);
-      if (this.#pages.length === 0) {
+      const gone = this.#tabs.find((t) => t.page === page);
+      this.#tabs = this.#tabs.filter((t) => t.page !== page);
+      if (this.#tabs.length === 0) {
+        this.#active = undefined;
         this.#closed = true;
-      } else {
-        void this.refresh();
+      } else if (this.#active?.page === page) {
+        // Back to the tab that opened it, else the one in view before.
+        const back =
+          (gone?.opener && this.#tabs.find((t) => t.id === gone.opener)) ||
+          [...this.#tabs].sort((a, b) => b.seen - a.seen)[0];
+        if (back) this.#show(back);
       }
+      void this.refresh();
       this.hooks.changed(this);
     });
     page.on('crash', () => {
       this.hooks.crashed();
       void page.reload().catch(() => undefined);
     });
+    return entry;
+  }
+
+  /** Past the limit: the tab unused longest goes (never the one in view or the new one). */
+  #makeRoom(keep: TabEntry): void {
+    while (this.#tabs.length > MAX_TABS) {
+      const oldest = this.#tabs
+        .filter((t) => t !== keep && t !== this.#active)
+        .sort((a, b) => a.seen - b.seen)[0];
+      if (!oldest) return;
+      this.#tabs = this.#tabs.filter((t) => t !== oldest);
+      this.evicted.push(oldest.id);
+      this.hooks.evicted?.(oldest);
+      void oldest.page.close().catch(() => undefined);
+    }
+  }
+
+  #show(entry: TabEntry): void {
+    this.#active = entry;
+    entry.seen = Date.now();
+    void this.refresh();
+  }
+
+  /** Your own Chrome keeps its own window size: read it rather than set it. */
+  async #measure(page: Page): Promise<void> {
+    const size = (await page
+      .evaluate('[window.innerWidth, window.innerHeight]')
+      .catch(() => undefined)) as [number, number] | undefined;
+    if (!size || page !== this.current) return;
+    const [width, height] = size;
+    if (width > 0 && height > 0) this.viewport = { width, height };
+  }
+
+  /** Bring a tab into view. False if there's no such tab. */
+  switchTo(id: string): boolean {
+    const entry = this.entry(id);
+    if (!entry) return false;
+    this.#show(entry);
+    if (!this.options.emulate) void this.#measure(entry.page);
+    void entry.page.bringToFront().catch(() => undefined);
+    this.hooks.changed(this);
+    return true;
+  }
+
+  /** Close one tab (the last one stays: a chat always has a page). */
+  async closeTab(id: string): Promise<'closed' | 'missing' | 'last'> {
+    const entry = this.entry(id);
+    if (!entry) return 'missing';
+    if (this.#tabs.length === 1) return 'last';
+    await entry.page.close().catch(() => undefined);
+    return 'closed';
+  }
+
+  /** Each tab's title and address, for the agent and the strip. */
+  async list(): Promise<BrowserTabEntry[]> {
+    return Promise.all(
+      this.#tabs.map(async (t) => {
+        const url = t.page.url();
+        return {
+          id: t.id,
+          title: await t.page.title().catch(() => ''),
+          url: url === 'about:blank' ? '' : url,
+          active: t === this.#active,
+        };
+      }),
+    );
   }
 
   async state(): Promise<TabState> {
@@ -123,27 +261,31 @@ export class Tab {
       url: url === 'about:blank' ? '' : url,
       title: await page.title().catch(() => ''),
       loading: false,
-      canGoBack: this.#pages.length > 1 || url !== 'about:blank',
+      canGoBack: url !== 'about:blank',
       canGoForward: false,
       control: this.control,
       viewport: this.viewport,
       handoff: this.handoff,
+      tabs: await this.list(),
+      ...(this.options.backend && { backend: this.options.backend }),
     };
   }
 
   /**
    * Give the page the panel's shape. Width stays desktop-like (so sites don't
    * switch to their phone layout) at about 1.6× the panel, so text stays
-   * readable; height follows the panel, so the picture fills it.
+   * readable; height follows the panel, so the picture fills it. Your own
+   * Chrome is never resized: the panel shows it as it is.
    */
   async fit(stage: { width: number; height: number }): Promise<boolean> {
+    if (!this.options.emulate) return false;
     const width = Math.round(Math.min(1440, Math.max(960, stage.width * 1.6)));
     const height = Math.round(Math.min(2400, Math.max(540, (width * stage.height) / stage.width)));
     if (Math.abs(width - this.viewport.width) < 8 && Math.abs(height - this.viewport.height) < 8)
       return false;
     this.viewport = { width, height };
     await Promise.all(
-      this.#pages.map((p) => p.setViewportSize(this.viewport).catch(() => undefined)),
+      this.#tabs.map((t) => t.page.setViewportSize(this.viewport).catch(() => undefined)),
     );
     // The screencast is sized at start: begin again at the new size.
     if (this.#cdp) {
@@ -191,7 +333,7 @@ export class Tab {
   /** Start or stop the screencast to match who's watching, on the page in view. */
   async refresh(): Promise<void> {
     const wanted = !this.#closed && [...this.watchers()].some((w) => w.visible);
-    const page = this.#pages.at(-1);
+    const page = this.#active?.page;
     if (this.#cdp && (!wanted || this.#cdp.page !== page)) {
       const { session } = this.#cdp;
       this.#cdp = undefined;
@@ -199,7 +341,17 @@ export class Tab {
       await session.detach().catch(() => undefined);
     }
     if (!wanted || !page || this.#cdp) return;
-    const session = await page.context().newCDPSession(page);
+    let session: CDPSession;
+    try {
+      session = await page.context().newCDPSession(page);
+    } catch {
+      return; // The page closed meanwhile.
+    }
+    // Another refresh got there first, or the view moved on while this one started.
+    if (this.#cdp || this.#active?.page !== page) {
+      await session.detach().catch(() => undefined);
+      return;
+    }
     this.#cdp = { page, session };
     session.on('Page.screencastFrame', (frame) => {
       void session
@@ -233,6 +385,11 @@ export class Tab {
   async boxOf(locator: Locator): Promise<BrowserBox | undefined> {
     const box = await locator.boundingBox({ timeout: 1_500 }).catch(() => null);
     if (!box) return undefined;
+    return this.boxAt(box);
+  }
+
+  /** A box in page pixels, as 0–1 of the viewport. */
+  boxAt(box: { x: number; y: number; width: number; height: number }): BrowserBox {
     const clamp = (n: number) => Math.min(1, Math.max(0, n));
     return {
       x: clamp(box.x / this.viewport.width),
@@ -282,10 +439,18 @@ export class Tab {
 
   // ── Your hands ────────────────────────────────────────────────────────
 
+  /** When you last touched the page: a handoff waits until you've paused. */
+  lastInput = 0;
+
   /** Mouse and keyboard from the live view. Only while you're driving. */
   async input(command: BrowserLiveCommand): Promise<void> {
     const page = this.page;
     this.lastUsed = Date.now();
+    if (command.type === 'mouse' && command.action === 'move') {
+      // Hovering isn't doing anything.
+    } else {
+      this.lastInput = Date.now();
+    }
     switch (command.type) {
       case 'mouse': {
         const x = command.x * this.viewport.width;
@@ -339,7 +504,9 @@ export class Tab {
     for (const wake of this.#waiters) wake();
     this.#waiters.clear();
     await this.refresh();
-    await Promise.all(this.#pages.map((p) => p.close().catch(() => undefined)));
-    this.#pages = [];
+    const pages = this.#tabs.map((t) => t.page);
+    this.#tabs = [];
+    this.#active = undefined;
+    await Promise.all(pages.map((p) => p.close().catch(() => undefined)));
   }
 }

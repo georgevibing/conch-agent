@@ -530,7 +530,7 @@ describe('the tool loop', () => {
         stream: () =>
           ++step === 1
             ? toolTurn([
-                { id: 'call_1', name: 'mcp__conch__remember', argumentsJson: '{"content": ' },
+                { id: 'call_1', name: 'mcp__conch__remember', argumentsJson: 'content = tea' },
               ])
             : ended('Let me try that again.'),
       }),
@@ -539,7 +539,7 @@ describe('the tool loop', () => {
     const events = await collect(engine.runTurn(turn({ tools: [rememberTool([])] })));
     expect(events.find((e) => e.type === 'tool-end')).toMatchObject({
       status: 'error',
-      output: 'Those arguments were not valid JSON. Call the tool again with a JSON object.',
+      output: expect.stringContaining('Call the tool again with one JSON object'),
     });
     expect(events.at(-1)).toMatchObject({ type: 'done', outcome: 'success' });
   });
@@ -811,7 +811,9 @@ describe('arguments from the model', () => {
     expect(parseArgs('   ')).toEqual({});
     expect(parseArgs('[1,2]')).toBeUndefined();
     expect(parseArgs('"a"')).toBeUndefined();
-    expect(parseArgs('{oops')).toBeUndefined();
+    expect(parseArgs('oops')).toBeUndefined();
+    // Almost-JSON is mended (ADR 0072); the tool's own check judges what it says.
+    expect(parseArgs("{'a': 1,")).toEqual({ a: 1 });
   });
 });
 

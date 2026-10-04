@@ -1,5 +1,6 @@
 import {
   AppWindow,
+  AppWindowMac,
   BadgeCheck,
   Blocks,
   Earth,
@@ -41,6 +42,7 @@ const ICONS: Record<BackupPowerInfo['kind'], ReactNode> = {
   'routine-address': <Webhook />,
   'browser-sites': <Globe />,
   'browser-local': <Router />,
+  'browser-own-chrome': <AppWindowMac />,
   'terminal-remote': <MonitorSmartphone />,
   'channel-people': <MessageCircle />,
   'trusted-publishers': <BadgeCheck />,

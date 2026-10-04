@@ -22,6 +22,7 @@ import { RestoredNotice } from '../features/health/RestoredNotice';
 import { ChannelDetailView } from '../features/channels/ChannelDetailView';
 import { ConnectChannel } from '../features/channels/ConnectChannel';
 import { ChatView } from '../features/chat/ChatView';
+import { WakeWord } from '../features/voice/WakeWord';
 import { PasswordsView } from '../features/passwords/PasswordsView';
 import { ChatProvider } from '../features/engine/ChatProvider';
 import { AppDetailView } from '../features/integrations/AppDetailView';
@@ -90,6 +91,20 @@ export function Shell() {
   const memoryArea = path.startsWith('/memory');
   const tasksArea = path.startsWith('/tasks');
   const archiveArea = path === ARCHIVE_PATH;
+  // The chat is on screen: its header names who answers it, and "Hey Conch"
+  // opens talk there (anywhere else, on a new chat).
+  const onChat = !(
+    (pinnedArea && artifactId) ||
+    routinesArea ||
+    appsArea ||
+    skillsArea ||
+    channelsArea ||
+    passwordsArea ||
+    activityArea ||
+    memoryArea ||
+    tasksArea ||
+    archiveArea
+  );
 
   // Toasts and notifications raised outside the router ask us to navigate.
   useEffect(() => {
@@ -147,20 +162,6 @@ export function Shell() {
 
   const showSidebar = !narrow && sidebarOpen;
 
-  // The chat is on screen (not another page): its header names who answers it.
-  const onChat = !(
-    (pinnedArea && artifactId) ||
-    memoryArea ||
-    tasksArea ||
-    archiveArea ||
-    activityArea ||
-    passwordsArea ||
-    channelsArea ||
-    skillsArea ||
-    appsArea ||
-    routinesArea
-  );
-
   return (
     <div className={styles.shell} data-sidebar={showSidebar || undefined}>
       {showSidebar && (
@@ -212,6 +213,7 @@ export function Shell() {
               {title}
             </LiveTitle>
           </Text>
+          <WakeWord onChat={onChat} />
           {onChat && <ChatProvider conversationId={conversationId} />}
           {conversationId && <BrowserToggle conversationId={conversationId} />}
           <TerminalToggle />

@@ -7,11 +7,13 @@ import { WA_CLOSE } from '../whatsapp';
 import type { WaIdentity, WaSessionHandle } from '../whatsapp-sessions';
 
 export interface MockWaSent {
-  kind: 'text' | 'edit' | 'react' | 'presence' | 'read';
+  kind: 'text' | 'edit' | 'react' | 'presence' | 'read' | 'voice';
   chat: string;
   id?: string;
   text?: string;
   emoji?: string;
+  /** A voice note's length, in seconds. */
+  seconds?: number;
 }
 
 interface MockState {
@@ -103,6 +105,28 @@ export class MockWhatsApp {
             1,
           );
         return Promise.resolve(id);
+      },
+      voice: (chat, _audio, seconds, options) => {
+        if (!live.open) return Promise.reject(new Error('Connection Closed'));
+        this.sent.push({ kind: 'voice', chat, id: options.id, seconds });
+        // Echoed like anything this device sends: Conch must never hear it back.
+        setTimeout(
+          () =>
+            this.#deliver({
+              id: options.id,
+              chat,
+              fromMe: true,
+              sender: chat,
+              at: Date.now(),
+              text: '',
+              files: [
+                { name: 'voice-note.ogg', ref: options.id, mimeType: 'audio/ogg', voice: true },
+              ],
+              group: chat.endsWith('@g.us'),
+            }),
+          1,
+        );
+        return Promise.resolve(options.id);
       },
       react: (chat, id, _fromMe, emoji) => {
         this.sent.push({ kind: 'react', chat, id, emoji });

@@ -64,6 +64,7 @@ const settlesStop = (event: ConversationEvent) =>
   event.type === 'turn.completed' ||
   event.type === 'turn.held' ||
   event.type === 'turn.needs-apps' ||
+  event.type === 'turn.capped' ||
   (event.type === 'status' && event.status !== 'running' && event.status !== 'awaiting-permission');
 
 function without<T>(record: Record<string, T>, key: string): Record<string, T> {

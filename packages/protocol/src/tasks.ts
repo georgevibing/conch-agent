@@ -107,6 +107,11 @@ export const Task = z.object({
   conversationId: z.string().optional(),
   /** Who answers it, and with which model when it isn't the provider's default. */
   options: TurnOptions.default({}),
+  /**
+   * The provider doing it, by name, when it isn't the chat's own: a helper
+   * handed to another engine ("Codex CLI"). Shown on its card.
+   */
+  by: z.string().max(80).optional(),
   createdAt: z.number(),
   startedAt: z.number().optional(),
   finishedAt: z.number().optional(),

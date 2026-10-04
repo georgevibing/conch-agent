@@ -48,6 +48,8 @@ export const DoctorPlace = z.enum([
   'skills',
   /** Routines (and one routine, by `focus`): ADR 0056. */
   'routines',
+  /** Settings → Other apps: apps paired with Conch (ADR 0073). */
+  'other-apps',
 ]);
 export type DoctorPlace = z.infer<typeof DoctorPlace>;
 

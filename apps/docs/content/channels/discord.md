@@ -25,4 +25,4 @@ Once Conch knows it's you, the bot greets you by name.
 
 - **Nothing to switch on.** The bot needs no special settings in the portal: Conch handles them.
 - **While it works** you see Discord's "typing…".
-- **It answers private messages only.**
+- **Private messages, and server channels you turn on.** A server channel where someone mentions the bot shows on its page in Conch, off. Turn it on there, and it answers whoever mentions it: you as in private, everyone else in words only. See [In a group](index.md#in-a-group).

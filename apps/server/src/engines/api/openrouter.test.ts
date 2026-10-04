@@ -444,9 +444,7 @@ describe('OpenRouter attachments', () => {
     expect(models.map((m) => m.info.images)).toEqual([true, false, undefined]);
 
     expect(or.userMessage('hi')).toEqual({ role: 'user', content: 'hi' });
-    expect(
-      or.userMessage('what is this?', [{ name: 'a.png', mimeType: 'image/png', data: 'QUJD' }]),
-    ).toEqual({
+    expect(or.userMessage('what is this?', [{ mimeType: 'image/png', data: 'QUJD' }])).toEqual({
       role: 'user',
       content: [
         { type: 'image_url', image_url: { url: 'data:image/png;base64,QUJD' } },

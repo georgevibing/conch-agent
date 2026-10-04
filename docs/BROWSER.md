@@ -22,6 +22,29 @@ and see what it saw. Hover a frame to see it bigger.
 - **Turn off auto-opening:** Settings → Browser → _Show the browser when it starts
   browsing_. It still opens when it needs you.
 
+## Tabs
+
+A link that opens a new tab, or a "Sign in with Google" window, becomes a tab of its own, and
+the assistant knows it did. Once there's more than one, a row of tabs shows above the page: click
+one to look at it, close one with its ×, or open a new one with **+**. When a sign-in window
+closes, the view goes back to the tab that opened it. A chat keeps up to eight tabs.
+
+## What it can do
+
+Whatever you'd do with a mouse and keyboard: click, double-click, right-click, point at a menu
+to open it, drag something onto something else, press shortcuts like <kbd>Ctrl</kbd> +
+<kbd>Shift</kbd> + <kbd>K</kbd>, and scroll inside a list or a panel. On a page with nothing to
+point at by name — a map, a drawing, a game — an assistant that can see screenshots clicks where
+it sees things. It asks exactly the same questions either way.
+
+## Uploading files
+
+It can put a file into a page's **Upload** or **Choose file** box: a file you attached in the
+chat, something it made for you in the chat, or a file in your working folder. It asks you every
+time, and says which file goes to which site: _"Upload “cv.pdf” (attached in this chat) to
+jobs.example?"_. Hidden files, key files and Conch's own files never go, and nothing from outside
+your working folder.
+
 ## Taking the wheel
 
 Click anywhere on the page (or press **Take over**). The assistant stops and waits.
@@ -36,12 +59,28 @@ it.
 Some things only you should do: signing in, a captcha, a payment, anything
 personal. The assistant never types passwords, codes or card numbers. When a site
 needs one, it hands the browser to you instead. You'll see **Your turn** in the chat
-and in the panel, with what to do. Type it yourself, then press **I'm done**.
+and in the panel, with what to do, and your phone gets a notification with **Take over** if
+you're away. Type it yourself. When it's a sign-in or a captcha, the assistant notices once
+you're through and carries on by itself; otherwise press **I'm done**.
 
 The assistant never sees what you type there. Password and card fields are hidden in
 everything it reads, including screenshots.
 
 Sites you sign in to stay signed in, so you only do it once.
+
+## Every model sees the page
+
+The assistant reads a page as text, and looks at it as a picture when words aren't enough: a
+chart, a map, a photo, a captcha. A model that can see gets the picture itself. A model that
+can't gets a description instead, written by one of your models that can: another model from
+the same provider first, then your other providers. There's nothing to set up.
+
+- A chat with a model on this computer only asks models on this computer, so what's on your
+  screen stays here.
+- Each picture is described once, so looking at the same page again costs nothing more. What
+  describing costs counts with the chat.
+- If none of your models can see, the assistant is told so. It reads the page instead, or hands
+  it to you.
 
 ## What it asks you, and why
 
@@ -60,10 +99,30 @@ In **Plan only** mode it reads but never clicks or types. In **Full trust** mode
 skips the "new site" question, but never the "anything significant" one, and never
 types your secrets.
 
+## Where it runs
+
+Settings → Browser → **Where it runs**:
+
+- **Its own browser** (the default): separate from yours, on this computer.
+- **Your Chrome**, where you're already signed in. In Chrome, open
+  `chrome://inspect/#remote-debugging` and turn on **Allow remote debugging** (Chrome 144 or
+  newer), then press **Use my Chrome**; Chrome asks you to allow it. The assistant only uses tabs
+  it opens there, each marked _Conch is using this tab_, never reads your other tabs, and asks
+  before acting on each site in every chat — even in **Full trust**. The panel says **In your
+  Chrome**. Use it only when you need your sign-ins: a page it reads there could try to trick
+  it, with your real accounts.
+- **Browserbase** or **Steel**: a browser in the cloud, with your API key. Pages it opens are
+  seen by that company.
+- **Another browser**, at its DevTools address.
+
+Anything but its own browser asks for your password (or passkey) first, and keys are kept sealed
+on this computer. If the one you chose can't be reached, the assistant uses its own browser
+meanwhile and Settings says why.
+
 ## Staying safe
 
-- It's a separate browser with its own profile. Your own browser, its cookies and
-  its passwords are never touched.
+- By default it's a separate browser with its own profile. Your own browser, its
+  cookies and its passwords are never touched, unless you choose **Your Chrome**.
 - Web pages can contain hidden instructions meant to trick AI assistants. Conch tells
   the assistant that page content is information, never orders, and the questions
   above mean a page can't make it buy or send anything without you.
@@ -89,8 +148,12 @@ only an administrator can install; Conch then shows the one command to run.
 
 - Code lives in `apps/server/src/browser/` (gateway), `apps/web/src/features/browser/`
   (app) and `packages/nacre/src/patterns/Browser/` (design system). The decision
-  record is [ADR 0014](./adr/0014-browser.md).
+  records are [ADR 0014](./adr/0014-browser.md) and
+  [ADR 0080](./adr/0080-the-browser-does-what-you-do.md) (tabs, uploads, clicking by
+  position, your own Chrome and the cloud).
 - Testing your own app on `localhost`? Turn on **Open local apps**. Conch's own port
   stays blocked either way.
 - `pnpm dev:mock` has a scripted assistant that browses: try _"Open example.com and
-  click “Learn more”"_, or _"… and sign in"_ to see a handoff.
+  click “Learn more”"_, or _"… and sign in"_ to see a handoff. Attach a file and say
+  _"Open … and upload it to “CV”"_ for an upload, or _"… click “Our blog”, then go back to
+  the first tab"_ for tabs.

@@ -1,0 +1,19 @@
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nc-space-2);
+  max-inline-size: 48rem;
+  margin: var(--nc-space-3) auto 0;
+  padding: var(--nc-space-2) var(--nc-space-3);
+  border-radius: var(--nc-radius-md);
+  corner-shape: var(--nc-corner-shape);
+  background: var(--nc-surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  font-size: var(--nc-text-sm);
+  color: var(--nc-text-muted);
+}
+
+.banner button {
+  margin-inline-start: auto;
+}

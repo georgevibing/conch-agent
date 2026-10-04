@@ -183,6 +183,8 @@ describe('installing a release', () => {
           npm: async () => undefined,
           winget: async () => undefined,
           brew: async () => undefined,
+          pypi: async () => undefined,
+          github: async () => undefined,
         },
         app: new AppReleases({
           app,

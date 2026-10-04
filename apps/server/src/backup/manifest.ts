@@ -147,7 +147,12 @@ export const RULES: readonly BackupRule[] = [
   {
     match: 'voice/**',
     class: 'derived',
-    why: 'Private dictation’s speech model (downloaded again when it’s missing) and recordings being read, which are deleted at once.',
+    why: 'Voice models: the speech model for listening and the natural voices for reading aloud (downloaded again when they’re missing), and recordings being read, which are deleted at once.',
+  },
+  {
+    match: 'tools/**',
+    class: 'derived',
+    why: 'Programs Conch fetched for you from their own releases (whisper.cpp on Windows): fetched again on a new computer, made for this one.',
   },
   {
     match: 'tasks.json',
@@ -170,6 +175,11 @@ export const RULES: readonly BackupRule[] = [
     match: 'undo/**',
     class: 'derived',
     why: 'What the assistant changed, kept so it can be undone: copies of files on this computer, about this computer’s folders.',
+  },
+  {
+    match: 'mcp/**',
+    class: 'derived',
+    why: 'The apps paired with Conch on this computer (ADR 0073), their keys and the launcher they start: a restore pairs nothing, so another computer’s apps never come with it. Pair them again from Settings → Other apps.',
   },
   {
     match: 'here/**',
@@ -435,6 +445,12 @@ export const RULES: readonly BackupRule[] = [
     class: 'secret',
     group: 'secrets',
     why: 'Google app credentials and account sign-ins.',
+  },
+  {
+    match: 'browser.secrets.json',
+    class: 'secret',
+    group: 'secrets',
+    why: 'The keys and addresses of a browser in the cloud, or elsewhere, that Conch uses (ADR 0080).',
   },
   {
     match: 'slack.secrets.json',

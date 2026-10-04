@@ -31,6 +31,7 @@ import type {
   LoginHandle,
   TurnInput,
 } from '../types';
+import { checkHostArgs, lenientShape, withNotes } from '../tools/args';
 import { detectClaude } from './detect';
 import { PROTECTED_MESSAGE, touchesProtected } from '../../lib/protect';
 import { childEnv } from './env';
@@ -106,6 +107,8 @@ export class ClaudeCodeEngine implements Engine {
   readonly label = 'Claude Code';
   /** Claude Code maps this to Haiku on every provider (or ANTHROPIC_DEFAULT_HAIKU_MODEL). */
   readonly smallModel = 'haiku';
+  /** Every Claude model sees, so it can describe a screenshot for a model that can't (ADR 0070). */
+  readonly completeSees = true;
   /** It loads `~/.claude/skills` by itself, whatever Conch says. */
   readonly skillSources = ['claude'] as const;
   /** It keeps its own plan (its todos or tasks), translated into Conch's checklist. */
@@ -419,8 +422,26 @@ export class ClaudeCodeEngine implements Engine {
     const onAbort = () => abort.abort();
     input.signal.addEventListener('abort', onAbort, { once: true });
     try {
+      // Pictures go in a message of their own: a plain prompt can only be words.
+      const images = input.images ?? [];
+      async function* withPictures(): AsyncGenerator<SDKUserMessage> {
+        yield {
+          type: 'user',
+          message: {
+            role: 'user',
+            content: [
+              ...images.map((image) => ({
+                type: 'image' as const,
+                source: { type: 'base64' as const, media_type: image.mimeType, data: image.data },
+              })),
+              { type: 'text' as const, text: input.prompt },
+            ],
+          },
+          parent_tool_use_id: null,
+        } as SDKUserMessage;
+      }
       const q = query({
-        prompt: input.prompt,
+        prompt: images.length ? withPictures() : input.prompt,
         options: {
           cwd: await this.settings.workspace(),
           pathToClaudeCodeExecutable: programFile(status.executablePath),
@@ -474,9 +495,17 @@ export class ClaudeCodeEngine implements Engine {
         tool(
           t.name,
           t.description,
-          t.input,
-          async (args, extra) => {
-            const result = await t.run(args);
+          // Advertised exactly as declared, read forgivingly and checked by Conch (ADR 0072).
+          lenientShape(t.input),
+          async (raw, extra) => {
+            const checked = checkHostArgs(t, raw);
+            if (!checked.ok)
+              return { content: [{ type: 'text' as const, text: checked.message }], isError: true };
+            const ran = await t.run(checked.args);
+            const result =
+              typeof ran === 'string'
+                ? withNotes(ran, checked.notes)
+                : { ...ran, text: withNotes(ran.text, checked.notes) };
             const id = toolUseIdOf(extra);
             if (id && typeof result !== 'string' && result.view) views.set(id, result.view);
             // The model gets the text (and pictures); the view is never sent to it.
@@ -530,7 +559,12 @@ export class ClaudeCodeEngine implements Engine {
           env: childEnv({ ANTHROPIC_API_KEY: anthropicApiKey }),
           abortController: abort,
           includePartialMessages: true,
-          systemPrompt: { type: 'preset', preset: 'claude_code', append: input.systemAppend },
+          // Words only (a guest in a group, ADR 0075): no tools of its own, and none of
+          // Claude Code's own prompt, which describes this computer.
+          systemPrompt: input.wordsOnly
+            ? input.systemAppend
+            : { type: 'preset', preset: 'claude_code', append: input.systemAppend },
+          ...(input.wordsOnly && { tools: [] }),
           ...(input.options.model &&
             input.options.model !== 'default' && { model: input.options.model }),
           ...(input.options.effort !== 'auto' && { effort: input.options.effort }),

@@ -13,6 +13,7 @@ import { useLiveStore } from '../../live/store';
 import { listen, type Listening } from './listen';
 import { languageOf, useVoicePrefs } from './prefs';
 import { createSpeaker, sentences, speakable, type Speaker } from './speak';
+import { type BargeIn, watchForBargeIn } from './vad';
 import { useListenEngine } from './useEngine';
 
 /** What the assistant has said since `from` (the item count when you spoke). */
@@ -61,6 +62,8 @@ export function Talk({
   const queue = useRef<Promise<void>>(Promise.resolve());
   /** The question already read out, so it's said once. */
   const asked = useRef<string | undefined>(undefined);
+  /** Talking over it interrupts it (ADR 0077 § 5), once the microphone is listening for that. */
+  const [bargeIn, setBargeIn] = useState(false);
 
   const stopAll = () => {
     listening.current?.cancel();
@@ -214,6 +217,50 @@ export function Talk({
     });
   }, [open, conversationId]);
 
+  /** Cut it short and listen: a tap on the pearl, or talking over it. */
+  const interrupt = () => {
+    speaker.current?.stop();
+    turn.current = undefined;
+    queue.current = Promise.resolve();
+    useUi.setState({ talking: {} });
+    void startListening();
+  };
+  const interruptRef = useRef(interrupt);
+  useEffect(() => {
+    interruptRef.current = interrupt;
+  });
+
+  // Barge-in: while it speaks, the microphone listens (echo cancelled) for you starting to talk.
+  useEffect(() => {
+    if (!open || state !== 'speaking' || !navigator.mediaDevices || !('AudioContext' in window))
+      return;
+    let cancelled = false;
+    let watcher: BargeIn | undefined;
+    void watchForBargeIn({
+      echo: () => speaker.current?.speaking() ?? false,
+      onSpeech: () => {
+        if (cancelled) return;
+        cancelled = true;
+        watcher?.stop();
+        interruptRef.current();
+      },
+    }).then(
+      (w) => {
+        if (cancelled) w.stop();
+        else {
+          watcher = w;
+          setBargeIn(true);
+        }
+      },
+      // No microphone while it speaks: the pearl still interrupts.
+      () => setBargeIn(false),
+    );
+    return () => {
+      cancelled = true;
+      watcher?.stop();
+    };
+  }, [open, state]);
+
   // A gentle pulse while it speaks, so the pearl talks too.
   useEffect(() => {
     if (state !== 'speaking') return;
@@ -223,7 +270,10 @@ export function Talk({
 
   useEffect(() => {
     // Waiting for an answer already (a new chat's page): listen once it's spoken.
-    if (open && !turn.current) void startListening();
+    // "Hey Conch, what's on tomorrow?": what came after the phrase is the first thing said.
+    const first = open && !turn.current ? useUi.getState().talking?.first?.trim() : undefined;
+    if (first) queueMicrotask(() => finish(first));
+    else if (open && !turn.current) void startListening();
     else if (!open) stopAll();
     return () => stopAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- starts and ends with the overlay
@@ -242,13 +292,10 @@ export function Talk({
       reply={state === 'speaking' || state === 'thinking' ? reply || undefined : undefined}
       name={name}
       problem={problem}
+      bargeIn={bargeIn}
       onPearl={() => {
-        if (state === 'speaking') {
-          speaker.current?.stop();
-          turn.current = undefined;
-          queue.current = Promise.resolve();
-          void startListening();
-        } else if (state === 'listening' || state === 'hearing') listening.current?.stop();
+        if (state === 'speaking') interrupt();
+        else if (state === 'listening' || state === 'hearing') listening.current?.stop();
         else if (state === 'paused' || state === 'error') void startListening();
       }}
       onMute={() => {

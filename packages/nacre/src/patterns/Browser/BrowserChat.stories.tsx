@@ -99,6 +99,30 @@ export const ConfirmADownload: Story = {
   ),
 };
 
+export const ConfirmAnUpload: Story = {
+  render: () => (
+    <BrowserApproval
+      kind="upload"
+      site="jobs.example"
+      action="Upload “cv.pdf” (attached in this chat)"
+      onDecide={fn()}
+    />
+  ),
+};
+
+/** In your own Chrome: the card says so, and a site is never allowed for good. */
+export const AskInYourChrome: Story = {
+  render: () => (
+    <BrowserApproval
+      kind="site"
+      site="bank.example"
+      action="Click “Statements”"
+      ownChrome
+      onDecide={fn()}
+    />
+  ),
+};
+
 export const Answered: Story = {
   render: () => (
     <Stack gap={3}>
@@ -121,6 +145,7 @@ export const Answered: Story = {
         decision="deny"
       />
       <BrowserHandoff reason="Sign in to your Staylight account" state="done" />
+      <BrowserHandoff reason="Solve the check on Staylight" state="done" auto />
     </Stack>
   ),
 };

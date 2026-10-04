@@ -17,21 +17,29 @@ pnpm storybook    # every Nacre component, on :6006
 pnpm docs:dev     # these pages and the front page, on :4400
 pnpm check        # format, lint, types and tests: before every commit
 pnpm e2e          # whole journeys in a real browser
+pnpm eval         # the same tasks on real models, side by side: costs money
 ```
 
 `pnpm dev:mock` uses no model at all, so it's the place to work on screens.
 
+## On every model
+
+`pnpm eval` gives about ten real models the same tasks: fill a form, find something two pages into a site, use an app, remember something for a new chat, ask you a question, read a number drawn on a page, hand over a sign-in, upload a file, a thirty-step job, an app with a messy tool, and a chat that changes model halfway. Code checks every answer, and the report shows each model's passes, steps, tokens, cost and time, next to the run before, with anything that got worse at the top.
+
+It runs only the models whose keys are in your environment (`OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY` and the rest), plus Claude Code and a model on this computer if you have them, each in a throwaway Conch that never touches yours. `pnpm eval --list` says what would run, `pnpm eval --smoke` runs a cheap few, and `--models` and `--tasks` pick. It spends money, so it isn't part of `pnpm check`; it also runs every night. [Why it works this way](../../../../docs/adr/0071-evals-on-every-model.md).
+
 ## Where things are
 
-| Folder              | What's in it                                                         |
-| ------------------- | -------------------------------------------------------------------- |
-| `apps/web`          | The app you chat in                                                  |
-| `apps/server`       | Conch itself: providers, apps, the browser, channels and the rest    |
-| `apps/docs`         | These pages, and the front page                                      |
-| `packages/nacre`    | The design system, with its Storybook                                |
-| `packages/protocol` | Every message between the app and Conch, as schemas both sides check |
-| `e2e`               | Journeys run in a real browser                                       |
-| `docs/adr`          | Why things are the way they are                                      |
+| Folder                  | What's in it                                                         |
+| ----------------------- | -------------------------------------------------------------------- |
+| `apps/web`              | The app you chat in                                                  |
+| `apps/server`           | Conch itself: providers, apps, the browser, channels and the rest    |
+| `apps/docs`             | These pages, and the front page                                      |
+| `packages/nacre`        | The design system, with its Storybook                                |
+| `packages/protocol`     | Every message between the app and Conch, as schemas both sides check |
+| `e2e`                   | Journeys run in a real browser                                       |
+| `apps/server/src/evals` | The same tasks on real models (`pnpm eval`)                          |
+| `docs/adr`              | Why things are the way they are                                      |
 
 ## The rules
 

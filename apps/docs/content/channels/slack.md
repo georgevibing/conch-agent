@@ -26,6 +26,6 @@ Once Conch knows it's you, the app greets you by name.
 - **Why two keys.** The first lets the app speak. The second lets Conch reach Slack from your computer, with no public address.
 - **Slack showed an empty form?** Conch has the settings ready to paste: on the first step, open **Slack showed an empty form?**
 - **While it works** your message gets 👀. Slack has no "typing…" for apps.
-- **It answers direct messages only.**
+- **Direct messages, and channels you turn on.** Invite the app to a channel (`/invite @yourapp`) and mention it: the channel shows on its page in Conch, off. Turn it on there, and it answers whoever mentions it: you as in a DM, everyone else in words only. See [In a group](index.md#in-a-group). An app made before October 2026 needs **Reinstall to Workspace** after adding the `app_mentions:read` scope and the `app_mention` event, or it never hears a mention.
 - **The same app reads Slack for you too.** Slack is one app in Conch, with one page. To let your assistant search and catch up on your channels with any model, press **Set it up** on the channel's page, or **Set up** beside **Read & search** on Slack's: it needs one more key from the same app, the **User OAuth Token**. See [Apps](../features/apps.md#connect-slack).
 - **Already let it read Slack?** Turn on **Talk to me here** on Slack's page in Apps. The first step is done already: the app is made. You copy its bot token from the same **Install App** page, and make the app-level token.

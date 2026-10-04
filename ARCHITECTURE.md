@@ -100,7 +100,9 @@ src/
     acp/                      Copilot, Gemini CLI, Grok over the Agent Client Protocol; the door (ADR 0053)
     api/                      key-based APIs: one OpenAI-style reader and adapter, a preset per
                               company (presets.ts), Anthropic, Ollama, LM Studio, servers;
-                              session.ts keeps the transcript, context.ts fits it to the window (ADR 0055)
+                              session.ts keeps the transcript, context.ts fits it to the window (ADR 0055);
+                              toolplan.ts hands tools over natively or in words, schemas.ts per provider (ADR 0072)
+    tools/                    reading a tool call's arguments for every engine: repair, normalise, precise errors (ADR 0072)
     mock/                     scripted engine for UI work and E2E tests
   providers/                  the words for each engine, connecting them, switching, keys
   secrets/                    where a key lives: this computer, or 1Password (`op read`)
@@ -114,12 +116,14 @@ src/
   background/                 Always on: login items (launchd, systemd, the Run key), the launcher, the handover, Conch as an app (ADR 0026); the menu bar helper, lingering, keep-awake (ADR 0029)
   network/tailscale.ts        your phone's secure address: `tailscale serve`, looked at and turned on (ADR 0027)
   push/                       notifications: RFC 8291/8292 Web Push on node:crypto, subscriptions, presence (ADR 0027)
-  voice/                      private dictation: whisper.cpp and its speech model (ADR 0027)
+  voice/                      hearing (whisper.cpp, its model; FFmpeg on pipes only for voice notes), natural voices (Piper, kept running), “Hey Conch” (ADR 0027, ADR 0077, ADR 0078)
   activity/                   everything the assistant did, read from the chats' logs (ADR 0028)
   undo/                       what each change was before: blobs, change sets, the preview diff, putting back (ADR 0030)
   import/                     Come home: OpenClaw and Hermes read-only, a plan, a ledger for Undo (ADR 0035)
   artifacts/                  things made beside the chat: store, tools, fenced blocks, the sealed frame (ADR 0034); edits, drafts, live data (`live.ts`, ADR 0046)
   tasks/                      background tasks and helpers side by side (`delegate`), queue, worktrees (ADR 0033)
+  mcp/                        other apps using Conch: the MCP door at `/mcp`, the launcher's handshake, scopes,
+                              a call as a turn of the app's own chat, pairing Claude Desktop, Cursor, VS Code (ADR 0073)
   conchapps/                  Conch apps (ADR 0061): the maker's tools, drafts, the sealed runtime (`runtime/host.mjs`),
                               the quality bar, packages, signatures, GitHub, `ConchApps` (a hosted tool family)
   questions/                  `ask`: a question answered with a tap, the one waiting per chat, its answer route (ADR 0060)
@@ -150,7 +154,13 @@ src/
   last event it saw; when a conversation moves to another provider, that provider
   resumes its own session and is handed the transcript it missed
   (`conversations/handoff.ts`, newest first within 60,000 characters, with the chat's
-  latest summary for what that leaves out). `turn.completed` says which provider and
+  latest summary for what that leaves out): the words, what was done between them
+  (each tool and its result in brief, the browser's steps, files, memories,
+  questions) and where things stand (the browser's page, an open plan). An engine
+  that can't continue its session starts a new one with `TurnInput.freshPrompt`,
+  the whole conversation ([ADR 0069](./docs/adr/0069-carrying-a-chat-on.md)): Codex
+  keeps its threads in `codex-sessions/` and resumes them while the tools are the
+  same; ACP programs `session/load`. `turn.completed` says which provider and
   model answered.
 - **Long chats** ([ADR 0055](./docs/adr/0055-long-chats-on-every-model.md)). An engine
   that keeps the transcript itself declares `Engine.context`: the model APIs fit each
@@ -162,6 +172,14 @@ src/
   `SummaryDivider`) and learns what the person said before it (`MemoryTidy.learn`).
   A "too long" refusal folds harder and goes again once, by itself, before it becomes
   the `too-long` problem. `/compact` is `POST /api/conversations/:id/compact`.
+- **Tools on every model** ([ADR 0072](./docs/adr/0072-every-model-gets-its-tools.md)).
+  Every engine reads a tool call's arguments through `engines/tools/args.ts`: almost-JSON
+  mended, slips normalised by the tool's own schema, then the strict check, whose failure
+  names each field, what was wanted and what came. The model APIs send each schema in the
+  dialect the provider reads (`Wire.schemaFamily`); a refused schema is simplified once, and
+  a model without native tools gets them listed in its instructions and asks in
+  `<tool_call>` blocks (`ToolPlan`, `prompted.ts`). Chat-only is left for a window too
+  small for the list.
 - **Slash commands.** Four sources, resolved in this order: Conch's own commands
   (`/model`, `/effort`, `/mode`, `/fast`, `/new`, `/remember`, `/skills`, … — handled
   in the web app, never sent to the model), your commands
@@ -317,6 +335,16 @@ src/
   web app is installable (manifest, `sw.js` with an offline screen), dictates
   (on-device, private, or the browser's service with consent), reads aloud, and talks
   hands free (`Talk`).
+- **Voice notes, natural voices, “Hey Conch”** ([ADR 0077](./docs/adr/0077-voice-notes-and-a-natural-voice.md),
+  [ADR 0078](./docs/adr/0078-hey-conch.md)). The channel service hears a voice note before it
+  goes on (`VoiceService.transcribeNote`: `audio.ts` sniffs the container and runs FFmpeg with
+  that demuxer only, on pipes, then whisper.cpp); its words are the message, read as someone
+  else's, and a note Conch can't hear yet waits in `StoredChannel.voiceWaiting` until a need
+  lands. `SpeechService` speaks with pinned Piper voices through one long-lived Piper process
+  (`piper.ts`) or a connected provider's voice, for Read aloud and voice notes back
+  (`ChannelConnection.voiceNotes`). Talk mode's barge-in and the desktop app's wake word run in
+  the page (`vad.ts`, `WakeWord.tsx`); a wake burst is read by whisper.cpp on the same computer
+  (`WakeWord.check`) and the tray shows that it listens (`GatewayToApp` `wake`).
 - **Safe hands** ([ADR 0028](./docs/adr/0028-safe-hands.md)). A chat that takes something
   in from outside (web, downloads, integrations, another person's message) gets a
   `taint` event; from then on `sinkReason` calls (commands, files outside the work
@@ -444,8 +472,20 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   starts helpers in the parent turn's mode, with the parent's taint, on the small model by
   default, optionally in a git worktree (`tasks/worktree.ts`, removed when nothing
   changed); their taint comes back to the parent, the turn's abort stops them, and over
-  budget it refuses. A restart marks running tasks `interrupted` (one-press retry); a limit
+  budget it refuses. A part (or a background task) can go to another provider that's ready
+  (`provider`, `model`), still in the parent's mode, taint and holds; `Task.by` names it.
+  A restart marks running tasks `interrupted` (one-press retry); a limit
   carries on once on `limitFallback`. Push topic `tasks`; doctor check `tasks`.
+
+- **Other apps using Conch** ([ADR 0073](./docs/adr/0073-conch-for-your-other-apps.md)).
+  `/mcp` on the gateway's own port speaks stateless streamable HTTP MCP to paired apps only
+  (`mcp/endpoint.ts`): no `Origin` or cross-site `Sec-Fetch-Site`, a request that looks
+  local (or HTTPS through your address, when you allowed it, for a marked app), and either
+  a launcher session (`/mcp/hello` nonce → HMAC of the app's key → `/mcp/session`) or an
+  HTTP app's key (hashed at rest). `McpService` lists only the scopes' tools; memory is
+  read and suggested directly, everything else is one turn of the app's chat (origin
+  `client`) run by `CallEngine`, scoped to that tool. Pairing (`pairing.ts`, `targets.ts`)
+  writes Claude Desktop's, Cursor's or VS Code's settings. Doctor check `mcp`.
 
 - **Questions** ([ADR 0060](./docs/adr/0060-the-chat-knows-conch.md) §4). The host tool `ask`
   (`questions/tools.ts`; not offered when `ToolContext.unattended`: routines, tasks, chats
@@ -506,8 +546,11 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   - _Your plans_: Copilot, Gemini CLI and Grok run as the vendor's own program over
     ACP (`engines/acp/`), signed in with its own sign-in. Conch never reads their
     credentials. Conch's tools reach them through a per-turn loopback MCP door
-    (`door.ts`: no `Origin`, loopback `Host`, a random bearer key), and their own
-    changing tools are declined, as Codex's are.
+    (`door.ts`: no `Origin`, loopback `Host`, a random bearer key; over stdio
+    through `shim.mjs` for a program without HTTP), and their own changing tools
+    are declined, as Codex's are. Conch's instructions go where each program takes
+    them (`AcpAgent.instructions`), and their own tool calls show as rows
+    (`calls.ts`, ADR 0069).
   - _Servers of your own_ (`providers/servers.ts`, `engines/api/server.ts`): each
     is a `server-xxxxxxxx` engine. `probeServer` looks at the address as it is typed.
     Plain http is allowed only to private addresses (`local/host.ts`
@@ -558,19 +601,24 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   A turn keeps running in an archived chat.
 - API retries from the engine surface as live `notice` events ("Retrying in 4s…"),
   so a stalled provider is never a silent spinner.
-- **The browser** (`browser/`, [ADR 0014](./docs/adr/0014-browser.md)).
+- **The browser** (`browser/`, [ADR 0014](./docs/adr/0014-browser.md),
+  [ADR 0080](./docs/adr/0080-the-browser-does-what-you-do.md)).
   - **Runtime.** One headless browser per gateway, driven with `playwright-core`:
     the Chrome, Edge, Brave or Chromium already installed (`locate.ts`), else a
     Chromium downloaded on first use (`install.ts`). It gets its own profile in
-    `~/.conch/browser/profile`.
+    `~/.conch/browser/profile`. Or, by the person's choice (`backends.ts`), their own
+    Chrome (attached over CDP with Chrome's own consent; only Conch's tabs are
+    touched, each contained and badged), Browserbase, Steel or a DevTools address,
+    keys in the sealed `browser.secrets.json`; any of them falls back to the local one.
   - **Self-healing** (`runtime.ts`). A browser that won't start falls back to the
     next one found, then to a download. Processes still holding the profile are
     found by command line and ended. A crash relaunches, and each chat's tab
     reopens at its last address. The browser stops after 10 idle minutes. Each
     repair is logged in `BrowserStatus.healed`.
-  - **Tabs.** One per conversation (`tab.ts`). Popups (sign-in windows) stack.
-    The page's viewport takes the watching panel's shape: desktop-wide, as tall
-    as the panel.
+  - **Tabs.** Each conversation has its own tabs (`tab.ts`, up to eight): links to
+    a new tab and popups join and come into view, and closing one returns to its
+    opener. The page's viewport takes the watching panel's shape: desktop-wide, as
+    tall as the panel (never resized in the person's own Chrome).
   - **Agent tools.** `browser_*` host tools (`tools.ts`) reach every engine with
     host tools, the same way memory does. Claude Code gets them in-process, API
     engines and the mock as function tools, and Codex through app-server dynamic
@@ -582,14 +630,19 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
     - Permissions are the browser's own, via the tool context's `ask`, so every
       engine behaves the same. It asks per site (registrable domain via tldts)
       and always for high-stakes controls and downloads. Plan mode only reads.
-    - Typing into a secret field becomes a `browser.handoff` to the user.
+    - Typing into a secret field becomes a `browser.handoff` to the user; one that
+      starts at a sign-in or captcha ends by itself once it's passed (`handoff.ts`).
+    - `browser_click_at` acts by position (`point.ts` finds what's there, through
+      frames, for the same checks); `browser_upload` takes only the chat's own files
+      or the work folder's (`uploads.ts`), and always asks.
   - **Live view.** `/api/browser/live?conversationId=` is its own WebSocket:
     - binary JPEG screencast frames, sent only while a watcher is visible,
       latest wins;
     - `tab` and `action` events (for the agent's cursor and captions);
     - your mouse, keys and text when you take over, sent through CDP input.
   - **REST.** `GET /api/browser` (status), `PATCH /api/browser/settings` (`allowLocal`
-    needs recent verification), `DELETE /api/browser/sites/:site`, `POST
+    needs recent verification), `PUT /api/browser/backend` (anything but the local
+    one needs recent verification), `DELETE /api/browser/backend/:kind`, `DELETE /api/browser/sites/:site`, `POST
 /api/browser/repair`, `POST /api/browser/wipe`, `POST /api/browser/:id/control`
     (hand back from the transcript), and `GET /api/browser/shots/:id/:shot`.
     `browser.status` is broadcast on every change, install progress included.
@@ -685,7 +738,11 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   - **Who may talk.** Telegram lets the owner in with a one-time
     `t.me/<bot>?start=<code>` (96-bit, 10 minutes, hashed). On Discord and
     Slack the owner sends a message and confirms "That's me" in Conch. Anyone
-    else becomes a request, answered from the page. Private chats only.
+    else becomes a request, answered from the page. Groups only once the owner
+    turns one on (ADR 0075), and only when the bot is mentioned: the owner as
+    in private, anyone else in a words-only conversation of their own
+    (`origin.guest`: no tools, memories or profile, with every provider), and
+    the owner's approvals in their private chat.
   - **Health** (`ChannelHealth`): `connecting`, `online`, `reconnecting` (with
     `retryAt`), `needs-token`, `conflict`, `error`, `off`, and `access` when a
     macOS switch is off (Full Disk Access, Automation). Each adapter
@@ -697,7 +754,8 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
     `POST /api/channels`, `PATCH|DELETE /api/channels/:id`,
     `PUT /api/channels/:id/token`, `POST /api/channels/:id/pair|repair|test`,
     `POST /api/channels/:id/requests/:personId`,
-    `DELETE /api/channels/:id/people/:personId`.
+    `DELETE /api/channels/:id/people/:personId`,
+    `PUT|DELETE /api/channels/:id/groups/:groupId`.
     `POST /api/channels/link`, `GET|DELETE /api/channels/link/:id` (WhatsApp,
     Signal); `GET /api/channels/imessage` (what Messages has, and whether
     Conch may read it), `POST /api/channels/imessage/open` (System Settings,
@@ -1101,7 +1159,9 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
   - the agent can't let anyone talk to it from a chat app: connecting a bot,
     letting someone in and making a hello link are routes that need a person
     (and, from another device, a recent password or key). Channels answer
-    private chats only, and never pass a stranger's message to a model.
+    private chats, and groups only the owner turned on, where anyone but the
+    owner gets words only (ADR 0075); a stranger's private message never
+    reaches a model.
 - **Terminal guards:** other devices need `allowRemote` (itself behind recent
   verification, and flagged by the checkup) plus a fresh verification per open and
   attach; one-time owner-bound socket tickets; sign-out and key revocation end the

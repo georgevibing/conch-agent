@@ -14,6 +14,7 @@ import { errorText } from './queries';
 /** Teams, and a WeChat Official Account, come in through the public door (ADR 0045). */
 export const usesDoor = (channel: Channel) =>
   channel.kind === 'microsoftteams' ||
+  channel.kind === 'sms' ||
   (channel.kind === 'wechat' && channel.bot.account === 'official');
 
 /** One value to paste somewhere else, with its copy button. */
@@ -93,20 +94,23 @@ export function WeChatServerFields({ channel }: { channel: Channel }) {
 export function HookSection({ channel }: { channel: Channel }) {
   if (!usesDoor(channel)) return null;
   const teams = channel.kind === 'microsoftteams';
+  // Conch points the Twilio number at its address itself: nothing to paste.
+  const sms = channel.kind === 'sms';
+  const app = teams ? 'Teams' : sms ? 'Twilio' : 'WeChat';
   return (
     <section aria-labelledby="ch-hook" className={styles.section}>
       <Heading level={2} id="ch-hook" size="sm" tone="muted">
-        Where {teams ? 'Teams' : 'WeChat'} delivers
+        Where {app} delivers
       </Heading>
       <DoorStep />
       {teams && channel.hook?.url && (
         <CopyRow label="Messaging endpoint" value={channel.hook.url} />
       )}
-      {!teams && <WeChatServerFields channel={channel} />}
+      {!teams && !sms && <WeChatServerFields channel={channel} />}
       <Text size="sm" tone="subtle" aria-live="polite">
         {channel.hook?.heardAt
-          ? `${teams ? 'Teams' : 'WeChat'} last delivered here ${relativeTime(channel.hook.heardAt)}.`
-          : `Nothing from ${teams ? 'Teams' : 'WeChat'} yet.`}
+          ? `${app} last delivered here ${relativeTime(channel.hook.heardAt)}.`
+          : `Nothing from ${app} yet.`}
       </Text>
       {teams && (
         <Button asChild variant="ghost" size="sm" leadingIcon={<Download />} className={styles.fit}>

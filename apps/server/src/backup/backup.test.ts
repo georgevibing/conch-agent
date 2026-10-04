@@ -542,7 +542,7 @@ describe('the preview before a restore', () => {
           status: 'draft',
         }),
         'browser.json': JSON.stringify({
-          settings: { allowLocal: true },
+          settings: { allowLocal: true, backend: 'chrome' },
           sites: [{ site: 'bank.example', grantedAt: 1 }],
         }),
         'terminal.json': JSON.stringify({ settings: { allowRemote: true } }),
@@ -577,6 +577,7 @@ describe('the preview before a restore', () => {
       { kind: 'routine-never-asks', name: 'Nightly tidy' },
       { kind: 'browser-sites', sites: ['bank.example'], more: 0 },
       { kind: 'browser-local' },
+      { kind: 'browser-own-chrome' },
       { kind: 'terminal-remote' },
     ]);
     expect(preview.morePowers).toBe(0);

@@ -1,6 +1,11 @@
 import { readFile } from 'node:fs/promises';
 
-import { BrowserLiveCommand, Id, UpdateBrowserSettingsBody } from '@conch/protocol';
+import {
+  BrowserLiveCommand,
+  Id,
+  SetBrowserBackendBody,
+  UpdateBrowserSettingsBody,
+} from '@conch/protocol';
 import { z } from 'zod';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
@@ -44,6 +49,35 @@ export function registerBrowserRoutes(app: FastifyInstance, services: Services, 
     if (parsed.data.allowLocal === true && verifyRequired(request, reply)) return;
     await browser.updateSettings(parsed.data);
     return browser.status();
+  });
+
+  /**
+   * Where the browser runs (ADR 0080). Your own Chrome, or a browser elsewhere
+   * that sees what it browses, is a trust decision: it needs a recent sign-in.
+   * Going back to Conch's own never does.
+   */
+  app.put('/api/browser/backend', async (request, reply) => {
+    const parsed = SetBrowserBackendBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: 'bad-request', message: parsed.error.issues[0]?.message });
+    }
+    if (parsed.data.kind !== 'local' && verifyRequired(request, reply)) return;
+    try {
+      return await browser.setBackend(parsed.data);
+    } catch (error) {
+      if (error instanceof BrowserProblemError)
+        return reply.code(400).send({ error: 'bad-request', message: error.problem.message });
+      throw error;
+    }
+  });
+
+  /** Forget a saved cloud key or browser address. */
+  app.delete<{ Params: { kind: string } }>('/api/browser/backend/:kind', async (request, reply) => {
+    const kind = z.enum(['browserbase', 'steel', 'cdp']).safeParse(request.params.kind);
+    if (!kind.success) return reply.code(404).send({ error: 'not-found', message: 'Not found.' });
+    return browser.forgetBackend(kind.data);
   });
 
   app.delete<{ Params: { site: string } }>('/api/browser/sites/:site', async (request, reply) => {

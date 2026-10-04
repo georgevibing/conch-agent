@@ -15,6 +15,8 @@ import {
   dataUrl,
   pause,
   redact,
+  capOf,
+  readCapped,
 } from './types';
 
 export const SLACK_API = 'https://slack.com/api';
@@ -94,8 +96,12 @@ function checkAppToken(token: string) {
  */
 export class SlackAdapter implements ChannelAdapter, SlackCheck {
   readonly kind = 'slack' as const;
+  /** Mentions and replies in groups are told apart (ADR 0075). */
+  readonly groups = true;
   #names = new Map<string, ChannelUser>();
   #dms = new Map<string, string>();
+  /** Channels' names, for the groups on its page (ADR 0075). */
+  #places = new Map<string, string>();
   /** Markdown blocks render tables and headings; an older workspace gets mrkdwn instead. */
   #markdownBlocks = true;
 
@@ -305,7 +311,7 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
           name: 'eyes',
         }).catch(() => undefined);
       },
-      download: (file) => this.#download(file),
+      download: (file, options) => this.#download(file, options),
       directChat: (userId) => this.#directChat(userId),
       close: () => stop.abort(),
     };
@@ -378,7 +384,8 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
     return post(build(false));
   }
 
-  async #download(file: ChannelFile) {
+  async #download(file: ChannelFile, options?: { maxBytes?: number }) {
+    const cap = capOf(FILE_LIMIT, options);
     let url: URL;
     try {
       url = new URL(file.ref);
@@ -388,7 +395,7 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
     // Only Slack's own file servers get the key.
     if (url.protocol !== 'https:' || !/(^|\.)slack\.com$/.test(url.hostname))
       throw new ChannelError('refused', 'That file isn’t on Slack’s own servers.');
-    if (file.size && file.size > FILE_LIMIT)
+    if (file.size && file.size > cap)
       throw new ChannelError('refused', 'That file is too big to take from Slack.');
     const response = await fetch(url, {
       headers: { authorization: `Bearer ${this.botToken}` },
@@ -409,7 +416,7 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
       );
     return {
       name: file.name,
-      bytes: Buffer.from(await response.arrayBuffer()),
+      bytes: await readCapped(response, cap, 'That file is too big to take from Slack.'),
       mimeType: file.mimeType,
     };
   }
@@ -573,9 +580,27 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
             url_private_download?: string;
             mimetype?: string;
             size?: number;
+            /** `slack_audio`: a clip recorded in Slack. */
+            subtype?: string;
           }[];
         }
       | undefined;
+    // Mentioned in a channel (ADR 0075): answered there only once you turned that channel on.
+    if (event?.type === 'app_mention') {
+      if (event.bot_id || !event.user || !event.channel || !event.ts) return;
+      const me = (payload?.authorizations as { user_id?: string }[] | undefined)?.[0]?.user_id;
+      events.message({
+        chatId: event.channel,
+        messageId: event.ts,
+        user: await this.#person(event.user),
+        text: (me ? (event.text ?? '').replaceAll(`<@${me}>`, '') : (event.text ?? '')).trim(),
+        files: [],
+        direct: false,
+        mentioned: true,
+        group: await this.#place(event.channel),
+      });
+      return;
+    }
     if (event?.type !== 'message' || event.bot_id || !event.user || !event.channel || !event.ts)
       return;
     if (event.subtype && event.subtype !== 'file_share') return;
@@ -590,6 +615,7 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
               {
                 name: file.name ?? 'file',
                 ref: file.url_private_download,
+                ...(file.subtype === 'slack_audio' && { voice: true }),
                 ...(file.mimetype && { mimeType: file.mimetype }),
                 ...(file.size !== undefined && { size: file.size }),
               },
@@ -598,6 +624,21 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
       ),
       direct: event.channel_type === 'im',
     });
+  }
+
+  /** A channel's name ("#general"), for the groups on its page; Slack may not say without a scope. */
+  async #place(channel: string): Promise<string> {
+    const known = this.#places.get(channel);
+    if (known) return known;
+    const info = await this.web<SlackResponse & { channel?: { name?: string } }>(
+      'conversations.info',
+      {
+        channel,
+      },
+    ).catch(() => undefined);
+    const name = info?.channel?.name ? `#${info.channel.name}` : 'A Slack channel';
+    if (info?.channel?.name) this.#places.set(channel, name);
+    return name;
   }
 
   async #interactive(payload: Record<string, unknown> | undefined, events: ChannelEvents) {

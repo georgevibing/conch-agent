@@ -137,6 +137,8 @@ export const PRESETS: readonly Preset[] = [
     small: /(luna|nano|mini)/,
     // OpenAI: "Chat Completions does not support function calling with GPT-6 Astra or GPT-6.1 Sol."
     noTools: /^gpt-6(\.1)?-(astra|sol)\b/,
+    // The list says nothing about sight; its chat models look at pictures.
+    sees: true,
     efforts: (model) => (/^(o\d|gpt-5|gpt-6)/.test(model.id) ? ['low', 'medium', 'high'] : []),
     maxTokens: 'max_completion_tokens',
   },
@@ -151,8 +153,11 @@ export const PRESETS: readonly Preset[] = [
     hide: /(embedding|aqa|imagen|veo|tts|native-audio|live|image|robotics|computer-use|learnlm)/i,
     rank: [/^gemini-\d/, /^gemma/],
     small: /flash-lite|flash/,
-    // Gemma on the Gemini API has no function calling.
+    // Gemma on the Gemini API has no function calling: its tools go in the prompt (ADR 0072).
     noTools: /^gemma/,
+    sees: true,
+    // The OpenAI endpoint reads only Gemini's OpenAPI subset of JSON Schema.
+    schemas: 'gemini',
     efforts: (model) => (model.thinking ? ['low', 'medium', 'high'] : []),
   },
   {
@@ -163,6 +168,7 @@ export const PRESETS: readonly Preset[] = [
     endpoints: [{ id: 'global', base: 'https://api.x.ai/v1' }],
     hide: /(image|imagine|vision-beta)/i,
     rank: [/^grok-\d/],
+    sees: /^grok-([4-9]|\d{2})/,
     small: /(fast|mini|non-reasoning)/,
   },
   {
@@ -185,6 +191,9 @@ export const PRESETS: readonly Preset[] = [
     hide: /(ocr|moderation|embed|voxtral|saba)/i,
     rank: [/^mistral-(medium|large)/, /^(devstral|codestral)/, /^mistral-small/, /^ministral/],
     small: /(small|ministral|tiny)/,
+    // Its list says which models see (`capabilities.vision`). A tool's
+    // pictures follow its results, and Mistral wants a turn between.
+    toolThenUser: 'bridge',
   },
   {
     id: 'groq',
@@ -194,6 +203,7 @@ export const PRESETS: readonly Preset[] = [
     endpoints: [{ id: 'global', base: 'https://api.groq.com/openai/v1' }],
     rank: [/gpt-oss-120b/, /qwen/, /llama/],
     small: /(20b|8b|instant|mini)/,
+    sees: /llama-4|scout|maverick|vision/,
     efforts: (model) => (/gpt-oss/.test(model.id) ? ['low', 'medium', 'high'] : []),
   },
   {
@@ -221,6 +231,7 @@ export const PRESETS: readonly Preset[] = [
     regionHint: '(or it’s from Z.ai’s other site: international keys and BigModel keys don’t mix)',
     rank: [/^glm-\d/],
     small: /(flash|air)/,
+    sees: /^glm-[\d.]+v\b|vision/,
     efforts: (model) => (/^glm-5/.test(model.id) ? ['low', 'high', 'max'] : []),
   },
   {
@@ -239,6 +250,7 @@ export const PRESETS: readonly Preset[] = [
     hide: /^(moonshot-v1|kimi-k2-)/,
     rank: [/k3/, /k2\.\d/],
     small: /(k2\.6|turbo|mini)/,
+    sees: /k3|k2\.[5-9]|vision|vl/,
     replayReasoning: 'reasoning_content',
     efforts: (model) => (/k3/.test(model.id) ? ['low', 'high', 'max'] : []),
   },
@@ -285,6 +297,7 @@ export const PRESETS: readonly Preset[] = [
     hide: /(ocr|asr|tts|realtime|wanx|paraformer|cosyvoice|gte-|image|livetranslate|mt-)/i,
     rank: [/max/, /plus/, /qwen3/, /flash|turbo/],
     small: /(flash|turbo)/,
+    sees: /vl|omni|vision|qwen3\.[5-9]/,
   },
   {
     id: 'ollama-cloud',

@@ -184,6 +184,51 @@ describe('BrowserWindow', () => {
     await expectAccessible(container);
   });
 
+  it('shows the chat’s tabs, switches, closes and opens them', async () => {
+    const user = userEvent.setup();
+    const onTab = vi.fn();
+    const { container, rerender } = renderNacre(
+      <BrowserWindow
+        tab={{ ...tab, tabs: [{ id: 't1', title: 'Hotels', url: tab.url, active: true }] }}
+        onTab={onTab}
+      />,
+    );
+    // One tab: no strip.
+    expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
+    rerender(
+      <BrowserWindow
+        tab={{
+          ...tab,
+          tabs: [
+            { id: 't1', title: 'Hotels', url: tab.url, active: false },
+            { id: 't2', title: '', url: 'https://accounts.example.com/signin', active: true },
+          ],
+        }}
+        onTab={onTab}
+      />,
+    );
+    const strip = screen.getByRole('navigation', { name: 'Tabs' });
+    expect(screen.getByRole('button', { name: 'accounts.example.com' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await user.click(screen.getByRole('button', { name: 'Hotels' }));
+    expect(onTab).toHaveBeenLastCalledWith('switch', 't1');
+    await user.click(screen.getByRole('button', { name: 'Close tab: Hotels' }));
+    expect(onTab).toHaveBeenLastCalledWith('close', 't1');
+    await user.click(screen.getByRole('button', { name: 'New tab' }));
+    expect(onTab).toHaveBeenLastCalledWith('new');
+    expect(strip).toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
+  it('says when it’s your own Chrome or a browser in the cloud', () => {
+    const { rerender } = renderNacre(<BrowserWindow tab={{ ...tab, backend: 'chrome' }} />);
+    expect(screen.getByText('In your Chrome')).toBeInTheDocument();
+    rerender(<BrowserWindow tab={{ ...tab, backend: 'steel' }} />);
+    expect(screen.getByText('In the cloud')).toBeInTheDocument();
+  });
+
   it('shows the handoff and hands back with “I’m done”', async () => {
     const user = userEvent.setup();
     const onHandBack = vi.fn();
@@ -249,6 +294,30 @@ describe('BrowserApproval', () => {
     expect(onDecide).toHaveBeenCalledWith('deny');
   });
 
+  it('asks before every upload, without an “always”', async () => {
+    const user = userEvent.setup();
+    const onDecide = vi.fn();
+    const { container } = renderNacre(
+      <BrowserApproval
+        kind="upload"
+        site="jobs.example"
+        action="Upload “cv.pdf”"
+        onDecide={onDecide}
+      />,
+    );
+    expect(screen.getByText('Upload “cv.pdf” to jobs.example?')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Always/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Upload' }));
+    expect(onDecide).toHaveBeenCalledWith('allow');
+    await expectAccessible(container);
+  });
+
+  it('never offers “always” for a site in your own Chrome', () => {
+    renderNacre(<BrowserApproval kind="site" site="bank.example" action="x" ownChrome />);
+    expect(screen.getByText(/in your own Chrome, where you’re signed in/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Always/ })).not.toBeInTheDocument();
+  });
+
   it('settles into a quiet line once answered', () => {
     renderNacre(
       <BrowserApproval kind="site" site="booking.com" action="x" decision="allow-always" />,
@@ -277,6 +346,8 @@ describe('BrowserHandoff', () => {
     await expectAccessible(container);
     rerender(<BrowserHandoff reason="Sign in to Staylight" state="done" />);
     expect(screen.getByRole('note')).toHaveTextContent('You took care of it');
+    rerender(<BrowserHandoff reason="Sign in to Staylight" state="done" auto />);
+    expect(screen.getByRole('note')).toHaveTextContent('You got through, so Conch carried on');
   });
 });
 

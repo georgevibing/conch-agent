@@ -94,6 +94,11 @@ export function HelloStep({
             . Answers come back in the same thread. Before anything important your assistant asks
             there, and you answer with a number.
           </p>
+        ) : channel.kind === 'sms' ? (
+          <p>
+            Text <b>{who}</b> from your phone, anytime. Everything you say there is also here, in
+            Conch. Before anything important it asks there, and you answer with a number.
+          </p>
         ) : channel.kind === 'imessage' && channel.bot.address === owner.username ? (
           <p>
             Text yourself at <b>{who}</b> from your iPhone, anytime. Everything you say there is
@@ -166,6 +171,12 @@ export function HelloStep({
           ) : channel.kind === 'imessage' ? (
             <p>
               From your iPhone, text <b>{who}</b> anything, like “hi”. Then press <b>That’s me</b>{' '}
+              here.
+            </p>
+          ) : channel.kind === 'sms' ? (
+            <p>
+              From your own phone, text <b>{who}</b> anything, like “hi”.{' '}
+              {fine ? 'Scanning the code opens a text to it. ' : ''}Then press <b>That’s me</b>{' '}
               here.
             </p>
           ) : channel.kind === 'discord' ? (

@@ -173,7 +173,9 @@ const MANAGER: Record<InstallRecipe['manager'], string> = {
   winget: 'winget',
   brew: 'brew',
   npm: 'npm',
+  uv: 'uv',
   self: '',
+  github: '',
 };
 
 /** The flags that only keep an installer quiet say nothing to a reader. */
@@ -187,6 +189,9 @@ const QUIET = new Set([
 ]);
 
 function command(recipe: InstallRecipe): string {
+  // Conch fetches it itself, from the project's own release (ADR 0077).
+  if (recipe.manager === 'github')
+    return `Conch downloads ${recipe.args[1] ?? ''} from github.com/${recipe.args[0] ?? ''}`;
   const args = recipe.args.filter((arg, i) => !(QUIET.has(arg) && i > 0));
   return [MANAGER[recipe.manager], ...args].filter(Boolean).join(' ');
 }
@@ -305,13 +310,14 @@ export function buildReference(): Reference {
       limits: [...SERVER_COPY.limits],
       color: SERVER_COPY.color,
     },
-    channels: CHANNEL_CATALOG.map(({ id, name, tagline, color, minutes, available }) => ({
+    channels: CHANNEL_CATALOG.map(({ id, name, tagline, color, minutes, available, groups }) => ({
       id,
       name,
       tagline,
       color,
       minutes,
       available,
+      ...(groups && { groups }),
     })),
     integrations: publicCatalog().map((app) => ({
       id: app.id,

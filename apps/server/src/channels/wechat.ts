@@ -20,6 +20,8 @@ import {
   pause,
   personId,
   redact,
+  capOf,
+  readCapped,
 } from './types';
 import {
   WeChatCryptoError,
@@ -215,7 +217,7 @@ export class WeComBotAdapter implements ChannelAdapter {
         await session.send(ref.chatId, markdown);
       },
       typing: () => Promise.resolve(),
-      download: (file) => session.download(file),
+      download: (file, options) => session.download(file, options),
       directChat: (userId) => Promise.resolve(appId(userId)),
       close: () => session.close(),
     };
@@ -561,7 +563,8 @@ class WeComSession {
     }
   }
 
-  async download(file: ChannelFile) {
+  async download(file: ChannelFile, options?: { maxBytes?: number }) {
+    const cap = capOf(FILE_LIMIT, options);
     let ref: { url?: string; aeskey?: string };
     try {
       ref = JSON.parse(file.ref) as typeof ref;
@@ -580,9 +583,7 @@ class WeComSession {
     );
     if (!response.ok)
       throw new ChannelError('network', `Couldn’t download that file (${response.status}).`);
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (bytes.length > FILE_LIMIT)
-      throw new ChannelError('refused', 'That file is too big to take from WeCom.');
+    const bytes = await readCapped(response, cap, 'That file is too big to take from WeCom.');
     const named = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(
       response.headers.get('content-disposition') ?? '',
     )?.[1];
@@ -807,7 +808,7 @@ export class WeChatOfficialAdapter implements ChannelAdapter {
         await session.send(ref.chatId, markdown);
       },
       typing: (chatId) => session.typing(chatId),
-      download: (file) => session.download(file),
+      download: (file, options) => session.download(file, options),
       directChat: (userId) => Promise.resolve(appId(userId)),
       close: () => {
         stop.abort();
@@ -975,7 +976,11 @@ class OfficialSession {
       // WeChat's own speech recognition, when the account has it on; else the recording.
       if (message.Recognition) text = message.Recognition;
       else if (message.MediaId)
-        files.push({ name: `voice.${message.Format ?? 'amr'}`, ref: message.MediaId });
+        files.push({
+          name: `voice.${message.Format ?? 'amr'}`,
+          ref: message.MediaId,
+          voice: true,
+        });
     } else if ((type === 'video' || type === 'shortvideo') && message.MediaId)
       files.push({ name: 'video.mp4', mimeType: 'video/mp4', ref: message.MediaId });
     else if (type === 'link') text = `${message.Title ?? ''}\n${message.Url ?? ''}`.trim();
@@ -1096,7 +1101,8 @@ class OfficialSession {
     );
   }
 
-  async download(file: ChannelFile) {
+  async download(file: ChannelFile, options?: { maxBytes?: number }) {
+    const cap = capOf(FILE_LIMIT, options);
     if (!/^[\w-]{1,128}$/.test(file.ref))
       throw new ChannelError('refused', 'That file’s id isn’t one Conch recognises.');
     const token = await this.adapter.accessToken();
@@ -1118,9 +1124,7 @@ class OfficialSession {
         'refused',
         'WeChat didn’t hand over that file (it keeps them for three days).',
       );
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (bytes.length > FILE_LIMIT)
-      throw new ChannelError('refused', 'That file is too big to take from WeChat.');
+    const bytes = await readCapped(response, cap, 'That file is too big to take from WeChat.');
     return {
       name: file.name,
       bytes,

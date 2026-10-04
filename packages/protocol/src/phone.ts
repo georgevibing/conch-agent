@@ -144,8 +144,18 @@ export const VoiceStatus = z.object({
     z.object({ state: z.literal('downloading'), done: z.number(), total: z.number() }),
     z.object({ state: z.literal('ready') }),
   ]),
+  /** "Hey Conch" (ADR 0078): only in the desktop app, which this Conch runs in or not. */
+  wake: z.object({ available: z.boolean() }).optional(),
 });
 export type VoiceStatus = z.infer<typeof VoiceStatus>;
+
+/** Whether a burst of speech said "Hey Conch", and what came after it. */
+export const WakeResult = z.object({ heard: z.boolean(), rest: z.string().max(2000).optional() });
+export type WakeResult = z.infer<typeof WakeResult>;
+
+/** The window is listening for "Hey Conch", or has stopped (the tray says so too). */
+export const WakeStateBody = z.object({ on: z.boolean() });
+export type WakeStateBody = z.infer<typeof WakeStateBody>;
 
 export const Transcript = z.object({ text: z.string() });
 export type Transcript = z.infer<typeof Transcript>;

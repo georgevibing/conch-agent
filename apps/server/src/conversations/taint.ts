@@ -22,7 +22,7 @@ import type { ConversationEvent, TaintSource } from '@conch/protocol';
 const WEB_READERS = new Set(['WebFetch', 'WebSearch']);
 /** Conch's browser: every look at a page is the outside coming in. */
 const BROWSER =
-  /^(?:mcp__conch__)?browser_(?:open|read|screenshot|click|back|scroll|wait|select|press|type)$/;
+  /^(?:mcp__conch__)?browser_(?:open|read|screenshot|click|click_at|back|scroll|wait|select|press|type|tabs|upload)$/;
 const DOWNLOADS =
   /\b(?:curl|wget|http(?:ie)?|aria2c|fetch|Invoke-WebRequest|iwr|irm)\b|https?:\/\//i;
 /**

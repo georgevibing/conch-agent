@@ -27,10 +27,48 @@ describe('what Conch knows how to get', () => {
     for (const spec of KNOWN_NEEDS.values())
       for (const recipes of Object.values(spec.install ?? {}))
         for (const recipe of [recipes].flat()) {
-          expect(['winget', 'brew', 'npm']).toContain(recipe.manager);
+          expect(['winget', 'brew', 'npm', 'uv', 'github']).toContain(recipe.manager);
           // Never a shell, never sudo, never a script from the internet.
           expect(recipe.args.join(' ')).not.toMatch(/sudo|\||curl|iex|;|&&/);
+          // Conch's own fetch: only a project's release file, by name.
+          if (recipe.manager === 'github') {
+            expect(recipe.args[0]).toMatch(/^[\w.-]+\/[\w.-]+$/);
+            expect(recipe.args[1]).toMatch(/^[\w.+-]+$/);
+          }
+          // uv comes first when it isn't here.
+          if (recipe.manager === 'uv') expect(recipe.via).toBe('uv');
         }
+  });
+
+  it('gets whisper.cpp from its own release where no package manager has it', () => {
+    const whisper = KNOWN_NEEDS.get('whisper');
+    if (process.arch === 'x64')
+      expect(whisper?.install?.win32).toEqual({
+        manager: 'github',
+        args: ['ggml-org/whisper.cpp', 'whisper-bin-x64.zip', 'whisper-cli'],
+      });
+    expect(whisper?.install?.darwin).toEqual({ manager: 'brew', args: ['install', 'whisper-cpp'] });
+    // Homebrew first on Linux, then the release.
+    expect([whisper?.install?.linux].flat()[0]).toMatchObject({ manager: 'brew' });
+  });
+
+  it('gets Piper through uv, and FFmpeg through the package manager', () => {
+    const piper = KNOWN_NEEDS.get('piper');
+    for (const platform of ['win32', 'darwin', 'linux'] as const)
+      expect(piper?.install?.[platform]).toEqual({
+        manager: 'uv',
+        args: ['tool', 'install', 'piper-tts'],
+        via: 'uv',
+      });
+    expect(piper?.update?.('/home/ada/.local/bin/piper', 'linux')).toEqual([
+      { manager: 'uv', args: ['tool', 'upgrade', 'piper-tts'], via: 'uv' },
+    ]);
+    const ffmpeg = KNOWN_NEEDS.get('ffmpeg');
+    expect(ffmpeg?.install?.win32).toMatchObject({
+      manager: 'winget',
+      args: expect.arrayContaining(['Gyan.FFmpeg']),
+    });
+    expect(ffmpeg?.install?.darwin).toEqual({ manager: 'brew', args: ['install', 'ffmpeg'] });
   });
 
   it('gives every need somewhere to get it by hand', () => {

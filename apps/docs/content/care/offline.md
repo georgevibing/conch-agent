@@ -37,7 +37,7 @@ The chip at the top of a chat names the provider answering it and shows what's l
 
 If the chat's provider needs you (a sign-in that ended), the chip says **Sign in** instead. With no provider connected, it says **Connect a provider**.
 
-If you pay as you go, the details show what you've spent today and this month. Set a **Monthly budget** in **Settings → Usage**, and the chip shows what's left of that. Conch warns you when it runs low. It never stops you. Routines are the one exception: what they spend while you're away has [a limit of its own](../features/routines.md#it-wont-run-up-a-bill).
+If you pay as you go, the details show what you've spent today and this month. Set a **Monthly budget** in **Settings → Usage**, and the chip shows what's left of that. Near it, a chat says so once; at it, a chat asks before spending more ([What it costs](./what-it-costs.md)). Routines have [a limit of their own](../features/routines.md#it-wont-run-up-a-bill) for what they spend while you're away.
 
 A line appears above the message box only when the chat's provider is close to its limit or has reached it. Type `/usage` to open the chip's details, or open **Settings → Usage** to see every connected provider's limits at once.
 

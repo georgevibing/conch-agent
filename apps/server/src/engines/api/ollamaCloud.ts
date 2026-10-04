@@ -159,6 +159,10 @@ class OllamaCloudWire implements Wire {
     return this.direct.smallModel();
   }
 
+  seesFor(model: string): boolean | undefined {
+    return this.direct.seesFor(model);
+  }
+
   toolsFor(model: string): boolean | undefined {
     return this.direct.toolsFor(model);
   }

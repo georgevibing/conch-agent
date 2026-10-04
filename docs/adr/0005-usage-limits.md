@@ -1,6 +1,7 @@
 # 0005 — Usage limits
 
-- Status: accepted
+- Status: accepted; amended by [ADR 0079](./0079-what-a-chat-costs.md): the monthly budget now
+  holds chats on a key you pay as you go, and only money counts toward it
 - Date: 2026-09-29
 
 ## Context

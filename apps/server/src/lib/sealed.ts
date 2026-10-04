@@ -26,6 +26,8 @@ export const SEALED_FILES = new Set([
   'integrations.secrets.json',
   'google.secrets.json',
   'slack.secrets.json',
+  // A cloud browser's key, or a browser address with its token (ADR 0080).
+  'browser.secrets.json',
   'channels.secrets.json',
   'whatsapp.secrets.json',
   'push.secrets.json',

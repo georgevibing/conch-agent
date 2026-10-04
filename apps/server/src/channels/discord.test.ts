@@ -86,6 +86,32 @@ describe('Discord', () => {
     expect(discord.identifies).toBe(1);
   });
 
+  it('answers in a server channel you turned on, only when mentioned (ADR 0075)', async () => {
+    const { s, discord, channel } = await paired();
+    discord.join();
+    discord.sayInServer('not for the bot');
+    const group = await until(
+      async () => (await s.channels.get(channel.id)).groups[0],
+      'channel listed',
+    );
+    expect(group).toMatchObject({ name: '#general (My server)', on: false });
+    await s.channels.setGroup(channel.id, group.id, true);
+    const bob = { id: '777', username: 'bob', global_name: 'Bob' };
+    discord.sayInServer('what time is it?', bob, { mention: true });
+    const chat = await until(
+      async () => (await s.conversations.list()).find((c) => c.origin?.kind === 'channel'),
+      'conversation',
+    );
+    expect(chat.origin).toMatchObject({ guest: true, group: '#general (My server)' });
+    const said = await until(
+      async () =>
+        (await s.conversations.eventsAfter(chat.id)).find((e) => e.type === 'user.message'),
+      'message logged',
+    );
+    expect(said).toMatchObject({ text: 'what time is it?' });
+    await until(() => discord.last('general1'), 'answer in the channel');
+  });
+
   it('clears an Interactions Endpoint URL that would swallow button presses', async () => {
     const ctx = await setup();
     ctx.discord.endpoint = 'https://example.com/interactions';

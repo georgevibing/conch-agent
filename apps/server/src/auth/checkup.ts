@@ -174,6 +174,8 @@ export interface CheckupInput {
   terminalRemote?: boolean;
   /** The agent's browser may open pages on this computer and your network (Settings › Browser). */
   browserLocal?: boolean;
+  /** The agent's browser is your own signed-in Chrome (ADR 0080). */
+  browserOwnChrome?: boolean;
   /** Pages allowed to read live data from this computer (ADR 0046), by host. */
   pagesLocal?: string[];
   /** A connected provider, and whether Conch can ask you before each step with it (the one that can't, if any). */
@@ -183,13 +185,18 @@ export interface CheckupInput {
   /** Defaults to this computer's. */
   platform?: NodeJS.Platform;
   /** Chat apps that reach the assistant, and who besides you may use each. */
-  channels?: { app: string; bot: string; others: string[] }[];
+  channels?: { app: string; bot: string; others: string[]; groups?: string[] }[];
   /** The public door (ADR 0045): where the internet reaches it, and for which apps. */
   door?: { url: string; apps: string[] };
   /** Safe hands (ADR 0028): the guard, and the sealed box for commands. */
   safety?: { checkAfterReading: boolean; sealedCommands: boolean; sandboxAvailable: boolean };
   /** An address of your own (ADR 0064): the internet reaches Conch there. */
   address?: AddressStatus;
+  /**
+   * Apps paired with Conch (ADR 0073), and whether those marked for it may come
+   * in through your own address.
+   */
+  otherApps?: { remote: boolean; apps: { name: string; remote: boolean }[] };
 }
 
 /**
@@ -443,6 +450,19 @@ export function checkup(input: CheckupInput): CheckupItem[] {
     });
   }
 
+  const grouped = channels.filter((c) => c.groups?.length);
+  if (grouped.length) {
+    const groups = [...new Set(grouped.flatMap((c) => c.groups ?? []))];
+    items.push({
+      id: 'channel-groups',
+      level: 'info',
+      title: `Your assistant answers in ${groups.length === 1 ? `“${groups[0]}”` : `${groups.length} group chats`}`,
+      detail:
+        'Anyone there can mention it and get an answer in words, on your provider. Only you can ask it to do things, and it asks you privately first. Turn a group off when you no longer want it there.',
+      fix: { kind: 'open', label: 'Review', place: 'channels' },
+    });
+  }
+
   if (input.door) {
     const apps = input.door.apps.length ? input.door.apps.join(' and ') : 'Teams and WeChat';
     items.push({
@@ -452,6 +472,29 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       detail: `It leads to a small door of its own, not to Conch: it lets in only messages ${apps} signed, for the channels you connected, and nothing on this computer can be reached through it. Turn it off when you no longer use ${apps}.`,
       fix: { kind: 'open', label: 'Review', place: 'channels' },
     });
+  }
+
+  if (input.otherApps?.apps.length) {
+    const { apps, remote } = input.otherApps;
+    const outside = remote ? apps.filter((a) => a.remote) : [];
+    const names = (list: { name: string }[]) =>
+      list.length === 1 ? list[0]?.name : `${list.length} apps`;
+    if (outside.length)
+      items.push({
+        id: 'other-apps-remote',
+        level: 'warn',
+        title: `${names(outside)} can reach Conch through your address`,
+        detail: `Whoever has ${outside.length === 1 ? 'its key' : 'one of their keys'} can use what you let ${outside.length === 1 ? 'it' : 'them'} use in Conch, from anywhere. Keep this only for an app you use on another computer, and remove it when you don’t.`,
+        fix: { kind: 'open', label: 'Review', place: 'other-apps' },
+      });
+    else
+      items.push({
+        id: 'other-apps',
+        level: 'info',
+        title: `${names(apps)} can use Conch on this computer`,
+        detail: `${apps.map((a) => a.name).join(', ')}: each only what you chose, and anything that changes something asks you first in Conch. Remove an app you no longer use.`,
+        fix: { kind: 'open', label: 'Review', place: 'other-apps' },
+      });
   }
 
   if (input.workspaceRules?.length) {
@@ -506,6 +549,17 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       detail:
         'The assistant’s browser can reach pages on this computer and your network, like a router or a dev server. A web page it visits could try to use them too. Conch itself stays out of reach. If you don’t need it, turn it off.',
       fix: { kind: 'act', label: 'Turn off', action: 'browser-local-off' },
+    });
+  }
+
+  if (input.browserOwnChrome) {
+    items.push({
+      id: 'browser-own-chrome',
+      level: 'warn',
+      title: 'The assistant browses in your own Chrome',
+      detail:
+        'It uses your Chrome, where you’re signed in to your accounts. It only touches the tabs it opens, and asks before acting on each site, but a page it reads there could try to trick it. If you don’t need your sign-ins, go back to Conch’s own browser.',
+      fix: { kind: 'act', label: 'Use Conch’s browser', action: 'browser-own-chrome-off' },
     });
   }
 

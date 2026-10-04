@@ -201,6 +201,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
         workspaceRules: await workspaceRules(await services.settings.workspace()),
         trustedIntegrations: await services.integrations.store.trusted(),
         browserLocal: (await services.browser.store.settings()).allowLocal,
+        browserOwnChrome: (await services.browser.store.settings()).backend === 'chrome',
         pagesLocal: [
           ...new Set(
             (await services.artifacts.live.access.list().catch(() => []))
@@ -224,6 +225,10 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
           sandboxAvailable: sandboxSupport().available,
         },
         address: services.address.status(),
+        otherApps: {
+          remote: await services.mcp.store.remote(),
+          apps: (await services.mcp.store.list()).map((c) => ({ name: c.name, remote: c.remote })),
+        },
         ...(services.config.CONCH_TOKEN && { tokenProfile: await findTokenProfile() }),
       }),
       exposure: exposure(services.config),

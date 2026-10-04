@@ -51,9 +51,17 @@ export interface PushDeps {
   store: PushStore;
   /** The assistant's name, for "Conch needs your OK". */
   persona: () => Promise<string>;
-  conversation: (
-    id: string,
-  ) => Promise<{ title: string; routine?: boolean; channel?: boolean; task?: boolean } | undefined>;
+  conversation: (id: string) => Promise<
+    | {
+        title: string;
+        routine?: boolean;
+        channel?: boolean;
+        task?: boolean;
+        /** Another app's chat (ADR 0073): the app is who's asking. */
+        app?: string;
+      }
+    | undefined
+  >;
   routineTitle: (id: string) => Promise<string | undefined>;
   /** Still allowed in: signed in, not removed. */
   ownerExists: (owner: string) => Promise<boolean>;
@@ -322,8 +330,9 @@ export class PushService {
       return;
     }
     if (e.type === 'permission.requested') {
-      const name = await this.deps.persona();
       const chat = await this.deps.conversation(e.conversationId);
+      // Another app asking through Conch says so: the OK is for it, not your assistant.
+      const name = chat?.app ?? (await this.deps.persona());
       await this.notify('approvals', {
         title: `${name} needs your OK`,
         body: clip(chat?.title ? `${e.summary} · ${chat.title}` : e.summary),
@@ -379,8 +388,10 @@ export class PushService {
         title: `${name} needs you in the browser`,
         body: clip(e.handoff.reason),
         quiet: 'Open Conch to take over.',
-        url,
+        // Straight to the page: the panel opens by itself while it's your turn.
+        url: `${url}?browser=1`,
         tag: `hand-${e.handoff.handoffId}`,
+        actions: [{ action: 'open', title: 'Take over' }],
         requireInteraction: true,
         urgency: 'high',
       });

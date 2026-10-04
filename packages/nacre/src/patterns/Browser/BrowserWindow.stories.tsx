@@ -118,6 +118,37 @@ export const YourTurn: Story = {
   },
 };
 
+/** Links that open a new tab, and sign-in popups, become tabs you can see and switch. */
+export const Tabs: Story = {
+  args: {
+    onTab: fn(),
+    tab: {
+      ...hotels,
+      control: 'idle',
+      tabs: [
+        { id: 't1', title: 'Hotels in Lisbon · Staylight', url: hotels.url, active: false },
+        {
+          id: 't2',
+          title: 'Casa do Rio · Staylight',
+          url: 'https://www.staylight.example/hotel/0',
+          active: true,
+        },
+        { id: 't3', title: '', url: 'https://accounts.example.com/signin', active: false },
+      ],
+    },
+  },
+};
+
+/** Working in your own Chrome, where you’re signed in: the window says so. */
+export const InYourChrome: Story = {
+  args: { tab: { ...hotels, control: 'agent', backend: 'chrome' } },
+};
+
+/** A browser in the cloud. */
+export const InTheCloud: Story = {
+  args: { tab: { ...hotels, control: 'agent', backend: 'browserbase' } },
+};
+
 export const Idle: Story = {
   args: { tab: { ...hotels, control: 'idle' } },
 };

@@ -6,6 +6,7 @@
  */
 import { findExecutable, run as runProgram, type RunResult } from '../lib/proc';
 import type { LatestLookup } from '../setup/needs';
+import { latestRelease } from '../setup/release';
 import { parseVersion } from './version';
 
 export type Runner = (
@@ -27,6 +28,8 @@ export interface LookupDeps {
 const NPM_NAME = /^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/;
 /** A winget id (`OpenAI.Codex`) or a Homebrew name (`1password-cli`). */
 const PACKAGE_ID = /^[A-Za-z0-9][\w.+-]*$/;
+/** A PyPI project name (`piper-tts`). */
+const PYPI_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 
 /** `winget show` prints `Version: 0.160.0` under the `Found … [id]` line. */
 export function parseWingetShow(stdout: string): string | undefined {
@@ -94,6 +97,31 @@ export function lookup(deps: LookupDeps = {}): LatestLookup {
         { timeout },
       );
       return result.code === 0 ? parseWingetShow(result.stdout) : undefined;
+    },
+    async pypi(pkg) {
+      if (!PYPI_NAME.test(pkg)) return undefined;
+      try {
+        const response = await (deps.fetch ?? fetch)(`https://pypi.org/pypi/${pkg}/json`, {
+          headers: { accept: 'application/json' },
+          signal: AbortSignal.timeout(timeout),
+        });
+        if (!response.ok) return undefined;
+        const body = (await response.json()) as { info?: { version?: unknown } };
+        return typeof body.info?.version === 'string' ? parseVersion(body.info.version) : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+    async github(repo, asset) {
+      try {
+        const release = await latestRelease(repo, asset, {
+          ...(deps.fetch && { fetch: deps.fetch }),
+          signal: AbortSignal.timeout(timeout),
+        });
+        return release?.version;
+      } catch {
+        return undefined;
+      }
     },
     async brew(name, cask = false) {
       const brew = PACKAGE_ID.test(name) ? await manager('brew') : undefined;

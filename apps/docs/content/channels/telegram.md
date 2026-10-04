@@ -23,3 +23,4 @@ The link opens your bot in Telegram with one button, **START**. Press it and the
 - **Answers arrive as they're written.** Telegram shows the reply as a draft while your assistant works, with its own Stop button.
 - **One program per bot.** Telegram lets only one program read a bot's messages. If another has yours, Conch says so, waits, and retries every minute.
 - **A leftover webhook** from another tool is removed for you.
+- **In a group**, add the bot like any member. It shows on its page in Conch, off; turn it on there, and it answers when someone writes `@yourbot` or replies to it. See [In a group](index.md#in-a-group).

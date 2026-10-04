@@ -108,12 +108,27 @@ describe('automatic titles', () => {
     expect(engine.completions).toHaveLength(1);
   });
 
-  it('adds what titling cost to the spend ledger', async () => {
+  it('adds what titling cost to the spend ledger, on a key you pay as you go', async () => {
+    process.env.CONCH_MOCK_USAGE = 'metered';
+    try {
+      const { services, events } = await setup();
+      const convo = await send(services, 'Hello there');
+      await titled(events, services, convo.id);
+      await new Promise((r) => setTimeout(r, 300));
+      const snapshot = await services.usage.snapshot();
+      expect(snapshot.spend.today).toBeGreaterThanOrEqual(0.0002);
+    } finally {
+      delete process.env.CONCH_MOCK_USAGE;
+    }
+  });
+
+  it('counts no money for titling on a plan (ADR 0079)', async () => {
     const { services, events } = await setup();
     const convo = await send(services, 'Hello there');
     await titled(events, services, convo.id);
+    await idle(services, convo.id);
     await new Promise((r) => setTimeout(r, 300));
     const snapshot = await services.usage.snapshot();
-    expect(snapshot.spend.today).toBeGreaterThanOrEqual(0.0002);
+    expect(snapshot.spend.today).toBe(0);
   });
 });

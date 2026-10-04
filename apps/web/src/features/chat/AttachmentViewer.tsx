@@ -97,10 +97,12 @@ function useExcerpt(attachment: Attachment) {
 
 function SentCard({ attachment, onOpen }: { attachment: Attachment; onOpen: () => void }) {
   const excerpt = useExcerpt(attachment);
-  const { id: _id, createdAt: _at, ...info } = attachment;
+  const { id: _id, createdAt: _at, transcript, ...info } = attachment;
   return (
     <AttachmentCard
       {...info}
+      // A voice note from a chat app (ADR 0077): its words are the message beside it.
+      note={transcript !== undefined ? 'Voice note, turned into words on this computer' : undefined}
       excerpt={excerpt}
       src={attachment.kind === 'image' ? attachmentUrl(attachment.id) : undefined}
       density="comfortable"

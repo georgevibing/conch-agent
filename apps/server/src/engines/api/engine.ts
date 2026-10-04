@@ -19,7 +19,6 @@ import type {
   TurnProblem,
   Usage,
 } from '@conch/protocol';
-import { z } from 'zod';
 import { sandboxSupport } from '../../conversations/sandbox';
 import { authorizeTool, hostComputerTools, HOST_NAMES } from '../host';
 
@@ -28,6 +27,7 @@ import { newId } from '../../lib/ids';
 import type { ProviderKeys } from '../../providers/keys';
 import type { SettingsStore } from '../../settings/store';
 import {
+  hostToolImages,
   hostToolText,
   type Compacted,
   type Completion,
@@ -38,8 +38,11 @@ import {
   type EngineIntegrations,
   type EngineUsage,
   type HostTool,
+  type Picture,
+  type ToolImage,
   type TurnInput,
 } from '../types';
+import { checkBridgedArgs, checkHostArgs, readArgs, withNotes } from '../tools/args';
 import { bridgedSchema, hostToolSpec, wireName } from './jsonschema';
 import {
   budgetFor,
@@ -60,7 +63,18 @@ import {
   turnStarts,
   withSummary,
 } from './context';
+import {
+  ageToolPictures,
+  hasPictures,
+  picturesOf,
+  toolPictureCount,
+  UNSEEN_PICTURE,
+  wordsForPictures,
+} from './pictures';
+import { describeOrSay, withSight } from './sight';
+import { UNREADABLE, UNREADABLE_MESSAGE } from './prompted';
 import { sessionsDir, TranscriptStore, type Session } from './session';
+import { ToolPlan, type ToolLessons } from './toolplan';
 import {
   ApiError,
   type ApiVariant,
@@ -134,7 +148,7 @@ export interface Callable {
   run(
     args: Record<string, unknown>,
     toolUseId: string,
-  ): Promise<{ text: string; isError: boolean; view?: ToolView }>;
+  ): Promise<{ text: string; isError: boolean; view?: ToolView; images?: ToolImage[] }>;
 }
 
 /** What fitting a chat into its model's window needs to know (ADR 0055). */
@@ -162,10 +176,6 @@ interface Notice {
   type: 'notice';
   code: string;
   message: string;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /** The key couldn't be had: none saved, or 1Password wouldn't hand it over. */
@@ -256,13 +266,14 @@ export function buildTools(
     add(display, (name) => ({
       spec: hostToolSpec(host, name),
       display,
-      run: async (args, id) => {
-        const parsed = z.object(host.input).strict().safeParse(args);
-        if (!parsed.success)
-          return { text: 'The tool arguments do not match its schema.', isError: true };
-        const denied = await authorizeTool(input, display, parsed.data, id);
+      run: async (raw, id) => {
+        // Read forgivingly, checked strictly; what's authorised is what runs (ADR 0072).
+        const checked = checkHostArgs(host, raw, name);
+        if (!checked.ok) return { text: checked.message, isError: true };
+        const denied = await authorizeTool(input, display, checked.args, id);
         if (denied) return { text: denied, isError: true };
-        return { ...(await run(host, parsed.data)), isError: false };
+        const result = await run(host, checked.args);
+        return { ...result, text: withNotes(result.text, checked.notes), isError: false };
       },
     }));
   }
@@ -271,12 +282,16 @@ export function buildTools(
       spec: { name, description: bridged.description, schema: bridgedSchema(bridged.inputSchema) },
       display: bridged.name,
       // Already wrapped in the user's permission rules by the caller.
-      run: async (args, toolUseId) => {
+      run: async (raw, toolUseId) => {
         input.signal.throwIfAborted();
+        const checked = checkBridgedArgs(name, bridgedSchema(bridged.inputSchema), raw);
+        if (!checked.ok) return { text: checked.message, isError: true };
+        const args = checked.args;
         const decision = await input.guard?.({ toolName: bridged.name, toolUseId, input: args });
         if (decision?.decision === 'deny') return { text: decision.message, isError: true };
         // The bridge's requestPermission evaluates ask/taint again immediately before execution.
-        return bridged.run(args, toolUseId);
+        const result = await bridged.run(args, toolUseId);
+        return { ...result, text: withNotes(result.text, checked.notes) };
       },
     }));
   }
@@ -286,13 +301,15 @@ export function buildTools(
 async function run(
   tool: HostTool,
   args: Record<string, unknown>,
-): Promise<{ text: string; view?: ToolView }> {
+): Promise<{ text: string; view?: ToolView; images?: ToolImage[] }> {
   // A HostTool validates its own arguments; the cast is the seam between an
-  // untyped wire and a typed shape. API providers take text results only; a
-  // view is for the person, passed on beside the text, never to the model.
+  // untyped wire and a typed shape. A view is for the person, passed on beside
+  // the text, never to the model; pictures go to a model that can see them
+  // (`withSight`, ADR 0070).
   const result = await tool.run(args as never);
   const view = typeof result === 'string' ? undefined : result.view;
-  return { text: hostToolText(result), ...(view && { view }) };
+  const images = hostToolImages(result);
+  return { text: hostToolText(result), ...(view && { view }), ...(images && { images }) };
 }
 
 export class ApiEngine implements Engine {
@@ -311,6 +328,8 @@ export class ApiEngine implements Engine {
   };
   /** Models that can see get images; none of these can open files on this computer. */
   readonly attachments = { images: true, files: false };
+  /** A model that sees can describe a screenshot for one that can't (ADR 0070). */
+  readonly completeSees = true;
   /** Only for providers that publish limits; Conch tracks spend for the rest. */
   readonly usage?: (options?: { force?: boolean }) => Promise<EngineUsage>;
   /** A sign-in of the provider's own (Ollama Cloud through the Ollama app). */
@@ -324,6 +343,10 @@ export class ApiEngine implements Engine {
   #usageProbe?: Promise<EngineUsage>;
   /** Windows a provider named when it said "too long", smaller than its list said (ADR 0055). */
   #learned = new Map<string, number>();
+  /** Models that refused a picture though nothing said they would: blind from then on (ADR 0070). */
+  #blind = new Set<string>();
+  /** Models that refused a schema, or tools, and how they take them now (ADR 0072). */
+  #toolLessons: ToolLessons = new Map();
   /** A `/compact` in progress, by session: a turn waits for it rather than racing it. */
   #compacting = new Map<string, Promise<unknown>>();
   /** Conch keeps the transcript, so Conch fits long chats into the window (ADR 0055). */
@@ -487,7 +510,13 @@ export class ApiEngine implements Engine {
         signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
       });
       // A chat-only model says so with its own badge in the picker (ADR 0050).
-      models = listed.map((model) => ({ ...model.info, tools: model.tools }));
+      // Whether it sees is said outright (ADR 0070): the list's word, else the
+      // provider's, and no for one that has refused a picture.
+      models = listed.map((model) => ({
+        ...model.info,
+        tools: model.tools,
+        images: this.#sight(model.info.id, model.info.images),
+      }));
     } catch {
       // An empty list is the honest answer: Conch never invents model names.
       models = [];
@@ -507,6 +536,19 @@ export class ApiEngine implements Engine {
     };
     this.#capabilities = { value, at: Date.now() };
     return value;
+  }
+
+  /** Whether a model looks at pictures: not once it refused one, else the list's or provider's word. */
+  #sight(model: string, listed: boolean | undefined): boolean {
+    if (this.#blind.has(model)) return false;
+    return listed ?? this.variant.wire.seesFor?.(model) ?? false;
+  }
+
+  /** A model refused a picture: it's blind from now on, in the list too (ADR 0070). */
+  #learnBlind(model: string) {
+    this.#blind.add(model);
+    const known = this.#capabilities?.value.models.find((m) => m.id === model);
+    if (known) known.images = false;
   }
 
   /** The key changed (the provider service stores it): forget what depended on it. */
@@ -588,6 +630,7 @@ export class ApiEngine implements Engine {
         model,
         system: input.system,
         prompt: input.prompt,
+        ...(input.images?.length && { images: input.images }),
         maxTokens: input.maxTokens ?? COMPLETION_MAX_TOKENS,
         signal: input.signal,
       });
@@ -650,39 +693,58 @@ export class ApiEngine implements Engine {
         ? await this.#sessions.open(resuming, this.id)
         : { messages: [], seqs: [] };
       const listed = (await this.capabilities()).models.find((m) => m.id === model);
-      // A model the provider says is blind gets a note instead of pictures it would refuse.
-      const blind = input.images?.length && listed?.images === false;
+      /** Asked on every picture: a model can turn out blind halfway through a turn. */
+      const sees = () => this.#sight(model, listed?.images);
+      // A model that can't see gets the person's pictures in words, by one that can (ADR 0070).
+      const attached = input.images?.length && !sees() ? input.images : undefined;
+      const seen = attached
+        ? await describeOrSay(attached, {
+            ...(input.describe && { describe: input.describe }),
+            what: 'pictures the person attached to their message',
+            signal: input.signal,
+            spent,
+          })
+        : undefined;
       session.seqs.push(input.seq ?? null);
       session.messages.push(
-        blind
+        seen
           ? this.variant.wire.userMessage(
-              `${input.prompt}\n\n[The images named above couldn't be shown: ${model} can't see images. If the message depends on them, say so.]`,
+              `${input.prompt}\n\n[The pictures named above can’t be shown to this model. ${seen} If the message depends on them and this isn’t enough, say so.]`,
             )
           : this.variant.wire.userMessage(input.prompt, input.images),
       );
-      // A model that can't call tools (some small local ones) is never shown any.
-      const canCall =
-        this.variant.wire.toolsFor?.(model) ??
-        (await this.capabilities()).models.find((m) => m.id === model)?.tools ??
-        false;
-      if (!canCall)
-        yield {
-          type: 'notice',
-          code: 'chat-only',
-          message:
-            'This model is chat-only: it cannot use files, commands, memory or connected apps. Choose a tool-capable model for actions.',
-        };
-      const tools = canCall ? buildTools(input) : new Map<string, Callable>();
-      const specs = [...tools.values()].map((tool) => tool.spec);
-      // Conch's browser is the one way out to the web; the note mustn't deny it when it's there.
-      const canBrowse = canCall && input.tools.some((t) => t.name.startsWith('browser_'));
-      const note = capabilitiesNote({
-        canBrowse,
-        tools: canCall,
-        computer: canCall,
-        ...(this.variant.where && { where: this.variant.where }),
+      // Every model gets its tools: natively, else in words; chat-only only when
+      // even the shortest list won't fit (ADR 0072). Unknown counts as able (ADR 0050).
+      // A tool’s pictures reach a model that sees them natively; the rest, and a model
+      // using its tools in words (whose answers are text), get them in words (ADR 0070, 0072).
+      const tools = withSight(buildTools(input), {
+        sees: () => plan.mode === 'native' && sees(),
+        ...(input.describe && { describe: input.describe }),
+        signal: input.signal,
+        spent,
       });
-      const system = [input.systemAppend.trim(), note].filter(Boolean).join('\n\n');
+      const plan = new ToolPlan({
+        tools,
+        native:
+          (await this.variant.wire.toolsFor?.(model)) ??
+          (await this.capabilities()).models.find((m) => m.id === model)?.tools ??
+          true,
+        family: this.variant.wire.schemaFamily?.(model) ?? 'permissive',
+        window: await this.#window(model),
+        model,
+        lessons: this.#toolLessons,
+      });
+      if (plan.notice) yield plan.notice;
+      const systemFor = () => {
+        // Conch's browser is the one way out to the web; the note mustn't deny it when it's there.
+        const note = capabilitiesNote({
+          canBrowse: plan.usable && input.tools.some((t) => t.name.startsWith('browser_')),
+          tools: plan.usable,
+          computer: plan.usable,
+          ...(this.variant.where && { where: this.variant.where }),
+        });
+        return plan.system([input.systemAppend.trim(), note].filter(Boolean).join('\n\n'));
+      };
       const save = () =>
         this.#sessions
           .save(sessionId, {
@@ -698,13 +760,15 @@ export class ApiEngine implements Engine {
         session,
         model,
         label: listed?.label ?? model,
-        system,
-        specs,
+        system: systemFor(),
+        specs: plan.specs(),
         signal: input.signal,
         spent,
       };
       /** Asked again once, by itself, after the provider said "too long" (ADR 0055). */
       let healed = false;
+      /** Asked again once without pictures, after the model refused them (ADR 0070). */
+      let unseen = false;
 
       for (let step = 0; step < MAX_STEPS; step++) {
         if (input.signal.aborted) {
@@ -715,6 +779,8 @@ export class ApiEngine implements Engine {
         const messageId = newId('msg');
         let said = false;
         let end: Extract<WireEvent, { type: 'end' }> | undefined;
+        // Only the newest screenshots stay pictures: each is paid for on every request.
+        session.messages = ageToolPictures(session.messages);
         // The chat fits the window before every request: tool results grow it mid-turn too.
         yield* this.#fit(fitting);
         // Summarising is spending too: say so before the next request (ADR 0057).
@@ -725,16 +791,16 @@ export class ApiEngine implements Engine {
         const request: WireRequest = {
           key,
           model,
-          system,
-          messages: withSummary(session.messages, session.summary?.text),
+          system: fitting.system,
+          messages: plan.history(withSummary(session.messages, session.summary?.text)),
           // Tools go on every request in the loop, including the one carrying
           // results — leave them off and the model forgets it has any.
-          tools: specs,
+          tools: fitting.specs,
           effort: input.options.effort,
           signal: input.signal,
         };
         try {
-          for await (const event of this.#stream(request)) {
+          for await (const event of plan.read(this.#stream(request))) {
             if (event.type === 'notice') {
               yield event;
             } else if (event.type === 'text' || event.type === 'thinking') {
@@ -745,6 +811,35 @@ export class ApiEngine implements Engine {
             }
           }
         } catch (error) {
+          // A model that can't see refused a picture before a word was said: it's
+          // blind from now on, its pictures become words, and it's asked once more.
+          if (
+            !unseen &&
+            !said &&
+            !input.signal.aborted &&
+            error instanceof ApiError &&
+            error.kind === 'images' &&
+            request.messages.some(hasPictures)
+          ) {
+            unseen = true;
+            this.#learnBlind(model);
+            yield {
+              type: 'notice',
+              code: 'no-images',
+              message: `${fitting.label} can’t see pictures, so Conch asked again with words in their place.`,
+            };
+            session.messages = await this.#unpicture(session.messages, input, spent);
+            await save();
+            continue;
+          }
+          // Refused over its tools before a word was said: a plainer schema, else tools in words.
+          const mended = said || input.signal.aborted ? undefined : plan.heal(error);
+          if (mended) {
+            if (mended.notice) yield mended.notice;
+            fitting.system = systemFor();
+            fitting.specs = plan.specs();
+            continue;
+          }
           // "Too long" before a word was said: fold harder and ask once more, quietly.
           if (
             healed ||
@@ -766,7 +861,9 @@ export class ApiEngine implements Engine {
           session.factor = calibrate(
             session.factor,
             end.usage.inputTokens,
-            estimateTokens(system) + estimateTokens(specs) + estimateTokens(request.messages),
+            estimateTokens(request.system) +
+              estimateTokens(request.tools) +
+              estimateTokens(request.messages),
           );
         total.inputTokens += end.usage?.inputTokens ?? 0;
         total.outputTokens += end.usage?.outputTokens ?? 0;
@@ -804,7 +901,8 @@ export class ApiEngine implements Engine {
             continue;
           }
           const tool = tools.get(call.name);
-          const args = parseArgs(call.argumentsJson);
+          const read = readArgs(call.argumentsJson);
+          const args = 'args' in read ? read.args : undefined;
           yield {
             type: 'tool-start',
             // The provider's own id, so Conch can match start to end.
@@ -812,8 +910,14 @@ export class ApiEngine implements Engine {
             name: tool?.display ?? call.name,
             input: args ?? { arguments: call.argumentsJson.slice(0, 2_000) },
           };
-          const { text, status, view } = await this.#call(tool, args, call, input);
-          results.push({ id: call.id, name: call.name, text, isError: status === 'error' });
+          const { text, status, view, images } = await this.#call(tool, read, call, input);
+          results.push({
+            id: call.id,
+            name: call.name,
+            text,
+            isError: status === 'error',
+            ...(images && { images }),
+          });
           yield {
             type: 'tool-end',
             toolUseId: call.id,
@@ -822,7 +926,7 @@ export class ApiEngine implements Engine {
             ...(view && { view }),
           };
         }
-        session.messages.push(...this.variant.wire.toolResults(results));
+        session.messages.push(...plan.results(this.variant.wire, results));
         await save();
         if (stopped) {
           yield { type: 'done', outcome: 'interrupted', usage: usage() };
@@ -850,6 +954,43 @@ export class ApiEngine implements Engine {
         usage: usage(),
       };
     }
+  }
+
+  // ── Pictures (ADR 0070) ───────────────────────────────────────────────────
+
+  /**
+   * The transcript with every picture put into words, for a model that turned
+   * out not to see: the ones in the turn being answered described by a model
+   * that can (each once, even when it appears twice), older ones a plain line.
+   */
+  async #unpicture(
+    messages: readonly WireMessage[],
+    input: TurnInput,
+    spent: (usage: Usage | undefined) => void,
+  ): Promise<WireMessage[]> {
+    const from = turnStarts(messages).at(-1) ?? 0;
+    const words = new Map<string, string>();
+    for (const message of messages.slice(from))
+      for (const picture of picturesOf(message)) {
+        if (words.has(picture.data)) continue;
+        const said = await describeOrSay([picture], {
+          ...(input.describe && { describe: input.describe }),
+          what: toolPictureCount(message)
+            ? 'a screenshot of a web page in Conch’s browser'
+            : 'a picture the person attached',
+          signal: input.signal,
+          spent,
+        });
+        words.set(picture.data, `[A picture, in words: ${said}]`);
+      }
+    return messages.map((message, i) =>
+      i < from
+        ? wordsForPictures(message, () => UNSEEN_PICTURE)
+        : wordsForPictures(
+            message,
+            (picture: Picture) => words.get(picture.data) ?? UNSEEN_PICTURE,
+          ),
+    );
   }
 
   // ── Long chats (ADR 0055) ─────────────────────────────────────────────────
@@ -1053,16 +1194,12 @@ export class ApiEngine implements Engine {
   /** Run one tool call. A tool that fails is an answer to the model, not an exception. */
   async #call(
     tool: Callable | undefined,
-    args: Record<string, unknown> | undefined,
+    read: ReturnType<typeof readArgs>,
     call: { name: string; id: string },
     input: TurnInput,
-  ): Promise<{ text: string; status: ToolStatus; view?: ToolView }> {
-    if (!args) {
-      return {
-        text: 'Those arguments were not valid JSON. Call the tool again with a JSON object.',
-        status: 'error',
-      };
-    }
+  ): Promise<{ text: string; status: ToolStatus; view?: ToolView; images?: ToolImage[] }> {
+    if (call.name === UNREADABLE) return { text: UNREADABLE_MESSAGE, status: 'error' };
+    if ('problem' in read) return { text: read.problem, status: 'error' };
     if (!tool) {
       return {
         text: `There is no tool called ${call.name}. Use one of the tools in this request.`,
@@ -1070,11 +1207,12 @@ export class ApiEngine implements Engine {
       };
     }
     try {
-      const result = await tool.run(args, call.id);
+      const result = await tool.run(read.args, call.id);
       return {
-        text: result.text,
+        text: withNotes(result.text, read.notes),
         status: result.isError ? 'error' : 'success',
         ...(result.view && !result.isError && { view: result.view }),
+        ...(result.images?.length && { images: result.images }),
       };
     } catch (error) {
       if (input.signal.aborted) return { text: 'Stopped.', status: 'error' };
@@ -1116,14 +1254,11 @@ export class ApiEngine implements Engine {
   }
 }
 
-/** Arguments from the model are untrusted text: a bad one is a tool error, not a crash. */
+/**
+ * Arguments from the model are untrusted text: a bad one is a tool error, not
+ * a crash. Almost-JSON is mended (ADR 0072); undefined when there's nothing to read.
+ */
 export function parseArgs(json: string): Record<string, unknown> | undefined {
-  const trimmed = json.trim();
-  if (!trimmed) return {};
-  try {
-    const parsed: unknown = JSON.parse(trimmed);
-    return isRecord(parsed) ? parsed : undefined;
-  } catch {
-    return undefined;
-  }
+  const read = readArgs(json);
+  return 'args' in read ? read.args : undefined;
 }

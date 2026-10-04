@@ -165,7 +165,7 @@ describe('UsageService, one meter per provider', () => {
     // A Codex turn ends: only Codex is read again.
     codex.set({ ...plan(92), source: 'ChatGPT Plus' });
     now += 20_000;
-    await service.recordTurn(undefined, 'codex-cli');
+    await service.recordTurn(undefined, undefined, { engine: 'codex-cli' });
     await vi.advanceTimersByTimeAsync(2_000);
     await vi.waitFor(() => expect(seen.at(-1)).toMatchObject({ engine: 'codex-cli' }));
     expect(seen.at(-1)?.windows[0]?.usedPercent).toBe(92);

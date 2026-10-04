@@ -27,8 +27,9 @@ import { z } from 'zod';
 
 import { gigabytes } from '../../local/models';
 import { errorOf, ndjson, type OllamaClient } from '../../local/ollama';
-import type { Completion, EngineUsage, TurnImage } from '../types';
+import type { Completion, EngineUsage, Picture } from '../types';
 import { tooLong, windowIn } from './context';
+import { refusesImages, toolPicturesLead } from './pictures';
 import { defaultHome } from './session';
 import {
   ApiError,
@@ -44,6 +45,7 @@ import {
   type WireToolCall,
   type WireUsage,
 } from './types';
+import { refusalError } from './refusals';
 import { send, text, validate, type ToolResult, type Wire } from './wire';
 
 /** What the person calls this provider (the picker's group, the chat's sentences). */
@@ -138,6 +140,9 @@ export function mapError(status: number, message: string, model: string): ApiErr
       `${model} needs more memory than this computer has free right now. Close a few apps, or pick a smaller model.`,
     );
   }
+  if (refusesImages(message)) {
+    return new ApiError('images', `${model} can’t look at pictures.`);
+  }
   if (tooLong(message) || /context|exceeds/i.test(message)) {
     const window = windowIn(message);
     return new ApiError('context', TOO_LONG, { ...(window && { window }) });
@@ -198,12 +203,17 @@ export class OllamaWire implements Wire {
     return this.#models.get(model)?.tools;
   }
 
+  /** What Ollama says the model can do: `vision` among its capabilities (ADR 0070). */
+  seesFor(model: string): boolean {
+    return this.#models.get(model)?.vision ?? false;
+  }
+
   smallModel(): string | undefined {
     // Every local model is free; the one the person chose is the one that's loaded.
     return undefined;
   }
 
-  userMessage(content: string, images?: readonly TurnImage[]): WireMessage {
+  userMessage(content: string, images?: readonly Picture[]): WireMessage {
     return {
       role: 'user',
       content,
@@ -211,13 +221,23 @@ export class OllamaWire implements Wire {
     };
   }
 
+  /** Tool answers, one `tool` message each; their pictures follow in one user message (ADR 0070). */
   toolResults(results: ToolResult[]): WireMessage[] {
-    return results.map((result) => ({
+    const messages: WireMessage[] = results.map((result) => ({
       role: 'tool',
       tool_name: result.name,
       tool_call_id: result.id,
       content: result.text,
     }));
+    const pictured = results.filter((result) => result.images?.length);
+    if (pictured.length)
+      messages.push(
+        this.userMessage(
+          toolPicturesLead(pictured.map((result) => result.name)),
+          pictured.flatMap((result) => result.images ?? []),
+        ),
+      );
+    return messages;
   }
 
   /**
@@ -250,7 +270,7 @@ export class OllamaWire implements Wire {
     }
   }
 
-  #body(request: WireRequest, options: { tools: boolean; think: boolean }) {
+  #body(request: WireRequest, options: { think: boolean }) {
     const model = this.#models.get(request.model);
     const think = options.think ? thinkFor(model, request.effort) : undefined;
     return {
@@ -258,33 +278,38 @@ export class OllamaWire implements Wire {
       messages: [{ role: 'system', content: request.system }, ...request.messages],
       stream: true,
       options: { num_ctx: this.link.contextFor(request.model) },
-      ...(options.tools &&
-        request.tools.length && {
-          tools: request.tools.map((tool) => ({
-            type: 'function',
-            function: { name: tool.name, description: tool.description, parameters: tool.schema },
-          })),
-        }),
+      ...(request.tools.length && {
+        tools: request.tools.map((tool) => ({
+          type: 'function',
+          function: { name: tool.name, description: tool.description, parameters: tool.schema },
+        })),
+      }),
       ...(think !== undefined && { think }),
     };
   }
 
-  /** Ask, healing the two refusals that only mean "this model can't do that". */
+  /**
+   * Ask, healing a model that doesn't think. One that takes no tools is
+   * remembered and told to the engine, which gives it its tools in words
+   * instead (ADR 0072).
+   */
   async #chat(request: WireRequest): Promise<Response> {
-    let tools = !this.#noTools.has(request.model);
     let think = !this.#noThinking.has(request.model);
     for (let attempt = 0; attempt < 3; attempt++) {
       const response = await this.#post(
         '/api/chat',
-        this.#body(request, { tools, think }),
+        this.#body(request, { think }),
         request.signal,
       );
       if (response.ok) return response;
       const message = await errorOf(response);
-      if (response.status === 400 && tools && /does not support tools/i.test(message)) {
+      if (
+        response.status === 400 &&
+        request.tools.length &&
+        /does not support tools/i.test(message)
+      ) {
         this.#noTools.add(request.model);
-        tools = false;
-        continue;
+        throw refusalError('tools', this.#label(request.model));
       }
       if (response.status === 400 && think && /does not support think/i.test(message)) {
         this.#noThinking.add(request.model);
@@ -301,7 +326,6 @@ export class OllamaWire implements Wire {
   }
 
   async *stream(request: WireRequest): AsyncIterable<WireEvent> {
-    const toolsBefore = !this.#noTools.has(request.model);
     // A model that isn't in memory takes a few seconds to load: say so, rather than a silent spinner.
     if (!(await this.link.loaded(request.model).catch(() => true))) {
       yield {
@@ -311,13 +335,6 @@ export class OllamaWire implements Wire {
       };
     }
     const response = await this.#chat(request);
-    if (toolsBefore && this.#noTools.has(request.model) && request.tools.length) {
-      yield {
-        type: 'notice',
-        code: 'no-tools',
-        message: `${this.#label(request.model)} can’t use tools, so it’s answering without your apps and memory.`,
-      };
-    }
     if (!response.body) throw new ApiError('network', 'Ollama sent an empty reply.');
 
     let content = '';
@@ -383,7 +400,7 @@ export class OllamaWire implements Wire {
         model: request.model,
         messages: [
           { role: 'system', content: request.system },
-          { role: 'user', content: request.prompt },
+          this.userMessage(request.prompt, request.images),
         ],
         stream: false,
         // The same context as a chat, or Ollama would reload the model just for this.

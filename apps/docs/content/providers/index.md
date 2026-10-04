@@ -12,7 +12,8 @@ order: 1
 There is no "current provider" to switch. Each one you connect adds its models to the same picker, grouped by provider and searchable by name.
 
 - **One is the default.** New chats start there. Change it with **Make default** in **Settings → Providers**, or from the picker.
-- **A chat can change provider mid-way.** The one that joins is handed what it missed, word for word, so the thread carries on.
+- **A chat can change provider mid-way.** The one that joins is handed what it missed, word for word, and what was done along the way: which tools ran and how each went, the browser’s page, files changed, an open plan. So it carries on rather than starts again.
+- **Each provider carries its own chat on.** Claude Code, Codex, Codex CLI and the programs that can (Copilot, Gemini CLI, Grok) pick a chat up where they left it. If one can’t, it’s given the whole conversation instead.
 - **What you set up belongs to Conch.** Your [apps](../features/apps.md), [skills](../features/skills.md), [memory](../features/memory.md) and [routines](../features/routines.md) work with every provider. What a provider brings by itself is shown apart, and says so.
 
 ## What each one can do

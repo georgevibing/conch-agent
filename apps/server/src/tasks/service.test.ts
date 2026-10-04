@@ -136,6 +136,7 @@ async function setup(
       emit: (event) => events.push(event),
       home,
       overBudget: async () => Boolean(options.overBudget),
+      ready: async () => [...engines.values()],
       background: options.background,
       helpers: options.helpers,
     });
@@ -734,6 +735,231 @@ describe('helpers side by side (delegate)', () => {
     expect(existsSync(looked?.worktree?.path ?? '/nope')).toBe(false);
     expect(out).toContain(`branch \`conch/${changed?.id}\``);
     expect(changed?.worktree?.path.startsWith(join(home, 'worktrees'))).toBe(true);
+  });
+});
+
+describe('helpers on another provider', () => {
+  const ctx = (conversationId: string, engine: Engine) => ({
+    conversationId,
+    append: () => undefined,
+    engine,
+    permissionMode: 'acceptEdits' as const,
+    ask: async () => 'deny' as const,
+    signal: new AbortController().signal,
+  });
+
+  async function idleChat(conversations: ConversationManager, options?: { model: string }) {
+    const chat = await conversations.send({
+      clientMessageId: 'u1',
+      text: 'hi',
+      ...(options && { options }),
+    });
+    await until(
+      () => conversations.detail(chat.id),
+      (d) => d.conversation.status === 'idle',
+    );
+    return chat;
+  }
+
+  it('hands a part to the provider asked for, in the chat’s own mode, and says who did it', async () => {
+    const { tasks, conversations, engines } = await setup();
+    const chat = await idleChat(conversations);
+    const delegate = tasks
+      .tools(ctx(chat.id, engines.get('mock') as Engine))
+      .find((t) => t.name === 'delegate');
+    const out = await delegate?.run({
+      parts: [
+        {
+          title: 'Write the tests',
+          instructions: 'write the tests',
+          provider: 'openrouter',
+          model: 'fast',
+          worktree: false,
+        },
+        { title: 'Check it', instructions: 'check it', model: 'fast', worktree: false },
+      ],
+    } as never);
+    expect(out).toBe(
+      '## Write the tests\nNot verified: Other did: write the tests\n\n## Check it\nNot verified: Scripted did: check it',
+    );
+    const helpers = (await tasks.list()).tasks;
+    const other = helpers.find((t) => t.title === 'Write the tests');
+    expect(other).toMatchObject({
+      by: 'Other',
+      options: { engine: 'openrouter', model: 'small-model', permissionMode: 'acceptEdits' },
+    });
+    expect(helpers.find((t) => t.title === 'Check it')?.by).toBeUndefined();
+    // It ran there, and only there; a mode it can't honour became its safest.
+    const ran = engines.get('openrouter')?.turns ?? [];
+    expect(ran).toHaveLength(1);
+    expect(ran[0]?.options.permissionMode).toBe('default');
+    const card = (await conversations.detail(chat.id)).events.findLast(
+      (e) => e.type === 'task' && e.taskId === other?.id,
+    );
+    expect(card).toMatchObject({ by: 'Other' });
+  });
+
+  it('knows a provider by its name too', async () => {
+    const { tasks, conversations, engines } = await setup();
+    const chat = await idleChat(conversations);
+    const delegate = tasks
+      .tools(ctx(chat.id, engines.get('mock') as Engine))
+      .find((t) => t.name === 'delegate');
+    await delegate?.run({
+      parts: [{ title: 'A', instructions: 'a', provider: 'other', model: 'same', worktree: false }],
+    } as never);
+    expect((await tasks.list()).tasks[0]?.options.engine).toBe('openrouter');
+  });
+
+  it('a provider that isn’t connected starts nothing, and says who can take it', async () => {
+    const { tasks, conversations, engines } = await setup();
+    const chat = await idleChat(conversations);
+    const delegate = tasks
+      .tools(ctx(chat.id, engines.get('mock') as Engine))
+      .find((t) => t.name === 'delegate');
+    const out = await delegate?.run({
+      parts: [
+        { title: 'A', instructions: 'a', model: 'fast', worktree: false },
+        { title: 'B', instructions: 'b', provider: 'gemini-cli', model: 'fast', worktree: false },
+      ],
+    } as never);
+    expect(out).toMatch(/^Nothing was started\. “gemini-cli” isn’t a provider/);
+    expect(out).toContain('Other (`openrouter`)');
+    expect((await tasks.list()).tasks).toHaveLength(0);
+  });
+
+  it('checks a model against that provider’s own list', async () => {
+    const { tasks, conversations, engines } = await setup();
+    const other = engines.get('openrouter') as Scripted;
+    other.capabilities = async () => ({
+      engine: 'openrouter',
+      label: 'Other',
+      models: [{ id: 'big-one', label: 'Big One' }] as Capabilities['models'],
+      commands: [],
+      permissionModes: ['default'],
+    });
+    const chat = await idleChat(conversations);
+    const delegate = tasks
+      .tools(ctx(chat.id, engines.get('mock') as Engine))
+      .find((t) => t.name === 'delegate');
+    const wrong = await delegate?.run({
+      parts: [
+        { title: 'A', instructions: 'a', provider: 'openrouter', model: 'gpt-9', worktree: false },
+      ],
+    } as never);
+    expect(wrong).toMatch(/Other has no model called “gpt-9”.*big-one/);
+    await delegate?.run({
+      parts: [
+        {
+          title: 'A',
+          instructions: 'a',
+          provider: 'openrouter',
+          model: 'Big One',
+          worktree: false,
+        },
+      ],
+    } as never);
+    expect((await tasks.list()).tasks[0]?.options.model).toBe('big-one');
+  });
+
+  it('doesn’t carry the chat’s own model to another provider', async () => {
+    const { tasks, conversations, engines } = await setup();
+    const chat = await idleChat(conversations, { model: 'chat-model' });
+    const delegate = tasks
+      .tools(ctx(chat.id, engines.get('mock') as Engine))
+      .find((t) => t.name === 'delegate');
+    await delegate?.run({
+      parts: [
+        { title: 'Mine', instructions: 'a', model: 'same', worktree: false },
+        {
+          title: 'Theirs',
+          instructions: 'b',
+          provider: 'openrouter',
+          model: 'same',
+          worktree: false,
+        },
+      ],
+    } as never);
+    const helpers = (await tasks.list()).tasks;
+    expect(helpers.find((t) => t.title === 'Mine')?.options.model).toBe('chat-model');
+    expect(helpers.find((t) => t.title === 'Theirs')?.options.model).toBeUndefined();
+  });
+
+  it('another provider’s helper is as wary as the chat, and what it read comes back', async () => {
+    const { tasks, conversations, engines } = await setup();
+    const chat = await idleChat(conversations);
+    await conversations.addTaint(chat.id, [{ kind: 'person', label: 'Ana on Telegram' }]);
+    const delegate = tasks
+      .tools(ctx(chat.id, engines.get('mock') as Engine))
+      .find((t) => t.name === 'delegate');
+    await delegate?.run({
+      parts: [
+        {
+          title: 'Read',
+          instructions: 'read the web',
+          provider: 'openrouter',
+          model: 'fast',
+          worktree: false,
+        },
+      ],
+    } as never);
+    const helper = (await tasks.list()).tasks[0] as Task;
+    expect(await conversations.taintOf(helper.conversationId ?? '')).toEqual(
+      expect.arrayContaining([{ kind: 'person', label: 'Ana on Telegram' }]),
+    );
+    expect(await conversations.taintOf(chat.id)).toContainEqual({
+      kind: 'web',
+      label: 'evil.example',
+    });
+  });
+
+  it('over the monthly budget, hands nothing to anyone', async () => {
+    const { tasks, conversations, engines } = await setup({ overBudget: true });
+    const chat = await idleChat(conversations);
+    const delegate = tasks
+      .tools(ctx(chat.id, engines.get('mock') as Engine))
+      .find((t) => t.name === 'delegate');
+    expect(
+      await delegate?.run({
+        parts: [
+          { title: 'A', instructions: 'a', provider: 'openrouter', model: 'fast', worktree: false },
+        ],
+      } as never),
+    ).toMatch(/monthly budget/);
+    expect(engines.get('openrouter')?.turns).toHaveLength(0);
+  });
+
+  it('a background task can go to another provider too', async () => {
+    const { tasks, conversations, engines } = await setup();
+    const chat = await idleChat(conversations);
+    const background = tasks
+      .tools(ctx(chat.id, engines.get('mock') as Engine))
+      .find((t) => t.name === 'start_background_task');
+    const said = await background?.run({
+      title: 'Tidy',
+      instructions: 'tidy the README',
+      provider: 'openrouter',
+    } as never);
+    expect(said).toMatch(/in the background with Other\./);
+    const task = (await tasks.list()).tasks[0] as Task;
+    expect(task).toMatchObject({
+      kind: 'background',
+      by: 'Other',
+      options: { engine: 'openrouter' },
+    });
+    await until(
+      () => tasks.get(task.id),
+      (t) => t.status === 'unverified',
+    );
+    expect(engines.get('openrouter')?.turns).toHaveLength(1);
+  });
+
+  it('tells the assistant who else it can hand work to', async () => {
+    const { tasks, engines } = await setup();
+    const section = await tasks.promptSection(engines.get('mock') as Engine);
+    expect(section).toContain('## Handing work off');
+    expect(section).toContain('- Other (`openrouter`)');
+    expect(section).not.toContain('(`mock`)');
   });
 });
 

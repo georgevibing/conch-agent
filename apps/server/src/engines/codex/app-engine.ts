@@ -4,7 +4,7 @@
  * tools doing the work (ADR 0036), and `agent` (Codex CLI) with Codex's own
  * shell and file edits on, every approval it asks for going through Conch.
  */
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import {
   EffortChoice,
@@ -28,6 +28,7 @@ import { run } from '../../lib/proc';
 import type { ProviderKeys } from '../../providers/keys';
 import type { SettingsStore } from '../../settings/store';
 import { buildTools } from '../api/engine';
+import { withSight } from '../api/sight';
 import { hostEnvironment } from '../host';
 import type {
   Engine,
@@ -35,11 +36,13 @@ import type {
   EngineUsage,
   LoginHandle,
   PermissionRequest,
+  ToolImage,
   TurnInput,
 } from '../types';
 import { DOCS_URL, MIN_VERSION, findCodex, installHints, isAtLeast, parseVersion } from './detect';
 import { CodexHome } from './home';
 import type { RpcMessage } from './rpc';
+import { CodexThreads, digest, parseResumeId, resumeIdFor, toolsDigest } from './threads';
 
 const Account = z.object({
   account: z
@@ -283,13 +286,14 @@ export class CodexEngine implements Engine {
   readonly label: string;
   /** Codex's commands go through Conch's sealed tools; Codex CLI's run in Codex's own sandbox. */
   readonly commandSandbox?: 'conch';
-  readonly conversationHistory = true;
   readonly integrations = { mode: 'bridge' as const };
   readonly hostTools = true;
   /** Its plan updates (`turn/plan/updated`) are drawn as Conch's checklist. */
   readonly plans = 'native' as const;
   readonly attachments = { images: true, files: true };
   readonly #home: CodexHome;
+  /** Threads carried on from one turn to the next (ADR 0066 § Carrying on). */
+  readonly #threads: CodexThreads;
   #status?: EngineStatus;
   #at = 0;
   #caps?: Capabilities;
@@ -308,6 +312,7 @@ export class CodexEngine implements Engine {
     readonly variant: 'tools' | 'agent' = 'tools',
   ) {
     this.#home = new CodexHome(home);
+    this.#threads = new CodexThreads(join(home, 'codex-sessions'));
     this.id = variant === 'agent' ? 'codex-agent' : 'codex-cli';
     this.label = variant === 'agent' ? 'Codex CLI' : 'Codex';
     if (variant === 'tools') this.commandSandbox = 'conch';
@@ -504,6 +509,11 @@ export class CodexEngine implements Engine {
     this.#status = undefined;
     this.#caps = undefined;
   }
+  /** The chat was deleted: Conch's copy of its Codex thread goes with it. */
+  async forgetSession(resumeId: string): Promise<void> {
+    const kept = parseResumeId(resumeId);
+    if (kept) await this.#threads.forget(kept.threadId);
+  }
   async setApiKey(): Promise<void> {
     this.#status = undefined;
     this.#caps = undefined;
@@ -614,7 +624,29 @@ export class CodexEngine implements Engine {
         );
       signal.throwIfAborted();
       const agent = this.variant === 'agent';
-      const tools = buildTools({ ...input, signal }, { computer: !agent, bare: true });
+      // A screenshot goes back as a picture to a model that takes them (every
+      // Codex model so far); one that doesn't gets it in words (ADR 0070).
+      const sees =
+        (await this.capabilities().catch(() => undefined))?.models.find(
+          (m) => m.id === input.options.model,
+        )?.images ?? true;
+      const tools = withSight(buildTools({ ...input, signal }, { computer: !agent, bare: true }), {
+        sees: () => sees,
+        ...(input.describe && { describe: input.describe }),
+        signal,
+      });
+      // The thread this chat had, carried on while its tools are the same (Codex
+      // can't be given new ones: ADR 0036). Otherwise a new one, with the handoff.
+      const toolsKey = toolsDigest(
+        this.variant,
+        [...tools.values()].map((tool) => ({ name: tool.spec.name, schema: tool.spec.schema })),
+      );
+      const wanted = parseResumeId(input.resumeId);
+      const kept =
+        wanted && wanted.tools === toolsKey ? await this.#threads.meta(wanted.threadId) : undefined;
+      const instructions = digest(input.systemAppend);
+      let restored = false;
+      let threadId = '';
       const profile = [
         // Codex CLI writes where the chat may (the work folder is the profile's own).
         ...(agent ? (input.sandbox?.allowWrite ?? []).map((p) => [p, 'write'] as const) : []),
@@ -673,7 +705,6 @@ export class CodexEngine implements Engine {
       await this.#home.withClient(
         status.executablePath,
         async (rpc) => {
-          let threadId = '';
           let turnId = '';
           const pendingTools = new Set<Promise<void>>();
           let toolTail = Promise.resolve();
@@ -726,6 +757,7 @@ export class CodexEngine implements Engine {
                   let text = 'This tool is not enabled in this conversation.';
                   let isError = true;
                   let view: ToolView | undefined;
+                  let images: readonly ToolImage[] = [];
                   try {
                     if (tool) {
                       signal.throwIfAborted();
@@ -733,6 +765,7 @@ export class CodexEngine implements Engine {
                       text = result.text;
                       isError = result.isError;
                       view = result.isError ? undefined : result.view;
+                      images = result.images ?? [];
                     }
                   } catch {
                     text = signal.aborted
@@ -749,7 +782,17 @@ export class CodexEngine implements Engine {
                   if (!signal.aborted)
                     rpc.send({
                       id: message.id,
-                      result: { success: !isError, contentItems: [{ type: 'inputText', text }] },
+                      result: {
+                        success: !isError,
+                        // The app server takes pictures back from a tool as `inputImage`.
+                        contentItems: [
+                          { type: 'inputText', text },
+                          ...images.map((image) => ({
+                            type: 'inputImage',
+                            imageUrl: `data:${image.mimeType};base64,${image.data}`,
+                          })),
+                        ],
+                      },
                     });
                 });
                 toolTail = job.catch(() => {});
@@ -877,36 +920,82 @@ export class CodexEngine implements Engine {
             }
           };
           rpc.listen(onMessage);
-          // Fresh thread each turn: dynamic tools are persisted on thread/start
-          // and cannot be replaced on resume in the supported protocol. Reusing
-          // an old schema could expose an app the user has since disconnected.
-          const started = object(
-            await rpc.request('thread/start', {
-              cwd: input.cwd,
-              environments: [],
-              model: input.options.model,
-              approvalPolicy: 'untrusted',
-              permissions: 'conch',
-              config: { [`projects.${JSON.stringify(input.cwd)}.trust_level`]: 'untrusted' },
-              developerInstructions: input.systemAppend,
-              allowProviderModelFallback: false,
-              ephemeral: true,
-              dynamicTools: [...tools.values()].map((tool) => ({
-                type: 'function',
-                name: tool.spec.name,
-                description: tool.spec.description,
-                inputSchema: tool.spec.schema,
-              })),
-            }),
-          );
-          threadId = String(object(started.thread).id ?? '');
-          if (!threadId) throw new Error('Codex did not create a conversation.');
+          const trust = { [`projects.${JSON.stringify(input.cwd)}.trust_level`]: 'untrusted' };
+          // Carry on the chat's thread: the same tools (checked above), asking as
+          // every thread does, in the same sealed profile (set per run, below).
+          let resumed = false;
+          if (restored && wanted)
+            try {
+              const thread = object(
+                object(
+                  await rpc.request('thread/resume', {
+                    threadId: wanted.threadId,
+                    cwd: input.cwd,
+                    ...(input.options.model && { model: input.options.model }),
+                    approvalPolicy: 'untrusted',
+                    permissions: 'conch',
+                    config: trust,
+                    excludeTurns: true,
+                  }),
+                ).thread,
+              );
+              resumed = thread.id === wanted.threadId;
+            } catch {
+              // Codex couldn't read it back (a newer format, a damaged file): a new one, below.
+            }
+          if (resumed && wanted) threadId = wanted.threadId;
+          else {
+            if (wanted) await this.#threads.forget(wanted.threadId);
+            const started = object(
+              await rpc.request('thread/start', {
+                cwd: input.cwd,
+                environments: [],
+                model: input.options.model,
+                approvalPolicy: 'untrusted',
+                permissions: 'conch',
+                config: trust,
+                developerInstructions: input.systemAppend,
+                allowProviderModelFallback: false,
+                // Kept, so the next turn can carry it on (`threads.ts`).
+                ephemeral: false,
+                dynamicTools: [...tools.values()].map((tool) => ({
+                  type: 'function',
+                  name: tool.spec.name,
+                  description: tool.spec.description,
+                  inputSchema: tool.spec.schema,
+                })),
+              }),
+            );
+            threadId = String(object(started.thread).id ?? '');
+            if (!threadId) throw new Error('Codex did not create a conversation.');
+          }
+          emit({
+            type: 'session',
+            resumeId: resumeIdFor(threadId, toolsKey),
+            // It should have carried on and couldn't: healed, with the whole conversation.
+            ...(input.resumeId &&
+              !resumed &&
+              (!wanted || wanted.tools === toolsKey) && { restarted: 'lost' as const }),
+          });
+          // A carried-on thread gets what it missed; a new one, the whole conversation.
+          const text = resumed ? input.prompt : (input.freshPrompt ?? input.prompt);
           const startedTurn = object(
             await rpc.request('turn/start', {
               threadId,
               environments: [],
+              // Codex keeps a thread's instructions from when it started: when Conch's
+              // have changed since (a memory, a setting), the new ones go with the turn.
+              ...(resumed &&
+                kept?.instructions !== instructions && {
+                  additionalContext: {
+                    conch: {
+                      kind: 'application',
+                      value: `Conch's instructions for this conversation, as they are now. They replace the earlier ones.\n\n${input.systemAppend}`,
+                    },
+                  },
+                }),
               input: [
-                { type: 'text', text: input.prompt },
+                { type: 'text', text },
                 ...(input.images ?? []).map((image) => ({
                   type: 'image',
                   url: `data:${image.mimeType};base64,${image.data}`,
@@ -939,6 +1028,15 @@ export class CodexEngine implements Engine {
         },
         {
           signal,
+          ...(kept &&
+            wanted && {
+              prepare: async (home: string) => {
+                restored = await this.#threads.restore(wanted.threadId, home);
+              },
+            }),
+          after: async (home: string) => {
+            if (threadId) await this.#threads.keep(threadId, home, instructions);
+          },
           config: [
             ...(agent ? AGENT_CONFIG : TOOL_CONFIG),
             `permissions.conch.extends="${agent ? ':workspace' : ':read-only'}"`,

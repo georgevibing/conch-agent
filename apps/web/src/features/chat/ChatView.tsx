@@ -49,6 +49,7 @@ import { useChannels } from '../channels/queries';
 import { RunBanner } from '../routines/RunBanner';
 import { tasksApi } from '../tasks/api';
 import { TaskBanner } from '../tasks/TaskBanner';
+import { ClientBanner } from '../otherapps/ClientBanner';
 import { useStartTask } from '../tasks/queries';
 import { ComposerControls } from '../models/ComposerControls';
 import { modeInfo, modelLabel } from '../models/catalog';
@@ -58,6 +59,7 @@ import { providersApi } from '../providers/api';
 import { providerKeys, putProvider, useProviders } from '../providers/queries';
 import { useNeed } from '../setup/useNeed';
 import { UsageComposerNotice } from '../usage/UsageComposerNotice';
+import { ChatSpend } from '../spend/Spend';
 import styles from './ChatView.module.css';
 import { attachmentUrl } from './uploads';
 import { composerHistory, loadDraft, rememberSent, saveDraft } from './composer';
@@ -323,6 +325,14 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
     () => (location.state as { draft?: string } | null)?.draft ?? loadDraft(key),
   );
   useEffect(() => saveDraft(key, draft), [key, draft]);
+  // The words can arrive after the chat is already open (the welcome hands them over as it
+  // finishes): take them once per arrival.
+  const [arrived, setArrived] = useState(location.key);
+  if (arrived !== location.key) {
+    setArrived(location.key);
+    const handed = (location.state as { draft?: string } | null)?.draft;
+    if (handed) setDraft(handed);
+  }
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const columnRef = useRef<HTMLDivElement>(null);
   const attachments = useDraftAttachments();
@@ -598,7 +608,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
   const noteFor = (d: Draft): string | undefined => {
     if (!provider) return undefined;
     if (d.kind === 'image' && !sees && !can?.files)
-      return `${provider.label} can’t see pictures with this model. It will only get the name.`;
+      return 'This model can’t see pictures, so Conch describes it in words when another of your models can.';
     if (d.kind === 'file' && !can?.files)
       return `${provider.label} can’t open this kind of file. It will only get the name.`;
     return undefined;
@@ -812,6 +822,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
             {(engine?.state === 'ready' || chosenReady) && (
               <ComposerControls turn={turn} name={name} />
             )}
+            <ChatSpend conversationId={conversationId} />
             <Tooltip content={app?.workspace ?? ''}>
               <ComposerChip
                 icon={<Folder />}
@@ -903,6 +914,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
       {dropOverlay}
       <RunBanner conversationId={conversationId} />
       <TaskBanner conversationId={conversationId} />
+      <ClientBanner conversationId={conversationId} />
       <ChannelBanner conversationId={conversationId} />
       <ArchivedBanner conversationId={conversationId} />
       <Transcript
@@ -923,7 +935,8 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
         recover={recover}
         footer={footer}
       />
-      <div className={styles.dock}>{composer}</div>
+      {/* Another app's chat is its log (ADR 0073): nobody writes in it. */}
+      {origin?.kind !== 'client' && <div className={styles.dock}>{composer}</div>}
     </div>
   );
   // Wrapped the same before and after a new chat gets its id, so the transcript

@@ -19,11 +19,13 @@ import {
   VaultKindGlyph,
 } from '@conch/nacre';
 import {
+  Cable,
   Archive,
   ArchiveRestore,
   CirclePause,
   BadgeCheck,
   BatteryMedium,
+  Coins,
   Folder,
   Settings2,
   Bell,
@@ -193,7 +195,7 @@ const settingsPlaces: {
     tab: 'voice',
     label: 'Voice',
     keywords:
-      'voice dictation dictate speak talk microphone mic speech whisper read aloud language accent tts stt',
+      'voice dictation dictate speak talk microphone mic speech whisper read aloud language accent tts stt natural voices piper hey conch wake word voice notes',
     icon: <Mic />,
   },
   {
@@ -259,7 +261,8 @@ const settingsPlaces: {
   {
     tab: 'browser',
     label: 'Browser',
-    keywords: 'web browse chrome edge sites cookies sign out local localhost repair',
+    keywords:
+      'web browse chrome edge sites cookies sign out local localhost repair my chrome remote debugging cloud browserbase steel cdp devtools where it runs',
     icon: <Globe />,
   },
   {
@@ -267,6 +270,13 @@ const settingsPlaces: {
     label: 'Terminal',
     keywords: 'shell console command line powershell bash zsh remote devices',
     icon: <SquareTerminal />,
+  },
+  {
+    tab: 'other-apps',
+    label: 'Other apps',
+    keywords:
+      'other apps claude desktop cursor vs code vscode visual studio code zed windsurf mcp server connect conch to use from elsewhere editor ide pair paired',
+    icon: <Cable />,
   },
   {
     tab: 'appearance',
@@ -863,7 +873,7 @@ export function useFindables(query: string, conversationId: string | undefined):
       id: 'talk',
       label: 'Talk to me here',
       keywords:
-        'channels chat apps telegram discord slack whatsapp signal imessage email teams matrix wechat phone mobile message reach bot remote',
+        'channels chat apps telegram discord slack whatsapp signal imessage email teams matrix wechat sms text phone mobile message reach bot remote',
       icon: <MessagesSquare />,
       run: () => void navigate('/apps?show=talk'),
     },
@@ -909,6 +919,15 @@ export function useFindables(query: string, conversationId: string | undefined):
             keywords: 'web browse page watch take over',
             icon: <Globe />,
             run: () => openBrowser(conversationId),
+          },
+          // What this chat spent, and a limit of its own (ADR 0079).
+          {
+            id: 'chat-spend',
+            label: 'What this chat spent',
+            keywords:
+              'cost costs money spend spent spending price dollars bill tokens cache saved limit cap budget this chat expensive',
+            icon: <Coins />,
+            run: () => useUi.setState({ chatSpendOpen: conversationId }),
           },
         ]
       : []),

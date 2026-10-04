@@ -2,13 +2,14 @@ import { createHash } from 'node:crypto';
 import type { Server as HttpServer } from 'node:http';
 import { join, resolve, sep } from 'node:path';
 
-import type {
-  EngineId,
-  LoginState,
-  ServerEvent,
-  SkillSource,
-  TrayInfo,
-  TurnProblem,
+import {
+  ARTIFACT_FILES,
+  type EngineId,
+  type LoginState,
+  type ServerEvent,
+  type SkillSource,
+  type TrayInfo,
+  type TurnProblem,
 } from '@conch/protocol';
 
 import { Activity } from './activity/service';
@@ -27,7 +28,12 @@ import { ArtifactStore } from './artifacts/store';
 import { tasksCheck } from './tasks/doctor';
 import { signingKeyCheck } from './skills/doctor';
 import { fingerprintOf } from './skills/signing';
-import { TASKS_PROMPT, TaskService } from './tasks/service';
+import { TaskService } from './tasks/service';
+import { mcpCheck } from './mcp/doctor';
+import { McpSessions } from './mcp/endpoint';
+import { McpPairing } from './mcp/pairing';
+import { McpService } from './mcp/service';
+import { McpClientStore } from './mcp/store';
 import { TaskStore } from './tasks/store';
 import { QuestionDesk } from './questions/desk';
 import { QUESTIONS_PROMPT, questionTools } from './questions/tools';
@@ -50,6 +56,8 @@ import { pushCheck } from './push/doctor';
 import { PushService } from './push/service';
 import { PushStore } from './push/store';
 import { VoiceService } from './voice/service';
+import { SpeechService } from './voice/speech';
+import { WakeWord } from './voice/wake';
 import { AccessStore } from './auth/store';
 import { backupCheck } from './backup/doctor';
 import { BackupService } from './backup/service';
@@ -69,6 +77,7 @@ import { MockTeams } from './channels/mock/teams';
 import { MockTelegram } from './channels/mock/telegram';
 import { linkedChannels, type LinkedChannels } from './channels/linked-setup';
 import { ChannelLinking } from './channels/linking';
+import { MockTwilio } from './channels/mock/twilio';
 import { MockWeChat } from './channels/mock/wechat';
 import { CHANNEL_NAMES, ChannelService } from './channels/service';
 import { ChannelStore } from './channels/store';
@@ -83,11 +92,11 @@ import type { ApiEngine } from './engines/api';
 import { builtInEngines, serverEngine } from './engines/registry';
 import { appsNeeded } from './providers/apps';
 import { carryTools } from './providers/capabilities';
+import { Describer } from './vision/describer';
 import { MockEngine } from './engines/mock/engine';
 import { MOCK_MEANING_SPEC, mockMeaningFetch, mockMeaningLoad } from './engines/mock/meaning';
 import type { Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
-import { findExecutable } from './lib/proc';
 import { sandboxFor, sandboxSupport, secretPlaces } from './conversations/sandbox';
 import { heldTaints } from './conversations/taint';
 import { UndoService } from './undo/service';
@@ -103,6 +112,7 @@ import type { Heal } from './lib/recover';
 import { LocalService } from './local/service';
 import { KNOWN_NEEDS } from './setup/known';
 import { Setup } from './setup/needs';
+import { setToolsHome } from './setup/release';
 import { ProviderKeys } from './providers/keys';
 import { ProviderService } from './providers/service';
 import { SecretVault } from './secrets/vault';
@@ -160,6 +170,8 @@ import { lookup } from './updates/latest';
 import { mockPrograms } from './updates/mock';
 import { UpdatesService } from './updates/service';
 import { UsageService } from './usage/service';
+import { Billings, turnCost } from './usage/billing';
+import { ChatSpendDesk } from './usage/desk';
 import { REPOSITORY, SERVER_VERSION } from './version';
 import { theApp } from './desktop/app';
 import { AppReleases } from './updates/app';
@@ -170,14 +182,22 @@ export { SERVER_VERSION };
 /** How long Passwords waits on a provider's sign-in before using what it last said. */
 const SIGN_IN_LOOK_MS = 1_500;
 
-/** Every past turn's cost, oldest conversations included. */
+/**
+ * Every past turn's money, oldest conversations included: what Conch worked
+ * out (ADR 0079) where it did, so a plan's turns cost nothing; else what the
+ * provider said.
+ */
 async function turnCosts(store: ConversationStore) {
   const turns: { at: number; costUsd: number }[] = [];
   for (const record of await store.list()) {
     for (const event of await store.events(record.id)) {
-      if (event.type === 'turn.completed' && event.usage?.costUsd) {
-        turns.push({ at: event.at, costUsd: event.usage.costUsd });
-      }
+      if (event.type !== 'turn.completed') continue;
+      const usd = event.cost
+        ? event.cost.billing === 'metered'
+          ? event.cost.usd
+          : 0
+        : event.usage?.costUsd;
+      if (usd) turns.push({ at: event.at, costUsd: usd });
     }
   }
   return turns;
@@ -234,6 +254,8 @@ export class Services {
   readonly keys: ProviderKeys;
   /** Connecting providers, switching between them, and saying how they are. */
   readonly providers: ProviderService;
+  /** Screenshots in words for models that can't see, by one that can (ADR 0070). */
+  readonly describer: Describer;
   readonly usage: UsageService;
   readonly integrations: IntegrationService;
   /** Skills: Conch's own, and those in other agents' folders (ADR 0013). */
@@ -266,8 +288,16 @@ export class Services {
   readonly #pushRevocations = new Set<Promise<void>>();
   /** Private dictation: whisper.cpp on this computer (ADR 0027). */
   readonly voice: VoiceService;
+  /** Natural voices: Piper on this computer, or a connected provider's (ADR 0077). */
+  readonly speech: SpeechService;
+  /** "Hey Conch", in the desktop app (ADR 0078). */
+  readonly wake: WakeWord;
   /** Work that runs in the background, and helpers side by side (ADR 0033). */
   readonly tasks: TaskService;
+  /** Other apps using Conch through its MCP door (ADR 0073). */
+  readonly mcp: McpService;
+  readonly mcpPairing: McpPairing;
+  readonly mcpSessions = new McpSessions();
   /** Direct Google account connections, shared by every engine. */
   readonly google: GoogleService;
   /** Gmail, Google Calendar and Google Drive as apps in Apps (ADR 0048). */
@@ -297,6 +327,7 @@ export class Services {
   readonly mockTeams?: MockTeams;
   readonly mockMatrix?: MockMatrix;
   readonly mockWeChat?: MockWeChat;
+  readonly mockTwilio?: MockTwilio;
   /** The public door, for the channels that only deliver to a web address (ADR 0045). */
   readonly door: ChannelDoorService;
   /** Your own address, over HTTPS by Conch itself (ADR 0064). Started by main.ts, never by tests. */
@@ -318,6 +349,7 @@ export class Services {
     this.healed = new Healed(config.CONCH_HOME, (note) =>
       this.broadcast.emit({ type: 'healed', note }),
     );
+    setToolsHome(config.CONCH_HOME);
     this.setup = new Setup(KNOWN_NEEDS);
     this.network = new NetworkWatch({
       emit: (network) => this.broadcast.emit({ type: 'network.status', network }),
@@ -429,6 +461,7 @@ export class Services {
       // A different provider means different limits and a different model list.
       onSwitch: () => void this.usage.refresh({ force: true }),
     });
+    this.describer = new Describer({ ready: () => this.providers.ready() });
     // With the mock engine, integrations talk to a pretend vendor on this machine too.
     this.mockVendor = config.CONCH_ENGINE === 'mock' ? new MockVendor() : undefined;
     // Apps you make, share and add (ADR 0061): an app like any other on the Apps page.
@@ -532,6 +565,46 @@ export class Services {
       gatewayPort: config.CONCH_PORT,
       workspace: () => this.settings.workspace(),
       emit: (event) => this.broadcast.emit(event),
+      // What `browser_upload` may put on a page (ADR 0080): this chat's own files, or the work folder.
+      uploads: {
+        home: config.CONCH_HOME,
+        forbidden: [
+          ...protectedPaths(config.CONCH_HOME),
+          ...secretPlaces().map((p) => p.path),
+          join(config.CONCH_HOME, 'browser'),
+        ],
+        attachments: async (conversationId) => {
+          const { events } = await this.conversations.detail(conversationId);
+          const sent = events.flatMap((e) =>
+            e.type === 'user.message' ? (e.attachments ?? []) : [],
+          );
+          return sent.map((a) => ({
+            id: a.id,
+            name: a.name,
+            mimeType: a.mimeType,
+            read: async () => {
+              const bytes = await this.attachments.bytes(a.id);
+              if (!bytes) throw new Error(`“${a.name}” isn’t here any more.`);
+              return bytes;
+            },
+          }));
+        },
+        made: async (conversationId) => {
+          const all = await this.artifacts.store.list();
+          return all
+            .filter((a) => a.conversationId === conversationId)
+            .map((a) => {
+              const file = ARTIFACT_FILES[a.kind];
+              return {
+                id: a.id,
+                name: `${a.title.replace(/[\\/:*?"<>|\0]/g, '_').slice(0, 120)}.${file.ext}`,
+                mimeType: file.type,
+                read: async () =>
+                  Buffer.from((await this.artifacts.store.content(a.id)).content, 'utf8'),
+              };
+            });
+        },
+      },
     });
     // The browser fills sign-in fields from Passwords, with your OK (ADR 0025).
     this.browser.passwords = this.vault;
@@ -662,13 +735,24 @@ export class Services {
         once: (id, request) => this.skills.once(id, request),
       },
     });
+    // How each provider charges, asked once a minute at most: chats and routines share it.
+    const billings = new Billings();
     this.conversations = new ConversationManager({
+      // What each turn costs, what a chat has spent, and its limits (ADR 0079).
+      spend: new ChatSpendDesk({
+        billings,
+        usage: () => this.usage,
+        catalog: () => this.providers.models(),
+        engineFor: (id) => this.providers.engineFor(id),
+        task: (id) => this.tasks.get(id),
+      }),
       store: conversationStore,
       settings: this.settings,
       memory: this.memory,
       memoryIndex: this.memoryIndex,
       engine: (id) => this.providers.engineFor(id),
       route: (engine, context) => this.route(engine, context),
+      describe: (engine, model) => this.describer.for(engine, model),
       // An engine that can't run Conch's own tools is never offered them.
       tools: (ctx) =>
         ctx.engine.hostTools === false
@@ -731,7 +815,7 @@ export class Services {
           engine.hostTools === false ? '' : this.vault.promptSection(),
           this.artifacts.promptSection(engine.hostTools !== false),
           await this.artifacts.editedSection(conversationId).catch(() => ''),
-          engine.hostTools === false ? '' : TASKS_PROMPT,
+          engine.hostTools === false ? '' : await this.tasks.promptSection(engine).catch(() => ''),
           // Only where someone is there to answer (not a routine, a task or a chat app).
           engine.hostTools === false ||
           (await this.conversations.detail(conversationId).catch(() => undefined))?.conversation
@@ -776,7 +860,12 @@ export class Services {
       skillPermissions: (skillId) => this.skills.permissions(skillId),
       questions: this.questions,
       // A spend that can't be saved is lost, not fatal: an unhandled rejection would stop Conch.
-      onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
+      // Naming a chat on a plan costs no money (ADR 0079).
+      onSpend: (usage, engine) =>
+        void billings
+          .of(engine)
+          .then((info) => this.usage.recordTurn(usage, turnCost(usage, info, undefined)))
+          .catch(() => undefined),
       // Before a long chat's start is summarised, what you said there is learned (ADR 0055).
       learn: async ({ conversationId, origin, events, beforeSeq }) => {
         await this.tidy.learn(
@@ -794,6 +883,7 @@ export class Services {
       home: config.CONCH_HOME,
       engine: (id) => this.providers.engineFor(id),
       heal,
+      billings,
       changed: () =>
         void this.routines
           .spending()
@@ -828,8 +918,34 @@ export class Services {
         const { spend } = await this.usage.snapshot();
         return spend.budget !== undefined && spend.month >= spend.budget;
       },
+      // A helper may be handed to any provider that's ready, not only the chat's own.
+      ready: () => this.providers.ready(),
     });
     this.doctor.register(tasksCheck(this.tasks));
+    // Your other apps, reaching Conch through its door (ADR 0073).
+    this.mcp = new McpService({
+      store: new McpClientStore(config.CONCH_HOME),
+      conversations: this.conversations,
+      engineId: () => this.engine().id,
+      memory: this.memory,
+      search: (query) => this.memoryIndex.search(query),
+      skills: this.skills,
+      apps: {
+        list: async () => (await this.integrations.list()).integrations,
+        hosted: (id) =>
+          this.googleApps.owns(id) || this.slackApps.owns(id) || this.conchApps.hosted.owns(id),
+        forTurn: (prompt) => this.integrations.forTurn(prompt),
+        bridge: (servers, disallowed) => this.integrations.bridge(servers, disallowed),
+      },
+    });
+    this.mcpPairing = new McpPairing({
+      mcp: this.mcp,
+      sessions: this.mcpSessions,
+      port: config.CONCH_PORT,
+      address: () => this.address.status().url,
+      onHeal: (message) => void this.healed.note('integrations', message),
+    });
+    this.doctor.register(mcpCheck(this.mcpPairing));
     // Save how I did this (ADR 0058): work that went well, offered as a skill, never saved by itself.
     this.learner = new SkillLearner({
       home: config.CONCH_HOME,
@@ -884,11 +1000,7 @@ export class Services {
       history: () => turnCosts(conversationStore),
     });
     this.usage.changed.on((usage) => this.broadcast.emit({ type: 'usage.changed', usage }));
-    this.conversations.events.on((event) => {
-      if (event.type === 'conversation.event' && event.event.type === 'turn.completed') {
-        void this.usage.recordTurn(event.event.usage, event.event.engine).catch(() => undefined);
-      }
-    });
+    // Each turn's money is counted by the chat as it ends (ADR 0079), so it can say when the month nears its budget.
     this.usage.start();
     void (this.mockVendor?.start() ?? Promise.resolve()).then(() => this.integrations.start());
     this.googleApps.start();
@@ -952,6 +1064,7 @@ export class Services {
     this.mockTeams = config.CONCH_ENGINE === 'mock' ? new MockTeams() : undefined;
     this.mockMatrix = config.CONCH_ENGINE === 'mock' ? new MockMatrix() : undefined;
     this.mockWeChat = config.CONCH_ENGINE === 'mock' ? new MockWeChat() : undefined;
+    this.mockTwilio = config.CONCH_ENGINE === 'mock' ? new MockTwilio() : undefined;
     // In mock mode the "internet" is this computer: what's sent to the public address reaches the door.
     const door: ChannelDoorService = new ChannelDoorService({
       home: config.CONCH_HOME,
@@ -975,6 +1088,7 @@ export class Services {
     this.door = door;
     if (this.mockTeams) this.mockTeams.resolve = (url) => door.localFor(url);
     if (this.mockWeChat) this.mockWeChat.resolve = (url) => door.localFor(url);
+    if (this.mockTwilio) this.mockTwilio.resolve = (url) => door.localFor(url);
     this.mockMail = config.CONCH_ENGINE === 'mock' ? new MockMail() : undefined;
     this.mockMessages = config.CONCH_ENGINE === 'mock' ? new MockMessages() : undefined;
     this.linked = linkedChannels({
@@ -1004,6 +1118,13 @@ export class Services {
         (await this.routines.detail(id).catch(() => undefined))?.routine.title,
       // The pretend Messages works anywhere; the real one only on a Mac.
       platform: messages ? 'darwin' : process.platform,
+      // Voice notes are heard on this computer (ADR 0077); `voice` is made just below.
+      voice: {
+        hearing: (wav) => this.voice.hearing(wav),
+        transcribeNote: (bytes, language) => this.voice.transcribeNote(bytes, language),
+        getModel: () => this.voice.getModel(),
+      },
+      speech: { voiceNote: (markdown, format) => this.speech.voiceNote(markdown, format) },
       imessage: {
         setup: () => imessageSetup(new ChatDb(messages?.db ?? MESSAGES_DB)),
         open: (place) =>
@@ -1067,15 +1188,45 @@ export class Services {
       ...(config.CONCH_ENGINE === 'mock' && pretendTailscale()),
     });
     this.doctor.register(pushCheck(this.push, this.tailscale));
+    const need = (id: string) => {
+      const spec = KNOWN_NEEDS.get(id);
+      return spec ? this.setup.path(spec) : Promise.resolve(undefined);
+    };
+    const desktop = theApp();
     this.voice = new VoiceService({
       home: config.CONCH_HOME,
+      wake: Boolean(desktop),
       // The mock engine never finds (or downloads) a real speech model.
-      whisper: async () =>
-        config.CONCH_ENGINE === 'mock' ? undefined : findExecutable('whisper-cli'),
-      emit: (status) => this.broadcast.emit({ type: 'voice.changed', status }),
+      whisper: async () => (config.CONCH_ENGINE === 'mock' ? undefined : need('whisper')),
+      ffmpeg: async () => (config.CONCH_ENGINE === 'mock' ? undefined : need('ffmpeg')),
+      emit: (status) => {
+        this.broadcast.emit({ type: 'voice.changed', status });
+        // The speech model just arrived: voice notes that waited for it are heard now.
+        if (status.private.state === 'ready') void this.channels.hearAgain().catch(() => undefined);
+      },
     });
     void this.voice.sweep();
     this.doctor.register(this.voice.doctorCheck());
+    this.speech = new SpeechService({
+      home: config.CONCH_HOME,
+      // The mock engine never finds Piper, so tests never download a voice.
+      piper: async () => (config.CONCH_ENGINE === 'mock' ? undefined : need('piper')),
+      ffmpeg: async () => (config.CONCH_ENGINE === 'mock' ? undefined : need('ffmpeg')),
+      // Only a key that's already here: reading aloud never raises a 1Password prompt.
+      openaiKey: () => this.keys.value('openai', { peek: true }),
+      chosen: async () => (await this.settings.get()).preferences.voice,
+    });
+    this.doctor.register(this.speech.doctorCheck());
+    this.wake = new WakeWord({
+      ...(desktop && { app: { send: (message) => desktop.send(message) } }),
+      voice: this.voice,
+    });
+    // "Stop listening" in the tray: the window stops too.
+    desktop?.listen((message) => {
+      if (message.type !== 'wake.stop') return;
+      void this.wake.state(false);
+      this.broadcast.emit({ type: 'wake.stop' });
+    });
     this.doctor.register(this.artifacts.doctorCheck());
     this.doctor.register(this.artifacts.liveDataCheck());
     // A reply from a provider without Conch's tools may carry ```artifact blocks.
@@ -1133,6 +1284,10 @@ export class Services {
         endpoints.wechat = this.mockWeChat.base;
         endpoints.wecom = this.mockWeChat.socket;
         endpoints.wechatFiles = [this.mockWeChat.base];
+      }
+      if (this.mockTwilio) {
+        await this.mockTwilio.start(Number(process.env.CONCH_MOCK_TWILIO_PORT ?? 0));
+        endpoints.twilio = this.mockTwilio.api;
       }
     })();
   }
@@ -1392,6 +1547,7 @@ export class Services {
           routine: origin?.kind === 'routine',
           channel: origin?.kind === 'channel',
           task: origin?.kind === 'task',
+          ...(origin?.kind === 'client' && { app: origin.name }),
         };
       },
       routineTitle: async (id) =>
@@ -1702,6 +1858,30 @@ export class Services {
         manage: { label: 'Open Apps', place: 'integrations' },
         reveal: async () => slack.token,
       });
+    // A cloud browser's key, or a browser's address with its token (ADR 0080).
+    const browser = await this.browser.secrets.read().catch(() => undefined);
+    const browserKeys = [
+      browser?.browserbase?.key && {
+        kind: 'browserbase',
+        title: 'Browserbase',
+        value: browser.browserbase.key,
+      },
+      browser?.steel?.key && { kind: 'steel', title: 'Steel', value: browser.steel.key },
+      browser?.cdp?.address && {
+        kind: 'cdp',
+        title: 'Browser address',
+        value: browser.cdp.address,
+      },
+    ].filter((k): k is { kind: string; title: string; value: string } => Boolean(k));
+    for (const key of browserKeys)
+      out.push({
+        id: id('browser', key.kind),
+        title: key.title,
+        usedBy: 'The browser',
+        hint: key.kind === 'cdp' ? 'saved' : tail(key.value),
+        manage: { label: 'Open Browser settings', place: 'browser' },
+        reveal: async () => key.value,
+      });
     for (const item of await this.integrations.store.all().catch(() => [])) {
       const secrets = await this.integrations.store.secrets(item.id).catch(() => undefined);
       for (const [key, value] of Object.entries(secrets?.values ?? {})) {
@@ -1838,6 +2018,8 @@ export class Services {
     this.conchApps.start();
     this.slack.start();
     void this.tasks.start().catch((error: unknown) => console.error('[tasks]', error));
+    // Apps paired with Conch still find it: its launcher, and their settings (ADR 0073).
+    void this.mcpPairing.heal().catch((error: unknown) => console.error('[mcp]', error));
     this.backups.start();
   }
 
@@ -1855,6 +2037,8 @@ export class Services {
     void this.conchApps.stop();
     this.slack.stop();
     this.channels.stop();
+    this.speech.stop();
+    this.wake.stop();
     this.channelLinking.stop();
     this.linked.stop();
     this.door.stop();
@@ -1899,7 +2083,7 @@ export class Services {
    */
   async route(
     engine: Engine,
-    context: { failed?: TurnProblem; model?: string },
+    context: { failed?: TurnProblem; model?: string; pictures?: boolean },
   ): Promise<TurnRoute> {
     const { preferences } = await this.settings.get();
     // The model another provider answers with: your default, if it's your default provider.
@@ -1910,6 +2094,7 @@ export class Services {
         ...(context.model && { fromModel: context.model }),
         ...(modelFor(other) && { toModel: modelFor(other) }),
         choose,
+        ...(context.pictures && { sight: true }),
       }).catch(() => false as const);
     if (!engine.local) {
       // A provider that stopped answering is the moment to look again.

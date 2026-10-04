@@ -64,6 +64,7 @@ export function LiveTaskCard({
       error={task.error}
       note={task.note}
       branch={task.worktree?.changed ? task.worktree.branch : undefined}
+      by={task.by}
       onOpen={task.conversationId ? () => void navigate(`/c/${task.conversationId}`) : undefined}
       onStop={() => stop.mutate(task.id)}
       // Helpers are the assistant's to start again; a task you sent away is yours.

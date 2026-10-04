@@ -70,6 +70,9 @@
   asks with options, days or a number to tap, and the reply carries on.
 - **Offline and at a limit.** A message waits until you're back, or the model on
   this computer answers. At a usage limit, the provider you picked takes over.
+- **What it costs, in plain sight.** Each reply and each chat says what it cost,
+  or how much of your plan it used. Set a limit for a chat or the month, and a
+  chat asks before spending more.
 
 ### 🧩 Get things done
 
@@ -85,9 +88,11 @@
   before a meeting, when a page changes. Watching is free until something happens,
   each routine says what it costs, and a monthly limit keeps them from running up a bill.
 - **A browser and a terminal.** The assistant uses a browser you can watch and
-  take over, and a real shell is a keystroke away.
+  take over: tabs, uploads, dragging, even a canvas. It can run in your own Chrome
+  or in the cloud, and a real shell is a keystroke away.
 - **Show me.** Charts, pages and documents open beside the chat, with every version kept.
-- **Hand it off.** Send work to the background and keep chatting.
+- **Hand it off.** Send work to the background and keep chatting, or have another
+  provider do a part ("have Codex write the tests").
 
 ### 🧠 It learns you
 
@@ -100,7 +105,8 @@
 ### 📱 Wherever you are
 
 - **Your chat apps.** Telegram, Discord, Slack, WhatsApp, Signal, iMessage, email,
-  Microsoft Teams, Matrix and WeChat.
+  Microsoft Teams, Matrix, WeChat, and plain text messages to a number of its own. In a group you turn on, it answers when
+  mentioned: you as in private, everyone else in words only. Voice notes are heard on your own computer.
 - **Your phone.** An installable app over a private Tailscale address, with
   notifications and voice.
 - **Your own address.** On a server, Conch answers at `conch.yourname.com` with
@@ -109,7 +115,10 @@
 - **Touch ID, Windows Hello, Face ID.** Sign in with what your device already has.
   New devices wait for your OK, which you give from one you already use.
 - **Your desktop.** Conch for macOS, Windows and Linux: its own window, the pearl
-  in the menu bar, and each new release one press away.
+  in the menu bar, and each new release one press away. Say “Hey Conch” to talk, if
+  you turn it on; it listens on your computer only.
+- **Your other apps.** Claude Desktop, Cursor and VS Code can use your memory,
+  skills, apps and Conch's browser, connected in one press, each only what you tick.
 
 ### 🛡️ Safe hands, and it looks after itself
 

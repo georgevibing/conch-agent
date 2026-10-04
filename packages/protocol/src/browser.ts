@@ -22,6 +22,16 @@ export const BrowserCandidate = z.object({
 });
 export type BrowserCandidate = z.infer<typeof BrowserCandidate>;
 
+/**
+ * Where the browser runs (ADR 0080). `local`: Conch's own, on this computer
+ * (the default). `chrome`: the person's own signed-in Chrome, attached with
+ * Chrome's own consent. `browserbase`, `steel`: a browser in the cloud.
+ * `cdp`: any other browser at an address that speaks the DevTools protocol.
+ * Whatever runs, it falls back to `local` when it can't be reached.
+ */
+export const BrowserBackendKind = z.enum(['local', 'chrome', 'browserbase', 'steel', 'cdp']);
+export type BrowserBackendKind = z.infer<typeof BrowserBackendKind>;
+
 export const BrowserSettings = z.object({
   /** Let the agent use the browser at all. */
   enabled: z.boolean().default(true),
@@ -33,6 +43,8 @@ export const BrowserSettings = z.object({
   declineCookies: z.boolean().default(true),
   /** Slide the browser panel open when the agent starts browsing. */
   autoOpen: z.boolean().default(true),
+  /** Where it runs. Changed only through `PUT /api/browser/backend`, after a recent sign-in. */
+  backend: BrowserBackendKind.default('local'),
 });
 export type BrowserSettings = z.infer<typeof BrowserSettings>;
 
@@ -47,6 +59,44 @@ export const UpdateBrowserSettingsBody = z
   })
   .partial();
 export type UpdateBrowserSettingsBody = z.infer<typeof UpdateBrowserSettingsBody>;
+
+/**
+ * Choosing where the browser runs. A key or an address is only ever sent
+ * here, kept sealed (`browser.secrets.json`), and never sent back.
+ */
+export const SetBrowserBackendBody = z.object({
+  kind: BrowserBackendKind,
+  /** Browserbase or Steel: the API key. Left out: keep the one saved. */
+  key: z.string().trim().min(8).max(400).optional(),
+  /** Browserbase: the project id (optional on newer accounts). */
+  project: z.string().trim().max(120).optional(),
+  /** `cdp`: a `ws(s)://` or `http(s)://` DevTools address. Left out: keep the one saved. */
+  address: z.string().trim().max(2000).optional(),
+});
+export type SetBrowserBackendBody = z.infer<typeof SetBrowserBackendBody>;
+
+/** What the settings page shows about where the browser runs (never a key). */
+export const BrowserBackendStatus = z.object({
+  /** What was chosen. */
+  chosen: BrowserBackendKind,
+  /** What runs now: `local` while the chosen one can't be reached. */
+  using: BrowserBackendKind,
+  /** Why it isn't the chosen one, in a sentence. */
+  fellBack: z.string().optional(),
+  /** Which cloud keys and addresses are saved (only the host, for an address). */
+  saved: z.object({
+    browserbase: z.boolean(),
+    steel: z.boolean(),
+    cdp: z.string().optional(),
+  }),
+  /**
+   * Your Chrome: `ready` (open, and it allows Conch to ask), `closed` (not
+   * running, or remote debugging isn't allowed in it yet), `missing` (no
+   * Chrome on this computer).
+   */
+  chrome: z.enum(['ready', 'closed', 'missing']).optional(),
+});
+export type BrowserBackendStatus = z.infer<typeof BrowserBackendStatus>;
 
 /** A site (registrable domain) you told Conch it may always act on. */
 export const BrowserSite = z.object({
@@ -103,6 +153,8 @@ export const BrowserStatus = z.object({
   /** Conversations with a tab open. */
   tabs: z.array(Id).default([]),
   sites: z.array(BrowserSite).default([]),
+  /** Where it runs (ADR 0080). Missing from an older gateway: Conch's own, here. */
+  backend: BrowserBackendStatus.optional(),
 });
 export type BrowserStatus = z.infer<typeof BrowserStatus>;
 
@@ -120,6 +172,10 @@ export const BrowserActionKind = z.enum([
   'screenshot',
   'wait',
   'handoff',
+  'hover',
+  'drag',
+  'upload',
+  'tab',
 ]);
 export type BrowserActionKind = z.infer<typeof BrowserActionKind>;
 
@@ -159,13 +215,16 @@ export const BrowserHandoff = z.object({
   /** In the agent's words, shown on the card: "Sign in to your Google account". */
   reason: z.string(),
   url: z.string(),
+  /** Done because Conch saw the sign-in or captcha go through, not because you pressed "I’m done". */
+  auto: z.boolean().optional(),
 });
 export type BrowserHandoff = z.infer<typeof BrowserHandoff>;
 
 /** Extra detail on a `permission.requested` for the browser, so the prompt can show the site and the control. */
 export const BrowserPermission = z.object({
   /** `fill`: Conch types a saved password into the page (ADR 0025); the agent never sees it. */
-  kind: z.enum(['site', 'high-stakes', 'download', 'fill']),
+  /** `upload`: files from this computer go to the site; asked every time. */
+  kind: z.enum(['site', 'high-stakes', 'download', 'fill', 'upload']),
   site: z.string(),
   url: z.string(),
   title: z.string(),
@@ -175,6 +234,8 @@ export const BrowserPermission = z.object({
   box: BrowserBox.optional(),
   /** Thumbnail of the page with the control, same store as steps. */
   shot: z.string().optional(),
+  /** It's the person's own signed-in Chrome (ADR 0080): said, and a site is never allowed for good. */
+  ownChrome: z.boolean().optional(),
 });
 export type BrowserPermission = z.infer<typeof BrowserPermission>;
 
@@ -183,6 +244,16 @@ export type BrowserPermission = z.infer<typeof BrowserPermission>;
 /** Who's driving: the agent, you (after a takeover), or nobody right now. */
 export const BrowserControl = z.enum(['agent', 'user', 'idle']);
 export type BrowserControl = z.infer<typeof BrowserControl>;
+
+/** One of a chat's tabs, for the strip above the page. */
+export const BrowserTabEntry = z.object({
+  /** Short and stable while the tab lives: "t1", "t2"… */
+  id: z.string().max(8),
+  title: z.string(),
+  url: z.string(),
+  active: z.boolean(),
+});
+export type BrowserTabEntry = z.infer<typeof BrowserTabEntry>;
 
 export const BrowserTab = z.object({
   conversationId: Id,
@@ -195,6 +266,10 @@ export const BrowserTab = z.object({
   viewport: z.object({ width: z.number().int(), height: z.number().int() }),
   /** Set while the agent is waiting for you to finish something. */
   handoff: BrowserHandoff.optional(),
+  /** Every tab in this chat, in order; the page shown is the `active` one. */
+  tabs: z.array(BrowserTabEntry).default([]),
+  /** Where it runs, when it isn't Conch's own browser here ("In your Chrome"). */
+  backend: BrowserBackendKind.optional(),
 });
 export type BrowserTab = z.infer<typeof BrowserTab>;
 
@@ -266,5 +341,11 @@ export const BrowserLiveCommand = z.discriminatedUnion('type', [
   }),
   /** Frames only flow while someone looks: the panel says when it's visible. */
   z.object({ type: z.literal('watch'), visible: z.boolean() }),
+  /** Show another of the chat's tabs, close one, or open a new one. */
+  z.object({
+    type: z.literal('tab'),
+    action: z.enum(['switch', 'close', 'new']),
+    id: z.string().max(8).optional(),
+  }),
 ]);
 export type BrowserLiveCommand = z.infer<typeof BrowserLiveCommand>;

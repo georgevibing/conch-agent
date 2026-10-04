@@ -56,6 +56,10 @@ export const GatewayToApp = z.discriminatedUnion('type', [
   z.object({ type: z.literal('failed'), message: z.string().max(1000) }),
   /** Show or hide Conch in the menu bar, tray or panel. */
   z.object({ type: z.literal('tray'), on: z.boolean() }),
+  /** The window is listening for "Hey Conch" (ADR 0078): the tray says so, and the window keeps running hidden. */
+  z.object({ type: z.literal('wake'), on: z.boolean() }),
+  /** "Hey Conch" was heard: bring the window to the front. */
+  z.object({ type: z.literal('show') }),
   /** Download this release and replace the app with it (Settings → Health → Updates). */
   z.object({
     type: z.literal('update'),
@@ -65,8 +69,10 @@ export const GatewayToApp = z.discriminatedUnion('type', [
 ]);
 export type GatewayToApp = z.infer<typeof GatewayToApp>;
 
-/** What the app tells the gateway, while it updates itself. */
+/** What the app tells the gateway: how an update is going, and the tray's "Stop listening". */
 export const AppToGateway = z.discriminatedUnion('type', [
+  /** "Stop listening for Hey Conch", pressed in the tray (ADR 0078). */
+  z.object({ type: z.literal('wake.stop') }),
   z.object({
     type: z.literal('update.progress'),
     version: z.string().max(40),

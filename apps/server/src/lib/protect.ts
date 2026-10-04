@@ -16,6 +16,8 @@ export function protectedPaths(home: string): string[] {
     join(home, 'integrations.secrets.json'),
     join(home, 'google.secrets.json'),
     join(home, 'slack.secrets.json'),
+    // A cloud browser's key, or the address of a browser elsewhere (ADR 0080).
+    join(home, 'browser.secrets.json'),
     join(home, 'channels.secrets.json'),
     // The secrets other apps sign their messages to routines with (ADR 0056).
     join(home, 'routines.secrets.json'),
@@ -49,6 +51,9 @@ export function protectedPaths(home: string): string[] {
     join(home, 'skills.signing.json'),
     // Conch's own versions and which one runs (ADR 0051): writing there would run the assistant's code as Conch.
     join(home, 'versions'),
+    // Programs Conch fetched and runs (whisper.cpp), and the voice models they read (ADR 0077).
+    join(home, 'tools'),
+    join(home, 'voice'),
     // Apps you added, their data and their keys (ADR 0061): the assistant changes an app
     // only through a card the person presses, and never reads what it keeps.
     join(home, 'conch-apps'),
@@ -57,6 +62,9 @@ export function protectedPaths(home: string): string[] {
     // Which repositories publishing may push to: the assistant mustn't point it elsewhere.
     join(home, 'conch-apps-published.json'),
     join(home, 'conch-apps.secrets.json'),
+    // Apps paired with Conch and their keys (ADR 0073): with one, the assistant could
+    // reach Conch as that app, and with the list it could widen what one may use.
+    join(home, 'mcp'),
   ];
 }
 

@@ -45,6 +45,10 @@ export class MockTelegram {
   /** Keys that work, and the bot each one belongs to. */
   readonly bots = new Map<string, MockUser>();
   readonly sent: MockSent[] = [];
+  /** What a voice note's file holds when the bot downloads it (whatever size the message said). */
+  voiceBytes: Buffer = VOICE;
+  /** Voice notes the bot sent (ADR 0077). */
+  readonly voices: { chat_id: string; duration: number; type: string; size: number }[] = [];
   readonly calls: { method: string; params: Record<string, unknown> }[] = [];
   /** The bot has a profile picture (set with setMyProfilePhoto). */
   hasPhoto = false;
@@ -64,6 +68,10 @@ export class MockTelegram {
     last_name: 'Lovelace',
     username: 'ada',
   };
+
+  /** A group the bot is in (ADR 0075), and someone else in it. */
+  static readonly GROUP = { id: -1001234567890, type: 'supergroup', title: 'Family' };
+  static readonly MEMBER: MockUser = { id: 5151, first_name: 'Bob', username: 'bob' };
 
   constructor() {
     this.bots.set(MockTelegram.TOKEN, {
@@ -119,6 +127,55 @@ export class MockTelegram {
     });
   }
 
+  /**
+   * A message in the group. `mention` puts "@my_conch_bot " in front, as
+   * Telegram writes it (with its entity); `replyTo` makes it a reply to that
+   * message (the bot's own when `from` is the bot).
+   */
+  sayInGroup(
+    text: string,
+    from: MockUser = MockTelegram.OWNER,
+    options: {
+      mention?: boolean;
+      replyTo?: { message_id: number; from: MockUser; text: string };
+      group?: { id: number; type: string; title: string };
+    } = {},
+  ) {
+    const handle = '@my_conch_bot';
+    const said = options.mention ? `${handle} ${text}` : text;
+    this.#push({
+      message: {
+        message_id: this.#nextMessage++,
+        from,
+        chat: options.group ?? MockTelegram.GROUP,
+        date: Math.floor(Date.now() / 1000),
+        text: said,
+        ...(options.mention && {
+          entities: [{ type: 'mention', offset: 0, length: handle.length }],
+        }),
+        ...(options.replyTo && {
+          reply_to_message: {
+            ...options.replyTo,
+            chat: options.group ?? MockTelegram.GROUP,
+          },
+        }),
+      },
+    });
+  }
+
+  /** Someone adds the bot to the group. */
+  addToGroup(from: MockUser = MockTelegram.OWNER, group = MockTelegram.GROUP) {
+    this.#push({
+      my_chat_member: {
+        chat: group,
+        from,
+        date: Math.floor(Date.now() / 1000),
+        old_chat_member: { status: 'left' },
+        new_chat_member: { status: 'member' },
+      },
+    });
+  }
+
   /** A photo from the person (the file's bytes come from `/file/…`). */
   photo(caption: string, from: MockUser = MockTelegram.OWNER) {
     this.say('', from, {
@@ -131,13 +188,29 @@ export class MockTelegram {
     });
   }
 
-  press(data: string, messageId: number, from: MockUser = MockTelegram.OWNER) {
+  /** A voice note recorded in the chat (its bytes, a pretend Ogg file, come from `/file/…`). */
+  voice(seconds = 3, from: MockUser = MockTelegram.OWNER) {
+    this.say('', from, {
+      text: undefined,
+      voice: {
+        file_id: `voice-${this.#nextMessage}`,
+        file_size: VOICE.length,
+        mime_type: 'audio/ogg',
+        duration: seconds,
+      },
+    });
+  }
+
+  press(data: string, messageId: number, from: MockUser = MockTelegram.OWNER, chatId?: number) {
     this.#push({
       callback_query: {
         id: `cb${this.#nextUpdate}`,
         from,
         data,
-        message: { message_id: messageId, chat: { id: from.id, type: 'private' } },
+        message: {
+          message_id: messageId,
+          chat: { id: chatId ?? from.id, type: chatId === undefined ? 'private' : 'supergroup' },
+        },
       },
     });
   }
@@ -190,6 +263,8 @@ export class MockTelegram {
       // The bot's picture is the pearl it was given; anything else, a tiny valid PNG.
       if (file[2]?.includes('avatar'))
         return res.writeHead(200, { 'content-type': 'image/jpeg' }).end(await botAvatar());
+      if (file[2]?.includes('voice'))
+        return res.writeHead(200, { 'content-type': 'audio/ogg' }).end(this.voiceBytes);
       return res.writeHead(200, { 'content-type': 'image/png' }).end(PNG);
     }
     const match = /^\/bot([^/]+)\/(\w+)$/.exec(url.pathname);
@@ -293,8 +368,23 @@ export class MockTelegram {
       case 'setMyProfilePhoto':
         this.hasPhoto = true;
         return ok(true);
+      case 'sendVoice': {
+        const voice = params.voice as { type?: string; size?: number } | undefined;
+        this.voices.push({
+          chat_id: String(params.chat_id),
+          duration: Number(params.duration),
+          type: voice?.type ?? '',
+          size: voice?.size ?? 0,
+        });
+        return ok({ message_id: this.#nextMessage++, chat: { id: Number(params.chat_id) } });
+      }
       case 'getFile':
-        return ok({ file_id: params.file_id, file_path: `photos/${String(params.file_id)}.png` });
+        return ok({
+          file_id: params.file_id,
+          file_path: String(params.file_id).startsWith('voice')
+            ? `voice/${String(params.file_id)}.oga`
+            : `photos/${String(params.file_id)}.png`,
+        });
       case 'sendChatAction':
       case 'answerCallbackQuery':
       case 'setMyCommands':
@@ -313,6 +403,10 @@ export class MockTelegram {
   #control(path: string, body: Record<string, unknown>, res: ServerResponse) {
     const from = body.from ? (body.from as MockUser) : MockTelegram.OWNER;
     if (path === '/__control/say') this.say(String(body.text ?? ''), from);
+    else if (path === '/__control/voice') this.voice(Number(body.seconds ?? 3), from);
+    else if (path === '/__control/group-say')
+      this.sayInGroup(String(body.text ?? ''), from, { mention: body.mention !== false });
+    else if (path === '/__control/group-add') this.addToGroup(from);
     else if (path === '/__control/press')
       this.press(String(body.data), Number(body.messageId), from);
     else if (path === '/__control/revoke') this.revoke();
@@ -338,6 +432,20 @@ async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> 
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(chunk as Buffer);
   if (!chunks.length) return {};
+  // A file (a voice note, a picture): its fields, and each file's name, type and size.
+  const type = req.headers['content-type'] ?? '';
+  if (type.startsWith('multipart/form-data')) {
+    const form = await new Response(new Uint8Array(Buffer.concat(chunks)), {
+      headers: { 'content-type': type },
+    }).formData();
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of form)
+      out[key] =
+        typeof value === 'string'
+          ? value
+          : { name: value.name, type: value.type, size: value.size };
+    return out;
+  }
   try {
     return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>;
   } catch {
@@ -350,3 +458,6 @@ const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
   'base64',
 );
+
+/** The start of an Ogg file: enough to be stored as a voice note, never played. */
+const VOICE = Buffer.concat([Buffer.from('OggS', 'ascii'), Buffer.alloc(60, 1)]);

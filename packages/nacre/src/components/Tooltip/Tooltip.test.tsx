@@ -20,6 +20,26 @@ describe('Tooltip', () => {
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
 
+  it('stays away on a touch-only screen, where focus moves by itself', async () => {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      ...original(query),
+      matches: query === '(hover: none) and (pointer: coarse)',
+    })) as typeof window.matchMedia;
+    try {
+      renderNacre(
+        <Tooltip content="New chat" shortcut="mod+shift+o">
+          <button type="button">New chat</button>
+        </Tooltip>,
+      );
+      await userEvent.tab();
+      expect(screen.getByRole('button')).toHaveFocus();
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+
   it('renders only the trigger when disabled', () => {
     renderNacre(
       <Tooltip content="Hidden" disabled defaultOpen>

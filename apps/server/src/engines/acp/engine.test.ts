@@ -11,8 +11,9 @@ import { z } from 'zod';
 
 import { SettingsStore } from '../../settings/store';
 import { collect } from '../api/fake';
-import type { HostTool, TurnInput } from '../types';
+import type { EngineEvent, HostTool, TurnInput } from '../types';
 import { ACP_AGENTS, type AcpAgent } from './agents';
+import { namesDoorTool, rowOf } from './calls';
 import { AcpEngine, deviceSignIn, forDoor, offerOf, preamble, whyUnstartable } from './engine';
 import { fakeSpawn, type AgentScript } from './fake';
 
@@ -165,9 +166,27 @@ describe('an ACP agent’s state', () => {
 });
 
 describe('a turn with an ACP agent', () => {
-  it('streams the answer, and hands the conversation over with Conch’s instructions first', async () => {
+  it('streams the answer, with Conch’s instructions where the program takes them', async () => {
+    let door: { url: string; headers: { name: string; value: string }[] } | undefined;
+    let instructions: string | undefined;
     const { engine, agents } = await engineWith({
+      session: (params) => {
+        door = (params.mcpServers as (typeof door)[])[0];
+        return { sessionId: 'sess_1' };
+      },
       prompt: async (t) => {
+        if (!door) throw new Error('No door');
+        // Copilot reads a tool server's instructions into its system prompt.
+        const client = new Client({ name: 'pretend-agent', version: '1' });
+        await client.connect(
+          new StreamableHTTPClientTransport(new URL(door.url), {
+            requestInit: {
+              headers: Object.fromEntries(door.headers.map((h) => [h.name, h.value])),
+            },
+          }),
+        );
+        instructions = client.getInstructions();
+        await client.close();
         t.update({
           sessionUpdate: 'agent_thought_chunk',
           content: { type: 'text', text: 'Thinking…' },
@@ -196,8 +215,15 @@ describe('a turn with an ACP agent', () => {
     const prompt = agents[0]?.received.find((m) => m.method === 'session/prompt')?.params as {
       prompt: { text: string }[];
     };
-    expect(prompt.prompt[0]?.text).toContain('You are Pearl.');
-    expect(prompt.prompt.at(-1)?.text).toBe('Remember I like tea');
+    // Not in the person's message: in the door's own instructions.
+    expect(prompt.prompt).toHaveLength(1);
+    expect(prompt.prompt[0]?.text).toBe('Remember I like tea');
+    expect(instructions).toContain('You are Pearl.');
+    expect(instructions).toContain('"conch" server');
+    // The program is started so it reads them (Copilot 1.0.66).
+    expect(events.find((e) => e.type === 'session')).toMatchObject({
+      resumeId: expect.stringMatching(/^[0-9a-f]{16}:sess_1$/),
+    });
     // The session is closed after the turn when the agent can; the program stays warm for the next.
     expect(agents).toHaveLength(1);
   });
@@ -421,11 +447,14 @@ describe('a turn with an ACP agent', () => {
 });
 
 describe('words and checks', () => {
-  it('puts Conch’s instructions first, and says where the tools are', () => {
+  it('frames Conch’s instructions as the app’s, and says where the tools are', () => {
     const text = preamble('You are Pearl.', true);
     expect(text).toContain('You are Pearl.');
     expect(text).toContain('"conch" server');
+    expect(text).toContain('not the user’s');
     expect(preamble('x', false)).toContain('no tools');
+    expect(preamble('x', true, { updated: true })).toContain('they replace the earlier ones');
+    expect(ACP_AGENTS.copilot.args({})).toContain('--allow-all-mcp-server-instructions');
   });
 
   it('recognises a request for one of the door’s tools in every way agents name them', () => {
@@ -538,6 +567,322 @@ describe('signing in', () => {
     expect(final).toMatchObject({
       phase: 'failed',
       message: expect.stringContaining('declined or expired'),
+    });
+  });
+});
+
+describe('carrying a chat on with an ACP program', () => {
+  const loads = (initialize: Record<string, unknown> = {}) => ({
+    protocolVersion: 1,
+    agentCapabilities: {
+      loadSession: true,
+      mcpCapabilities: { http: true },
+      promptCapabilities: { image: true },
+      ...initialize,
+    },
+    agentInfo: { name: 'pretend', version: '9.9.9' },
+  });
+  const sessionOf = (events: EngineEvent[]) =>
+    events.find((e): e is Extract<EngineEvent, { type: 'session' }> => e.type === 'session');
+  const sent = (agent: { received: { method?: string; params?: unknown }[] } | undefined) =>
+    (
+      agent?.received.filter((m) => m.method === 'session/prompt').at(-1)?.params as {
+        prompt: { text?: string }[];
+      }
+    ).prompt.map((p) => p.text);
+
+  it('loads the chat’s session next turn and sends only what it missed, history replay unshown', async () => {
+    const { engine, agents } = await engineWith({
+      initialize: loads(),
+      session: () => ({ sessionId: 'sess_kept' }),
+      prompt: async (t) => {
+        t.update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'ok' } });
+        return { stopReason: 'end_turn' };
+      },
+    });
+    const first = sessionOf(await collect(engine.runTurn(turn())))?.resumeId;
+    // Loading replays the earlier turn: that's history, not this reply.
+    const fake = agents[0];
+    const created = fake?.received.filter((m) => m.method === 'session/new').length;
+    const events = await collect(
+      engine.runTurn(
+        turn({ resumeId: first, prompt: 'And coffee?', freshPrompt: 'EVERYTHING\n\nAnd coffee?' }),
+      ),
+    );
+    const load = fake?.received.find((m) => m.method === 'session/load')?.params as Record<
+      string,
+      unknown
+    >;
+    expect(load).toMatchObject({ sessionId: 'sess_kept', cwd: process.cwd() });
+    // Conch's tools come again, through this turn's own door.
+    expect((load.mcpServers as { url: string }[])[0]?.url).toMatch(/^http:\/\/127\.0\.0\.1:/);
+    expect(fake?.received.filter((m) => m.method === 'session/new')).toHaveLength(created ?? 0);
+    expect(sent(fake)).toEqual(['And coffee?']);
+    expect(sessionOf(events)?.resumeId).toBe(first);
+    expect(sessionOf(events)?.restarted).toBeUndefined();
+    expect(
+      events.filter((e) => e.type === 'text').map((e) => (e as { delta: string }).delta),
+    ).toEqual(['ok']);
+  });
+
+  it('heals a session the program can’t load: a new one with the whole conversation, said quietly', async () => {
+    const { engine, agents } = await engineWith({
+      initialize: loads(),
+      session: () => ({ sessionId: `sess_${Math.random().toString(36).slice(2, 8)}` }),
+      load: (params) =>
+        params.sessionId === 'sess_gone'
+          ? { error: { code: -32002, message: 'Session not found' } }
+          : {},
+    });
+    const first = sessionOf(await collect(engine.runTurn(turn())))?.resumeId ?? '';
+    const lost = `${first.split(':')[0]}:sess_gone`;
+    const fake = agents[0];
+    const events = await collect(
+      engine.runTurn(turn({ resumeId: lost, prompt: 'next', freshPrompt: 'EVERYTHING\n\nnext' })),
+    );
+    expect(sessionOf(events)).toMatchObject({ restarted: 'lost' });
+    expect(sent(fake)).toEqual(['EVERYTHING\n\nnext']);
+    expect(events.at(-1)).toMatchObject({ type: 'done', outcome: 'success' });
+  });
+
+  it('starts afresh with the whole conversation for a program that can’t load, without calling it a repair', async () => {
+    const { engine, agents } = await engineWith({});
+    const first = sessionOf(await collect(engine.runTurn(turn())))?.resumeId;
+    const events = await collect(
+      engine.runTurn(turn({ resumeId: first, prompt: 'next', freshPrompt: 'EVERYTHING\n\nnext' })),
+    );
+    expect(agents[0]?.received.some((m) => m.method === 'session/load')).toBe(false);
+    expect(sent(agents[0])).toEqual(['EVERYTHING\n\nnext']);
+    expect(sessionOf(events)?.restarted).toBeUndefined();
+  });
+
+  it('gives Grok Conch’s instructions as its session rules, never in the message', async () => {
+    const { engine, agents } = await engineWith({ initialize: loads() }, ACP_AGENTS.grok);
+    await collect(engine.runTurn(turn()));
+    const created = agents[0]?.received.findLast((m) => m.method === 'session/new')?.params as {
+      _meta?: { rules?: string };
+    };
+    expect(created._meta?.rules).toContain('You are Pearl.');
+    expect(sent(agents[0])).toEqual(['Remember I like tea']);
+  });
+
+  it('tells a carried-on Gemini chat Conch’s instructions again only when they changed', async () => {
+    const { engine, agents } = await engineWith(
+      { initialize: loads(), session: () => ({ sessionId: 'sess_g' }) },
+      ACP_AGENTS['gemini-cli'],
+    );
+    const first = sessionOf(await collect(engine.runTurn(turn())))?.resumeId;
+    // The first message read them from the door: nothing in the words.
+    expect(sent(agents[0])).toEqual(['Remember I like tea']);
+    await collect(engine.runTurn(turn({ resumeId: first, prompt: 'same' })));
+    expect(sent(agents[0])).toEqual(['same']);
+    await collect(
+      engine.runTurn(turn({ resumeId: first, prompt: 'changed', systemAppend: 'You are Shell.' })),
+    );
+    const words = sent(agents[0]);
+    expect(words[0]).toContain('You are Shell.');
+    expect(words[0]).toContain('they replace the earlier ones');
+    expect(words.at(-1)).toBe('changed');
+  });
+
+  it('serves the door as a program of its own to an agent that can’t reach an address', async () => {
+    let server:
+      { command?: string; args?: string[]; env?: { name: string; value: string }[] } | undefined;
+    const { engine } = await engineWith({
+      initialize: loads({ mcpCapabilities: {} }),
+      session: (params) => {
+        server = (params.mcpServers as (typeof server)[])[0];
+        return { sessionId: 'sess_stdio' };
+      },
+      prompt: async () => {
+        if (!server?.command || !server.args) throw new Error('No door');
+        // Start it the way the program would, and ask it for Conch's tools.
+        const child = spawn(server.command, server.args, {
+          env: Object.fromEntries((server.env ?? []).map((e) => [e.name, e.value])),
+          stdio: ['pipe', 'pipe', 'inherit'],
+        });
+        const lines: string[] = [];
+        child.stdout.on('data', (d: Buffer) =>
+          lines.push(...d.toString().split('\n').filter(Boolean)),
+        );
+        const wait = async (n: number) => {
+          for (let i = 0; i < 200 && lines.length < n; i++)
+            await new Promise((r) => setTimeout(r, 10));
+        };
+        child.stdin.write(
+          `${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'x', version: '1' } } })}\n`,
+        );
+        await wait(1);
+        child.stdin.write(
+          `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
+        );
+        child.stdin.write(
+          `${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'mcp__conch__remember', arguments: { content: 'likes tea' } } })}\n`,
+        );
+        await wait(2);
+        child.kill();
+        expect(JSON.parse(lines[0] ?? '{}')).toMatchObject({
+          id: 1,
+          result: { serverInfo: { name: 'conch' } },
+        });
+        expect(JSON.parse(lines[1] ?? '{}')).toMatchObject({
+          id: 2,
+          result: { content: [{ type: 'text', text: 'Saved to memory.' }] },
+        });
+        return { stopReason: 'end_turn' };
+      },
+    });
+    const saved: string[] = [];
+    const events = await collect(engine.runTurn(turn({ tools: [rememberTool(saved)] })));
+    expect(server?.command).toBe(process.execPath);
+    // The key travels in the program's own environment for it, never in its arguments.
+    expect(server?.args?.join(' ')).not.toMatch(/Bearer|KEY/);
+    expect(saved).toEqual(['likes tea']);
+    expect(events.at(-1)).toMatchObject({ type: 'done', outcome: 'success' });
+  });
+});
+
+describe('the program’s own tools, shown like every provider’s', () => {
+  it('draws its own calls as rows, and leaves the door’s to the door', async () => {
+    const { engine } = await engineWith({
+      prompt: async (t) => {
+        // Its own read, done without asking.
+        t.update({
+          sessionUpdate: 'tool_call',
+          toolCallId: 'r1',
+          title: 'Reading notes.md',
+          kind: 'read',
+          status: 'pending',
+          locations: [{ path: '/work/notes.md' }],
+        });
+        t.update({ sessionUpdate: 'tool_call_update', toolCallId: 'r1', status: 'in_progress' });
+        t.update({
+          sessionUpdate: 'tool_call_update',
+          toolCallId: 'r1',
+          status: 'completed',
+          content: [{ type: 'content', content: { type: 'text', text: 'tea, coffee' } }],
+        });
+        // One of Conch's own, as Copilot names it: the door shows that one.
+        t.update({
+          sessionUpdate: 'tool_call',
+          toolCallId: 'd1',
+          title: 'conch-mcp__conch__remember',
+          kind: 'other',
+          status: 'pending',
+        });
+        t.update({ sessionUpdate: 'tool_call_update', toolCallId: 'd1', status: 'completed' });
+        // Its own command: Conch declines it, and the row says so.
+        t.update({
+          sessionUpdate: 'tool_call',
+          toolCallId: 'x1',
+          title: 'rm -rf build',
+          kind: 'execute',
+          status: 'pending',
+          rawInput: { command: 'rm -rf build' },
+        });
+        await t.ask('session/request_permission', {
+          sessionId: t.sessionId,
+          toolCall: { toolCallId: 'x1', title: 'rm -rf build', kind: 'execute' },
+          options: [
+            { optionId: 'allow_once', kind: 'allow_once' },
+            { optionId: 'reject_once', kind: 'reject_once' },
+          ],
+        });
+        t.update({ sessionUpdate: 'tool_call_update', toolCallId: 'x1', status: 'failed' });
+        // A call that asked through the door, named only by its description.
+        t.update({
+          sessionUpdate: 'tool_call',
+          toolCallId: 'd2',
+          title: 'Save the fact',
+          kind: 'other',
+          status: 'pending',
+        });
+        await t.ask('session/request_permission', {
+          sessionId: t.sessionId,
+          toolCall: { toolCallId: 'd2', title: 'conch/mcp__conch__remember', kind: 'other' },
+          options: [
+            { optionId: 'allow_once', kind: 'allow_once' },
+            { optionId: 'reject_once', kind: 'reject_once' },
+          ],
+        });
+        t.update({ sessionUpdate: 'tool_call_update', toolCallId: 'd2', status: 'in_progress' });
+        t.update({ sessionUpdate: 'tool_call_update', toolCallId: 'd2', status: 'completed' });
+        return { stopReason: 'end_turn' };
+      },
+    });
+    const events = await collect(engine.runTurn(turn({ tools: [rememberTool([])] })));
+    const rows = events.filter((e) => e.type === 'tool-start' || e.type === 'tool-end');
+    expect(rows).toEqual([
+      {
+        type: 'tool-start',
+        toolUseId: expect.stringMatching(/_r1$/),
+        name: 'Read',
+        input: { file_path: '/work/notes.md' },
+      },
+      {
+        type: 'tool-end',
+        toolUseId: expect.stringMatching(/_r1$/),
+        status: 'success',
+        output: 'tea, coffee',
+      },
+      {
+        type: 'tool-start',
+        toolUseId: expect.stringMatching(/_x1$/),
+        name: 'Bash',
+        input: { command: 'rm -rf build' },
+      },
+      {
+        type: 'tool-end',
+        toolUseId: expect.stringMatching(/_x1$/),
+        status: 'error',
+        output: expect.stringContaining('Not run'),
+      },
+    ]);
+  });
+
+  it('knows the door’s tools however each program names them, and a command that only looks like one isn’t', () => {
+    const tools = new Set(['mcp__conch__remember', 'Read']);
+    for (const title of [
+      'conch-mcp__conch__remember',
+      'conch/Read',
+      'mcp__conch__remember(content: tea)',
+      'Read (conch MCP Server)',
+    ])
+      expect(namesDoorTool({ title, kind: 'other' }, tools, { strict: true })).toBe(true);
+    expect(
+      namesDoorTool(
+        { title: 'use_tool', rawInput: { tool_name: 'conch__mcp__conch__remember' } },
+        tools,
+        { strict: true },
+      ),
+    ).toBe(true);
+    // Gemini CLI titles its own shell call with the command itself.
+    expect(
+      namesDoorTool({ title: 'mcp__conch__remember(x); rm -rf ~ #)', kind: 'execute' }, tools, {
+        strict: true,
+      }),
+    ).toBe(false);
+    expect(namesDoorTool({ title: 'Reading notes.md', kind: 'read' }, tools)).toBe(false);
+    expect(
+      namesDoorTool({ title: 'use_tool', rawInput: { tool_name: 'evil__remember' } }, tools),
+    ).toBe(false);
+  });
+
+  it('reads a row the way Conch names that kind of work', () => {
+    expect(rowOf({ toolCallId: 'a', kind: 'fetch', title: 'https://example.com' })).toEqual({
+      name: 'WebFetch',
+      input: { url: 'https://example.com' },
+    });
+    expect(
+      rowOf({
+        toolCallId: 'b',
+        kind: 'edit',
+        content: [{ type: 'diff', path: '/w/a.ts', oldText: 'a', newText: 'b' }],
+      }),
+    ).toEqual({ name: 'Edit', input: { file_path: '/w/a.ts', old_string: 'a', new_string: 'b' } });
+    expect(rowOf({ toolCallId: 'c', kind: 'think', title: 'Planning next steps' })).toEqual({
+      name: 'Planning next steps',
+      input: { description: 'Planning next steps' },
     });
   });
 });

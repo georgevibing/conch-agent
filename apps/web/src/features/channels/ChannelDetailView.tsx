@@ -45,8 +45,16 @@ import { GetIt } from '../setup/GetIt';
 import { HelloStep } from './HelloStep';
 import { HookSection } from './HookSection';
 import { SignInAgain } from './SignInAgain';
+import { VoiceNotesSection } from './VoiceNotesSection';
 import { useKeyCheck } from './hooks';
-import { channelKeys, errorText, putChannel, useChannel, useChannelAction } from './queries';
+import {
+  channelKeys,
+  errorText,
+  putChannel,
+  useChannel,
+  useChannelAction,
+  useChannels,
+} from './queries';
 import { AlwaysOnHint } from '../background/AlwaysOnHint';
 import { googleApi } from '../integrations/googleApi';
 import { appPath, connectPath, TALK_PATH } from '../integrations/paths';
@@ -85,6 +93,7 @@ function Detail({ channel }: { channel: Channel }) {
   const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
   const assistant = useAppState().data?.persona.name ?? 'Conch';
   const { data: conversations } = useConversations();
+  const { data: catalog } = useChannels();
   const [confirm, setConfirm] = useState(false);
   const [testing, setTesting] = useState(false);
   const update = useChannelAction(
@@ -98,6 +107,16 @@ function Detail({ channel }: { channel: Channel }) {
   const removePerson = useChannelAction((personId: string) =>
     channelsApi.removePerson(channel.id, personId),
   );
+  const setGroup = useChannelAction(
+    (groupId: string, on: boolean) => channelsApi.setGroup(channel.id, groupId, on),
+    'Couldn’t change that.',
+  );
+  const forgetGroup = useChannelAction((groupId: string) =>
+    channelsApi.forgetGroup(channel.id, groupId),
+  );
+  const answersGroups =
+    channel.groups.length > 0 ||
+    (catalog?.catalog.find((entry) => entry.id === channel.kind)?.groups ?? false);
 
   const app = APPS[channel.kind];
   const state = channelState(channel);
@@ -296,6 +315,66 @@ function Detail({ channel }: { channel: Channel }) {
         </section>
       )}
 
+      {owner && answersGroups && (
+        <section aria-labelledby="ch-groups" className={styles.section}>
+          <Heading level={2} id="ch-groups" size="sm" tone="muted">
+            Groups
+          </Heading>
+          {channel.groups.length === 0 ? (
+            <Text size="sm" tone="muted">
+              Add {handle ? `@${handle}` : 'the bot'} to a group in {app.name}, and the group shows
+              up here. {assistant} won’t answer there until you turn it on.
+            </Text>
+          ) : (
+            <>
+              {channel.groups.map((group) => (
+                <div key={group.id} className={styles.setting}>
+                  <Stack gap={0}>
+                    <Text weight="medium" id={`ch-group-${group.id}`}>
+                      {group.name}
+                    </Text>
+                    <Text size="sm" tone="muted">
+                      {group.on
+                        ? `Answers when mentioned${group.since ? ` · on since ${relativeTime(group.since)}` : ''}`
+                        : `Off · last heard from ${relativeTime(group.seenAt)}`}
+                    </Text>
+                  </Stack>
+                  <Stack direction="row" gap={2} align="center">
+                    {!group.on && (
+                      <Button
+                        variant="ghost"
+                        tone="neutral"
+                        size="sm"
+                        onClick={() => forgetGroup.mutate([group.id])}
+                        aria-label={`Forget ${group.name}`}
+                      >
+                        Forget
+                      </Button>
+                    )}
+                    <Switch
+                      aria-labelledby={`ch-group-${group.id}`}
+                      checked={group.on}
+                      onCheckedChange={(on) =>
+                        on
+                          ? void guard(() => setGroup.mutateAsync([group.id, true])).catch(
+                              () => undefined,
+                            )
+                          : setGroup.mutate([group.id, false])
+                      }
+                    />
+                  </Stack>
+                </div>
+              ))}
+              <Text size="sm" tone="subtle">
+                In a group that’s on, {assistant} answers only when someone mentions it or replies
+                to it. You get everything you get here. Anyone else gets an answer in words only, on
+                your provider: only you can ask it to do things, and it asks you privately first.
+              </Text>
+            </>
+          )}
+        </section>
+      )}
+
       {chats.length > 0 && (
         <section aria-labelledby="ch-chats" className={styles.section}>
           <Heading level={2} id="ch-chats" size="sm" tone="muted">
@@ -326,6 +405,12 @@ function Detail({ channel }: { channel: Channel }) {
           </ul>
         </section>
       )}
+
+      <VoiceNotesSection
+        channel={channel}
+        assistant={assistant}
+        onReplies={(voiceReplies) => update.mutate([{ settings: { voiceReplies } }])}
+      />
 
       <section aria-labelledby="ch-settings" className={styles.section}>
         <Heading level={2} id="ch-settings" size="sm" tone="muted">
@@ -389,9 +474,11 @@ function Detail({ channel }: { channel: Channel }) {
                   ? `${assistant} stops answering in ${app.name}, and Conch forgets its keys. Your conversations stay here. Remove Conch under Linked devices in Signal too.`
                   : channel.kind === 'email'
                     ? `${assistant} stops answering ${whoOf(channel)}, and Conch forgets its app password. Your conversations stay here, and your mail stays as it is.`
-                    : channel.kind === 'imessage'
-                      ? `${assistant} stops answering ${whoOf(channel)}. Your conversations stay here, and Messages stays as it is.`
-                      : `${assistant} stops answering ${whoOf(channel)}, and Conch forgets its key. Your conversations stay here. The bot itself stays in ${app.name} until you delete it there.`}
+                    : channel.kind === 'sms'
+                      ? `${assistant} stops answering texts to ${whoOf(channel)}, and Conch forgets its Twilio keys. Your conversations stay here, and the number stays yours in Twilio until you release it there.`
+                      : channel.kind === 'imessage'
+                        ? `${assistant} stops answering ${whoOf(channel)}. Your conversations stay here, and Messages stays as it is.`
+                        : `${assistant} stops answering ${whoOf(channel)}, and Conch forgets its key. Your conversations stay here. The bot itself stays in ${app.name} until you delete it there.`}
             </AlertDialog.Description>
           </AlertDialog.Header>
           <AlertDialog.Footer>
@@ -496,7 +583,8 @@ function ReplaceKey({ channel }: { channel: Channel }) {
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const slack = channel.kind === 'slack';
-  const email = channel.kind === 'email';
+  // An email's app password, or a Twilio Auth Token: only that changes, the rest stays.
+  const email = channel.kind === 'email' || channel.kind === 'sms';
   const body =
     email || !token.trim()
       ? undefined
@@ -523,16 +611,19 @@ function ReplaceKey({ channel }: { channel: Channel }) {
     microsoftteams: '',
     matrix: '',
     wechat: '',
+    sms: 'On the Twilio Console’s first page, under Account Info, copy the Auth Token (it was probably changed).',
   };
 
   const save = async () => {
     const secrets: ReplaceChannelTokenBody = slack
       ? { kind: 'slack', botToken: token, appToken }
-      : email
-        ? { kind: 'email', password: token }
-        : channel.kind === 'discord'
-          ? { kind: 'discord', token }
-          : { kind: 'telegram', token };
+      : channel.kind === 'sms'
+        ? { kind: 'sms', authToken: token }
+        : email
+          ? { kind: 'email', password: token }
+          : channel.kind === 'discord'
+            ? { kind: 'discord', token }
+            : { kind: 'telegram', token };
     setBusy(true);
     setError(undefined);
     try {
@@ -548,13 +639,30 @@ function ReplaceKey({ channel }: { channel: Channel }) {
   };
 
   return (
-    <Callout tone="warning" title={email ? 'It needs a new app password' : 'It needs a new key'}>
+    <Callout
+      tone="warning"
+      title={
+        channel.kind === 'email'
+          ? 'It needs a new app password'
+          : channel.kind === 'sms'
+            ? 'It needs the new Auth Token'
+            : 'It needs a new key'
+      }
+    >
       <Stack gap={3}>
         <Text size="sm">
           {channel.health.message} {where[channel.kind]}
         </Text>
         <KeyField
-          label={slack ? 'Bot token' : email ? 'New app password' : 'New key'}
+          label={
+            slack
+              ? 'Bot token'
+              : channel.kind === 'sms'
+                ? 'Auth Token'
+                : email
+                  ? 'New app password'
+                  : 'New key'
+          }
           value={token}
           onValueChange={setToken}
           status={error ? 'error' : status}

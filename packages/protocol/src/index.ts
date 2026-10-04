@@ -43,11 +43,13 @@ import { CatalogId, Integration } from './integrations';
 import { Routine, RoutineRun, RoutineSpending } from './routines';
 import { VaultPermission, VaultRequest } from './vault';
 import { VoiceStatus } from './phone';
+import { ConchVoiceId } from './speech';
 import { ChangedFile } from './undo';
 import { SkillPermissions } from './skills';
 import { Task, TaskKind, TaskStatus } from './tasks';
 import { UpdatesStatus } from './updates';
 import { UsageSnapshot } from './usage';
+import { CappedOutcome, ChatSpend, SpendLimitKind, SpendModel, TurnCost } from './spend';
 
 export * from './access';
 export * from './address';
@@ -62,6 +64,7 @@ export * from './background';
 export * from './backups';
 export * from './browser';
 export * from './channels';
+export * from './speech';
 export * from './engine';
 export * from './first-job';
 export * from './healed';
@@ -71,6 +74,7 @@ export * from './learning';
 export * from './linking';
 export * from './local';
 export * from './memory';
+export * from './mcp';
 export * from './common';
 export * from './desktop';
 export * from './doctor';
@@ -90,6 +94,7 @@ export * from './terminal';
 export * from './undo';
 export * from './updates';
 export * from './usage';
+export * from './spend';
 export * from './vault';
 export * from './passwords';
 export * from './pick';
@@ -188,6 +193,11 @@ export const Preferences = z.object({
   keepAwake: z.boolean().default(false),
   /** Tidy memory every night, while nothing's running (ADR 0032). Every change can be undone. */
   tidyMemory: z.boolean().default(false),
+  /**
+   * The voice a voice note from a chat app is answered with (ADR 0077): one of
+   * Conch's, chosen in Settings → Voice. Unset: the first natural voice here.
+   */
+  voice: ConchVoiceId.optional(),
 });
 export type Preferences = z.infer<typeof Preferences>;
 
@@ -286,6 +296,8 @@ export const UpdateSettingsBody = z.object({
       menuBar: z.boolean(),
       keepAwake: z.boolean(),
       tidyMemory: z.boolean(),
+      /** `null` goes back to the first natural voice here. */
+      voice: ConchVoiceId.nullable(),
     })
     .partial()
     .optional(),
@@ -331,6 +343,8 @@ export const ConversationSummary = z.object({
       ChannelOrigin,
       /** A task running in the background (ADR 0033). */
       z.object({ kind: z.literal('task'), taskId: z.string() }),
+      /** What another app did through Conch (ADR 0073): Claude Desktop, Cursor… */
+      z.object({ kind: z.literal('client'), clientId: z.string(), name: z.string().max(60) }),
     ])
     .optional(),
   /**
@@ -338,6 +352,8 @@ export const ConversationSummary = z.object({
    * it, or it needing you, puts it back.
    */
   archivedAt: z.number().optional(),
+  /** What it has spent, its tasks included, and its own limit (ADR 0079). */
+  spend: ChatSpend.optional(),
 });
 export type ConversationSummary = z.infer<typeof ConversationSummary>;
 
@@ -510,6 +526,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     kind: TaskKind,
     state: TaskStatus,
     summary: z.string().optional(),
+    /** Another provider is doing it, by name (`Task.by`). */
+    by: z.string().max(80).optional(),
   }),
   z.object({ ...logged, type: z.literal('status'), status: ConversationStatus }),
   z.object({
@@ -523,8 +541,42 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     /** Which provider answered, and with which model when it said. */
     engine: EngineId.optional(),
     model: z.string().optional(),
+    /** What it cost, the way its provider charges (ADR 0079). */
+    cost: TurnCost.optional(),
   }),
   z.object({ ...logged, type: z.literal('title'), title: z.string() }),
+  /**
+   * A message met a spending limit (ADR 0079): the chat's own, or the monthly
+   * budget. It waits for one tap: raise the limit, carry on with a model that
+   * costs less, or stop. `during`: a reply was stopped part way, and carries
+   * on from there.
+   */
+  z.object({
+    ...logged,
+    type: z.literal('turn.capped'),
+    limit: SpendLimitKind,
+    /** Spent so far: this chat's, or this month's (USD). */
+    spentUsd: z.number().nonnegative(),
+    limitUsd: z.number().positive(),
+    /** What "Raise it" sets the limit to (USD). */
+    raiseTo: z.number().positive(),
+    switchTo: SpendModel.optional(),
+    during: z.boolean().optional(),
+  }),
+  /** The person chose how a message at a limit goes on. */
+  z.object({ ...logged, type: z.literal('turn.capped.settled'), outcome: CappedOutcome }),
+  /**
+   * A quiet word about money, said once when it matters (ADR 0079):
+   * `budget-near`, the month is most of the way to its budget; `pricier`, the
+   * model just picked costs a lot more a reply on a chat this long; `stopped`,
+   * a task stopped at the limit of the chat it came from.
+   */
+  z.object({
+    ...logged,
+    type: z.literal('spend.notice'),
+    kind: z.enum(['budget-near', 'pricier', 'stopped']),
+    message: z.string().max(400),
+  }),
   /**
    * A skill was used in this turn — asked for by name, or picked by the
    * assistant — or came with work from another chat. From here on the chat is
@@ -836,6 +888,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('task.deleted'), taskId: z.string() }),
   /** Private dictation changed: its speech model arriving, say (ADR 0027). */
   z.object({ type: z.literal('voice.changed'), status: VoiceStatus }),
+  /** "Stop listening for Hey Conch" was pressed in the tray (ADR 0078): the window stops. */
+  z.object({ type: z.literal('wake.stop') }),
   /**
    * Devices changed: one signed in, was approved or removed, or asked to be
    * approved (`waiting` counts those). Refetch Settings → Security.

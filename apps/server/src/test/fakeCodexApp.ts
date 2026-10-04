@@ -21,6 +21,8 @@ export async function fakeCodexApp(
      * approve it, then run it (or not) as the answer says.
      */
     native?: { command?: string; paths?: string[]; network?: boolean };
+    /** `thread/resume` fails, as for a thread Codex can't read back. */
+    resumeFails?: boolean;
   } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), 'conch-app-server-'));
@@ -35,13 +37,17 @@ if (process.argv.includes('--version')) { console.log('codex 0.159.0'); process.
 const send = (v) => process.stdout.write(JSON.stringify(v)+'\\n');
 const note = (method, params) => send({method,params});
 const auth = path.join(process.env.CODEX_HOME, 'auth.json');
+let TID = 't1';
+// Codex keeps a thread where it looks for it again: its home's sessions folder.
+const rolloutOf = (id) => path.join(process.env.CODEX_HOME, 'sessions', '2026', '10', '04', 'rollout-2026-10-04T00-00-00-' + id + '.jsonl');
+const findRollout = (id) => { try { return fs.readdirSync(path.join(process.env.CODEX_HOME, 'sessions'), {recursive:true}).map(String).find(f => f.endsWith('-' + id + '.jsonl')); } catch { return undefined; } };
 fs.appendFileSync(LOG, JSON.stringify({spawn:true, argv: process.argv.slice(2), home: process.env.CODEX_HOME, secretLeaked: Boolean(process.env.CONCH_TOKEN || process.env.OPENAI_API_KEY || process.env.OP_SERVICE_ACCOUNT_TOKEN)})+'\\n');
 const complete = () => {
  if (OPTIONS.hang) return;
- if (OPTIONS.plan) note('turn/plan/updated',{threadId:'t1',turnId:'turn1',explanation:null,plan:OPTIONS.plan});
- note('item/agentMessage/delta',{threadId:'t1',itemId:'m1',delta:'Finished.'});
- note('item/completed',{threadId:'t1',item:{type:'agentMessage',id:'m1'}});
- note('turn/completed',{threadId:'t1',turn:{id:'turn1',status:OPTIONS.fail?'failed':'completed'}});
+ if (OPTIONS.plan) note('turn/plan/updated',{threadId:TID,turnId:'turn1',explanation:null,plan:OPTIONS.plan});
+ note('item/agentMessage/delta',{threadId:TID,itemId:'m1',delta:'Finished.'});
+ note('item/completed',{threadId:TID,item:{type:'agentMessage',id:'m1'}});
+ note('turn/completed',{threadId:TID,turn:{id:'turn1',status:OPTIONS.fail?'failed':'completed'}});
 };
 rl.createInterface({input:process.stdin}).on('line', line => {
  const m = JSON.parse(line); fs.appendFileSync(LOG, JSON.stringify(m)+'\\n');
@@ -62,31 +68,40 @@ rl.createInterface({input:process.stdin}).on('line', line => {
  else if (m.method === 'thread/start') {
    // Like Codex 0.159: names starting mcp__ belong to its own MCP servers.
    const reserved = ((m.params && m.params.dynamicTools) || []).find(t => /^mcp__/.test(t.name));
-   if (reserved) send({id:m.id,error:{code:-32600,message:'dynamic tool name is reserved: '+reserved.name}});
-   else reply({thread:{id:'t1'}});
+   if (reserved) { send({id:m.id,error:{code:-32600,message:'dynamic tool name is reserved: '+reserved.name}}); return; }
+   TID = require('node:crypto').randomUUID();
+   fs.mkdirSync(path.dirname(rolloutOf(TID)), {recursive:true});
+   fs.writeFileSync(rolloutOf(TID), JSON.stringify({type:'session_meta', tools:(m.params.dynamicTools||[]).map(t=>t.name)})+'\\n');
+   reply({thread:{id:TID}});
+ }
+ else if (m.method === 'thread/resume') {
+   if (OPTIONS.resumeFails || !findRollout(m.params.threadId)) send({id:m.id,error:{code:-32600,message:'no rollout found for thread id ' + m.params.threadId}});
+   else { TID = m.params.threadId; reply({thread:{id:TID}}); }
  }
  else if (m.method === 'turn/start') {
    reply({turn:{id:'turn1'}});
+   const file = findRollout(TID);
+   if (file) fs.appendFileSync(path.join(process.env.CODEX_HOME, 'sessions', file), JSON.stringify({type:'user', input:m.params.input})+'\\n');
    if (OPTIONS.malformed) process.stdout.write('not-json\\n');
-   else if (OPTIONS.tool) send({id:'call1',method:'item/tool/call',params:{threadId:'t1',turnId:'turn1',callId:'tool1',tool:OPTIONS.tool,arguments:OPTIONS.args || {}}});
+   else if (OPTIONS.tool) send({id:'call1',method:'item/tool/call',params:{threadId:TID,turnId:'turn1',callId:'tool1',tool:OPTIONS.tool,arguments:OPTIONS.args || {}}});
    else if (OPTIONS.native && OPTIONS.native.command) {
-     note('item/started',{threadId:'t1',turnId:'turn1',item:{type:'commandExecution',id:'cmd1',command:OPTIONS.native.command,cwd:'/work',status:'inProgress',aggregatedOutput:null,exitCode:null}});
-     send({id:'approve1',method:'item/commandExecution/requestApproval',params:{kind:'command',threadId:'t1',turnId:'turn1',itemId:'cmd1',startedAtMs:1,environmentId:null,command:OPTIONS.native.command,cwd:'/work',...(OPTIONS.native.network ? {networkApprovalContext:{host:'x.example',protocol:'https'}} : {})}});
+     note('item/started',{threadId:TID,turnId:'turn1',item:{type:'commandExecution',id:'cmd1',command:OPTIONS.native.command,cwd:'/work',status:'inProgress',aggregatedOutput:null,exitCode:null}});
+     send({id:'approve1',method:'item/commandExecution/requestApproval',params:{kind:'command',threadId:TID,turnId:'turn1',itemId:'cmd1',startedAtMs:1,environmentId:null,command:OPTIONS.native.command,cwd:'/work',...(OPTIONS.native.network ? {networkApprovalContext:{host:'x.example',protocol:'https'}} : {})}});
    }
    else if (OPTIONS.native && OPTIONS.native.paths) {
-     note('item/started',{threadId:'t1',turnId:'turn1',item:{type:'fileChange',id:'fc1',status:'inProgress',changes:OPTIONS.native.paths.map(p=>({path:p,kind:{type:'update',move_path:null},diff:''}))}});
-     send({id:'approve1',method:'item/fileChange/requestApproval',params:{threadId:'t1',turnId:'turn1',itemId:'fc1',startedAtMs:1}});
+     note('item/started',{threadId:TID,turnId:'turn1',item:{type:'fileChange',id:'fc1',status:'inProgress',changes:OPTIONS.native.paths.map(p=>({path:p,kind:{type:'update',move_path:null},diff:''}))}});
+     send({id:'approve1',method:'item/fileChange/requestApproval',params:{threadId:TID,turnId:'turn1',itemId:'fc1',startedAtMs:1}});
    }
    else complete();
  }
  else if (m.id === 'call1') complete();
  else if (m.id === 'approve1') {
    const ok = m.result && m.result.decision === 'accept';
-   if (OPTIONS.native.command) note('item/completed',{threadId:'t1',turnId:'turn1',item:{type:'commandExecution',id:'cmd1',command:OPTIONS.native.command,cwd:'/work',status:ok?'completed':'declined',aggregatedOutput:ok?'ran it':null,exitCode:ok?0:null}});
-   else note('item/completed',{threadId:'t1',turnId:'turn1',item:{type:'fileChange',id:'fc1',status:ok?'completed':'declined',changes:OPTIONS.native.paths.map(p=>({path:p,kind:{type:'update',move_path:null},diff:''}))}});
+   if (OPTIONS.native.command) note('item/completed',{threadId:TID,turnId:'turn1',item:{type:'commandExecution',id:'cmd1',command:OPTIONS.native.command,cwd:'/work',status:ok?'completed':'declined',aggregatedOutput:ok?'ran it':null,exitCode:ok?0:null}});
+   else note('item/completed',{threadId:TID,turnId:'turn1',item:{type:'fileChange',id:'fc1',status:ok?'completed':'declined',changes:OPTIONS.native.paths.map(p=>({path:p,kind:{type:'update',move_path:null},diff:''}))}});
    complete();
  }
- else if (m.method === 'turn/interrupt') { reply({}); note('turn/completed',{threadId:'t1',turn:{id:'turn1',status:'interrupted'}}); }
+ else if (m.method === 'turn/interrupt') { reply({}); note('turn/completed',{threadId:TID,turn:{id:'turn1',status:'interrupted'}}); }
 });
 `,
   );

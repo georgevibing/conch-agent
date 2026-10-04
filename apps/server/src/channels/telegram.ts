@@ -14,7 +14,10 @@ import {
   type ChannelUser,
   type SendOptions,
   type SentRef,
+  type VoiceNote,
+  capOf,
   dataUrl,
+  readCapped,
   pause,
   redact,
 } from './types';
@@ -47,12 +50,25 @@ interface TgFile {
   width?: number;
 }
 
+interface TgEntity {
+  type: string;
+  offset: number;
+  length: number;
+  user?: TgUser;
+}
+
 interface TgMessage {
   message_id: number;
   from?: TgUser;
-  chat: { id: number; type: string };
+  chat: { id: number; type: string; title?: string };
   text?: string;
   caption?: string;
+  entities?: TgEntity[];
+  caption_entities?: TgEntity[];
+  /** The message this one replies to (groups: a reply to the bot counts as mentioning it). */
+  reply_to_message?: TgMessage;
+  /** The part of it that was quoted, when only a part was. */
+  quote?: { text: string };
   photo?: TgFile[];
   document?: TgFile;
   audio?: TgFile;
@@ -65,6 +81,12 @@ interface TgUpdate {
   /** The person pressed Stop under a streaming draft (Bot API 10.3). */
   stopped_message_generation?: { chat: { id: number }; draft_id: number };
   message?: TgMessage;
+  /** The bot was added to a group, or removed (ADR 0075: the group shows on its page). */
+  my_chat_member?: {
+    chat: { id: number; type: string; title?: string };
+    from: TgUser;
+    new_chat_member: { status: string };
+  };
   callback_query?: {
     id: string;
     from: TgUser;
@@ -98,6 +120,10 @@ const person = (user: TgUser): ChannelUser => ({
  */
 export class TelegramAdapter implements ChannelAdapter {
   readonly kind = 'telegram' as const;
+  /** Mentions and replies in groups are told apart (ADR 0075). */
+  readonly groups = true;
+  /** Who the bot is, to know when a group mentions it. */
+  #me?: TgUser;
 
   constructor(
     private readonly token: string,
@@ -228,6 +254,33 @@ export class TelegramAdapter implements ChannelAdapter {
     if (!body?.ok) throw new ChannelError('refused', 'Telegram didn’t take the picture.');
   }
 
+  /** A voice note: Opus in Ogg, which Telegram shows with its waveform. */
+  async #sendVoice(chatId: string, note: VoiceNote) {
+    const form = new FormData();
+    form.set('chat_id', chatId);
+    form.set('duration', String(note.seconds));
+    form.set('voice', new Blob([new Uint8Array(note.bytes)], { type: note.mimeType }), 'voice.ogg');
+    let response: Response;
+    try {
+      response = await fetch(`${this.base}/bot${this.token}/sendVoice`, {
+        method: 'POST',
+        body: form,
+        signal: AbortSignal.timeout(60_000),
+      });
+    } catch (error) {
+      throw new ChannelError(
+        'network',
+        redact(`Couldn’t reach Telegram (${(error as Error).message}).`, this.token),
+      );
+    }
+    const body = (await response.json().catch(() => undefined)) as TgResponse<unknown> | undefined;
+    if (!body?.ok)
+      throw new ChannelError(
+        response.status === 429 ? 'rate-limit' : 'refused',
+        redact(body?.description ?? 'Telegram didn’t take the voice note.', this.token),
+      );
+  }
+
   connect(events: ChannelEvents): ChannelConnection {
     const stop = new AbortController();
     void this.#poll(events, stop.signal);
@@ -236,6 +289,7 @@ export class TelegramAdapter implements ChannelAdapter {
     let drafts = true;
     return {
       send: (chatId, markdown, options) => this.#send(chatId, markdown, options),
+      voiceNotes: { format: 'ogg', send: (chatId, note) => this.#sendVoice(chatId, note) },
       draft: async (chatId, draftId, markdown) => {
         if (!drafts) return false;
         try {
@@ -260,7 +314,7 @@ export class TelegramAdapter implements ChannelAdapter {
       typing: async (chatId) => {
         await this.call('sendChatAction', { chat_id: chatId, action: 'typing' });
       },
-      download: (file) => this.#download(file),
+      download: (file, options) => this.#download(file, options),
       // A private chat's id is the person's id.
       directChat: (userId) => Promise.resolve(userId),
       close: () => stop.abort(),
@@ -279,11 +333,18 @@ export class TelegramAdapter implements ChannelAdapter {
           'getUpdates',
           {
             timeout: POLL_SECONDS,
-            allowed_updates: ['message', 'callback_query', 'stopped_message_generation'],
+            allowed_updates: [
+              'message',
+              'callback_query',
+              'stopped_message_generation',
+              'my_chat_member',
+            ],
             ...(offset !== undefined && { offset }),
           },
           { signal, timeoutMs: (POLL_SECONDS + 15) * 1000 },
         );
+        // Who the bot is, once per connection, to know when a group mentions it.
+        this.#me ??= await this.call<TgUser>('getMe', {}, { signal });
         if (!online) {
           online = true;
           events.state('online');
@@ -361,9 +422,66 @@ export class TelegramAdapter implements ChannelAdapter {
       });
       return;
     }
+    // Added to a group: it shows on the channel's page (off) before anyone mentions it.
+    const joined = update.my_chat_member;
+    if (
+      joined &&
+      joined.chat.type !== 'private' &&
+      ['member', 'administrator'].includes(joined.new_chat_member.status)
+    ) {
+      events.message({
+        chatId: String(joined.chat.id),
+        messageId: '0',
+        user: person(joined.from),
+        text: '',
+        files: [],
+        direct: false,
+        mentioned: false,
+        ...(joined.chat.title && { group: joined.chat.title }),
+      });
+      return;
+    }
     const message = update.message;
     if (!message?.from || message.from.is_bot) return;
     events.message(this.#message(message, message.from));
+  }
+
+  /**
+   * In a group, whether the bot is being asked: an @mention of it, a command
+   * addressed to it (`/help@its_name`), or a reply to one of its messages. The
+   * text is given back without the mention.
+   */
+  #addressed(message: TgMessage): { mentioned: boolean; text: string } {
+    const text = message.text ?? message.caption ?? '';
+    const me = this.#me;
+    if (!me) return { mentioned: false, text };
+    const handle = me.username ? `@${me.username}`.toLowerCase() : undefined;
+    const entities = message.entities ?? message.caption_entities ?? [];
+    const mentioned =
+      message.reply_to_message?.from?.id === me.id ||
+      entities.some((e) => {
+        if (e.type === 'text_mention') return e.user?.id === me.id;
+        const said = text.slice(e.offset, e.offset + e.length).toLowerCase();
+        if (e.type === 'mention') return handle !== undefined && said === handle;
+        if (e.type === 'bot_command') return handle !== undefined && said.endsWith(handle);
+        return false;
+      });
+    if (!mentioned || !handle) return { mentioned, text };
+    // "@its_name what's on?" reads as "what's on?": each mention of it is cut out, last first.
+    let cleaned = text;
+    for (const e of [...entities].sort((a, b) => b.offset - a.offset))
+      if (
+        e.type === 'mention' &&
+        text.slice(e.offset, e.offset + e.length).toLowerCase() === handle
+      )
+        cleaned = cleaned.slice(0, e.offset) + cleaned.slice(e.offset + e.length);
+    return {
+      mentioned,
+      text: cleaned
+        .replace(/^[\s,:]+/, '')
+        .replace(/ {2,}/g, ' ')
+        .trim(),
+    };
   }
 
   #message(message: TgMessage, from: TgUser): ChannelMessage {
@@ -389,15 +507,35 @@ export class TelegramAdapter implements ChannelAdapter {
           mimeType: file.mime_type,
           size: file.file_size,
           ref: file.file_id,
+          ...(file === message.voice && { voice: true }),
         });
     }
+    const direct = message.chat.type === 'private';
+    if (direct)
+      return {
+        chatId: String(message.chat.id),
+        messageId: String(message.message_id),
+        user: person(from),
+        text: message.text ?? message.caption ?? '',
+        files,
+        direct,
+      };
+    const { mentioned, text } = this.#addressed(message);
+    // Replying to someone else's message: what they said comes along, as theirs.
+    const replied = message.reply_to_message;
+    const quoted = message.quote?.text ?? replied?.text ?? replied?.caption;
     return {
       chatId: String(message.chat.id),
       messageId: String(message.message_id),
       user: person(from),
-      text: message.text ?? message.caption ?? '',
+      text,
       files,
-      direct: message.chat.type === 'private',
+      direct,
+      mentioned,
+      ...(message.chat.title && { group: message.chat.title }),
+      ...(replied?.from &&
+        replied.from.id !== this.#me?.id &&
+        quoted && { quote: { name: person(replied.from).name, text: quoted } }),
     };
   }
 
@@ -468,14 +606,19 @@ export class TelegramAdapter implements ChannelAdapter {
     }
   }
 
-  async #download(file: ChannelFile) {
-    if (file.size && file.size > FILE_LIMIT)
-      throw new ChannelError('refused', 'Telegram only lets bots download files up to 20 MB.');
-    const { bytes } = await this.#fetchFile(file.ref, 60_000);
+  async #download(file: ChannelFile, options?: { maxBytes?: number }) {
+    const cap = capOf(FILE_LIMIT, options);
+    if (file.size && file.size > cap)
+      throw new ChannelError('refused', 'That file is too big for Conch to take from Telegram.');
+    const { bytes } = await this.#fetchFile(file.ref, 60_000, cap);
     return { name: file.name, bytes, mimeType: file.mimeType };
   }
 
-  async #fetchFile(fileId: string, timeoutMs: number): Promise<{ bytes: Buffer }> {
+  async #fetchFile(
+    fileId: string,
+    timeoutMs: number,
+    maxBytes = FILE_LIMIT,
+  ): Promise<{ bytes: Buffer }> {
     const info = await this.call<{ file_path?: string }>('getFile', { file_id: fileId });
     if (!info.file_path) throw new ChannelError('refused', 'Telegram didn’t hand over that file.');
     try {
@@ -483,8 +626,9 @@ export class TelegramAdapter implements ChannelAdapter {
         signal: AbortSignal.timeout(timeoutMs),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return { bytes: Buffer.from(await response.arrayBuffer()) };
+      return { bytes: await readCapped(response, maxBytes) };
     } catch (error) {
+      if (error instanceof ChannelError) throw error;
       throw new ChannelError(
         'network',
         redact(

@@ -418,6 +418,8 @@ async function status() {
     workspaceRules: await workspaceRules(await settings.workspace()),
     trustedIntegrations: await new IntegrationStore(config.CONCH_HOME, heal).trusted(),
     browserLocal: (await new BrowserStore(config.CONCH_HOME, heal).settings()).allowLocal,
+    browserOwnChrome:
+      (await new BrowserStore(config.CONCH_HOME, heal).settings()).backend === 'chrome',
     terminalRemote: await terminalRemote(config.CONCH_HOME),
     provider: providerCopy(config.CONCH_ENGINE ?? (await settings.get()).preferences.engine),
   });

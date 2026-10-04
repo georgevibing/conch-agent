@@ -35,7 +35,7 @@ function BudgetField({ initial }: { initial?: number }) {
   return (
     <Section
       title="Monthly budget"
-      description="Optional. Conch shows what’s left of it and warns you when it runs low — it never stops you."
+      description="Optional. It counts what you spend on pay-as-you-go providers through Conch. Near it, a chat says so once; at it, a chat asks before spending more."
       status={<SaveStatus status={status} />}
     >
       <Field invalid={!valid}>
@@ -99,7 +99,8 @@ export function UsageTab() {
     })),
   });
   if (!list) return null;
-  const metered = usages.find((u) => u.data?.kind === 'metered')?.data;
+  // Spend is Conch-wide: any provider's numbers carry it.
+  const spend = usages.find((u) => u.data)?.data?.spend;
   return (
     <Stack gap={6}>
       <Section
@@ -112,7 +113,8 @@ export function UsageTab() {
           ))}
         </Stack>
       </Section>
-      {metered && <BudgetField initial={metered.spend.budget} />}
+      {/* Every chat on a key you pay as you go counts, whichever provider answers it (ADR 0079). */}
+      {spend && <BudgetField initial={spend.budget} />}
       <SpendingSection />
     </Stack>
   );

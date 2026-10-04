@@ -1,6 +1,7 @@
 # 0057 — Routines can't run up a bill or eat your plan
 
-- Status: accepted
+- Status: accepted; amended by [ADR 0079](./0079-what-a-chat-costs.md): chats share how a
+  provider charges and what a turn cost (`usage/billing.ts`), and have limits of their own
 - Date: 2026-10-03
 
 ## Context

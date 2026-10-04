@@ -514,6 +514,7 @@ export class MockEngine implements Engine {
   async *runTurn(turn: TurnInput): AsyncIterable<EngineEvent> {
     // A chat-only model is never shown any tools, as a model API's isn't (ADR 0050).
     const chatOnly =
+      turn.wordsOnly === true ||
       (await this.capabilities()).models.find((m) => m.id === turn.options.model)?.tools === false;
     const input: TurnInput = chatOnly ? { ...turn, tools: [], bridgedTools: [] } : turn;
     const wait = (ms: number) => sleep(ms * this.#speed, input.signal);
@@ -1509,7 +1510,8 @@ export class MockEngine implements Engine {
       // The browser: open what was asked for, click what was named, hand over to sign in.
       const address =
         /\b(https?:\/\/[^\s)"”]+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?(?:\/[^\s)"”]*)?)/i.exec(
-          input.prompt,
+          // What was typed: not the name of a file attached to it.
+          said,
         )?.[1];
       const canBrowse = input.tools.some((t) => t.name === 'browser_open');
       if (
@@ -1546,6 +1548,27 @@ export class MockEngine implements Engine {
               /said no|doesn’t want|Plan only/.test(page)
                 ? `didn’t click “${target}” (${page.split('\n')[0]})`
                 : `clicked “${target}”`,
+            );
+            if (/opened a new tab/.test(page)) done.push('it opened in a new tab');
+          }
+        }
+        // "…then go back to the first tab": the tab it came from.
+        if (/\bfirst tab\b/.test(text)) {
+          page = yield* use('browser_tabs', { action: 'switch', tab: 't1' });
+          done.push('went back to the first tab');
+        }
+        // "…and upload it to “CV”": the file attached to this message, into that box.
+        const box = /\bupload\b[^“"]*[“"]([^”"]+)[”"]/i.exec(input.prompt)?.[1];
+        const file = /<attachment name="([^"]+)"/.exec(input.prompt)?.[1];
+        if (box && file) {
+          const escaped = box.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const ref = new RegExp(`"${escaped}"[^\\n]*?\\[ref=([a-z0-9]+)\\]`, 'i').exec(page)?.[1];
+          if (ref) {
+            page = yield* use('browser_upload', { ref, element: box, files: [file] });
+            done.push(
+              /said no|doesn’t want/.test(page)
+                ? `didn’t upload “${file}”`
+                : `uploaded “${file}” to “${box}”`,
             );
           }
         }

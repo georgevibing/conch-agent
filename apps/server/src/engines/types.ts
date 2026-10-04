@@ -26,7 +26,7 @@ export interface HostToolResult {
   text: string;
   /** Trusted tool guarantee: no write was attempted (e.g. approval declined). */
   effect?: 'not-executed';
-  images?: { data: string; mimeType: 'image/jpeg' | 'image/png' }[];
+  images?: ToolImage[];
   /**
    * What it found, drawn as it is for the person (an agenda, emails, files,
    * messages: ADR 0060). Never shown to the model, which reads `text`.
@@ -81,6 +81,35 @@ export interface HostTool<Shape extends z.ZodRawShape = z.ZodRawShape> {
   /** Words that find it when tools are searched for. */
   searchHint?: string;
 }
+
+/** A picture, whoever sent it: base64, no data-URL prefix. */
+export type Picture = Pick<TurnImage, 'data' | 'mimeType'>;
+
+/** A picture a tool returned (a screenshot): base64, no data-URL prefix. */
+export interface ToolImage {
+  data: string;
+  mimeType: 'image/jpeg' | 'image/png';
+}
+
+/** The pictures in a host tool's result, if any. */
+export function hostToolImages(result: string | HostToolResult): ToolImage[] | undefined {
+  return typeof result === 'string' || !result.images?.length ? undefined : result.images;
+}
+
+/**
+ * Pictures put into words for a model that can't see them (ADR 0070): by
+ * another model that can, chosen from the providers the person connected.
+ * `text` is undefined when none of them could look; `usage` is what
+ * describing cost, counted with the turn.
+ */
+export type DescribeImages = (
+  images: readonly Picture[],
+  context: {
+    /** What the pictures are, for the describer: "a screenshot of a web page". */
+    what: string;
+    signal: AbortSignal;
+  },
+) => Promise<{ text?: string; usage?: Usage }>;
 
 /** A host tool's result as plain text, for engines (and logs) that only take text. */
 export function hostToolText(result: string | HostToolResult): string {
@@ -179,6 +208,14 @@ export interface TurnInput {
   /** Engine-native session to continue, from a previous turn's `session` event. */
   resumeId?: string;
   /**
+   * With `resumeId`: what to send instead of `prompt` when that session can't be
+   * continued (it was lost, or what the turn may use changed since), so the
+   * engine starts a new one: the conversation so far, as Conch's handoff, before
+   * the message. `prompt` carries only what the session missed. An engine that
+   * starts afresh says so with a `session` event for the new one.
+   */
+  freshPrompt?: string;
+  /**
    * Where the message this turn answers sits in the chat's log. An engine that
    * keeps the transcript itself (`context`) remembers it per turn, so it can
    * say where the model's memory starts after summarising (ADR 0055).
@@ -205,6 +242,13 @@ export interface TurnInput {
   onModeChange?: (listener: (mode: PermissionMode) => void) => void;
   /** Native engines: integrations to load, keyed by server name (tools become `mcp__<name>__<tool>`). */
   mcpServers?: Record<string, EngineMcpServer>;
+  /**
+   * Put pictures into words for a model that can't see them (ADR 0070), by a
+   * model that can. Engines call it for a tool's screenshot, or a picture the
+   * person attached, when the turn's model can't take pictures. Bound to this
+   * turn's provider and model, so neither is asked to look.
+   */
+  describe?: DescribeImages;
   /** Bridge engines: integration tools Conch is connected to for this turn. */
   bridgedTools?: BridgedTool[];
   /** Tools the user turned off; the model never sees them. */
@@ -227,6 +271,12 @@ export interface TurnInput {
    * can: writes only to these folders, no reading these.
    */
   sandbox?: { allowWrite: string[]; denyRead: string[] };
+  /**
+   * Answer in words only (a guest in a group chat, ADR 0075): engines that
+   * bring tools of their own leave them out, and their own system prompt
+   * (which describes this computer) too. The guard refuses any tool anyway.
+   */
+  wordsOnly?: boolean;
 }
 
 export type GuardDecision =
@@ -242,7 +292,16 @@ export interface ResolvedOptions {
 
 /** Normalised stream every engine produces for a turn. */
 export type EngineEvent =
-  | { type: 'session'; resumeId: string; model?: string }
+  | {
+      type: 'session';
+      resumeId: string;
+      model?: string;
+      /**
+       * `lost`: the session in `TurnInput.resumeId` couldn't be continued, so
+       * the engine started a new one with `freshPrompt`: healed, said quietly.
+       */
+      restarted?: 'lost';
+    }
   | { type: 'text'; messageId: string; delta: string }
   | { type: 'thinking'; messageId: string; delta: string }
   | { type: 'message-done'; messageId: string }
@@ -292,6 +351,8 @@ export interface CompletionInput {
   model?: string;
   /** A longer answer than a title (a chat's summary). Undefined = a few words. */
   maxTokens?: number;
+  /** Pictures to look at with the prompt, for engines with `completeSees` (ADR 0070). */
+  images?: readonly Picture[];
   signal: AbortSignal;
 }
 
@@ -311,8 +372,7 @@ export interface Compacted {
  * How an engine fits a long chat into what its model reads at once (ADR
  * 0055). Engines that keep the transcript themselves (the model APIs) offer
  * it; the rest leave it to the provider, which compacts by itself (Claude
- * Code, Codex) or is handed a fresh, bounded handoff every turn (the ACP
- * programs).
+ * Code, Codex, the ACP programs).
  */
 export interface EngineContext {
   /**
@@ -381,6 +441,12 @@ export interface Engine {
   readonly smallModel?: string;
   /** Answer a single prompt with plain text: no tools, no session, no thinking. */
   complete?(input: CompletionInput): Promise<Completion>;
+  /**
+   * `complete` looks at `CompletionInput.images` when its model can see (its
+   * `ModelInfo.images` isn't false), so it can describe a screenshot to a
+   * model that can't (ADR 0070).
+   */
+  readonly completeSees?: boolean;
   /** Current plan limits. Engines without limits omit it; Conch then only tracks spend. */
   usage?(options?: { force?: boolean }): Promise<EngineUsage>;
   /** How this engine uses integrations. */
@@ -402,8 +468,6 @@ export interface Engine {
   readonly plans?: 'native';
   /** Commands are always sealed by Conch, independent of the native-provider toggle. */
   readonly commandSandbox?: 'conch';
-  /** Each turn uses Conch’s complete handoff, not a provider-native resume ID. */
-  readonly conversationHistory?: boolean;
   /** Conch fits long chats for it by summarising their start (ADR 0055). Absent: the provider does. */
   readonly context?: EngineContext;
   /**
@@ -411,6 +475,11 @@ export interface Engine {
    * `~/.claude/skills`). Conch doesn't list those skills to it a second time.
    */
   readonly skillSources?: readonly SkillSource[];
+  /**
+   * The chat is gone: let go of anything the engine keeps for this session
+   * (a Codex thread kept between turns). Sessions the provider keeps itself stay its own.
+   */
+  forgetSession?(resumeId: string): Promise<void>;
   /** MCP servers the engine loads by itself, and whether they work. */
   mcpStatus?(): Promise<EngineMcpStatus[]>;
   /** Subscribe to live limit hints emitted while turns run. */

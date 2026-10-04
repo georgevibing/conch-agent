@@ -18,7 +18,7 @@ Conch runs the conversation itself: it keeps the thread, holds the connections t
 
 ## Good to know
 
-- **Conch supplies the tools.** Tool-capable models can use memory, connected apps and files in this conversation’s work folder, with the same permission checks and Undo tracking. Commands require the OS sandbox, cannot access the network and have no unrestricted fallback. Chat-only models are labelled before answering and cannot perform actions.
+- **Conch supplies the tools.** Tool-capable models can use memory, connected apps and files in this conversation’s work folder, with the same permission checks and Undo tracking. Commands require the OS sandbox, cannot access the network and have no unrestricted fallback. Models that weren't made for tools are labelled **Chat only** in the picker; if you use one anyway, Conch lists the tools in its instructions so it can still try. This works for any model OpenRouter has, not only the ones the picker shows.
 - **Spend is tracked.** Conch records what each turn cost, and you can set a budget. See [Offline and at a limit](../care/offline.md).
 - **A key with an end date** says when it runs out on its card, from two weeks before. Once it's past, OpenRouter no longer knows the key: make a new one at openrouter.ai and press **Add a key**.
 - **Pictures work** with models that can see. A file card warns you when the chosen model can't use it.

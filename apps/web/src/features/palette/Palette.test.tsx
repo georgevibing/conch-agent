@@ -412,6 +412,26 @@ describe('Palette search', () => {
     act(() => useUi.setState({ settingsFocus: undefined }));
   });
 
+  it('finds Other apps by the apps people use Conch from (ADR 0073)', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    const { where } = renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    for (const words of ['claude desktop', 'cursor', 'vs code', 'mcp server', 'other apps']) {
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /Settings: Other apps/ }),
+      ).toBeInTheDocument();
+    }
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(where()).toBe('/settings/other-apps'));
+  });
+
   it('finds your own address by domain, certificate or HTTPS, straight to its section', async () => {
     const user = userEvent.setup();
     mockFetch({
@@ -535,6 +555,26 @@ describe('Palette search', () => {
     );
     expect(useUi.getState().stopHolding).toEqual({ conversationId: 'c7', skillId: 'quick-setup' });
     act(() => useUi.setState({ stopHolding: undefined }));
+  });
+
+  it('opens what the open chat spent, and its limit, by name (ADR 0079)', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    renderApp(
+      <Routes>
+        <Route path="/c/:conversationId" element={<Palette />} />
+      </Routes>,
+      { route: '/c/c7' },
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'spending limit');
+    await user.click(await screen.findByRole('option', { name: /What this chat spent/ }));
+    expect(useUi.getState().chatSpendOpen).toBe('c7');
+    act(() => useUi.setState({ chatSpendOpen: null }));
   });
 
   it('summarises the start of the open chat by name, as /compact does (ADR 0055)', async () => {

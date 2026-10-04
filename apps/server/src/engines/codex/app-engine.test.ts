@@ -203,6 +203,40 @@ describe('Codex app-server parity', () => {
       view,
     });
   });
+  it('hands a tool’s screenshot back as an inputImage, for a model that sees (ADR 0070)', async () => {
+    const { engine, turn, fake } = await setup({
+      signedIn: true,
+      tool: 'conch__browser_screenshot',
+      args: {},
+    });
+    const run = vi.fn(async () => ({
+      text: 'Screenshot of “Shop”.',
+      images: [{ data: '/9j/AAAA', mimeType: 'image/jpeg' as const }],
+    }));
+    const describe = vi.fn(async () => ({ text: 'words' }));
+    await collect(
+      engine.runTurn(
+        turn({
+          describe,
+          options: {
+            model: 'account-model',
+            effort: 'auto',
+            fastMode: false,
+            permissionMode: 'default',
+          },
+          tools: [{ name: 'browser_screenshot', description: 'Look', input: {}, run }],
+        }),
+      ),
+    );
+    const answered = (await fake.calls()).find((c) => c.id === 'call1')?.result as {
+      contentItems?: unknown[];
+    };
+    expect(answered.contentItems).toEqual([
+      { type: 'inputText', text: 'Screenshot of “Shop”.' },
+      { type: 'inputImage', imageUrl: 'data:image/jpeg;base64,/9j/AAAA' },
+    ]);
+    expect(describe).not.toHaveBeenCalled();
+  });
   it('never runs a denied tool, including in full trust', async () => {
     const { engine, turn } = await setup({
       signedIn: true,
@@ -234,7 +268,7 @@ describe('Codex app-server parity', () => {
     expect(calls.find((call) => call.method === 'thread/start')?.params).toMatchObject({
       environments: [],
       permissions: 'conch',
-      ephemeral: true,
+      ephemeral: false,
     });
     expect(calls.find((call) => call.method === 'turn/start')?.params).toMatchObject({
       environments: [],
@@ -523,5 +557,142 @@ describe('Codex CLI: Codex with its own tools, asking through Conch (ADR 0066)',
     const config = await configOf(fake);
     expect(config).toContain('features.shell_tool=false');
     expect(config).toContain('permissions.conch.extends=":read-only"');
+  });
+});
+
+describe('Codex carrying a chat on (ADR 0066 § Carrying on)', () => {
+  const sessionOf = (events: EngineEvent[]) =>
+    events.find((e): e is Extract<EngineEvent, { type: 'session' }> => e.type === 'session');
+  const textOf = (call: Record<string, unknown> | undefined) =>
+    ((call?.params as { input: { text?: string }[] }).input[0]?.text ?? '') as string;
+  const remember = {
+    name: 'remember',
+    description: 'Remember',
+    input: { text: z.string() },
+    run: async () => 'Saved.',
+  };
+
+  it('resumes the same thread next turn, with only what it missed, kept in Conch’s home between runs', async () => {
+    const { engine, fake, home, turn } = await setup({ signedIn: true });
+    const first = await collect(
+      engine.runTurn(turn({ prompt: 'My colour is teal', tools: [remember] })),
+    );
+    const session = sessionOf(first);
+    expect(session?.resumeId).toMatch(/^[0-9a-f-]{36}\.[0-9a-f]{16}$/);
+    expect(session?.restarted).toBeUndefined();
+    const threadId = session?.resumeId.split('.')[0] ?? '';
+    // Kept outside the run's home, which is gone.
+    expect(await readdir(join(home, 'codex-sessions'))).toEqual(
+      expect.arrayContaining([`${threadId}.jsonl`, `${threadId}.json`]),
+    );
+    expect(await readdir(join(home, 'codex-runtime'))).toEqual([]);
+
+    const second = await collect(
+      engine.runTurn(
+        turn({
+          prompt: 'What is my colour?',
+          freshPrompt: 'EVERYTHING\n\nWhat is my colour?',
+          resumeId: session?.resumeId,
+          tools: [remember],
+        }),
+      ),
+    );
+    expect(sessionOf(second)?.resumeId).toBe(session?.resumeId);
+    const calls = await fake.calls();
+    expect(calls.filter((c) => c.method === 'thread/start')).toHaveLength(1);
+    expect(calls.find((c) => c.method === 'thread/resume')?.params).toMatchObject({
+      threadId,
+      approvalPolicy: 'untrusted',
+      permissions: 'conch',
+    });
+    expect(textOf(calls.filter((c) => c.method === 'turn/start').at(-1))).toBe(
+      'What is my colour?',
+    );
+    // Both turns are in the thread Conch keeps.
+    const kept = await readFile(join(home, 'codex-sessions', `${threadId}.jsonl`), 'utf8');
+    expect(kept).toContain('My colour is teal');
+    expect(kept).toContain('What is my colour?');
+    expect(second.at(-1)).toMatchObject({ type: 'done', outcome: 'success' });
+  });
+
+  it('tells a resumed thread Conch’s instructions again only when they changed', async () => {
+    const { engine, fake, turn } = await setup({ signedIn: true });
+    const resumeId = sessionOf(
+      await collect(engine.runTurn(turn({ systemAppend: 'Conch v1' }))),
+    )?.resumeId;
+    await collect(engine.runTurn(turn({ resumeId, systemAppend: 'Conch v1' })));
+    await collect(engine.runTurn(turn({ resumeId, systemAppend: 'Conch v2: likes tea' })));
+    const turns = (await fake.calls()).filter((c) => c.method === 'turn/start');
+    expect((turns[1]?.params as Record<string, unknown>).additionalContext).toBeUndefined();
+    expect((turns[2]?.params as Record<string, unknown>).additionalContext).toEqual({
+      conch: {
+        kind: 'application',
+        value: expect.stringContaining('Conch v2: likes tea'),
+      },
+    });
+  });
+
+  it('starts a new thread with the whole conversation when the chat’s tools changed', async () => {
+    const { engine, fake, home, turn } = await setup({ signedIn: true });
+    const old = sessionOf(await collect(engine.runTurn(turn())))?.resumeId ?? '';
+    const events = await collect(
+      engine.runTurn(
+        turn({
+          resumeId: old,
+          prompt: 'next',
+          freshPrompt: 'EVERYTHING\n\nnext',
+          tools: [remember],
+        }),
+      ),
+    );
+    const now = sessionOf(events);
+    expect(now?.resumeId).not.toBe(old);
+    // Changed on purpose: nothing to heal.
+    expect(now?.restarted).toBeUndefined();
+    const calls = await fake.calls();
+    expect(calls.some((c) => c.method === 'thread/resume')).toBe(false);
+    expect(textOf(calls.filter((c) => c.method === 'turn/start').at(-1))).toBe(
+      'EVERYTHING\n\nnext',
+    );
+    // The old thread isn't kept once it can't be carried on.
+    expect(await readdir(join(home, 'codex-sessions'))).not.toContain(`${old.split('.')[0]}.jsonl`);
+  });
+
+  it('heals a thread Codex can’t read back: a new one, with the whole conversation, said quietly', async () => {
+    const { engine, home, turn } = await setup({ signedIn: true });
+    const old = sessionOf(await collect(engine.runTurn(turn())))?.resumeId;
+    // The same Conch home, with a Codex that can't resume it.
+    const broken = await fakeCodexApp({ signedIn: true, resumeFails: true });
+    const settings = new SettingsStore(home);
+    const again = new CodexEngine(settings, new ProviderKeys(settings), broken.bin);
+    const events = await collect(
+      again.runTurn(turn({ resumeId: old, prompt: 'next', freshPrompt: 'EVERYTHING\n\nnext' })),
+    );
+    expect(sessionOf(events)).toMatchObject({ restarted: 'lost' });
+    expect(sessionOf(events)?.resumeId).not.toBe(old);
+    const calls = await broken.calls();
+    expect(calls.some((c) => c.method === 'thread/resume')).toBe(true);
+    expect(textOf(calls.find((c) => c.method === 'turn/start'))).toBe('EVERYTHING\n\nnext');
+    expect(events.at(-1)).toMatchObject({ type: 'done', outcome: 'success' });
+
+    // A thread whose file is gone (tidied, another computer), or an id from long ago: the same.
+    for (const resumeId of [
+      `00000000-0000-4000-8000-000000000000.${old?.split('.')[1]}`,
+      'thread-from-codex-exec',
+    ]) {
+      const lost = await collect(
+        engine.runTurn(turn({ resumeId, prompt: 'next', freshPrompt: 'EVERYTHING\n\nnext' })),
+      );
+      expect(sessionOf(lost)).toMatchObject({ restarted: 'lost' });
+    }
+  });
+
+  it('lets go of the kept thread when the chat is deleted', async () => {
+    const { engine, home, turn } = await setup({ signedIn: true });
+    const resumeId = sessionOf(await collect(engine.runTurn(turn())))?.resumeId ?? '';
+    await engine.forgetSession(resumeId);
+    expect(await readdir(join(home, 'codex-sessions'))).toEqual([]);
+    // Nothing that isn't a thread id becomes a path.
+    await expect(engine.forgetSession('../../codex.secrets.json')).resolves.toBeUndefined();
   });
 });

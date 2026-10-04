@@ -33,6 +33,8 @@ import {
   pause,
   personId,
   redact,
+  capOf,
+  readCapped,
 } from './types';
 
 type MatrixSecrets = Extract<ChannelSecrets, { kind: 'matrix' }>;
@@ -459,7 +461,7 @@ export class MatrixAdapter implements ChannelAdapter {
       edit: (ref, markdown) => session.edit(ref, markdown),
       typing: (chatId) => session.typing(chatId),
       seen: (ref, working) => session.seen(ref, working),
-      download: (file) => session.download(file),
+      download: (file, options) => session.download(file, options),
       directChat: (userId) => session.directChat(appId(userId)),
       close: () => session.close(),
     };
@@ -992,6 +994,8 @@ class MatrixSession {
         files.push({
           name: text || 'file',
           ref: JSON.stringify(file ? { file } : { url }),
+          // Element marks what was recorded in the room (MSC3245).
+          ...(msgtype === 'm.audio' && 'org.matrix.msc3245.voice' in content && { voice: true }),
           ...(info.mimetype && { mimeType: info.mimetype }),
           ...(info.size !== undefined && { size: info.size }),
         });
@@ -1144,8 +1148,9 @@ class MatrixSession {
       .catch(() => undefined);
   }
 
-  async download(file: ChannelFile) {
-    if (file.size && file.size > FILE_LIMIT)
+  async download(file: ChannelFile, options?: { maxBytes?: number }) {
+    const cap = capOf(FILE_LIMIT, options);
+    if (file.size && file.size > cap)
       throw new ChannelError('refused', 'That file is too big to take from Matrix.');
     let ref: { url?: string; file?: EncryptedFile };
     try {
@@ -1161,9 +1166,7 @@ class MatrixSession {
     });
     if (!response.ok)
       throw new ChannelError('network', `Couldn’t download that file (${response.status}).`);
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (bytes.length > FILE_LIMIT)
-      throw new ChannelError('refused', 'That file is too big to take from Matrix.');
+    const bytes = await readCapped(response, cap, 'That file is too big to take from Matrix.');
     return {
       name: file.name,
       bytes: ref.file ? decryptAttachment(bytes, ref.file) : bytes,

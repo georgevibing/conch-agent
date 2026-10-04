@@ -319,7 +319,10 @@
   }
 
   .quietEnd {
+    display: inline-flex;
+    align-items: center;
     align-self: center;
+    gap: var(--nc-space-1);
     font-size: var(--nc-text-xs);
     color: var(--nc-text-subtle);
     letter-spacing: 0.02em;

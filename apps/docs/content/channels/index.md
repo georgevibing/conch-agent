@@ -15,7 +15,7 @@ A channel is a bot you make in the chat app, connected to the Conch on your comp
 
 Conch connects **outward** to the app. Nothing on your computer is opened to the internet, and you need no public address and no tunnel.
 
-Two apps only deliver to a web address: **Microsoft Teams**, and a WeChat **Official Account**. For them, Conch can open one public address with one press (through Tailscale Funnel), or use an address of your own. It leads to a small door of its own, not to Conch: the door lets in only messages the app signed, for the channels you connected. A WeChat **WeCom bot** and **Matrix** connect outward like the others.
+Some apps only deliver to a web address: **Microsoft Teams**, a WeChat **Official Account**, and **SMS** through Twilio. For them, Conch can open one public address with one press (through Tailscale Funnel), or use an address of your own. It leads to a small door of its own, not to Conch: the door lets in only messages the app signed, for the channels you connected. A WeChat **WeCom bot** and **Matrix** connect outward like the others.
 
 Setting one up is a short numbered path in Conch, from **Apps → Talk to me here**, beside a picture of exactly what you'll see in the other app. Keys are checked the moment you paste them, anywhere on the page.
 
@@ -31,13 +31,27 @@ WhatsApp and Signal have no bots to make. Instead Conch joins **your own account
 
 - **You** say hello once, and Conch knows the bot is yours.
 - **Anyone else** who writes gets one polite reply that names no one (none at all on iMessage and email), and appears in Conch as a request. Press **Let them in** or **Block**.
-- **Private chats only.** The bot ignores groups and servers, where anyone could speak for you.
+- **Groups only when you turn them on.** A group the bot is in shows on its page in Conch, off. Until you turn it on there, the bot doesn't answer in it.
+
+## In a group
+
+Telegram, Discord and Slack can answer in a group, a server's channel or a Slack channel, once you turn that group on in Conch. Add the bot to the group in the app; the group shows up on the bot's page in Conch under **Groups**, with a switch.
+
+- **Only when it's asked.** In a group that's on, your assistant answers only when someone mentions it (`@yourbot`) or replies to one of its messages. Everything else in the group is never read.
+- **You get everything.** When you mention it, it's the same assistant as in your private chat, in a conversation of its own for that group.
+- **Everyone else gets words only.** Anyone else in the group who mentions it gets an answer, and nothing more: no files, no commands, no apps, nothing it remembers about you. Each person has a conversation of their own, so what one writes never reaches yours. Their questions run on your provider, at most 20 an hour per group.
+- **Only you approve.** When something you asked for needs your OK, the question comes to your private chat with the bot, never to the group, where others could see or press it.
+- **What others write is read as theirs.** If you reply to someone's message and mention your assistant, their words come along, read as someone else's, so anything they say can't make it act without asking you first.
+- **It knows you by your account.** Someone who takes your name, or forwards your words, is still someone else.
+
+Turn a group off, and your assistant goes quiet there at once. **Forget** takes it off the list until the bot hears from it again. WhatsApp, Signal, iMessage and email are your own account, so they never answer in groups. Teams, Matrix and WeChat answer in private chats only.
 
 ## What works from a chat
 
 - **Everything your assistant can do.** A message becomes a Conch chat with your default provider. It shows in the sidebar, wearing the app's logo.
-- **Approvals, as buttons.** When your assistant asks, the question arrives with **Allow**, **Always in this chat** and **Don't allow**. Answer it anywhere, and the message updates to say what was decided. WhatsApp, Signal, iMessage and email have no buttons, so you reply with the answer's number.
+- **Approvals, as buttons.** When your assistant asks, the question arrives with **Allow**, **Always in this chat** and **Don't allow**. Answer it anywhere, and the message updates to say what was decided. WhatsApp, Signal, iMessage, email and SMS have no buttons, so you reply with the answer's number.
 - **Photos and files** you send become attachments.
+- **Voice notes** are turned into words on your computer and answered like anything you typed. See [Voice](../features/voice.md#voice-notes-from-your-chat-apps).
 - **Routine results**, and a routine's questions, come to you there when the channel has **Routine results** on.
 - **Three commands:** `/new` starts a fresh conversation, `/stop` stops the answer, `/help` explains. Any other `/name` runs your skill of that name.
 

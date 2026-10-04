@@ -17,6 +17,7 @@ import {
   ThinkingIndicator,
   ToolCall,
   toast,
+  TurnCostTag,
   useSmoothText,
   type ToolCallStatus,
 } from '@conch/nacre';
@@ -158,6 +159,7 @@ export function AssistantMessage({
   entrance = true,
   attached,
   said,
+  ended,
 }: {
   item: Of<'assistant'>;
   name: string;
@@ -171,6 +173,8 @@ export function AssistantMessage({
    * Undefined while any of it is still being written (no actions yet).
    */
   said?: string;
+  /** How its turn ended: what it cost sits among its actions (ADR 0079). */
+  ended?: Of<'turn-end'>;
 }) {
   const streaming = !item.done;
   const arrivedLive = useContext(ArrivedLive);
@@ -219,6 +223,7 @@ export function AssistantMessage({
           <>
             <ReadAloud text={said} />
             <CopyButton value={said} label="Copy reply" />
+            {ended?.cost && <TurnCostTag cost={ended.cost} tokens={ended.usage} />}
           </>
         ) : undefined
       }
@@ -536,6 +541,8 @@ export function TurnEnd({
             <span className={styles.stoppedAfter}>after {formatDuration(after)}</span>
           ) : null}
         </span>
+        {/* What it had spent by then, quietly (ADR 0079). */}
+        {item.cost && <TurnCostTag cost={item.cost} tokens={item.usage} />}
       </div>
     );
   }

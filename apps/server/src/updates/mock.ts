@@ -62,5 +62,9 @@ export function mockPrograms(
   // The "package manager" is Node itself, running the script above.
   const setup = new Setup(specs, { manager: () => Promise.resolve(process.execPath) });
   const none = () => Promise.resolve(undefined);
-  return { specs, setup, lookup: { npm: none, winget: none, brew: none } };
+  return {
+    specs,
+    setup,
+    lookup: { npm: none, winget: none, brew: none, pypi: none, github: none },
+  };
 }

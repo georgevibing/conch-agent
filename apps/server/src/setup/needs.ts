@@ -9,12 +9,13 @@
  */
 import { spawn as nodeSpawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { platform as osPlatform } from 'node:os';
+import { homedir, platform as osPlatform } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import type { Need, Readiness } from '@conch/protocol';
 
 import { agentEnv, findExecutable, launch, type Launch } from '../lib/proc';
+import { fetchedBin, fetchRelease, type FetchOptions } from './release';
 
 export type Platform = 'win32' | 'darwin' | 'linux';
 
@@ -22,10 +23,19 @@ export type Platform = 'win32' | 'darwin' | 'linux';
  * An install through the computer's own package manager, run as you. An
  * update can also be `self`: the program brings itself up to date
  * (`claude update`), run from where it was found.
+ *
+ * - `uv` installs a Python program as a tool of its own (`uv tool install
+ *   piper-tts`), with the Python it needs, for this user only.
+ * - `github` is Conch fetching a project's own release itself (`release.ts`):
+ *   `args` are the repository, the file and the program inside it.
+ *
+ * `via` names the need that brings the package manager (`uv`): when it isn't
+ * here yet, installing this gets that first, in the same press.
  */
 export interface InstallRecipe {
-  manager: 'winget' | 'brew' | 'npm' | 'self';
+  manager: 'winget' | 'brew' | 'npm' | 'self' | 'uv' | 'github';
   args: string[];
+  via?: string;
 }
 
 /** Where the newest version of a program is asked for (see `updates/latest.ts`). */
@@ -33,6 +43,10 @@ export interface LatestLookup {
   npm(pkg: string): Promise<string | undefined>;
   winget(id: string): Promise<string | undefined>;
   brew(name: string, cask?: boolean): Promise<string | undefined>;
+  /** The newest release on PyPI (what `uv tool upgrade` would bring). */
+  pypi(pkg: string): Promise<string | undefined>;
+  /** The newest finished release of a GitHub repository that has `asset`. */
+  github(repo: string, asset: string): Promise<string | undefined>;
 }
 
 type Recipes = InstallRecipe | InstallRecipe[];
@@ -93,7 +107,11 @@ type Spawn = typeof nodeSpawn;
 export interface SetupDeps {
   platform?: Platform;
   /** Finds a package manager; tests point it at a fake. */
-  manager?: (name: Exclude<InstallRecipe['manager'], 'self'>) => Promise<string | undefined>;
+  manager?: (
+    name: Exclude<InstallRecipe['manager'], 'self' | 'github'>,
+  ) => Promise<string | undefined>;
+  /** Fetches a release from GitHub (`release.ts`); tests stand in for it. */
+  github?: (options: FetchOptions) => Promise<unknown>;
   spawn?: Spawn;
   /** Longest an install may take. */
   timeoutMs?: number;
@@ -209,7 +227,7 @@ export class Setup {
       message: failed ?? spec.hint?.(has),
       install: recipe && {
         label: `Install ${spec.short}`,
-        command: [recipe.manager, ...recipe.args].join(' '),
+        command: await this.#command(recipe),
       },
       download,
       openable,
@@ -221,15 +239,55 @@ export class Setup {
     return this.#first(list(spec.install?.[this.platform]));
   }
 
+  /**
+   * The first recipe Conch can carry out here: its package manager is here,
+   * or the need that brings it (`via`) can be installed first.
+   */
   async #first(recipes: InstallRecipe[], path?: string): Promise<InstallRecipe | undefined> {
-    for (const recipe of recipes) if (await this.#manager(recipe.manager, path)) return recipe;
+    for (const recipe of recipes) {
+      if (await this.#manager(recipe.manager, path)) return recipe;
+      if (await this.#viaRecipe(recipe)) return recipe;
+    }
     return undefined;
+  }
+
+  /** How to get the package manager a recipe runs with, when it isn't here yet. */
+  async #viaRecipe(
+    recipe: InstallRecipe,
+  ): Promise<{ spec: NeedSpec; recipe: InstallRecipe } | undefined> {
+    const via = recipe.via ? this.specs.get(recipe.via) : undefined;
+    if (!via) return undefined;
+    // One step deep: the manager's own install must use a manager that's here.
+    for (const first of list(via.install?.[this.platform]))
+      if (await this.#manager(first.manager)) return { spec: via, recipe: first };
+    return undefined;
+  }
+
+  /** What the person is shown before pressing Install. */
+  async #command(recipe: InstallRecipe): Promise<string> {
+    const words = (r: InstallRecipe) =>
+      r.manager === 'github'
+        ? `download ${r.args[1] ?? ''} from github.com/${r.args[0] ?? ''}`
+        : [r.manager, ...r.args].join(' ');
+    if (await this.#manager(recipe.manager)) return words(recipe);
+    const via = await this.#viaRecipe(recipe);
+    return via ? `${words(via.recipe)} && ${words(recipe)}` : words(recipe);
   }
 
   /** The package manager to run; `self` is the program itself, at `path`. */
   #manager(name: InstallRecipe['manager'], path?: string): Promise<string | undefined> {
     if (name === 'self') return Promise.resolve(path);
+    // Conch itself does the fetching: always here.
+    if (name === 'github') return Promise.resolve('github');
     if (this.deps.manager) return this.deps.manager(name);
+    if (name === 'uv')
+      return findExecutable('uv', {
+        extraDirs: [
+          join(homedir(), '.local', 'bin'),
+          join(homedir(), '.cargo', 'bin'),
+          ...fetchedBin('uv'),
+        ],
+      });
     return name === 'npm' ? ownNpm() : findExecutable(name);
   }
 
@@ -280,18 +338,39 @@ export class Setup {
     path?: string,
   ): Promise<void> {
     const manager = await this.#manager(recipe.manager, path);
-    if (!manager) throw new Error(`Conch can’t ${kind} ${spec.short} on this computer.`);
+    // The package manager itself comes first, when it isn't here yet (`via`).
+    const via = manager ? undefined : await this.#viaRecipe(recipe);
+    if (!manager && !via) throw new Error(`Conch can’t ${kind} ${spec.short} on this computer.`);
     // Checked after the awaits, so two presses can't both start one.
     if (this.#jobs.has(spec.id)) return;
     this.#failed.delete(spec.id);
     const job: Job = {
       kind,
       progress: {
-        label: kind === 'update' ? `Updating ${spec.short}…` : `Getting ${spec.short} ready…`,
+        label: via
+          ? `Getting ${via.spec.short} first…`
+          : kind === 'update'
+            ? `Updating ${spec.short}…`
+            : `Getting ${spec.short} ready…`,
       },
       done: Promise.resolve(),
     };
-    job.done = this.#run(spec, launchOf(manager), recipe.args, job)
+    const steps = async () => {
+      let program = manager;
+      if (via) {
+        const viaManager = await this.#manager(via.recipe.manager);
+        if (!viaManager) throw new Error(`Conch can’t install ${via.spec.short} on this computer.`);
+        await this.#step(via.spec, via.recipe, viaManager, job);
+        program = await this.#manager(recipe.manager, path);
+        if (!program)
+          throw new Error(
+            `${via.spec.short} was installed, but Conch can’t find it yet. Try again in a moment.`,
+          );
+        job.progress = { label: `Getting ${spec.short} ready…` };
+      }
+      await this.#step(spec, recipe, program ?? '', job);
+    };
+    job.done = steps()
       .then(async () => {
         if (!(await this.path(spec)))
           this.#failed.set(
@@ -307,6 +386,35 @@ export class Setup {
   /** Wait for a running install (tests, and callers that want to carry on after). */
   async settled(id: string): Promise<void> {
     await this.#jobs.get(id)?.done;
+  }
+
+  /** One install: Conch's own fetch for `github`, else the package manager as a program. */
+  #step(spec: NeedSpec, recipe: InstallRecipe, manager: string, job: Job): Promise<void> {
+    if (recipe.manager !== 'github') return this.#run(spec, launchOf(manager), recipe.args, job);
+    const [repo = '', asset = '', program = ''] = recipe.args;
+    const verb = job.kind === 'update' ? 'Updating' : 'Downloading';
+    return (this.deps.github ?? fetchRelease)({
+      repo,
+      asset,
+      program,
+      need: spec.id,
+      progress: (line) => {
+        const percent = readProgress(line);
+        job.progress =
+          percent === undefined
+            ? { label: `${verb} ${spec.short}…` }
+            : { percent, label: `${verb} ${spec.short} · ${percent}%` };
+      },
+    }).then(
+      () => undefined,
+      (error: Error) => {
+        throw new Error(
+          /reach|ENOTFOUND|fetch failed|network/i.test(error.message)
+            ? explainInstall('network', spec.short)
+            : error.message,
+        );
+      },
+    );
   }
 
   #run(spec: NeedSpec, manager: Launch, args: string[], job: Job): Promise<void> {

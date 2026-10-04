@@ -17,7 +17,7 @@
 import { severityFor } from '@conch/protocol';
 import { z } from 'zod';
 
-import type { Completion, EngineUsage, TurnImage } from '../types';
+import type { Completion, EngineUsage, Picture } from '../types';
 import {
   ChatCompletion,
   chatToolResults,
@@ -30,6 +30,7 @@ import {
   type ChatError,
 } from './chat';
 import { tooLong, windowIn } from './context';
+import { refusesImages } from './pictures';
 import {
   ApiError,
   TOO_LONG,
@@ -43,6 +44,8 @@ import {
   type WireModel,
   type WireRequest,
 } from './types';
+import { refusalError, toolRefusal } from './refusals';
+import type { SchemaFamily } from './schemas';
 import { defaultHome } from './session';
 import {
   contextLabel,
@@ -59,6 +62,11 @@ import {
 
 const BASE = 'https://openrouter.ai/api/v1';
 const LABEL = 'OpenRouter';
+/** How long the catalogue's word on tool support is kept. */
+const CATALOGUE_MS = 30 * 60_000;
+/** How long after a failed lookup before the catalogue is asked again. */
+const LOOKUP_RETRY_MS = 5 * 60_000;
+const LOOKUP_TIMEOUT_MS = 10_000;
 /** How long before a key's end date the card starts saying so. */
 const EXPIRY_NOTICE_DAYS = 14;
 
@@ -143,6 +151,10 @@ export function mapError(
     }
     return new ApiError('payment', 'Your OpenRouter credits have run out. Top up to keep going.');
   }
+  // "No endpoints found that support image input" is a 404: the model can't see.
+  if ([0, 400, 404, 422, 500].includes(status) && refusesImages(detail)) {
+    return new ApiError('images', detail);
+  }
   if (type === 'rate_limit_exceeded' || status === 429) {
     // Without a hint there is nothing to wait for, so retrying is guesswork.
     return new ApiError('rate-limit', 'OpenRouter is rate-limiting this key.', {
@@ -193,6 +205,11 @@ export class OpenRouterWire implements Wire {
   #now: () => number;
   /** What the last model list said, so a turn only sends options the model takes. */
   #models = new Map<string, WireModel>();
+  /** Whether each model in the whole catalogue calls tools, and when that was read. */
+  #catalogue = new Map<string, boolean>();
+  #catalogueAt = 0;
+  #lookedAt = Number.NEGATIVE_INFINITY;
+  #looking?: Promise<void>;
 
   constructor(fetchImpl: FetchLike, now: () => number = Date.now) {
     this.#fetch = fetchImpl;
@@ -294,6 +311,7 @@ export class OpenRouterWire implements Wire {
     }
 
     const all = entries.map((entry) => this.#model(entry));
+    this.#remember(all);
     // An engine that can't call tools can't use integrations or memory, so the
     // picker only offers models that can — unless that would leave it empty, in
     // which case saying so beats showing nothing.
@@ -340,7 +358,71 @@ export class OpenRouterWire implements Wire {
     return pickSmallModel([...this.#models.keys()]);
   }
 
-  userMessage(content: string, images?: readonly TurnImage[]): WireMessage {
+  /**
+   * What OpenRouter's list says the model takes. A model it doesn't list is
+   * tried with pictures: OpenRouter takes them, and says so if the model can't.
+   */
+  seesFor(model: string): boolean {
+    return this.#models.get(model)?.info.images ?? true;
+  }
+
+  /** Every model's tool support, from the whole list rather than the picker's share of it. */
+  #remember(models: readonly WireModel[]) {
+    this.#catalogue = new Map(models.map((m) => [m.info.id, m.tools]));
+    this.#catalogueAt = this.#now();
+  }
+
+  /**
+   * Whether a model calls tools natively, from OpenRouter's full catalogue: the
+   * picker shows only the first models, and a chat can be on any of the rest.
+   * A model the last list didn't have, or a list that's old or never came, is
+   * looked up in the public catalogue (kept a while, one lookup at a time, not
+   * retried for every turn when it fails). Unknown is undefined, which counts
+   * as able (ADR 0050); a model that then refuses tools gets them in words
+   * (ADR 0072).
+   */
+  async toolsFor(model: string): Promise<boolean | undefined> {
+    const fresh = this.#now() - this.#catalogueAt < CATALOGUE_MS;
+    if (fresh && this.#catalogue.has(model)) return this.#catalogue.get(model);
+    if (this.#now() - this.#lookedAt >= LOOKUP_RETRY_MS) {
+      this.#looking ??= this.#lookUp().finally(() => {
+        this.#looking = undefined;
+      });
+      await this.#looking;
+    }
+    return this.#catalogue.get(model);
+  }
+
+  async #lookUp(): Promise<void> {
+    this.#lookedAt = this.#now();
+    try {
+      const response = await send({
+        fetchImpl: this.#fetch,
+        url: `${BASE}/models`,
+        method: 'GET',
+        headers: { 'content-type': 'application/json' },
+        label: LABEL,
+        signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
+      });
+      if (!response.ok) return;
+      const entries = validate(ModelList, await text(response, LABEL), LABEL).data;
+      const known = new Map(this.#catalogue);
+      for (const entry of entries) known.set(entry.id, this.#model(entry).tools);
+      this.#catalogue = known;
+      this.#catalogueAt = this.#now();
+    } catch {
+      /* Unknown it stays: able, until the model says otherwise. */
+    }
+  }
+
+  /** Google's models read Gemini's schema subset; Anthropic's want one object at the root. */
+  schemaFamily(model: string): SchemaFamily {
+    if (/^google\//.test(model)) return 'gemini';
+    if (/^anthropic\//.test(model)) return 'anthropic';
+    return 'permissive';
+  }
+
+  userMessage(content: string, images?: readonly Picture[]): WireMessage {
     return chatUserMessage(content, images);
   }
 
@@ -372,7 +454,20 @@ export class OpenRouterWire implements Wire {
       key: request.key,
       signal: request.signal,
     });
-    if (!response.ok) throw await this.#fail(response, request.key);
+    if (!response.ok) {
+      const body = await text(response, LABEL).catch(() => '');
+      const error = errorIn(body);
+      // Refused over its tools: the engine heals that (ADR 0072), it isn't a dead end.
+      if (request.tools.length && [400, 404, 422].includes(response.status)) {
+        const raw = error?.metadata?.raw;
+        const refusal = toolRefusal(
+          `${error?.message ?? ''} ${typeof raw === 'string' ? raw : raw ? JSON.stringify(raw) : ''}`,
+        );
+        if (refusal === 'tools') this.#catalogue.set(request.model, false);
+        if (refusal === 'schema' || refusal === 'tools') throw refusalError(refusal, LABEL);
+      }
+      throw mapError(response.status, error, retryAfterMs(response.headers), request.key);
+    }
     if (!response.body) throw new ApiError('network', `${LABEL} sent an empty reply.`);
     // Usage is always included: it arrives as the penultimate frame, repeating
     // `finish_reason` on an empty delta, and the shared reader counts it once.
@@ -392,7 +487,7 @@ export class OpenRouterWire implements Wire {
         model: request.model,
         messages: [
           { role: 'system', content: request.system },
-          { role: 'user', content: request.prompt },
+          chatUserMessage(request.prompt, request.images),
         ],
         max_tokens: request.maxTokens,
       },

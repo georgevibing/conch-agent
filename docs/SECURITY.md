@@ -262,6 +262,27 @@ copy.
 - **Disconnecting** makes Conch forget the sign-in. To revoke it on the app's side
   too, remove Conch from that app's "connected apps" settings.
 
+## Other apps using Conch
+
+Claude Desktop, Cursor, VS Code and other MCP apps can use Conch (ADR 0073).
+
+- **Only apps you paired.** Pairing is a press in **Settings → Other apps**, after you
+  confirm it's you, on this computer or a device you let in. An app can't pair itself, a
+  script's access key can't, and neither can your assistant.
+- **Only what you ticked.** Each app has its own list (your memory, your skills, the
+  browser, each of your apps), checked again on every call. Your passwords, files and
+  terminal are never on it.
+- **Asked like your assistant.** What an app does through Conch runs in a chat of its
+  own, so changes wait for your OK, your choices in Apps hold, and the care after
+  reading something untrusted applies. A memory it suggests waits for your OK.
+- **Only on this computer.** The door is on Conch's own port and answers programs on
+  this computer. Web pages are refused (they say where they come from), and so is any
+  name but Conch's own. Apps from elsewhere get in only if you turn that on, over HTTPS
+  through your own address, and only apps you marked for it.
+- **No key in the app's settings.** Conch's launcher reads the app's key from a file only
+  you can read, and proves it holds it without sending it. An app that connects over
+  HTTP sends its key, which Conch keeps only as a hash. **Remove** ends it at once.
+
 ## Your own WhatsApp or Signal
 
 - **Linking makes this computer one of your devices.** Whoever can use Conch can read

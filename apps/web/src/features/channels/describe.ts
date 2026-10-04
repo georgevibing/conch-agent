@@ -15,6 +15,7 @@ export const APPS: Record<ChannelKind, { name: string; color: string }> = {
   microsoftteams: { name: 'Microsoft Teams', color: '#6264A7' },
   matrix: { name: 'Matrix', color: '#0DBD8B' },
   wechat: { name: 'WeChat', color: '#07C160' },
+  sms: { name: 'SMS', color: '#F22F46' },
 };
 
 /** More words people would type to find each app (⌘K). */
@@ -26,6 +27,7 @@ export const APP_WORDS: Partial<Record<string, string>> = {
   microsoftteams: 'teams microsoft office work school bot',
   matrix: 'element encrypted homeserver matrix.org',
   wechat: '微信 企业微信 wecom weixin 公众号 测试号 official account',
+  sms: 'text message texting phone number twilio mms',
 };
 
 export const isKind = (value: string | undefined): value is ChannelKind =>

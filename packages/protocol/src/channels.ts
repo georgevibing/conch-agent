@@ -36,8 +36,32 @@ export const ChannelKind = z.enum([
   'microsoftteams',
   'matrix',
   'wechat',
+  'sms',
 ]);
 export type ChannelKind = z.infer<typeof ChannelKind>;
+
+/**
+ * The apps whose voice notes Conch hears (ADR 0077): the ones where a person
+ * records one in the chat. Email and Teams have no voice notes of their own.
+ */
+export const VOICE_NOTE_CHANNELS: readonly ChannelKind[] = [
+  'telegram',
+  'whatsapp',
+  'signal',
+  'discord',
+  'slack',
+  'matrix',
+  'imessage',
+  'wechat',
+];
+
+/** The apps Conch can answer with a voice note of its own (ADR 0077). */
+export const VOICE_REPLY_CHANNELS: readonly ChannelKind[] = [
+  'telegram',
+  'whatsapp',
+  'signal',
+  'discord',
+];
 
 /**
  * How the connection is.
@@ -157,6 +181,29 @@ export const ChannelHook = z.object({
 });
 export type ChannelHook = z.infer<typeof ChannelHook>;
 
+/**
+ * A group chat the bot is in (ADR 0075). It answers there only when you turned
+ * the group on, and only when someone mentions it or replies to it. You (the
+ * owner) get everything you'd get in a private chat; anyone else in the group
+ * gets an answer in words only.
+ */
+export const ChannelGroup = z.object({
+  /** Conch's id for it (the app's own id may not be an `Id`: Telegram's start with a minus). */
+  id: Id,
+  name: z.string().max(200),
+  /** You turned it on: the assistant answers here when it's mentioned. Never on by itself. */
+  on: z.boolean(),
+  /** When the bot last heard from it. */
+  seenAt: z.number(),
+  /** When you turned it on. */
+  since: z.number().optional(),
+});
+export type ChannelGroup = z.infer<typeof ChannelGroup>;
+
+/** `PUT /api/channels/:id/groups/:groupId`: answer in that group when mentioned, or stop. */
+export const SetChannelGroupBody = z.object({ on: z.boolean() });
+export type SetChannelGroupBody = z.infer<typeof SetChannelGroupBody>;
+
 export const ChannelSettings = z.object({
   /** Send routine results (and their questions) to the people here. */
   notifyRoutines: z.boolean().default(true),
@@ -167,8 +214,28 @@ export const ChannelSettings = z.object({
    * they get one polite reply and wait for you to let them in).
    */
   others: z.enum(['ignore', 'ask']).optional(),
+  /**
+   * Answering a voice note with one (ADR 0077): `match` (the default) answers
+   * a voice note with a voice note and writing with writing; `always`;
+   * `never`. The answer is written too, either way.
+   */
+  voiceReplies: z.enum(['match', 'always', 'never']).optional(),
 });
 export type ChannelSettings = z.infer<typeof ChannelSettings>;
+
+/**
+ * Voice notes that arrived while Conch couldn't hear them yet (ADR 0077):
+ * they wait, kept, and go to the assistant by themselves once Conch can.
+ */
+export const ChannelVoiceNotes = z.object({
+  /** How many are waiting. */
+  waiting: z.number().int().nonnegative(),
+  /** A program to install first (a need, ADR 0016): whisper.cpp, or FFmpeg. */
+  need: z.enum(['whisper', 'ffmpeg']).optional(),
+  /** The speech model is missing, or on its way. */
+  model: z.enum(['missing', 'downloading']).optional(),
+});
+export type ChannelVoiceNotes = z.infer<typeof ChannelVoiceNotes>;
 
 export const Channel = z.object({
   id: Id,
@@ -186,12 +253,16 @@ export const Channel = z.object({
   requests: z.array(ChannelRequest).default([]),
   /** How many people you turned away (they get no answer). */
   blocked: z.number().int().nonnegative().default(0),
+  /** Group chats the bot is in, and whether it answers there (ADR 0075). */
+  groups: z.array(ChannelGroup).default([]),
   settings: ChannelSettings.default({ notifyRoutines: true }),
   health: ChannelHealth,
   /** Set while a hello link is waiting to be used. */
   pairing: ChannelPairing.optional(),
   /** Teams and WeChat: the web address their servers deliver messages to (ADR 0045). */
   hook: ChannelHook.optional(),
+  /** Voice notes waiting until Conch can hear them (ADR 0077). */
+  voiceNotes: ChannelVoiceNotes.optional(),
   lastMessageAt: z.number().optional(),
 });
 export type Channel = z.infer<typeof Channel>;
@@ -210,6 +281,8 @@ export const ChannelCatalogEntry = z.object({
   minutes: z.number().int().positive().optional(),
   /** False for ones that are coming. */
   available: z.boolean(),
+  /** It can answer in group chats you turn on, when mentioned (ADR 0075). */
+  groups: z.boolean().optional(),
 });
 export type ChannelCatalogEntry = z.infer<typeof ChannelCatalogEntry>;
 
@@ -248,6 +321,9 @@ export const ChannelField = z.enum([
   'server',
   'accessToken',
   'secret',
+  'accountSid',
+  'authToken',
+  'number',
 ]);
 export type ChannelField = z.infer<typeof ChannelField>;
 
@@ -302,6 +378,28 @@ const wechat = {
   secret,
   token: short.optional(),
   aesKey: short.optional(),
+  hookId: hookId.optional(),
+};
+
+// Twilio: an Account SID is AC and 32 hex digits; an Auth Token is 32 hex digits.
+export const TWILIO_ACCOUNT_SID = /\b(AC[0-9a-f]{32})\b/;
+export const TWILIO_AUTH_TOKEN = /\b([0-9a-f]{32})\b/;
+
+/**
+ * SMS (ADR 0076): a phone number of the assistant's own, rented from Twilio.
+ * Texts come in through the public door, signed with the Auth Token; Conch
+ * points the number at its address itself. `provider` leaves room for others.
+ */
+const sms = {
+  kind: z.literal('sms'),
+  provider: z.enum(['twilio']),
+  accountSid: secret,
+  authToken: secret,
+  /** The number it texts from, `+15005550006`: the account's only one when unset. */
+  number: z
+    .string()
+    .regex(/^\+\d{6,15}$/)
+    .optional(),
   hookId: hookId.optional(),
 };
 
@@ -360,6 +458,7 @@ export const ChannelSecrets = z.discriminatedUnion('kind', [
   z.object(teams),
   z.object(matrix),
   z.object(wechat),
+  z.object(sms),
 ]);
 export type ChannelSecrets = z.infer<typeof ChannelSecrets>;
 
@@ -379,6 +478,7 @@ export const CheckChannelBody = z.discriminatedUnion('kind', [
   z.object({ ...teams, appId: secret.optional(), appPassword: secret.optional() }),
   z.object(matrix),
   z.object({ ...wechat, appId: secret.optional(), secret: secret.optional() }),
+  z.object({ ...sms, accountSid: secret.optional(), authToken: secret.optional() }),
 ]);
 export type CheckChannelBody = z.infer<typeof CheckChannelBody>;
 
@@ -419,6 +519,8 @@ export type UpdateChannelBody = z.infer<typeof UpdateChannelBody>;
 export const ReplaceChannelTokenBody = z.union([
   ChannelSecrets,
   z.object({ kind: z.literal('email'), password: secret }),
+  // A new Twilio Auth Token: the account and its number stay as they were.
+  z.object({ kind: z.literal('sms'), authToken: secret }),
 ]);
 export type ReplaceChannelTokenBody = z.infer<typeof ReplaceChannelTokenBody>;
 
@@ -431,6 +533,13 @@ export const ChannelOrigin = z.object({
   kind: z.literal('channel'),
   channelId: z.string(),
   channel: ChannelKind,
+  /** Asked in a group chat (ADR 0075): the group's name. */
+  group: z.string().max(200).optional(),
+  /**
+   * Someone other than you asked, in a group: it answers in words only. No
+   * tools, no apps, nothing it remembers about you, whoever continues it.
+   */
+  guest: z.boolean().optional(),
 });
 export type ChannelOrigin = z.infer<typeof ChannelOrigin>;
 

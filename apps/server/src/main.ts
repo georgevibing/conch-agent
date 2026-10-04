@@ -192,6 +192,7 @@ const findings = checkup({
   workspaceRules: await workspaceRules(await services.settings.workspace()),
   trustedIntegrations: await services.integrations.store.trusted(),
   browserLocal: (await services.browser.store.settings()).allowLocal,
+  browserOwnChrome: (await services.browser.store.settings()).backend === 'chrome',
   terminalRemote: (await services.terminal.settings()).allowRemote,
   provider: services.providers.activeCopy(),
   channels: await services.channels.checkupCopy(),

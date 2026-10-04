@@ -8,6 +8,7 @@ import { ImessageAdapter, type ImessageOptions } from './imessage';
 import type { ChannelDoorService } from './door';
 import { MatrixAdapter } from './matrix';
 import { SLACK_API, SlackAdapter } from './slack';
+import { TwilioSmsAdapter } from './sms';
 import { TeamsAdapter } from './teams';
 import { TELEGRAM_API, TelegramAdapter } from './telegram';
 import type { ChannelAdapter } from './types';
@@ -37,6 +38,8 @@ export interface ChannelEndpoints {
   wecom?: string;
   /** Where files may come from besides Tencent's own servers (the pretend WeChat). */
   wechatFiles?: string[];
+  /** Twilio's REST API (the pretend Twilio in tests). */
+  twilio?: string;
   /** The public door (Teams, Official Accounts), and where channels keep what they remember. */
   door?: ChannelDoorService;
   home?: string;
@@ -76,6 +79,8 @@ export function adapterFor(
       return secrets.mode === 'wecom'
         ? new WeComBotAdapter(secrets, endpoints)
         : new WeChatOfficialAdapter(secrets, endpoints);
+    case 'sms':
+      return new TwilioSmsAdapter(secrets, endpoints);
   }
 }
 

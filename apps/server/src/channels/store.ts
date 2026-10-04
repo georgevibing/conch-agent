@@ -2,6 +2,7 @@ import { join } from 'node:path';
 
 import {
   ChannelBot,
+  ChannelGroup,
   ChannelKind,
   ChannelPerson,
   ChannelRequest,
@@ -13,6 +14,7 @@ import { z } from 'zod';
 
 import { Mutex, writeJson } from '../lib/fs';
 import { readStore, type Heal } from '../lib/recover';
+import { WaitingNote } from './voice-notes';
 
 export const StoredChannel = z.object({
   id: Id,
@@ -24,12 +26,22 @@ export const StoredChannel = z.object({
   requests: z.array(ChannelRequest).default([]),
   /** People turned away for good: they get no answer and no new request. */
   blocked: z.array(Id).default([]),
+  /**
+   * Group chats the bot is in (ADR 0075), with the app's own id for each
+   * (`chatId`), which may not be an `Id`. At most `MAX_GROUPS`.
+   */
+  groups: z.array(ChannelGroup.extend({ chatId: z.string().min(1).max(300) })).default([]),
   settings: ChannelSettings.default({ notifyRoutines: true }),
-  /** Each person's current conversation (`/new` starts another). */
+  /**
+   * Each person's current conversation (`/new` starts another). In a group,
+   * each person has their own, under `group:<group id>:<person id>`.
+   */
   chats: z.record(z.string(), z.string()).default({}),
   lastMessageAt: z.number().optional(),
   /** How far the connection has read (iMessage, email), so a restart carries on from there. */
   cursor: z.string().max(200).optional(),
+  /** Voice notes waiting until Conch can hear them (ADR 0077), oldest first. */
+  voiceWaiting: z.array(WaitingNote).default([]),
 });
 export type StoredChannel = z.infer<typeof StoredChannel>;
 
@@ -79,7 +91,7 @@ export class ChannelStore {
     return this.#mutex.run(async () => (await this.#load()).get(id));
   }
 
-  add(item: StoredChannel, secrets: ChannelSecrets): Promise<StoredChannel> {
+  add(item: z.input<typeof StoredChannel>, secrets: ChannelSecrets): Promise<StoredChannel> {
     return this.#mutex.run(async () => {
       const parsed = StoredChannel.parse(item);
       // Secrets first: a channel that exists must be able to find its key.

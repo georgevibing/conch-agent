@@ -49,9 +49,10 @@ interface UiState {
   /**
    * Talk mode is open (ADR 0027). `from`: where the answer to what was just
    * said starts in the chat, so a new chat (which opens on its own page)
-   * still speaks it.
+   * still speaks it. `first`: what was said right after "Hey Conch" (ADR 0078),
+   * sent as soon as it opens.
    */
-  talking?: { from?: number };
+  talking?: { from?: number; first?: string };
   /** Asking whether to stop holding a chat to a skill's list (ADR 0047), e.g. from ⌘K. */
   stopHolding?: { conversationId: string; skillId: string };
   find: FindState | null;
@@ -59,6 +60,8 @@ interface UiState {
   lastFind?: { conversationId: string; query: string };
   /** The header usage popover (so `/usage` and the composer notice can open it). */
   usageOpen: boolean;
+  /** The chat whose spending chip is open (ADR 0079), e.g. from ⌘K. */
+  chatSpendOpen: string | null;
   picker: Picker;
   /** Model/effort/mode chosen for a new chat before its first message. */
   draftOptions: TurnOptions;
@@ -154,6 +157,7 @@ export const useUi = create<UiState>((set) => ({
   paletteOpen: false,
   find: null,
   usageOpen: false,
+  chatSpendOpen: null,
   picker: null,
   draftOptions: {},
   composerText: null,

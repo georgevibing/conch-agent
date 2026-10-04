@@ -317,26 +317,56 @@ describe('a turn with a preset provider', () => {
     expect(fetch.calls[0]?.headers.authorization).toBe('Bearer sk-test-0123456789abcdef');
   });
 
-  it('asks again without tools when a model can’t use them, says so, and remembers', async () => {
-    let calls = 0;
+  it('tells the engine a model can’t take tools, never drops them itself, and remembers', async () => {
     const fetch = fakeFetch(() =>
-      ++calls === 1
-        ? jsonResponse(
-            {
-              error: {
-                message: 'This model does not support tools',
-                type: 'invalid_request_error',
-              },
-            },
-            400,
-          )
-        : answer(),
+      jsonResponse(
+        { error: { message: 'This model does not support tools', type: 'invalid_request_error' } },
+        400,
+      ),
     );
     const wire = new OpenAiWire(preset('groq'), fetch.fetch);
-    const events = await drain(wire.stream(request({ model: 'tiny-model' })));
-    expect(events[0]).toMatchObject({ type: 'notice', code: 'no-tools' });
-    expect((fetch.calls[1]?.body as Record<string, unknown>).tools).toBeUndefined();
+    const error = await failure(drain(wire.stream(request({ model: 'tiny-model' }))));
+    expect(error.kind).toBe('tools');
+    expect(fetch.calls).toHaveLength(1);
     expect(wire.toolsFor('tiny-model')).toBe(false);
+  });
+
+  it.each([
+    [
+      'OpenAI',
+      "Invalid schema for function 'search': In context=('properties', 'when'), 'format' is not supported.",
+    ],
+    [
+      'Gemini',
+      'Invalid JSON payload received. Unknown name "additionalProperties" at \'tools[0].function_declarations[0].parameters\': Cannot find field.',
+    ],
+    [
+      'Gemini',
+      '* GenerateContentRequest.tools[0].function_declarations[1].parameters.properties: should be non-empty for OBJECT type',
+    ],
+    ['Groq', 'tools.0.function.parameters: $ref is not supported in this function'],
+  ])(
+    'reads a refused %s schema as a schema to simplify, never as "no tools"',
+    async (_who, message) => {
+      const fetch = fakeFetch(() =>
+        jsonResponse({ error: { message, type: 'invalid_request_error' } }, 400),
+      );
+      const wire = new OpenAiWire(preset('groq'), fetch.fetch);
+      const error = await failure(drain(wire.stream(request({ model: 'big-model' }))));
+      expect(error.kind).toBe('schema');
+      expect(wire.toolsFor('big-model')).not.toBe(false);
+    },
+  );
+
+  it('says which schema dialect each model reads', () => {
+    expect(
+      new OpenAiWire(preset('gemini'), fakeFetch(() => answer()).fetch).schemaFamily(
+        'gemini-3-pro',
+      ),
+    ).toBe('gemini');
+    expect(
+      new OpenAiWire(preset('openai'), fakeFetch(() => answer()).fetch).schemaFamily('gpt-5.1'),
+    ).toBe('permissive');
   });
 
   it('only asks for thinking where the model takes that level', async () => {

@@ -1,4 +1,5 @@
 import type { Channel, ChannelCatalogEntry } from '@conch/protocol';
+import axe from 'axe-core';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -45,6 +46,7 @@ const channel = (patch: Partial<Channel> = {}): Channel => ({
   people: [],
   requests: [],
   blocked: 0,
+  groups: [],
   settings: { notifyRoutines: true },
   health: { state: 'online' },
   ...patch,
@@ -301,6 +303,181 @@ describe('A channel’s page', () => {
     );
     await waitFor(() => expect(calls.some((c) => c.method === 'DELETE')).toBe(true));
   });
+
+  it('lists the groups the bot is in, off, and turns one on (ADR 0075)', async () => {
+    const family = { id: 'Xfamily', name: 'Family', on: false, seenAt: Date.now() - 60_000 };
+    const grouped = channel({ people: [ada], groups: [family] });
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({
+        channels: [grouped],
+        catalog: catalog.map((c) => (c.id === 'telegram' ? { ...c, groups: true } : c)),
+      }),
+      'PUT /api/channels/ch_1/groups/Xfamily': () => ({
+        ...grouped,
+        groups: [{ ...family, on: true, since: Date.now() }],
+      }),
+    });
+    renderApp(<ChannelDetailView channelId="ch_1" />, { route: '/channels/ch_1' });
+    const groups = await screen.findByRole('region', { name: 'Groups' });
+    expect(groups).toHaveTextContent('Off');
+    expect(groups).toHaveTextContent(/words only/);
+    await userEvent.click(within(groups).getByRole('switch', { name: 'Family' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/api/channels/ch_1/groups/Xfamily')?.body).toEqual({
+        on: true,
+      }),
+    );
+    await waitFor(() => expect(groups).toHaveTextContent('Answers when mentioned'));
+  });
+
+  it('says how to add the bot to a group when it’s in none', async () => {
+    mockFetch({
+      ...base,
+      'GET /api/channels': () => ({
+        channels: [channel({ people: [ada] })],
+        catalog: catalog.map((c) => (c.id === 'telegram' ? { ...c, groups: true } : c)),
+      }),
+    });
+    renderApp(<ChannelDetailView channelId="ch_1" />, { route: '/channels/ch_1' });
+    const groups = await screen.findByRole('region', { name: 'Groups' });
+    expect(groups).toHaveTextContent('Add @adas_conch_bot to a group in Telegram');
+  });
+});
+
+describe('Voice notes on a channel’s page (ADR 0077)', () => {
+  const need = (id: string, state: 'missing' | 'ready' | 'installing') => ({
+    ready: state === 'ready',
+    needs: [
+      {
+        id,
+        name: id,
+        short: id === 'ffmpeg' ? 'FFmpeg' : 'whisper.cpp',
+        state,
+        openable: false,
+        ...(state === 'missing' && {
+          install: { label: `Install ${id}`, command: `winget install ${id}` },
+        }),
+      },
+    ],
+  });
+
+  it('says how many wait, and gets everything they need with one press', async () => {
+    let whisper: 'missing' | 'installing' | 'ready' = 'missing';
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({
+        channels: [channel({ people: [ada], voiceNotes: { waiting: 2, need: 'whisper' } })],
+        catalog,
+      }),
+      'GET /api/voice': () => ({
+        private:
+          whisper === 'ready'
+            ? { state: 'model-missing', bytes: 147_951_465 }
+            : { state: 'missing' },
+      }),
+      'GET /api/needs/whisper': () => need('whisper', whisper),
+      'GET /api/needs/ffmpeg': () => need('ffmpeg', 'missing'),
+      'POST /api/needs/whisper/install': () => {
+        whisper = 'installing';
+        return need('whisper', 'installing');
+      },
+      'POST /api/needs/ffmpeg/install': () => need('ffmpeg', 'installing'),
+      'POST /api/voice/model': () => ({ private: { state: 'downloading', done: 0, total: 1 } }),
+    });
+    const { container } = renderApp(<ChannelDetailView channelId="ch_1" />, {
+      route: '/channels/ch_1',
+    });
+    const section = await screen.findByRole('region', { name: 'Voice notes' });
+    expect(within(section).getByText(/2 voice notes are waiting/)).toBeInTheDocument();
+    const list = await within(section).findByRole('list', { name: 'What voice notes need' });
+    expect(within(list).getByText('FFmpeg')).toBeInTheDocument();
+    await userEvent.click(within(section).getByRole('button', { name: 'Get it' }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.path === '/api/needs/whisper/install')).toBe(true),
+    );
+    // whisper.cpp lands: FFmpeg and the model follow from the same press.
+    whisper = 'ready';
+    await waitFor(
+      () => {
+        expect(calls.some((c) => c.path === '/api/needs/ffmpeg/install')).toBe(true);
+        expect(calls.some((c) => c.path === '/api/voice/model')).toBe(true);
+      },
+      { timeout: 8_000 },
+    );
+    expect(
+      (await axe.run(container, { rules: { 'color-contrast': { enabled: false } } })).violations,
+    ).toEqual([]);
+  });
+
+  it('says plainly that voice notes stay on this computer once it can hear them', async () => {
+    mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [channel({ people: [ada] })], catalog }),
+      'GET /api/voice': () => ({ private: { state: 'ready' } }),
+      'GET /api/needs/ffmpeg': () => need('ffmpeg', 'ready'),
+    });
+    renderApp(<ChannelDetailView channelId="ch_1" />, { route: '/channels/ch_1' });
+    const section = await screen.findByRole('region', { name: 'Voice notes' });
+    await waitFor(() =>
+      expect(section).toHaveTextContent('turns voice notes into words on this computer'),
+    );
+    expect(within(section).queryByRole('button')).toBeNull();
+  });
+
+  it('answers voice notes with one when you send one, and says when a natural voice is needed first', async () => {
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [channel({ people: [ada] })], catalog }),
+      'GET /api/voice': () => ({ private: { state: 'ready' } }),
+      'GET /api/needs/ffmpeg': () => need('ffmpeg', 'ready'),
+      'GET /api/voice/speech': () => ({ piper: 'missing', voices: [], cloud: [] }),
+      'PATCH /api/channels/ch_1': () =>
+        channel({ people: [ada], settings: { notifyRoutines: true, voiceReplies: 'always' } }),
+    });
+    renderApp(<ChannelDetailView channelId="ch_1" />, { route: '/channels/ch_1' });
+    const section = await screen.findByRole('region', { name: 'Voice notes' });
+    const replies = within(section).getByRole('combobox', { name: 'Answer with a voice note' });
+    expect(replies).toHaveTextContent('When you send one');
+    expect(
+      await within(section).findByRole('link', { name: 'Settings → Voice' }),
+    ).toBeInTheDocument();
+    await userEvent.click(replies);
+    await userEvent.click(await screen.findByRole('option', { name: 'Always' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({
+        settings: { voiceReplies: 'always' },
+      }),
+    );
+  });
+
+  it('offers to turn them on before any arrive, and shows nothing for email', async () => {
+    mockFetch({
+      ...base,
+      'GET /api/channels': () => ({
+        channels: [
+          channel({ people: [ada] }),
+          channel({ id: 'ch_mail', kind: 'email', people: [ada] }),
+        ],
+        catalog,
+      }),
+      'GET /api/voice': () => ({ private: { state: 'missing' } }),
+      'GET /api/needs/whisper': () => need('whisper', 'missing'),
+      'GET /api/needs/ffmpeg': () => need('ffmpeg', 'missing'),
+    });
+    const { unmount } = renderApp(<ChannelDetailView channelId="ch_1" />, {
+      route: '/channels/ch_1',
+    });
+    const section = await screen.findByRole('region', { name: 'Voice notes' });
+    await userEvent.click(within(section).getByRole('button', { name: 'Turn on' }));
+    expect(
+      await within(section).findByRole('list', { name: 'What voice notes need' }),
+    ).toBeInTheDocument();
+    unmount();
+    renderApp(<ChannelDetailView channelId="ch_mail" />, { route: '/channels/ch_mail' });
+    await screen.findByRole('region', { name: /Who can talk/ });
+    expect(screen.queryByRole('region', { name: 'Voice notes' })).toBeNull();
+  });
 });
 
 describe('Guides', () => {
@@ -321,7 +498,7 @@ describe('Guides', () => {
     });
     expect(manifest.settings).toMatchObject({
       socket_mode_enabled: true,
-      event_subscriptions: { bot_events: ['message.im'] },
+      event_subscriptions: { bot_events: ['message.im', 'app_mention'] },
     });
     expect(manifest.oauth_config.scopes.bot).toEqual(
       expect.arrayContaining(['chat:write', 'im:history']),
@@ -848,5 +1025,80 @@ describe('Connecting WeChat', () => {
     expect(
       screen.getByDisplayValue('https://mac.tail1.ts.net/conch/hooks/abc'),
     ).toBeInTheDocument();
+  });
+});
+
+describe('Connecting SMS (ADR 0076)', () => {
+  const SID = 'AC' + '0a1b2c3d4e5f60718293a4b5c6d7e8f9';
+  const TOKEN = 'f0e1d2c3b4a59687' + '7869504a3b2c1d0e';
+  it('takes both keys, finds the number, then opens the address: nothing to paste in Twilio', async () => {
+    const made = channel({
+      kind: 'sms',
+      bot: { id: '+15005550006', name: '(500) 555-0006', phone: '+15005550006' },
+      hook: {},
+      health: { state: 'error', message: 'Twilio can’t reach Conch yet.' },
+    });
+    let doorState: object = { state: 'off', apps: ['sms'] };
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'POST /api/channels/check': () => ({ ok: true, bot: made.bot, checked: [] }),
+      'POST /api/channels': () => made,
+      'GET /api/channels/door': () => doorState,
+      'POST /api/channels/door/tailscale': () => {
+        doorState = {
+          state: 'ready',
+          apps: ['sms'],
+          url: 'https://mac.tail1.ts.net/conch',
+          via: 'tailscale',
+        };
+        return doorState;
+      },
+      'GET /api/auth': () => ({ method: 'none' }),
+    });
+    renderApp(<ConnectChannel kind="sms" />, { route: '/channels/new/sms' });
+    expect(await screen.findByRole('heading', { name: 'Connect SMS' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'I have a number' }));
+    await userEvent.type(screen.getByLabelText('Account SID'), `Account SID ${SID}`);
+    expect(screen.getByLabelText('Account SID')).toHaveValue(SID);
+    await userEvent.type(screen.getByLabelText('Auth Token'), TOKEN);
+    // Found by Twilio, and shown once connected: the step closes on the number.
+    expect(await screen.findByText(/Texts from \+1 500 555 0006/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST' && c.path === '/api/channels')?.body).toEqual({
+        kind: 'sms',
+        provider: 'twilio',
+        accountSid: SID,
+        authToken: TOKEN,
+      }),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Turn on with Tailscale' }));
+    expect(await screen.findByText(/At https:\/\/mac\.tail1\.ts\.net\/conch/)).toBeInTheDocument();
+    expect(screen.queryByText(/Endpoint address/)).toBeNull();
+  });
+
+  it('asks for the new Auth Token on its own when Twilio stops taking it', async () => {
+    const broken = channel({
+      kind: 'sms',
+      people: [ada],
+      bot: { id: '+15005550006', name: '(500) 555-0006', phone: '+15005550006' },
+      health: { state: 'needs-token', message: 'Twilio doesn’t accept that Auth Token.' },
+    });
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [broken], catalog }),
+      'GET /api/channels/door': () => ({ state: 'off', apps: [] }),
+      'PUT /api/channels/ch_1/token': () => ({ ...broken, health: { state: 'online' } }),
+    });
+    renderApp(<ChannelDetailView channelId="ch_1" />, { route: '/channels/ch_1' });
+    expect(await screen.findByText('It needs the new Auth Token')).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Auth Token'), TOKEN);
+    await userEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({
+        kind: 'sms',
+        authToken: TOKEN,
+      }),
+    );
   });
 });
