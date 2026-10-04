@@ -65,7 +65,9 @@ function setup(overrides: Partial<PushDeps> = {}, status = () => 201) {
         ? { title: 'Morning briefing', routine: true }
         : id === 'c_telegram'
           ? { title: 'From Telegram', channel: true }
-          : { title: 'Fix the build' },
+          : id === 'c_app'
+            ? { title: 'Claude Desktop', app: 'Claude Desktop' }
+            : { title: 'Fix the build' },
     routineTitle: async () => 'Morning briefing',
     ownerExists: async (owner) => allowed.has(owner),
     fetch: async (url, init) => {
@@ -111,6 +113,29 @@ describe('notifications', () => {
       tag: 'ok-p_1',
       deny: { conversationId: 'c_chat', permissionId: 'p_1' },
       requireInteraction: true,
+    });
+  });
+
+  it('says which app is asking when another app asks through Conch (ADR 0073)', async () => {
+    const { push, sent } = setup();
+    const phone = browser();
+    await push.subscribe('device:phone', 'iPhone · Safari', phone.subscription);
+    await push.onEvent({
+      type: 'conversation.event',
+      event: {
+        seq: 1,
+        at: 1,
+        conversationId: 'c_app',
+        type: 'permission.requested',
+        permissionId: 'p_2',
+        toolName: 'mcp__notion__create',
+        input: {},
+        summary: 'create a page in Notion',
+      },
+    } as ServerEvent);
+    expect(phone.read(sent[0]?.body ?? Buffer.alloc(0))).toMatchObject({
+      title: 'Claude Desktop needs your OK',
+      url: '/c/c_app',
     });
   });
 

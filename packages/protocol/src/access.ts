@@ -420,6 +420,8 @@ export const CheckupPlace = z.enum([
   'passkeys',
   /** Settings › Security › Your address: a domain of your own, over HTTPS (ADR 0064). */
   'address',
+  /** Settings › Other apps: the apps paired with Conch, and what each may use (ADR 0073). */
+  'other-apps',
 ]);
 export type CheckupPlace = z.infer<typeof CheckupPlace>;
 

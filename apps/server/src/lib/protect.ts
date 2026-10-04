@@ -57,6 +57,9 @@ export function protectedPaths(home: string): string[] {
     // Which repositories publishing may push to: the assistant mustn't point it elsewhere.
     join(home, 'conch-apps-published.json'),
     join(home, 'conch-apps.secrets.json'),
+    // Apps paired with Conch and their keys (ADR 0073): with one, the assistant could
+    // reach Conch as that app, and with the list it could widen what one may use.
+    join(home, 'mcp'),
   ];
 }
 

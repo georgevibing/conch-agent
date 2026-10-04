@@ -153,6 +153,12 @@ export interface TurnExtras {
   /** Starts held to the skills the chat it came from was held to (ADR 0047), from there. */
   skills?: readonly (SkillHold & { from: string })[];
   /**
+   * A scoped run (`toolAllowed`) that may still reach these of your apps, by
+   * their MCP server names: another app's call to one of them (ADR 0073).
+   * Only these are connected for the turn.
+   */
+  apps?: readonly string[];
+  /**
    * What the turn has used so far, as the engine reports it (a running total):
    * a routine stops a run that goes past its limit (ADR 0057).
    */
@@ -425,6 +431,20 @@ export class ConversationError extends Error {
   }
 }
 
+/** What a turn loads of your apps, kept to the servers named (ADR 0073). */
+function onlyApps<T extends { servers: Record<string, EngineMcpServer> }>(
+  loaded: T,
+  names: readonly string[],
+): T {
+  const wanted = new Set(names);
+  return {
+    ...loaded,
+    servers: Object.fromEntries(
+      Object.entries(loaded.servers).filter(([name]) => wanted.has(name)),
+    ),
+  };
+}
+
 /** Host tools are shown through their own events (memory, artifacts…), or a row with a view. */
 const isHostTool = (name: string) => name.startsWith('mcp__conch__');
 
@@ -679,6 +699,12 @@ export class ConversationManager {
         'busy',
         'Use Resume safely on the task card to continue this work with its saved results and approval scope.',
       );
+    // Another app's chat is its log (ADR 0073): what you'd say goes in a chat of your own.
+    if (existing?.record.origin?.kind === 'client')
+      throw new ConversationError(
+        'busy',
+        `This is what ${existing.record.origin.name} did through Conch. Start a new chat to talk to your assistant.`,
+      );
     if (existing?.abort)
       throw new ConversationError('busy', 'Still replying to your last message.');
     // Whichever provider the conversation (or this message) chose answers —
@@ -888,6 +914,11 @@ export class ConversationManager {
     options?: TurnOptions;
     origin: NonNullable<ConversationRecord['origin']>;
     extras: TurnExtras;
+    /**
+     * Who answers, when it isn't one of your providers: another app's single
+     * tool call, run by Conch itself (ADR 0073). Never routed elsewhere.
+     */
+    engine?: Engine;
   }): Promise<{ conversationId: string; result: Promise<TurnResult> }> {
     if (input.conversationId) {
       const live = await this.#get(input.conversationId);
@@ -896,7 +927,7 @@ export class ConversationManager {
       live.alwaysAllow.clear();
       live.permissions.clear();
       this.#applyOptions(live, input.options ?? {});
-      const engine = this.deps.engine(live.record.options.engine);
+      const engine = input.engine ?? this.deps.engine(live.record.options.engine);
       this.#append(live, { type: 'user.message', messageId: newId('u'), text: input.text });
       this.#claim(live);
       live.extras = input.extras;
@@ -905,8 +936,11 @@ export class ConversationManager {
       await input.extras.onConversation?.(live.record.id);
       return { conversationId: live.record.id, result: this.#runTurn(live, engine, input.text) };
     }
-    const engine = this.deps.engine(input.options?.engine);
-    const expanded = await this.deps.expand?.(input.text, engine).catch(() => undefined);
+    const engine = input.engine ?? this.deps.engine(input.options?.engine);
+    // Another app's call is what it says, never a skill typed by name.
+    const expanded = input.engine
+      ? undefined
+      : await this.deps.expand?.(input.text, engine).catch(() => undefined);
     const now = Date.now();
     const record: ConversationRecord = {
       id: newId('c'),
@@ -942,6 +976,14 @@ export class ConversationManager {
       conversationId: record.id,
       result: this.#runTurn(live, engine, expanded?.prompt ?? input.text),
     };
+  }
+
+  /**
+   * The tools Conch's other parts give a turn with this context: what another
+   * app paired with Conch could be offered (ADR 0073), before its scopes.
+   */
+  toolsFor(ctx: ToolContext): HostTool[] {
+    return this.deps.tools?.(ctx) ?? [];
   }
 
   /** Change a conversation's model/effort/mode without sending a message. */
@@ -1559,7 +1601,12 @@ export class ConversationManager {
       const [loaded, apps] = await Promise.all([
         // Scoped workflows use Conch host tools only. Even MCP initialization
         // can start a program; source notes must not trigger unrelated apps.
-        extras?.toolAllowed ? undefined : integrations?.forTurn(said).catch(() => undefined),
+        extras?.toolAllowed && !extras.apps?.length
+          ? undefined
+          : integrations
+              ?.forTurn(said)
+              .then((loaded) => (extras?.apps ? onlyApps(loaded, extras.apps) : loaded))
+              .catch(() => undefined),
         this.#offers(live, engine),
       ]);
       for (const offer of apps.offers) this.#append(live, { type: 'offer', offer });

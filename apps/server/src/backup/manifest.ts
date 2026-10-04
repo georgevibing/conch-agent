@@ -172,6 +172,11 @@ export const RULES: readonly BackupRule[] = [
     why: 'What the assistant changed, kept so it can be undone: copies of files on this computer, about this computer’s folders.',
   },
   {
+    match: 'mcp/**',
+    class: 'derived',
+    why: 'The apps paired with Conch on this computer (ADR 0073), their keys and the launcher they start: a restore pairs nothing, so another computer’s apps never come with it. Pair them again from Settings → Other apps.',
+  },
+  {
     match: 'here/**',
     class: 'derived',
     why: 'The key that proves a browser or a launcher is on this computer (ADR 0063), and the one-time files that open Conch: this computer’s own, made again on the next start.',

@@ -224,6 +224,10 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
           sandboxAvailable: sandboxSupport().available,
         },
         address: services.address.status(),
+        otherApps: {
+          remote: await services.mcp.store.remote(),
+          apps: (await services.mcp.store.list()).map((c) => ({ name: c.name, remote: c.remote })),
+        },
         ...(services.config.CONCH_TOKEN && { tokenProfile: await findTokenProfile() }),
       }),
       exposure: exposure(services.config),

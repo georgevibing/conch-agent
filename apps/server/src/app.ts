@@ -80,6 +80,8 @@ import { registerUndoRoutes } from './undo/routes';
 import { registerArtifactRoutes } from './artifacts/routes';
 import { registerConchAppRoutes } from './conchapps/routes';
 import { registerTaskRoutes } from './tasks/routes';
+import { registerMcpEndpoint } from './mcp/endpoint';
+import { registerMcpRoutes } from './mcp/routes';
 import { registerQuestionRoutes } from './questions/routes';
 import { registerFirstJobRoutes } from './onboarding/first-job';
 import { registerBackgroundRoutes } from './background/routes';
@@ -195,6 +197,9 @@ export async function buildApp(services: Services) {
   registerAuthRoutes(app, services, gate);
   registerHereRoutes(app, gate);
   registerAddressRoutes(app, services.address, gate);
+  // Other apps using Conch (ADR 0073): the door they knock on, and pairing them from Settings.
+  registerMcpEndpoint(app, services.mcp, gate, services.mcpSessions);
+  registerMcpRoutes(app, services.mcpPairing, gate);
   registerBrowserRoutes(app, services, gate);
   registerTerminalRoutes(app, services, gate);
   registerLocalRoutes(app, services, gate);

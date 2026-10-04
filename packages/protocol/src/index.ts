@@ -71,6 +71,7 @@ export * from './learning';
 export * from './linking';
 export * from './local';
 export * from './memory';
+export * from './mcp';
 export * from './common';
 export * from './desktop';
 export * from './doctor';
@@ -331,6 +332,8 @@ export const ConversationSummary = z.object({
       ChannelOrigin,
       /** A task running in the background (ADR 0033). */
       z.object({ kind: z.literal('task'), taskId: z.string() }),
+      /** What another app did through Conch (ADR 0073): Claude Desktop, Cursor… */
+      z.object({ kind: z.literal('client'), clientId: z.string(), name: z.string().max(60) }),
     ])
     .optional(),
   /**

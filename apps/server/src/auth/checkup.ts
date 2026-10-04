@@ -190,6 +190,11 @@ export interface CheckupInput {
   safety?: { checkAfterReading: boolean; sealedCommands: boolean; sandboxAvailable: boolean };
   /** An address of your own (ADR 0064): the internet reaches Conch there. */
   address?: AddressStatus;
+  /**
+   * Apps paired with Conch (ADR 0073), and whether those marked for it may come
+   * in through your own address.
+   */
+  otherApps?: { remote: boolean; apps: { name: string; remote: boolean }[] };
 }
 
 /**
@@ -452,6 +457,29 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       detail: `It leads to a small door of its own, not to Conch: it lets in only messages ${apps} signed, for the channels you connected, and nothing on this computer can be reached through it. Turn it off when you no longer use ${apps}.`,
       fix: { kind: 'open', label: 'Review', place: 'channels' },
     });
+  }
+
+  if (input.otherApps?.apps.length) {
+    const { apps, remote } = input.otherApps;
+    const outside = remote ? apps.filter((a) => a.remote) : [];
+    const names = (list: { name: string }[]) =>
+      list.length === 1 ? list[0]?.name : `${list.length} apps`;
+    if (outside.length)
+      items.push({
+        id: 'other-apps-remote',
+        level: 'warn',
+        title: `${names(outside)} can reach Conch through your address`,
+        detail: `Whoever has ${outside.length === 1 ? 'its key' : 'one of their keys'} can use what you let ${outside.length === 1 ? 'it' : 'them'} use in Conch, from anywhere. Keep this only for an app you use on another computer, and remove it when you don’t.`,
+        fix: { kind: 'open', label: 'Review', place: 'other-apps' },
+      });
+    else
+      items.push({
+        id: 'other-apps',
+        level: 'info',
+        title: `${names(apps)} can use Conch on this computer`,
+        detail: `${apps.map((a) => a.name).join(', ')}: each only what you chose, and anything that changes something asks you first in Conch. Remove an app you no longer use.`,
+        fix: { kind: 'open', label: 'Review', place: 'other-apps' },
+      });
   }
 
   if (input.workspaceRules?.length) {

@@ -28,6 +28,11 @@ import { tasksCheck } from './tasks/doctor';
 import { signingKeyCheck } from './skills/doctor';
 import { fingerprintOf } from './skills/signing';
 import { TaskService } from './tasks/service';
+import { mcpCheck } from './mcp/doctor';
+import { McpSessions } from './mcp/endpoint';
+import { McpPairing } from './mcp/pairing';
+import { McpService } from './mcp/service';
+import { McpClientStore } from './mcp/store';
 import { TaskStore } from './tasks/store';
 import { QuestionDesk } from './questions/desk';
 import { QUESTIONS_PROMPT, questionTools } from './questions/tools';
@@ -271,6 +276,10 @@ export class Services {
   readonly voice: VoiceService;
   /** Work that runs in the background, and helpers side by side (ADR 0033). */
   readonly tasks: TaskService;
+  /** Other apps using Conch through its MCP door (ADR 0073). */
+  readonly mcp: McpService;
+  readonly mcpPairing: McpPairing;
+  readonly mcpSessions = new McpSessions();
   /** Direct Google account connections, shared by every engine. */
   readonly google: GoogleService;
   /** Gmail, Google Calendar and Google Drive as apps in Apps (ADR 0048). */
@@ -837,6 +846,30 @@ export class Services {
       ready: () => this.providers.ready(),
     });
     this.doctor.register(tasksCheck(this.tasks));
+    // Your other apps, reaching Conch through its door (ADR 0073).
+    this.mcp = new McpService({
+      store: new McpClientStore(config.CONCH_HOME),
+      conversations: this.conversations,
+      engineId: () => this.engine().id,
+      memory: this.memory,
+      search: (query) => this.memoryIndex.search(query),
+      skills: this.skills,
+      apps: {
+        list: async () => (await this.integrations.list()).integrations,
+        hosted: (id) =>
+          this.googleApps.owns(id) || this.slackApps.owns(id) || this.conchApps.hosted.owns(id),
+        forTurn: (prompt) => this.integrations.forTurn(prompt),
+        bridge: (servers, disallowed) => this.integrations.bridge(servers, disallowed),
+      },
+    });
+    this.mcpPairing = new McpPairing({
+      mcp: this.mcp,
+      sessions: this.mcpSessions,
+      port: config.CONCH_PORT,
+      address: () => this.address.status().url,
+      onHeal: (message) => void this.healed.note('integrations', message),
+    });
+    this.doctor.register(mcpCheck(this.mcpPairing));
     // Save how I did this (ADR 0058): work that went well, offered as a skill, never saved by itself.
     this.learner = new SkillLearner({
       home: config.CONCH_HOME,
@@ -1398,6 +1431,7 @@ export class Services {
           routine: origin?.kind === 'routine',
           channel: origin?.kind === 'channel',
           task: origin?.kind === 'task',
+          ...(origin?.kind === 'client' && { app: origin.name }),
         };
       },
       routineTitle: async (id) =>
@@ -1844,6 +1878,8 @@ export class Services {
     this.conchApps.start();
     this.slack.start();
     void this.tasks.start().catch((error: unknown) => console.error('[tasks]', error));
+    // Apps paired with Conch still find it: its launcher, and their settings (ADR 0073).
+    void this.mcpPairing.heal().catch((error: unknown) => console.error('[mcp]', error));
     this.backups.start();
   }
 

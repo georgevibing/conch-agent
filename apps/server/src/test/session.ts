@@ -3,7 +3,8 @@
  * (searchable by meaning, with its model), a command, a routine that ran, a skill, an integration with its token, a
  * chat with an attachment, a model API's transcript, the browser's and
  * terminal's settings, a note the assistant wrote (and Undo's copy), a budget, a limit on what routines spend, a password, a provider key,
- * a linked WhatsApp and Signal, an app made in a chat and one added from a file (with its key), and a backup.
+ * a linked WhatsApp and Signal, an app made in a chat and one added from a file (with its key),
+ * another app paired with Conch, and a backup.
  * Everything is written by the real services, the way using Conch writes it.
  * The backup tests use it to check nothing Conch writes is left unclassified.
  */
@@ -393,6 +394,14 @@ export async function useConch(g: Gateway) {
       (await readdir(join(home, 'channels')).catch(() => [])).some((f) =>
         f.startsWith('matrix-'),
       ) || undefined,
+  );
+  // Another app paired with Conch, with its key for the launcher (ADR 0073).
+  await ok(
+    await app.inject({
+      method: 'POST',
+      url: '/api/mcp/clients',
+      payload: { app: 'other', name: 'An editor', scopes: ['memory.read'] },
+    }),
   );
   await services.backups.backupNow();
   // Sign-in last: from here on, requests need the cookie.
