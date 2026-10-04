@@ -1,12 +1,13 @@
-import type {
-  BrowserBackendKind,
-  BrowserBox,
-  BrowserControl,
-  BrowserHandoff,
-  BrowserLiveCommand,
-  BrowserLiveEvent,
-  BrowserTabEntry,
-  BrowserTab as TabState,
+import {
+  BrowserTabIcon,
+  type BrowserBackendKind,
+  type BrowserBox,
+  type BrowserControl,
+  type BrowserHandoff,
+  type BrowserLiveCommand,
+  type BrowserLiveEvent,
+  type BrowserTabEntry,
+  type BrowserTab as TabState,
 } from '@conch/protocol';
 import type { CDPSession, Locator, Page } from 'playwright-core';
 
@@ -38,6 +39,64 @@ const MODIFIER_KEYS: [keyof Modifiers, string][] = [
 /** Most tabs one chat keeps open. A new one past this closes the one unused longest. */
 export const MAX_TABS = 8;
 
+/** Closed tabs remembered for "Reopen closed tab". */
+const CLOSED_KEPT = 10;
+
+/**
+ * The page's size for a panel's screen (CSS px). Width stays desktop-like (so
+ * sites don't switch to their phone layout) at about 1.6× the panel, so text
+ * stays readable; height follows the panel, so the picture fills it.
+ */
+export function fitViewport(stage: { width: number; height: number }): {
+  width: number;
+  height: number;
+} {
+  const width = Math.round(Math.min(1440, Math.max(960, stage.width * 1.6)));
+  const height = Math.round(Math.min(2400, Math.max(540, (width * stage.height) / stage.width)));
+  return { width, height };
+}
+
+/**
+ * Runs in the page: the site's icon, fetched by the page itself (so the
+ * browser's guard sees it like any request), as [type, base64], or null.
+ * Only small images; anything else and the strip shows a globe.
+ */
+const ICON_SCRIPT = `(async () => {
+  if (!/^https?:$/.test(location.protocol)) return null;
+  const links = [...document.querySelectorAll('link[rel~="icon" i], link[rel="apple-touch-icon" i]')];
+  const small = links.filter((l) =>
+    (l.getAttribute('sizes') || '').split(' ').some((s) => s === '16x16' || s === '32x32'),
+  );
+  // The icons the page names (small ones first), then the site's own: one on
+  // another site may not let the page read it.
+  const hrefs = [...new Set([...small, ...links].map((l) => l.href).filter(Boolean))].slice(0, 3);
+  hrefs.push(new URL('/favicon.ico', location.origin).href);
+  const stop = new AbortController();
+  const timer = setTimeout(() => stop.abort(), 4000);
+  try {
+    for (let href of hrefs) {
+      // Playwright keeps any address ending in /favicon.ico out of its routing, so
+      // the guard would never see it and the fetch fails: the same file, asked another way.
+      if (href.endsWith('/favicon.ico')) href += '?';
+      try {
+        const res = await fetch(href, { credentials: 'same-origin', cache: 'force-cache', signal: stop.signal });
+        if (!res.ok) continue;
+        const type = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        if (!type.startsWith('image/') || bytes.length === 0 || bytes.length > 16000) continue;
+        let text = '';
+        for (let i = 0; i < bytes.length; i++) text += String.fromCharCode(bytes[i]);
+        return [type, btoa(text)];
+      } catch {
+        if (stop.signal.aborted) return null;
+      }
+    }
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+})()`;
+
 /** One page in a chat's browser: "t1", "t2"… for the agent and the strip. */
 export interface TabEntry {
   id: string;
@@ -46,6 +105,12 @@ export interface TabEntry {
   opener?: string;
   /** When it was last the one in view. */
   seen: number;
+  /** Between a navigation starting and its page loading. */
+  loading?: boolean;
+  /** The site's icon (a data URL), once the page fetched it. */
+  icon?: string;
+  /** Where it's opening again (a restored tab), until the page gets there. */
+  pending?: string;
 }
 
 export interface TabHooks {
@@ -89,6 +154,10 @@ export class Tab {
   #cdp?: { page: Page; session: CDPSession };
   #waiters = new Set<() => void>();
   #closed = false;
+  /** Addresses of tabs closed, newest last, for "Reopen closed tab". */
+  #recentlyClosed: string[] = [];
+  /** Icons already fetched this session, by site. */
+  #icons = new Map<string, string>();
 
   constructor(
     readonly conversationId: string,
@@ -100,8 +169,11 @@ export class Tab {
       emulate: boolean;
       /** Where it runs, for the panel: undefined for Conch's own here. */
       backend?: BrowserBackendKind;
+      /** The page's size to start with: the panel's shape when one is watching (see `fit`). */
+      viewport?: { width: number; height: number };
     } = { emulate: true },
   ) {
+    if (options.viewport) this.viewport = { ...options.viewport };
     this.#adopt(page);
   }
 
@@ -151,12 +223,30 @@ export class Tab {
     } else {
       void this.#measure(page);
     }
+    page.on('request', (request) => {
+      if (!request.isNavigationRequest() || request.frame() !== page.mainFrame()) return;
+      if (entry.loading) return;
+      entry.loading = true;
+      this.hooks.changed(this);
+    });
+    page.on('requestfailed', (request) => {
+      if (!request.isNavigationRequest() || request.frame() !== page.mainFrame()) return;
+      entry.loading = false;
+      this.hooks.changed(this);
+    });
     page.on('framenavigated', (frame) => {
-      if (frame === page.mainFrame()) this.hooks.changed(this);
+      if (frame !== page.mainFrame()) return;
+      if (page.url() !== 'about:blank') entry.pending = undefined;
+      // Another site: its icon comes with its page.
+      const site = originOf(page.url());
+      if (entry.icon && this.#icons.get(site) !== entry.icon) entry.icon = this.#icons.get(site);
+      this.hooks.changed(this);
     });
     page.on('load', () => {
+      entry.loading = false;
       this.hooks.changed(this);
       this.hooks.loaded(page);
+      void this.#fetchIcon(entry);
     });
     page.on('popup', (popup) => {
       if (this.#closed) return;
@@ -167,6 +257,9 @@ export class Tab {
     });
     page.on('close', () => {
       const gone = this.#tabs.find((t) => t.page === page);
+      const url = gone && !this.#closed ? page.url() : '';
+      if (url && url !== 'about:blank')
+        this.#recentlyClosed = [...this.#recentlyClosed, url].slice(-CLOSED_KEPT);
       this.#tabs = this.#tabs.filter((t) => t.page !== page);
       if (this.#tabs.length === 0) {
         this.#active = undefined;
@@ -229,6 +322,73 @@ export class Tab {
     return true;
   }
 
+  /** Close every tab but one. The number closed. */
+  async closeOthers(id: string): Promise<number> {
+    const keep = this.entry(id);
+    if (!keep) return 0;
+    const others = this.#tabs.filter((t) => t !== keep);
+    if (this.#active !== keep) this.#show(keep);
+    await Promise.all(others.map((t) => t.page.close().catch(() => undefined)));
+    return others.length;
+  }
+
+  /** The address of the tab closed last, taken off the list: open it again. */
+  takeRecentlyClosed(): string | undefined {
+    return this.#recentlyClosed.pop();
+  }
+
+  /** Stop loading the page in view. */
+  async stop(): Promise<void> {
+    const entry = this.#active;
+    if (!entry) return;
+    await entry.page.evaluate('window.stop()').catch(() => undefined);
+    if (entry.loading) {
+      entry.loading = false;
+      this.hooks.changed(this);
+    }
+  }
+
+  /** Each tab's address, in order, and which one is in view: what reopens next time. */
+  snapshot(): { urls: string[]; active: number } {
+    const urls = this.#tabs.map((t) => this.#urlOf(t));
+    return {
+      urls,
+      active: Math.max(
+        0,
+        this.#tabs.findIndex((t) => t === this.#active),
+      ),
+    };
+  }
+
+  /** A tab's address; a restored one still opening counts as where it's going. */
+  #urlOf(entry: TabEntry): string {
+    const url = entry.page.url();
+    return url === 'about:blank' && entry.pending ? entry.pending : url;
+  }
+
+  async #fetchIcon(entry: TabEntry): Promise<void> {
+    const site = originOf(entry.page.url());
+    if (!site) return;
+    const known = this.#icons.get(site);
+    if (known) {
+      if (entry.icon !== known) {
+        entry.icon = known;
+        this.hooks.changed(this);
+      }
+      return;
+    }
+    const found = (await entry.page.evaluate(ICON_SCRIPT).catch(() => null)) as unknown;
+    if (!Array.isArray(found) || typeof found[0] !== 'string' || typeof found[1] !== 'string')
+      return;
+    const type = found[0] === 'image/vnd.microsoft.icon' ? 'image/x-icon' : found[0];
+    const icon = BrowserTabIcon.safeParse(`data:${type};base64,${found[1]}`);
+    // The page moved on meanwhile: this icon is the old site's.
+    if (!icon.success || originOf(entry.page.url()) !== site) return;
+    this.#icons.set(site, icon.data);
+    entry.icon = icon.data;
+    this.hooks.changed(this);
+  }
+
   /** Close one tab (the last one stays: a chat always has a page). */
   async closeTab(id: string): Promise<'closed' | 'missing' | 'last'> {
     const entry = this.entry(id);
@@ -242,12 +402,14 @@ export class Tab {
   async list(): Promise<BrowserTabEntry[]> {
     return Promise.all(
       this.#tabs.map(async (t) => {
-        const url = t.page.url();
+        const url = this.#urlOf(t);
         return {
           id: t.id,
           title: await t.page.title().catch(() => ''),
           url: url === 'about:blank' ? '' : url,
           active: t === this.#active,
+          ...(t.loading && { loading: true }),
+          ...(t.icon && { icon: t.icon }),
         };
       }),
     );
@@ -256,13 +418,14 @@ export class Tab {
   async state(): Promise<TabState> {
     const page = this.page;
     const url = page.url();
+    const history = await this.#history(page);
     return {
       conversationId: this.conversationId,
       url: url === 'about:blank' ? '' : url,
       title: await page.title().catch(() => ''),
-      loading: false,
-      canGoBack: url !== 'about:blank',
-      canGoForward: false,
+      loading: Boolean(this.#active?.loading),
+      canGoBack: history.back,
+      canGoForward: history.forward,
       control: this.control,
       viewport: this.viewport,
       handoff: this.handoff,
@@ -271,16 +434,32 @@ export class Tab {
     };
   }
 
+  /** Whether Back and Forward go anywhere: the page's own history, as the browser keeps it. */
+  async #history(page: Page): Promise<{ back: boolean; forward: boolean }> {
+    try {
+      const session = await page.context().newCDPSession(page);
+      try {
+        const { currentIndex, entries } = await session.send('Page.getNavigationHistory');
+        return {
+          // A new tab starts blank; going back to nothing isn't going back.
+          back: entries.slice(0, currentIndex).some((e) => e.url !== 'about:blank'),
+          forward: currentIndex < entries.length - 1,
+        };
+      } finally {
+        await session.detach().catch(() => undefined);
+      }
+    } catch {
+      return { back: page.url() !== 'about:blank', forward: false };
+    }
+  }
+
   /**
-   * Give the page the panel's shape. Width stays desktop-like (so sites don't
-   * switch to their phone layout) at about 1.6× the panel, so text stays
-   * readable; height follows the panel, so the picture fills it. Your own
-   * Chrome is never resized: the panel shows it as it is.
+   * Give the page the panel's shape (`fitViewport`). Your own Chrome is never
+   * resized: the panel shows it as it is.
    */
   async fit(stage: { width: number; height: number }): Promise<boolean> {
     if (!this.options.emulate) return false;
-    const width = Math.round(Math.min(1440, Math.max(960, stage.width * 1.6)));
-    const height = Math.round(Math.min(2400, Math.max(540, (width * stage.height) / stage.width)));
+    const { width, height } = fitViewport(stage);
     if (Math.abs(width - this.viewport.width) < 8 && Math.abs(height - this.viewport.height) < 8)
       return false;
     this.viewport = { width, height };
@@ -508,5 +687,15 @@ export class Tab {
     this.#tabs = [];
     this.#active = undefined;
     await Promise.all(pages.map((p) => p.close().catch(() => undefined)));
+  }
+}
+
+/** `https://www.example.com/x` → `https://www.example.com`; '' for anything else. */
+function originOf(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return /^https?:$/.test(parsed.protocol) ? parsed.origin : '';
+  } catch {
+    return '';
   }
 }

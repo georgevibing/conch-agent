@@ -319,6 +319,13 @@ export async function useConch(g: Gateway) {
   await chat(services, `/${String(skill.name)} for March`);
   // A thumbnail of a page the agent looked at, as the browser keeps them.
   await services.browser.saveShot(convo.id, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+  // …and the tabs that chat had open, kept to open again.
+  await services.browser.saved.set(convo.id, {
+    urls: ['https://example.com/'],
+    active: 0,
+    at: Date.now(),
+  });
+  await services.browser.saved.flush();
   // What a plain model API keeps to carry a chat on.
   await new TranscriptStore(sessionsDir(home)).save(TranscriptStore.newId(), {
     provider: 'anthropic-api',

@@ -217,6 +217,11 @@ export class BrowserRuntime {
     return Boolean(this.#context);
   }
 
+  /** Closing on purpose (idle, settings, shutting down), not crashing. */
+  get stopping(): boolean {
+    return this.#stopping;
+  }
+
   /** Note something Conch fixed on its own. Shown as reassurance in Settings. */
   heal(message: string): void {
     this.healed = [{ at: Date.now(), message }, ...this.healed].slice(0, HEALED_KEPT);

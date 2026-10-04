@@ -442,6 +442,12 @@ export const RULES: readonly BackupRule[] = [
     group: 'chats',
     why: 'Pictures of what the agent saw while browsing, shown in the chat.',
   },
+  {
+    match: 'browser/tabs.json',
+    class: 'kept',
+    group: 'chats',
+    why: 'The tabs each chat had open in the browser, so they open again where you left them.',
+  },
 
   {
     match: 'vault/sources.json',

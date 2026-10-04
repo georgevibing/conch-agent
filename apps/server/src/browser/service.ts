@@ -12,7 +12,7 @@ import type {
   UpdateBrowserSettingsBody,
   VaultRequest,
 } from '@conch/protocol';
-import type { Download, Page } from 'playwright-core';
+import type { BrowserContext, Download, Page } from 'playwright-core';
 
 import type { Engine, HostTool } from '../engines/types';
 import type { ToolContext } from '../conversations/manager';
@@ -30,13 +30,16 @@ import { declineCookies } from './cookies';
 import { BrowserGuard } from './guard';
 import { blockedPage } from './pages';
 import { BrowserProblemError, BrowserRuntime } from './runtime';
+import { restorable, SavedTabs } from './saved';
 import { BrowserSecrets, BrowserStore } from './store';
-import { MAX_TABS, Tab, type Watcher } from './tab';
+import { fitViewport, MAX_TABS, Tab, type Watcher } from './tab';
 import { browserTools } from './tools';
 import type { UploadSources } from './uploads';
 
 /** The browser shuts down after this long with nobody using or watching it. */
 const IDLE_MS = 10 * 60_000;
+/** A chat's tabs reopen by themselves at most this often (a browser that keeps crashing). */
+const REOPEN_GAP_MS = 5_000;
 /** Thumbnails kept per conversation (oldest go first). */
 const SHOTS_KEPT = 300;
 
@@ -105,8 +108,11 @@ export class BrowserService {
   #tabs = new Map<string, Tab>();
   #opening = new Map<string, Promise<Tab>>();
   #watchers = new Map<string, Set<Watcher>>();
-  /** Each chat's last address, so a restarted browser comes back where it was. */
-  #lastUrl = new Map<string, string>();
+  /** Each chat's tabs, so a restarted browser (or Conch) opens them again. */
+  readonly saved: SavedTabs;
+  /** The panel's screen size per chat, so a tab opened later already has its shape. */
+  #stage = new Map<string, { width: number; height: number }>();
+  #reopenedAt = new Map<string, number>();
   #settings?: BrowserSettings;
   /** Cookie banners declined as pages loaded, until the agent's next step reports them. */
   #declined = new WeakMap<Page, string>();
@@ -116,6 +122,7 @@ export class BrowserService {
   constructor(private readonly deps: BrowserServiceDeps) {
     this.store = new BrowserStore(deps.home, deps.heal);
     this.secrets = new BrowserSecrets(deps.home, deps.heal);
+    this.saved = new SavedTabs(deps.home, deps.heal);
     this.guard = new BrowserGuard(() => ({
       allowLocal: this.#settings?.allowLocal ?? false,
       gatewayPort: deps.gatewayPort,
@@ -127,7 +134,12 @@ export class BrowserService {
       onClosed: () => {
         this.#tabs.clear();
         this.#opening.clear();
-        for (const conversationId of this.#watchers.keys()) void this.#pushTab(conversationId);
+        for (const [conversationId, watchers] of this.#watchers) {
+          void this.#pushTab(conversationId);
+          // Someone is looking: the tabs come back, as after any crash.
+          if (!this.runtime.stopping && [...watchers].some((w) => w.visible))
+            void this.#reopen(conversationId);
+        }
       },
       blockedPage,
       secrets: this.secrets,
@@ -288,12 +300,13 @@ export class BrowserService {
 
   async wipe(): Promise<BrowserStatus> {
     await this.runtime.wipe();
-    this.#lastUrl.clear();
+    await this.saved.clear();
     return this.status();
   }
 
   async stop(): Promise<void> {
     clearInterval(this.#idleTimer);
+    await this.saved.flush();
     await this.runtime.stop();
   }
 
@@ -332,14 +345,14 @@ export class BrowserService {
         ? context.pages().find((p) => p.url() === 'about:blank')
         : undefined;
     const page = spare ?? (await this.runtime.newPage(context));
+    const stage = this.#stage.get(conversationId);
     const tab: Tab = new Tab(
       conversationId,
       page,
       () => this.#watchersOf(conversationId),
       {
         changed: (t) => {
-          const url = t.current?.url();
-          if (url && url !== 'about:blank') this.#lastUrl.set(conversationId, url);
+          this.#remember(t);
           void this.#pushTab(conversationId);
         },
         loaded: (p) => void this.#afterLoad(p),
@@ -351,19 +364,80 @@ export class BrowserService {
           p.on('download', (download) => void this.#userDownload(tab, download));
         },
       },
-      { emulate: !shared, ...(kind !== 'local' && { backend: kind }) },
+      {
+        emulate: !shared,
+        ...(kind !== 'local' && { backend: kind }),
+        ...(stage && { viewport: fitViewport(stage) }),
+      },
     );
     this.#tabs.set(conversationId, tab);
-    const last = this.#lastUrl.get(conversationId);
-    if (last) {
-      await page
-        .goto(last, { waitUntil: 'domcontentloaded', timeout: 20_000 })
-        .catch(() => undefined);
-    }
+    await this.#restore(tab, context);
     await tab.refresh();
     await this.#pushTab(conversationId);
     this.#changed();
     return tab;
+  }
+
+  /**
+   * Open the chat's tabs from last time, the one in view first; the others
+   * load behind it. Without any, the tab stays blank.
+   */
+  async #restore(tab: Tab, context: BrowserContext): Promise<void> {
+    const saved = await this.saved.get(tab.conversationId);
+    const urls = (saved?.urls ?? []).filter(restorable).slice(0, MAX_TABS);
+    if (!saved || urls.length === 0) return;
+    const active = Math.min(
+      urls.length - 1,
+      Math.max(0, urls.indexOf(saved.urls[saved.active] ?? '')),
+    );
+    const first = tab.tabs[0];
+    if (!first) return;
+    const pages: { id: string; url: string }[] = [{ id: first.id, url: urls[0] ?? '' }];
+    for (const url of urls.slice(1)) {
+      const page = await this.runtime.newPage(context).catch(() => undefined);
+      if (!page || tab.closed) break;
+      pages.push({ id: tab.add(page).id, url });
+    }
+    const shown = pages[active] ?? pages[0];
+    if (shown) tab.switchTo(shown.id);
+    await Promise.all(
+      pages.map(async ({ id, url }) => {
+        const entry = tab.entry(id);
+        const page = entry?.page;
+        if (!page) return;
+        entry.pending = url;
+        const loading = page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20_000 });
+        // Only the one in view is waited for.
+        if (id === shown?.id) await loading.catch(() => undefined);
+        else void loading.catch(() => undefined);
+      }),
+    );
+  }
+
+  /**
+   * Keep a chat's tabs for next time. A tab going away is only kept once it's
+   * clear the browser itself isn't closing (then every page closes, and the
+   * tabs should all come back).
+   */
+  #remember(tab: Tab): void {
+    const id = tab.conversationId;
+    const save = () => {
+      if (tab.closed || this.#tabs.get(id) !== tab || !this.runtime.alive) return;
+      const { urls, active } = tab.snapshot();
+      const kept = urls.filter(restorable);
+      const shown = kept.indexOf(urls[active] ?? '');
+      void this.saved.set(
+        id,
+        kept.length
+          ? { urls: kept, active: shown < 0 ? kept.length - 1 : shown, at: Date.now() }
+          : undefined,
+      );
+    };
+    void this.saved.get(id).then((before) => {
+      const count = tab.snapshot().urls.filter(restorable).length;
+      if (before && count < before.urls.length) setTimeout(save, 400).unref();
+      else save();
+    });
   }
 
   async #afterLoad(page: Page): Promise<void> {
@@ -435,7 +509,8 @@ export class BrowserService {
   async forget(conversationId: string): Promise<void> {
     const tab = this.#tabs.get(conversationId);
     this.#tabs.delete(conversationId);
-    this.#lastUrl.delete(conversationId);
+    this.#stage.delete(conversationId);
+    await this.saved.set(conversationId, undefined);
     await tab?.close();
     await rm(join(this.store.shotsDir, conversationId), { recursive: true, force: true }).catch(
       () => undefined,
@@ -469,7 +544,15 @@ export class BrowserService {
     if (!watchers?.size) return;
     const tab = this.tabIfOpen(conversationId);
     const state = tab ? await tab.state().catch(() => null) : null;
-    for (const watcher of watchers) watcher.send({ type: 'tab', tab: state });
+    // No tab, but some from last time: they open as soon as someone looks.
+    const restoring = !state && (await this.#hasSaved(conversationId));
+    for (const watcher of watchers)
+      watcher.send({ type: 'tab', tab: state, ...(restoring && { restoring }) });
+  }
+
+  async #hasSaved(conversationId: string): Promise<boolean> {
+    if (!(this.#settings ?? (await this.store.settings())).enabled) return false;
+    return Boolean((await this.saved.get(conversationId))?.urls.some(restorable));
   }
 
   /** Someone opened the live view. Returns a function that ends the watch. */
@@ -477,11 +560,26 @@ export class BrowserService {
     const set = this.#watchersOf(conversationId);
     set.add(watcher);
     void this.#pushTab(conversationId);
+    if (watcher.visible) void this.#reopen(conversationId);
     return () => {
       set.delete(watcher);
       if (set.size === 0) this.#watchers.delete(conversationId);
       void this.tabIfOpen(conversationId)?.refresh();
     };
+  }
+
+  /**
+   * Someone is looking at a chat whose browser closed (it went idle, Conch
+   * restarted): its tabs from last time open again, as a browser restores its
+   * session. Nothing opens for a chat that never browsed.
+   */
+  async #reopen(conversationId: string): Promise<void> {
+    if (this.tabIfOpen(conversationId) || !(await this.#hasSaved(conversationId))) return;
+    // A browser that keeps crashing isn't started again and again.
+    const last = this.#reopenedAt.get(conversationId) ?? 0;
+    if (Date.now() - last < REOPEN_GAP_MS) return;
+    this.#reopenedAt.set(conversationId, Date.now());
+    await this.tabFor(conversationId).catch(() => this.#pushTab(conversationId));
   }
 
   /** A command from the live view (you, in the panel). */
@@ -491,13 +589,17 @@ export class BrowserService {
     command: BrowserLiveCommand,
   ): Promise<void> {
     if (command.type === 'fit') {
+      // Kept even before there's a tab: the first page opens in the panel's shape.
+      this.#stage.set(conversationId, { width: command.width, height: command.height });
       const tab = this.tabIfOpen(conversationId);
       if (tab && (await tab.fit(command))) await this.#pushTab(conversationId);
       return;
     }
     if (command.type === 'watch') {
+      const shown = command.visible && !watcher.visible;
       watcher.visible = command.visible;
       await this.tabIfOpen(conversationId)?.refresh();
+      if (shown) void this.#reopen(conversationId);
       return;
     }
     // Driving yourself opens the tab if there isn't one yet.
@@ -505,16 +607,34 @@ export class BrowserService {
     tab.lastUsed = Date.now();
     switch (command.type) {
       case 'tab': {
-        if (command.action === 'new') {
-          if (!(await this.openTab(tab)))
+        if (command.action === 'new' || command.action === 'reopen') {
+          const url = command.action === 'reopen' ? tab.takeRecentlyClosed() : undefined;
+          if (command.action === 'reopen') {
+            if (!url) return;
+            const verdict = await this.guard.navigation(url);
+            if (!verdict.ok) return watcher.send({ type: 'error', message: verdict.message });
+          }
+          const opened = await this.openTab(tab);
+          if (!opened) {
             watcher.send({
               type: 'error',
               message: `A chat keeps ${MAX_TABS} tabs at most. Close one first.`,
             });
+          } else if (url) {
+            void tab
+              .entry(opened)
+              ?.page.goto(url, { waitUntil: 'commit', timeout: 30_000 })
+              .catch(() => undefined);
+          }
+          tab.touched = true;
           await this.#pushTab(conversationId);
           return;
         }
         if (!command.id) return;
+        if (command.action === 'others') {
+          if ((await tab.closeOthers(command.id)) > 0) tab.touched = true;
+          return;
+        }
         if (command.action === 'switch') {
           if (!tab.switchTo(command.id))
             watcher.send({ type: 'error', message: 'That tab is closed.' });
@@ -546,6 +666,7 @@ export class BrowserService {
           await tab.page.goBack({ timeout: 15_000 }).catch(() => undefined);
         else if (command.action === 'forward')
           await tab.page.goForward({ timeout: 15_000 }).catch(() => undefined);
+        else if (command.action === 'stop') await tab.stop();
         else await tab.page.reload({ timeout: 30_000 }).catch(() => undefined);
         return;
       case 'mouse':
