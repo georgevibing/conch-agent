@@ -194,6 +194,29 @@ export async function useConch(g: Gateway) {
       payload: { mode: 'off' },
     }),
   );
+  // A skill from Discover (ADR 0070): searched (the cache), read (staging), added (its folder and origin).
+  await ok(await app.inject({ method: 'GET', url: '/api/skills/market?q=meeting' }));
+  const look = await ok(
+    await app.inject({
+      method: 'POST',
+      url: '/api/skills/market/preview',
+      payload: { id: 'clawhub:pretend/meeting-notes' },
+    }),
+  );
+  await ok(
+    await app.inject({
+      method: 'POST',
+      url: '/api/skills/market/install',
+      payload: { previewId: look.previewId, mode: 'auto' },
+    }),
+  );
+  await ok(
+    await app.inject({
+      method: 'POST',
+      url: '/api/skills/market/preview',
+      payload: { id: 'clawhub:pretend/trip-planner' },
+    }),
+  );
   await services.integrations.create(
     { catalogId: 'github', values: { token: GITHUB_TOKEN } },
     { redirectUrl: 'http://localhost/oauth/callback', display: 'popup' },
