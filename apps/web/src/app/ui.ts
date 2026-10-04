@@ -142,6 +142,16 @@ const SIDEBAR_KEY = 'conch.sidebar';
 const BROWSER_WIDTH_KEY = 'conch.browserWidth';
 const TERMINAL_HEIGHT_KEY = 'conch.terminalHeight';
 const ARTIFACT_WIDTH_KEY = 'conch.artifactWidth';
+/** Per window (session storage): a reload opens the same chat's browser again. */
+const BROWSER_FOR_KEY = 'conch.browserFor';
+
+function storedBrowserFor(): string | null {
+  try {
+    return sessionStorage.getItem(BROWSER_FOR_KEY);
+  } catch {
+    return null;
+  }
+}
 
 function storedHeight(): number {
   const value =
@@ -216,7 +226,7 @@ export const useUi = create<UiState>((set) => ({
         : s.lastFind,
     })),
   setUsageOpen: (usageOpen) => set({ usageOpen }),
-  browserFor: null,
+  browserFor: storedBrowserFor(),
   browserDismissed: {},
   browserWidth: storedWidth(),
   // One panel beside the chat at a time: the browser or something made.
@@ -297,3 +307,14 @@ export const useUi = create<UiState>((set) => ({
     set({ browserWidth });
   },
 }));
+
+// The open browser panel survives a reload of this window.
+useUi.subscribe((state, previous) => {
+  if (state.browserFor === previous.browserFor) return;
+  try {
+    if (state.browserFor) sessionStorage.setItem(BROWSER_FOR_KEY, state.browserFor);
+    else sessionStorage.removeItem(BROWSER_FOR_KEY);
+  } catch {
+    // Storage is off: the panel just starts closed after a reload.
+  }
+});

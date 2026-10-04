@@ -19,7 +19,12 @@ export function useBrowserLive(conversationId: string | undefined, visible: bool
   const [tab, setTab] = useState<BrowserTab | null>(null);
   const [action, setAction] = useState<BrowserWindowAction>();
   const [state, setState] = useState<LiveState>('connecting');
+  const [restoring, setRestoring] = useState(false);
+  /** The gateway has said what the tab is (until then, an empty panel isn't news). */
+  const [heard, setHeard] = useState(false);
   const [error, setError] = useState<string>();
+  /** The panel's last size: said again on every (re)connect, so the page always has its shape. */
+  const fitted = useRef<Extract<BrowserLiveCommand, { type: 'fit' }> | undefined>(undefined);
   const socket = useRef<WebSocket | null>(null);
   const image = useRef<HTMLImageElement | null>(null);
   const urls = useRef<string[]>([]);
@@ -41,6 +46,7 @@ export function useBrowserLive(conversationId: string | undefined, visible: bool
   }, [watching]);
 
   const send = useCallback((command: BrowserLiveCommand) => {
+    if (command.type === 'fit') fitted.current = command;
     const ws = socket.current;
     if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(command));
   }, []);
@@ -77,6 +83,8 @@ export function useBrowserLive(conversationId: string | undefined, visible: bool
         attempt = 0;
         setState('open');
         setError(undefined);
+        // The size first: a tab that opens for this watch opens in the panel's shape.
+        if (fitted.current) ws.send(JSON.stringify(fitted.current));
         ws.send(JSON.stringify({ type: 'watch', visible: watchingRef.current }));
       };
       ws.onmessage = (message: MessageEvent<string | Blob>) => {
@@ -89,8 +97,11 @@ export function useBrowserLive(conversationId: string | undefined, visible: bool
         }
         const event = BrowserLiveEvent.safeParse(json);
         if (!event.success) return;
-        if (event.data.type === 'tab') setTab(event.data.tab);
-        else if (event.data.type === 'action') {
+        if (event.data.type === 'tab') {
+          setTab(event.data.tab);
+          setHeard(true);
+          setRestoring(Boolean(event.data.restoring) && !event.data.tab);
+        } else if (event.data.type === 'action') {
           actions.current += 1;
           setAction({ ...event.data, key: actions.current });
         } else setError(event.data.message);
@@ -114,6 +125,8 @@ export function useBrowserLive(conversationId: string | undefined, visible: bool
       for (const url of urls.current) URL.revokeObjectURL(url);
       urls.current = [];
       setTab(null);
+      setRestoring(false);
+      setHeard(false);
     };
   }, [conversationId]);
 
@@ -131,6 +144,9 @@ export function useBrowserLive(conversationId: string | undefined, visible: bool
     tab,
     action,
     state,
+    /** No tab yet, but the chat's tabs from last time are opening. */
+    restoring,
+    heard,
     error,
     send,
     control,

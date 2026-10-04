@@ -7,8 +7,14 @@ import { useUi } from '../../app/ui';
 import { useBrowserStatus, useRepairBrowser } from './queries';
 import { useBrowserLive } from './useBrowserLive';
 
-function phaseOf(status: BrowserStatus | undefined, live: string): BrowserWindowPhase {
-  if (live === 'connecting' && !status) return 'connecting';
+function phaseOf(
+  status: BrowserStatus | undefined,
+  live: { restoring: boolean; heard: boolean },
+): BrowserWindowPhase {
+  const busy = status?.phase === 'problem' || status?.phase === 'installing';
+  // Until the gateway says, "nothing open" may not be true: don't say it yet.
+  if (!status || (!live.heard && !busy)) return 'connecting';
+  if (live.restoring && !busy) return 'restoring';
   switch (status?.phase) {
     case 'installing':
       return 'installing';
@@ -71,7 +77,7 @@ export function BrowserPanel({
           backend: live.tab.backend === 'local' ? undefined : live.tab.backend,
         }
       }
-      phase={phaseOf(status, live.state)}
+      phase={phaseOf(status, live)}
       install={status?.install}
       problem={
         problem ? { message: problem.message, command: problem.command, ...action } : undefined
