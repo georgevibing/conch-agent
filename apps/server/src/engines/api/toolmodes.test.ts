@@ -1,5 +1,5 @@
 /**
- * Every model gets its tools (ADR 0069): a fake-fetch matrix over the ways a
+ * Every model gets its tools (ADR 0072): a fake-fetch matrix over the ways a
  * provider can take them, refuse them, or not know a model at all.
  */
 import { describe, expect, it } from 'vitest';

@@ -1,6 +1,6 @@
 /**
  * Tool schemas the way real MCP servers write them, for the sanitiser's tests
- * (ADR 0069). Each is shaped after a server people connect: Python servers
+ * (ADR 0072). Each is shaped after a server people connect: Python servers
  * built on Pydantic (FastMCP, the reference `fetch` and `git` servers), Go
  * servers built on mcp-go (GitHub's), TypeScript servers built on Zod
  * (Notion's, Playwright's), and the awkward cases they produce between them.

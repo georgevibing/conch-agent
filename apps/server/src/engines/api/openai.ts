@@ -116,7 +116,7 @@ export interface ChatPreset {
   rank?: readonly RegExp[];
   /** A small, cheap model among the listed ones, for naming chats. */
   small?: RegExp;
-  /** The schema dialect its models read (ADR 0069). Default . */
+  /** The schema dialect its models read (ADR 0072). Default . */
   schemas?: SchemaFamily;
   /** Models that can't call tools in this API, whatever the list says. */
   noTools?: RegExp;
@@ -729,7 +729,7 @@ export class OpenAiWire implements Wire {
 
   /**
    * Ask, healing a thinking level the model refuses. A refusal over tools is
-   * the engine's to heal (ADR 0069): a schema it simplifies, a model without
+   * the engine's to heal (ADR 0072): a schema it simplifies, a model without
    * tools it gives them in words. Neither ever drops them silently.
    */
   async #chat(request: WireRequest): Promise<Response> {

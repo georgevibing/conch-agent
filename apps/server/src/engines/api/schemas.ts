@@ -1,5 +1,5 @@
 /**
- * Tool schemas each provider family will take (ADR 0069).
+ * Tool schemas each provider family will take (ADR 0072).
  *
  * An integration's schema comes straight from its MCP server: `$ref`s into
  * `$defs`, `anyOf` with `null` for an optional field (every Python server made

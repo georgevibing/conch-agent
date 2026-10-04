@@ -1,5 +1,5 @@
 /**
- * Tools through the prompt, for models that can't take them natively (ADR 0069).
+ * Tools through the prompt, for models that can't take them natively (ADR 0072).
  *
  * A small local model, a chat-only model at OpenRouter, a server that refuses
  * `tools`: each can still use Conch's tools if it's told what they are and how

@@ -71,11 +71,15 @@ Only one offer shows under a reply, and the same app isn't offered twice in a ch
 
 ## When a model can only chat
 
-Some models can't use apps, files or memory. They can only chat. The model picker shows **Chat only — can't use your apps** under them.
+Some models weren't made to use tools: many small models on this computer, a few at OpenRouter, some servers of your own. The model picker shows **Chat only — can't use your apps** under them.
 
 Ask one of them about an app you connected, and your message waits with a card: "Chat Lite can't use Linear". Press **Switch to** and the model that can. The chat moves to that model, and your message goes by itself. Conch only offers models you've already set up, the same provider's first.
 
 **Answer without it** sends your message to the model you chose anyway. Conch asks once per model in a chat. If none of your models can use apps, the card offers **Connect a provider**.
+
+Even then, Conch doesn't leave the model without your apps. It lists their tools in the model's instructions and reads the model's requests from its reply, so many small models manage simple steps, like saving a memory or looking something up. A model made for tools is still more dependable. Only a model too small to read even a short list of tools answers without any, and the chat says so.
+
+When a model asks for a tool almost right, Conch reads what it meant: a number written as text, a missing quote, a field the tool doesn't take. When it can't, it tells the model exactly what to fix, so it gets a second try.
 
 ## Decide what it may do
 

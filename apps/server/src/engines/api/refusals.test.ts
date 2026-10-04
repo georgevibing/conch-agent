@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { toolRefusal } from './refusals';
 
-describe('telling a refused schema from a model without tools (ADR 0069)', () => {
+describe('telling a refused schema from a model without tools (ADR 0072)', () => {
   it.each([
     "Invalid schema for function 'search': In context=('properties', 'when'), 'format' is not supported.",
     'Invalid JSON payload received. Unknown name "additionalProperties" at \'tools[0].function_declarations[0].parameters\': Cannot find field.',

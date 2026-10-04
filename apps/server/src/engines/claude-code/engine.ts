@@ -495,7 +495,7 @@ export class ClaudeCodeEngine implements Engine {
         tool(
           t.name,
           t.description,
-          // Advertised exactly as declared, read forgivingly and checked by Conch (ADR 0069).
+          // Advertised exactly as declared, read forgivingly and checked by Conch (ADR 0072).
           lenientShape(t.input),
           async (raw, extra) => {
             const checked = checkHostArgs(t, raw);

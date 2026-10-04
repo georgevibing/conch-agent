@@ -32,7 +32,7 @@ function read(reply: string, size = 3) {
 const args = (calls: { argumentsJson: string }[]) =>
   calls.map((c) => JSON.parse(c.argumentsJson) as unknown);
 
-describe('reading tool calls a model wrote in words (ADR 0069)', () => {
+describe('reading tool calls a model wrote in words (ADR 0072)', () => {
   it('reads the Hermes/Qwen format, showing the words around it', () => {
     const out = read(
       'Let me save that.\n<tool_call>\n{"name": "mcp__conch__remember", "arguments": {"content": "Likes tea"}}\n</tool_call>',

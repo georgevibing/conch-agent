@@ -170,9 +170,9 @@ export type ApiErrorKind =
   | 'timeout'
   | 'network'
   | 'not-found'
-  /** A tool's schema was refused: simplified and sent again (ADR 0069). */
+  /** A tool's schema was refused: simplified and sent again (ADR 0072). */
   | 'schema'
-  /** The model takes no tools natively: they go in the prompt instead (ADR 0069). */
+  /** The model takes no tools natively: they go in the prompt instead (ADR 0072). */
   | 'tools'
   | 'other';
 

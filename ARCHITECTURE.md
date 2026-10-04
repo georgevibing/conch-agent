@@ -100,7 +100,9 @@ src/
     acp/                      Copilot, Gemini CLI, Grok over the Agent Client Protocol; the door (ADR 0053)
     api/                      key-based APIs: one OpenAI-style reader and adapter, a preset per
                               company (presets.ts), Anthropic, Ollama, LM Studio, servers;
-                              session.ts keeps the transcript, context.ts fits it to the window (ADR 0055)
+                              session.ts keeps the transcript, context.ts fits it to the window (ADR 0055);
+                              toolplan.ts hands tools over natively or in words, schemas.ts per provider (ADR 0072)
+    tools/                    reading a tool call's arguments for every engine: repair, normalise, precise errors (ADR 0072)
     mock/                     scripted engine for UI work and E2E tests
   providers/                  the words for each engine, connecting them, switching, keys
   secrets/                    where a key lives: this computer, or 1Password (`op read`)
@@ -168,6 +170,14 @@ src/
   `SummaryDivider`) and learns what the person said before it (`MemoryTidy.learn`).
   A "too long" refusal folds harder and goes again once, by itself, before it becomes
   the `too-long` problem. `/compact` is `POST /api/conversations/:id/compact`.
+- **Tools on every model** ([ADR 0072](./docs/adr/0072-every-model-gets-its-tools.md)).
+  Every engine reads a tool call's arguments through `engines/tools/args.ts`: almost-JSON
+  mended, slips normalised by the tool's own schema, then the strict check, whose failure
+  names each field, what was wanted and what came. The model APIs send each schema in the
+  dialect the provider reads (`Wire.schemaFamily`); a refused schema is simplified once, and
+  a model without native tools gets them listed in its instructions and asks in
+  `<tool_call>` blocks (`ToolPlan`, `prompted.ts`). Chat-only is left for a window too
+  small for the list.
 - **Slash commands.** Four sources, resolved in this order: Conch's own commands
   (`/model`, `/effort`, `/mode`, `/fast`, `/new`, `/remember`, `/skills`, … — handled
   in the web app, never sent to the model), your commands

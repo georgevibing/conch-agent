@@ -94,7 +94,7 @@ function conchTools(): HostTool[] {
   ];
 }
 
-describe('tool schemas for each provider family (ADR 0069)', () => {
+describe('tool schemas for each provider family (ADR 0072)', () => {
   const families: SchemaFamily[] = ['permissive', 'gemini', 'anthropic', 'strict'];
 
   it.each(Object.keys(MCP_SCHEMAS))('gives Gemini only what it reads: %s', (name) => {

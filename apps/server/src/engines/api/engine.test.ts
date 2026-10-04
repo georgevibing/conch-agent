@@ -812,7 +812,7 @@ describe('arguments from the model', () => {
     expect(parseArgs('[1,2]')).toBeUndefined();
     expect(parseArgs('"a"')).toBeUndefined();
     expect(parseArgs('oops')).toBeUndefined();
-    // Almost-JSON is mended (ADR 0069); the tool's own check judges what it says.
+    // Almost-JSON is mended (ADR 0072); the tool's own check judges what it says.
     expect(parseArgs("{'a': 1,")).toEqual({ a: 1 });
   });
 });

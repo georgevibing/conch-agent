@@ -60,7 +60,7 @@ export interface Wire {
   /**
    * Whether this model can call tools natively, from the provider's list (a
    * lookup in its full catalogue may be needed). `false` means its tools go
-   * in the prompt instead (ADR 0069); unset means yes (ADR 0050).
+   * in the prompt instead (ADR 0072); unset means yes (ADR 0050).
    */
   toolsFor?(model: string): boolean | undefined | Promise<boolean | undefined>;
   /**
@@ -69,7 +69,7 @@ export interface Wire {
    * means no.
    */
   seesFor?(model: string): boolean | undefined;
-  /** The schema dialect this model's provider reads (ADR 0069). Unset is `permissive`. */
+  /** The schema dialect this model's provider reads (ADR 0072). Unset is `permissive`. */
   schemaFamily?(model: string): SchemaFamily;
 }
 

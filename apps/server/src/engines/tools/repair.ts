@@ -1,5 +1,5 @@
 /**
- * Mending tool-call arguments a model got almost right (ADR 0069).
+ * Mending tool-call arguments a model got almost right (ADR 0072).
  *
  * Small models, and big ones on a bad day, write JSON a strict parser refuses:
  * a trailing comma, single quotes, a key without quotes, `True`, a code fence

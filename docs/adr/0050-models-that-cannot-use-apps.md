@@ -3,6 +3,8 @@
 - Status: accepted
 - Date: 2026-10-02
 - Amends: [ADR 0023](./0023-offline-and-limits.md), [ADR 0036](./0036-provider-consistency.md)
+- Amended by: [ADR 0072](./0072-every-model-gets-its-tools.md) (a model without native tools
+  gets them in words; chat-only is only for one whose window can't hold the list)
 
 ## Context
 

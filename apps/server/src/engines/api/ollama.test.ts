@@ -451,7 +451,7 @@ describe('the local engine', () => {
     );
   });
 
-  it('gives a model that can’t take tools natively its tools in words (ADR 0069)', async () => {
+  it('gives a model that can’t take tools natively its tools in words (ADR 0072)', async () => {
     const { engine: e, calls } = await engine(() => lines(done()), [GEMMA]);
     await e.capabilities();
     const events = await collect(

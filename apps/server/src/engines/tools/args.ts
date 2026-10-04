@@ -1,5 +1,5 @@
 /**
- * A tool call's arguments, read forgivingly and checked strictly (ADR 0069).
+ * A tool call's arguments, read forgivingly and checked strictly (ADR 0072).
  *
  * Every engine that runs Conch's tools for a model (the model APIs, Codex's
  * dynamic tools, the door ACP programs reach, Claude Code's in-process server)

@@ -291,7 +291,7 @@ export class OllamaWire implements Wire {
   /**
    * Ask, healing a model that doesn't think. One that takes no tools is
    * remembered and told to the engine, which gives it its tools in words
-   * instead (ADR 0069).
+   * instead (ADR 0072).
    */
   async #chat(request: WireRequest): Promise<Response> {
     let think = !this.#noThinking.has(request.model);

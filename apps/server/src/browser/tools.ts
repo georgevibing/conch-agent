@@ -53,7 +53,7 @@ const HANDOFF_WAIT_MS = 30 * 60_000;
 /**
  * A ref the way a model copied it from the page text: `[ref=e12]`, `ref=e12`,
  * `e12]`, `"e12"`. Only the wrapping goes; what's left must still be a bare ref
- * (ADR 0069), so nothing else can reach the locator.
+ * (ADR 0072), so nothing else can reach the locator.
  */
 export function unwrapRef(value: unknown): unknown {
   if (typeof value !== 'string') return value;

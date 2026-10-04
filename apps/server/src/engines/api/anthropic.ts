@@ -217,7 +217,7 @@ export class AnthropicWire implements Wire {
   async #fail(response: Response, key?: string, tools = false): Promise<ApiError> {
     const body = await text(response, LABEL).catch(() => '');
     const parsed = ErrorBody.safeParse(safeJson(body));
-    // A tool's schema it won't read: the engine simplifies it and asks again (ADR 0069).
+    // A tool's schema it won't read: the engine simplifies it and asks again (ADR 0072).
     if (
       tools &&
       response.status === 400 &&

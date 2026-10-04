@@ -5,7 +5,7 @@ import { unwrapRef } from './tools';
 
 const Ref = z.preprocess(unwrapRef, z.string().regex(/^[a-z0-9]{1,16}$/i));
 
-describe('a ref the way a model copied it (ADR 0069)', () => {
+describe('a ref the way a model copied it (ADR 0072)', () => {
   it.each(['e12', '[ref=e12]', 'ref=e12', 'e12]', '[e12]', '"e12"', ' ref: e12 ', '`e12`'])(
     'reads %s as e12',
     (written) => {
