@@ -1356,6 +1356,34 @@ export class MockEngine implements Engine {
         );
         return;
       }
+      // Skills people share (ADR 0072): tidying meeting notes looks on Discover and
+      // offers what it finds; added, the chat carries on with it.
+      if (usingSkill && /\bmeeting notes\b/i.test(text)) {
+        yield* speak(
+          `Here are your notes, tidied with “${usingSkill}”. Decided: ship on Friday. Actions: Sam writes the release notes by Thursday. Open: who tells support.`,
+        );
+        return;
+      }
+      if (
+        /\btidy (?:up )?(?:these|my) meeting notes\b/i.test(text) &&
+        input.tools.some((t) => t.name === 'find_skills') &&
+        input.tools.some((t) => t.name === 'offer')
+      ) {
+        const found = yield* hostTool('find_skills', { words: 'meeting notes' });
+        const id = /`((?:clawhub|anthropic|skills-sh):[^`]+)`/.exec(found)?.[1];
+        if (id) {
+          yield* hostTool('offer', {
+            kind: 'market',
+            target: id,
+            why: 'It turns notes like these into decisions, actions and open questions.',
+          });
+          yield* speak(
+            'I can tidy them roughly now, but there’s a skill people share that does exactly this. Read it, and if you add it I’ll use it.',
+          );
+          return;
+        }
+      }
+
       const canOffer = input.tools.some((t) => t.name === 'offer');
       const plate = /\bon my plate\b/i.test(text)
         ? offerable('app').find((a) => a.id === 'linear')
