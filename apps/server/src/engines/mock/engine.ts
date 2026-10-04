@@ -1315,6 +1315,22 @@ export class MockEngine implements Engine {
         }
       }
 
+      // A skill people share, added from the chat's offer (ADR 0077): the chat carries on
+      // with it. Before the scripts below, which its own words ("List what was decided") would wake.
+      const sharedSkill = /<skill name="[^"]*" title="([^"]*)"[\s\S]*asked you to use the/.exec(
+        input.prompt,
+      )?.[1];
+      if (
+        sharedSkill &&
+        /\bI added the “[^”]+” skill from\b/.test(input.prompt) &&
+        /\bmeeting notes\b/i.test(text)
+      ) {
+        yield* speak(
+          `Here are your notes, tidied with “${sharedSkill}”. Decided: ship on Friday. Actions: Sam writes the release notes by Thursday. Open: who tells support.`,
+        );
+        return;
+      }
+
       if (!chatOnly && /\b(run|list|files?|test)\b/.test(text)) {
         const toolUseId = newId('tool');
         const command = /test/.test(text) ? 'npm test' : 'ls -la';
@@ -1358,13 +1374,7 @@ export class MockEngine implements Engine {
         return;
       }
       // Skills people share (ADR 0077): tidying meeting notes looks on Discover and
-      // offers what it finds; added, the chat carries on with it.
-      if (usingSkill && /\bmeeting notes\b/i.test(text)) {
-        yield* speak(
-          `Here are your notes, tidied with “${usingSkill}”. Decided: ship on Friday. Actions: Sam writes the release notes by Thursday. Open: who tells support.`,
-        );
-        return;
-      }
+      // offers what it finds (added, the chat carries on with it: above).
       if (
         /\btidy (?:up )?(?:these|my) meeting notes\b/i.test(text) &&
         input.tools.some((t) => t.name === 'find_skills') &&
