@@ -53,6 +53,7 @@ Turn a group off, and your assistant goes quiet there at once. **Forget** takes 
 - **Photos and files** you send become attachments.
 - **Voice notes** are turned into words on your computer and answered like anything you typed. See [Voice](../features/voice.md#voice-notes-from-your-chat-apps).
 - **Routine results**, and a routine's questions, come to you there when the channel has **Routine results** on.
+- **Messages your assistant starts.** Ask in any chat, here or in Conch, "text me on WhatsApp when it's done" or "send the weather to my Telegram", and your assistant writes to you there. A [routine](../features/routines.md) can do the same. It only ever writes to your own private chat with Conch, never to anyone else. Without an app named, it uses the one you wrote from last.
 - **Three commands:** `/new` starts a fresh conversation, `/stop` stops the answer, `/help` explains. Any other `/name` runs your skill of that name.
 
 ## It reconnects by itself

@@ -168,3 +168,26 @@ room on a plan (`guard: 'plan-room'`).
   time counts toward it; the line says "about".
 - A ledger that won't read starts its count again (and says so under Fixed on
   its own); the per-day spend in `usage.json` still has the month.
+
+## Update (2026-10-04): room for your chats is yours to set
+
+A one-off asked for "in a minute" waited five days for a weekly window at 81%, and
+was marked done while it waited, so it never ran. Three changes:
+
+- **The fullness is a person's choice**: 70, 80 (still the default), 90 or 95% used,
+  or never wait (`planRoom` in `routine-spend.json`, `PUT /api/routines/spending`
+  `{ planRoomPercent }`). The Routines page shows it once a routine runs on a plan
+  (Nacre `PlanRoom`), with a line per plan saying what the choice means right now.
+- **A routine can run regardless** (`runOnFullPlan`: "Always run this one",
+  "Run even when the plan is nearly used" in Edit). Like the limits, only a person
+  sets it; the routine tools don't offer it. Changing either looks at held runs
+  at once (`RoutineService.recheckHeld`).
+- **Waiting is not done.** A one-off held for room, the month or its provider stays
+  on, shows when it goes as its next run, and completes only after it ran. Held runs
+  are rebuilt from history after a restart (`#restoreHeld`), and a one-off an older
+  Conch marked done while it waited is put back, with a note under Fixed on its own.
+
+A routine drafted in a chat also runs on that chat's provider and model now (the
+person picked them there, often to spare a plan), and a routine's run gets Conch's
+own tools like a chat from a chat app, without the routine tools: your apps, Conch
+apps, the browser, and `message_user` to write to you in any connected chat app.

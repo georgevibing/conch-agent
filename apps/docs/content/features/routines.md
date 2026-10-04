@@ -20,6 +20,10 @@ Ask in any chat: "every weekday at 8, tell me what's on my calendar", or "tell m
 - **Edit** changes the words, when it starts, or what it may do.
 - **Not now** keeps it, paused.
 
+A routine drafted in a chat runs on that chat's provider and model, so a routine you ask for in a chat with Codex runs with Codex. **Edit** changes it.
+
+A run can do what a chat can: use your [apps](apps.md), the ones you added yourself too, your Conch apps and the browser. It can also write to you in any [chat app](../channels/index.md) you've connected: "every morning, send the weather to my Telegram" sends the message itself, to your own private chat with Conch.
+
 You can also open **Routines** in the sidebar and start a new one there. Describe what you want and press **Draft it**, pick one of the ideas, or choose **Set it up yourself**. In <kbd>mod+k</kbd>, **New routine that starts when…** opens it with **When…** chosen.
 
 ## Every…
@@ -90,7 +94,9 @@ Three things keep routines from spending your money or your plan while you're aw
 
 - **A run that does far more than usual stops.** That's about three times what the routine usually costs (before it has run, three times a typical briefing on its model), and never less than $1. The run ends under **Needs you** with one line saying why. **Let it use more** lets that routine's runs go further. **Edit** sets an exact amount under **Most one run may spend**.
 - **A monthly limit.** Routines that cost money may spend $20 a month until you change it. Every run counts, whatever started it, and so do the checks a routine makes before it runs. At the limit they pause until the 1st, and Conch tells you once: on the Routines page, in a notification, and in your chat apps. Choose **Raise the limit** or **Keep paused**. Routines on a plan, or on this computer, carry on.
-- **Room for your own chats.** With a subscription, a routine doesn't start while any of your plan's limits is 80% used. Its run says **Waited so your own chats have room**, and goes by itself once the limit resets.
+- **Room for your own chats.** With a subscription, a routine doesn't start while any of your plan's limits is 80% used. Its run says **Waited so your own chats have room**, and goes by itself once the limit resets. A one-off waits too, and runs then.
+
+You choose when routines on a plan wait: at **70%**, **80%**, **90%** or **95%** used, or **Never wait**. The choice is under **Room for your own chats** at the bottom of the Routines page, once a routine runs on a plan, and in **Settings → Usage → Routines**. Beneath it, Conch says what your choice means for each plan right now. For a routine that must go on time, like a reminder, choose **Always run this one** on its page, or turn on **Run even when the plan is nearly used** in **Edit**. **Run now** always goes.
 
 The monthly limit is in **Settings → Usage**, under **Routines**, or type "what routines may spend" in <kbd>mod+k</kbd>. Only you can change it, or how much one run may spend. Your assistant can't, whatever it reads.
 
