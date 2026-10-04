@@ -2,6 +2,9 @@
 
 - Status: accepted
 - Date: 2026-09-30
+- Extended by: [ADR 0080](./0080-the-browser-does-what-you-do.md) (tabs, uploads, the
+  person's gestures, clicking by position, handoffs that finish by themselves, your own Chrome
+  and browsers in the cloud)
 
 ## Context
 

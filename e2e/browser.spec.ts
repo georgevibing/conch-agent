@@ -12,7 +12,10 @@ import { expect, test } from '@playwright/test';
 const pages: Record<string, string> = {
   '/': `<title>Staylight · Hotels in Lisbon</title><h1>Hotels in Lisbon</h1>
     <div>Casa do Rio · €128 <a href="/hotel/0">See availability</a></div>
-    <p><a href="/signin">Sign in</a></p>`,
+    <p><a href="/signin">Sign in</a> · <a href="/blog" target="_blank">Our blog</a></p>`,
+  '/blog': `<title>Staylight blog</title><h1>Ten quiet places in Lisbon</h1>`,
+  '/apply': `<title>Apply · Staylight</title><h1>Work with us</h1>
+    <label>CV <input type="file" onchange="document.title='Got '+this.files[0].name"></label>`,
   '/hotel/0': `<title>Casa do Rio</title><h1>Casa do Rio</h1><p>€384 total</p><button>Book now</button>`,
   '/signin': `<title>Sign in · Staylight</title><h1>Sign in</h1>
     <form onsubmit="event.preventDefault();document.title='Signed in';document.body.textContent='Welcome back'">
@@ -99,6 +102,58 @@ test('hand over to sign in: you type, the assistant never sees it', async ({ pag
   await expect(page.getByText(/waited while you signed in/)).toBeVisible();
   await expect(page.getByText(/You took care of it/)).toBeVisible();
   await expect(page.locator('main')).not.toContainText('pearl-secret-42');
+});
+
+test('a link to a new tab is a tab you can see and switch', async ({ page }) => {
+  await page.goto('/');
+  const composer = page.getByRole('textbox', { name: /^Message/ });
+  await composer.fill(`Open ${origin}/ and click “Our blog”, then go back to the first tab`);
+  await composer.press('Enter');
+  await page.getByRole('button', { name: 'Allow in this chat' }).click();
+  await expect(
+    page.getByText(/it opened in a new tab, then went back to the first tab/),
+  ).toBeVisible();
+
+  // The panel shows both tabs; the first is in view again.
+  const panel = page.getByRole('complementary', { name: 'Browser panel' });
+  const tabs = panel.getByRole('navigation', { name: 'Tabs' });
+  await expect(tabs.getByRole('button', { name: 'Staylight blog' })).toBeVisible();
+  await expect(tabs.getByRole('button', { name: /Staylight · Hotels in Lisbon/ })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  // You switch to the blog yourself, then close it.
+  await tabs.getByRole('button', { name: 'Staylight blog' }).click();
+  await expect(panel.getByRole('button', { name: /Address: .*\/blog/ })).toBeVisible();
+  await tabs.getByRole('button', { name: 'Close tab: Staylight blog' }).click();
+  await expect(tabs).toBeHidden();
+  await expect(panel.getByRole('button', { name: /Address: .*\/blog/ })).toBeHidden();
+});
+
+test('upload a file you attached, after saying yes to it', async ({ page }) => {
+  await page.goto('/');
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Attach files' }).click();
+  await (
+    await chooser
+  ).setFiles([
+    { name: 'cv.txt', mimeType: 'text/plain', buffer: Buffer.from('Ada Lovelace, analyst') },
+  ]);
+  await expect(page.getByRole('button', { name: /cv\.txt/ })).toBeVisible();
+  const composer = page.getByRole('textbox', { name: /^Message/ });
+  await composer.fill(`Open ${origin}/apply and upload it to “CV”`);
+  await composer.press('Enter');
+
+  // Uploading always asks, and says what goes where.
+  const card = page.getByRole('group', { name: 'Upload files to 127.0.0.1?' });
+  await expect(card).toBeVisible();
+  await expect(card).toContainText('Upload “cv.txt” (attached in this chat) to 127.0.0.1?');
+  await card.getByRole('button', { name: 'Upload' }).click();
+  await expect(page.getByText(/uploaded “cv\.txt” to “CV”/)).toBeVisible();
+  const panel = page.getByRole('complementary', { name: 'Browser panel' });
+  await expect(
+    panel.getByRole('button', { name: /Take over the page: Got cv\.txt/ }),
+  ).toBeVisible();
 });
 
 test('settings show the browser it found, and changes stick', async ({ page, request }) => {

@@ -88,7 +88,8 @@
   before a meeting, when a page changes. Watching is free until something happens,
   each routine says what it costs, and a monthly limit keeps them from running up a bill.
 - **A browser and a terminal.** The assistant uses a browser you can watch and
-  take over, and a real shell is a keystroke away.
+  take over: tabs, uploads, dragging, even a canvas. It can run in your own Chrome
+  or in the cloud, and a real shell is a keystroke away.
 - **Show me.** Charts, pages and documents open beside the chat, with every version kept.
 - **Hand it off.** Send work to the background and keep chatting, or have another
   provider do a part ("have Codex write the tests").
