@@ -112,6 +112,17 @@
     text-wrap: balance;
   }
 
+  /* Where a skill people share is from (ADR 0070). */
+  .from {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-1-5) var(--nc-space-2);
+    margin: var(--nc-space-1-5) 0 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
   .message {
     margin: 0;
     font-size: var(--nc-text-xs);
