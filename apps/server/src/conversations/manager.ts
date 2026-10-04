@@ -623,6 +623,17 @@ export class ConversationManager {
     const attached = events.flatMap((e) =>
       e.type === 'user.message' ? (e.attachments ?? []).map((a) => a.id) : [],
     );
+    // What an engine kept of it between turns goes too (a Codex thread).
+    const record = live?.record ?? (await this.deps.store.get(id).catch(() => undefined));
+    for (const [engineId, session] of Object.entries(record?.sessions ?? {})) {
+      if (!session?.resumeId) continue;
+      try {
+        const engine = this.deps.engine(engineId as EngineId);
+        if (engine.id === engineId) await engine.forgetSession?.(session.resumeId);
+      } catch {
+        /* An engine no longer here keeps nothing to forget. */
+      }
+    }
     await this.deps.store.remove(id);
     if (attached.length) await this.deps.attachments?.forget(id, attached).catch(() => undefined);
     this.events.emit({ type: 'conversation.deleted', conversationId: id });
@@ -1311,12 +1322,13 @@ export class ConversationManager {
     }
     if (extras?.wrapTool) for (const [i, tool] of tools.entries()) tools[i] = extras.wrapTool(tool);
     // This provider's own session, and whatever it missed while others answered.
-    const session =
-      'conversationHistory' in engine && engine.conversationHistory
-        ? undefined
-        : live.record.sessions?.[engine.id];
+    const session = live.record.sessions?.[engine.id];
     const asked = askedSeq(live.events) ?? live.seq;
     const missed = handoff(live.events, { afterSeq: session?.seq ?? -1, beforeSeq: asked });
+    // Everything, for when that session can't be continued and the engine starts a new one.
+    const everything = session?.resumeId
+      ? handoff(live.events, { afterSeq: -1, beforeSeq: asked, restart: true })
+      : undefined;
     let answeredWith: string | undefined;
     const integrations = this.deps.integrations;
     const appendIssue = (issue: IntegrationIssueInput) =>
@@ -1559,6 +1571,9 @@ export class ConversationManager {
             ...(readableDirs.length && { readableDirs }),
             ...(this.deps.protectedPaths?.length && { protectedPaths: this.deps.protectedPaths }),
             resumeId: session?.resumeId,
+            ...(session?.resumeId && {
+              freshPrompt: everything ? `${everything}\n\n${prompt}` : prompt,
+            }),
             seq: asked,
             systemAppend: [
               buildSystemAppend({
@@ -1599,6 +1614,10 @@ export class ConversationManager {
         switch (event.type) {
           case 'session':
             answeredWith = event.model ?? answeredWith;
+            if (event.restarted === 'lost')
+              this.deps.heal?.(
+                `${engine.label} couldn’t pick up a chat where it left off, so Conch gave it the conversation so far and it carried on.`,
+              );
             live.record = {
               ...live.record,
               engine: engine.id,

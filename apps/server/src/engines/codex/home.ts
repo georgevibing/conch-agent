@@ -119,6 +119,13 @@ export class CodexHome {
       config?: string[];
       /** This run signs out: a sign-in that's gone afterwards is forgotten. */
       signOut?: boolean;
+      /** Before Codex starts, with the run's home (put a kept thread back: `threads.ts`). */
+      prepare?: (home: string) => Promise<void>;
+      /**
+       * After Codex has stopped, before the run's home goes (keep the thread it
+       * wrote). A failure here is never the run's: its answer is in hand.
+       */
+      after?: (home: string) => Promise<void>;
     } = {},
   ): Promise<T> {
     return this.#mutex.run(async () => {
@@ -141,6 +148,7 @@ export class CodexHome {
         const written = saved.value.auth ? JSON.stringify(saved.value.auth) : undefined;
         if (written) await writeFile(join(dir, 'auth.json'), written, { mode: 0o600 });
         stopKeeping = keepRenewals(path, dir, written);
+        await options.prepare?.(dir);
         options.signal?.throwIfAborted();
         rpc = new CodexRpc(executable, {
           cwd: dir,
@@ -154,6 +162,7 @@ export class CodexHome {
         options.signal?.removeEventListener('abort', stop);
         await rpc?.close();
         await stopKeeping?.();
+        if (rpc) await options.after?.(dir).catch(() => undefined);
         try {
           if (rpc) await saveCredentials(path, dir, options.signOut === true);
         } finally {

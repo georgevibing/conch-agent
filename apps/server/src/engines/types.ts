@@ -179,6 +179,14 @@ export interface TurnInput {
   /** Engine-native session to continue, from a previous turn's `session` event. */
   resumeId?: string;
   /**
+   * With `resumeId`: what to send instead of `prompt` when that session can't be
+   * continued (it was lost, or what the turn may use changed since), so the
+   * engine starts a new one: the conversation so far, as Conch's handoff, before
+   * the message. `prompt` carries only what the session missed. An engine that
+   * starts afresh says so with a `session` event for the new one.
+   */
+  freshPrompt?: string;
+  /**
    * Where the message this turn answers sits in the chat's log. An engine that
    * keeps the transcript itself (`context`) remembers it per turn, so it can
    * say where the model's memory starts after summarising (ADR 0055).
@@ -242,7 +250,16 @@ export interface ResolvedOptions {
 
 /** Normalised stream every engine produces for a turn. */
 export type EngineEvent =
-  | { type: 'session'; resumeId: string; model?: string }
+  | {
+      type: 'session';
+      resumeId: string;
+      model?: string;
+      /**
+       * `lost`: the session in `TurnInput.resumeId` couldn't be continued, so
+       * the engine started a new one with `freshPrompt`: healed, said quietly.
+       */
+      restarted?: 'lost';
+    }
   | { type: 'text'; messageId: string; delta: string }
   | { type: 'thinking'; messageId: string; delta: string }
   | { type: 'message-done'; messageId: string }
@@ -311,8 +328,7 @@ export interface Compacted {
  * How an engine fits a long chat into what its model reads at once (ADR
  * 0055). Engines that keep the transcript themselves (the model APIs) offer
  * it; the rest leave it to the provider, which compacts by itself (Claude
- * Code, Codex) or is handed a fresh, bounded handoff every turn (the ACP
- * programs).
+ * Code, Codex, the ACP programs).
  */
 export interface EngineContext {
   /**
@@ -402,8 +418,6 @@ export interface Engine {
   readonly plans?: 'native';
   /** Commands are always sealed by Conch, independent of the native-provider toggle. */
   readonly commandSandbox?: 'conch';
-  /** Each turn uses Conch’s complete handoff, not a provider-native resume ID. */
-  readonly conversationHistory?: boolean;
   /** Conch fits long chats for it by summarising their start (ADR 0055). Absent: the provider does. */
   readonly context?: EngineContext;
   /**
@@ -411,6 +425,11 @@ export interface Engine {
    * `~/.claude/skills`). Conch doesn't list those skills to it a second time.
    */
   readonly skillSources?: readonly SkillSource[];
+  /**
+   * The chat is gone: let go of anything the engine keeps for this session
+   * (a Codex thread kept between turns). Sessions the provider keeps itself stay its own.
+   */
+  forgetSession?(resumeId: string): Promise<void>;
   /** MCP servers the engine loads by itself, and whether they work. */
   mcpStatus?(): Promise<EngineMcpStatus[]>;
   /** Subscribe to live limit hints emitted while turns run. */
