@@ -45,7 +45,14 @@ rules that shape most changes:
 ```bash
 pnpm check        # format, lint, types and tests: must pass
 pnpm e2e          # journeys in a real browser, when you changed one
+pnpm eval         # real models on the eval tasks, when you changed how models are driven
 ```
+
+`pnpm eval` spends money: it runs only the models whose keys are in your
+environment (and Claude Code or Ollama when you have them), never as part of
+`pnpm check`. `pnpm eval --list` shows what would run; `--smoke`, `--models` and
+`--tasks` run less. The report lands in `.evals/report.html`, compared with your
+last run. See [ADR 0071](./docs/adr/0071-evals-on-every-model.md).
 
 For UI changes, look at the affected stories in light and dark mode
 (`pnpm storybook`, or `node scripts/snap.mjs <story-id>`).
