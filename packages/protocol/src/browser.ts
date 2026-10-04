@@ -245,6 +245,17 @@ export type BrowserPermission = z.infer<typeof BrowserPermission>;
 export const BrowserControl = z.enum(['agent', 'user', 'idle']);
 export type BrowserControl = z.infer<typeof BrowserControl>;
 
+/**
+ * A site's icon, carried inline so the panel never loads anything from the
+ * site itself. Only images, only small ones.
+ */
+export const BrowserTabIcon = z
+  .string()
+  .max(24_000)
+  .regex(
+    /^data:image\/(?:png|x-icon|vnd\.microsoft\.icon|svg\+xml|jpeg|gif|webp);base64,[A-Za-z0-9+/]+=*$/,
+  );
+
 /** One of a chat's tabs, for the strip above the page. */
 export const BrowserTabEntry = z.object({
   /** Short and stable while the tab lives: "t1", "t2"… */
@@ -252,6 +263,10 @@ export const BrowserTabEntry = z.object({
   title: z.string(),
   url: z.string(),
   active: z.boolean(),
+  /** The page is loading (the strip shows a spinner in place of its icon). */
+  loading: z.boolean().optional(),
+  /** The site's icon, as a small image the page itself fetched (never a link to load). */
+  icon: BrowserTabIcon.optional(),
 });
 export type BrowserTabEntry = z.infer<typeof BrowserTabEntry>;
 
@@ -278,8 +293,15 @@ export type BrowserTab = z.infer<typeof BrowserTab>;
  * frames: one JPEG each, latest wins.
  */
 export const BrowserLiveEvent = z.discriminatedUnion('type', [
-  /** The tab changed (address, title, loading, who's driving). `null`: no tab yet. */
-  z.object({ type: z.literal('tab'), tab: BrowserTab.nullable() }),
+  /**
+   * The tab changed (address, title, loading, who's driving). `null`: no tab
+   * yet; with `restoring`, the chat's tabs from last time are opening again.
+   */
+  z.object({
+    type: z.literal('tab'),
+    tab: BrowserTab.nullable(),
+    restoring: z.boolean().optional(),
+  }),
   /** The agent is about to act: where its cursor goes and what it's doing. */
   z.object({
     type: z.literal('action'),
@@ -327,7 +349,10 @@ export const BrowserLiveCommand = z.discriminatedUnion('type', [
   /** Text from paste or an input method, inserted as-is. */
   z.object({ type: z.literal('text'), text: z.string().max(10_000) }),
   z.object({ type: z.literal('navigate'), url: z.string().min(1).max(4096) }),
-  z.object({ type: z.literal('history'), action: z.enum(['back', 'forward', 'reload']) }),
+  z.object({
+    type: z.literal('history'),
+    action: z.enum(['back', 'forward', 'reload', 'stop']),
+  }),
   /** Take the wheel (`user`) or give it back (`agent`). Handing back also finishes a handoff. */
   z.object({ type: z.literal('control'), to: z.enum(['user', 'agent']) }),
   /**
@@ -341,10 +366,13 @@ export const BrowserLiveCommand = z.discriminatedUnion('type', [
   }),
   /** Frames only flow while someone looks: the panel says when it's visible. */
   z.object({ type: z.literal('watch'), visible: z.boolean() }),
-  /** Show another of the chat's tabs, close one, or open a new one. */
+  /**
+   * Show another of the chat's tabs, close one, open a new one, close all but
+   * one (`others`), or open again the one closed last (`reopen`).
+   */
   z.object({
     type: z.literal('tab'),
-    action: z.enum(['switch', 'close', 'new']),
+    action: z.enum(['switch', 'close', 'new', 'others', 'reopen']),
     id: z.string().max(8).optional(),
   }),
 ]);
