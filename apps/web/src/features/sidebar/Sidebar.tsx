@@ -31,6 +31,7 @@ import { NavLink, useNavigate, useParams } from 'react-router';
 import { api } from '../../api/client';
 import { useAppState, useConversations } from '../../api/queries';
 import { useUi } from '../../app/ui';
+import { useLiveStore } from '../../live/store';
 import { dayGroup, type DayGroup } from '../../lib/time';
 import { useAutoFocus } from '../../lib/useAutoFocus';
 import { ActivityLink } from '../activity/ActivityLink';
@@ -93,8 +94,11 @@ function ConversationRow({
   // made at mount, which would be the first-line placeholder, not the generated title.
   const [draft, setDraft] = useState<string>();
   const [confirm, setConfirm] = useState(false);
+  // Stop pressed: the row is still the moment the chat is.
+  const stopped = useLiveStore((s) => conversation.id in s.stopping);
   const running =
-    conversation.status === 'running' || conversation.status === 'awaiting-permission';
+    !stopped &&
+    (conversation.status === 'running' || conversation.status === 'awaiting-permission');
 
   const rename = async () => {
     const next = draft?.trim();

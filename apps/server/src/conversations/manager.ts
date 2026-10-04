@@ -365,10 +365,52 @@ interface Live {
   stopAt?: number;
   /** The running turn takes a mode picked mid-turn (Full trust, say) from its next step. */
   setTurnMode?: (mode: PermissionMode) => void;
+  /** Waiting for the chat to be free (a message sent while a stopped turn winds down). */
+  waiters?: (() => void)[];
 }
 
 /** How long a Stop pressed just before a turn starts still counts. */
 const STOP_GRACE_MS = 10_000;
+/**
+ * A Stop and the message it stops travel together, but may be read a moment
+ * out of order; one from longer before the message was for the turn before.
+ */
+const STOP_ORDER_MS = 1_000;
+/** How long a stopped provider gets to wind down before the chat stops waiting for it. */
+const WIND_DOWN_MS = 4_000;
+/** How long a message sent right after Stop waits for the stopped turn to close. */
+const AFTER_STOP_WAIT_MS = WIND_DOWN_MS + 2_000;
+
+/**
+ * The provider's events, until it's stopped and doesn't finish in `graceMs`:
+ * then the chat stops waiting (the provider is left to finish on its own), so
+ * a hung program can't keep a chat busy after Stop.
+ */
+export async function* windDown<T>(
+  stream: AsyncIterable<T>,
+  signal: AbortSignal,
+  graceMs = WIND_DOWN_MS,
+): AsyncIterable<T> {
+  const iterator = stream[Symbol.asyncIterator]();
+  const late = Symbol('late');
+  const gaveUp = new Promise<typeof late>((resolve) => {
+    const arm = () => setTimeout(() => resolve(late), graceMs).unref?.();
+    if (signal.aborted) arm();
+    else signal.addEventListener('abort', arm, { once: true });
+  });
+  for (;;) {
+    const next = await Promise.race([iterator.next(), gaveUp]);
+    if (next === late) {
+      void Promise.resolve(iterator.return?.()).catch(() => undefined);
+      return;
+    }
+    if (next.done) return;
+    yield next.value;
+  }
+}
+
+/** What a stopped turn no longer shows: more words, more thinking, a newer plan. */
+const quietAfterStop = new Set<EngineEvent['type']>(['text', 'thinking', 'plan', 'notice']);
 
 /** A turn that was stopped before it began: nothing to run. */
 async function* nothing(): AsyncIterable<EngineEvent> {}
@@ -604,7 +646,9 @@ export class ConversationManager {
     /** The words are someone else's (a chat app's other people): the chat reads them as untrusted (ADR 0028). */
     untrusted?: TaintSource;
   }) {
+    const began = Date.now();
     const existing = input.conversationId ? await this.#get(input.conversationId) : undefined;
+    if (existing) await this.#afterStop(existing);
     // A question waits (ADR 0060): what's typed answers it, as a message of yours.
     if (existing?.abort && this.deps.questions?.waiting(existing.record.id))
       return this.#answerTyped(existing, input);
@@ -739,7 +783,7 @@ export class ConversationManager {
     }
     if (route.routed)
       this.#append(live, { type: 'turn.routed', from: chosen.id, to: engine.id, ...route.routed });
-    this.#claim(live);
+    this.#claim(live, began);
     this.#setStatus(live, 'running');
     await this.#persist(live);
     void this.#answer(live, engine, prompt, sending, route.model);
@@ -895,21 +939,53 @@ export class ConversationManager {
 
   async interrupt(id: string) {
     const live = await this.#get(id);
-    // Stop pressed right after sending, before the turn began: it stops as it starts.
-    if (live.abort) live.abort.abort();
-    else live.stopAt = Date.now();
+    // Stop pressed right after sending, before the turn began (or while a
+    // stopped one winds down): it stops as it starts.
+    if (live.abort && !live.abort.signal.aborted) live.abort.abort();
+    else if (!live.abort || live.waiters?.length) live.stopAt = Date.now();
   }
 
   /**
    * The chat is busy from here: one turn at a time. Claimed with no wait in
    * between the check and the claim, so two sends (or releases) never both run.
+   * `since`: when the message that starts it arrived — a Stop from well before
+   * then was meant for the turn that just ended, not this one.
    */
-  #claim(live: Live): AbortController {
+  #claim(live: Live, since?: number): AbortController {
     const abort = new AbortController();
-    if (live.stopAt && Date.now() - live.stopAt < STOP_GRACE_MS) abort.abort();
+    if (
+      live.stopAt &&
+      Date.now() - live.stopAt < STOP_GRACE_MS &&
+      (since === undefined || live.stopAt >= since - STOP_ORDER_MS)
+    )
+      abort.abort();
     live.stopAt = undefined;
     live.abort = abort;
     return abort;
+  }
+
+  /** The chat is free: whatever waited for it goes now. */
+  #free(live: Live) {
+    live.abort = undefined;
+    const waiting = live.waiters ?? [];
+    live.waiters = undefined;
+    for (const go of waiting) go();
+  }
+
+  /**
+   * A message sent right after Stop waits for the stopped turn to close,
+   * instead of being turned away as "still replying".
+   */
+  async #afterStop(live: Live): Promise<void> {
+    if (!live.abort?.signal.aborted) return;
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, AFTER_STOP_WAIT_MS);
+      timer.unref?.();
+      (live.waiters ??= []).push(() => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
   }
 
   /**
@@ -1517,7 +1593,9 @@ export class ConversationManager {
             ...(settings.preferences.sealedCommands && { sandbox: this.deps.sandbox?.(workspace) }),
           });
 
-      for await (const event of stream) {
+      for await (const event of windDown(stream, abort.signal)) {
+        // Stopped: the reply ends where Stop was pressed, while the provider winds down.
+        if (abort.signal.aborted && quietAfterStop.has(event.type)) continue;
         switch (event.type) {
           case 'session':
             answeredWith = event.model ?? answeredWith;
@@ -1723,7 +1801,8 @@ export class ConversationManager {
       await closeBridge?.();
       // Handed on: the chat stays busy while the next provider answers.
       const handedOn = next?.kind === 'use';
-      live.abort = handedOn ? new AbortController() : undefined;
+      if (handedOn) live.abort = new AbortController();
+      else this.#free(live);
       live.permissions.clear();
       const status: ConversationStatus = handedOn
         ? 'running'
@@ -1830,7 +1909,7 @@ export class ConversationManager {
         message: error instanceof Error && error.message ? error.message : 'That didn’t work.',
       };
     } finally {
-      if (live.abort === abort) live.abort = undefined;
+      if (live.abort === abort) this.#free(live);
     }
   }
 

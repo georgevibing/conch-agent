@@ -84,10 +84,20 @@ const aside = (block: Block) =>
 function blocks(items: TranscriptItem[]): Block[] {
   const out: Block[] = [];
   let at = 0;
+  let turn = '';
+  let ends = 0;
   for (const item of items) {
     at = timeOf(item) ?? at;
     const last = out.at(-1);
-    if (item.kind === 'tool') {
+    if (isTurnStart(item)) {
+      turn = item.id;
+      ends = 0;
+    }
+    if (item.kind === 'turn-end') {
+      // Keyed by its turn, so "Stopped" drawn the moment Stop is pressed is the
+      // same line the gateway's own end replaces, not a second one arriving.
+      out.push({ key: `turn-end-${turn}-${ends++}`, item, at });
+    } else if (item.kind === 'tool') {
       if (last?.tools) last.tools.push(item);
       else out.push({ key: `tools-${item.id}`, tools: [item], at });
     } else if (item.kind === 'browser') {

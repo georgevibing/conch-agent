@@ -326,6 +326,8 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         socketRef.current?.send({ type: 'conversation.configure', conversationId, options });
       },
       interrupt(conversationId) {
+        // Drawn stopped this instant; the gateway's word follows (`stoppedView`).
+        useLiveStore.getState().stop(conversationId ?? NEW);
         if (conversationId) {
           socketRef.current?.send({ type: 'conversation.interrupt', conversationId });
           return;

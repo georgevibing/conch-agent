@@ -961,6 +961,53 @@ export function heldMessage(view: ConversationView) {
   return last?.kind === 'held' && !last.sent ? last : undefined;
 }
 
+/**
+ * The chat as it will be once a Stop pressed at `at` lands, drawn straight
+ * away: the reply ends where it is, a running tool says it stopped, a waiting
+ * question or approval is put away, and the turn says "Stopped". Messages not
+ * yet confirmed are part of it. The gateway's own events replace it as they
+ * come, and say the same.
+ */
+export function stoppedView(
+  view: ConversationView,
+  at: number,
+  pending: readonly {
+    clientMessageId: string;
+    text: string;
+    at: number;
+    attachments?: Attachment[];
+  }[] = [],
+): ConversationView {
+  const items: TranscriptItem[] = [
+    ...view.items.map((item): TranscriptItem => {
+      if (item.kind === 'assistant' && !item.done) return { ...item, done: true, endedAt: at };
+      if (item.kind === 'tool' && (item.status === 'running' || item.status === 'pending'))
+        return { ...item, status: 'error', output: 'Stopped.', durationMs: at - item.startedAt };
+      if (item.kind === 'permission' && !item.decision) return { ...item, decision: 'expired' };
+      if (item.kind === 'question' && item.answer === undefined) return { ...item, answer: null };
+      return item;
+    }),
+    ...pending.map((p) => ({
+      kind: 'user' as const,
+      id: p.clientMessageId,
+      text: p.text,
+      at: p.at,
+      ...(p.attachments?.length && { attachments: p.attachments }),
+    })),
+  ];
+  const last = items.at(-1);
+  const ended = last?.kind === 'turn-end' && !pending.length;
+  return {
+    ...view,
+    status: 'idle',
+    turnStartedAt: undefined,
+    notice: undefined,
+    items: ended
+      ? items
+      : [...items, { kind: 'turn-end', id: 'end-stopping', outcome: 'interrupted' }],
+  };
+}
+
 export function reduceAll(events: ConversationEvent[], view = emptyView): ConversationView {
   return events.reduce(reduce, view);
 }

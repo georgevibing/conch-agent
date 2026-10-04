@@ -9,6 +9,7 @@ import {
   pendingQuestion,
   reduce,
   reduceAll,
+  stoppedView,
 } from './reducer';
 
 function log(...inputs: ConversationEventInput[]): ConversationEvent[] {
@@ -418,5 +419,60 @@ describe('questions answered with a tap (ADR 0060)', () => {
     );
     expect(view.items.at(-1)).toMatchObject({ kind: 'question', answer: null });
     expect(pendingQuestion(view)).toBeUndefined();
+  });
+});
+
+describe('Stop, drawn at once (stoppedView)', () => {
+  const midTurn = () =>
+    reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'Look around' },
+        { type: 'status', status: 'running' },
+        { type: 'assistant.delta', messageId: 'm1', kind: 'text', delta: 'Let me' },
+        {
+          type: 'tool.started',
+          toolUseId: 't1',
+          name: 'Bash',
+          input: { command: 'ls' },
+        },
+        {
+          type: 'permission.requested',
+          permissionId: 'p1',
+          toolName: 'Bash',
+          summary: 'Run ls',
+          input: {},
+        },
+        { type: 'status', status: 'awaiting-permission' },
+      ),
+    );
+
+  it('ends the turn where it is: idle, the reply closed, the tool and the ask put away', () => {
+    const view = stoppedView(midTurn(), 5000);
+    expect(view.status).toBe('idle');
+    expect(view.turnStartedAt).toBeUndefined();
+    expect(view.items.find((i) => i.kind === 'assistant')).toMatchObject({ done: true });
+    expect(view.items.find((i) => i.kind === 'tool')).toMatchObject({
+      status: 'error',
+      output: 'Stopped.',
+    });
+    expect(pendingPermission(view)).toBeUndefined();
+    expect(view.items.at(-1)).toMatchObject({ kind: 'turn-end', outcome: 'interrupted' });
+  });
+
+  it('a message not yet confirmed is part of the stopped turn', () => {
+    const view = stoppedView(emptyView, 5000, [{ clientMessageId: 'u9', text: 'Hello', at: 4900 }]);
+    expect(view.items.map((i) => i.kind)).toEqual(['user', 'turn-end']);
+  });
+
+  it('says "Stopped" once, though the gateway already said it', () => {
+    const ended = reduce(midTurn(), {
+      type: 'turn.completed',
+      outcome: 'interrupted',
+      conversationId: 'c1',
+      seq: 99,
+      at: 6000,
+    } as ConversationEvent);
+    const view = stoppedView(ended, 5000);
+    expect(view.items.filter((i) => i.kind === 'turn-end')).toHaveLength(1);
   });
 });

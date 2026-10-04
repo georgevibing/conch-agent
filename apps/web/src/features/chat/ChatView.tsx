@@ -37,6 +37,7 @@ import {
   emptyView,
   lastUserMessage,
   pendingQuestion,
+  stoppedView,
   type ConversationView,
 } from '../../live/reducer';
 import { NEW, useLiveStore } from '../../live/store';
@@ -294,9 +295,23 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
   // the splash must not come back for the frame in between.
   const conversationId = routeId ?? (sentId ? created[sentId] : undefined);
   const key = conversationId ?? NEW;
-  const view =
-    useLiveStore((s) => (conversationId ? s.views[conversationId] : undefined)) ?? emptyView;
-  const pending = useLiveStore((s) => s.pending[key]) ?? [];
+  const heard = useLiveStore((s) => (conversationId ? s.views[conversationId] : undefined));
+  const waiting = useLiveStore((s) => s.pending[key]);
+  // Stop pressed: drawn stopped at once, not when the provider has wound down.
+  // What was sent after Stop is the next turn's, still on its way.
+  const stoppedAt = useLiveStore((s) => s.stopping[key]);
+  const { view, pending } = useMemo(() => {
+    const all = waiting ?? [];
+    if (stoppedAt === undefined) return { view: heard ?? emptyView, pending: all };
+    return {
+      view: stoppedView(
+        heard ?? emptyView,
+        stoppedAt,
+        all.filter((p) => p.at <= stoppedAt),
+      ),
+      pending: all.filter((p) => p.at > stoppedAt),
+    };
+  }, [heard, waiting, stoppedAt]);
   const engineIssue = useLiveStore((s) => s.engineIssue);
   const setEngineIssue = useLiveStore((s) => s.setEngineIssue);
   const openSettings = useUi((s) => s.openSettings);
