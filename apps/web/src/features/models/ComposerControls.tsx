@@ -2,7 +2,8 @@ import { fuzzyMatch, type EffortChoice, type PermissionMode } from '@conch/proto
 import { ModelPicker, ModePicker } from '@conch/nacre';
 
 import { useUi } from '../../app/ui';
-import { availableModes, effortOptions, pickerProviders } from './catalog';
+import { useProviders } from '../providers/queries';
+import { availableModes, effortOptions, pickerProviders, providerLogo } from './catalog';
 import { modelKey, type useTurnOptions } from './useTurnOptions';
 
 /**
@@ -22,8 +23,23 @@ export function ComposerControls({
   const picker = useUi((s) => s.picker);
   const setPicker = useUi((s) => s.setPicker);
   const { catalog, capabilities, options, model } = turn;
-  const providers = pickerProviders(catalog?.providers ?? [], catalog?.default, modelKey);
+  const { data: list } = useProviders();
+  const listed = pickerProviders(catalog?.providers ?? [], catalog?.default, modelKey);
   const selected = options.engine ? modelKey(options.engine, model?.id ?? options.model) : '';
+  // The chat's own provider while it's away: shown as it is, with why, never swapped for another.
+  const providers =
+    turn.away && options.engine
+      ? [
+          ...listed,
+          {
+            id: options.engine,
+            label: list?.providers.find((p) => p.id === options.engine)?.name ?? options.engine,
+            logo: providerLogo(options.engine),
+            message: 'Not ready right now. Sign in or check it in Settings → Providers.',
+            models: [{ id: selected, label: options.model }],
+          },
+        ]
+      : listed;
 
   return (
     <>

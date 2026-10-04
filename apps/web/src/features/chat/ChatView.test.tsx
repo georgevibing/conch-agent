@@ -219,6 +219,49 @@ describe('ChatView', () => {
     ).toBeInTheDocument();
   });
 
+  it('keeps a chat on its own provider while that one is away, never showing another’s model', async () => {
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [
+        {
+          id: 'c-away',
+          title: 'Weather',
+          preview: '',
+          createdAt: 1,
+          updatedAt: 1,
+          status: 'idle',
+          options: { engine: 'codex-cli', model: 'gpt-6.1-sol' },
+        },
+      ],
+      // Codex dropped out of the list for a moment; only Claude Code answered.
+      'GET /api/models': () => ({
+        default: 'claude-code',
+        providers: [
+          {
+            engine: 'claude-code',
+            label: 'Claude Code',
+            local: false,
+            models: [
+              {
+                id: 'sonnet',
+                label: 'Sonnet 5.5',
+                description: '',
+                efforts: [],
+                supportsFastMode: false,
+                supportsAutoMode: false,
+              },
+            ],
+            commands: [],
+            permissionModes: ['default'],
+          },
+        ],
+      }),
+    });
+    renderApp(<ChatView conversationId="c-away" />, { route: '/c/c-away' });
+    expect(await screen.findByRole('button', { name: /^Model: gpt-6\.1-sol/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Model: Sonnet/ })).not.toBeInTheDocument();
+  });
+
   it('picks a model from any connected provider, found by name, for the next chat', async () => {
     const model = (id: string, label: string) => ({
       id,

@@ -77,12 +77,16 @@ export function useTurnOptions(conversationId?: string) {
 
   const chosen = overrides.engine ?? defaultEngine;
   const providers = catalog?.providers ?? [];
+  const listed = providers.find((p) => p.engine === chosen);
+  // A chat keeps the provider it chose while that one is away for a moment (a
+  // sign-in lapsed, a check timed out): the gateway still sends there, and
+  // showing another provider's model would be a switch nobody made.
+  const away = Boolean(conversationId && overrides.engine && catalog && !listed);
   // The chosen provider if it's connected; otherwise the default, or whichever is.
-  const provider =
-    providers.find((p) => p.engine === chosen) ??
-    providers.find((p) => p.engine === defaultEngine) ??
-    providers[0];
-  const engine = provider?.engine ?? chosen;
+  const provider = away
+    ? undefined
+    : (listed ?? providers.find((p) => p.engine === defaultEngine) ?? providers[0]);
+  const engine = away ? overrides.engine : (provider?.engine ?? chosen);
   const wanted =
     overrides.model && chosen === engine
       ? overrides.model
@@ -150,6 +154,8 @@ export function useTurnOptions(conversationId?: string) {
     catalog,
     /** The provider answering: its models, commands and permission modes. */
     capabilities: provider,
+    /** This chat's provider isn't connected right now; the chat still belongs to it. */
+    away,
     loading: models.isLoading,
     model,
     options: effective,
