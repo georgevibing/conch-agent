@@ -786,7 +786,12 @@ describe('a model that reads little at once (ADR 0070)', () => {
     };
     const { engine } = await engineFor(wire);
     const tools = [rememberTool(saved), recallTool as HostTool];
-    const events = await collect(engine.runTurn(turn({ systemAppend: BIG_SYSTEM, tools })));
+    // Words that name no tool: the model has to look for one.
+    const events = await collect(
+      engine.runTurn(
+        turn({ prompt: 'Note down that I like tea', systemAppend: BIG_SYSTEM, tools }),
+      ),
+    );
 
     expect(requests[0]?.tools.map((t) => t.name)).toEqual(['find_tools']);
     expect(requests[0]?.system).toContain('You are Pearl.');
@@ -806,6 +811,20 @@ describe('a model that reads little at once (ADR 0070)', () => {
     expect(kept[0]).toBe('find_tools');
     expect(kept).toContain('mcp__conch__remember');
     expect(kept).not.toContain('Bash');
+  });
+
+  it('loads the tools the message names before the model is asked', async () => {
+    const requests: WireRequest[] = [];
+    const wire = small(8_192);
+    wire.stream = (request) => {
+      requests.push(structuredClone({ ...request, signal: undefined }) as never);
+      return ended('Saved.');
+    };
+    const { engine } = await engineFor(wire);
+    await collect(
+      engine.runTurn(turn({ prompt: 'Please remember I like tea', tools: [rememberTool([])] })),
+    );
+    expect(requests[0]?.tools.map((t) => t.name)).toEqual(['find_tools', 'mcp__conch__remember']);
   });
 
   it('runs a tool called by name without loading it first', async () => {
