@@ -24,10 +24,26 @@ and see what it saw. Hover a frame to see it bigger.
 
 ## Tabs
 
+Each chat's tabs sit above the address bar, as in any browser, each with its site's icon. Click
+one to look at it, close one with its × or the middle mouse button, or open a new one with **+**
+(or double-click the empty part of the row); the address is ready to type. Right-click a tab to
+reload it, close the others, or reopen the one you closed last.
+
 A link that opens a new tab, or a "Sign in with Google" window, becomes a tab of its own, and
-the assistant knows it did. Once there's more than one, a row of tabs shows above the page: click
-one to look at it, close one with its ×, or open a new one with **+**. When a sign-in window
-closes, the view goes back to the tab that opened it. A chat keeps up to eight tabs.
+the assistant knows it did. When a sign-in window closes, the view goes back to the tab that
+opened it. A chat keeps up to eight tabs.
+
+The browser's keys work while the panel has focus: <kbd>Ctrl</kbd> + <kbd>L</kbd> for the
+address, <kbd>Ctrl</kbd> + <kbd>T</kbd> for a new tab, <kbd>Ctrl</kbd> + <kbd>W</kbd> to close
+one, <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> to reopen it, <kbd>Ctrl</kbd> +
+<kbd>Tab</kbd> for the next tab, <kbd>Ctrl</kbd> + <kbd>1</kbd>–<kbd>9</kbd> for one by
+place, and <kbd>Alt</kbd> + <kbd>←</kbd> / <kbd>→</kbd> for back and forward (⌘ instead of
+Ctrl on a Mac). In a web browser, a few of these belong to the browser you opened Conch in;
+the desktop app has them all.
+
+**Your tabs come back.** Close the panel, reload Conch, or come back after the browser went to
+sleep or Conch restarted: each chat's tabs open again where you left them, the same one in
+view.
 
 ## What it can do
 
