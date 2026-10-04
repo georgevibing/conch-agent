@@ -51,6 +51,7 @@ import {
   useUpdateSkill,
 } from './queries';
 import styles from './Skills.module.css';
+import { MarketOriginSection } from './Discover';
 import { SkillCan, SkillSignatureSection, useTurnOn } from './SkillTrust';
 
 export function SkillDetailView({ skillId }: { skillId: string }) {
@@ -209,7 +210,11 @@ function SkillPage({ skill }: { skill: SkillDetail }) {
           <Text tone="muted">{fields.description || skill.description}</Text>
           <div className={styles.facts}>
             <Text as="span" size="xs" tone="subtle">
-              {skill.editable ? 'Yours' : `From ${skill.sourceLabel}`}
+              {skill.editable
+                ? 'Yours'
+                : skill.origin
+                  ? `From ${skill.origin.sourceLabel}, by ${skill.origin.publisher.name}`
+                  : `From ${skill.sourceLabel}`}
             </Text>
             <span className={styles.path} title={skill.path}>
               {skill.path}
@@ -238,14 +243,14 @@ function SkillPage({ skill }: { skill: SkillDetail }) {
             Make a copy to edit
           </Button>
         )}
-        {skill.editable && (
+        {(skill.editable || skill.origin) && (
           <Button
             variant="ghost"
             tone="danger"
             leadingIcon={<Trash2 />}
             onClick={() => setConfirming(true)}
           >
-            Delete
+            {skill.origin ? 'Remove' : 'Delete'}
           </Button>
         )}
       </Stack>
@@ -310,7 +315,8 @@ function SkillPage({ skill }: { skill: SkillDetail }) {
           </AlertDialog.Footer>
         </AlertDialog.Content>
       </AlertDialog.Root>
-      {!skill.editable && problemFix?.kind !== 'copy' && (
+      <MarketOriginSection skill={skill} />
+      {!skill.editable && !skill.origin && problemFix?.kind !== 'copy' && (
         <Callout tone="info" title={`From ${skill.sourceLabel}`}>
           Conch reads this folder but never changes it. Skills found in other apps start off — read
           it below, then choose when to use it.
@@ -454,10 +460,13 @@ function SkillPage({ skill }: { skill: SkillDetail }) {
 
       <AlertDialog.Root open={confirming} onOpenChange={setConfirming}>
         <AlertDialog.Content tone="danger">
-          <AlertDialog.Title>Delete {skill.title}?</AlertDialog.Title>
+          <AlertDialog.Title>
+            {skill.origin ? 'Remove' : 'Delete'} {skill.title}?
+          </AlertDialog.Title>
           <AlertDialog.Description>
             Its folder is removed from this computer, and /{skill.name} stops working. Chats that
             used it keep what they said.
+            {skill.origin && ' You can add it again from Discover.'}
           </AlertDialog.Description>
           <AlertDialog.Footer>
             <AlertDialog.Cancel asChild>
@@ -470,13 +479,13 @@ function SkillPage({ skill }: { skill: SkillDetail }) {
                 onClick={() =>
                   remove.mutate(skill.id, {
                     onSuccess: () => {
-                      toast(`${skill.title} deleted`);
+                      toast(`${skill.title} ${skill.origin ? 'removed' : 'deleted'}`);
                       void navigate('/skills', { replace: true });
                     },
                   })
                 }
               >
-                Delete skill
+                {skill.origin ? 'Remove skill' : 'Delete skill'}
               </Button>
             </AlertDialog.Action>
           </AlertDialog.Footer>
