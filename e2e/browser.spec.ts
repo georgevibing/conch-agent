@@ -117,13 +117,12 @@ test('a link to a new tab is a tab you can see and switch', async ({ page }) => 
   // The panel shows both tabs; the first is in view again.
   const panel = page.getByRole('complementary', { name: 'Browser panel' });
   const tabs = panel.getByRole('navigation', { name: 'Tabs' });
-  await expect(tabs.getByRole('button', { name: 'Staylight blog' })).toBeVisible();
-  await expect(tabs.getByRole('button', { name: /Staylight · Hotels in Lisbon/ })).toHaveAttribute(
-    'aria-current',
-    'page',
-  );
+  await expect(tabs.getByRole('button', { name: 'Staylight blog', exact: true })).toBeVisible();
+  await expect(
+    tabs.getByRole('button', { name: 'Staylight · Hotels in Lisbon', exact: true }),
+  ).toHaveAttribute('aria-current', 'page');
   // You switch to the blog yourself, then close it.
-  await tabs.getByRole('button', { name: 'Staylight blog' }).click();
+  await tabs.getByRole('button', { name: 'Staylight blog', exact: true }).click();
   await expect(panel.getByRole('button', { name: /Address: .*\/blog/ })).toBeVisible();
   await tabs.getByRole('button', { name: 'Close tab: Staylight blog' }).click();
   await expect(tabs).toBeHidden();
@@ -139,7 +138,7 @@ test('upload a file you attached, after saying yes to it', async ({ page }) => {
   ).setFiles([
     { name: 'cv.txt', mimeType: 'text/plain', buffer: Buffer.from('Ada Lovelace, analyst') },
   ]);
-  await expect(page.getByRole('button', { name: /cv\.txt/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^cv\.txt, / })).toBeVisible();
   const composer = page.getByRole('textbox', { name: /^Message/ });
   await composer.fill(`Open ${origin}/apply and upload it to “CV”`);
   await composer.press('Enter');
@@ -148,7 +147,7 @@ test('upload a file you attached, after saying yes to it', async ({ page }) => {
   const card = page.getByRole('group', { name: 'Upload files to 127.0.0.1?' });
   await expect(card).toBeVisible();
   await expect(card).toContainText('Upload “cv.txt” (attached in this chat) to 127.0.0.1?');
-  await card.getByRole('button', { name: 'Upload' }).click();
+  await card.getByRole('button', { name: 'Upload', exact: true }).click();
   await expect(page.getByText(/uploaded “cv\.txt” to “CV”/)).toBeVisible();
   const panel = page.getByRole('complementary', { name: 'Browser panel' });
   await expect(
