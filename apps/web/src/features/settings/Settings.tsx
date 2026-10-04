@@ -22,6 +22,7 @@ import {
 import {
   BatteryMedium,
   Bell,
+  Cable,
   Brain,
   Check,
   ChevronLeft,
@@ -50,6 +51,7 @@ import { SecurityTab } from '../auth/SecurityTab';
 import { updatesWaiting, useUpdates } from '../updates/queries';
 import { BrowserSettings } from '../browser/BrowserSettings';
 import { HealthTab } from '../health/HealthTab';
+import { OtherAppsTab } from '../otherapps/OtherAppsTab';
 import { ComeHomeSection } from '../import/ComeHomeSection';
 import { NotificationsTab } from '../notifications/NotificationsTab';
 import { VoiceTab } from '../voice/VoiceTab';
@@ -303,7 +305,7 @@ interface Place {
 }
 
 /**
- * Fifteen places, read as five: the everyday basics, then who your assistant
+ * Sixteen places, read as five: the everyday basics, then who your assistant
  * is, where its intelligence comes from, what it can use, and keeping it safe.
  */
 const groups: { label: string; hidden?: boolean; places: Place[] }[] = [
@@ -339,6 +341,7 @@ const groups: { label: string; hidden?: boolean; places: Place[] }[] = [
     places: [
       { value: 'browser', label: 'Browser', icon: <Globe /> },
       { value: 'terminal', label: 'Terminal', icon: <SquareTerminal /> },
+      { value: 'other-apps', label: 'Other apps', icon: <Cable /> },
     ],
   },
   {
@@ -516,6 +519,9 @@ export function Settings() {
                 </Tabs.Content>
                 <Tabs.Content value="terminal">
                   <TerminalSettings />
+                </Tabs.Content>
+                <Tabs.Content value="other-apps">
+                  <OtherAppsTab />
                 </Tabs.Content>
                 <Tabs.Content value="appearance">
                   <AppearanceTab />

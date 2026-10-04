@@ -49,6 +49,7 @@ import { useChannels } from '../channels/queries';
 import { RunBanner } from '../routines/RunBanner';
 import { tasksApi } from '../tasks/api';
 import { TaskBanner } from '../tasks/TaskBanner';
+import { ClientBanner } from '../otherapps/ClientBanner';
 import { useStartTask } from '../tasks/queries';
 import { ComposerControls } from '../models/ComposerControls';
 import { modeInfo, modelLabel } from '../models/catalog';
@@ -908,6 +909,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
       {dropOverlay}
       <RunBanner conversationId={conversationId} />
       <TaskBanner conversationId={conversationId} />
+      <ClientBanner conversationId={conversationId} />
       <ChannelBanner conversationId={conversationId} />
       <ArchivedBanner conversationId={conversationId} />
       <Transcript
@@ -928,7 +930,8 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
         recover={recover}
         footer={footer}
       />
-      <div className={styles.dock}>{composer}</div>
+      {/* Another app's chat is its log (ADR 0073): nobody writes in it. */}
+      {origin?.kind !== 'client' && <div className={styles.dock}>{composer}</div>}
     </div>
   );
   // Wrapped the same before and after a new chat gets its id, so the transcript

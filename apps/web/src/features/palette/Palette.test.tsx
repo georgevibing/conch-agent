@@ -412,6 +412,26 @@ describe('Palette search', () => {
     act(() => useUi.setState({ settingsFocus: undefined }));
   });
 
+  it('finds Other apps by the apps people use Conch from (ADR 0073)', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    const { where } = renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    for (const words of ['claude desktop', 'cursor', 'vs code', 'mcp server', 'other apps']) {
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /Settings: Other apps/ }),
+      ).toBeInTheDocument();
+    }
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(where()).toBe('/settings/other-apps'));
+  });
+
   it('finds your own address by domain, certificate or HTTPS, straight to its section', async () => {
     const user = userEvent.setup();
     mockFetch({

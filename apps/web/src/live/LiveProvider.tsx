@@ -130,11 +130,32 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           );
           break;
         }
-        case 'conversation.updated':
+        case 'conversation.updated': {
+          const before = client
+            .getQueryData<ConversationSummary[]>(keys.conversations)
+            ?.find((c) => c.id === event.conversation.id)?.status;
           client.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>
             upsertSummary(list, event.conversation),
           );
+          // Another app asking through Conch (ADR 0073): its chat is out of sight, so say so here.
+          const { origin, status, id } = event.conversation;
+          if (
+            origin?.kind === 'client' &&
+            status === 'awaiting-permission' &&
+            before !== 'awaiting-permission' &&
+            window.location.pathname !== `/c/${id}`
+          )
+            toast(`${origin.name} needs your OK`, {
+              description: 'It’s waiting for your answer before it goes on.',
+              duration: 30_000,
+              action: {
+                label: 'Review',
+                onClick: () =>
+                  window.dispatchEvent(new CustomEvent('conch:navigate', { detail: `/c/${id}` })),
+              },
+            });
           break;
+        }
         case 'conversation.deleted':
           live.forget(event.conversationId);
           client.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>

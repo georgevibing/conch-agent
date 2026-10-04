@@ -19,6 +19,7 @@ import {
   VaultKindGlyph,
 } from '@conch/nacre';
 import {
+  Cable,
   Archive,
   ArchiveRestore,
   CirclePause,
@@ -267,6 +268,13 @@ const settingsPlaces: {
     label: 'Terminal',
     keywords: 'shell console command line powershell bash zsh remote devices',
     icon: <SquareTerminal />,
+  },
+  {
+    tab: 'other-apps',
+    label: 'Other apps',
+    keywords:
+      'other apps claude desktop cursor vs code vscode visual studio code zed windsurf mcp server connect conch to use from elsewhere editor ide pair paired',
+    icon: <Cable />,
   },
   {
     tab: 'appearance',

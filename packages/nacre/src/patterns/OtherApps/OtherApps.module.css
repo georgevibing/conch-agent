@@ -1,0 +1,106 @@
+@layer nacre.components {
+  .list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-3);
+    padding-block: var(--nc-space-2-5);
+  }
+
+  .row + .row {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  /* Not on this computer: there, but quieter. */
+  .row[data-state='missing'] {
+    opacity: 0.7;
+  }
+
+  .row[data-busy] {
+    opacity: 0.6;
+  }
+
+  .body {
+    flex: 1 1 12rem;
+    min-inline-size: 0;
+  }
+
+  .name {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2);
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .uses {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  .meta {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .actions {
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-1);
+  }
+
+  .empty {
+    padding-block: var(--nc-space-2);
+  }
+
+  /* ── What an app may use ───────────────────────────────────────────── */
+  .picker {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-4);
+  }
+
+  .groupTitle {
+    margin: 0 0 var(--nc-space-2);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    letter-spacing: 0.02em;
+    color: var(--nc-text-subtle);
+  }
+
+  .choices {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .choice {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+  }
+
+  .appChoice {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+}
