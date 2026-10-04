@@ -31,6 +31,7 @@ import {
   Id,
   PermissionMode,
   TurnOptions,
+  TurnPause,
   TurnProblem,
   Usage,
 } from './common';
@@ -529,6 +530,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     error: z.string().optional(),
     /** Why it failed, when Conch can tell (see `TurnProblem`). */
     problem: TurnProblem.optional(),
+    /** It stopped to check in, not because it was done (ADR 0077): the chat offers Carry on. */
+    paused: TurnPause.optional(),
     /** Which provider answered, and with which model when it said. */
     engine: EngineId.optional(),
     model: z.string().optional(),

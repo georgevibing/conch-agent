@@ -27,6 +27,7 @@ import type {
   ToolStatus,
   ToolView,
   TurnOptions,
+  TurnPause,
   TurnProblem,
   PlanStep,
   SpendLimitKind,
@@ -323,6 +324,8 @@ export type TranscriptItem =
       error?: string;
       /** Why it failed, when Conch can tell: decides what the chat offers. */
       problem?: TurnProblem;
+      /** It stopped to check in, not because it was done (ADR 0077): Carry on picks it up. */
+      paused?: TurnPause;
       usage?: Usage;
       /** What it cost, the way its provider charges (ADR 0079). */
       cost?: TurnCost;
@@ -737,6 +740,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             outcome: event.outcome,
             error: event.error,
             ...(event.problem && { problem: event.problem }),
+            ...(event.paused && { paused: event.paused }),
             usage: event.usage,
             ...(event.cost && { cost: event.cost }),
             engine: event.engine,

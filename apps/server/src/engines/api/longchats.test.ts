@@ -169,23 +169,32 @@ describe('a long chat on a model API', () => {
   it('counts what summarising cost in the turn that needed it', async () => {
     const chat = await setup({ window: 9_000 });
     let done: Extract<EngineEvent, { type: 'done' }> | undefined;
+    let asked = 0;
     for (let i = 0; i < 8; i++) {
+      const before = chat.completions.length;
       const events = await chat.ask(long(i), i);
-      if (compactions(events).length) done = events.at(-1) as typeof done;
+      if (compactions(events).length) {
+        done = events.at(-1) as typeof done;
+        asked = chat.completions.length - before;
+      }
     }
     expect(done?.usage?.inputTokens).toBeGreaterThanOrEqual(100);
-    expect(done?.usage?.costUsd).toBeCloseTo(0.001, 6);
+    // Each summarising request costs $0.001; a small window takes the chat in pieces that fit it.
+    expect(asked).toBeGreaterThan(0);
+    expect(done?.usage?.costUsd).toBeCloseTo(0.001 * asked, 6);
   });
 
   it('says what summarising cost as soon as it’s paid, before the next request (ADR 0057)', async () => {
     const chat = await setup({ window: 9_000 });
     for (let i = 0; i < 8; i++) {
+      const before = chat.completions.length;
       const events = await chat.ask(long(i), i);
       if (!compactions(events).length) continue;
       const folded = events.findIndex((e) => e.type === 'compacted');
       const said = events.findIndex((e, at) => at > folded && e.type === 'usage');
       expect(said).toBeGreaterThan(folded);
-      expect(events[said]).toMatchObject({ type: 'usage', usage: { costUsd: 0.001 } });
+      const asked = chat.completions.length - before;
+      expect(events[said]).toMatchObject({ type: 'usage', usage: { costUsd: 0.001 * asked } });
       // Before the model's answer: an unattended run can stop at its limit first.
       expect(said).toBeLessThan(events.findIndex((e) => e.type === 'text'));
       return;

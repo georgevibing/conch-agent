@@ -15,6 +15,7 @@ import type { EngineEvent, HostTool, TurnInput } from '../types';
 import { ACP_AGENTS, type AcpAgent } from './agents';
 import { namesDoorTool, rowOf } from './calls';
 import { AcpEngine, deviceSignIn, forDoor, offerOf, preamble, whyUnstartable } from './engine';
+import { guardTurn } from '../../conversations/turn-guard';
 import { fakeSpawn, type AgentScript } from './fake';
 
 async function settings() {
@@ -394,6 +395,73 @@ describe('a turn with an ACP agent', () => {
     expect(
       copilot.agents.at(-1)?.received.some((m) => m.method === 'session/set_config_option'),
     ).toBe(false);
+  });
+
+  it('pauses with Carry on when the program reaches its own step limit', async () => {
+    const { engine } = await engineWith({
+      prompt: async () => ({ stopReason: 'max_turn_requests' }),
+    });
+    const events = await collect(engine.runTurn(turn()));
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      outcome: 'success',
+      paused: { reason: 'steps', message: expect.stringContaining('checking in') },
+    });
+  });
+
+  it('is watched from outside: a loop through the door is pointed out, then paused (ADR 0077)', async () => {
+    const saved: string[] = [];
+    const answers: string[] = [];
+    let door: { url: string; headers: { name: string; value: string }[] } | undefined;
+    const { engine, agents } = await engineWith({
+      session: (params) => {
+        door = (params.mcpServers as (typeof door)[])[0];
+        return { sessionId: 'sess_loop' };
+      },
+      prompt: async (t) => {
+        if (!door) throw new Error('No door');
+        let cancelled = false;
+        void t.cancelled().then(() => (cancelled = true));
+        const client = new Client({ name: 'pretend-agent', version: '1' });
+        await client.connect(
+          new StreamableHTTPClientTransport(new URL(door.url), {
+            requestInit: {
+              headers: Object.fromEntries(door.headers.map((h) => [h.name, h.value])),
+            },
+          }),
+        );
+        // A program stuck on one call, the same every time.
+        for (let i = 0; i < 10 && !cancelled; i++) {
+          const result = await client
+            .callTool({ name: 'mcp__conch__remember', arguments: { content: 'tea' } })
+            .catch(() => undefined);
+          const text = (result?.content as { text: string }[] | undefined)?.[0]?.text;
+          if (text) answers.push(text);
+          await new Promise((r) => setTimeout(r, 5));
+        }
+        await client.close().catch(() => undefined);
+        return { stopReason: cancelled ? 'cancelled' : 'end_turn' };
+      },
+    });
+    const stop = new AbortController();
+    const pace = guardTurn(engine, {
+      budget: { steps: 100, tokens: 1e9, ms: 1e9 },
+      tools: [rememberTool(saved)],
+      signal: stop.signal,
+    });
+    const events = await collect(
+      pace.events(engine.runTurn(turn({ tools: pace.tools, signal: pace.signal }))),
+    );
+    // The third identical call told the program to stop repeating it.
+    expect(answers[2]).toContain('From Conch');
+    expect(saved.length).toBeLessThan(5);
+    expect(agents[0]?.received.some((m) => m.method === 'session/cancel')).toBe(true);
+    // Not "Stopped": a pause the person can carry on from.
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      outcome: 'success',
+      paused: { reason: 'loop' },
+    });
   });
 
   it('stops when you stop it', async () => {

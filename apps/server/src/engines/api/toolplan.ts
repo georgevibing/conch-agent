@@ -78,7 +78,13 @@ export class ToolPlan {
       : options.native && lesson !== 'prompted'
         ? 'native'
         : this.#inWords();
-    for (const [name, tool] of options.tools) {
+    this.#index();
+  }
+
+  /** Every name the model might write for each tool. */
+  #index(): void {
+    this.#names.clear();
+    for (const [name, tool] of this.options.tools) {
       for (const alias of [name, tool.display, tool.display.split('__').at(-1) ?? name]) {
         const key = alias.toLowerCase();
         // A short name two tools share points at neither.
@@ -87,6 +93,20 @@ export class ToolPlan {
         else if (!this.#names.has(key) || alias === name) this.#names.set(key, name);
       }
     }
+  }
+
+  /**
+   * The tools changed under the plan — lean mode loaded more (ADR 0078) — so
+   * read them again, in words too. True when something did.
+   */
+  refresh(): boolean {
+    const specs = [...this.options.tools.values()].map((tool) => tool.spec);
+    if (specs.length === this.#specs.length && specs.every((spec, i) => spec === this.#specs[i]))
+      return false;
+    this.#specs = specs;
+    this.#index();
+    if (this.mode === 'prompted') this.mode = this.#inWords();
+    return true;
   }
 
   /** Whether the model has tools at all this turn. */

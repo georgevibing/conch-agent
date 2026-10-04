@@ -183,6 +183,84 @@ function safeJson(body: string): unknown {
   }
 }
 
+// ── Prompt caching ──────────────────────────────────────────────────────────
+
+const EPHEMERAL = { type: 'ephemeral' } as const;
+
+/** One message with a cache breakpoint on its last block, as sent (the stored copy is untouched). */
+function marked(message: WireMessage): WireMessage {
+  const content = message.content;
+  if (typeof content === 'string')
+    return content
+      ? { ...message, content: [{ type: 'text', text: content, cache_control: EPHEMERAL }] }
+      : message;
+  if (!Array.isArray(content) || !content.length) return message;
+  const last = content.at(-1);
+  // Thinking blocks can't carry a breakpoint; a request always ends on the person's side anyway.
+  if (!isRecord(last) || last.type === 'thinking' || last.type === 'redacted_thinking')
+    return message;
+  return { ...message, content: [...content.slice(0, -1), { ...last, cache_control: EPHEMERAL }] };
+}
+
+/**
+ * The prompt with Anthropic's cache breakpoints (four at most), so a turn of
+ * many steps pays a tenth for everything it already sent:
+ *  - the last tool: the tool list, the same all chat long;
+ *  - the system prompt (tools and system together);
+ *  - the last two of the person's side of the conversation: the newest, which
+ *    the next step reads, and the one before, which is still there to read
+ *    when the newest gets shortened to fit (ADR 0055) — each request finds
+ *    the one before within the 20 blocks Anthropic looks back.
+ * A prefix too short to cache is simply not cached; nothing fails.
+ */
+export function cached(request: Pick<WireRequest, 'system' | 'messages' | 'tools'>) {
+  const tools = request.tools.map((tool, i) => ({
+    name: tool.name,
+    description: tool.description,
+    input_schema: tool.schema,
+    ...(i === request.tools.length - 1 && { cache_control: EPHEMERAL }),
+  }));
+  const people = request.messages.flatMap((m, i) => (m.role === 'user' ? [i] : [])).slice(-2);
+  const messages = request.messages.map((m, i) => (people.includes(i) ? marked(m) : m));
+  return {
+    ...(request.system && {
+      system: [{ type: 'text', text: request.system, cache_control: EPHEMERAL }],
+    }),
+    messages,
+    ...(tools.length && { tools }),
+  };
+}
+
+/**
+ * A refusal because a replayed thinking block no longer matches the
+ * conversation before it. Newer models bind each block to everything that came
+ * before it, and Conch does change the past on purpose: it summarises the start
+ * of a long chat (ADR 0055) and lets stale pages go (ADR 0077).
+ */
+export function thinkingMismatch(detail: string): boolean {
+  return (
+    /thinking|signature/i.test(detail) &&
+    /prefix|binding|mismatch|modified|changed|invalid/i.test(detail)
+  );
+}
+
+/**
+ * The conversation without the model's earlier thinking: what it said and did
+ * stays, its private reasoning goes. Anthropic documents dropping thinking as
+ * the recovery when a block can't be replayed.
+ */
+export function withoutThinking(messages: readonly WireMessage[]): WireMessage[] {
+  return messages.map((message) => {
+    if (message.role !== 'assistant' || !Array.isArray(message.content)) return message;
+    const kept = message.content.filter(
+      (block) =>
+        !(isRecord(block) && (block.type === 'thinking' || block.type === 'redacted_thinking')),
+    );
+    if (kept.length === message.content.length) return message;
+    return { ...message, content: kept.length ? kept : [{ type: 'text', text: '…' }] };
+  });
+}
+
 // ── Adapter ─────────────────────────────────────────────────────────────────
 
 /** A picture as the Messages API takes it. */
@@ -347,15 +425,7 @@ export class AnthropicWire implements Wire {
     return {
       model: request.model,
       max_tokens: maxTokens,
-      system: request.system,
-      messages: request.messages,
-      ...(request.tools.length && {
-        tools: request.tools.map((tool) => ({
-          name: tool.name,
-          description: tool.description,
-          input_schema: tool.schema,
-        })),
-      }),
+      ...cached(request),
       // Forced tool choice 400s on several current models, so the default
       // (`auto`) is the only one Conch uses.
       ...(wantsEffort && model?.thinking && { thinking: { type: 'adaptive' } }),
@@ -364,16 +434,31 @@ export class AnthropicWire implements Wire {
   }
 
   async *stream(request: WireRequest): AsyncIterable<WireEvent> {
-    const response = await send({
-      fetchImpl: this.#fetch,
-      url: `${BASE}/v1/messages`,
-      method: 'POST',
-      headers: this.#headers(request.key),
-      body: { ...this.#body(request), stream: true },
-      label: LABEL,
-      key: request.key,
-      signal: request.signal,
-    });
+    const post = (messages: WireMessage[]) =>
+      send({
+        fetchImpl: this.#fetch,
+        url: `${BASE}/v1/messages`,
+        method: 'POST',
+        headers: this.#headers(request.key),
+        body: { ...this.#body({ ...request, messages }), stream: true },
+        label: LABEL,
+        key: request.key,
+        signal: request.signal,
+      });
+    let response = await post(request.messages);
+    if (response.status === 400) {
+      const body = await text(response, LABEL).catch(() => '');
+      const error = ErrorBody.safeParse(safeJson(body));
+      const detail = error.success ? (error.data.error.message ?? '') : '';
+      // Earlier thinking no longer matches what came before it (the start of the chat
+      // was summarised, a stale page let go): it goes, and the request goes again.
+      if (thinkingMismatch(detail)) response = await post(withoutThinking(request.messages));
+      // A tool's schema it won't read: the engine simplifies it and asks again (ADR 0072).
+      else if (request.tools.length > 0 && toolRefusal(detail) === 'schema')
+        throw refusalError('schema', LABEL);
+      else
+        throw mapError(400, error.success ? error.data.error : undefined, undefined, request.key);
+    }
     if (!response.ok) throw await this.#fail(response, request.key, request.tools.length > 0);
     if (!response.body) throw new ApiError('network', `${LABEL} sent an empty reply.`);
 
@@ -381,6 +466,7 @@ export class AnthropicWire implements Wire {
     const blocks = new Map<number, { block: Record<string, unknown>; json: string }>();
     let inputTokens = 0;
     let cachedInputTokens = 0;
+    let cacheWriteTokens = 0;
     let outputTokens = 0;
     let stopReason: string | undefined;
 
@@ -400,6 +486,7 @@ export class AnthropicWire implements Wire {
           (usage?.cache_creation_input_tokens ?? 0) +
           (usage?.cache_read_input_tokens ?? 0);
         cachedInputTokens = usage?.cache_read_input_tokens ?? 0;
+        cacheWriteTokens = usage?.cache_creation_input_tokens ?? 0;
         continue;
       }
       if (kind === 'content_block_start') {
@@ -460,6 +547,7 @@ export class AnthropicWire implements Wire {
     const usage: WireUsage = {
       inputTokens: Math.max(0, Math.round(inputTokens)),
       ...(cachedInputTokens > 0 && { cachedInputTokens: Math.round(cachedInputTokens) }),
+      ...(cacheWriteTokens > 0 && { cacheWriteTokens: Math.round(cacheWriteTokens) }),
       outputTokens: Math.max(0, Math.round(outputTokens)),
     };
     const stop: WireStop =
