@@ -38,6 +38,7 @@ import { cleanPlan, stepStatus } from '../../plans/steps';
 import { agentEnv, launch, run } from '../../lib/proc';
 import type { SettingsStore } from '../../settings/store';
 import { buildTools, type Callable } from '../api/engine';
+import { withSight } from '../api/sight';
 import { isAtLeast, parseVersion } from '../codex/detect';
 import type { Engine, EngineEvent, LoginHandle, TurnInput } from '../types';
 import { findAgent, signedInBefore, type AcpAgent } from './agents';
@@ -807,7 +808,14 @@ export class AcpEngine implements Engine {
       open = false;
       messageId = newId('msg');
     };
-    const tools = buildTools(input);
+    // A program that takes pictures in a prompt gets a tool's pictures too (an
+    // MCP `image`); one that doesn't gets them in words (ADR 0070).
+    const canSee = running.info.agentCapabilities?.promptCapabilities?.image === true;
+    const tools = withSight(buildTools(input), {
+      sees: () => canSee,
+      ...(input.describe && { describe: input.describe }),
+      signal: input.signal,
+    });
     const names = new Set([...tools.values()].map((tool: Callable) => tool.spec.name));
     const local = new AbortController();
     const signal = AbortSignal.any([input.signal, local.signal]);
@@ -961,7 +969,6 @@ export class AcpEngine implements Engine {
             ? preamble(input.systemAppend, Boolean(door), { updated: true })
             : undefined;
       const words = resumed ? input.prompt : (input.freshPrompt ?? input.prompt);
-      const canSee = running.info.agentCapabilities?.promptCapabilities?.image === true;
       const prompt = [
         ...(lead ? [{ type: 'text', text: lead }] : []),
         ...(canSee ? (input.images ?? []) : []).map((image) => ({

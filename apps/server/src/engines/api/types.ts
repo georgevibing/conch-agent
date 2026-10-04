@@ -9,7 +9,7 @@
  */
 import type { EffortChoice, EngineId, EngineStatus, LoginState, ModelInfo } from '@conch/protocol';
 
-import type { LoginHandle } from '../types';
+import type { LoginHandle, Picture } from '../types';
 import type { Wire } from './wire';
 
 /**
@@ -130,6 +130,8 @@ export interface WireCompletion {
   model: string;
   system: string;
   prompt: string;
+  /** Pictures to look at with the prompt (describing a screenshot, ADR 0070). */
+  images?: readonly Picture[];
   maxTokens: number;
   signal: AbortSignal;
 }
@@ -162,6 +164,8 @@ export type ApiErrorKind =
   | 'rate-limit'
   | 'overloaded'
   | 'context'
+  /** The model can't look at pictures, and the request carried some (ADR 0070). */
+  | 'images'
   | 'policy'
   | 'timeout'
   | 'network'

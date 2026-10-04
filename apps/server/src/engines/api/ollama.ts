@@ -27,8 +27,9 @@ import { z } from 'zod';
 
 import { gigabytes } from '../../local/models';
 import { errorOf, ndjson, type OllamaClient } from '../../local/ollama';
-import type { Completion, EngineUsage, TurnImage } from '../types';
+import type { Completion, EngineUsage, Picture } from '../types';
 import { tooLong, windowIn } from './context';
+import { refusesImages, toolPicturesLead } from './pictures';
 import { defaultHome } from './session';
 import {
   ApiError,
@@ -138,6 +139,9 @@ export function mapError(status: number, message: string, model: string): ApiErr
       `${model} needs more memory than this computer has free right now. Close a few apps, or pick a smaller model.`,
     );
   }
+  if (refusesImages(message)) {
+    return new ApiError('images', `${model} can’t look at pictures.`);
+  }
   if (tooLong(message) || /context|exceeds/i.test(message)) {
     const window = windowIn(message);
     return new ApiError('context', TOO_LONG, { ...(window && { window }) });
@@ -198,12 +202,17 @@ export class OllamaWire implements Wire {
     return this.#models.get(model)?.tools;
   }
 
+  /** What Ollama says the model can do: `vision` among its capabilities (ADR 0070). */
+  seesFor(model: string): boolean {
+    return this.#models.get(model)?.vision ?? false;
+  }
+
   smallModel(): string | undefined {
     // Every local model is free; the one the person chose is the one that's loaded.
     return undefined;
   }
 
-  userMessage(content: string, images?: readonly TurnImage[]): WireMessage {
+  userMessage(content: string, images?: readonly Picture[]): WireMessage {
     return {
       role: 'user',
       content,
@@ -211,13 +220,23 @@ export class OllamaWire implements Wire {
     };
   }
 
+  /** Tool answers, one `tool` message each; their pictures follow in one user message (ADR 0070). */
   toolResults(results: ToolResult[]): WireMessage[] {
-    return results.map((result) => ({
+    const messages: WireMessage[] = results.map((result) => ({
       role: 'tool',
       tool_name: result.name,
       tool_call_id: result.id,
       content: result.text,
     }));
+    const pictured = results.filter((result) => result.images?.length);
+    if (pictured.length)
+      messages.push(
+        this.userMessage(
+          toolPicturesLead(pictured.map((result) => result.name)),
+          pictured.flatMap((result) => result.images ?? []),
+        ),
+      );
+    return messages;
   }
 
   /**
@@ -383,7 +402,7 @@ export class OllamaWire implements Wire {
         model: request.model,
         messages: [
           { role: 'system', content: request.system },
-          { role: 'user', content: request.prompt },
+          this.userMessage(request.prompt, request.images),
         ],
         stream: false,
         // The same context as a chat, or Ollama would reload the model just for this.

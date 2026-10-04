@@ -18,8 +18,9 @@
  */
 import { z } from 'zod';
 
-import type { Completion, TurnImage } from '../types';
+import type { Completion, Picture } from '../types';
 import { tooLong, windowIn } from './context';
+import { refusesImages } from './pictures';
 import { sseEvents } from './sse';
 import { defaultHome } from './session';
 import {
@@ -159,6 +160,9 @@ export function mapError(
   if (status === 504 || type === 'timeout_error') {
     return new ApiError('timeout', 'The model took too long to answer.', { retryable: true });
   }
+  if (type === 'invalid_request_error' && refusesImages(detail)) {
+    return new ApiError('images', detail || 'This model can’t look at pictures.');
+  }
   if (type === 'invalid_request_error' && (tooLong(detail) || /exceed|context/i.test(detail))) {
     const window = windowIn(detail);
     return new ApiError('context', TOO_LONG, { ...(window && { window }) });
@@ -178,6 +182,14 @@ function safeJson(body: string): unknown {
 }
 
 // ── Adapter ─────────────────────────────────────────────────────────────────
+
+/** A picture as the Messages API takes it. */
+function imageBlock(image: Picture): Record<string, unknown> {
+  return {
+    type: 'image',
+    source: { type: 'base64', media_type: image.mimeType, data: image.data },
+  };
+}
 
 export class AnthropicWire implements Wire {
   readonly source = LABEL;
@@ -266,6 +278,8 @@ export class AnthropicWire implements Wire {
         efforts: knownEfforts(Object.keys(entry.capabilities?.effort ?? {})),
         supportsFastMode: false,
         supportsAutoMode: false,
+        // Every Claude model on the Messages API looks at pictures.
+        images: true,
       },
       // Every Claude model on the Messages API can call tools.
       tools: true,
@@ -279,21 +293,20 @@ export class AnthropicWire implements Wire {
     return pickSmallModel([...this.#models.keys()]);
   }
 
-  userMessage(content: string, images?: readonly TurnImage[]): WireMessage {
-    if (!images?.length) return { role: 'user', content };
-    return {
-      role: 'user',
-      content: [
-        ...images.map((image) => ({
-          type: 'image',
-          source: { type: 'base64', media_type: image.mimeType, data: image.data },
-        })),
-        { type: 'text', text: content },
-      ],
-    };
+  /** Every Claude model sees (ADR 0070). */
+  seesFor(): boolean {
+    return true;
   }
 
-  /** Every result for one assistant turn goes back in a single user message. */
+  userMessage(content: string, images?: readonly Picture[]): WireMessage {
+    if (!images?.length) return { role: 'user', content };
+    return { role: 'user', content: [...images.map(imageBlock), { type: 'text', text: content }] };
+  }
+
+  /**
+   * Every result for one assistant turn goes back in a single user message. A
+   * tool's pictures go inside its own `tool_result`, after its text.
+   */
   toolResults(results: ToolResult[]): WireMessage[] {
     if (!results.length) return [];
     return [
@@ -302,7 +315,9 @@ export class AnthropicWire implements Wire {
         content: results.map((result) => ({
           type: 'tool_result',
           tool_use_id: result.id,
-          content: result.text,
+          content: result.images?.length
+            ? [{ type: 'text', text: result.text }, ...result.images.map(imageBlock)]
+            : result.text,
           ...(result.isError && { is_error: true }),
         })),
       },
@@ -453,7 +468,7 @@ export class AnthropicWire implements Wire {
         model: request.model,
         max_tokens: request.maxTokens,
         system: request.system,
-        messages: [{ role: 'user', content: request.prompt }],
+        messages: [this.userMessage(request.prompt, request.images)],
       },
       label: LABEL,
       key: request.key,

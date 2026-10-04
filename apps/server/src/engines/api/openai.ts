@@ -24,6 +24,7 @@
 import type { EffortChoice } from '@conch/protocol';
 import type { Completion } from '../types';
 import {
+  bridgeToolToUser,
   chatToolResults,
   chatTools,
   chatUserMessage,
@@ -33,6 +34,7 @@ import {
   type ChatError,
 } from './chat';
 import { tooLong, windowIn } from './context';
+import { refusesImages } from './pictures';
 import {
   ApiError,
   TOO_LONG,
@@ -114,6 +116,14 @@ export interface ChatPreset {
   small?: RegExp;
   /** Models that can't call tools in this API, whatever the list says. */
   noTools?: RegExp;
+  /**
+   * Whether a model the list says nothing about looks at pictures (ADR 0070):
+   * `true` where the provider takes them (a model that can't says so, and
+   * Conch heals), a pattern for the ids that do, unset where it never does.
+   */
+  sees?: boolean | RegExp;
+  /** Refuses a user message straight after a tool's (Mistral): a blank assistant turn goes between. */
+  toolThenUser?: 'bridge';
   /** Thinking levels a model takes, when the list doesn't say. */
   efforts?(model: ModelFacts): Effort[];
   /** How a thinking level is asked for. Default `reasoning_effort`. */
@@ -435,6 +445,8 @@ export function mapChatError(
       'not-found',
       `That model isn’t available at ${label} any more. Pick another one.`,
     );
+  if ([0, 400, 404, 422, 500].includes(status) && refusesImages(words))
+    return new ApiError('images', said || `That model at ${label} can’t look at pictures.`);
   if (tooLong(words) || status === 413) {
     const window = windowIn(said);
     return new ApiError('context', TOO_LONG, { ...(window && { window }) });
@@ -659,7 +671,7 @@ export class OpenAiWire implements Wire {
         efforts,
         supportsFastMode: false,
         supportsAutoMode: false,
-        ...(m.images !== undefined && { images: m.images }),
+        images: m.images ?? this.#seesUnlisted(m.id),
       },
       tools,
       thinking: Boolean(m.thinking || efforts.length),
@@ -676,6 +688,16 @@ export class OpenAiWire implements Wire {
     if (this.#noTools.has(model) || this.preset.noTools?.test(model)) return false;
     const known = this.#models.get(model);
     return known ? (known.tools ?? true) : undefined;
+  }
+
+  /** What the list says about a model's sight, else what the provider does (ADR 0070). */
+  seesFor(model: string): boolean {
+    return this.#models.get(model)?.images ?? this.#seesUnlisted(model);
+  }
+
+  #seesUnlisted(model: string): boolean {
+    const sees = this.preset.sees;
+    return sees instanceof RegExp ? sees.test(model) : sees === true;
   }
 
   userMessage(content: string, images?: Parameters<typeof chatUserMessage>[1]): WireMessage {
@@ -698,7 +720,12 @@ export class OpenAiWire implements Wire {
   #body(request: WireRequest, tools: boolean): Record<string, unknown> {
     return {
       model: request.model,
-      messages: [{ role: 'system', content: request.system }, ...request.messages],
+      messages: [
+        { role: 'system', content: request.system },
+        ...(this.preset.toolThenUser === 'bridge'
+          ? bridgeToolToUser(request.messages)
+          : request.messages),
+      ],
       stream: true,
       ...(this.preset.usageOption !== false && { stream_options: { include_usage: true } }),
       ...(tools ? chatTools(request.tools) : {}),
@@ -782,7 +809,7 @@ export class OpenAiWire implements Wire {
         model: request.model,
         messages: [
           { role: 'system', content: request.system },
-          { role: 'user', content: request.prompt },
+          chatUserMessage(request.prompt, request.images),
         ],
         stream: true,
         ...(this.preset.usageOption !== false && { stream_options: { include_usage: true } }),

@@ -26,7 +26,7 @@ export interface HostToolResult {
   text: string;
   /** Trusted tool guarantee: no write was attempted (e.g. approval declined). */
   effect?: 'not-executed';
-  images?: { data: string; mimeType: 'image/jpeg' | 'image/png' }[];
+  images?: ToolImage[];
   /**
    * What it found, drawn as it is for the person (an agenda, emails, files,
    * messages: ADR 0060). Never shown to the model, which reads `text`.
@@ -81,6 +81,35 @@ export interface HostTool<Shape extends z.ZodRawShape = z.ZodRawShape> {
   /** Words that find it when tools are searched for. */
   searchHint?: string;
 }
+
+/** A picture, whoever sent it: base64, no data-URL prefix. */
+export type Picture = Pick<TurnImage, 'data' | 'mimeType'>;
+
+/** A picture a tool returned (a screenshot): base64, no data-URL prefix. */
+export interface ToolImage {
+  data: string;
+  mimeType: 'image/jpeg' | 'image/png';
+}
+
+/** The pictures in a host tool's result, if any. */
+export function hostToolImages(result: string | HostToolResult): ToolImage[] | undefined {
+  return typeof result === 'string' || !result.images?.length ? undefined : result.images;
+}
+
+/**
+ * Pictures put into words for a model that can't see them (ADR 0070): by
+ * another model that can, chosen from the providers the person connected.
+ * `text` is undefined when none of them could look; `usage` is what
+ * describing cost, counted with the turn.
+ */
+export type DescribeImages = (
+  images: readonly Picture[],
+  context: {
+    /** What the pictures are, for the describer: "a screenshot of a web page". */
+    what: string;
+    signal: AbortSignal;
+  },
+) => Promise<{ text?: string; usage?: Usage }>;
 
 /** A host tool's result as plain text, for engines (and logs) that only take text. */
 export function hostToolText(result: string | HostToolResult): string {
@@ -213,6 +242,13 @@ export interface TurnInput {
   onModeChange?: (listener: (mode: PermissionMode) => void) => void;
   /** Native engines: integrations to load, keyed by server name (tools become `mcp__<name>__<tool>`). */
   mcpServers?: Record<string, EngineMcpServer>;
+  /**
+   * Put pictures into words for a model that can't see them (ADR 0070), by a
+   * model that can. Engines call it for a tool's screenshot, or a picture the
+   * person attached, when the turn's model can't take pictures. Bound to this
+   * turn's provider and model, so neither is asked to look.
+   */
+  describe?: DescribeImages;
   /** Bridge engines: integration tools Conch is connected to for this turn. */
   bridgedTools?: BridgedTool[];
   /** Tools the user turned off; the model never sees them. */
@@ -309,6 +345,8 @@ export interface CompletionInput {
   model?: string;
   /** A longer answer than a title (a chat's summary). Undefined = a few words. */
   maxTokens?: number;
+  /** Pictures to look at with the prompt, for engines with `completeSees` (ADR 0070). */
+  images?: readonly Picture[];
   signal: AbortSignal;
 }
 
@@ -397,6 +435,12 @@ export interface Engine {
   readonly smallModel?: string;
   /** Answer a single prompt with plain text: no tools, no session, no thinking. */
   complete?(input: CompletionInput): Promise<Completion>;
+  /**
+   * `complete` looks at `CompletionInput.images` when its model can see (its
+   * `ModelInfo.images` isn't false), so it can describe a screenshot to a
+   * model that can't (ADR 0070).
+   */
+  readonly completeSees?: boolean;
   /** Current plan limits. Engines without limits omit it; Conch then only tracks spend. */
   usage?(options?: { force?: boolean }): Promise<EngineUsage>;
   /** How this engine uses integrations. */

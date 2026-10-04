@@ -15,7 +15,7 @@ import type { EffortChoice } from '@conch/protocol';
 import type { z } from 'zod';
 
 import { isLoopbackUrl, isPrivateUrl } from '../../local/host';
-import type { Completion, EngineUsage, TurnImage } from '../types';
+import type { Completion, EngineUsage, Picture, ToolImage } from '../types';
 import {
   ApiError,
   type FetchLike,
@@ -33,6 +33,8 @@ export interface ToolResult {
   name: string;
   text: string;
   isError: boolean;
+  /** Pictures the tool returned, only for a model that can see them (ADR 0070). */
+  images?: readonly ToolImage[];
 }
 
 export interface Wire {
@@ -49,8 +51,8 @@ export interface Wire {
   /** Limits the provider publishes. Omitted where it publishes none. */
   usage?(input: { key: string; signal?: AbortSignal }): Promise<EngineUsage>;
   /** The user's prompt (and any images sent with it), in this provider's message shape. */
-  userMessage(text: string, images?: readonly TurnImage[]): WireMessage;
-  /** Tool answers, in this provider's message shape. */
+  userMessage(text: string, images?: readonly Picture[]): WireMessage;
+  /** Tool answers (and their pictures), in this provider's message shape. */
   toolResults(results: ToolResult[]): WireMessage[];
   /** A small, cheap model from the last list the provider gave us, if it has one. */
   smallModel(): string | undefined;
@@ -59,6 +61,12 @@ export interface Wire {
    * turn goes without them (and the model is told so); unset means yes.
    */
   toolsFor?(model: string): boolean | undefined;
+  /**
+   * Whether this model can look at pictures (ADR 0070): what the provider's
+   * list says, else whether the provider takes pictures at all. Undefined
+   * means no.
+   */
+  seesFor?(model: string): boolean | undefined;
 }
 
 /** Effort levels Conch's protocol knows about (everything but `auto`). */

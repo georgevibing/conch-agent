@@ -27,6 +27,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import type { ToolStatus, ToolView } from '@conch/protocol';
 
 import type { Callable } from '../api/engine';
+import type { ToolImage } from '../types';
 
 /** A request body bigger than this is not a tool call. */
 const MAX_BODY = 4 * 1024 * 1024;
@@ -122,9 +123,10 @@ export async function openDoor(
       let text = 'The tool could not complete. Check the action and try again.';
       let isError = true;
       let view: ToolView | undefined;
+      let images: readonly ToolImage[] | undefined;
       try {
         signal.throwIfAborted();
-        ({ text, isError, view } = await tool.run(args, id));
+        ({ text, isError, view, images } = await tool.run(args, id));
       } catch {
         if (signal.aborted) text = 'Stopped.';
       }
@@ -134,7 +136,18 @@ export async function openDoor(
         output: text,
         ...(view && !isError && { view }),
       });
-      return { isError, content: [{ type: 'text' as const, text }] };
+      // A tool's pictures (a screenshot) go back as MCP images, after its words.
+      return {
+        isError,
+        content: [
+          { type: 'text' as const, text },
+          ...(images ?? []).map((image) => ({
+            type: 'image' as const,
+            data: image.data,
+            mimeType: image.mimeType,
+          })),
+        ],
+      };
     });
     return server;
   };

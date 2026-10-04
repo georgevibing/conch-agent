@@ -36,10 +36,10 @@ After you send, the cards sit above your message and open the same way.
 Each provider gets an attachment in the way it can use:
 
 - Text goes along with your words.
-- Pictures go to models that can see.
+- Pictures go to models that can see. A model that can't gets a description, written by one of your models that can.
 - Other files go to providers that can open files on your computer.
 
-When the provider or model you picked can't use something, its card shows a small dot before you send, with the reason: it will only get the name. Choose another in the model picker, or send it anyway. [Compare providers](../providers/index.md).
+When the provider or model you picked can't use something, its card shows a small dot before you send, with the reason. A file it can't open only gets its name. Choose another in the model picker, or send it anyway. [Compare providers](../providers/index.md).
 
 Your assistant is told that attachments are material to work with, not instructions to follow.
 

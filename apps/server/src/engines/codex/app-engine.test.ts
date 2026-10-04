@@ -146,6 +146,40 @@ describe('Codex app-server parity', () => {
       view,
     });
   });
+  it('hands a tool’s screenshot back as an inputImage, for a model that sees (ADR 0070)', async () => {
+    const { engine, turn, fake } = await setup({
+      signedIn: true,
+      tool: 'mcp__conch__browser_screenshot',
+      args: {},
+    });
+    const run = vi.fn(async () => ({
+      text: 'Screenshot of “Shop”.',
+      images: [{ data: '/9j/AAAA', mimeType: 'image/jpeg' as const }],
+    }));
+    const describe = vi.fn(async () => ({ text: 'words' }));
+    await collect(
+      engine.runTurn(
+        turn({
+          describe,
+          options: {
+            model: 'account-model',
+            effort: 'auto',
+            fastMode: false,
+            permissionMode: 'default',
+          },
+          tools: [{ name: 'browser_screenshot', description: 'Look', input: {}, run }],
+        }),
+      ),
+    );
+    const answered = (await fake.calls()).find((c) => c.id === 'call1')?.result as {
+      contentItems?: unknown[];
+    };
+    expect(answered.contentItems).toEqual([
+      { type: 'inputText', text: 'Screenshot of “Shop”.' },
+      { type: 'inputImage', imageUrl: 'data:image/jpeg;base64,/9j/AAAA' },
+    ]);
+    expect(describe).not.toHaveBeenCalled();
+  });
   it('never runs a denied tool, including in full trust', async () => {
     const { engine, turn } = await setup({
       signedIn: true,

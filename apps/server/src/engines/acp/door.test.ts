@@ -108,3 +108,72 @@ describe('the stdio door (shim.mjs)', () => {
     await door.close();
   });
 });
+
+/** A tool call through the door, read back as the agent would. */
+function call(url: string, headers: Record<string, string>, name: string) {
+  return new Promise<unknown>((resolve, reject) => {
+    const target = new URL(url);
+    const req = request(
+      {
+        hostname: target.hostname,
+        port: target.port,
+        path: target.pathname,
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          ...headers,
+        },
+      },
+      (res) => {
+        let body = '';
+        res.on('data', (chunk: Buffer) => (body += chunk.toString()));
+        res.on('end', () => resolve(JSON.parse(body)));
+      },
+    );
+    req.on('error', reject);
+    req.end(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: { name, arguments: {} },
+      }),
+    );
+  });
+}
+
+describe('a tool’s pictures through the door (ADR 0070)', () => {
+  it('go back as MCP images after the words', async () => {
+    const stop = new AbortController();
+    const shot: Callable = {
+      ...tool('browser_screenshot'),
+      run: async () => ({
+        text: 'Screenshot of “Shop”.',
+        isError: false,
+        images: [{ data: '/9j/AAAA', mimeType: 'image/jpeg' }],
+      }),
+    };
+    const ended: { output: string }[] = [];
+    const door = await openDoor(
+      new Map([['browser_screenshot', shot]]),
+      { start() {}, end: (e) => void ended.push(e) },
+      stop.signal,
+    );
+    const key = Object.fromEntries(door.headers.map((h) => [h.name, h.value]));
+    try {
+      const reply = (await call(door.url, key, 'browser_screenshot')) as {
+        result: { content: unknown[] };
+      };
+      expect(reply.result.content).toEqual([
+        { type: 'text', text: 'Screenshot of “Shop”.' },
+        { type: 'image', data: '/9j/AAAA', mimeType: 'image/jpeg' },
+      ]);
+      // The person's row shows the words, never the bytes.
+      expect(ended[0]?.output).toBe('Screenshot of “Shop”.');
+    } finally {
+      stop.abort();
+      await door.close();
+    }
+  });
+});

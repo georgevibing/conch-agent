@@ -83,6 +83,7 @@ import type { ApiEngine } from './engines/api';
 import { builtInEngines, serverEngine } from './engines/registry';
 import { appsNeeded } from './providers/apps';
 import { carryTools } from './providers/capabilities';
+import { Describer } from './vision/describer';
 import { MockEngine } from './engines/mock/engine';
 import { MOCK_MEANING_SPEC, mockMeaningFetch, mockMeaningLoad } from './engines/mock/meaning';
 import type { Engine, LoginHandle } from './engines/types';
@@ -234,6 +235,8 @@ export class Services {
   readonly keys: ProviderKeys;
   /** Connecting providers, switching between them, and saying how they are. */
   readonly providers: ProviderService;
+  /** Screenshots in words for models that can't see, by one that can (ADR 0070). */
+  readonly describer: Describer;
   readonly usage: UsageService;
   readonly integrations: IntegrationService;
   /** Skills: Conch's own, and those in other agents' folders (ADR 0013). */
@@ -429,6 +432,7 @@ export class Services {
       // A different provider means different limits and a different model list.
       onSwitch: () => void this.usage.refresh({ force: true }),
     });
+    this.describer = new Describer({ ready: () => this.providers.ready() });
     // With the mock engine, integrations talk to a pretend vendor on this machine too.
     this.mockVendor = config.CONCH_ENGINE === 'mock' ? new MockVendor() : undefined;
     // Apps you make, share and add (ADR 0061): an app like any other on the Apps page.
@@ -669,6 +673,7 @@ export class Services {
       memoryIndex: this.memoryIndex,
       engine: (id) => this.providers.engineFor(id),
       route: (engine, context) => this.route(engine, context),
+      describe: (engine, model) => this.describer.for(engine, model),
       // An engine that can't run Conch's own tools is never offered them.
       tools: (ctx) =>
         ctx.engine.hostTools === false

@@ -27,8 +27,16 @@ import { run } from '../../lib/proc';
 import type { ProviderKeys } from '../../providers/keys';
 import type { SettingsStore } from '../../settings/store';
 import { buildTools } from '../api/engine';
+import { withSight } from '../api/sight';
 import { hostEnvironment } from '../host';
-import type { Engine, EngineEvent, LoginHandle, PermissionRequest, TurnInput } from '../types';
+import type {
+  Engine,
+  EngineEvent,
+  LoginHandle,
+  PermissionRequest,
+  ToolImage,
+  TurnInput,
+} from '../types';
 import { DOCS_URL, MIN_VERSION, findCodex, installHints, isAtLeast, parseVersion } from './detect';
 import { CodexHome } from './home';
 import type { RpcMessage } from './rpc';
@@ -512,7 +520,17 @@ export class CodexEngine implements Engine {
         );
       signal.throwIfAborted();
       const agent = this.variant === 'agent';
-      const tools = buildTools({ ...input, signal }, { computer: !agent });
+      // A screenshot goes back as a picture to a model that takes them (every
+      // Codex model so far); one that doesn't gets it in words (ADR 0070).
+      const sees =
+        (await this.capabilities().catch(() => undefined))?.models.find(
+          (m) => m.id === input.options.model,
+        )?.images ?? true;
+      const tools = withSight(buildTools({ ...input, signal }, { computer: !agent }), {
+        sees: () => sees,
+        ...(input.describe && { describe: input.describe }),
+        signal,
+      });
       // The thread this chat had, carried on while its tools are the same (Codex
       // can't be given new ones: ADR 0036). Otherwise a new one, with the handoff.
       const toolsKey = toolsDigest(
@@ -635,6 +653,7 @@ export class CodexEngine implements Engine {
                   let text = 'This tool is not enabled in this conversation.';
                   let isError = true;
                   let view: ToolView | undefined;
+                  let images: readonly ToolImage[] = [];
                   try {
                     if (tool) {
                       signal.throwIfAborted();
@@ -642,6 +661,7 @@ export class CodexEngine implements Engine {
                       text = result.text;
                       isError = result.isError;
                       view = result.isError ? undefined : result.view;
+                      images = result.images ?? [];
                     }
                   } catch {
                     text = signal.aborted
@@ -658,7 +678,17 @@ export class CodexEngine implements Engine {
                   if (!signal.aborted)
                     rpc.send({
                       id: message.id,
-                      result: { success: !isError, contentItems: [{ type: 'inputText', text }] },
+                      result: {
+                        success: !isError,
+                        // The app server takes pictures back from a tool as `inputImage`.
+                        contentItems: [
+                          { type: 'inputText', text },
+                          ...images.map((image) => ({
+                            type: 'inputImage',
+                            imageUrl: `data:${image.mimeType};base64,${image.data}`,
+                          })),
+                        ],
+                      },
                     });
                 });
                 toolTail = job.catch(() => {});

@@ -28,6 +28,7 @@ import { honouredMode, skillHolds, type PermissionMode, type SkillHold } from '@
 import type {
   BridgedTool,
   Compacted,
+  DescribeImages,
   Engine,
   EngineEvent,
   EngineMcpServer,
@@ -514,6 +515,11 @@ export class ConversationManager {
       expand?: MessageExpander;
       /** Money spent outside a turn (naming a chat), for the usage ledger. */
       onSpend?: (usage: Usage) => void;
+      /**
+       * Pictures in words for a turn's model that can't see them (ADR 0070), by
+       * another model the person connected.
+       */
+      describe?: (engine: Engine, model?: string) => DescribeImages;
       integrations?: TurnIntegrationsProvider;
       /** Where uploaded files and long pastes are kept (ADR 0017). */
       attachments?: AttachmentStore;
@@ -1568,6 +1574,7 @@ export class ConversationManager {
             conversationId,
             prompt: missed ? `${missed}\n\n${prompt}` : prompt,
             ...(attached?.images.length && { images: attached.images }),
+            ...(this.deps.describe && { describe: this.deps.describe(engine, resolved.model) }),
             ...(readableDirs.length && { readableDirs }),
             ...(this.deps.protectedPaths?.length && { protectedPaths: this.deps.protectedPaths }),
             resumeId: session?.resumeId,

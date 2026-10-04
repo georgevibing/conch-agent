@@ -606,7 +606,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
   const noteFor = (d: Draft): string | undefined => {
     if (!provider) return undefined;
     if (d.kind === 'image' && !sees && !can?.files)
-      return `${provider.label} can’t see pictures with this model. It will only get the name.`;
+      return 'This model can’t see pictures, so Conch describes it in words when another of your models can.';
     if (d.kind === 'file' && !can?.files)
       return `${provider.label} can’t open this kind of file. It will only get the name.`;
     return undefined;

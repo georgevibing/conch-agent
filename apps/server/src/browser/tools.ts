@@ -741,7 +741,7 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
   const screenshot: HostTool = {
     name: 'browser_screenshot',
     description:
-      'Look at the page as an image (for layout, pictures, charts). Prefer browser_read for text. Secret fields are masked.',
+      'Look at the page as a picture of what’s on screen (layout, pictures, charts, canvas, captchas). Prefer browser_read for text and controls. If your model can’t see pictures, you get a description from one that can. Secret fields are masked.',
     input: {},
     run: () =>
       step(
@@ -757,8 +757,11 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
             maskColor: '#9a8f88',
           });
           const title = await tab.page.title().catch(() => '');
+          const size = tab.page.viewportSize();
           return {
-            text: `Screenshot of “${title}” (${tab.page.url()}). If you can’t see the image, use browser_read instead.`,
+            // One picture pixel is one CSS pixel (the browser runs at scale 1),
+            // so a position read off the picture is a position on the page.
+            text: `Screenshot of “${title}” (${tab.page.url()}): the visible part of the page${size ? `, ${size.width}×${size.height} pixels, x across from the left and y down from the top` : ''}.`,
             images: [{ data: image.toString('base64'), mimeType: 'image/jpeg' }],
           };
         },
