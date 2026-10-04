@@ -575,10 +575,7 @@ test(
         mkdirSync(bin);
         const script = join(root, 'app', 'apps/server/src/setup/seal-commands.sh');
         mkdirSync(join(root, 'app', 'apps/server/src/setup'), { recursive: true });
-        writeFileSync(
-          script,
-          `echo "sealed by $(id -u >/dev/null 2>&1; echo script)" >> "${root}/calls"\n`,
-        );
+        writeFileSync(script, `echo "sealed by script" >> "${root}/calls"\n`);
         // Not installed yet; `sudo` only records and hands over (never a real password prompt).
         writeFileSync(
           join(bin, 'sudo'),
