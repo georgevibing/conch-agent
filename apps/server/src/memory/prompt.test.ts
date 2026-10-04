@@ -32,6 +32,27 @@ describe('buildSystemAppend', () => {
     expect(text).toContain('Use the remember tool');
   });
 
+  it('carries your cards as well as your own words', () => {
+    const text = buildSystemAppend({
+      persona: Persona.parse({ name: 'Shelly', tone: 'warm', instructions: '' }),
+      profile: Profile.parse({
+        name: 'George',
+        about: 'Game dev by night.',
+        facts: [{ id: 'f1', kind: 'person', text: 'Lina', detail: 'daughter' }],
+      }),
+      memories: [],
+      autoMemory: true,
+    });
+    expect(text).toContain(
+      [
+        '# About the user',
+        'Their name is George.',
+        'People in their life: Lina (daughter).',
+        'In their own words: Game dev by night.',
+      ].join('\n'),
+    );
+  });
+
   it('stays within the memory budget and points to recall', () => {
     const memories = Array.from({ length: 400 }, (_, i) => ({
       id: `m_${i}`,

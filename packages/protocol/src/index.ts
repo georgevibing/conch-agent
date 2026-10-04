@@ -37,6 +37,7 @@ import {
 } from './common';
 import { DoctorReport } from './doctor';
 import { Memory, MemoryKind } from './memory';
+import { MAX_PROFILE_FACTS, ProfileFact } from './profile';
 import { PastChatsLooked } from './past-chats';
 import { EngineStatus, LoginState } from './engine';
 import { HealNote } from './healed';
@@ -53,6 +54,7 @@ import { UsageSnapshot } from './usage';
 import { CappedOutcome, ChatSpend, SpendLimitKind, SpendModel, TurnCost } from './spend';
 
 export * from './access';
+export * from './profile';
 export * from './address';
 export * from './apps';
 export * from './artifacts';
@@ -141,8 +143,10 @@ export type Persona = z.infer<typeof Persona>;
 export const Profile = z.object({
   /** How the agent should address the user. */
   name: z.string().trim().max(80).default(''),
-  /** A few lines about the user, always in context. */
+  /** A few lines about the user, always in context: in their own words. */
   about: z.string().max(4000).default(''),
+  /** Who they are in cards: work, home, people, interests, how they like things. */
+  facts: z.array(ProfileFact).max(MAX_PROFILE_FACTS).default([]),
 });
 export type Profile = z.infer<typeof Profile>;
 
@@ -274,7 +278,11 @@ export const UpdateSettingsBody = z.object({
     .partial()
     .optional(),
   profile: z
-    .object({ name: z.string().trim().max(80), about: z.string().max(4000) })
+    .object({
+      name: z.string().trim().max(80),
+      about: z.string().max(4000),
+      facts: z.array(ProfileFact).max(MAX_PROFILE_FACTS),
+    })
     .partial()
     .optional(),
   preferences: z

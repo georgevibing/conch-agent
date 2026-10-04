@@ -54,6 +54,7 @@ import {
   RoutineSpendingBody,
   UpdatesSettingsBody,
   type ServerEvent,
+  UnderstandProfileBody,
 } from '@conch/protocol';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import type { z } from 'zod';
@@ -90,6 +91,7 @@ import { registerFirstJobRoutes } from './onboarding/first-job';
 import { registerBackgroundRoutes } from './background/routes';
 import { registerImportRoutes } from './import/routes';
 import { registerLearningRoutes } from './memory/routes';
+import { ProfileUnavailable, understandProfile } from './profile/understand';
 import { registerBackupRoutes } from './backup/routes';
 import { registerBrowserRoutes } from './browser/routes';
 import { registerChannelLinkRoutes } from './channels/link-routes';
@@ -384,6 +386,25 @@ export async function buildApp(services: Services) {
     }
     await services.settings.update(body);
     return appState();
+  });
+
+  // About you, read into cards (suggestions only: nothing is saved until you keep it).
+  app.post('/api/profile/understand', async (request, reply) => {
+    const body = parse(UnderstandProfileBody, request.body, reply);
+    if (!body) return;
+    try {
+      const abort = new AbortController();
+      request.raw.on('close', () => abort.abort());
+      return { facts: await understandProfile(services.engine(), body.about, abort.signal) };
+    } catch (error) {
+      return reply.code(503).send({
+        error: 'engine-unavailable',
+        message:
+          error instanceof ProfileUnavailable
+            ? error.message
+            : 'That couldn’t be read just now. Try again, or add the cards yourself.',
+      });
+    }
   });
 
   // ── Engine ─────────────────────────────────────────────────────────────

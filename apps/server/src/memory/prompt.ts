@@ -1,4 +1,5 @@
 import type { Memory, Persona, Profile, Tone } from '@conch/protocol';
+import { describeProfile } from '@conch/protocol';
 
 const tones: Record<Tone, string> = {
   warm: 'Warm, encouraging and human. Plain language, a light touch of personality, never saccharine.',
@@ -66,10 +67,8 @@ export function systemParts(input: SystemInput): { identity: string; memory: str
     ].join('\n'),
   );
 
-  const about = [
-    profile.name.trim() && `Their name is ${profile.name.trim()}.`,
-    profile.about.trim(),
-  ].filter(Boolean);
+  // The same words Settings → About you shows as "What every chat starts with".
+  const about = describeProfile(profile);
   if (about.length) sections.push([`# About the user`, ...about].join('\n'));
 
   const lines: string[] = [];

@@ -2044,7 +2044,7 @@ export class ConversationManager {
               ? [
                   buildSystemAppend({
                     persona: { ...settings.persona, instructions: '' },
-                    profile: { name: '', about: '' },
+                    profile: { name: '', about: '', facts: [] },
                     memories: [],
                     total: 0,
                     autoMemory: false,

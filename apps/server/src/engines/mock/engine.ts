@@ -338,6 +338,37 @@ export class MockEngine implements Engine {
   async complete(input: CompletionInput): Promise<Completion> {
     this.completions.push(input.model);
     await sleep(1400 * this.#speed, input.signal);
+    // About you, read into cards: each sentence in the card it sounds like.
+    if (input.system.includes('cards of their profile')) {
+      const about = input.prompt.split('\n\n').slice(1).join('\n\n');
+      const kin =
+        /\b(daughter|son|wife|husband|partner|mother|father|parents?|sister|brother|friend)\b/i;
+      const facts = about
+        .split(/(?<=[.!?])\s+/)
+        .map((sentence) => sentence.replace(/[.!?]+$/, '').trim())
+        .filter(Boolean)
+        .map((text) =>
+          kin.test(text)
+            ? {
+                kind: 'person',
+                // The name after "daughter", "wife"…; the relation beside it.
+                text:
+                  /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*/.exec(
+                    text.slice((kin.exec(text)?.index ?? 0) + 1),
+                  )?.[0] ?? text,
+                detail: kin.exec(text)?.[1]?.toLowerCase() ?? '',
+              }
+            : /\b(work|job|engineer|manager|SDM|developer|designer|at [A-Z])/i.test(text)
+              ? { kind: 'work', text }
+              : /\b(live|lives|living|born|from|raised|moved)\b/i.test(text)
+                ? { kind: 'home', text }
+                : { kind: 'interest', text },
+        );
+      return {
+        text: JSON.stringify({ facts }),
+        usage: { inputTokens: 300, outputTokens: 120, costUsd: 0.0004 },
+      };
+    }
     // A skill to name and describe: answer in the shape Conch asks for.
     const skill = /<instructions>\n([\s\S]*)\n<\/instructions>/.exec(input.prompt)?.[1];
     if (skill !== undefined) {
