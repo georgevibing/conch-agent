@@ -63,6 +63,8 @@ export const UsageKind = z.enum([
 export type UsageKind = z.infer<typeof UsageKind>;
 
 export const UsageSnapshot = z.object({
+  /** The provider these limits are for. */
+  engine: z.string().max(200).optional(),
   kind: UsageKind,
   /** Who meters you: "Claude Max", "Anthropic API", "Amazon Bedrock". */
   source: z.string(),

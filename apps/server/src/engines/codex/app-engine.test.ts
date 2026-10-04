@@ -11,7 +11,7 @@ import { SettingsStore } from '../../settings/store';
 import { fakeCodexApp } from '../../test/fakeCodexApp';
 import type { LoginState } from '@conch/protocol';
 import type { EngineEvent, TurnInput } from '../types';
-import { CodexEngine, codexPlan, codexProblem, escapes } from './app-engine';
+import { CodexEngine, codexPlan, codexProblem, codexUsage, escapes } from './app-engine';
 
 const homes: string[] = [];
 afterEach(() => {
@@ -69,6 +69,48 @@ describe('why a Codex turn failed', () => {
     );
     expect(codexProblem('usageLimitExceeded')).toBe('limit');
     expect(codexProblem(undefined)).toBeUndefined();
+  });
+});
+
+describe('how much of the ChatGPT plan is left', () => {
+  it('reads the five-hour session and the week, as the usage meter shows them', async () => {
+    const { engine } = await setup({ signedIn: true });
+    expect(await engine.usage()).toEqual({
+      kind: 'plan',
+      source: 'ChatGPT Plus',
+      windows: [
+        {
+          id: 'session',
+          label: 'Current session',
+          usedPercent: 85,
+          resetsAt: 1791140000_000,
+          severity: 'warning',
+        },
+        {
+          id: 'weekly',
+          label: 'This week',
+          usedPercent: 20,
+          resetsAt: 1791600000_000,
+          severity: 'normal',
+        },
+      ],
+    });
+  });
+  it('says so when Codex reports no windows, and takes the update a turn sends', () => {
+    expect(codexUsage({ rateLimits: { primary: null, secondary: null } }, 'Codex')).toMatchObject({
+      kind: 'unknown',
+      source: 'Codex',
+    });
+    expect(
+      codexUsage(
+        { rateLimits: { primary: { usedPercent: 100, windowDurationMins: 300 }, planType: 'pro' } },
+        'Codex',
+      ),
+    ).toMatchObject({
+      kind: 'plan',
+      source: 'ChatGPT Pro',
+      windows: [{ id: 'session', usedPercent: 100, severity: 'exhausted' }],
+    });
   });
 });
 

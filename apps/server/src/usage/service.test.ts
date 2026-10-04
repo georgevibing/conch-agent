@@ -130,6 +130,58 @@ describe('UsageService', () => {
   });
 });
 
+describe('UsageService, one meter per provider', () => {
+  it('keeps each provider’s limits apart, and a turn re-reads the one that answered', async () => {
+    vi.useFakeTimers({
+      now: NOW,
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'],
+    });
+    const home = await mkdtemp(join(tmpdir(), 'conch-usage-'));
+    const claude = fakeEngine(plan(30));
+    const codex = fakeEngine({ ...plan(85), source: 'ChatGPT Plus' });
+    Object.assign(claude.engine, { id: 'claude-code' });
+    Object.assign(codex.engine, { id: 'codex-cli', label: 'Codex' });
+    const byId = { 'claude-code': claude.engine, 'codex-cli': codex.engine } as Record<
+      string,
+      Engine
+    >;
+    let now = NOW;
+    const service = new UsageService({
+      home,
+      engine: (id) => byId[id ?? 'claude-code'] as Engine,
+      engines: () => Object.values(byId),
+      now: () => now,
+    });
+    service.start();
+    const seen: UsageSnapshot[] = [];
+    service.changed.on((s) => seen.push(s));
+    expect(await service.snapshot()).toMatchObject({ engine: 'claude-code', source: 'Claude Max' });
+    expect(await service.snapshot({ engine: 'codex-cli' })).toMatchObject({
+      engine: 'codex-cli',
+      source: 'ChatGPT Plus',
+    });
+    expect(seen.map((s) => s.engine)).toEqual(['claude-code', 'codex-cli']);
+
+    // A Codex turn ends: only Codex is read again.
+    codex.set({ ...plan(92), source: 'ChatGPT Plus' });
+    now += 20_000;
+    await service.recordTurn(undefined, 'codex-cli');
+    await vi.advanceTimersByTimeAsync(2_000);
+    await vi.waitFor(() => expect(seen.at(-1)).toMatchObject({ engine: 'codex-cli' }));
+    expect(seen.at(-1)?.windows[0]?.usedPercent).toBe(92);
+    expect(claude.engine.usage).toHaveBeenCalledTimes(1);
+
+    // Codex's own live hint blocks Codex, not Claude.
+    codex.signal({ status: 'rejected', windowId: 'session', resetsAt: NOW + HOUR });
+    await vi.waitFor(() =>
+      expect(seen.at(-1)).toMatchObject({ engine: 'codex-cli', blocked: { until: NOW + HOUR } }),
+    );
+    expect((await service.snapshot()).blocked).toBeUndefined();
+    service.stop();
+    await rm(home, { recursive: true, force: true });
+  });
+});
+
 describe('UsageService ledger seeding', () => {
   it('backfills spend from past turns the first time', async () => {
     const home = await mkdtemp(join(tmpdir(), 'conch-usage-'));

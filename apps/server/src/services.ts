@@ -879,13 +879,14 @@ export class Services {
     this.usage = new UsageService({
       home: config.CONCH_HOME,
       heal,
-      engine: () => this.engine(),
+      engine: (id) => (id ? this.providers.engineFor(id) : this.engine()),
+      engines: () => [...this.engines.values()],
       history: () => turnCosts(conversationStore),
     });
     this.usage.changed.on((usage) => this.broadcast.emit({ type: 'usage.changed', usage }));
     this.conversations.events.on((event) => {
       if (event.type === 'conversation.event' && event.event.type === 'turn.completed') {
-        void this.usage.recordTurn(event.event.usage).catch(() => undefined);
+        void this.usage.recordTurn(event.event.usage, event.event.engine).catch(() => undefined);
       }
     });
     this.usage.start();
@@ -1936,10 +1937,7 @@ export class Services {
     }
     const fallback = preferences.limitFallback;
     if (fallback && fallback !== engine.id) {
-      const usage =
-        engine.id === this.engine().id
-          ? await this.usage.snapshot().catch(() => undefined)
-          : undefined;
+      const usage = await this.usage.snapshot({ engine: engine.id }).catch(() => undefined);
       if (context.failed === 'limit' || usage?.blocked) {
         const other = this.providers.engineFor(fallback);
         const ready = other.id !== engine.id && (await other.detect().catch(() => undefined));

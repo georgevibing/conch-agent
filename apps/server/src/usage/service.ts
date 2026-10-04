@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 
-import type { Usage, UsageSnapshot } from '@conch/protocol';
+import type { EngineId, Usage, UsageSnapshot } from '@conch/protocol';
 import { z } from 'zod';
 
 import type { Engine, EngineUsage, LimitSignal } from '../engines/types';
@@ -47,32 +47,44 @@ export function spendOf(ledger: Ledger, now: number): UsageSnapshot['spend'] {
 
 const METERED_NOTE = "Spend counts what you've run through Conch, at list prices.";
 
+/** What Conch knows about one provider's limits. */
+interface Meter {
+  engine: Engine;
+  usage?: EngineUsage;
+  readAt: number;
+  blocked?: UsageSnapshot['blocked'];
+  snapshot?: UsageSnapshot;
+  reading?: Promise<UsageSnapshot>;
+  debounce?: NodeJS.Timeout;
+  resetTimer?: NodeJS.Timeout;
+}
+
 /**
- * One answer to "how much do I have left?", whatever the engine or sign-in.
+ * One answer to "how much do I have left?", for each provider, whatever the
+ * sign-in. A chat shows the limits of the provider answering it, so every
+ * provider has a meter of its own.
  *
- * Plan windows come from the engine (and are refreshed after every turn, on
- * the provider's live rate-limit hints, when a window resets, and every few
+ * Plan windows come from the engine (and are refreshed after every turn it
+ * answers, on its live rate-limit hints, when a window resets, and every few
  * minutes); spend is Conch's own ledger in `~/.conch/usage.json`. Every change
- * is pushed through `changed`, so the browser never has to poll.
+ * is pushed through `changed`, naming its provider, so the browser never has
+ * to poll.
  */
 export class UsageService {
   readonly changed = new Emitter<UsageSnapshot>();
   #mutex = new Mutex();
   #ledger?: Ledger;
-  #engineUsage?: EngineUsage;
-  #readAt = 0;
-  #blocked?: UsageSnapshot['blocked'];
-  #snapshot?: UsageSnapshot;
-  #reading?: Promise<UsageSnapshot>;
-  #debounce?: NodeJS.Timeout;
-  #resetTimer?: NodeJS.Timeout;
+  #meters = new Map<string, Meter>();
   #poll?: NodeJS.Timeout;
-  #offLimits?: () => void;
+  #offLimits: (() => void)[] = [];
 
   constructor(
     private readonly deps: {
       home: string;
-      engine: () => Engine;
+      /** A provider by id; no id is the default provider. */
+      engine: (id?: EngineId) => Engine;
+      /** Every provider, to hear each one's live limit hints. Defaults to the default one. */
+      engines?: () => Engine[];
       /** Past turns, used once to seed the ledger so spend is right from day one. */
       history?: () => Promise<{ at: number; costUsd: number }[]>;
       now?: () => number;
@@ -89,42 +101,65 @@ export class UsageService {
     return join(this.deps.home, 'usage.json');
   }
 
+  #meter(id?: EngineId): Meter {
+    const engine = this.deps.engine(id);
+    // A test double may have no id: it's the one provider there is.
+    const key = engine.id ?? '';
+    let meter = this.#meters.get(key);
+    if (!meter) this.#meters.set(key, (meter = { engine, readAt: 0 }));
+    return meter;
+  }
+
   /** Begin listening for live hints and polling. Idempotent. */
   start(): void {
     if (this.#poll) return;
     // Seed the ledger now, before any new turn could be counted twice.
     void this.#mutex.run(() => this.#load()).catch(() => undefined);
-    this.#offLimits = this.deps.engine().onLimits?.((signal) => this.#onSignal(signal));
+    for (const engine of this.deps.engines?.() ?? [this.deps.engine()]) {
+      const off = engine.onLimits?.((signal) => this.#onSignal(engine.id, signal));
+      if (off) this.#offLimits.push(off);
+    }
     this.#poll = setInterval(() => {
-      if (this.#engineUsage?.kind === 'plan') void this.refresh({ force: true });
+      for (const meter of this.#meters.values())
+        if (meter.usage?.kind === 'plan') void this.#refresh(meter, true);
     }, POLL_MS);
     this.#poll.unref();
   }
 
   stop(): void {
     clearInterval(this.#poll);
-    clearTimeout(this.#debounce);
-    clearTimeout(this.#resetTimer);
-    this.#offLimits?.();
+    for (const meter of this.#meters.values()) {
+      clearTimeout(meter.debounce);
+      clearTimeout(meter.resetTimer);
+    }
+    for (const off of this.#offLimits.splice(0)) off();
     this.#poll = undefined;
   }
 
-  /** The latest snapshot; reads the provider on first use or when `force`d. */
-  async snapshot({ force = false } = {}): Promise<UsageSnapshot> {
-    if (this.#snapshot && !force) return this.#snapshot;
-    return this.refresh({ force });
+  /**
+   * The latest snapshot of a provider (the default one when none is named);
+   * reads the provider on first use or when `force`d.
+   */
+  async snapshot({ force = false, engine }: { force?: boolean; engine?: EngineId } = {}) {
+    const meter = this.#meter(engine);
+    if (meter.snapshot && !force) return meter.snapshot;
+    return this.#refresh(meter, force);
   }
 
-  /** Re-read the provider and broadcast the result. Concurrent calls share one read. */
-  refresh({ force = false } = {}): Promise<UsageSnapshot> {
-    this.#reading ??= this.#read(force).finally(() => {
-      this.#reading = undefined;
+  /** Re-read a provider and broadcast the result. Concurrent calls share one read. */
+  refresh({ force = false, engine }: { force?: boolean; engine?: EngineId } = {}) {
+    return this.#refresh(this.#meter(engine), force);
+  }
+
+  #refresh(meter: Meter, force: boolean): Promise<UsageSnapshot> {
+    meter.reading ??= this.#read(meter, force).finally(() => {
+      meter.reading = undefined;
     });
-    return this.#reading;
+    return meter.reading;
   }
 
-  /** Called when a turn finishes: add its cost, then look at the provider again. */
-  async recordTurn(usage: Usage | undefined): Promise<void> {
+  /** Called when a turn finishes: add its cost, then look again at the provider that answered. */
+  async recordTurn(usage: Usage | undefined, engine?: EngineId): Promise<void> {
     const cost = usage?.costUsd ?? 0;
     if (cost > 0) {
       await this.#mutex.run(async () => {
@@ -140,9 +175,10 @@ export class UsageService {
         await writeJson(this.#path, ledger);
       });
     }
-    this.#scheduleRefresh();
+    this.#scheduleRefresh(this.#meter(engine));
   }
 
+  /** Your own monthly budget. Spend is Conch-wide, so every meter says it again. */
   async setBudget(budget: number | null): Promise<UsageSnapshot> {
     await this.#mutex.run(async () => {
       const ledger = await this.#load();
@@ -150,7 +186,10 @@ export class UsageService {
       else ledger.budget = budget;
       await writeJson(this.#path, ledger);
     });
-    return this.#engineUsage ? this.#publish() : this.refresh();
+    const main = this.#meter();
+    for (const meter of this.#meters.values())
+      if (meter !== main && meter.usage) await this.#publish(meter);
+    return main.usage ? this.#publish(main) : this.#refresh(main, false);
   }
 
   async #load(): Promise<Ledger> {
@@ -180,83 +219,85 @@ export class UsageService {
     return ledger;
   }
 
-  async #read(force: boolean): Promise<UsageSnapshot> {
-    const engine = this.deps.engine();
-    const throttled = force && this.#now - this.#readAt < MIN_FORCE_MS;
+  async #read(meter: Meter, force: boolean): Promise<UsageSnapshot> {
+    const { engine } = meter;
+    const throttled = force && this.#now - meter.readAt < MIN_FORCE_MS;
     try {
-      this.#engineUsage = engine.usage
+      meter.usage = engine.usage
         ? await engine.usage({ force: force && !throttled })
         : { kind: 'metered', source: engine.label, windows: [] };
-      this.#readAt = this.#now;
+      meter.readAt = this.#now;
     } catch (error) {
       // Keep the last good numbers; say why they may be stale.
-      this.#engineUsage = {
-        ...(this.#engineUsage ?? { kind: 'unknown', source: engine.label, windows: [] }),
+      meter.usage = {
+        ...(meter.usage ?? { kind: 'unknown', source: engine.label, windows: [] }),
         message: `Couldn't refresh usage: ${(error as Error).message}`,
       };
     }
-    return this.#publish();
+    return this.#publish(meter);
   }
 
-  async #publish(): Promise<UsageSnapshot> {
+  async #publish(meter: Meter): Promise<UsageSnapshot> {
     const now = this.#now;
-    const usage = this.#engineUsage ?? { kind: 'unknown', source: '', windows: [] };
+    const usage = meter.usage ?? { kind: 'unknown', source: '', windows: [] };
     const spend = spendOf(await this.#load(), now);
 
     // A window at 100% blocks just as surely as a rejected request does.
     const full = usage.windows.find((w) => w.usedPercent >= 100);
-    if (full) this.#blocked = { until: full.resetsAt, windowId: full.id };
-    if (this.#blocked?.until !== undefined && this.#blocked.until <= now) this.#blocked = undefined;
-    if (usage.kind !== 'plan') this.#blocked = undefined;
+    if (full) meter.blocked = { until: full.resetsAt, windowId: full.id };
+    if (meter.blocked?.until !== undefined && meter.blocked.until <= now) meter.blocked = undefined;
+    if (usage.kind !== 'plan') meter.blocked = undefined;
 
     const message = usage.message ?? (usage.kind === 'metered' ? METERED_NOTE : undefined);
     const snapshot: UsageSnapshot = {
+      ...(meter.engine.id && { engine: meter.engine.id }),
       kind: usage.kind,
       source: usage.source,
       windows: usage.windows.map((w) =>
-        w.id === this.#blocked?.windowId ? { ...w, severity: 'exhausted' } : w,
+        w.id === meter.blocked?.windowId ? { ...w, severity: 'exhausted' } : w,
       ),
       ...(usage.extra && { extra: usage.extra }),
       spend,
-      ...(this.#blocked && { blocked: this.#blocked }),
+      ...(meter.blocked && { blocked: meter.blocked }),
       ...(message && { message }),
-      updatedAt: this.#readAt || now,
+      updatedAt: meter.readAt || now,
     };
-    this.#snapshot = snapshot;
-    this.#scheduleReset(snapshot);
+    meter.snapshot = snapshot;
+    this.#scheduleReset(meter, snapshot);
     this.changed.emit(snapshot);
     return snapshot;
   }
 
-  #onSignal(signal: LimitSignal) {
+  #onSignal(id: EngineId, signal: LimitSignal) {
+    const meter = this.#meter(id);
     if (signal.status === 'rejected') {
-      this.#blocked = { until: signal.resetsAt, windowId: signal.windowId };
-      void this.#publish();
-    } else if (this.#blocked && signal.status === 'allowed') {
-      this.#blocked = undefined;
+      meter.blocked = { until: signal.resetsAt, windowId: signal.windowId };
+      void this.#publish(meter);
+    } else if (meter.blocked && signal.status === 'allowed') {
+      meter.blocked = undefined;
     }
-    this.#scheduleRefresh();
+    this.#scheduleRefresh(meter);
   }
 
-  #scheduleRefresh() {
-    clearTimeout(this.#debounce);
-    this.#debounce = setTimeout(() => void this.refresh({ force: true }), DEBOUNCE_MS);
-    this.#debounce.unref();
+  #scheduleRefresh(meter: Meter) {
+    clearTimeout(meter.debounce);
+    meter.debounce = setTimeout(() => void this.#refresh(meter, true), DEBOUNCE_MS);
+    meter.debounce.unref();
   }
 
   /** Re-read the moment the next window (or block) resets, so meters refill on time. */
-  #scheduleReset(snapshot: UsageSnapshot) {
-    clearTimeout(this.#resetTimer);
+  #scheduleReset(meter: Meter, snapshot: UsageSnapshot) {
+    clearTimeout(meter.resetTimer);
     const now = this.#now;
     const times = [...snapshot.windows.map((w) => w.resetsAt), snapshot.blocked?.until].filter(
       (t): t is number => t !== undefined && t > now,
     );
     if (times.length === 0) return;
     const delay = Math.min(MAX_TIMER_MS, Math.min(...times) - now + 2_000);
-    this.#resetTimer = setTimeout(() => {
-      this.#blocked = undefined;
-      void this.refresh({ force: true });
+    meter.resetTimer = setTimeout(() => {
+      meter.blocked = undefined;
+      void this.#refresh(meter, true);
     }, delay);
-    this.#resetTimer.unref();
+    meter.resetTimer.unref();
   }
 }

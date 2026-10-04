@@ -540,8 +540,15 @@ export async function buildApp(services: Services) {
   );
 
   // ── Usage limits ───────────────────────────────────────────────────────
-  app.get<{ Querystring: { refresh?: string } }>('/api/usage', (request) =>
-    services.usage.snapshot({ force: request.query.refresh === '1' }),
+  // The default provider's limits, or `?engine=` for another's (the one a chat uses).
+  app.get<{ Querystring: { refresh?: string; engine?: string } }>(
+    '/api/usage',
+    (request, reply) => {
+      const { engine, refresh } = request.query;
+      const id = engine === undefined ? undefined : providerId({ id: engine }, reply);
+      if (engine !== undefined && !id) return;
+      return services.usage.snapshot({ force: refresh === '1', ...(id && { engine: id }) });
+    },
   );
   app.put('/api/usage/budget', async (request, reply) => {
     const body = parse(UsageBudgetBody, request.body, reply);

@@ -8,6 +8,7 @@ import { dirname } from 'node:path';
 
 import {
   EffortChoice,
+  severityFor,
   type Capabilities,
   type EngineStatus,
   type LoginMethod,
@@ -28,7 +29,14 @@ import type { ProviderKeys } from '../../providers/keys';
 import type { SettingsStore } from '../../settings/store';
 import { buildTools } from '../api/engine';
 import { hostEnvironment } from '../host';
-import type { Engine, EngineEvent, LoginHandle, PermissionRequest, TurnInput } from '../types';
+import type {
+  Engine,
+  EngineEvent,
+  EngineUsage,
+  LoginHandle,
+  PermissionRequest,
+  TurnInput,
+} from '../types';
 import { DOCS_URL, MIN_VERSION, findCodex, installHints, isAtLeast, parseVersion } from './detect';
 import { CodexHome } from './home';
 import type { RpcMessage } from './rpc';
@@ -80,6 +88,67 @@ export function codexProblem(info: unknown): TurnProblem | undefined {
     return 'unavailable';
   return undefined;
 }
+const LimitWindow = z.object({
+  usedPercent: z.number(),
+  windowDurationMins: z.number().nullable().optional(),
+  resetsAt: z.number().nullable().optional(),
+});
+const RateLimits = z.object({
+  primary: LimitWindow.nullable().optional(),
+  secondary: LimitWindow.nullable().optional(),
+  planType: z.string().nullable().optional(),
+  rateLimitReachedType: z.string().nullable().optional(),
+});
+
+/** A window's name by its length: Codex's are five hours and a week. */
+function windowWords(minutes: number | null | undefined, fallback: string) {
+  if (!minutes)
+    return { id: fallback, label: fallback === 'primary' ? 'Current session' : 'Longer window' };
+  if (minutes <= 24 * 60) return { id: 'session', label: 'Current session' };
+  if (Math.abs(minutes - 7 * 24 * 60) <= 24 * 60) return { id: 'weekly', label: 'This week' };
+  const days = Math.round(minutes / (24 * 60));
+  return { id: `window-${minutes}`, label: `${days}-day window` };
+}
+
+/**
+ * Codex's plan limits (`account/rateLimits/read`, and `account/rateLimits/updated`
+ * while a turn runs) as Conch's usage windows: the five-hour session and the week.
+ */
+export function codexUsage(result: unknown, source: string): EngineUsage {
+  const parsed = RateLimits.safeParse(object(result).rateLimits ?? result);
+  if (!parsed.success) return { kind: 'unknown', source, windows: [] };
+  const limits = parsed.data;
+  const windows = (
+    [
+      [limits.primary, 'primary'],
+      [limits.secondary, 'secondary'],
+    ] as const
+  ).flatMap(([window, fallback]) => {
+    if (!window) return [];
+    const used = Math.min(100, Math.max(0, window.usedPercent));
+    const at = window.resetsAt ?? undefined;
+    return [
+      {
+        ...windowWords(window.windowDurationMins, fallback),
+        usedPercent: used,
+        // Codex says seconds; a value this large is already milliseconds.
+        ...(at !== undefined && { resetsAt: at < 1e12 ? at * 1000 : at }),
+        severity: severityFor(used),
+      },
+    ];
+  });
+  const plan = limits.planType && limits.planType !== 'unknown' ? limits.planType : undefined;
+  return {
+    kind: windows.length ? 'plan' : 'unknown',
+    source: plan ? `ChatGPT ${plan.charAt(0).toUpperCase()}${plan.slice(1)}` : source,
+    windows,
+    ...(!windows.length && { message: 'Codex didn’t say how much of your plan is left.' }),
+  };
+}
+
+/** How long a limit Codex reported stays fresh enough to show without asking again. */
+const LIMITS_MS = 60_000;
+
 /**
  * Codex's plan (`turn/plan/updated`: its `update_plan` tool), as Conch's
  * checklist (ADR 0060). Each update is the whole plan.
@@ -226,6 +295,9 @@ export class CodexEngine implements Engine {
   #caps?: Capabilities;
   #detecting?: Promise<EngineStatus>;
   #listing?: Promise<Capabilities>;
+  /** The plan's limits as Codex last reported them: read, or sent during a turn. */
+  #limits?: { value: EngineUsage; at: number };
+  #limitsRead?: Promise<EngineUsage>;
 
   constructor(
     private readonly settings: SettingsStore,
@@ -436,6 +508,35 @@ export class CodexEngine implements Engine {
     this.#status = undefined;
     this.#caps = undefined;
   }
+  /**
+   * Your ChatGPT plan's limits, as Codex's own `/status` shows them. Codex and
+   * Codex CLI share the sign-in, so they share the limits. An API key has none:
+   * Conch counts what it spends.
+   */
+  async usage({ force = false } = {}): Promise<EngineUsage> {
+    if (!force && this.#limits && Date.now() - this.#limits.at < LIMITS_MS)
+      return this.#limits.value;
+    const status = await this.detect();
+    const source = status.auth?.description ?? this.label;
+    if (status.state !== 'ready' || !status.executablePath)
+      return { kind: 'unknown', source, windows: [] };
+    if (status.auth?.method === 'api-key') return { kind: 'metered', source, windows: [] };
+    const executable = status.executablePath;
+    this.#limitsRead ??= this.#home
+      .withClient(executable, (rpc) =>
+        rpc.request('account/rateLimits/read', { excludeResetCreditDetails: true }),
+      )
+      .then((result) => {
+        const value = codexUsage(result, source);
+        this.#limits = { value, at: Date.now() };
+        return value;
+      })
+      .finally(() => {
+        this.#limitsRead = undefined;
+      });
+    return this.#limitsRead;
+  }
+
   async capabilities({ force = false } = {}): Promise<Capabilities> {
     if (this.#caps && !force) return this.#caps;
     this.#listing ??= this.#capabilities().finally(() => {
@@ -737,6 +838,11 @@ export class CodexEngine implements Engine {
                   items.delete(id);
                 }
               }
+            }
+            // Limits move as the turn spends them: kept, so the meter shows them when it next looks.
+            if (message.method === 'account/rateLimits/updated') {
+              const value = codexUsage(p, this.#limits?.value.source ?? this.label);
+              if (value.kind === 'plan') this.#limits = { value, at: Date.now() };
             }
             if (message.method === 'turn/plan/updated') {
               const steps = codexPlan(p.plan);
