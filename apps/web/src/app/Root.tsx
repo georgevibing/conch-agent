@@ -62,6 +62,9 @@ export function Root() {
         <Route path="/routines/:routineId" element={<Shell />} />
         <Route path="/skills" element={<Shell />} />
         <Route path="/skills/new" element={<Shell />} />
+        {/* Discover (ADR 0070): skills people share, and one of them, read before it's added. */}
+        <Route path="/skills/discover" element={<Shell />} />
+        <Route path="/skills/discover/:listingId" element={<Shell />} />
         <Route path="/skills/:skillId" element={<Shell />} />
         <Route path="/apps" element={<Shell />} />
         <Route path="/apps/:appId" element={<Shell />} />

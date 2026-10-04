@@ -79,7 +79,7 @@ export function usableSkills(list: SkillsList | undefined): Skill[] {
   return (list?.skills ?? []).filter((s) => s.mode !== 'off' && !s.problem);
 }
 
-function putSkill(client: QueryClient, skill: SkillDetail, previousId?: string) {
+export function putSkill(client: QueryClient, skill: SkillDetail, previousId?: string) {
   client.setQueryData(skillKeys.one(skill.id), skill);
   client.setQueryData<SkillsList>(skillKeys.all, (list) => {
     if (!list) return list;

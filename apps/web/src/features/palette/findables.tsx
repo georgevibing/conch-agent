@@ -68,6 +68,7 @@ import {
   Zap,
   FingerprintPattern,
   GlobeLock,
+  Compass,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -96,7 +97,10 @@ import { useConchApps } from '../conchapps/queries';
 import { conchPagePath } from '../conchapps/words';
 import { useRoutines } from '../routines/queries';
 import { taskKeys } from '../tasks/queries';
+import { listingPath } from '../skills/Discover';
+import { useMarket } from '../skills/market';
 import { useSkills, useWorkSuggestions } from '../skills/queries';
+import { useDebounced } from '../channels/hooks';
 import { draftFrom } from '../skills/SkillSuggestions';
 import { useLiveStore } from '../../live/store';
 import { useTerminalStatus } from '../terminal/queries';
@@ -349,6 +353,10 @@ export function useFindables(query: string, conversationId: string | undefined):
     ? fromWork?.suggestions.find((s) => s.chat?.conversationId === conversationId)
     : undefined;
   const q = query.trim();
+  // Discover (ADR 0070): the shelf as it was last seen, and, once typing pauses, a search.
+  const searched = useDebounced(q, 400);
+  const { data: shelf } = useMarket('', undefined, Boolean(q));
+  const { data: matched } = useMarket(searched, undefined, searched.length >= 3);
   if (!q) return [];
 
   const models = (turn.catalog?.providers ?? []).flatMap((provider) =>
@@ -413,6 +421,27 @@ export function useFindables(query: string, conversationId: string | undefined):
         : () => void navigate(`/skills/${encodeURIComponent(item.id)}`),
     };
   });
+
+  const sharedSeen = new Map(
+    [...(matched?.listings ?? []), ...(shelf?.listings ?? [])]
+      .filter((l) => !l.installed && l.trust !== 'blocked')
+      .map((l) => [l.id, l]),
+  );
+  const sharedItems = find(
+    [...sharedSeen.values()],
+    q,
+    (l) => l.title,
+    (l) => `${l.name} ${l.description} ${l.sourceLabel} ${l.category ?? ''}`,
+    4,
+  ).map(({ item, match }): Findable => ({
+    id: `market:${item.id}`,
+    label: item.title,
+    ranges: match.ranges,
+    description: item.description,
+    hint: `Discover · ${item.sourceLabel}`,
+    icon: <SkillIcon name={item.name} title={item.title} size="sm" />,
+    run: () => void navigate(listingPath(item.id)),
+  }));
 
   const connected = integrations?.integrations ?? [];
   const apps: {
@@ -816,6 +845,14 @@ export function useFindables(query: string, conversationId: string | undefined):
       run: () => void navigate('/skills'),
     },
     {
+      id: 'discover-skills',
+      label: 'Discover skills',
+      keywords:
+        'discover find browse add install get skills people share marketplace market store community clawhub skills.sh anthropic new ideas',
+      icon: <Compass />,
+      run: () => void navigate('/skills/discover'),
+    },
+    {
       id: 'skill-publishers',
       label: 'Skill publishers you trust',
       keywords: 'skill signed signature verified publisher key fingerprint',
@@ -1014,6 +1051,7 @@ export function useFindables(query: string, conversationId: string | undefined):
     { heading: 'Go to', items: placeItems },
     { heading: 'Passwords', items: passwordItems },
     { heading: 'Skills', items: skillItems },
+    { heading: 'Skills people share', items: sharedItems },
     { heading: 'Models', items: modelItems },
     { heading: 'Apps', items: [...appItems, ...pageItems] },
     { heading: 'Talk to me here', items: channelItems },
