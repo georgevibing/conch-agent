@@ -1,4 +1,4 @@
-import type { Attachment, ConversationEvent, LoginState } from '@conch/protocol';
+import type { Attachment, ConversationEvent, LoginState, TurnOptions } from '@conch/protocol';
 import { create } from 'zustand';
 
 import { decided, emptyView, reduce, type ConversationView } from './reducer';
@@ -27,6 +27,13 @@ interface LiveState {
   pending: Record<string, PendingMessage[]>;
   /** clientMessageId → conversation id, once the server created it. */
   created: Record<string, string>;
+  /**
+   * What a new chat was started with (its model and mode), from the first
+   * message until the server names it: the draft is gone by then, and the
+   * chat shouldn't look like the default provider's for that moment.
+   */
+  startedWith?: TurnOptions;
+  setStartedWith(options: TurnOptions | undefined): void;
   login?: LoginState;
   /** Set when a send failed because the engine isn't ready. */
   engineIssue?: string;
@@ -78,6 +85,7 @@ export const useLiveStore = create<LiveState>((set) => ({
   pending: {},
   created: {},
   stopping: {},
+  setStartedWith: (startedWith) => set({ startedWith }),
 
   setConnection: (connection) => set({ connection }),
   apply: (event) =>

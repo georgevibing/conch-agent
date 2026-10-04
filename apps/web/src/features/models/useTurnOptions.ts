@@ -12,6 +12,7 @@ import { toast } from '@conch/nacre';
 import { useAppState, useConversations, useModels, useUpdateSettings } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { useLive } from '../../live/LiveProvider';
+import { NEW, useLiveStore } from '../../live/store';
 
 export interface ResolvedTurnOptions {
   /** The provider that answers. */
@@ -62,9 +63,16 @@ export function useTurnOptions(conversationId?: string) {
 
   const catalog = models.data;
   const prefs = app?.preferences;
+  // The first message of a new chat took the draft with it: until the server names
+  // the chat, it's what it was started with, never the default provider's look.
+  const startedWith = useLiveStore((s) =>
+    (s.pending[NEW]?.length ?? 0) > 0 ? s.startedWith : undefined,
+  );
   const overrides: TurnOptions = conversationId
     ? (conversations?.find((c) => c.id === conversationId)?.options ?? {})
-    : draft;
+    : Object.keys(draft).length === 0 && startedWith
+      ? startedWith
+      : draft;
 
   const defaultEngine = catalog?.default ?? prefs?.engine;
   const defaults: ResolvedTurnOptions = {

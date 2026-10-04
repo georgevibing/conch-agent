@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useUi } from '../../app/ui';
 import { ChatProvider } from '../engine/ChatProvider';
 import { useTurnOptions } from '../models/useTurnOptions';
+import { useLive } from '../../live/LiveProvider';
+import { useLiveStore } from '../../live/store';
 import {
   appState,
   baseProviders,
@@ -20,6 +22,7 @@ import { UsageComposerNotice } from './UsageComposerNotice';
 afterEach(() => {
   vi.unstubAllGlobals();
   useUi.setState({ usageOpen: false, draftOptions: {} });
+  useLiveStore.setState({ pending: {}, startedWith: undefined });
 });
 
 const HOUR = 3_600_000;
@@ -113,12 +116,16 @@ const catalog: ModelCatalog = {
 /** The new-chat header and composer notice, with a way to pick a model like the picker does. */
 function NewChat() {
   const turn = useTurnOptions();
+  const live = useLive();
   return (
     <>
       <ChatProvider />
       <UsageComposerNotice engine={turn.options.engine} />
       <button type="button" onClick={() => turn.choose('codex-cli|gpt-6.1-sol')}>
         Pick GPT
+      </button>
+      <button type="button" onClick={() => live.send('Hello', undefined, turn.takeDraft())}>
+        Send
       </button>
     </>
   );
@@ -171,6 +178,28 @@ describe('the chat’s provider in the header', () => {
     // The notice above the composer is about Codex now.
     expect(await screen.findByRole('status')).toHaveTextContent(/9% of your current session left/);
     expect(calls.some((c) => c.path.includes('engine=codex-cli'))).toBe(false);
+  });
+
+  it('stays on the chosen provider while a new chat is being made, never flashing the default’s limits', async () => {
+    routes({
+      'GET /api/usage': () => plan(82, 'claude-code', 'Claude Max'),
+    });
+    renderApp(<NewChat />);
+    // The default provider is low: its notice shows on a new chat.
+    expect(await screen.findByRole('status')).toHaveTextContent(/18% of your current session left/);
+    act(() =>
+      FakeSocket.last?.push({
+        type: 'usage.changed',
+        usage: plan(10, 'codex-cli', 'ChatGPT Plus'),
+      }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Pick GPT' }));
+    expect(await screen.findByRole('button', { name: /^Codex\. Usage/ })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    // Sent: the draft is gone, but the chat hasn't got its id yet.
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(screen.getByRole('button', { name: /^Codex\. Usage/ })).toBeInTheDocument();
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
   it('opens who you’re signed in as and the full limits, from the chip and from /usage', async () => {

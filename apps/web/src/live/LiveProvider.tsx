@@ -129,6 +129,8 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           client.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>
             upsertSummary(list, event.conversation),
           );
+          // From here the chat's own options say it: in the list, under its id.
+          if (ours) live.setStartedWith(undefined);
           break;
         }
         case 'conversation.updated': {
@@ -325,6 +327,8 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
     () => ({
       send(text, conversationId, options, attachments) {
         const clientMessageId = `u_${crypto.randomUUID().slice(0, 12)}`;
+        // A new chat keeps what it was started with until the server names it.
+        if (!conversationId) useLiveStore.getState().setStartedWith(options);
         useLiveStore.getState().addPending(conversationId ?? NEW, {
           clientMessageId,
           text,
