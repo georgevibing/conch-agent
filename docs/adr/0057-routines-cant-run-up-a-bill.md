@@ -191,3 +191,6 @@ A routine drafted in a chat also runs on that chat's provider and model now (the
 person picked them there, often to spare a plan), and a routine's run gets Conch's
 own tools like a chat from a chat app, without the routine tools: your apps, Conch
 apps, the browser, and `message_user` to write to you in any connected chat app.
+Never the routine tools, and never `delegate` or a background task: what a run hands off
+would spend outside its run limit and the monthly ledger. Tools that act (sending, a
+password) still ask the person, as they do in a chat from a chat app.

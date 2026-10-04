@@ -90,8 +90,10 @@ describe('what a routine can reach', () => {
     // The run had Conch's tools, the way a chat does…
     const tools = (turns.mock.calls.at(-1)?.[0] as TurnInput).tools.map((t) => t.name);
     expect(tools).toEqual(expect.arrayContaining(['message_user', 'report_outcome']));
-    // …but nothing that could reschedule or rewrite routines.
+    // …but nothing that could reschedule or rewrite routines, or hand work off past its limits.
     expect(tools).not.toEqual(expect.arrayContaining([expect.stringMatching(/routine$/)]));
+    expect(tools).not.toContain('delegate');
+    expect(tools).not.toContain('start_background_task');
 
     // "hi" arrived, and its result isn't said a second time.
     const sent = () =>

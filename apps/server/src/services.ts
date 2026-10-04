@@ -808,7 +808,9 @@ export class Services {
               ...this.browser.tools(ctx),
               ...vaultTools(this.vault, ctx),
               ...this.artifacts.tools(ctx),
-              ...this.tasks.tools(ctx),
+              // A routine's run hands nothing off: what it starts would spend past its own
+              // limits (ADR 0057) and outlive it.
+              ...(ctx.origin?.kind === 'routine' ? [] : this.tasks.tools(ctx)),
               // Only the Google apps that are connected and on, without the tools turned off.
               ...this.googleApps.tools(
                 googleTools(this.google, ctx, (draft) =>
