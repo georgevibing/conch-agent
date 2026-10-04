@@ -156,8 +156,8 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
    `scripts/snap.mjs` and look at them.
 2. **Small, conventional commits** (`feat(nacre): …`, `fix(server): …`, `docs: …`,
    `chore: …`). One logical change per commit. Never push unless asked. A commit's
-   author is whoever `git config` names; never add `Co-Authored-By`, "Generated with"
-   or any other attribution lines to commits or pull requests.
+   author is whoever `git config` names; a `Co-Authored-By` line for the AI agent that
+   helped is fine.
 3. **Dependencies are decisions.** Prefer what's already installed. New runtime deps
    need a line of justification in the commit message; significant ones need an ADR.
    pnpm enforces a minimum release age — don't bypass it.
