@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { expectAccessible, renderNacre } from '../../test/render';
+import { PlanRoom } from './PlanRoom';
 import { RoutineSpendingGauge, RoutinesPaused } from './RoutineSpending';
 
 const nextMonth = new Date(2026, 10, 1).getTime();
@@ -67,5 +68,52 @@ describe('RoutinesPaused', () => {
     expect(onRaise).toHaveBeenCalledOnce();
     expect(onKeepPaused).toHaveBeenCalledOnce();
     await expectAccessible(container);
+  });
+});
+
+describe('PlanRoom', () => {
+  const now = new Date(2026, 9, 4, 22, 40).getTime();
+  const resetsAt = new Date(2026, 9, 9, 18, 0).getTime();
+  const plans = [{ source: 'Claude Max', usedPercent: 81, resetsAt, waiting: 1 }];
+
+  it('says what the choice means for each plan today, and follows it as it changes', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const { container, rerender } = renderNacre(
+      <PlanRoom percent={80} onChange={onChange} plans={plans} now={now} />,
+    );
+    expect(screen.getByRole('heading', { name: 'Room for your own chats' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Your Claude Max plan is 81% used, so routines on it wait until it resets on Friday, October 9.',
+      ),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: /Never wait/ }));
+    expect(onChange).toHaveBeenLastCalledWith(null);
+    await user.click(screen.getByRole('radio', { name: /Wait at 90%/ }));
+    expect(onChange).toHaveBeenLastCalledWith(90);
+
+    rerender(<PlanRoom percent={90} onChange={onChange} plans={plans} now={now} />);
+    expect(
+      screen.getByText('Your Claude Max plan is 81% used, so the routine waiting for it goes now.'),
+    ).toBeInTheDocument();
+    rerender(<PlanRoom percent={null} onChange={onChange} plans={plans} now={now} />);
+    expect(screen.getByText(/Your own chats may run out first/)).toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
+  it('marks Conch’s own choice, and is reachable by keyboard', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderNacre(<PlanRoom percent={80} onChange={onChange} />);
+    expect(screen.getByRole('radio', { name: /80% used \(Conch’s choice\)/ })).toBeChecked();
+    expect(
+      screen.getByText('Routines wait once a plan is 80% used, and go when it resets.'),
+    ).toBeInTheDocument();
+    await user.tab();
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('radio', { name: /Wait at 90%/ })).toHaveFocus();
+    await user.keyboard(' ');
+    expect(onChange).toHaveBeenLastCalledWith(90);
   });
 });

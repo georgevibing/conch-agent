@@ -12,4 +12,69 @@
     flex-wrap: wrap;
     gap: var(--nc-space-2);
   }
+
+  /* Room for your own chats (ADR 0057): one choice, and what it means today. */
+  .planRoom {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-4);
+    min-inline-size: 0;
+    padding: var(--nc-space-5);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge);
+  }
+
+  .planRoomHead {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-3);
+  }
+
+  .planRoomIcon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 2.25rem;
+    block-size: 2.25rem;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-accent-3);
+    color: var(--nc-accent-11);
+  }
+
+  .planRoomIcon svg {
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+  }
+
+  .planRoomWords {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+  }
+
+  .planRoomTitle {
+    margin: 0;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+  }
+
+  .planRoomChoices {
+    align-self: flex-start;
+    max-inline-size: 100%;
+    overflow-x: auto;
+  }
+
+  .planRoomNow {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+  }
 }
