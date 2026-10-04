@@ -256,10 +256,19 @@ export class MemoryStore {
       };
       if (yours) {
         committed.provenance = { ...(provenance ?? { via: 'you' }), yours: true };
-        // Only Keep lifts a hold: an edit, even yours, leaves a waiting memory waiting.
-        if (method !== 'keep' && current?.pending) {
+        // Only Keep lifts a hold: an edit, even yours, leaves a waiting memory
+        // waiting, and one put back waits if it was waiting.
+        const waiting =
+          method === 'keep'
+            ? undefined
+            : current?.pending
+              ? current
+              : next.pending
+                ? next
+                : undefined;
+        if (waiting) {
           committed.pending = true;
-          if (current.held) committed.held = current.held;
+          if (waiting.held) committed.held = waiting.held;
         }
       } else {
         // Without a person, nothing gets less strict than it was or was asked to be.

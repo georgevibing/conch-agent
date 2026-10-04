@@ -147,7 +147,12 @@ export function registerLearningRoutes(
     const body = z.object({ memory: Memory }).safeParse(request.body);
     if (!body.success)
       return reply.code(400).send({ error: 'bad-request', message: 'That isn’t a memory.' });
-    const restored = await store.restore(body.data.memory);
+    // Your Undo, for the words the chat's line showed you (ADR 0087).
+    const { memory } = body.data;
+    const restored = await store.restore(
+      memory,
+      mintConsent(request, 'keep', { id: memory.id, content: memory.content }),
+    );
     void index.sync();
     await deps.decided?.(restored, true).catch(() => undefined);
     return restored;

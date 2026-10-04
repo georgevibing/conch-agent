@@ -257,7 +257,7 @@ describe('what the chat remembered a moment ago', () => {
 
 describe('the prompt', () => {
   const persona: Persona = { name: 'Conch', tone: 'warm', instructions: '' };
-  const profile: Profile = { name: '', about: '' };
+  const profile: Profile = { name: '', about: '', facts: [] };
   const memory = (patch: Partial<Memory>): Memory => ({
     id: 'm_1',
     content: 'Likes the crossword',
