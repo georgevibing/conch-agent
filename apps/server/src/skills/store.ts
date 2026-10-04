@@ -592,7 +592,8 @@ export class SkillStore {
     if (!problem && parsed.front === undefined) {
       problem = 'Its SKILL.md has no front matter (the --- block with a name and description).';
       problemKind = 'no-front-matter';
-    } else if (!problem && !description) {
+    } else if (!problem && !/[\p{L}\p{N}]/u.test(description)) {
+      // Nothing but punctuation (`description: ">"`) says no more than nothing.
       problem = 'It has no description, so an assistant wouldn’t know when to use it.';
       problemKind = 'no-description';
     }

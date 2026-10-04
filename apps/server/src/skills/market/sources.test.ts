@@ -359,6 +359,7 @@ describe('ClawHub', () => {
     const { fetch } = web({
       ...repo('bob', 'skills', {
         'skills/notes-pro/SKILL.md': skillMd('notes-pro'),
+        LICENSE: 'MIT License\n\nPermission is hereby granted, free of charge',
         'skills/other/SKILL.md': skillMd('other'),
       }),
       'clawhub.ai/api/v1/search?q=notes-pro&limit=30&nonSuspiciousOnly=true': { results: [] },
@@ -374,6 +375,8 @@ describe('ClawHub', () => {
       commit: COMMIT,
     });
     expect(fetched.listing.description).toBe('Does notes-pro things. Use when asked.');
+    // No licence in the folder: the repository's own is the hint.
+    expect(licenseOf(fetched.files, fetched.licenseHint)).toEqual({ kind: 'open', name: 'MIT' });
   });
 });
 

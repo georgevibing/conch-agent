@@ -227,6 +227,19 @@ export class GitHubSkills {
     return contentKey(wanted.map((f) => ({ path: f.path, hash: f.sha })));
   }
 
+  /**
+   * The repository's own LICENSE at that commit (its first few kilobytes),
+   * for a skill whose folder doesn't carry one. Only a hint: the skill's own
+   * words win (`licenseOf`).
+   */
+  async rootLicense(owner: string, repo: string, commit: string, signal?: AbortSignal) {
+    const tree = await this.tree(owner, repo, commit, signal);
+    const entry = tree.find(
+      (f) => /^(?:LICEN[CS]E|COPYING)(?:\.(?:md|txt))?$/i.test(f.path) && f.size <= 64 * 1024,
+    );
+    return entry ? (await this.text(owner, repo, commit, entry, signal)).slice(0, 4000) : undefined;
+  }
+
   /** A skill's folder at a commit, each file checked against its hash. Paths are relative to the folder. */
   async folder(
     owner: string,

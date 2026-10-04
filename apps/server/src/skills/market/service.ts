@@ -136,7 +136,13 @@ export function categoryOf(
   listing: Pick<MarketListing, 'name' | 'title' | 'description'>,
 ): MarketCategory | undefined {
   const text = `${listing.name.replace(/-/g, ' ')} ${listing.title} ${listing.description}`;
-  return SHELVES.find(([, words]) => words.test(text))?.[0];
+  // The shelf whose words it uses most; the first in the list wins a tie.
+  let best: { category: MarketCategory; hits: number } | undefined;
+  for (const [category, words] of SHELVES) {
+    const hits = text.match(new RegExp(words.source, 'gi'))?.length ?? 0;
+    if (hits && (!best || hits > best.hits)) best = { category, hits };
+  }
+  return best?.category;
 }
 
 /** What a category is searched for, when it's picked with no words. */
@@ -469,12 +475,13 @@ export class SkillMarket {
       throw new MarketError('too-big', 'Its SKILL.md is bigger than Conch reads.');
     const { front, body } = splitSkill(skillText.toString('utf8'));
     const description = readKey(front, 'description')?.trim();
+    const describes = Boolean(description && /[\p{L}\p{N}]/u.test(description));
     const license = licenseOf(fetched.files, fetched.licenseHint);
     const blocked =
       fetched.blocked ??
       (license.kind === 'restricted' ? RESTRICTED_WORDS : undefined) ??
-      (front === undefined || !description
-        ? 'It has no description, so an assistant wouldn’t know when to use it.'
+      (front === undefined || !describes
+        ? 'Its own file doesn’t say what it does, so an assistant wouldn’t know when to use it.'
         : undefined);
     const ownName = readKey(front, 'name')?.trim() ?? fetched.listing.name;
     const folder = updates?.folder ?? (await this.#folderFor(source, ownName));
