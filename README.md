@@ -87,7 +87,8 @@
 - **A browser and a terminal.** The assistant uses a browser you can watch and
   take over, and a real shell is a keystroke away.
 - **Show me.** Charts, pages and documents open beside the chat, with every version kept.
-- **Hand it off.** Send work to the background and keep chatting.
+- **Hand it off.** Send work to the background and keep chatting, or have another
+  provider do a part ("have Codex write the tests").
 
 ### 🧠 It learns you
 
@@ -110,6 +111,8 @@
   New devices wait for your OK, which you give from one you already use.
 - **Your desktop.** Conch for macOS, Windows and Linux: its own window, the pearl
   in the menu bar, and each new release one press away.
+- **Your other apps.** Claude Desktop, Cursor and VS Code can use your memory,
+  skills, apps and Conch's browser, connected in one press, each only what you tick.
 
 ### 🛡️ Safe hands, and it looks after itself
 
