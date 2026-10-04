@@ -51,6 +51,45 @@ const RULES: Rule[] = [
   {
     kind: 'download-run',
     severity: 'danger',
+    message: 'Downloads something from the internet and runs it straight away.',
+    // `bash -c "$(curl …)"`, `python3 <(wget …)`, `curl … | python`: the same thing, other spellings.
+    pattern:
+      /\b(?:ba|z|da|k)?sh\s+-c\s+["']?\$\(\s*(?:curl|wget)\b|\b(?:curl|wget)\b[^\n|;]*\|\s*(?:sudo\s+)?(?:python[0-9.]*|node|perl|ruby|php|osascript)\b|\b(?:python[0-9.]*|node|perl|ruby)\s+<\(\s*(?:curl|wget)/i,
+  },
+  {
+    kind: 'download-run',
+    severity: 'danger',
+    message: 'Opens a way into this computer for someone else.',
+    pattern:
+      /\/dev\/tcp\/[\w.-]+\/\d+|\bn(?:c|cat)\b[^\n]*\s-[a-z]*e\s+\/bin\/(?:ba)?sh|\bbash\s+-i\s+>&|\bsocat\b[^\n]*\bexec:/i,
+  },
+  {
+    // ClawHavoc's Windows half: "download the helper zip, the password is openclaw".
+    kind: 'download-run',
+    severity: 'danger',
+    message:
+      'Asks for a locked archive to be downloaded and opened, the way harmful programs hide from virus checks.',
+    pattern:
+      /\bdownload\w*\b[^\n]{0,160}\b(?:zip|archive|rar|7z)\b[\s\S]{0,160}?\b(?:password|passcode|pass)\s*(?:is|:|=)|\b(?:password|passcode)\s*(?:is|:|=)\s*\S+[^\n]{0,80}\b(?:extract|unzip|unpack)\b[^\n]{0,80}\b(?:run|open|launch|execute)\b/i,
+  },
+  {
+    kind: 'download-run',
+    severity: 'warning',
+    message: 'Points to a paste site for code to run, where what’s there can change at any time.',
+    pattern:
+      /\b(?:glot\.io\/snippets|pastebin\.com\/raw|paste\.ee\/r|hastebin\.com\/raw|rentry\.(?:co|org)\/[\w-]+\/raw|0bin\.net|ghostbin\.\w+|dpaste\.(?:com|org)\/[\w-]+\/raw)/i,
+  },
+  {
+    kind: 'download-run',
+    severity: 'warning',
+    message: 'Fetches something from a bare internet address instead of a named site.',
+    // Private and loopback addresses are a local server, which is ordinary in instructions.
+    pattern:
+      /\bhttps?:\/\/(?!(?:127|10|0)\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|169\.254\.)\d{1,3}(?:\.\d{1,3}){3}\b/i,
+  },
+  {
+    kind: 'download-run',
+    severity: 'danger',
     message: 'Turns off the Mac’s check on downloaded programs.',
     pattern:
       /xattr\s+(?:-[a-z]*d[a-z]*\s+|-r\s+-d\s+)com\.apple\.quarantine|spctl\s+--master-disable/i,
@@ -61,7 +100,7 @@ const RULES: Rule[] = [
     severity: 'danger',
     message: 'Reaches for saved passwords, keys or wallets.',
     pattern:
-      /~\/\.ssh\/id_|\.aws\/credentials|\.config\/gcloud|Login Data\b|Cookies\.binarycookies|Library\/Keychains|security\s+(?:find|dump)-(?:generic|internet)-password|\bdump-keychain\b|wallet\.dat|\bseed phrase\b|\.conch\/(?:secrets|vault|access)|\.env\b[^\n]*(?:cat|send|upload|post|curl)/i,
+      /~\/\.ssh\/id_|\.aws\/credentials|\.config\/gcloud|Login Data\b|Cookies\.binarycookies|Library\/Keychains|security\s+(?:find|dump)-(?:generic|internet)-password|\bdump-keychain\b|wallet\.dat|\bseed phrase\b|\.conch\/(?:secrets|vault|access)|\.env\b[^\n]*(?:cat|send|upload|post|curl)|\.(?:clawdbot|openclaw|moltbot|hermes)\/(?:[\w-]+\/)*(?:\.env|credentials|auth-profiles\.json)|\.claude\/\.credentials|\.codex\/auth\.json|\bauth-profiles\.json\b/i,
   },
   // ── Sending things somewhere ──────────────────────────────────────────
   {
