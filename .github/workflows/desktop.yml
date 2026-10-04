@@ -37,11 +37,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -93,7 +93,7 @@ jobs:
       - name: Check it starts
         if: runner.os == 'Linux'
         run: xvfb-run -a node apps/desktop/scripts/smoke.mjs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.name }}
           if-no-files-found: error
@@ -120,11 +120,11 @@ jobs:
       TAG: ${{ inputs.tag || github.ref_name }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: built
       - name: Gather the files
@@ -143,7 +143,7 @@ jobs:
           for feed in release/latest*.yml; do
             grep -qx "version: ${version}" "$feed" || { echo "$feed isn't ${version}"; cat "$feed"; exit 1; }
           done
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             release/*.dmg
