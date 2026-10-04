@@ -72,7 +72,12 @@ door, answering through the Chat API with a service account's key.
 - **Approvals are numbered replies** (`TextChoices`), read like any message:
   from Google Chat's own copy, so the person answering is the server's
   sender. Card clicks aren't taken at all: who clicked is only ever in the
-  posted body, which a captured token could carry forged.
+  posted body, which a captured token could carry forged. So an approval
+  can't be replayed: the reply is claimed once by Google's name for it; it
+  answers only the question still open in that chat (a decided, expired or
+  superseded question stops taking answers); the question's own key is
+  random, single-use and tied to its request and chat (ADR 0018); and a
+  question from a group goes to your private chat, where only you write.
 - **Groups** (ADR 0075): a space is answered once you turn it on, and only
   what mentions the app; everyone but you gets words only.
 - **Files** sent in Chat aren't taken yet (downloading them needs another

@@ -392,6 +392,102 @@ describe('Google Chat, second review (ADR 0084 § Security)', () => {
   });
 });
 
+describe('Google Chat approvals can’t be replayed (ADR 0084 § Security)', () => {
+  const resolutions = async (s: Services) => {
+    const chat = (await chats(s))[0];
+    return (await s.conversations.eventsAfter(chat?.id ?? '')).filter(
+      (e) => e.type === 'permission.resolved',
+    );
+  };
+
+  it('replaying the same approval reply decides nothing more', async () => {
+    const { s, google } = await paired();
+    await google.say('please run the tests');
+    await until(() => google.sent.find((m) => /Reply with a number/.test(m.text)), 'question');
+    const reply = google.event('1');
+    expect(await google.deliver(reply)).toBe(200);
+    await until(async () => (await resolutions(s)).length === 1, 'allowed once');
+    // The same reply again, under the same token, and a click claiming it: nothing more.
+    expect(await google.replay(reply)).toBe(200);
+    await google.press('p:anything:a', google.sent.at(-1)?.name ?? '');
+    await new Promise((r) => setTimeout(r, 800));
+    expect(await resolutions(s)).toHaveLength(1);
+  });
+
+  it('an old approval reply never answers a different, newer question', async () => {
+    const { s, google } = await paired();
+    await google.say('please run the tests');
+    await until(() => google.sent.find((m) => /Reply with a number/.test(m.text)), 'question 1');
+    const first = google.event('1');
+    await google.deliver(first);
+    await until(async () => (await resolutions(s)).length === 1, 'first allowed');
+    const chat = (await chats(s))[0];
+    await until(
+      async () =>
+        (await s.conversations.eventsAfter(chat?.id ?? '')).some(
+          (e) => e.type === 'turn.completed',
+        ),
+      'first turn over',
+    );
+    const asked = google.sent.length;
+    await google.say('please run the tests again');
+    await until(
+      () => google.sent.slice(asked).find((m) => /Reply with a number/.test(m.text)),
+      'question 2',
+    );
+    expect(await google.replay(first)).toBe(200);
+    await new Promise((r) => setTimeout(r, 800));
+    expect(await resolutions(s)).toHaveLength(1);
+  });
+
+  it('an answer after the question expired decides nothing', async () => {
+    const { s, google } = await paired();
+    await google.say('please run the tests');
+    await until(() => google.sent.find((m) => /Reply with a number/.test(m.text)), 'question');
+    const chat = (await chats(s))[0];
+    await s.conversations.interrupt(chat?.id ?? '');
+    await until(
+      async () => (await resolutions(s)).some((e) => e.type === 'permission.resolved'),
+      'expired',
+    );
+    await google.say('1');
+    await new Promise((r) => setTimeout(r, 800));
+    const decided = await resolutions(s);
+    expect(decided).toHaveLength(1);
+    expect(decided[0]).toMatchObject({ decision: 'expired' });
+  });
+
+  it('another member of a group can’t approve, by reply or by a click claiming to be you', async () => {
+    const { s, google, channel } = await paired();
+    await google.say('hi all', MockGoogleChat.OWNER, { space: true, mention: true });
+    const group = await until(async () => (await s.channels.get(channel.id)).groups[0], 'space');
+    await s.channels.setGroup(channel.id, group.id, true);
+    await google.say('please run the tests', MockGoogleChat.OWNER, { space: true, mention: true });
+    // The question goes to your private chat, never to the space.
+    const question = await until(
+      () =>
+        google.sent.find(
+          (m) =>
+            m.space === google.dmOf(MockGoogleChat.OWNER.name) &&
+            /Reply with a number/.test(m.text),
+        ),
+      'question in your private chat',
+    );
+    expect(
+      google.sent.some(
+        (m) => m.space === MockGoogleChat.SPACE.name && /Reply with a number/.test(m.text),
+      ),
+    ).toBe(false);
+    await google.say('1', MockGoogleChat.MEMBER, { space: true, mention: true });
+    await google.say('1', MockGoogleChat.MEMBER);
+    await google.press('p:anything:a', question.name, MockGoogleChat.OWNER);
+    await new Promise((r) => setTimeout(r, 1000));
+    const ownerChat = (await chats(s)).find((c) => c.origin?.kind === 'channel' && !c.origin.guest);
+    const events = await s.conversations.eventsAfter(ownerChat?.id ?? '');
+    expect(events.some((e) => e.type === 'permission.resolved')).toBe(false);
+  });
+});
+
 describe('Google Chat pieces', () => {
   it('reads a service account’s key file, and nothing else', () => {
     expect(() => serviceAccountOf('not json')).toThrow(/key file/);

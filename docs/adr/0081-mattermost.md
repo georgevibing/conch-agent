@@ -63,4 +63,8 @@ and `pnpm dev:mock`.
 - Making a bot account needs Bot Accounts turned on by whoever runs the
   server; the setup says where.
 - Tested against a pretend Mattermost that speaks its WebSocket protocol
-  (`mattermost.test.ts`), including a dropped socket and a revoked token.
+  (`mattermost.test.ts`), including a dropped socket and a revoked token, and
+  checked once against a real Mattermost server (`mattermost-preview` in
+  Docker): the token, the WebSocket, a direct message in and the answer out
+  in Markdown, typing, 👀, an edit, the direct chat found again, and an
+  @mention in Town Square read as a group message with the mention cut out.
