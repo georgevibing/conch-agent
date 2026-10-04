@@ -1,6 +1,6 @@
 import { readdirSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 import { sandboxSupport } from '../conversations/sandbox';
 import { bundledClaude } from '../engines/claude-code/bundled';
@@ -11,6 +11,7 @@ import { findCodex } from '../engines/codex/detect';
 import { findExecutable, presentSync, run } from '../lib/proc';
 import { parseVersion } from '../updates/version';
 import type { InstallRecipe, LatestLookup, NeedSpec, Platform } from './needs';
+import { fetchedBin, fetchedTool } from './release';
 
 /** Where macOS keeps apps: for everyone, then just for you. */
 const macApp = (name: string) =>
@@ -119,6 +120,70 @@ function updatable(ids: PackageIds): Pick<NeedSpec, 'update' | 'latest' | 'versi
     update: (path, platform) => updateBy(path, platform, ids),
     latest: (path, platform, lookup) => latestBy(path, platform, ids, lookup),
     version: versionOf,
+  };
+}
+
+/** A project's own release on GitHub, fetched and checked by Conch (`release.ts`). */
+const github = (repo: string, asset: string, program: string): InstallRecipe => ({
+  manager: 'github',
+  args: [repo, asset, program],
+});
+
+/** A Python program installed by uv as a tool of its own (getting uv first if needed). */
+const uvTool = (pkg: string): InstallRecipe => ({
+  manager: 'uv',
+  args: ['tool', 'install', pkg],
+  via: 'uv',
+});
+
+/** The version of a uv tool, as `uv tool list` says it (`piper-tts v1.8.0`). */
+export async function uvToolVersion(pkg: string): Promise<string | undefined> {
+  const uv = await findExecutable('uv', {
+    extraDirs: [join(homedir(), '.local', 'bin'), ...fetchedBin('uv')],
+  });
+  if (!uv) return undefined;
+  const result = await run(uv, ['tool', 'list'], { timeout: 15_000 });
+  const line = result.stdout.split(/\r?\n/).find((l) => l.startsWith(`${pkg} `));
+  return line ? parseVersion(line) : undefined;
+}
+
+const WHISPER_REPO = 'ggml-org/whisper.cpp';
+/** The release files for this computer, when the project makes one. */
+const WHISPER_WINDOWS = process.arch === 'x64' ? 'whisper-bin-x64.zip' : undefined;
+const WHISPER_LINUX =
+  process.arch === 'x64'
+    ? 'whisper-bin-ubuntu-x64.tar.gz'
+    : process.arch === 'arm64'
+      ? 'whisper-bin-ubuntu-arm64.tar.gz'
+      : undefined;
+const UV_LINUX =
+  process.arch === 'x64'
+    ? 'uv-x86_64-unknown-linux-gnu.tar.gz'
+    : process.arch === 'arm64'
+      ? 'uv-aarch64-unknown-linux-gnu.tar.gz'
+      : undefined;
+
+/**
+ * Versions and updates for a program Conch may have fetched itself: that copy
+ * follows its GitHub releases; one from a package manager follows that.
+ */
+function fetchedOr(
+  need: string,
+  repo: string,
+  asset: string | undefined,
+  ids: PackageIds,
+): Pick<NeedSpec, 'update' | 'latest' | 'version'> {
+  const fetched = (path: string) => {
+    const tool = fetchedTool(need);
+    return tool && asset && path.startsWith(tool.bin) ? tool : undefined;
+  };
+  const program = (path: string) => basename(path).replace(/\.exe$/i, '');
+  return {
+    update: (path, platform) =>
+      fetched(path) && asset ? [github(repo, asset, program(path))] : updateBy(path, platform, ids),
+    latest: (path, platform, lookup) =>
+      fetched(path) && asset ? lookup.github(repo, asset) : latestBy(path, platform, ids, lookup),
+    version: async (path) => fetched(path)?.version ?? versionOf(path),
   };
 }
 
@@ -468,12 +533,17 @@ list.push(
     id: 'uv',
     name: 'uv (runs Python tools)',
     short: 'uv',
-    find: () => findExecutable('uvx', { extraDirs: [join(homedir(), '.local', 'bin')] }),
+    find: () =>
+      findExecutable('uvx', {
+        extraDirs: [join(homedir(), '.local', 'bin'), ...fetchedBin('uv')],
+      }),
     install: {
       win32: winget('astral-sh.uv'),
       darwin: { manager: 'brew', args: ['install', 'uv'] },
+      // Its installer is a script piped into a shell, which Conch never does: its release instead.
+      ...(UV_LINUX && { linux: github('astral-sh/uv', UV_LINUX, 'uv') }),
     },
-    ...updatable({ winget: 'astral-sh.uv', brew: 'uv' }),
+    ...fetchedOr('uv', 'astral-sh/uv', UV_LINUX, { winget: 'astral-sh.uv', brew: 'uv' }),
     download: {
       win32: 'https://docs.astral.sh/uv/getting-started/installation/',
       darwin: 'https://docs.astral.sh/uv/getting-started/installation/',
@@ -531,23 +601,80 @@ list.push(
     opens: 'tailscale',
   },
   {
-    // Private dictation (ADR 0027): whisper.cpp turns speech into text on this
-    // computer, so a voice never leaves it. Homebrew has it on a Mac and on
-    // Linux; on Windows it's a download from its own releases.
+    // Private dictation and voice notes (ADR 0027, ADR 0077): whisper.cpp turns
+    // speech into text on this computer, so a voice never leaves it. Homebrew
+    // has it on a Mac and on Linux; on Windows (and Linux without Homebrew)
+    // Conch fetches the project's own release itself, checked against the
+    // SHA-256 GitHub publishes for it.
     id: 'whisper',
-    name: 'whisper.cpp (private dictation)',
+    name: 'whisper.cpp (private listening)',
     short: 'whisper.cpp',
-    find: () => findExecutable('whisper-cli'),
+    find: () => findExecutable('whisper-cli', { extraDirs: fetchedBin('whisper') }),
     install: {
+      ...(WHISPER_WINDOWS && { win32: github(WHISPER_REPO, WHISPER_WINDOWS, 'whisper-cli') }),
       darwin: { manager: 'brew', args: ['install', 'whisper-cpp'] },
-      linux: { manager: 'brew', args: ['install', 'whisper-cpp'] },
+      linux: [
+        { manager: 'brew', args: ['install', 'whisper-cpp'] },
+        ...(WHISPER_LINUX ? [github(WHISPER_REPO, WHISPER_LINUX, 'whisper-cli')] : []),
+      ],
     },
-    ...updatable({ brew: 'whisper-cpp' }),
+    ...fetchedOr('whisper', WHISPER_REPO, WHISPER_WINDOWS ?? WHISPER_LINUX, {
+      brew: 'whisper-cpp',
+    }),
     download: {
       win32: 'https://github.com/ggml-org/whisper.cpp/releases',
       darwin: 'https://github.com/ggml-org/whisper.cpp#quick-start',
       linux: 'https://github.com/ggml-org/whisper.cpp#quick-start',
     },
+  },
+  {
+    // Voice notes (ADR 0077) arrive as Opus, AAC or AMR, which whisper.cpp
+    // can't read, and a voice reply goes back as Opus: FFmpeg turns one into
+    // the other, on this computer.
+    id: 'ffmpeg',
+    name: 'FFmpeg (for voice notes)',
+    short: 'FFmpeg',
+    find: () => findExecutable('ffmpeg'),
+    install: {
+      win32: winget('Gyan.FFmpeg'),
+      darwin: { manager: 'brew', args: ['install', 'ffmpeg'] },
+      linux: { manager: 'brew', args: ['install', 'ffmpeg'] },
+    },
+    ...updatable({ winget: 'Gyan.FFmpeg', brew: 'ffmpeg' }),
+    // FFmpeg says its version with one dash.
+    version: async (path) => {
+      const result = await run(path, ['-version'], { timeout: 15_000 });
+      return result.code === 0 ? parseVersion(result.stdout.split('\n')[0] ?? '') : undefined;
+    },
+    download: {
+      win32: 'https://ffmpeg.org/download.html#build-windows',
+      darwin: 'https://ffmpeg.org/download.html#build-mac',
+      linux: 'https://ffmpeg.org/download.html#build-linux',
+    },
+  },
+  {
+    // A natural voice on this computer (ADR 0077): Piper reads answers aloud
+    // with a neural voice, offline. It's a Python program, so uv installs it
+    // as a tool of its own, with the Python it needs, for this user only.
+    id: 'piper',
+    name: 'Piper (natural voices)',
+    short: 'Piper',
+    find: () => findExecutable('piper', { extraDirs: [join(homedir(), '.local', 'bin')] }),
+    install: {
+      win32: uvTool('piper-tts'),
+      darwin: uvTool('piper-tts'),
+      linux: uvTool('piper-tts'),
+    },
+    update: () => [{ manager: 'uv', args: ['tool', 'upgrade', 'piper-tts'], via: 'uv' }],
+    latest: (_path, _platform, lookup) => lookup.pypi('piper-tts'),
+    version: () => uvToolVersion('piper-tts'),
+    download: {
+      win32: 'https://github.com/OHF-Voice/piper1-gpl#readme',
+      darwin: 'https://github.com/OHF-Voice/piper1-gpl#readme',
+      linux: 'https://github.com/OHF-Voice/piper1-gpl#readme',
+    },
+    hint: (has) =>
+      has('uv') ? undefined : 'Conch gets uv first, which brings the Python it runs on.',
   },
   {
     // Building Conch's menu bar helper (ADR 0029). Apple's own installer asks

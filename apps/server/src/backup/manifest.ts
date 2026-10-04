@@ -147,7 +147,12 @@ export const RULES: readonly BackupRule[] = [
   {
     match: 'voice/**',
     class: 'derived',
-    why: 'Private dictation’s speech model (downloaded again when it’s missing) and recordings being read, which are deleted at once.',
+    why: 'Voice models: the speech model for listening and the natural voices for reading aloud (downloaded again when they’re missing), and recordings being read, which are deleted at once.',
+  },
+  {
+    match: 'tools/**',
+    class: 'derived',
+    why: 'Programs Conch fetched for you from their own releases (whisper.cpp on Windows): fetched again on a new computer, made for this one.',
   },
   {
     match: 'tasks.json',

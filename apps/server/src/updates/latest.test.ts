@@ -99,6 +99,8 @@ describe('choosing where to ask', () => {
       npm: async (p) => (asked.push(`npm ${p}`), '1.0.0'),
       winget: async (id) => (asked.push(`winget ${id}`), '1.0.0'),
       brew: async (n, cask) => (asked.push(`brew ${n}${cask ? ' cask' : ''}`), '1.0.0'),
+      pypi: async (p) => (asked.push(`pypi ${p}`), '1.0.0'),
+      github: async (r, a) => (asked.push(`github ${r} ${a}`), '1.0.0'),
     };
   };
   const ids = {

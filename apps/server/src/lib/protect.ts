@@ -51,6 +51,9 @@ export function protectedPaths(home: string): string[] {
     join(home, 'skills.signing.json'),
     // Conch's own versions and which one runs (ADR 0051): writing there would run the assistant's code as Conch.
     join(home, 'versions'),
+    // Programs Conch fetched and runs (whisper.cpp), and the voice models they read (ADR 0077).
+    join(home, 'tools'),
+    join(home, 'voice'),
     // Apps you added, their data and their keys (ADR 0061): the assistant changes an app
     // only through a card the person presses, and never reads what it keeps.
     join(home, 'conch-apps'),

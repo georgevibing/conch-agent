@@ -185,6 +185,116 @@ describe('installing', () => {
   });
 });
 
+describe('a package manager that isn’t here yet, and Conch’s own fetch', () => {
+  it('gets the package manager first, in the same press, then the program', async () => {
+    const { spec, found } = world();
+    const uv = spec('uv', { install: recipe('') });
+    const piper = spec('piper', {
+      install: { win32: { manager: 'uv', args: ['-e', ''], via: 'uv' } },
+    });
+    const ran: string[] = [];
+    const setup = new Setup(
+      new Map([
+        [uv.id, uv],
+        [piper.id, piper],
+      ]),
+      {
+        platform: 'win32',
+        // winget is here; uv only once it has been installed.
+        manager: (name) =>
+          Promise.resolve(name === 'winget' || found.uv ? process.execPath : undefined),
+        spawn: ((command: string, args: string[], options: object) => {
+          ran.push(found.uv ? 'uv' : 'winget');
+          if (!found.uv) found.uv = 'C:\\uv.exe';
+          else found.piper = 'C:\\piper.exe';
+          return spawn(command, args, options as never);
+        }) as unknown as typeof spawn,
+      },
+    );
+    const [before] = (await setup.readiness([piper])).needs;
+    // Both steps are shown before the press.
+    expect(before?.install?.command).toMatch(/^winget -e .* && uv -e/);
+    await setup.install(piper);
+    expect((await setup.readiness([piper])).needs[0]).toMatchObject({
+      state: 'installing',
+      progress: { label: 'Getting uv first…' },
+    });
+    await setup.settled('piper');
+    expect(ran).toEqual(['winget', 'uv']);
+    expect((await setup.readiness([piper])).ready).toBe(true);
+  });
+
+  it('offers nothing when neither the manager nor a way to get it is here', async () => {
+    const { spec } = world();
+    const piper = spec('piper', {
+      install: { win32: { manager: 'uv', args: ['tool', 'install', 'piper-tts'], via: 'uv' } },
+    });
+    const [need] = (await setupWith([piper], null).readiness([piper])).needs;
+    expect(need?.install).toBeUndefined();
+  });
+
+  it('fetches a release itself, with progress, and says what it downloads', async () => {
+    const { spec, found } = world();
+    let finish: () => void = () => undefined;
+    const whisper = spec('whisper', {
+      install: {
+        win32: {
+          manager: 'github',
+          args: ['ggml-org/whisper.cpp', 'whisper-bin-x64.zip', 'whisper-cli'],
+        },
+      },
+    });
+    const github = vi.fn(
+      (options: { progress?: (line: string) => void; repo: string; need: string }) =>
+        new Promise<void>((resolve) => {
+          options.progress?.('Downloading whisper-bin-x64.zip 37%');
+          finish = () => {
+            found.whisper = 'C:\\tools\\whisper-cli.exe';
+            resolve();
+          };
+        }),
+    );
+    const setup = new Setup(new Map([[whisper.id, whisper]]), {
+      platform: 'win32',
+      manager: () => Promise.resolve(undefined),
+      github: github as never,
+    });
+    const [before] = (await setup.readiness([whisper])).needs;
+    expect(before?.install).toEqual({
+      label: 'Install whisper',
+      command: 'download whisper-bin-x64.zip from github.com/ggml-org/whisper.cpp',
+    });
+    await setup.install(whisper);
+    expect((await setup.readiness([whisper])).needs[0]).toMatchObject({
+      state: 'installing',
+      progress: { percent: 37, label: 'Downloading whisper · 37%' },
+    });
+    expect(github).toHaveBeenCalledWith(
+      expect.objectContaining({ repo: 'ggml-org/whisper.cpp', need: 'whisper' }),
+    );
+    finish();
+    await setup.settled('whisper');
+    expect((await setup.readiness([whisper])).ready).toBe(true);
+  });
+
+  it('says plainly when the fetch couldn’t reach the internet', async () => {
+    const { spec } = world();
+    const whisper = spec('whisper', {
+      install: { win32: { manager: 'github', args: ['o/r', 'a.zip', 'whisper-cli'] } },
+    });
+    const setup = new Setup(new Map([[whisper.id, whisper]]), {
+      platform: 'win32',
+      github: () => Promise.reject(new Error('Couldn’t reach GitHub: fetch failed')),
+    });
+    await setup.install(whisper);
+    await setup.settled('whisper');
+    expect((await setup.readiness([whisper])).needs[0]).toMatchObject({
+      state: 'failed',
+      message: 'Couldn’t download whisper: the internet seems to be unreachable.',
+    });
+  });
+});
+
 describe('opening an app', () => {
   it('starts the app it found, detached, and uses `open -a` on macOS', async () => {
     const { spec } = world({ app: '/Applications/App.app' });
