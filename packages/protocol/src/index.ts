@@ -455,7 +455,13 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     content: z.string(),
   }),
   /** The chat read something from outside: from here on, sending and changing ask first (ADR 0028). */
-  z.object({ ...logged, type: z.literal('taint'), source: TaintSource }),
+  z.object({
+    ...logged,
+    type: z.literal('taint'),
+    source: TaintSource,
+    /** The tool call that brought it in, when one did. */
+    toolUseId: z.string().optional(),
+  }),
   /** The assistant looked through your other chats (ADR 0059): for what, and where it found it. */
   z.object({ ...logged, type: z.literal('chats.looked'), ...PastChatsLooked.shape }),
   /**

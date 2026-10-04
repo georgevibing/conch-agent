@@ -181,3 +181,21 @@ stand. The verdict is `clean`, `caution` or `danger`.
   - The scanner can be evaded by a determined author. The pin, the prompts and
     the sealed box are the other layers.
   - Codex chats can't be asked mid-step, so they run tighter instead.
+
+## Later changes
+
+- **2026-10-04: the download rule matches programs, not words.** `git fetch`
+  matched `fetch` and marked coding chats as "downloaded something", so in
+  Full trust every command asked. Common names (`fetch`, `http`, `httpie`) now
+  count only as the program being run. A mark made by a command is checked again
+  by today's rule each time the chat's marks are read (`heldTaints`), so chats an
+  older rule got wrong come free. Marks now name the tool call that made them;
+  in older logs, it's the call that finishes right after. Pages, apps, people, and
+  marks carried in from another chat are never looked at again.
+- **2026-10-04: a mode picked mid-turn holds from the next step.** It used to wait
+  for the next message. The running turn's `options.permissionMode` changes in
+  place. Asks still waiting that Full trust would have allowed are allowed. Claude
+  Code switches with `setPermissionMode`. Full trust picked mid-turn runs there as
+  Ask, with Conch answering each ask itself, so the SDK's skip-permissions flag is
+  only ever set for turns that start in Full trust. What asks whatever the mode
+  still asks.

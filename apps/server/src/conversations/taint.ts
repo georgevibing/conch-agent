@@ -16,15 +16,17 @@
  */
 import { isAbsolute, relative, resolve } from 'node:path';
 
-import type { TaintSource } from '@conch/protocol';
+import type { ConversationEvent, TaintSource } from '@conch/protocol';
 
 /** Built-in tools that bring the outside in. */
 const WEB_READERS = new Set(['WebFetch', 'WebSearch']);
 /** Conch's browser: every look at a page is the outside coming in. */
 const BROWSER =
   /^(?:mcp__conch__)?browser_(?:open|read|screenshot|click|back|scroll|wait|select|press|type)$/;
-const DOWNLOADS =
-  /\b(?:curl|wget|http(?:ie)?|aria2c|fetch|Invoke-WebRequest|iwr|irm)\b|https?:\/\//i;
+/** Programs that bring the outside in, wherever they sit in a command line, and addresses. */
+const DOWNLOADS = /\b(?:curl|wget|aria2c|Invoke-WebRequest|iwr|irm)\b|https?:\/\//i;
+/** Names too common to match anywhere (`git fetch`, `grep http`): only as the program run. */
+const DOWNLOAD_PROGRAMS = /(?:^|[;&|(`\n]|\$\()\s*(?:sudo\s+)?(?:fetch|https?|httpie)\b/i;
 const INTEGRATION = /^mcp__([a-z0-9_-]+?)__(.+)$/;
 
 const hostOf = (value: unknown): string | undefined => {
@@ -57,12 +59,37 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
     };
   if (BROWSER.test(toolName))
     return { kind: 'web', label: hostOf(args.url) ?? 'pages in the browser' };
-  if (toolName === 'Bash' && typeof args.command === 'string' && DOWNLOADS.test(args.command))
+  if (
+    toolName === 'Bash' &&
+    typeof args.command === 'string' &&
+    (DOWNLOADS.test(args.command) || DOWNLOAD_PROGRAMS.test(args.command))
+  )
     return { kind: 'download', label: hostOf(args.command) ?? 'something downloaded' };
   const integration = INTEGRATION.exec(toolName);
   if (integration && integration[1] !== 'conch')
     return { kind: 'app', label: app ?? integration[1] ?? 'an app' };
   return undefined;
+}
+
+/**
+ * What a chat's log says it read. A mark a command made is looked at again by
+ * today's rule, so one an older rule got wrong (`git fetch` read as a download)
+ * stops holding the chat. Pages, apps, people, and marks carried in from
+ * another chat stay as they are.
+ */
+export function heldTaints(events: readonly ConversationEvent[]): TaintSource[] {
+  const calls = new Map<string, { name: string; input: unknown }>();
+  for (const e of events) if (e.type === 'tool.started') calls.set(e.toolUseId, e);
+  return events.flatMap((e, i) => {
+    if (e.type !== 'taint') return [];
+    if (e.source.kind !== 'download') return [e.source];
+    // The command that made it: named on the mark, or (older logs) the call finishing next.
+    const next = events[i + 1];
+    const id = e.toolUseId ?? (next?.type === 'tool.finished' ? next.toolUseId : undefined);
+    const call = id ? calls.get(id) : undefined;
+    if (call?.name !== 'Bash') return [e.source];
+    return taintFrom(call.name, call.input) ? [e.source] : [];
+  });
 }
 
 export interface SinkContext {

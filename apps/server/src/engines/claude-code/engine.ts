@@ -637,6 +637,15 @@ export class ClaudeCodeEngine implements Engine {
         },
       });
 
+      // A mode picked mid-turn holds from the next tool call, not the next message.
+      // Full trust picked mid-turn runs as Ask here, and Conch answers each ask
+      // itself (the manager), so what must still ask (ADR 0028) still does.
+      const startedTrusted = input.options.permissionMode === 'bypassPermissions';
+      input.onModeChange?.((mode) => {
+        const next = mode === 'bypassPermissions' && !startedTrusted ? 'default' : mode;
+        void q.setPermissionMode(next).catch(() => undefined);
+      });
+
       const integrations = Object.entries(input.mcpServers ?? {});
       if (!integrations.length) release();
       else {

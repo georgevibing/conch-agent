@@ -34,6 +34,7 @@ import {
 import { z } from 'zod';
 
 import { summarizeToolUse } from '../conversations/summarize';
+import { heldTaints } from '../conversations/taint';
 import type { Completion, CompletionInput } from '../engines/types';
 import { Mutex, writeJson } from '../lib/fs';
 import { readStore, type Heal } from '../lib/recover';
@@ -204,7 +205,7 @@ export function assess(
   events: readonly ConversationEvent[],
   options: { signal?: 'verified' | 'routine' | 'long' } = {},
 ): Assessment {
-  const taint = events.flatMap((e) => (e.type === 'taint' ? [e.source] : []));
+  const taint = heldTaints(events);
   // Someone else's words on a chat app aren't yours to learn from (ADR 0032).
   if (taint.some((t) => t.kind === 'person'))
     return { ok: false, why: 'someone else’s words are in it' };

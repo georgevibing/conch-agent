@@ -48,7 +48,7 @@ import { handoff } from './handoff';
 import type { ConversationRecord, ConversationStore } from './store';
 import { summarizeToolUse, titleFrom } from './summarize';
 import { allows, missing, needs } from '../skills/permissions';
-import { describeTaint, leavesSandbox, sinkReason, taintFrom } from './taint';
+import { describeTaint, heldTaints, leavesSandbox, sinkReason, taintFrom } from './taint';
 import { CONCH_POWER_MESSAGE, runsConchPower } from '../lib/protect';
 import { didWhat } from '../activity/service';
 import { changedFiles, type UndoService } from '../undo/service';
@@ -95,8 +95,22 @@ export async function turnProblem(
 interface PendingPermission {
   resolve: (decision: PermissionDecision) => void;
   toolName: string;
-  /** "Always allow" adds the tool to the conversation's list. Off when the asker keeps its own (the browser: per site). */
+  /**
+   * "Always allow" adds the tool to the conversation's list. Off when the asker
+   * keeps its own (the browser: per site), or asks whatever the mode (ADR 0028):
+   * on, it's asking only because of the mode.
+   */
   remember: boolean;
+}
+
+/**
+ * Would Full trust have let this through without asking? Everything a mode asks
+ * about, except a plan's go-ahead and integration tools Conch bridges (those ask
+ * in every mode).
+ */
+function trustAllows(mode: PermissionMode, toolName: string, nativeTools: boolean): boolean {
+  if (mode !== 'bypassPermissions' || toolName === 'ExitPlanMode') return false;
+  return nativeTools || !toolName.startsWith('mcp__');
 }
 
 /** A question a host tool puts to the user, through the same prompt as any permission. */
@@ -349,6 +363,8 @@ interface Live {
   titling?: AbortController;
   /** When Stop was pressed with no turn running yet: the one about to start stops. */
   stopAt?: number;
+  /** The running turn takes a mode picked mid-turn (Full trust, say) from its next step. */
+  setTurnMode?: (mode: PermissionMode) => void;
 }
 
 /** How long a Stop pressed just before a turn starts still counts. */
@@ -865,6 +881,7 @@ export class ConversationManager {
   async configure(id: string, options: TurnOptions) {
     const live = await this.#get(id);
     this.#applyOptions(live, options);
+    if (options.permissionMode) live.setTurnMode?.(options.permissionMode);
     await this.deps.store.upsert(live.record);
     this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
   }
@@ -910,13 +927,16 @@ export class ConversationManager {
   }
 
   async respond(id: string, permissionId: string, decision: PermissionDecision) {
-    const live = await this.#get(id);
+    this.#resolvePermission(await this.#get(id), permissionId, decision);
+  }
+
+  #resolvePermission(live: Live, permissionId: string, decision: PermissionDecision) {
     const pending = live.permissions.get(permissionId);
     if (!pending) return;
     live.permissions.delete(permissionId);
     if (decision === 'allow-always' && pending.remember) live.alwaysAllow.add(pending.toolName);
     this.#append(live, { type: 'permission.resolved', permissionId, decision });
-    if (live.permissions.size === 0 && !this.deps.questions?.waiting(id))
+    if (live.permissions.size === 0 && !this.deps.questions?.waiting(live.record.id))
       this.#setStatus(live, 'running');
     pending.resolve(decision);
   }
@@ -1083,7 +1103,22 @@ export class ConversationManager {
     if (model) resolved.model = model;
     if (extras?.permissionMode) resolved.permissionMode = extras.permissionMode;
     // The mode the chat shows for this provider is the one it runs in.
-    resolved.permissionMode = honouredMode(resolved.permissionMode, await honouredModes(engine));
+    const modes = await honouredModes(engine);
+    resolved.permissionMode = honouredMode(resolved.permissionMode, modes);
+    const nativeTools = engine.integrations.mode === 'native';
+    // A mode picked mid-turn holds from the next step, not the next message
+    // (a routine keeps its own). What's waiting that it would have let through, goes.
+    const modeListeners: ((mode: PermissionMode) => void)[] = [];
+    const setTurnMode = (picked: PermissionMode) => {
+      const mode = honouredMode(picked, modes);
+      if (mode === resolved.permissionMode) return;
+      resolved.permissionMode = mode;
+      for (const listener of modeListeners) listener(mode);
+      for (const [permissionId, pending] of live.permissions)
+        if (pending.remember && trustAllows(mode, pending.toolName, nativeTools))
+          this.#resolvePermission(live, permissionId, 'allow');
+    };
+    if (!extras?.permissionMode) live.setTurnMode = setTurnMode;
 
     /** Puts a question to the user and waits; expires (deny) if the turn stops first. */
     const askUser = (
@@ -1328,6 +1363,8 @@ export class ConversationManager {
       const taint = await mustAsk(request);
       if (!taint) {
         if (policy === 'allow') return 'allow';
+        // Full trust picked mid-turn, for an engine still running the mode it started in.
+        if (trustAllows(resolved.permissionMode, request.toolName, nativeTools)) return 'allow';
         if (live.alwaysAllow.has(request.toolName)) return 'allow';
       }
       const described = await integrations?.describeTool(request.toolName).catch(() => undefined);
@@ -1469,6 +1506,7 @@ export class ConversationManager {
             tools,
             wrapTool: extras?.wrapTool,
             options: resolved,
+            onModeChange: (listener) => modeListeners.push(listener),
             mcpServers: engine.integrations.mode === 'native' ? loaded?.servers : undefined,
             disallowedTools: loaded?.disallowedTools,
             bridgedTools,
@@ -1555,7 +1593,7 @@ export class ConversationManager {
                 ? (await integrations?.describeTool(call.name).catch(() => undefined))?.integration
                 : undefined;
               const source = taintFrom(call.name, call.input, app);
-              if (source) this.#taint(live, source);
+              if (source) this.#taint(live, source, event.toolUseId);
             }
             this.#append(live, {
               type: 'tool.finished',
@@ -1597,6 +1635,7 @@ export class ConversationManager {
       outcome = 'error';
       completed = { error: (error as Error).message || 'Something went wrong.' };
     } finally {
+      if (live.setTurnMode === setTurnMode) live.setTurnMode = undefined;
       // A question still waiting can't be answered now: it's skipped (ADR 0060).
       this.deps.questions?.close(live.record.id);
       // Whatever else the turn changed, kept before the turn closes.
@@ -1966,15 +2005,15 @@ export class ConversationManager {
 
   /** What untrusted things this chat has read, from its own log (so it survives a restart). */
   #tainted(live: Live): TaintSource[] {
-    return live.events.flatMap((e) => (e.type === 'taint' ? [e.source] : []));
+    return heldTaints(live.events);
   }
 
   /** Note once that the chat read something from outside; the transcript says so, quietly. */
-  #taint(live: Live, source: TaintSource) {
+  #taint(live: Live, source: TaintSource, toolUseId?: string) {
     const known = this.#tainted(live);
     if (known.length >= 12 || known.some((t) => t.kind === source.kind && t.label === source.label))
       return;
-    this.#append(live, { type: 'taint', source });
+    this.#append(live, { type: 'taint', source, ...(toolUseId && { toolUseId }) });
   }
 
   /** What untrusted things a chat has read (ADR 0028), for work handed on from it (ADR 0033). */

@@ -89,6 +89,7 @@ import type { Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
 import { findExecutable } from './lib/proc';
 import { sandboxFor, sandboxSupport, secretPlaces } from './conversations/sandbox';
+import { heldTaints } from './conversations/taint';
 import { UndoService } from './undo/service';
 import { UndoStore } from './undo/store';
 import { safetyCheck } from './conversations/safety-doctor';
@@ -1579,7 +1580,7 @@ export class Services {
       title: conversation.title,
       ...(conversation.archivedAt !== undefined && { archivedAt: conversation.archivedAt }),
       ...(conversation.origin && { origin: conversation.origin }),
-      taint: events.flatMap((e) => (e.type === 'taint' ? [e.source] : [])),
+      taint: heldTaints(events),
     };
   }
 

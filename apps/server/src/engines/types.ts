@@ -192,8 +192,17 @@ export interface TurnInput {
   wrapTool?: (tool: HostTool) => HostTool;
   requestPermission(request: PermissionRequest, signal: AbortSignal): Promise<PermissionDecision>;
   signal: AbortSignal;
-  /** Resolved choices for this turn (conversation overrides merged over defaults). */
+  /**
+   * Resolved choices for this turn (conversation overrides merged over defaults).
+   * `permissionMode` changes in place when the person picks another mode mid-turn:
+   * read it per call, don't copy it.
+   */
   options: ResolvedOptions;
+  /**
+   * The person picked another mode while this turn runs. Engines that hold the
+   * mode themselves (Claude Code) switch here; the rest read `options` per call.
+   */
+  onModeChange?: (listener: (mode: PermissionMode) => void) => void;
   /** Native engines: integrations to load, keyed by server name (tools become `mcp__<name>__<tool>`). */
   mcpServers?: Record<string, EngineMcpServer>;
   /** Bridge engines: integration tools Conch is connected to for this turn. */
