@@ -5,7 +5,7 @@ import { join } from 'node:path';
 
 import { nacreCssModules } from '@conch/nacre/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig, type ProxyOptions } from 'vite';
+import { createLogger, defineConfig, type Logger, type ProxyOptions } from 'vite';
 
 const USUAL = '127.0.0.1:4317';
 let known = { at: 0, address: USUAL };
@@ -48,7 +48,34 @@ function toGateway(scheme: 'http' | 'ws', options: ProxyOptions): ProxyOptions {
   };
 }
 
+/**
+ * Vite's own logger, with the proxy's everyday errors put plainly: a page
+ * that went away mid-reply (a reload, a sign-in) isn't news, and a gateway
+ * starting again is one line, not a stack trace per request.
+ */
+function quietProxyLogger(): Logger {
+  const logger = createLogger();
+  const error = logger.error.bind(logger);
+  let waitingSaid = 0;
+  logger.error = (msg, options) => {
+    const code = (options?.error as NodeJS.ErrnoException | null | undefined)?.code;
+    if (!code || !/proxy/.test(msg)) return error(msg, options);
+    if (/^(ECONNABORTED|ECONNRESET|EPIPE)$/.test(code)) return;
+    if (code === 'ECONNREFUSED') {
+      if (Date.now() - waitingSaid > 5_000)
+        logger.warn(`Conch isn’t answering at ${gateway()} yet (starting, or starting again).`, {
+          timestamp: true,
+        });
+      waitingSaid = Date.now();
+      return;
+    }
+    error(msg, options);
+  };
+  return logger;
+}
+
 export default defineConfig({
+  customLogger: quietProxyLogger(),
   plugins: [react()],
   css: { modules: nacreCssModules },
   server: {
