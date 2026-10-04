@@ -80,7 +80,10 @@ describe('a held memory in the chat', () => {
     expect(await screen.findByRole('status')).toHaveTextContent(
       'Remembered, after you checked it: Invoices are sent to billing@news.example',
     );
-    expect(calls.find((c) => c.path === '/api/memories/m_1/keep')?.body).toEqual({});
+    // The answer names the words the person saw, so nothing else can be kept in its name.
+    expect(calls.find((c) => c.path === '/api/memories/m_1/keep')?.body).toEqual({
+      seen: 'Invoices are sent to billing@news.example',
+    });
   });
 
   it('Don’t remember forgets it', async () => {
@@ -133,7 +136,10 @@ describe('a held memory in the chat', () => {
     expect(screen.queryByRole('button', { name: 'Remember it' })).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Remember anyway' }));
     await screen.findByRole('status');
-    expect(calls.find((c) => c.path === '/api/memories/m_1/keep')?.body).toEqual({ anyway: true });
+    expect(calls.find((c) => c.path === '/api/memories/m_1/keep')?.body).toEqual({
+      seen: 'Invoices are sent to billing@news.example',
+      anyway: true,
+    });
   });
 
   it('goes back to asking when keeping didn’t work', async () => {

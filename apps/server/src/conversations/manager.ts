@@ -1578,9 +1578,7 @@ export class ConversationManager {
       this.deps.memoryIndex && !guest
         ? await this.deps.memoryIndex.forPrompt(said).catch(() => undefined)
         : undefined;
-    const memories = guest
-      ? []
-      : (picked?.memories ?? (await this.deps.memory.list()).filter((m) => !m.pending));
+    const memories = guest ? [] : (picked?.memories ?? (await this.deps.memory.usable()));
     const memoryTotal = picked?.total ?? memories.length;
     const started = new Map<string, number>();
     const calls = new Map<string, { name: string; input: unknown }>();

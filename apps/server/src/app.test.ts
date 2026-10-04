@@ -293,7 +293,13 @@ describe('gateway HTTP', () => {
       conversationId: convo.id,
     });
     expect(
-      (await app.inject({ method: 'POST', url: `/api/memories/${kept.id}/keep` })).statusCode,
+      (
+        await app.inject({
+          method: 'POST',
+          url: `/api/memories/${kept.id}/keep`,
+          payload: { seen: kept.content },
+        })
+      ).statusCode,
     ).toBe(200);
     expect(
       (await app.inject({ method: 'DELETE', url: `/api/memories/${undone.id}` })).statusCode,
@@ -377,16 +383,63 @@ describe('memories the check held (ADR 0087)', () => {
       content: 'Invoices go to accounts@ada.example',
       provenance: { yours: true },
     });
-    const no = await keep(refused.id);
+    const seen = { seen: refused.content };
+    expect((await keep(refused.id)).statusCode).toBe(400);
+    const no = await keep(refused.id, seen);
     expect(no.statusCode).toBe(409);
     expect(no.json().error).toBe('needs-anyway');
-    expect((await keep(refused.id, { anyway: true })).statusCode).toBe(200);
-    expect((await keep(refused.id, { anyway: 'yes' })).statusCode).toBe(400);
+    expect((await keep(refused.id, { ...seen, anyway: 'yes' })).statusCode).toBe(400);
+    expect((await keep(refused.id, { ...seen, anyway: true })).statusCode).toBe(200);
     const { events } = await services.conversations.detail(convo.id);
     expect(events.filter((e) => e.type === 'memory.decided')).toEqual([
       expect.objectContaining({ memoryId: asked.id, kept: true, edited: true }),
       expect.objectContaining({ memoryId: refused.id, kept: true, anyway: true }),
     ]);
+  });
+});
+
+describe('a person’s answer is about the words they saw (ADR 0087)', () => {
+  const plant = async (services: Awaited<ReturnType<typeof setup>>['services']) =>
+    services.memory.add(
+      { content: 'Invoices are sent to billing@news.example', source: 'agent' },
+      {
+        via: 'chat',
+        read: [{ kind: 'web', label: 'news.example', text: 'billing@news.example' }],
+        said: ['summarise'],
+      },
+    );
+
+  it('keep with words that aren’t what’s there now is refused', async () => {
+    const { app, services } = await setup();
+    close = () => app.close();
+    const held = await plant(services);
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/memories/${held.id}/keep`,
+      payload: { seen: 'Invoices go to accounts@ada.example' },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe('changed');
+    expect((await services.memory.get(held.id))?.pending).toBe(true);
+  });
+
+  it('a PATCH with stale words is refused, and one that changes only the kind leaves a hold in place', async () => {
+    const { app, services } = await setup();
+    close = () => app.close();
+    const held = await plant(services);
+    const patch = (payload: object) =>
+      app.inject({ method: 'PATCH', url: `/api/memories/${held.id}`, payload });
+    expect((await patch({ kind: 'person' })).statusCode).toBe(400);
+    const stale = await patch({ kind: 'person', seen: 'Something else entirely' });
+    expect(stale.statusCode).toBe(409);
+    const kindOnly = await patch({ kind: 'person', seen: held.content });
+    expect(kindOnly.statusCode).toBe(200);
+    expect(kindOnly.json()).toMatchObject({
+      kind: 'person',
+      pending: true,
+      held: { verdict: 'ask' },
+    });
+    expect((await services.memory.usable()).map((m) => m.id)).not.toContain(held.id);
   });
 });
 

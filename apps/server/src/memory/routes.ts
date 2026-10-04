@@ -12,7 +12,7 @@ import type { FastifyInstance } from 'fastify';
 
 import type { SkillLearner } from '../skills/learn';
 import type { SkillSuggester } from '../skills/suggest';
-import { mintConsent } from './consent';
+import { mintConsent, NEW_MEMORY, wordsHash } from './consent';
 import type { MemoryIndex } from './index';
 import type { MemoryStore } from './store';
 import type { MemoryTidy } from './tidy';
@@ -57,13 +57,37 @@ export function registerLearningRoutes(
     const body = CreateMemoryBody.safeParse(request.body);
     if (!body.success)
       return reply.code(400).send({ error: 'bad-request', message: body.error.issues[0]?.message });
-    return store.add({ ...body.data, source: 'user' }, mintConsent(request, 'add'));
+    return store.add(
+      { ...body.data, source: 'user' },
+      mintConsent(request, 'add', { id: NEW_MEMORY, content: body.data.content }),
+    );
   });
   app.patch<{ Params: { id: string } }>('/api/memories/:id', async (request, reply) => {
     const body = UpdateMemoryBody.safeParse(request.body);
     if (!body.success)
       return reply.code(400).send({ error: 'bad-request', message: body.error.issues[0]?.message });
-    const memory = await store.update(request.params.id, body.data, mintConsent(request, 'edit'));
+    const current = await store.get(request.params.id);
+    if (!current) return reply.code(404).send({ error: 'not-found', message: 'Memory not found.' });
+    // Your answer is for the words you wrote, or, changing only its kind, the
+    // ones you saw: those must still be what's there (ADR 0087).
+    const words = body.data.content ?? body.data.seen;
+    if (words === undefined)
+      return reply
+        .code(400)
+        .send({ error: 'bad-request', message: 'Say which words you’re changing.' });
+    if (body.data.content === undefined && wordsHash(words) !== wordsHash(current.content))
+      return reply.code(409).send({
+        error: 'changed',
+        message: 'That memory changed since you looked at it. Have another look.',
+      });
+    const memory = await store.update(
+      request.params.id,
+      {
+        ...(body.data.content !== undefined && { content: body.data.content }),
+        ...(body.data.kind !== undefined && { kind: body.data.kind }),
+      },
+      mintConsent(request, 'edit', { id: current.id, content: words }),
+    );
     return memory ?? reply.code(404).send({ error: 'not-found', message: 'Memory not found.' });
   });
 
@@ -74,9 +98,25 @@ export function registerLearningRoutes(
     if (!body.success)
       return reply.code(400).send({ error: 'bad-request', message: body.error.issues[0]?.message });
     const before = await store.get(request.params.id);
+    if (!before)
+      return reply
+        .code(404)
+        .send({ error: 'not-found', message: 'That memory isn’t there any more.' });
+    // The answer is for the words the person saw (or wrote): if what's there now
+    // is different, they didn't say yes to it.
+    const words = body.data.content ?? body.data.seen;
+    if (words === undefined)
+      return reply
+        .code(400)
+        .send({ error: 'bad-request', message: 'Say which words you’re keeping.' });
+    if (body.data.content === undefined && wordsHash(words) !== wordsHash(before.content))
+      return reply.code(409).send({
+        error: 'changed',
+        message: 'That memory changed since you looked at it. Have another look.',
+      });
     const kept = await store.keep(
       request.params.id,
-      mintConsent(request, body.data.anyway ? 'anyway' : 'keep'),
+      mintConsent(request, body.data.anyway ? 'anyway' : 'keep', { id: before.id, content: words }),
       {
         ...(body.data.content !== undefined && { content: body.data.content }),
         ...(body.data.anyway && { anyway: true }),
@@ -193,11 +233,16 @@ export function registerLearningRoutes(
     const body = TidyAnswerBody.safeParse(request.body);
     if (!body.success)
       return reply.code(400).send({ error: 'bad-request', message: body.error.issues[0]?.message });
+    // One answer for each memory the card showed, for exactly the words it showed.
+    const change = (await tidy.status()).runs
+      .find((r) => r.id === body.data.runId)
+      ?.changes.find((c) => c.id === body.data.changeId);
+    const shown = change ? [...change.before, ...(change.after ? [change.after] : [])] : [];
     return tidy.answer(
       body.data.runId,
       body.data.changeId,
       body.data.answer,
-      mintConsent(request, 'tidy'),
+      shown.map((m) => mintConsent(request, 'tidy', { id: m.id, content: m.content })),
     );
   });
 

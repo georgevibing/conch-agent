@@ -437,7 +437,7 @@ function MemoryLine({ item }: { item: Of<'memory'> }) {
     setPressed(keep ? 'kept' : 'undone');
     try {
       if (keep && item.action === 'forgotten' && item.memory) await memoryApi.restore(item.memory);
-      else if (keep) await memoryApi.keep(item.memoryId);
+      else if (keep) await memoryApi.keep(item.memoryId, { seen: item.content });
       else await api.deleteMemory(item.memoryId);
       void client.invalidateQueries({ queryKey: keys.memories });
     } catch (e) {

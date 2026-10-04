@@ -200,6 +200,11 @@ interface Learning {
   check: boolean;
 }
 
+/** Learned from outside and never made the person's own (ADR 0087). */
+function fromOutside(m: Memory): boolean {
+  return !m.provenance?.yours && Boolean(m.provenance?.read?.length || m.untrusted);
+}
+
 /** What the store's check is told about something learned from these chats (ADR 0087). */
 function contextFor(chats: readonly Said[], on: boolean) {
   return {
@@ -293,21 +298,55 @@ export class MemoryTidy {
     const merge = async (group: Memory[], content: string, why: string) => {
       const live = group.filter((m) => byId.has(m.id) && !touched.has(m.id));
       if (live.length < 2) return;
-      // A merge says what they said (ADR 0087): words that look planted aren't merged in.
-      if (
-        checkMemory({ content, via: 'tidy', said: live.map((m) => m.content), on: checkMemories })
-          .verdict !== 'ok'
-      )
-        return;
       const [keep, ...drop] = [...live].sort((a, b) => b.updatedAt - a.updatedAt);
       if (!keep) return;
       for (const m of live) touched.add(m.id);
-      const after =
-        (await store.update(
-          keep.id,
-          { content },
-          { via: 'tidy', said: live.map((m) => m.content), on: checkMemories },
-        )) ?? keep;
+      // A merge is a new write (ADR 0087), as strict as the strictest of what it
+      // merges: anything from outside makes it from outside, and it's the
+      // person's own words only if every one of them was.
+      const outside = live.filter(fromOutside);
+      const read = [
+        ...new Set(outside.flatMap((m) => m.provenance?.read ?? ['something from outside'])),
+      ];
+      const context = {
+        via: 'tidy' as const,
+        read: read.map((label) => ({ kind: label.includes('.') ? 'web' : 'app', label }) as const),
+        said: live.filter((m) => !fromOutside(m)).map((m) => m.content),
+        on: checkMemories,
+      };
+      const provenance = {
+        via: 'tidy' as const,
+        ...(read.length > 0 && { read: read.slice(0, 12) }),
+        ...(live.every((m) => m.provenance?.yours) && { yours: true }),
+      };
+      const proposed = { ...keep, content, provenance, updatedAt: this.#now };
+      const held = holdOf(checkMemory({ content, ...context }));
+      if (held) {
+        // Never applied by itself: it waits on the card, with why.
+        changes.push({
+          id: newId('tc'),
+          kind: 'merged',
+          why: why || 'They said the same thing.',
+          before: live,
+          after: proposed,
+          state: 'pending',
+          untrusted: held.reasons[0]?.words ?? 'It looks off, so it waits for your OK.',
+        });
+        return;
+      }
+      const after = (await store.update(keep.id, { content, provenance }, context)) ?? keep;
+      if (after.pending) {
+        changes.push({
+          id: newId('tc'),
+          kind: 'merged',
+          why: why || 'They said the same thing.',
+          before: live,
+          after,
+          state: 'pending',
+          untrusted: after.held?.reasons[0]?.words ?? 'It looks off, so it waits for your OK.',
+        });
+        return;
+      }
       for (const d of drop) await store.remove(d.id);
       changes.push({
         id: newId('tc'),
@@ -412,7 +451,8 @@ export class MemoryTidy {
         });
         continue;
       }
-      // Checked again where it's written (ADR 0087), with the same chats behind it.
+      // Checked again where it's written (ADR 0087), with the same chats behind it:
+      // if the store holds it, the card waits for you rather than saying it's done.
       const after =
         (await store.update(current.id, { content: proposed.content }, contextFor(chats, check))) ??
         proposed;
@@ -422,7 +462,8 @@ export class MemoryTidy {
         why: u.why || 'Something you said more recently replaces it.',
         before: [current],
         after,
-        state: 'applied',
+        state: after.pending ? 'pending' : 'applied',
+        ...(after.held && { untrusted: after.held.reasons[0]?.words }),
       });
     }
 
@@ -472,8 +513,10 @@ export class MemoryTidy {
         why: a.why || 'Something you said in a chat.',
         before: [],
         after,
-        state: waits ? 'pending' : 'applied',
-        ...(untrusted && { untrusted }),
+        state: after.pending ? 'pending' : 'applied',
+        ...((after.held?.reasons[0]?.words ?? untrusted) && {
+          untrusted: after.held?.reasons[0]?.words ?? untrusted,
+        }),
       });
     }
   }
@@ -555,26 +598,37 @@ export class MemoryTidy {
     runId: string,
     changeId: string,
     answer: 'keep' | 'undo' | 'dismiss',
-    /** The person's answer (ADR 0087): what lets Keep and Undo past the memory check. */
-    consent?: PersonConsent,
+    /**
+     * The person's answers (ADR 0087), one for each memory the card showed, for
+     * exactly the words it showed: what lets Keep and Undo past the memory check.
+     */
+    consents: readonly PersonConsent[] = [],
   ): Promise<TidyStatus> {
+    const consent = (id: string) => consents.find((c) => c.id === id);
     const file = await this.#read();
     const change = file.runs.find((r) => r.id === runId)?.changes.find((c) => c.id === changeId);
     if (!change) return this.status();
     const { store } = this.deps;
     if (change.state === 'applied' && answer === 'undo') {
-      for (const m of change.before) await store.restore(m, consent);
+      for (const m of change.before) await store.restore(m, consent(m.id));
       if (change.kind === 'added' && change.after) await store.remove(change.after.id);
       change.state = 'undone';
     } else if (change.state === 'applied' && answer === 'keep') {
       change.state = 'kept';
     } else if (change.state === 'pending' && answer === 'keep') {
       // Keep on the card is the person's own choice, with the why in front of them.
-      if (!consent) return this.status();
-      if (change.kind === 'added' && change.after)
-        await store.keep(change.after.id, consent, { anyway: true });
-      if (change.kind === 'updated' && change.after)
-        await store.update(change.after.id, { content: change.after.content }, consent);
+      const yes = change.after && consent(change.after.id);
+      if (!change.after || !yes) return this.status();
+      if (change.kind === 'added') {
+        const kept = await store.keep(change.after.id, yes, { anyway: true });
+        if (!kept || kept === 'needs-anyway') return this.status();
+      }
+      if (change.kind === 'updated' || change.kind === 'merged') {
+        const kept = await store.update(change.after.id, { content: change.after.content }, yes);
+        if (!kept || kept.pending) return this.status();
+        if (change.kind === 'merged')
+          for (const m of change.before) if (m.id !== change.after.id) await store.remove(m.id);
+      }
       change.state = 'kept';
     } else if (change.state === 'pending' && (answer === 'dismiss' || answer === 'undo')) {
       if (change.kind === 'added' && change.after) await store.remove(change.after.id);

@@ -74,8 +74,9 @@ export function HeldMemory({
     setPressed({ answer: keep ? 'kept' : 'undone', words: words ?? content });
     try {
       if (keep)
+        // Your answer is for the words you saw (or wrote): the server checks they're still what's there.
         await memoryApi.keep(memoryId, {
-          ...(words !== undefined && { content: words }),
+          ...(words !== undefined ? { content: words } : { seen: content }),
           ...(refused && words === undefined && { anyway: true }),
         });
       else await api.deleteMemory(memoryId);

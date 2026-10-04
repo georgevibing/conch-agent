@@ -138,7 +138,8 @@ export class MemoryIndex {
   }
 
   async #active(): Promise<Memory[]> {
-    return (await this.deps.store.list()).filter((m) => !m.pending);
+    // Only what a model may be given: nothing held, nothing whose words changed since they were checked.
+    return this.deps.store.usable();
   }
 
   /** Vectors for these memories from `embedder`, making (and keeping) any that are missing or stale. */

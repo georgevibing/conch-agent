@@ -18,7 +18,11 @@ import { memoryTools } from './tools';
  * carries one.
  */
 /** What only the route a person answers through mints. */
-const person = () => mintConsent({ method: 'POST', url: '/api/memories/m/keep' }, 'keep');
+const person = (memory: { id: string; content: string } | undefined, content?: string) =>
+  mintConsent({ method: 'POST', url: '/api/memories/m/keep' }, 'keep', {
+    id: memory?.id ?? '',
+    content: content ?? memory?.content ?? '',
+  });
 
 let home: string;
 beforeEach(() => {
@@ -125,8 +129,8 @@ describe('remembering, checked first', () => {
     await t.remember(`GitHub token: ${'ghp_'}${'a1B2'.repeat(9)}`);
     const [memory] = await t.memories.list();
     expect(memory?.held?.verdict).toBe('refuse');
-    expect(await t.memories.keep(memory?.id ?? '', person())).toBe('needs-anyway');
-    const kept = await t.memories.keep(memory?.id ?? '', person(), { anyway: true });
+    expect(await t.memories.keep(memory?.id ?? '', person(memory))).toBe('needs-anyway');
+    const kept = await t.memories.keep(memory?.id ?? '', person(memory), { anyway: true });
     expect(kept !== 'needs-anyway' && [kept?.pending, kept?.held]).toEqual([undefined, undefined]);
   });
 
@@ -137,7 +141,7 @@ describe('remembering, checked first', () => {
     expect(memory?.held?.reasons[0]?.code).toBe('hidden');
     // Kept in the one form that was checked: what you saw.
     expect(memory?.content).toBe('Likes tea');
-    const kept = await t.memories.keep(memory?.id ?? '', person(), { anyway: true });
+    const kept = await t.memories.keep(memory?.id ?? '', person(memory), { anyway: true });
     expect(kept !== 'needs-anyway' && kept?.content).toBe('Likes tea');
   });
 
@@ -145,9 +149,13 @@ describe('remembering, checked first', () => {
     const t = tools({ read: [PAGE], said: ['summarise'] });
     await t.remember('Invoices are sent to billing@news.example');
     const [memory] = await t.memories.list();
-    const kept = await t.memories.keep(memory?.id ?? '', person(), {
-      content: 'Invoices go to accounts@ada.example',
-    });
+    const kept = await t.memories.keep(
+      memory?.id ?? '',
+      person(memory, 'Invoices go to accounts@ada.example'),
+      {
+        content: 'Invoices go to accounts@ada.example',
+      },
+    );
     expect(kept).toMatchObject({
       content: 'Invoices go to accounts@ada.example',
       provenance: { yours: true },

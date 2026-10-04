@@ -586,7 +586,7 @@ function whereWords(text: string): string {
   return 'who things are sent to';
 }
 
-type Effect = Exclude<MemoryReasonCode, 'outside' | 'pieces' | 'second-look'>;
+type Effect = Exclude<MemoryReasonCode, 'outside' | 'pieces' | 'second-look' | 'unchecked'>;
 
 const EFFECT: Record<Effect, (text: string) => string> = {
   redirect: (t) => `it would change ${whereWords(t)}`,
@@ -694,8 +694,9 @@ export function checkMemory(input: GuardInput): Verdict {
   const read = input.read ?? [];
   const said = input.said ?? [];
   // Something other than the person could be behind it.
-  const exposed =
-    read.length > 0 || input.via === 'import' || input.via === 'app' || input.via === 'other';
+  // Something other than the person could be behind it: something read, another
+  // app or assistant, a model's rewording in a tidy-up, or nobody said.
+  const exposed = read.length > 0 || input.via !== 'chat';
   const signals = signalsOf(input.content);
   const seen = canonical(input.content);
   const saidText = said.join('\n');
@@ -879,7 +880,7 @@ export async function secondLook(
 ): Promise<Verdict> {
   if (verdict.verdict !== 'ok' || !model || input.on === false || verdict.yours) return verdict;
   // Only where something from outside could be behind it.
-  if (!input.read?.length && input.via !== 'import' && input.via !== 'app') return verdict;
+  if (!input.read?.length && input.via === 'chat') return verdict;
   try {
     const found = await model();
     if (!found) return verdict;

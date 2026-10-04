@@ -180,35 +180,55 @@ person said themselves, and other assistants' memories — none held.
 
 ### 5. Enforced where memories are written
 
-The check doesn't rely on its callers. `MemoryStore` runs it in every write it
-has — `add`/`write`, `update` (even one that changes only the kind), `restore`
-(a tidy-up's Undo) — with whatever the caller says about where the words came
-from; a caller that says nothing is treated as outside. `hold` and `remove`
-only make things stricter. `keep` needs a person's answer.
+The check doesn't rely on its callers. Every method of `MemoryStore` that changes
+a memory — `add`/`write`, `update` (even one that changes only the kind),
+`restore` (a tidy-up's Undo), `keep`, `hold`, `remove` — goes through one private
+gate, `#commit`, and nothing else writes or deletes a memory file (a test lists
+every method and fails on one that doesn't). The gate runs the check with
+whatever the caller says about where the words came from; a caller that says
+nothing is treated as outside. Without a person's answer nothing ever gets less
+strict than it was: an edit of a waiting memory leaves it waiting, and only
+`keep` lifts a hold.
 
 - **A person's answer is a token** (`memory/consent.ts`, `PersonConsent`): minted
   only by the routes that take one (`memory/routes.ts`: add and edit on What
   Conch knows, Remember it, Remember anyway, Edit first, Keep and Undo on a
-  tidy-up), behind the gateway's sign-in, host and origin checks. Only a token
-  minted there passes (a `WeakSet`, so a look-alike object doesn't), and a test
-  fails if any other file mints one. It is the only way past the check.
+  tidy-up), behind the gateway's sign-in, host and origin checks; a test fails if
+  any other file mints one. Each is bound to one memory and to the SHA-256 of the
+  exact words the person saw or wrote, and is spent on first use. The routes take
+  the words the screen showed (`seen`) and answer 409 when what's there now is
+  different, so a token is never minted for words the person didn't look at.
+  Only a token minted there passes (a `WeakSet`, so a look-alike object doesn't).
 - **One canonical form** (`canonical`): hidden characters out, Unicode NFKC,
   whitespace as one space. Hidden characters and fullwidth names are looked for
   as written; everything else is checked in the canonical form, and that same
-  form is what's kept, shown and read back. Nothing is checked in one form and
-  kept in another.
+  form is what's kept, shown and read back.
 - **Every field a model reads is read.** Besides the words, where it came from is
   named in the prompt, so the names of what the chat read are checked too (a
   chat-app display name can say "ignore previous instructions"), and the labels
   and the `untrusted` note are kept in canonical form. Memories have no title
   or tags; their kind is one of four words.
-- **Sealed files.** Each memory file carries an HMAC-SHA256 seal under a key only
-  this Conch has (`memory.seal`, never backed up). A file whose seal doesn't hold —
-  edited by hand, brought back by a restored backup, written by anything else — is
-  checked again when it's read, and none of what it says about where it came from
-  is believed. The first time there is a key (the first run with seals, or a new
-  computer), what's there is sealed after the checks that hold wherever a memory
-  came from (secrets, hidden characters, lookalikes, encoded text, beacons).
+- **Fails closed.** The verdict and the words are one record, written atomically
+  (a temporary file, then a rename), so a memory is never on disk or in recall
+  without its verdict; a write that fails leaves what was there. A check that
+  throws holds the memory (`unchecked`), never lets it through. Recall, the
+  prompt and search use `usable()`: not waiting, and words whose hash still
+  matches the one taken when they were checked.
+- **Sealed files.** Each file carries the hash of its words and an HMAC-SHA256
+  seal over the whole record under a key only this Conch has (`memory.seal`,
+  never backed up). A file whose seal or hash doesn't hold — edited by hand,
+  brought back by a restored backup, dropped in by an import, written by anything
+  else — is checked again when it's read, and none of what it says about its
+  verdict or where it came from is believed. The first time there is a key (the
+  first run with seals, or a new computer), what's there is sealed after the
+  checks that hold wherever a memory came from (secrets, hidden characters,
+  lookalikes, encoded text, beacons).
+- **The tidy-up is a writer like any other.** Its merges and updates go through
+  the gate. A merge is as strict as the strictest memory in it: anything from
+  outside makes it from outside, it's the person's own only if every part was,
+  and held memories are never in one. A merge or update the check would hold is
+  never applied by itself: it waits on the card, and Keep there is a person's
+  answer like any other.
 - **The assistant can't write the files.** `memory/` and `memory.seal` are
   protected paths (`lib/protect.ts`): the assistant's file and shell tools never
   touch them, so `remember` is its only way in.

@@ -108,7 +108,10 @@ export function MemoryRow({ memory, showKind = false }: { memory: Memory; showKi
               {...(held.verdict === 'refuse' && { tone: 'danger' as const })}
               onClick={() =>
                 void run(() =>
-                  memoryApi.keep(memory.id, held.verdict === 'refuse' ? { anyway: true } : {}),
+                  memoryApi.keep(memory.id, {
+                    seen: memory.content,
+                    ...(held.verdict === 'refuse' && { anyway: true }),
+                  }),
                 )
               }
             >
@@ -128,7 +131,7 @@ export function MemoryRow({ memory, showKind = false }: { memory: Memory; showKi
             <Button
               size="sm"
               variant="soft"
-              onClick={() => void run(() => memoryApi.keep(memory.id))}
+              onClick={() => void run(() => memoryApi.keep(memory.id, { seen: memory.content }))}
             >
               Keep
             </Button>

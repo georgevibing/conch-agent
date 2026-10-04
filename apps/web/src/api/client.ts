@@ -243,7 +243,7 @@ export const api = {
   memories: () => request(z.array(Memory), '/api/memories'),
   addMemory: (content: string, kind: MemoryKind = 'fact') =>
     request(Memory, '/api/memories', { method: 'POST', body: { content, kind } }),
-  updateMemory: (id: string, patch: { content?: string; kind?: MemoryKind }) =>
+  updateMemory: (id: string, patch: { content?: string; kind?: MemoryKind; seen?: string }) =>
     request(Memory, `/api/memories/${id}`, { method: 'PATCH', body: patch }),
   deleteMemory: (id: string) => request(Ok, `/api/memories/${id}`, { method: 'DELETE' }),
 

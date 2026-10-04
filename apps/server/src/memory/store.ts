@@ -7,7 +7,7 @@ import { Memory, type MemoryKind, type MemoryProvenance } from '@conch/protocol'
 import { Emitter } from '../lib/emitter';
 import { Mutex, safeJoin, writeFileAtomic } from '../lib/fs';
 import { newId } from '../lib/ids';
-import { isConsent, type PersonConsent } from './consent';
+import { isConsent, NEW_MEMORY, spendConsent, wordsHash, type PersonConsent } from './consent';
 import {
   canonical,
   checkMemory,
@@ -29,13 +29,60 @@ export type WriteContext = Omit<GuardInput, 'content' | 'via'> & {
   look?: () => Promise<LookModel | undefined>;
 };
 
-/** A write is checked, unless it carries a person's answer (`mintConsent`, routes only). */
+/** A write is checked, unless it carries a person's answer for exactly these words. */
 export type MemoryWrite = WriteContext | PersonConsent;
 
 /** A memory as written, and what the check said about it. */
 export interface Written {
   memory: Memory;
   verdict: Verdict;
+}
+
+/** What `add` takes. */
+export interface MemoryInput {
+  content: string;
+  kind?: MemoryKind;
+  source: Memory['source'];
+  conversationId?: string;
+  /** Waiting for the person's OK (ADR 0032), and why. Only ever stricter. */
+  pending?: boolean;
+  untrusted?: string;
+  /** Where it came from (ADR 0087). */
+  provenance?: MemoryProvenance;
+}
+
+/** How a write is let through: checked, a person's answer, or only ever stricter. */
+type Gate = 'check' | 'person' | 'stricter';
+
+/** Every way a memory changes, as `#commit` sees it (tests hold each method to it). */
+export type CommitMethod = 'add' | 'update' | 'keep' | 'hold' | 'restore' | 'remove';
+
+const OK: Verdict = { verdict: 'ok', reasons: [] };
+
+/** A check that couldn't finish never lets a memory through: it waits for the person. */
+export const UNCHECKED: Verdict = {
+  verdict: 'ask',
+  reasons: [
+    {
+      code: 'unchecked',
+      words: 'I couldn’t check this one properly, so it waits for you to look at it.',
+    },
+  ],
+};
+
+/** The deterministic check; an exception holds the memory, never lets it through. */
+let check = checkMemory;
+function guarded(input: GuardInput): Verdict {
+  try {
+    return check(input);
+  } catch {
+    return UNCHECKED;
+  }
+}
+
+/** For tests: a check that fails. */
+export function useCheckForTests(replacement: typeof checkMemory | undefined): void {
+  check = replacement ?? checkMemory;
 }
 
 /** Where a memory came from is a field a model reads: every label in the one canonical form. */
@@ -45,21 +92,29 @@ function cleanProvenance(p: MemoryProvenance | undefined): MemoryProvenance | un
   return { ...p, ...(read && { read: read.slice(0, 12) }) };
 }
 
-const OK: Verdict = { verdict: 'ok', reasons: [] };
+const contextOf = (how: MemoryWrite | undefined): WriteContext =>
+  !how || isConsent(how) || 'hash' in how ? {} : how;
 
 /**
  * Long-term memory, stored as one Markdown file per memory under
  * `~/.conch/memory/`. Plain files are deliberate: memories are the user's
  * data — readable, editable, greppable, easy to back up or delete.
  *
- * Every write goes through the memory check here, not in its callers (ADR
- * 0087): the words are put in one canonical form, checked, and that same form
- * is what's kept and read back. One that looks planted is kept `pending` with
- * `held`, never used until a person answers; only a person's answer
- * (`PersonConsent`, minted by the routes that take it) skips the check. Each
- * file is sealed with a key only this Conch has, so a file changed outside it
- * — by hand, by a restored backup, by anything else — is checked again when
- * it's read.
+ * Every change goes through one gate, `#commit`, here rather than in its
+ * callers (ADR 0087):
+ *
+ * - the words are put in one canonical form, checked, and that same form is
+ *   what's kept and read back;
+ * - one that looks planted is kept `pending` with `held`, in the same atomic
+ *   write as its words, so it's never recallable without a verdict; a check
+ *   that throws holds it;
+ * - only a person's answer (`PersonConsent`), bound to this memory and to the
+ *   exact words they saw, and good once, skips the check or lets a held one go;
+ *   without one, nothing ever gets less strict;
+ * - each file carries a hash of its words and a seal over the whole record
+ *   under a key only this Conch has, so a file changed outside it — by hand, by
+ *   a restored backup, by anything else — is checked again when it's read, and
+ *   what it says about its verdict or where it came from isn't believed.
  *
  * ```md
  * ---
@@ -68,6 +123,7 @@ const OK: Verdict = { verdict: 'ok', reasons: [] };
  * source: agent
  * createdAt: 1727600000000
  * updatedAt: 1727600000000
+ * hash: 9c…
  * seal: 3f…
  * ---
  * Prefers TypeScript examples over Python.
@@ -77,19 +133,29 @@ export class MemoryStore {
   readonly changed = new Emitter<void>();
   #mutex = new Mutex();
   #cache?: Map<string, Memory>;
+  /** The hash of each memory's words as committed: recall uses only what still matches. */
+  #hashes = new Map<string, string>();
   #key?: Buffer;
   readonly #keyPath: string;
   /** The check's switch (Settings → Safety); on when unknown. */
   readonly #on: () => Promise<boolean>;
+  readonly #onCommit?: (method: CommitMethod) => void;
 
   constructor(
     private readonly dir: string,
-    options: { keyPath?: string; checkOn?: () => Promise<boolean> } = {},
+    options: {
+      keyPath?: string;
+      checkOn?: () => Promise<boolean>;
+      /** Every change, as it goes through the gate (for tests). */
+      onCommit?: (method: CommitMethod) => void;
+    } = {},
   ) {
     this.#keyPath = options.keyPath ?? join(dirname(dir), 'memory.seal');
     this.#on = options.checkOn ?? (() => Promise.resolve(true));
+    this.#onCommit = options.onCommit;
   }
 
+  /** Everything, held memories too (for the person, never for a model). */
   async list(): Promise<Memory[]> {
     const all = [...(await this.#load()).values()];
     return all.sort((a, b) => b.updatedAt - a.updatedAt);
@@ -99,22 +165,128 @@ export class MemoryStore {
     return (await this.#load()).get(id);
   }
 
-  /** The check, outside the lock (a second look may take seconds). */
-  async #check(content: string, how: MemoryWrite | undefined): Promise<Verdict> {
-    if (isConsent(how)) return OK;
-    const context: WriteContext = how ?? {};
-    const input: GuardInput = {
+  /**
+   * What a model may be given (ADR 0087): not waiting for an OK, and still
+   * exactly the words that were checked. Recall, the prompt and search use this.
+   */
+  async usable(): Promise<Memory[]> {
+    return (await this.list()).filter(
+      (m) => !m.pending && !m.held && this.#hashes.get(m.id) === wordsHash(m.content),
+    );
+  }
+
+  async #input(content: string, how: MemoryWrite | undefined): Promise<GuardInput> {
+    const context = contextOf(how);
+    return {
       ...context,
       via: context.via ?? 'other',
       content,
       on: context.on ?? (await this.#on().catch(() => true)),
     };
-    return secondLook(checkMemory(input), input, context.look);
+  }
+
+  /**
+   * The one gate every change goes through. `make` gets the memory as it is
+   * now (inside the lock) and says what it should become: `undefined` leaves
+   * it, `null` forgets it.
+   */
+  async #commit(
+    method: CommitMethod,
+    id: string | undefined,
+    make: (current: Memory | undefined) => Memory | null | undefined,
+    how: MemoryWrite | undefined,
+    gate: Gate,
+  ): Promise<{ memory?: Memory; verdict: Verdict }> {
+    this.#onCommit?.(method);
+    // The second look may take seconds: asked before the lock, about the words as they'd be.
+    const look = contextOf(how).look;
+    let raised: { content: string; verdict: Verdict } | undefined;
+    if (gate === 'check' && look) {
+      const preview = make(id ? await this.get(id) : undefined);
+      if (preview) {
+        const input = await this.#input(preview.content, how);
+        raised = {
+          content: canonical(preview.content).slice(0, 2000),
+          verdict: await secondLook(guarded(input), input, look).catch(() => UNCHECKED),
+        };
+      }
+    }
+    return this.#mutex.run(async () => {
+      const memories = await this.#load();
+      const current = id ? memories.get(id) : undefined;
+      if (id && !current) return { verdict: OK };
+      const next = make(current);
+      if (next === undefined) return { ...(current && { memory: current }), verdict: OK };
+      if (next === null) {
+        if (!current) return { verdict: OK };
+        await rm(safeJoin(this.dir, `${current.id}.md`), { force: true });
+        memories.delete(current.id);
+        this.#hashes.delete(current.id);
+        this.changed.emit();
+        return { memory: current, verdict: OK };
+      }
+      const content = canonical(next.content).slice(0, 2000);
+      if (!content) return { ...(current && { memory: current }), verdict: OK };
+
+      let verdict: Verdict = OK;
+      let yours = false;
+      // A restored memory is about itself even when it was gone; a new one has no id yet.
+      const about = current?.id ?? (method === 'restore' ? next.id : NEW_MEMORY);
+      if (gate === 'person') {
+        // A person's answer, about this memory and exactly these words, once.
+        if (!spendConsent(how, about, content))
+          throw new Error('Only a person can do that, for the words they saw.');
+        yours = true;
+      } else if (gate === 'check') {
+        if (spendConsent(how, about, content)) yours = true;
+        else {
+          verdict = guarded(await this.#input(next.content, how));
+          // The second look only ever raises, and only about these very words.
+          if (verdict.verdict === 'ok' && raised?.content === content) verdict = raised.verdict;
+        }
+      }
+      const held = holdOf(verdict);
+      const provenance = cleanProvenance(next.provenance);
+      const { pending: _p, held: _h, untrusted, provenance: _v, ...rest } = next;
+      const committed: Memory = {
+        ...rest,
+        content,
+        ...(untrusted && { untrusted: canonical(untrusted).slice(0, 300) }),
+        ...(provenance && { provenance }),
+      };
+      if (yours) {
+        committed.provenance = { ...(provenance ?? { via: 'you' }), yours: true };
+        // Only Keep lifts a hold: an edit, even yours, leaves a waiting memory waiting.
+        if (method !== 'keep' && current?.pending) {
+          committed.pending = true;
+          if (current.held) committed.held = current.held;
+        }
+      } else {
+        // Without a person, nothing gets less strict than it was or was asked to be.
+        if (held || current?.pending || next.pending) committed.pending = true;
+        const was = current?.pending ? current.held : undefined;
+        const stricter = held
+          ? { ...held, ...(verdict.pieces && { pieces: verdict.pieces }) }
+          : (next.held ?? was);
+        if (stricter && committed.pending) committed.held = stricter;
+        if (gate === 'check' && verdict.yours && provenance && !committed.held)
+          committed.provenance = { ...provenance, yours: true };
+        else if (provenance?.yours) committed.provenance = { ...provenance, yours: false };
+      }
+      const record = Memory.parse(committed);
+      // Its verdict and its words in one atomic write: never recallable without a verdict.
+      const { key } = await this.#sealKey();
+      await writeFileAtomic(safeJoin(this.dir, `${record.id}.md`), sealed(serialise(record), key));
+      memories.set(record.id, record);
+      this.#hashes.set(record.id, wordsHash(record.content));
+      this.changed.emit();
+      return { memory: record, verdict };
+    });
   }
 
   /**
    * Remember something. It's checked (ADR 0087) unless `how` is a person's
-   * answer; one that looks planted is kept waiting, with why.
+   * answer for these words; one that looks planted is kept waiting, with why.
    */
   async add(input: MemoryInput, how?: MemoryWrite): Promise<Memory> {
     return (await this.write(input, how)).memory;
@@ -124,152 +296,152 @@ export class MemoryStore {
   async write(input: MemoryInput, how?: MemoryWrite): Promise<Written> {
     const content = canonical(input.content);
     if (!content) throw new Error('A memory needs words.');
-    const verdict = await this.#check(input.content, how);
-    const held = holdOf(verdict);
-    const memory = await this.#mutex.run(async () => {
-      const memories = await this.#load();
-      // Re-saying something we already know refreshes it instead of duplicating.
-      const existing = [...memories.values()].find(
-        (m) => canonical(m.content).toLowerCase() === content.toLowerCase(),
+    // Re-saying something we already know refreshes it instead of duplicating:
+    // it neither goes back to waiting for an OK, nor comes out of it.
+    const existing = (await this.list()).find(
+      (m) => m.content.toLowerCase() === content.toLowerCase(),
+    );
+    if (existing) {
+      const { memory, verdict } = await this.#commit(
+        'add',
+        existing.id,
+        (current) => current && { ...current, updatedAt: Date.now() },
+        undefined,
+        'stricter',
       );
-      // (Something already known never goes back to waiting for an OK.)
-      if (existing) return this.#write({ ...existing, updatedAt: Date.now() });
-      const now = Date.now();
-      const provenance = cleanProvenance(input.provenance);
-      return this.#write(
-        Memory.parse({
-          id: newId('m'),
-          content,
-          kind: input.kind ?? 'fact',
-          source: input.source,
-          conversationId: input.conversationId,
-          createdAt: now,
-          updatedAt: now,
-          ...((input.pending || held) && { pending: true }),
-          ...(input.untrusted && { untrusted: canonical(input.untrusted).slice(0, 300) }),
-          ...(held && { held: { ...held, ...(verdict.pieces && { pieces: verdict.pieces }) } }),
-          ...(isConsent(how)
-            ? { provenance: { ...(provenance ?? { via: 'you' as const }), yours: true } }
-            : provenance && {
-                provenance: { ...provenance, ...(verdict.yours && { yours: true }) },
-              }),
-        }),
-      );
-    });
+      return { memory: memory ?? existing, verdict };
+    }
+    const now = Date.now();
+    const id = newId('m');
+    const { memory, verdict } = await this.#commit(
+      'add',
+      undefined,
+      () => ({
+        id,
+        content: input.content.slice(0, 4000),
+        kind: input.kind ?? 'fact',
+        source: input.source,
+        ...(input.conversationId && { conversationId: input.conversationId }),
+        createdAt: now,
+        updatedAt: now,
+        ...(input.pending && { pending: true }),
+        ...(input.untrusted && { untrusted: input.untrusted.slice(0, 600) }),
+        ...(input.provenance && { provenance: input.provenance }),
+      }),
+      how,
+      'check',
+    );
+    if (!memory) throw new Error('That memory couldn’t be kept.');
     return { memory, verdict };
   }
 
   /**
    * Change a memory's words or kind. Checked like a new one (ADR 0087), even
-   * when only its kind changes: words that look planted make it wait again.
+   * when only its kind changes; with a person's answer for the new words, theirs.
+   * It never lifts a hold: only `keep` does.
    */
   async update(
     id: string,
-    patch: { content?: string; kind?: MemoryKind },
+    patch: { content?: string; kind?: MemoryKind; provenance?: MemoryProvenance },
     how?: MemoryWrite,
   ): Promise<Memory | undefined> {
-    const before = await this.get(id);
-    if (!before) return undefined;
-    const words = patch.content ?? before.content;
-    const verdict = await this.#check(words, how);
-    const held = holdOf(verdict);
-    return this.#mutex.run(async () => {
-      const current = (await this.#load()).get(id);
-      if (!current) return undefined;
-      const content = canonical(words);
-      if (!content) return current;
-      return this.#write({
-        ...current,
-        content,
-        ...(patch.kind !== undefined && { kind: patch.kind }),
-        ...(held && { pending: true, held }),
-        ...(isConsent(how) && {
-          provenance: { ...(current.provenance ?? { via: 'you' as const }), yours: true },
-        }),
-        updatedAt: Date.now(),
-      });
-    });
+    return (
+      await this.#commit(
+        'update',
+        id,
+        (current) =>
+          current && {
+            ...current,
+            ...(patch.content !== undefined && { content: patch.content }),
+            ...(patch.kind !== undefined && { kind: patch.kind }),
+            ...(patch.provenance !== undefined && { provenance: patch.provenance }),
+            updatedAt: Date.now(),
+          },
+        how,
+        'check',
+      )
+    ).memory;
   }
 
   /**
-   * You looked at a memory waiting for your OK, and keep it: as it is, or in
-   * your own words (`content`). Only a person's answer keeps one; one the
-   * check refused (ADR 0087) needs `anyway`.
+   * You looked at a memory waiting for your OK, and keep it: as you saw it, or
+   * in your own words (`content`). Only a person's answer for exactly those
+   * words keeps one; one the check refused (ADR 0087) needs `anyway`.
    */
-  keep(
+  async keep(
     id: string,
     consent: PersonConsent,
     options: { content?: string; anyway?: boolean } = {},
   ): Promise<Memory | undefined | 'needs-anyway'> {
-    if (!isConsent(consent)) return Promise.reject(new Error('Only a person keeps a memory.'));
-    return this.#mutex.run(async () => {
-      const current = (await this.#load()).get(id);
-      if (!current) return undefined;
-      if (current.held?.verdict === 'refuse' && !options.anyway && options.content === undefined)
-        return 'needs-anyway';
-      const { pending: _p, untrusted: _u, held: _h, ...kept } = current;
-      const content = canonical(options.content ?? current.content);
-      if (!content) return current;
-      return this.#write({
-        ...kept,
-        content,
-        // Kept by you: its words are yours now, wherever they came from.
-        provenance: { ...(current.provenance ?? { via: 'chat' as const }), yours: true },
-        updatedAt: Date.now(),
-      });
-    });
+    const current = await this.get(id);
+    if (!current) return undefined;
+    if (current.held?.verdict === 'refuse' && !options.anyway && options.content === undefined)
+      return 'needs-anyway';
+    return (
+      await this.#commit(
+        'keep',
+        id,
+        (now) => {
+          if (!now) return undefined;
+          const { pending: _p, untrusted: _u, held: _h, ...kept } = now;
+          return {
+            ...kept,
+            content: options.content ?? now.content,
+            updatedAt: Date.now(),
+          };
+        },
+        consent,
+        'person',
+      )
+    ).memory;
   }
 
   /**
    * Hold a memory already remembered (ADR 0087): with what came next, it adds
    * up to something to ask about. It waits again and isn't used meanwhile.
-   * Only ever stricter, so it needs no check.
    */
-  hold(id: string, held: NonNullable<Memory['held']>): Promise<Memory | undefined> {
-    return this.#mutex.run(async () => {
-      const current = (await this.#load()).get(id);
-      if (!current) return undefined;
-      return this.#write({ ...current, pending: true, held, updatedAt: Date.now() });
-    });
+  async hold(id: string, held: NonNullable<Memory['held']>): Promise<Memory | undefined> {
+    return (
+      await this.#commit(
+        'hold',
+        id,
+        (current) => current && { ...current, pending: true, held, updatedAt: Date.now() },
+        undefined,
+        'stricter',
+      )
+    ).memory;
   }
 
   /**
    * Put a memory back as it was (Undo after a tidy-up). Checked like any
-   * write: with your Undo, as it was; otherwise words that look planted wait.
+   * write: with your Undo for these words, as it was; otherwise words that
+   * look planted wait.
    */
   async restore(memory: Memory, how?: MemoryWrite): Promise<Memory> {
-    const verdict = await this.#check(memory.content, how);
-    const held = holdOf(verdict);
     const parsed = Memory.parse(memory);
-    return this.#mutex.run(() =>
-      this.#write({
-        ...parsed,
-        content: canonical(parsed.content) || parsed.content,
-        ...(held && { pending: true, held }),
-      }),
+    const exists = Boolean(await this.get(parsed.id));
+    const { memory: restored } = await this.#commit(
+      'restore',
+      exists ? parsed.id : undefined,
+      () => parsed,
+      how,
+      'check',
     );
+    return restored ?? parsed;
   }
 
-  /** Forget a memory. Only ever takes away, so it needs no check. */
-  remove(id: string): Promise<Memory | undefined> {
-    return this.#mutex.run(async () => {
-      const memories = await this.#load();
-      const current = memories.get(id);
-      if (!current) return undefined;
-      await rm(safeJoin(this.dir, `${id}.md`), { force: true });
-      memories.delete(id);
-      this.changed.emit();
-      return current;
-    });
+  /** Forget a memory. */
+  async remove(id: string): Promise<Memory | undefined> {
+    return (await this.#commit('remove', id, () => null, undefined, 'stricter')).memory;
   }
 
-  /** Keyword search, ranked by term overlap then recency (the index's hybrid search is better: `MemoryIndex`). */
+  /** Keyword search over what a model may be given, ranked by term overlap then recency (`MemoryIndex` is better). */
   async search(query: string, limit = 8): Promise<Memory[]> {
     const terms = query
       .toLowerCase()
       .split(/\W+/)
       .filter((t) => t.length > 2);
-    const scored = (await this.list()).map((m) => {
+    const scored = (await this.usable()).map((m) => {
       const text = m.content.toLowerCase();
       return { m, score: terms.reduce((n, t) => n + (text.includes(t) ? 1 : 0), 0) };
     });
@@ -280,15 +452,7 @@ export class MemoryStore {
       .map((s) => s.m);
   }
 
-  async #write(memory: Memory): Promise<Memory> {
-    const { key } = await this.#sealKey();
-    await writeFileAtomic(safeJoin(this.dir, `${memory.id}.md`), sealed(serialise(memory), key));
-    (await this.#load()).set(memory.id, memory);
-    this.changed.emit();
-    return memory;
-  }
-
-  /** This Conch's own key for sealing memory files; made the first time (what's there then is trusted once). */
+  /** This Conch's own key for sealing memory files; made the first time there's a memory. */
   async #sealKey(): Promise<{ key: Buffer; fresh: boolean }> {
     if (this.#key) return { key: this.#key, fresh: false };
     try {
@@ -320,53 +484,49 @@ export class MemoryStore {
       return map;
     }
     const { key, fresh } = await this.#sealKey();
+    const on = await this.#on().catch(() => true);
     for (const file of files) {
       const text = await readFile(safeJoin(this.dir, file), 'utf8');
       const memory = parse(text);
       if (!memory) continue;
-      if (sealHolds(text, key)) {
+      if (sealHolds(text, key) && hashLine(text) === wordsHash(memory.content)) {
         map.set(memory.id, memory);
+        this.#hashes.set(memory.id, wordsHash(memory.content));
         continue;
       }
-      // No seal that holds: changed outside Conch (by hand, a restored backup,
-      // anything else), so it's checked again. With no key yet (the first run
-      // with seals, or a new computer), what's there gets the checks that hold
-      // wherever a memory came from: secrets, hidden characters, lookalikes,
-      // encoded text, beacons. With a key, a file it didn't seal is from outside.
-      const verdict = checkMemory({
+      // No seal that holds, or words that aren't the ones it was sealed with:
+      // changed outside Conch (by hand, a restored backup, an import, anything
+      // else). Its verdict and where it says it came from aren't believed; it's
+      // checked again. With no key yet (the first run with seals, a new
+      // computer), what's there gets the checks that hold wherever a memory
+      // came from; with a key, a file it didn't seal is from outside.
+      const verdict = guarded({
         content: rawContent(text) ?? memory.content,
-        via: fresh ? 'tidy' : 'other',
-        on: await this.#on().catch(() => true),
+        via: fresh ? 'chat' : 'other',
+        on,
       });
       const held = holdOf(verdict);
-      const { held: _was, ...rest } = memory;
-      const checked: Memory = {
+      const { held: _claimed, untrusted: _note, provenance, pending, ...rest } = memory;
+      const cleaned = cleanProvenance(provenance);
+      const checked = Memory.parse({
         ...rest,
-        content: canonical(memory.content) || memory.content,
-        ...((held || memory.pending) && { pending: true }),
+        content: canonical(memory.content).slice(0, 2000) || memory.content,
+        ...((held || pending) && { pending: true }),
         ...(held && { held }),
-        // What it says about where it came from came with the file: none of it is believed.
-        ...(memory.provenance && { provenance: { ...memory.provenance, yours: false } }),
-      };
+        ...(pending &&
+          !held && { untrusted: 'This changed outside Conch, so it waits for your OK.' }),
+        ...(cleaned && { provenance: { ...cleaned, yours: false } }),
+      });
+      // Held in memory first: even if the file can't be written, it isn't used.
       map.set(checked.id, checked);
-      await writeFileAtomic(safeJoin(this.dir, file), sealed(serialise(checked), key));
+      this.#hashes.set(checked.id, wordsHash(checked.content));
+      await writeFileAtomic(safeJoin(this.dir, file), sealed(serialise(checked), key)).catch(
+        () => undefined,
+      );
     }
     this.#cache = map;
     return map;
   }
-}
-
-/** What `add` takes. */
-export interface MemoryInput {
-  content: string;
-  kind?: MemoryKind;
-  source: Memory['source'];
-  conversationId?: string;
-  /** Waiting for the person's OK (ADR 0032), and why. Only ever stricter. */
-  pending?: boolean;
-  untrusted?: string;
-  /** Where it came from (ADR 0087). */
-  provenance?: MemoryProvenance;
 }
 
 /** The seal on a memory file: HMAC-SHA256 of the rest of it, under this Conch's key. */
@@ -385,6 +545,11 @@ function sealHolds(text: string, key: Buffer): boolean {
   const want = Buffer.from(sealOf(body, key));
   const got = Buffer.from(line[1]);
   return want.length === got.length && timingSafeEqual(want, got);
+}
+
+/** The hash of its words a file says it was written with. */
+function hashLine(text: string): string | undefined {
+  return /\nhash: ([0-9a-f]{64})\n/.exec(text)?.[1];
 }
 
 /** A file's words exactly as written, hidden characters and all, for the check. */
@@ -409,6 +574,7 @@ export function serialise(m: Memory): string {
     ...(m.provenance ? [`provenance: ${JSON.stringify(m.provenance)}`] : []),
     `createdAt: ${m.createdAt}`,
     `updatedAt: ${m.updatedAt}`,
+    `hash: ${wordsHash(m.content)}`,
   ];
   return `---\n${meta.join('\n')}\n---\n${m.content}\n`;
 }
@@ -424,7 +590,7 @@ export function parse(text: string): Memory | undefined {
     const value = line.slice(i + 1).trim();
     meta[key] = /At$/.test(key) ? Number(value) : value;
   }
-  const { pending, held, provenance, ...rest } = meta;
+  const { pending, held, provenance, hash: _hash, seal: _seal, ...rest } = meta;
   const json = (value: unknown) => {
     try {
       return typeof value === 'string' ? (JSON.parse(value) as unknown) : undefined;

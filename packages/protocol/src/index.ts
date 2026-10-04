@@ -258,6 +258,8 @@ export const CreateMemoryBody = z.object({
 export const UpdateMemoryBody = z.object({
   content: z.string().trim().min(1).max(2000).optional(),
   kind: MemoryKind.optional(),
+  /** Without new words: the words you saw (ADR 0087), so your answer is about them. */
+  seen: z.string().min(1).max(2000).optional(),
 });
 
 // ── Health (public) ────────────────────────────────────────────────────────

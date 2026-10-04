@@ -35,6 +35,8 @@ export const MemoryReasonCode = z.enum([
   'pieces',
   /** A second check by a model raised it (it can only raise, never clear). */
   'second-look',
+  /** The check couldn't finish: it waits rather than going through. */
+  'unchecked',
 ]);
 export type MemoryReasonCode = z.infer<typeof MemoryReasonCode>;
 
@@ -102,6 +104,8 @@ export type Memory = z.infer<typeof Memory>;
 export const KeepMemoryBody = z
   .object({
     content: z.string().trim().min(1).max(2000).optional(),
+    /** The words you saw when you answered: kept only if they're still what's there. */
+    seen: z.string().min(1).max(2000).optional(),
     anyway: z.boolean().optional(),
   })
   .strict();
