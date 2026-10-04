@@ -95,7 +95,9 @@ scripts, no `npm install`, no hooks. Scripts a skill carries can only ever be
 run later by the assistant, through the permission prompts, and only within
 the skill's own list.
 
-The scan learned ClawHavoc's other spellings: `bash -c "$(curl …)"`,
+The scan now reads up to 200 files (ADR 0028 said 60), as many as a skill from
+Discover may have, so every file in one is read. It also learned ClawHavoc's
+other spellings: `bash -c "$(curl …)"`,
 `curl … | python`, reverse shells (`/dev/tcp`, `nc -e`), "download the zip,
 the password is …", paste sites (glot.io, pastebin's raw view…), bare IP
 addresses, and other agents' key files (`~/.clawdbot/.env`,
