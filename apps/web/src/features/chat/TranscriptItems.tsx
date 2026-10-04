@@ -48,6 +48,11 @@ export function UserMessage({ item }: { item: Of<'user'> }) {
       timestamp={new Date(item.at)}
       data-pending={item.pending || undefined}
       className={styles.user}
+      actions={
+        item.text && !item.pending ? (
+          <CopyButton value={item.text} label="Copy message" />
+        ) : undefined
+      }
     >
       <span className={styles.userText}>{item.text}</span>
     </Message>
