@@ -510,6 +510,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     kind: TaskKind,
     state: TaskStatus,
     summary: z.string().optional(),
+    /** Another provider is doing it, by name (`Task.by`). */
+    by: z.string().max(80).optional(),
   }),
   z.object({ ...logged, type: z.literal('status'), status: ConversationStatus }),
   z.object({

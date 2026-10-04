@@ -16,6 +16,8 @@ You can also ask in words: "do this in the background and tell me when it's done
 
 A task uses the same provider, model and [mode](../reference/modes.md) as the chat it came from. It can do nothing that chat couldn't.
 
+To have another provider do it, say so: "have Codex CLI do this in the background". Any provider you've connected can take it. Its card says who's doing it.
+
 ## Watch it work
 
 The card stays where it first appeared and keeps itself current: what the task is doing now, its last few steps, and how long it has been going. When the task finishes, the card shows its result.
@@ -49,8 +51,9 @@ On the Tasks page, **Remove** hides a finished task's card. Conch retains its op
 When a job splits into parts that don't need each other, your assistant can run them at once, each with a helper, and bring the results back together. You don't start helpers. Your assistant does, and each one is a card in the chat.
 
 - Helpers use the provider's faster model, unless a part needs the full one.
+- A helper can be another provider you've connected. Ask for it ("have Codex write the tests while you fix the bug"), or your assistant picks one when it plainly suits a part, like a coding agent for changing code. The card says **by** which provider.
 - A helper that changes code can work in its own copy of the folder, on its own branch. If it changed something, its card names the branch. Conch never merges it for you.
-- Helpers run in the chat's mode, stay as careful as their chat, and stop when you stop the chat.
+- Whichever provider does the work, helpers run in the chat's mode, stay as careful as their chat, keep to the same skills' limits, and stop when you stop the chat. A provider that can't work in that mode uses its safest one.
 - Once you've spent your monthly budget, your assistant does the parts itself, one at a time.
 
 ## Good to know

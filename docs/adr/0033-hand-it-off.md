@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-10-01
+- Amended: 2026-10-04 (a part can go to another provider, below)
 - Builds on: [ADR 0005](./0005-usage-limits.md) (budgets that never block),
   [ADR 0006](./0006-routines.md) (a run is a conversation),
   [ADR 0023](./0023-offline-and-limits.md) (carrying on at a limit),
@@ -180,6 +181,29 @@ tasks' chats are backed up with your other chats. Worktrees are `outside`.
   them.
 - A helper's worktree branch is left for you to merge. Conch never merges on
   its own.
+
+## Amended 2026-10-04: a part can go to another provider
+
+People connect several providers (ADR 0012) and want to use them together: "have Codex
+write the tests while you fix the bug". OpenClaw runs Claude Code, Codex and Gemini CLI as
+workers; Conch's helpers could only use the chat's own provider.
+
+- `delegate` parts and `start_background_task` take an optional `provider` (an engine id
+  or its name) and a `model`: `fast` (that provider's small model), `same` (the chat's
+  model on its own provider, the provider's default elsewhere) or one of that provider's
+  model ids, checked against its list.
+- Only providers that are connected and ready now (`providers.ready()`, so a pin still
+  means only that one) can take a part. One unknown name starts nothing, and the tool
+  says who can. A provider that can't ask before each step is never handed anything.
+- The assistant's prompt lists the other connected providers, each with what kind it is
+  (a coding agent, a model on this computer, one that can only chat). It hands a part over
+  when the person asks or when it plainly suits the part, and otherwise keeps its own.
+- **Powers don't change with the provider.** The part runs in the chat's mode, through
+  `honouredMode` (a provider that can't honour it runs its safest), starts with the chat's
+  taint and skill holds, gives back what it read, counts against the same budget, and
+  stops with the chat. The chat's own model is never carried to a provider it isn't from.
+- `Task.by` (and the chat's `task` event) names the provider when it isn't the chat's
+  own, and the card says "by Codex CLI".
 
 ## Superseded completion and resumption semantics
 

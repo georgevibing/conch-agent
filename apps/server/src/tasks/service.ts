@@ -33,8 +33,10 @@ import { z } from 'zod';
 
 import type { ConversationManager, ToolContext } from '../conversations/manager';
 import { summarizeToolUse } from '../conversations/summarize';
+import { LOCAL_LABEL } from '../engines/api/ollama';
 import type { Engine, HostTool } from '../engines/types';
 import { Mutex } from '../lib/fs';
+import { PROVIDER_COPY } from '../providers/catalog';
 import { taskArgumentHash, taskArgumentText, TaskOperations, verifiedOutcome } from './operations';
 import { newId } from '../lib/ids';
 import type { SettingsStore } from '../settings/store';
@@ -92,6 +94,11 @@ export interface TaskDeps {
   home: string;
   /** Over the monthly budget you set (ADR 0005): helpers don't multiply the spend. */
   overBudget?: () => Promise<boolean>;
+  /**
+   * Every provider that's connected and ready now (`providers.ready()`): the
+   * ones a helper or a background task may be handed to, besides the chat's own.
+   */
+  ready?: () => Promise<Engine[]>;
   git?: Git;
   now?: () => number;
   background?: number;
@@ -166,6 +173,8 @@ export class TaskService {
     requestKey?: string;
     workflow?: Task['workflow'];
     toolScope?: Task['toolScope'];
+    /** Another provider does it, by name (shown on its card). */
+    by?: string;
   }): Promise<Task> {
     return this.#creation.run(async () => {
       const requestHash = createHash('sha256')
@@ -207,6 +216,7 @@ export class TaskService {
         rev: 0,
         ...(input.parentConversationId && { parentConversationId: input.parentConversationId }),
         ...(input.group && { group: input.group }),
+        ...(input.by && { by: input.by.slice(0, 80) }),
       };
       if (input.worktree) {
         const workspace = await this.deps.settings.workspace();
@@ -275,7 +285,12 @@ export class TaskService {
     const chat = parent
       ? await this.deps.conversations.detail(parent).catch(() => undefined)
       : undefined;
-    const inherited = chat?.conversation.options ?? {};
+    const own = chat?.conversation.options ?? {};
+    // Handed to another provider, it doesn't take this chat's model: that one isn't theirs.
+    const elsewhere =
+      given?.engine !== undefined && given.engine !== (own.engine ?? this.deps.engine().id);
+    const { model: _model, ...rest } = own;
+    const inherited = elsewhere ? rest : own;
     return {
       ...(preferences.permissionMode && { permissionMode: preferences.permissionMode }),
       ...inherited,
@@ -640,6 +655,7 @@ export class TaskService {
         kind: task.kind,
         state: task.status,
         ...(task.summary && { summary: tidy(task.summary, 600) }),
+        ...(task.by && { by: task.by }),
       })
       .catch(() => undefined);
   }
@@ -727,6 +743,92 @@ export class TaskService {
 
   // ── Tools for the assistant ─────────────────────────────────────────────
 
+  /**
+   * Who does a part (ADR 0033, amended): the chat's own provider, or another
+   * one that's connected and ready, when the assistant chose it or the person
+   * asked ("have Codex write the tests"). Either way it runs in the chat's
+   * permission mode (a provider that can't honour it runs its safest), as wary
+   * as the chat, and held to the same skills: another provider is another
+   * brain, never more powers. A provider that can't ask before each step is
+   * never handed anything.
+   */
+  async #handTo(
+    ctx: ToolContext,
+    provider: string | undefined,
+    model: string | undefined,
+  ): Promise<{ options: TurnOptions; by?: string }> {
+    const own = ctx.engine;
+    const asked = provider?.trim();
+    let engine = own;
+    if (asked && !sameProvider(own, asked)) {
+      const ready = (await this.deps.ready?.().catch(() => [])) ?? [];
+      const found = ready.filter((e) => sameProvider(e, asked));
+      const chosen = found.length === 1 ? found[0] : undefined;
+      if (!chosen)
+        throw new TaskError(
+          'invalid',
+          `“${asked}” isn’t a provider you can hand work to right now. ${handable(ready, own)}`,
+        );
+      if (PROVIDER_COPY.get(chosen.id)?.asksFirst === false)
+        throw new TaskError(
+          'invalid',
+          `${chosen.label} can’t ask before each step, so it can’t take on part of this chat. Choose another provider, or do this part yourself.`,
+        );
+      engine = chosen;
+    }
+    const wanted = model?.trim() || 'fast';
+    let picked: string | undefined;
+    if (wanted === 'fast') picked = engine.smallModel;
+    else if (wanted !== 'same') {
+      const listed = await engine
+        .capabilities()
+        .then((c) => c.models)
+        .catch(() => []);
+      const match = listed.find(
+        (m) => m.id === wanted || m.label.toLowerCase() === wanted.toLowerCase(),
+      );
+      if (listed.length && !match)
+        throw new TaskError(
+          'invalid',
+          `${engine.label} has no model called “${wanted}”. Use "fast", "same", or one of: ${listed
+            .slice(0, 12)
+            .map((m) => m.id)
+            .join(', ')}.`,
+        );
+      picked = match?.id ?? wanted;
+    }
+    const elsewhere = engine.id !== own.id;
+    return {
+      options: {
+        engine: engine.id,
+        permissionMode: ctx.permissionMode,
+        // "same" on the chat's own provider keeps the chat's model; elsewhere, theirs.
+        ...(picked && { model: picked }),
+      },
+      // "On this computer" is the provider's name, but not a name to do something by.
+      ...(elsewhere && {
+        by: engine.label === LOCAL_LABEL ? 'the model on this computer' : engine.label,
+      }),
+    };
+  }
+
+  /** What the assistant knows about handing work off, with who it can hand it to now. */
+  async promptSection(engine: Engine): Promise<string> {
+    const others = ((await this.deps.ready?.().catch(() => [])) ?? []).filter(
+      (e) => e.id !== engine.id && PROVIDER_COPY.get(e.id)?.asksFirst !== false,
+    );
+    return [
+      TASKS_PROMPT,
+      ...(others.length
+        ? [
+            `- A part or a background task runs on your own provider (${engine.label}) unless you set \`provider\`. Other providers connected now:`,
+            ...others.map((e) => `  - ${e.label} (\`${e.id}\`): ${providerKind(e)}`),
+            '- Hand a part to another provider when the user asks for it ("have Codex write the tests", "ask Gemini too"), or when it plainly suits the part better (a coding agent for changing code in the folder). Otherwise keep your own. Say which provider did what when you report back.',
+          ]
+        : []),
+    ].join('\n');
+  }
+
   /** `delegate` and `start_background_task`, in chats you're in (never inside a task). */
   tools(ctx: ToolContext): HostTool[] {
     const delegate: HostTool<{
@@ -734,34 +836,45 @@ export class TaskService {
         z.ZodObject<{
           title: z.ZodString;
           instructions: z.ZodString;
-          model: z.ZodDefault<z.ZodEnum<{ fast: 'fast'; same: 'same' }>>;
+          provider: z.ZodOptional<z.ZodString>;
+          model: z.ZodDefault<z.ZodString>;
           worktree: z.ZodDefault<z.ZodBoolean>;
         }>
       >;
     }> = {
       name: 'delegate',
-      description: `Do up to ${MAX_PARTS} independent parts of a job at the same time, each by a helper in its own conversation, and get all their results back together. Use it when the work splits cleanly (look into several things, check several files, draft alternatives) and each part can be done without the others. Each helper starts fresh: make every instruction complete on its own. Helpers can't ask the user anything. \`model: "fast"\` (the default) uses a quicker, cheaper model; use "same" for parts that need your full ability. \`worktree: true\` gives a code-changing part its own copy of the repository on its own branch.`,
+      description: `Do up to ${MAX_PARTS} independent parts of a job at the same time, each by a helper in its own conversation, and get all their results back together. Use it when the work splits cleanly (look into several things, check several files, draft alternatives) and each part can be done without the others. Each helper starts fresh: make every instruction complete on its own. Helpers can't ask the user anything. \`provider\` hands a part to another connected provider by its id (the list is in your instructions); leave it out to use your own. \`model: "fast"\` (the default) uses that provider's quicker, cheaper model; "same" its full model (yours, on your own provider); or name one of its models. \`worktree: true\` gives a code-changing part its own copy of the repository on its own branch.`,
       input: {
         parts: z
           .array(
             z.object({
               title: z.string().min(1).max(80),
               instructions: z.string().min(1).max(8_000),
-              model: z.enum(['fast', 'same']).default('fast'),
+              provider: z.string().min(1).max(80).optional(),
+              model: z.string().min(1).max(200).default('fast'),
               worktree: z.boolean().default(false),
             }),
           )
           .min(1)
           .max(MAX_PARTS),
       },
-      searchHint: 'parallel helpers subagents split work in parallel',
+      searchHint: 'parallel helpers subagents split work another provider model',
       run: async (args) => {
         if (await this.deps.overBudget?.().catch(() => false))
           return 'The user has spent their monthly budget, so don’t start helpers (they’d multiply the cost). Do the work yourself, one part at a time.';
+        // Every part's provider is settled before any starts: one bad name starts nothing.
+        const handed: { options: TurnOptions; by?: string }[] = [];
+        for (const part of args.parts) {
+          try {
+            handed.push(await this.#handTo(ctx, part.provider, part.model));
+          } catch (error) {
+            if (error instanceof TaskError) return `Nothing was started. ${error.message}`;
+            throw error;
+          }
+        }
         const group = newId('grp');
-        const small = ctx.engine.smallModel;
         const tasks = [];
-        for (const part of args.parts)
+        for (const [i, part] of args.parts.entries())
           tasks.push(
             await this.create({
               kind: 'helper',
@@ -770,11 +883,8 @@ export class TaskService {
               parentConversationId: ctx.conversationId,
               group,
               worktree: part.worktree,
-              options: {
-                engine: ctx.engine.id,
-                permissionMode: ctx.permissionMode,
-                ...(part.model === 'fast' && small && { model: small }),
-              },
+              options: handed[i]?.options,
+              by: handed[i]?.by,
             }),
           );
         const done = await this.waitFor(
@@ -784,25 +894,68 @@ export class TaskService {
         return merged(done);
       },
     };
-    const background: HostTool<{ title: z.ZodString; instructions: z.ZodString }> = {
+    const background: HostTool<{
+      title: z.ZodString;
+      instructions: z.ZodString;
+      provider: z.ZodOptional<z.ZodString>;
+      model: z.ZodOptional<z.ZodString>;
+    }> = {
       name: 'start_background_task',
       description:
-        'Start a longer job in the background, when the user asked you to or agreed to it ("do it in the background", "let me know when it’s done"). It runs in its own conversation; its result comes back to this chat and the user is notified. Make the instructions complete on their own. Then tell the user it’s started and they can carry on.',
-      input: { title: z.string().min(1).max(80), instructions: z.string().min(1).max(8_000) },
-      searchHint: 'background task later notify when done',
+        'Start a longer job in the background, when the user asked you to or agreed to it ("do it in the background", "let me know when it’s done"). It runs in its own conversation; its result comes back to this chat and the user is notified. Make the instructions complete on their own. `provider` runs it on another connected provider by its id (leave it out for your own); `model` is "fast", "same" (the default) or one of its models. Then tell the user it’s started and they can carry on.',
+      input: {
+        title: z.string().min(1).max(80),
+        instructions: z.string().min(1).max(8_000),
+        provider: z.string().min(1).max(80).optional(),
+        model: z.string().min(1).max(200).optional(),
+      },
+      searchHint: 'background task later notify when done another provider',
       run: async (args) => {
+        let handed: { options: TurnOptions; by?: string };
+        try {
+          handed = await this.#handTo(ctx, args.provider, args.model ?? 'same');
+        } catch (error) {
+          if (error instanceof TaskError) return `It wasn’t started. ${error.message}`;
+          throw error;
+        }
         const task = await this.create({
           kind: 'background',
           text: args.instructions,
           title: args.title,
           parentConversationId: ctx.conversationId,
-          options: { engine: ctx.engine.id, permissionMode: ctx.permissionMode },
+          options: handed.options,
+          by: handed.by,
         });
-        return `Started “${task.title}” in the background. Its result will come back to this chat, and the user will be told when it’s done.`;
+        return `Started “${task.title}” in the background${task.by ? ` with ${task.by}` : ''}. Its result will come back to this chat, and the user will be told when it’s done.`;
       },
     };
     return [delegate as HostTool, background as HostTool];
   }
+}
+
+/** A provider named by its id or its name, as the assistant or the person says it. */
+function sameProvider(engine: Engine, name: string): boolean {
+  const said = name.trim().toLowerCase();
+  return engine.id === said || engine.label.toLowerCase() === said;
+}
+
+/** Who work can be handed to now, in one sentence. */
+function handable(ready: readonly Engine[], own: Engine): string {
+  const others = ready.filter((e) => e.id !== own.id);
+  return others.length
+    ? `Connected now: ${others.map((e) => `${e.label} (\`${e.id}\`)`).join(', ')}. Or leave \`provider\` out to use your own.`
+    : 'No other provider is connected, so leave `provider` out to use your own.';
+}
+
+/** What kind of helper a provider makes, in a few words. */
+function providerKind(engine: Engine): string {
+  const group = PROVIDER_COPY.get(engine.id)?.group;
+  if (group === 'agent') return 'a coding agent with its own shell and file edits';
+  if (engine.local) return 'a model on this computer (free, works offline)';
+  if (engine.hostTools === false) return 'can only chat (no tools)';
+  return group === 'subscription'
+    ? 'on the user’s plan, with Conch’s tools'
+    : 'a model with Conch’s tools';
 }
 
 /** What every chat knows about handing work off (only chats you're in have these tools). */

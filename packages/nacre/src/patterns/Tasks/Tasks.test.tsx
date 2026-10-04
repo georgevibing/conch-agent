@@ -32,6 +32,23 @@ describe('TaskCard', () => {
     await expectAccessible(container);
   });
 
+  it('says which provider is doing it when it isn’t the chat’s own', async () => {
+    const { container } = renderNacre(
+      <TaskCard
+        title="Write the tests"
+        kind="helper"
+        status="running"
+        startedAt={NOW - 4_000}
+        now={NOW}
+        by="Codex CLI"
+      />,
+    );
+    expect(screen.getByRole('article', { name: /Write the tests/ })).toHaveTextContent(
+      'Working · 4s · by Codex CLI',
+    );
+    await expectAccessible(container);
+  });
+
   it('needing you comes first, with the way to answer', () => {
     const onOpen = vi.fn();
     renderNacre(<TaskCard title="Ship it" status="needs-you" onOpen={onOpen} />);

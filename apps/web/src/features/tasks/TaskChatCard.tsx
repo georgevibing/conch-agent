@@ -15,12 +15,14 @@ export function TaskChatCard({
   kind,
   state,
   summary,
+  by,
 }: {
   taskId: string;
   title: string;
   kind: TaskKind;
   state: TaskStatus;
   summary?: string;
+  by?: string;
 }) {
   const task = useTask(taskId);
   return (
@@ -28,7 +30,14 @@ export function TaskChatCard({
       {task ? (
         <LiveTaskCard task={task} variant="compact" />
       ) : (
-        <TaskCard variant="compact" kind={kind} title={title} status={state} summary={summary} />
+        <TaskCard
+          variant="compact"
+          kind={kind}
+          title={title}
+          status={state}
+          summary={summary}
+          by={by}
+        />
       )}
     </div>
   );

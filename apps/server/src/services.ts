@@ -27,7 +27,7 @@ import { ArtifactStore } from './artifacts/store';
 import { tasksCheck } from './tasks/doctor';
 import { signingKeyCheck } from './skills/doctor';
 import { fingerprintOf } from './skills/signing';
-import { TASKS_PROMPT, TaskService } from './tasks/service';
+import { TaskService } from './tasks/service';
 import { TaskStore } from './tasks/store';
 import { QuestionDesk } from './questions/desk';
 import { QUESTIONS_PROMPT, questionTools } from './questions/tools';
@@ -736,7 +736,7 @@ export class Services {
           engine.hostTools === false ? '' : this.vault.promptSection(),
           this.artifacts.promptSection(engine.hostTools !== false),
           await this.artifacts.editedSection(conversationId).catch(() => ''),
-          engine.hostTools === false ? '' : TASKS_PROMPT,
+          engine.hostTools === false ? '' : await this.tasks.promptSection(engine).catch(() => ''),
           // Only where someone is there to answer (not a routine, a task or a chat app).
           engine.hostTools === false ||
           (await this.conversations.detail(conversationId).catch(() => undefined))?.conversation
@@ -833,6 +833,8 @@ export class Services {
         const { spend } = await this.usage.snapshot();
         return spend.budget !== undefined && spend.month >= spend.budget;
       },
+      // A helper may be handed to any provider that's ready, not only the chat's own.
+      ready: () => this.providers.ready(),
     });
     this.doctor.register(tasksCheck(this.tasks));
     // Save how I did this (ADR 0058): work that went well, offered as a skill, never saved by itself.

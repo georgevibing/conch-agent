@@ -490,6 +490,7 @@ export const Transcript = memo(function Transcript({
           kind={block.item.taskKind}
           state={block.item.state}
           summary={block.item.summary}
+          by={block.item.by}
         />
       )}
       {block.item?.kind === 'integration-issue' && <IntegrationIssue item={block.item} />}

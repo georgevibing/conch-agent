@@ -92,6 +92,7 @@ export const HelpersInAChat: Story = {
         onRemove={undefined}
       />
       <TaskCard {...args} variant="compact" kind="helper" title="Check the tests" />
+      <TaskCard {...args} variant="compact" kind="helper" title="Write the tests" by="Codex CLI" />
       <TaskCard
         {...args}
         variant="compact"

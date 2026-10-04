@@ -177,6 +177,8 @@ export type TranscriptItem =
       taskKind: TaskKind;
       state: TaskStatus;
       summary?: string;
+      /** Another provider is doing it, by name. */
+      by?: string;
     }
   | {
       kind: 'integration-issue';
@@ -905,6 +907,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         taskKind: event.kind,
         state: event.state,
         ...(event.summary && { summary: event.summary }),
+        ...(event.by && { by: event.by }),
       };
       const at = items.findIndex((i) => i.kind === 'task' && i.taskId === event.taskId);
       if (at === -1) return { ...base, items: [...items, card] };

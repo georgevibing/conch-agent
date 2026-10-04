@@ -40,6 +40,8 @@ export interface TaskCardProps extends Omit<ComponentProps<'article'>, 'title'> 
   note?: ReactNode;
   /** A helper's own branch, when it changed things there. */
   branch?: string;
+  /** Another provider is doing it, by name ("Codex CLI"): said beside its status. */
+  by?: ReactNode;
   /** `full` on the Tasks page; `compact` in a chat. */
   variant?: 'full' | 'compact';
   onOpen?: () => void;
@@ -101,6 +103,7 @@ export function TaskCard({
   error,
   note,
   branch,
+  by,
   variant = 'full',
   onOpen,
   onStop,
@@ -156,6 +159,7 @@ export function TaskCard({
               {LABELS[status]}
             </span>
             {took && status !== 'queued' && <span> · {took}</span>}
+            {by && <span> · by {by}</span>}
           </p>
         </div>
       </div>
