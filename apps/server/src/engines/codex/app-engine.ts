@@ -20,7 +20,6 @@ import {
 } from '@conch/protocol';
 import { z } from 'zod';
 
-import { sandboxSupport } from '../../conversations/sandbox';
 import { PROTECTED_MESSAGE, touchesProtected } from '../../lib/protect';
 import { newId } from '../../lib/ids';
 import { cleanPlan, stepStatus } from '../../plans/steps';
@@ -562,7 +561,7 @@ export class CodexEngine implements Engine {
       models: [],
       commands: [],
       permissionModes: ['default', 'plan', 'acceptEdits', 'bypassPermissions'],
-      tools: { host: true, files: true, shell: sandboxSupport().available, approvals: true },
+      tools: { host: true, files: true, shell: true, approvals: true },
       attachments: this.attachments,
     };
     const status = await this.detect();

@@ -91,8 +91,8 @@ export type TranscriptItem =
       vault?: VaultPermission;
       /** Asked because the chat read something untrusted (ADR 0028): why. No "always". */
       taint?: string;
-      /** Asked only because of what the chat read: "Always allow" is on offer. */
-      afterReading?: boolean;
+      /** Asked for a reason "Always allow" can lift (what it read, the sealed box). */
+      lasting?: boolean;
     }
   | {
       /**
@@ -546,7 +546,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             browser: event.browser,
             ...(event.vault && { vault: event.vault }),
             ...(event.taint && { taint: event.taint }),
-            ...(event.afterReading && { afterReading: true }),
+            ...((event.lasting || event.afterReading) && { lasting: true }),
           },
         ],
       };

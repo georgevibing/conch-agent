@@ -19,7 +19,6 @@ import type {
   TurnProblem,
   Usage,
 } from '@conch/protocol';
-import { sandboxSupport } from '../../conversations/sandbox';
 import { authorizeTool, hostComputerTools, HOST_NAMES } from '../host';
 
 import { cheapestModel } from '../../conversations/title';
@@ -532,7 +531,7 @@ export class ApiEngine implements Engine {
       // No provider-native slash commands. Conch owns the permission modes.
       commands: [],
       permissionModes: ['default', 'plan', 'acceptEdits', 'bypassPermissions'],
-      tools: { host: true, files: true, shell: sandboxSupport().available, approvals: true },
+      tools: { host: true, files: true, shell: true, approvals: true },
     };
     this.#capabilities = { value, at: Date.now() };
     return value;

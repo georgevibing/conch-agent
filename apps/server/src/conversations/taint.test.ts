@@ -329,7 +329,7 @@ describe('the guard, end to end', () => {
     const request = asked.find((e) => e.type === 'permission.requested');
     expect(request).toMatchObject({
       toolName: 'Bash',
-      afterReading: true,
+      lasting: true,
       taint: expect.stringMatching(
         /This chat read evil\.example, which could be trying to steer me\. So I’m checking before I run a command\./,
       ),
@@ -407,29 +407,65 @@ describe('the guard, end to end', () => {
     );
     const request = asked.find((e) => e.type === 'permission.requested');
     if (request?.type !== 'permission.requested') throw new Error('no request');
-    expect(request.afterReading).toBeUndefined();
+    expect(request.lasting).toBeUndefined();
     await manager.respond(convo.id, request.permissionId, 'deny');
     await settle(manager, convo.id, (e) => e.some((x) => x.type === 'turn.completed'));
     expect(engine.decisions).toEqual(['deny']);
   });
 
-  it('a command leaving the sealed box asks, even in an untainted chat', async () => {
-    const { manager, engine } = await setup();
-    engine.script.push(async function* (input) {
-      engine.decisions.push(
-        await input.guard?.({
-          toolName: 'Bash',
-          input: { command: 'git push', dangerouslyDisableSandbox: true },
-        }),
-      );
+  it('a command leaving the sealed box asks in Ask first, even in an untainted chat, and “always” holds', async () => {
+    const { manager, engine, settings } = await setup();
+    await settings.update({ preferences: { permissionMode: 'default' } });
+    const push = async function* (input: TurnInput): AsyncGenerator<EngineEvent> {
+      const request = {
+        toolName: 'Bash',
+        input: { command: 'git clone https://example.com/r.git', dangerouslyDisableSandbox: true },
+      };
+      engine.decisions.push(await input.guard?.(request));
+      engine.decisions.push(await input.requestPermission(request, input.signal));
       yield { type: 'text', messageId: 'm', delta: 'ok' };
-    });
-    const convo = await manager.send({ clientMessageId: 'u1', text: 'push' });
-    await settle(manager, convo.id, (e) => e.some((x) => x.type === 'turn.completed'));
+    };
+    engine.script.push(push, push);
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'clone it' });
+    const asked = await settle(manager, convo.id, (e) =>
+      e.some((x) => x.type === 'permission.requested'),
+    );
     expect(engine.decisions[0]).toMatchObject({
       decision: 'ask',
-      reason: expect.stringMatching(/outside the sealed box/),
+      reason: expect.stringMatching(/with your access to this computer and the internet/),
     });
+    const request = asked.find((e) => e.type === 'permission.requested');
+    if (request?.type !== 'permission.requested') throw new Error('no request');
+    expect(request.lasting).toBe(true);
+    await manager.respond(convo.id, request.permissionId, 'allow-always');
+    await settle(manager, convo.id, (e) => e.some((x) => x.type === 'turn.completed'));
+    await manager.send({ conversationId: convo.id, clientMessageId: 'u2', text: 'another' });
+    const events = await settle(
+      manager,
+      convo.id,
+      (e) => e.filter((x) => x.type === 'turn.completed').length === 2,
+    );
+    expect(events.filter((e) => e.type === 'permission.requested')).toHaveLength(1);
+    expect(engine.decisions.slice(-2)).toEqual([undefined, 'allow']);
+  });
+
+  it('in Full trust, a command leaving the sealed box just runs', async () => {
+    const { manager, engine } = await setup();
+    engine.script.push(async function* (input) {
+      const request = {
+        toolName: 'Bash',
+        input: { command: 'git clone https://example.com/r.git', dangerouslyDisableSandbox: true },
+      };
+      engine.decisions.push(await input.guard?.(request));
+      engine.decisions.push(await input.requestPermission(request, input.signal));
+      yield { type: 'text', messageId: 'm', delta: 'ok' };
+    });
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'clone it' });
+    const events = await settle(manager, convo.id, (e) =>
+      e.some((x) => x.type === 'turn.completed'),
+    );
+    expect(engine.decisions).toEqual([undefined, 'allow']);
+    expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
   });
 
   it('turned off in Settings, it only notes what was read', async () => {
@@ -512,7 +548,7 @@ describe('a mode picked mid-turn', () => {
     });
   });
 
-  it('answers a question asked after reading too, but leaves leaving the sealed box waiting', async () => {
+  it('answers what waited after reading and for the sealed box, but not a skill’s list', async () => {
     const { manager, engine, settings } = await setup();
     await settings.update({ preferences: { permissionMode: 'default' } });
     engine.script.push(readsPage, async function* (input) {
@@ -532,23 +568,14 @@ describe('a mode picked mid-turn', () => {
     await manager.send({ conversationId: convo.id, clientMessageId: 'u2', text: 'go' });
     await settle(manager, convo.id, (e) => e.some((x) => x.type === 'permission.requested'));
     await manager.configure(convo.id, { permissionMode: 'bypassPermissions' });
-    // The one asked after reading is answered by Full trust; the sealed box still asks.
-    const asked = await settle(
-      manager,
-      convo.id,
-      (e) => e.filter((x) => x.type === 'permission.requested').length === 2,
-    );
-    const box = asked.filter((e) => e.type === 'permission.requested').at(-1);
-    if (box?.type !== 'permission.requested') throw new Error('no request');
-    expect(box.taint).toMatch(/outside the sealed box/);
-    expect(box.afterReading).toBeUndefined();
-    await manager.respond(convo.id, box.permissionId, 'deny');
-    await settle(
+    const events = await settle(
       manager,
       convo.id,
       (e) => e.filter((x) => x.type === 'turn.completed').length === 2,
     );
-    expect(engine.decisions).toEqual(['allow', 'deny']);
+    // The first was answered by Full trust; the second never had to ask.
+    expect(engine.decisions).toEqual(['allow', 'allow']);
+    expect(events.filter((e) => e.type === 'permission.requested')).toHaveLength(1);
   });
 });
 

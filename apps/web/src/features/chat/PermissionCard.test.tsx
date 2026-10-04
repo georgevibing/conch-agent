@@ -25,7 +25,7 @@ describe('a question asked because of what the chat read', () => {
         item={asked({
           taint:
             'This chat read github.com, which could be trying to steer me. So I’m checking before I run a command.',
-          afterReading: true,
+          lasting: true,
         })}
         name="Conch"
         onRespond={respond}

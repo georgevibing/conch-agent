@@ -125,3 +125,46 @@ describe('shared Conch host tools', () => {
     vi.unstubAllEnvs();
   });
 });
+
+describe('commands, on every provider that uses Conch’s tools', () => {
+  it('is always on offer, says how it runs, and lets a command ask to leave the seal', async () => {
+    const input = await turn();
+    const bash = buildTools(input).get('Bash');
+    expect(bash).toBeDefined();
+    expect(bash?.spec.description).toMatch(/asked first unless they chose Full trust/);
+    expect(JSON.stringify(bash?.spec.schema)).toContain('dangerouslyDisableSandbox');
+  });
+
+  it('asks first, then runs with your access with no box for the turn (a clone, an install)', async () => {
+    // No box for this turn (as where this computer can't seal, or sealing is off).
+    const guard = vi.fn(async () => undefined);
+    const ask = vi.fn(async () => 'allow' as const);
+    const input = await turn({ guard, requestPermission: ask });
+    const result = await buildTools(input)
+      .get('Bash')
+      ?.run({ command: 'echo cloned > made.txt && echo done' }, 'b1');
+    expect(result).toMatchObject({ isError: false });
+    expect(result?.text).toContain('done');
+    expect(await readFile(join(input.cwd, 'made.txt'), 'utf8')).toContain('cloned');
+    // The guard and the question both hear that it runs outside the box.
+    expect(guard).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({ dangerouslyDisableSandbox: true }),
+      }),
+    );
+    expect(ask).toHaveBeenCalledOnce();
+  });
+
+  it('keeps Conch’s keys and your secrets out of reach, sealed or not', async () => {
+    const input = await turn({
+      options: { permissionMode: 'bypassPermissions', effort: 'auto', fastMode: false },
+    });
+    const secret = join(input.cwd, '..', 'secrets.json');
+    await writeFile(secret, 'key');
+    await expect(
+      buildTools({ ...input, protectedPaths: [secret] })
+        .get('Bash')
+        ?.run({ command: `cat ${secret}`, dangerouslyDisableSandbox: true }, 'b2'),
+    ).rejects.toThrow(/passwords/);
+  });
+});

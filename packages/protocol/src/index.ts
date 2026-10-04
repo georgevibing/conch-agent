@@ -453,9 +453,12 @@ export const ConversationEvent = z.discriminatedUnion('type', [
      */
     taint: z.string().optional(),
     /**
-     * Asked only because of what the chat read: "Always allow" lets this tool
-     * through for the rest of the chat. Without it, a `taint` question is this once.
+     * Asked for a reason "Always allow" can lift for the rest of the chat
+     * (what it read, or leaving the sealed box). Without it, a `taint`
+     * question is this once.
      */
+    lasting: z.boolean().optional(),
+    /** The same, as the first version of this field said it (2026-10-04). */
     afterReading: z.boolean().optional(),
   }),
   z.object({

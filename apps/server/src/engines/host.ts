@@ -8,7 +8,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { z } from 'zod';
 
 import { sandboxSupport, secretPlaces } from '../conversations/sandbox';
-import { PROTECTED_MESSAGE } from '../lib/protect';
+import { PROTECTED_MESSAGE, touchesProtected } from '../lib/protect';
 import type { HostTool, TurnInput } from './types';
 
 const MAX_FILE = 1024 * 1024;
@@ -90,23 +90,48 @@ try {
 finally { await SandboxManager.reset(); }
 `;
 
+/** Commands in this turn run sealed: this computer can, and sealing is on (it hands the turn its box). */
+export function sealable(input: Pick<TurnInput, 'sandbox'>): boolean {
+  return Boolean(input.sandbox) && sandboxSupport().available;
+}
+
+/**
+ * Run a command for the assistant. Sealed by the operating system when this
+ * computer can (no network, no secrets, writes only in the work folder).
+ * `unsealed`: it runs as you, with your access — the person said yes to that
+ * (or chose Full trust), and it's how a repository is cloned or a package
+ * installed. A computer that can't seal commands runs every one that way.
+ */
 export async function runHostCommand(
   input: TurnInput,
   command: string,
   timeoutMs: number,
+  { unsealed = false }: { unsealed?: boolean } = {},
 ): Promise<string> {
-  const support = sandboxSupport();
-  if (!support.available)
-    throw new Error(
-      `${support.reason} Open Settings → Health to finish command setup. Files and connected apps still work.`,
-    );
   input.signal.throwIfAborted();
-  const child = spawn(process.execPath, ['--input-type=module', '-e', WORKER], {
-    cwd: input.cwd,
-    env: hostEnvironment(),
-    detached: process.platform !== 'win32',
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
+  // No box for this turn: this computer can't make one, or sealing is off in Settings.
+  const unboxed = unsealed || !sealable(input);
+  if (unboxed) {
+    // Conch's keys, your passwords and sign-ins stay out of reach, sealed or not.
+    const places = [...(input.protectedPaths ?? []), ...secretPlaces().map((p) => p.path)];
+    if (touchesProtected({ command }, places)) throw new Error(PROTECTED_MESSAGE);
+  }
+  const child = unboxed
+    ? spawn(command, {
+        cwd: input.cwd,
+        env: hostEnvironment(),
+        // The system's own shell: sh where there is one, cmd on Windows.
+        shell: process.platform === 'win32' ? true : '/bin/sh',
+        detached: process.platform !== 'win32',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      })
+    : spawn(process.execPath, ['--input-type=module', '-e', WORKER], {
+        cwd: input.cwd,
+        env: hostEnvironment(),
+        detached: process.platform !== 'win32',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
   let output = '';
   let timedOut = false;
   const stop = () => {
@@ -125,35 +150,40 @@ export async function runHostCommand(
   const collect = (chunk: Buffer) => {
     output = (output + chunk.toString('utf8')).slice(-64_000);
   };
-  child.stdout.on('data', collect);
-  child.stderr.on('data', collect);
-  child.stdin.on('error', () => {});
-  child.stdin.end(
-    JSON.stringify({
-      module: import.meta.resolve('@anthropic-ai/sandbox-runtime'),
-      command,
-      cwd: input.cwd,
-      config: {
-        network: { allowedDomains: [], deniedDomains: [] },
-        filesystem: {
-          allowWrite: [input.cwd],
-          denyWrite: [...(input.protectedPaths ?? []), resolve(input.cwd, '.git')],
-          denyRead: [
-            ...(input.sandbox?.denyRead ?? []),
-            ...(input.protectedPaths ?? []),
-            ...secretPlaces().map((p) => p.path),
-          ],
+  child.stdout?.on('data', collect);
+  child.stderr?.on('data', collect);
+  if (!unboxed && child.stdin) {
+    child.stdin.on('error', () => {});
+    child.stdin.end(
+      JSON.stringify({
+        module: import.meta.resolve('@anthropic-ai/sandbox-runtime'),
+        command,
+        cwd: input.cwd,
+        config: {
+          network: { allowedDomains: [], deniedDomains: [] },
+          filesystem: {
+            allowWrite: [input.cwd],
+            denyWrite: [...(input.protectedPaths ?? []), resolve(input.cwd, '.git')],
+            denyRead: [
+              ...(input.sandbox?.denyRead ?? []),
+              ...(input.protectedPaths ?? []),
+              ...secretPlaces().map((p) => p.path),
+            ],
+          },
         },
-      },
-    }),
-  );
+      }),
+    );
+  }
   try {
     const code = await new Promise<number | null>((done, fail) => {
       child.once('error', fail);
       child.once('close', done);
     });
     input.signal.throwIfAborted();
-    if (timedOut) throw new Error('The command took too long and was stopped.');
+    if (timedOut)
+      throw new Error(
+        `The command took longer than ${Math.round(timeoutMs / 1000)}s and was stopped. For a long one (a big clone, an install), set timeout_ms higher.`,
+      );
     if (code !== 0) throw new Error(`Command exited with code ${code ?? 'unknown'}.\n${output}`);
     return output || 'Command completed with no output.';
   } finally {
@@ -247,21 +277,21 @@ export function hostComputerTools(input: TurnInput): HostTool[] {
         return write(String(args.file_path), content.replace(old, String(args.new_string)));
       },
     },
-    ...(sandboxSupport().available
-      ? [
-          {
-            name: 'Bash',
-            description:
-              'Run a command in the work folder, sealed by the operating system. No network or secret access; writes stay in this folder. No unrestricted fallback.',
-            input: {
-              command: z.string().min(1).max(32_000),
-              timeout_ms: z.number().int().min(100).max(120_000).default(30_000),
-            },
-            run: async (args: Record<string, unknown>) =>
-              runHostCommand(input, String(args.command), Number(args.timeout_ms)),
-          },
-        ]
-      : []),
+    {
+      name: 'Bash',
+      description: sealable(input)
+        ? 'Run a command in the work folder, sealed by the operating system: no network, no secrets, and writes stay in the work folder (not .git). For a command that needs more (the network for git clone or an install, or files elsewhere), set dangerouslyDisableSandbox: true; it then runs with the person’s own access, and they are asked first unless they chose Full trust.'
+        : 'Run a command in the work folder. This computer can’t seal commands, so each one runs with the person’s own access (the network included), and they are asked first unless they chose Full trust. Passwords, sign-ins and Conch’s keys stay out of reach.',
+      input: {
+        command: z.string().min(1).max(32_000),
+        timeout_ms: z.number().int().min(100).max(600_000).default(30_000),
+        dangerouslyDisableSandbox: z.boolean().optional(),
+      },
+      run: async (args: Record<string, unknown>) =>
+        runHostCommand(input, String(args.command), Number(args.timeout_ms), {
+          unsealed: args.dangerouslyDisableSandbox === true,
+        }),
+    },
   ];
   for (const tool of tools) {
     if (!['Read', 'LS', 'Write'].includes(tool.name)) continue;
@@ -341,7 +371,14 @@ export async function authorizeTool(
 ): Promise<string | undefined> {
   input.signal.throwIfAborted();
   if (input.disallowedTools?.includes(name)) return 'The user turned this tool off.';
-  const request = { toolName: name, toolUseId: id, input: args };
+  // A computer that can't seal commands runs each one outside the box: the guard
+  // and the question say so, as they would for a command that asked to leave it.
+  const request = {
+    toolName: name,
+    toolUseId: id,
+    input:
+      name === 'Bash' && !sealable(input) ? { ...args, dangerouslyDisableSandbox: true } : args,
+  };
   const guard = await input.guard?.(request);
   if (guard?.decision === 'deny') return guard.message;
   if (

@@ -32,7 +32,6 @@ import {
 } from '@conch/protocol';
 import { z } from 'zod';
 
-import { sandboxSupport } from '../../conversations/sandbox';
 import { newId } from '../../lib/ids';
 import { cleanPlan, stepStatus } from '../../plans/steps';
 import { agentEnv, launch, run } from '../../lib/proc';
@@ -605,7 +604,7 @@ export class AcpEngine implements Engine {
       models: offer?.models ?? [],
       commands: [],
       permissionModes: ['default', 'plan', 'acceptEdits', 'bypassPermissions'],
-      tools: { host: true, files: true, shell: sandboxSupport().available, approvals: true },
+      tools: { host: true, files: true, shell: true, approvals: true },
       attachments: this.attachments,
     };
     if (offer) this.#caps = { value, offer, at: Date.now() };
