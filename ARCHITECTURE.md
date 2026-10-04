@@ -813,9 +813,11 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   (`state.behind`); `Root` renders the routes at that page, so it stays mounted
   behind, and leaving goes back to it. `useUi.openSettings` keeps its signature for
   every caller and moves the router through `app/navigation.tsx` (`Navigator`, `go`).
-- First run is a short, skippable flow: welcome → connect a provider (install /
-  sign-in / API key, with live re-checks) → a useful first job → personality and
-  "about you" → chat.
+- First run is the welcome (ADR 0068, `features/onboarding`, Nacre `Welcome`): hello →
+  your name → what you'd like a hand with (chips, kept as one sentence in "about you") →
+  a voice, heard → a provider (`ProviderSetup`, carrying on by itself once one works) →
+  apps that connect in a press or two → come home, when there's something to bring →
+  three things to ask first, which open a chat with the words in the composer.
 - **Conch apps** (ADR 0061). **Add your own** opens on **Describe it** (Nacre `AppMaker`),
   which sends "Make me an app: …" as a new chat; **From a link** previews a package
   (`AppPreview`). The transcript draws `conch-app.offer` as `AppOffer` and

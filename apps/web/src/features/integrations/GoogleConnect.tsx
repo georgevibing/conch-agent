@@ -31,7 +31,7 @@ function savedFlow(key: string) {
     return '';
   }
 }
-/** Shared by Integrations and the first-job flow. Credential/code entry never enters chat. */
+/** Shared by the Google apps in Integrations. Credential/code entry never enters chat. */
 interface GoogleConnectProps {
   capabilities: GoogleCapability[];
   onReady: (accountId: string) => void;

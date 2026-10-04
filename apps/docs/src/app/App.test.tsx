@@ -134,9 +134,9 @@ describe('a page', () => {
   it('moves to the next page from the contents', async () => {
     open('/start/install');
     const contents = screen.getByRole('navigation', { name: 'Documentation' });
-    await userEvent.click(within(contents).getByRole('link', { name: 'Your first useful result' }));
+    await userEvent.click(within(contents).getByRole('link', { name: 'Your first minute' }));
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Your first useful result' }),
+      await screen.findByRole('heading', { level: 1, name: 'Your first minute' }),
     ).toBeInTheDocument();
   });
 

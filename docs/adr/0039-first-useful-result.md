@@ -1,6 +1,7 @@
 # 0039: A useful result before personalization
 
-- Status: accepted
+- Status: superseded for onboarding by [ADR 0068](./0068-a-welcome-not-a-task.md); the
+  verified first-job task and its API remain
 - Date: 2026-10-02
 - Builds on: 0036 (provider capabilities), 0037 (Google accounts), 0038 (verified tasks)
 

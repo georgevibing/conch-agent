@@ -59,3 +59,4 @@ export * from './ConchApps';
 export * from './Memory';
 export * from './Docs';
 export * from './Site';
+export * from './Welcome';
