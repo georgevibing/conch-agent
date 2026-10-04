@@ -373,7 +373,10 @@ export PATH
 if ! has_git; then get_git; fi
 ok "Git"
 
+# What was here before, so a new version can be started in place of the old one.
+BEFORE=
 if [ -d "$DIR/.git" ]; then
+  BEFORE=$(git -C "$DIR" rev-parse HEAD 2>/dev/null || true)
   # A release swapped in by Conch's own updates is the one that runs (ADR 0051).
   CURRENT=
   [ -f "$HOME_DIR/versions/current" ] && CURRENT=$(head -n 1 "$HOME_DIR/versions/current")
@@ -450,6 +453,12 @@ fi
 
 URL=http://localhost:4317
 if [ -n "$BACKGROUND" ]; then
+  # Running already, on the version that was here: stop it, so the one that starts is the new one.
+  # (The computer only starts Conch when it isn't running, so it would carry on as it was.)
+  AFTER=$(git -C "$DIR" rev-parse HEAD 2>/dev/null || true)
+  if [ "$RUN_DIR" = "$DIR" ] && [ -n "$BEFORE" ] && [ "$BEFORE" != "$AFTER" ]; then
+    conch quit >"$LOG" 2>&1 || true
+  fi
   step "Starting Conch"
   if conch background on >"$LOG" 2>&1; then
     URL=$(sed -n 's/.*\(http:\/\/[^ ]*\).*/\1/p' "$LOG" | head -n 1)
@@ -473,6 +482,21 @@ if [ -n "$HEADLESS" ] && [ -n "$BACKGROUND" ]; then
   else
     say "${DIM}A Mac stops Conch when you log out: turn on automatic login in System Settings → Users & Groups.${RESET}"
   fi
+fi
+
+# Somebody already made this Conch theirs: an update, not a first install. Say where it
+# is and that it's current, instead of asking again how they'll reach it.
+claimed() {
+  [ -f "$HOME_DIR/access.json" ] &&
+    grep -Eq '"method"[[:space:]]*:[[:space:]]*"(password|key|passkey)"' "$HOME_DIR/access.json"
+}
+if [ -n "$HEADLESS" ] && [ -z "$DOMAIN" ] && [ -z "$PROXY" ] && claimed; then
+  NAME=$(sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$HOME_DIR/address.json" 2>/dev/null | head -n 1)
+  printf '\n  %s✨ Conch is up to date%s' "$BOLD" "$RESET"
+  if [ -n "$NAME" ]; then printf ' at https://%s\n' "$NAME"; else printf '\n'; fi
+  say "${DIM}To change how you reach it: conch setup${RESET}"
+  printf '\n'
+  exit 0
 fi
 
 # No screen here: the conversation (ADR 0064). How will you reach Conch, and the
