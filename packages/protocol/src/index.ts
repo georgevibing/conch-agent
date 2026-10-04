@@ -37,7 +37,7 @@ import {
 } from './common';
 import { DoctorReport } from './doctor';
 import { Memory, MemoryKind } from './memory';
-import { MAX_PROFILE_FACTS, ProfileFact } from './profile';
+import { MAX_PROFILE_FACTS, ProfileAvatar, ProfileFact } from './profile';
 import { PastChatsLooked } from './past-chats';
 import { EngineStatus, LoginState } from './engine';
 import { HealNote } from './healed';
@@ -147,6 +147,8 @@ export const Profile = z.object({
   about: z.string().max(4000).default(''),
   /** Who they are in cards: work, home, people, interests, how they like things. */
   facts: z.array(ProfileFact).max(MAX_PROFILE_FACTS).default([]),
+  /** A photo of theirs, set only through `PUT /api/profile/avatar`. */
+  avatar: ProfileAvatar.optional(),
 });
 export type Profile = z.infer<typeof Profile>;
 

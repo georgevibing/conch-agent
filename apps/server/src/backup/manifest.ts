@@ -220,6 +220,12 @@ export const RULES: readonly BackupRule[] = [
     why: 'Personality, about you, preferences.',
   },
   {
+    match: 'avatar',
+    class: 'kept',
+    group: 'settings',
+    why: 'Your photo, as About you and the sidebar show it.',
+  },
+  {
     match: 'address.json',
     class: 'kept',
     group: 'settings',

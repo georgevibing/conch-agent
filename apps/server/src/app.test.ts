@@ -321,6 +321,35 @@ describe('gateway HTTP', () => {
   });
 });
 
+describe('your photo', () => {
+  it('is set, served only as the picture it is, and taken away', async () => {
+    const { app } = await setup();
+    close = () => app.close();
+    const png =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    const set = await app.inject({
+      method: 'PUT',
+      url: '/api/profile/avatar',
+      payload: { data: png },
+    });
+    expect(set.statusCode).toBe(200);
+    expect(set.json().profile.avatar).toMatchObject({ type: 'image/png' });
+    const got = await app.inject('/api/profile/avatar');
+    expect(got.headers['content-type']).toBe('image/png');
+    expect(got.headers['x-content-type-options']).toBe('nosniff');
+    expect(got.rawPayload.equals(Buffer.from(png, 'base64'))).toBe(true);
+    const svg = Buffer.from('<svg onload="alert(1)"/>').toString('base64');
+    expect(
+      (await app.inject({ method: 'PUT', url: '/api/profile/avatar', payload: { data: svg } }))
+        .statusCode,
+    ).toBe(400);
+    expect(
+      (await app.inject({ method: 'DELETE', url: '/api/profile/avatar' })).json().profile.avatar,
+    ).toBeUndefined();
+    expect((await app.inject('/api/profile/avatar')).statusCode).toBe(404);
+  });
+});
+
 describe('gateway capabilities and commands', () => {
   it('lists models, modes and custom commands', async () => {
     const { app } = await setup();

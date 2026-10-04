@@ -55,6 +55,7 @@ import {
   UpdatesSettingsBody,
   type ServerEvent,
   UnderstandProfileBody,
+  AvatarBody,
 } from '@conch/protocol';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import type { z } from 'zod';
@@ -91,6 +92,7 @@ import { registerFirstJobRoutes } from './onboarding/first-job';
 import { registerBackgroundRoutes } from './background/routes';
 import { registerImportRoutes } from './import/routes';
 import { registerLearningRoutes } from './memory/routes';
+import { AvatarError, AvatarStore } from './profile/avatar';
 import { ProfileUnavailable, understandProfile } from './profile/understand';
 import { registerBackupRoutes } from './backup/routes';
 import { registerBrowserRoutes } from './browser/routes';
@@ -385,6 +387,35 @@ export async function buildApp(services: Services) {
       }
     }
     await services.settings.update(body);
+    return appState();
+  });
+
+  // Your photo (About you): kept as you framed it, served only as the picture it is.
+  const avatars = new AvatarStore(services.config.CONCH_HOME, services.settings);
+  app.put('/api/profile/avatar', async (request, reply) => {
+    const body = parse(AvatarBody, request.body, reply);
+    if (!body) return;
+    try {
+      await avatars.save(body.data);
+    } catch (error) {
+      if (error instanceof AvatarError)
+        return reply.code(400).send({ error: 'bad-request', message: error.message });
+      throw error;
+    }
+    return appState();
+  });
+  app.get('/api/profile/avatar', async (_request, reply) => {
+    const avatar = await avatars.read();
+    if (!avatar) return reply.code(404).send({ error: 'not-found', message: 'No photo.' });
+    return reply
+      .type(avatar.type)
+      .header('x-content-type-options', 'nosniff')
+      .header('content-security-policy', "default-src 'none'")
+      .header('cache-control', 'private, max-age=31536000, immutable')
+      .send(avatar.bytes);
+  });
+  app.delete('/api/profile/avatar', async () => {
+    await avatars.remove();
     return appState();
   });
 
