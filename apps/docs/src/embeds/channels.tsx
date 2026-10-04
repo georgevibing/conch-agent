@@ -541,6 +541,38 @@ const SCENES: Record<string, Record<string, () => ReactNode>> = {
       />
     ),
   },
+  mattermost: {
+    key: () => (
+      <PortalSketch
+        label="Mattermost, adding a bot account"
+        address="chat.example.com/integrations/bots/add"
+        nav={['Incoming Webhooks', 'Slash Commands', 'Bot Accounts']}
+        active="Bot Accounts"
+        title="Add Bot Account"
+        color={colorOf('mattermost')}
+      >
+        <PortalSketch.Field label="Username">conch</PortalSketch.Field>
+        <PortalSketch.Field label="Display Name">{BOT}</PortalSketch.Field>
+        <PortalSketch.Row>
+          <PortalSketch.Button>Create Bot Account</PortalSketch.Button>
+        </PortalSketch.Row>
+      </PortalSketch>
+    ),
+    hello: () => (
+      <Handset
+        label="A direct message with your bot in Mattermost, once Conch knows it’s you"
+        brand="mattermost"
+        color={colorOf('mattermost')}
+        title={BOT}
+        subtitle="BOT"
+        messages={[
+          { id: '1', from: 'you', text: 'hi' },
+          { id: '2', from: 'them', text: WELCOME },
+        ]}
+        footer={<Handset.Composer placeholder={`Write to ${BOT}`} />}
+      />
+    ),
+  },
 };
 
 function colorOf(id: string): string | undefined {

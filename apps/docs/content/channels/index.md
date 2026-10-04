@@ -35,7 +35,7 @@ WhatsApp and Signal have no bots to make. Instead Conch joins **your own account
 
 ## In a group
 
-Telegram, Discord and Slack can answer in a group, a server's channel or a Slack channel, once you turn that group on in Conch. Add the bot to the group in the app; the group shows up on the bot's page in Conch under **Groups**, with a switch.
+Telegram, Discord, Slack and Mattermost can answer in a group, a server's channel or a team's channel, once you turn that group on in Conch. Add the bot to the group in the app; the group shows up on the bot's page in Conch under **Groups**, with a switch.
 
 - **Only when it's asked.** In a group that's on, your assistant answers only when someone mentions it (`@yourbot`) or replies to one of its messages. Everything else in the group is never read.
 - **You get everything.** When you mention it, it's the same assistant as in your private chat, in a conversation of its own for that group.
@@ -44,7 +44,7 @@ Telegram, Discord and Slack can answer in a group, a server's channel or a Slack
 - **What others write is read as theirs.** If you reply to someone's message and mention your assistant, their words come along, read as someone else's, so anything they say can't make it act without asking you first.
 - **It knows you by your account.** Someone who takes your name, or forwards your words, is still someone else.
 
-Turn a group off, and your assistant goes quiet there at once. **Forget** takes it off the list until the bot hears from it again. WhatsApp, Signal, iMessage and email are your own account, so they never answer in groups. Teams, Matrix and WeChat answer in private chats only.
+Turn a group off, and your assistant goes quiet there at once. **Forget** takes it off the list until the bot hears from it again. WhatsApp, Signal, iMessage and email are your own account, so they never answer in groups. Teams, Matrix, WeChat and SMS answer in private chats only.
 
 ## What works from a chat
 

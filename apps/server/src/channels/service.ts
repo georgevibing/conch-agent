@@ -51,6 +51,7 @@ import {
   personId,
   type VoiceNote,
 } from './types';
+import { normalizeMattermost } from './mattermost';
 import { normalizeSms } from './sms';
 import {
   BUSY,
@@ -202,6 +203,7 @@ export function normalizeSecrets(secrets: ChannelSecrets, kept?: ChannelSecrets)
   if (secrets.kind === 'wechat')
     return normalizeWeChat(secrets, kept?.kind === 'wechat' ? kept : undefined);
   if (secrets.kind === 'sms') return normalizeSms(secrets, kept?.kind === 'sms' ? kept : undefined);
+  if (secrets.kind === 'mattermost') return normalizeMattermost(secrets);
   const pick = (value: string, pattern: RegExp) => pattern.exec(value)?.[1] ?? value.trim();
   if (secrets.kind === 'telegram')
     return { kind: 'telegram', token: pick(secrets.token, TELEGRAM_TOKEN) };
@@ -822,13 +824,23 @@ export class ChannelService {
         ? kept?.kind === 'sms'
           ? { ...kept, authToken: input.authToken }
           : undefined
-        : input.kind === 'email' && !('address' in input)
-          ? kept?.kind === 'email'
-            ? { ...kept, password: input.password }
+        : input.kind === 'mattermost' && !('server' in input)
+          ? kept?.kind === 'mattermost'
+            ? { ...kept, token: input.token }
             : undefined
-          : (input as ChannelSecrets);
+          : input.kind === 'email' && !('address' in input)
+            ? kept?.kind === 'email'
+              ? { ...kept, password: input.password }
+              : undefined
+            : (input as ChannelSecrets);
     if (!merged)
-      throw new ChannelServiceError('invalid', 'Connect this email account again.', 'password');
+      throw new ChannelServiceError(
+        'invalid',
+        input.kind === 'email'
+          ? 'Connect this email account again.'
+          : `Connect ${CHANNEL_NAMES[input.kind]} again from Apps.`,
+        input.kind === 'email' ? 'password' : undefined,
+      );
     if (merged.kind !== current.kind)
       throw new ChannelServiceError('invalid', `That’s a key for ${CHANNEL_NAMES[merged.kind]}.`);
     const { secrets, bot } = await this.#settle(normalizeSecrets(merged, kept));

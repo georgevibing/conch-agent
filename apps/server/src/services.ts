@@ -77,6 +77,7 @@ import { MockTeams } from './channels/mock/teams';
 import { MockTelegram } from './channels/mock/telegram';
 import { linkedChannels, type LinkedChannels } from './channels/linked-setup';
 import { ChannelLinking } from './channels/linking';
+import { MockMattermost } from './channels/mock/mattermost';
 import { MockTwilio } from './channels/mock/twilio';
 import { MockWeChat } from './channels/mock/wechat';
 import { CHANNEL_NAMES, ChannelService } from './channels/service';
@@ -328,6 +329,7 @@ export class Services {
   readonly mockMatrix?: MockMatrix;
   readonly mockWeChat?: MockWeChat;
   readonly mockTwilio?: MockTwilio;
+  readonly mockMattermost?: MockMattermost;
   /** The public door, for the channels that only deliver to a web address (ADR 0045). */
   readonly door: ChannelDoorService;
   /** Your own address, over HTTPS by Conch itself (ADR 0064). Started by main.ts, never by tests. */
@@ -1065,6 +1067,7 @@ export class Services {
     this.mockMatrix = config.CONCH_ENGINE === 'mock' ? new MockMatrix() : undefined;
     this.mockWeChat = config.CONCH_ENGINE === 'mock' ? new MockWeChat() : undefined;
     this.mockTwilio = config.CONCH_ENGINE === 'mock' ? new MockTwilio() : undefined;
+    this.mockMattermost = config.CONCH_ENGINE === 'mock' ? new MockMattermost() : undefined;
     // In mock mode the "internet" is this computer: what's sent to the public address reaches the door.
     const door: ChannelDoorService = new ChannelDoorService({
       home: config.CONCH_HOME,
@@ -1289,6 +1292,9 @@ export class Services {
         await this.mockTwilio.start(Number(process.env.CONCH_MOCK_TWILIO_PORT ?? 0));
         endpoints.twilio = this.mockTwilio.api;
       }
+      // The Mattermost server is whatever's typed: the pretend one says where it is.
+      if (this.mockMattermost)
+        await this.mockMattermost.start(Number(process.env.CONCH_MOCK_MATTERMOST_PORT ?? 0));
     })();
   }
 
@@ -2055,6 +2061,8 @@ export class Services {
     void this.mockTeams?.stop();
     void this.mockMatrix?.stop();
     void this.mockWeChat?.stop();
+    void this.mockTwilio?.stop();
+    void this.mockMattermost?.stop();
     clearInterval(this.#sweeper);
     clearInterval(this.#hereSweeper);
     this.#stopAsks?.();

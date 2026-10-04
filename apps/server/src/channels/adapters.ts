@@ -6,6 +6,7 @@ import type { SignalDaemon } from './signal-cli';
 import { EmailAdapter, type MailEndpoints } from './email';
 import { ImessageAdapter, type ImessageOptions } from './imessage';
 import type { ChannelDoorService } from './door';
+import { MattermostAdapter } from './mattermost';
 import { MatrixAdapter } from './matrix';
 import { SLACK_API, SlackAdapter } from './slack';
 import { TwilioSmsAdapter } from './sms';
@@ -81,6 +82,8 @@ export function adapterFor(
         : new WeChatOfficialAdapter(secrets, endpoints);
     case 'sms':
       return new TwilioSmsAdapter(secrets, endpoints);
+    case 'mattermost':
+      return new MattermostAdapter(secrets);
   }
 }
 

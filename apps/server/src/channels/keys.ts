@@ -27,6 +27,8 @@ export function channelKeys(secrets: ChannelSecrets): [string, string][] {
       return [['app password', secrets.password]];
     case 'sms':
       return [['Auth Token', secrets.authToken]];
+    case 'mattermost':
+      return [['bot access token', secrets.token]];
     // iMessage has no key; a linked device's keys are listed apart (`Services.#systemKeys`).
     case 'imessage':
     case 'whatsapp':

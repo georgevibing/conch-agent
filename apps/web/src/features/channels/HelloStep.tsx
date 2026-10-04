@@ -190,6 +190,11 @@ export function HelloStep({
                 allow Direct Messages.
               </Text>
             </>
+          ) : channel.kind === 'mattermost' ? (
+            <p>
+              In Mattermost, open a direct message with <b>{who}</b> (search for it under Direct
+              Messages) and send it anything, like “hi”. Then press <b>That’s me</b> here.
+            </p>
           ) : channel.kind === 'slack' ? (
             <p>
               Open {who} in Slack (it’s under Apps) and send it anything, like “hi”. Then press{' '}

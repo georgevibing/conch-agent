@@ -37,6 +37,7 @@ export const ChannelKind = z.enum([
   'matrix',
   'wechat',
   'sms',
+  'mattermost',
 ]);
 export type ChannelKind = z.infer<typeof ChannelKind>;
 
@@ -404,6 +405,17 @@ const sms = {
 };
 
 /**
+ * Mattermost (ADR 0081): a bot account on your server, reached over its
+ * WebSocket. `server` is the address you open Mattermost at.
+ */
+const mattermost = {
+  kind: z.literal('mattermost'),
+  server: short,
+  /** The bot account's access token. */
+  token: secret,
+};
+
+/**
  * Mail services Conch knows the settings of (ADR 0044). `other` takes the
  * server names by hand.
  */
@@ -459,6 +471,7 @@ export const ChannelSecrets = z.discriminatedUnion('kind', [
   z.object(matrix),
   z.object(wechat),
   z.object(sms),
+  z.object(mattermost),
 ]);
 export type ChannelSecrets = z.infer<typeof ChannelSecrets>;
 
@@ -479,6 +492,7 @@ export const CheckChannelBody = z.discriminatedUnion('kind', [
   z.object(matrix),
   z.object({ ...wechat, appId: secret.optional(), secret: secret.optional() }),
   z.object({ ...sms, accountSid: secret.optional(), authToken: secret.optional() }),
+  z.object({ ...mattermost, server: short.optional(), token: secret.optional() }),
 ]);
 export type CheckChannelBody = z.infer<typeof CheckChannelBody>;
 
@@ -521,6 +535,8 @@ export const ReplaceChannelTokenBody = z.union([
   z.object({ kind: z.literal('email'), password: secret }),
   // A new Twilio Auth Token: the account and its number stay as they were.
   z.object({ kind: z.literal('sms'), authToken: secret }),
+  // A new Mattermost bot token: the server stays as it was.
+  z.object({ kind: z.literal('mattermost'), token: secret }),
 ]);
 export type ReplaceChannelTokenBody = z.infer<typeof ReplaceChannelTokenBody>;
 

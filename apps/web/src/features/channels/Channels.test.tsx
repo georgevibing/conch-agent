@@ -1102,3 +1102,50 @@ describe('Connecting SMS (ADR 0076)', () => {
     );
   });
 });
+
+describe('Connecting Mattermost (ADR 0081)', () => {
+  it('suggests the bot’s names, checks the address and token together, and connects', async () => {
+    const made = channel({
+      kind: 'mattermost',
+      bot: { id: 'b0t', name: 'Conch', username: 'conch', workspace: 'chat.example.com' },
+    });
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'POST /api/channels/check': () => ({ ok: true, bot: made.bot, checked: [] }),
+      'POST /api/channels': () => made,
+      'GET /api/auth': () => ({ method: 'none' }),
+    });
+    renderApp(<ConnectChannel kind="mattermost" />, { route: '/channels/new/mattermost' });
+    expect(await screen.findByRole('heading', { name: 'Connect Mattermost' })).toBeInTheDocument();
+    expect(screen.getByDisplayValue('conch')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'I made it' }));
+    await userEvent.type(screen.getByLabelText('Server address'), 'https://chat.example.com');
+    await userEvent.type(screen.getByLabelText('Access token'), 'abcdefghijklmnopqrstuvwxyz');
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST' && c.path === '/api/channels')?.body).toEqual({
+        kind: 'mattermost',
+        server: 'https://chat.example.com',
+        token: 'abcdefghijklmnopqrstuvwxyz',
+      }),
+    );
+    expect(await screen.findByText('On chat.example.com')).toBeInTheDocument();
+  });
+
+  it('points at the address box when the server isn’t one', async () => {
+    mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'POST /api/channels/check': () => ({
+        ok: false,
+        field: 'server',
+        message: 'There’s no Mattermost at that address.',
+      }),
+    });
+    renderApp(<ConnectChannel kind="mattermost" />, { route: '/channels/new/mattermost' });
+    await userEvent.click(await screen.findByRole('button', { name: 'I made it' }));
+    await userEvent.type(screen.getByLabelText('Server address'), 'https://wrong.example.com');
+    await userEvent.type(screen.getByLabelText('Access token'), 'abcdefghijklmnopqrstuvwxyz');
+    expect(await screen.findByText('There’s no Mattermost at that address.')).toBeInTheDocument();
+  });
+});

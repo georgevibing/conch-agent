@@ -109,6 +109,16 @@ export const CHANNEL_CATALOG: ChannelCatalogEntry[] = [
     minutes: 5,
     available: true,
   },
+  {
+    id: 'mattermost',
+    name: 'Mattermost',
+    tagline: 'A bot on your own Mattermost server. No public address.',
+    short: 'A bot on your server',
+    color: '#1E325C',
+    minutes: 3,
+    available: true,
+    groups: true,
+  },
 ];
 
 export const CHANNEL_NAMES: Record<ChannelKind, string> = {
@@ -123,6 +133,7 @@ export const CHANNEL_NAMES: Record<ChannelKind, string> = {
   matrix: 'Matrix',
   wechat: 'WeChat',
   sms: 'SMS',
+  mattermost: 'Mattermost',
 };
 
 /** Channels that only work on some systems: elsewhere the tile says so and can't be chosen. */
