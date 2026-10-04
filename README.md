@@ -79,6 +79,8 @@
 - **Apps and skills for every model.** Gmail, Google Calendar and Drive, Slack,
   GitHub, Notion, Linear and more from one gallery, plus Agent Skills (`SKILL.md`).
   When one that isn't on would help, the chat offers it, and carries on once it's on.
+  **Discover** adds skills people share (Anthropic's, ClawHub, skills.sh), each read
+  in full, pinned to the version you read and held to what it says it needs.
   What they find shows as it is: a calendar as days, emails, files and messages.
 - **Apps it makes for you.** Say what you want ("remember when I water my plants"),
   and Conch builds an app: tools every model can use, a page that looks like Conch,
