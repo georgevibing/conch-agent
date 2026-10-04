@@ -36,7 +36,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useLocation, useNavigate, useParams } from 'react-router';
 
 import { useAppState, useConversations } from '../../api/queries';
 import { useUi } from '../../app/ui';
@@ -181,6 +181,7 @@ export function Palette() {
   const openFind = useUi((s) => s.openFind);
   const theme = useNacreTheme();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { conversationId: currentId } = useParams();
   const { data: conversations } = useConversations();
   const [query, setQuery] = useState('');
@@ -242,7 +243,9 @@ export function Palette() {
       label: 'How much usage do I have left?',
       icon: <Gauge />,
       keywords: 'limits quota plan',
-      run: () => setUsageOpen(true),
+      // In a chat, its provider's limits; anywhere else, every provider's.
+      run: () =>
+        pathname === '/' || pathname.startsWith('/c/') ? setUsageOpen(true) : openSettings('usage'),
     },
     {
       id: 'theme',
