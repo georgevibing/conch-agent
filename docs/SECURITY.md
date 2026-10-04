@@ -408,7 +408,10 @@ address, so for them Conch can open one ([ADR 0045](./adr/0045-teams-matrix-wech
   it learns about you in a chat that read something from outside is said in the
   chat, with **Undo**, and notes where it came from; when nobody is there to see
   it (a routine, a chat app), it waits for your OK in **What Conch knows about
-  you** before it's ever used.
+  you** before it's ever used. A memory that looks planted — an address you never
+  typed, where invoices go, an order to follow, a password — isn't saved at all:
+  the chat shows it, says why and where it came from, and asks you
+  ([ADR 0087](./adr/0087-the-memory-check.md)).
 - Use a password manager.
 - Sign out devices you don't use.
 

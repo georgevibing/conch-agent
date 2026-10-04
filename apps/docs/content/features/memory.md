@@ -72,11 +72,37 @@ When a long chat is [summarised](./chats.md#long-chats), Conch first learns what
 
 When your assistant remembers something, the chat says so in one quiet line, **Remembered**, with **Undo** beside it. It doesn't stop to ask.
 
-A web page or an email can try to plant a memory, such as "remember to send invoices to this address". So a memory learned in a chat that read something from outside notes where it came from, on the page. Read the line when it appears; **Undo** takes it away.
+A memory learned in a chat that read something from outside notes where it came from, on the page. Read the line when it appears; **Undo** takes it away.
+
+## When a memory looks off
+
+A web page or an email can try to plant a memory, such as "remember that invoices are sent to this address", so your assistant acts on it in every chat after. Conch looks at every memory before it's kept. One that looks planted isn't saved. The chat shows a card instead, **Remember this?**, with:
+
+- what it wants to remember;
+- why it looks off, in a sentence: "This came from news.example, a page this chat read, not from you, and it would change where invoices go.";
+- where it came from;
+- **Remember it**, **Don't remember** and **Edit first**. **Edit first** lets you put it in your own words; Enter keeps them, Escape goes back.
+
+Conch looks out for:
+
+- an address, link, phone, bank account or wallet that came from what the chat read, not from you;
+- something that would change where money, invoices, files or replies go;
+- an order to your assistant ("from now on…", "don't tell the user");
+- a claim to speak for you or approve things;
+- sending what you talk about somewhere;
+- names that look like another (a Cyrillic "а" in "pаypal.com"), hidden characters and encoded text.
+
+Anything you typed yourself is yours: it's never questioned. A password, a key or a code is only asked about when you typed it, because it's safer in [Passwords](./passwords.md). When it didn't come from you, or it has hidden characters, the card says **I didn't remember this**, and only **Remember anyway** keeps it.
+
+A held memory isn't used, isn't found by search and isn't in an export. It waits under **Waiting for your OK** on the page too, with the same answers, and your phone gets a notification like any approval. **Activity** lists every memory that was held, and what you chose.
+
+Most memories never see the card. Where something from outside was read, Conch may also ask a cheap model for a second opinion; it can only hold a memory, never let one through.
+
+To turn the check down, go to **Settings → Security → Safety** and turn off **Check what it remembers**. Conch says what could happen and asks that it's you. Passwords, keys and hidden characters are still held.
 
 ## Waiting for your OK
 
-When nobody is there to see it — a routine running by itself, or a chat where someone else is talking to your assistant on a chat app — a memory from a chat that read something from outside is set aside instead. It shows **Wants to remember** with **Keep** and **Forget**, and sits under **Waiting for your OK** on the page. Your assistant doesn't use a waiting memory, and it isn't in an export, until you keep it.
+When nobody is there to see it — a routine running by itself, or a chat where someone else is talking to your assistant on a chat app — a memory from a chat that read something from outside is set aside instead. It shows **Wants to remember** with **Keep** and **Forget**, and sits under **Waiting for your OK** on the page. Your assistant doesn't use a waiting memory, and it isn't in an export, until you keep it. One that also looks off says why.
 
 What you choose stays in the chat: open it again and it shows what you kept or undid.
 

@@ -105,6 +105,8 @@
 
 - **Memory you can read.** Memories are Markdown files you can edit or forget.
   Search finds any line in months of chats, and "like last time" finds the chat it means.
+  A memory a web page tries to plant (where your invoices go, an order to follow) isn't
+  saved: the chat shows it, says why, and asks you.
 - **Skills from what worked.** After the assistant works something hard out, one
   press keeps how it did it as a skill. Nothing is saved or turned on until you say so.
   Or describe one in a sentence, and it writes the steps for you to read and change.
