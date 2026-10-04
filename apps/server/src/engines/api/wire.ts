@@ -16,6 +16,7 @@ import type { z } from 'zod';
 
 import { isLoopbackUrl, isPrivateUrl } from '../../local/host';
 import type { Completion, EngineUsage, Picture, ToolImage } from '../types';
+import type { SchemaFamily } from './schemas';
 import {
   ApiError,
   type FetchLike,
@@ -57,16 +58,19 @@ export interface Wire {
   /** A small, cheap model from the last list the provider gave us, if it has one. */
   smallModel(): string | undefined;
   /**
-   * Whether this model can call tools, from the last list. `false` means the
-   * turn goes without them (and the model is told so); unset means yes.
+   * Whether this model can call tools natively, from the provider's list (a
+   * lookup in its full catalogue may be needed). `false` means its tools go
+   * in the prompt instead (ADR 0069); unset means yes (ADR 0050).
    */
-  toolsFor?(model: string): boolean | undefined;
+  toolsFor?(model: string): boolean | undefined | Promise<boolean | undefined>;
   /**
    * Whether this model can look at pictures (ADR 0070): what the provider's
    * list says, else whether the provider takes pictures at all. Undefined
    * means no.
    */
   seesFor?(model: string): boolean | undefined;
+  /** The schema dialect this model's provider reads (ADR 0069). Unset is `permissive`. */
+  schemaFamily?(model: string): SchemaFamily;
 }
 
 /** Effort levels Conch's protocol knows about (everything but `auto`). */

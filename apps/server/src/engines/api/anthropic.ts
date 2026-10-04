@@ -21,6 +21,8 @@ import { z } from 'zod';
 import type { Completion, Picture } from '../types';
 import { tooLong, windowIn } from './context';
 import { refusesImages } from './pictures';
+import { refusalError, toolRefusal } from './refusals';
+import type { SchemaFamily } from './schemas';
 import { sseEvents } from './sse';
 import { defaultHome } from './session';
 import {
@@ -212,9 +214,17 @@ export class AnthropicWire implements Wire {
     };
   }
 
-  async #fail(response: Response, key?: string): Promise<ApiError> {
+  async #fail(response: Response, key?: string, tools = false): Promise<ApiError> {
     const body = await text(response, LABEL).catch(() => '');
     const parsed = ErrorBody.safeParse(safeJson(body));
+    // A tool's schema it won't read: the engine simplifies it and asks again (ADR 0069).
+    if (
+      tools &&
+      response.status === 400 &&
+      parsed.success &&
+      toolRefusal(parsed.data.error.message ?? '') === 'schema'
+    )
+      return refusalError('schema', LABEL);
     return mapError(
       response.status,
       parsed.success ? parsed.data.error : undefined,
@@ -298,6 +308,11 @@ export class AnthropicWire implements Wire {
     return true;
   }
 
+  /** JSON Schema, with one object at the root (ADR 0072). */
+  schemaFamily(): SchemaFamily {
+    return 'anthropic';
+  }
+
   userMessage(content: string, images?: readonly Picture[]): WireMessage {
     if (!images?.length) return { role: 'user', content };
     return { role: 'user', content: [...images.map(imageBlock), { type: 'text', text: content }] };
@@ -359,7 +374,7 @@ export class AnthropicWire implements Wire {
       key: request.key,
       signal: request.signal,
     });
-    if (!response.ok) throw await this.#fail(response, request.key);
+    if (!response.ok) throw await this.#fail(response, request.key, request.tools.length > 0);
     if (!response.body) throw new ApiError('network', `${LABEL} sent an empty reply.`);
 
     /** Blocks in the order the model sent them, kept whole for replay. */

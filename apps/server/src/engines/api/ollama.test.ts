@@ -224,7 +224,7 @@ describe('Ollama, streamed', () => {
     });
   });
 
-  it('asks again without tools when the model can’t use them, and remembers', async () => {
+  it('tells the engine a model can’t take tools (it gives them in words), and remembers', async () => {
     const { link: l, calls } = link((call) =>
       (call.body as { tools?: unknown }).tools
         ? jsonResponse(
@@ -236,15 +236,11 @@ describe('Ollama, streamed', () => {
     // /api/show said it could; Ollama knows better.
     const liar = { ...GEMMA, tools: true };
     const wire = await ready({ ...l, models: async () => [liar] });
-    const events = await drain(wire.stream(request({ model: 'gemma3:1b' })));
+    const error = await failure(drain(wire.stream(request({ model: 'gemma3:1b' }))));
 
-    expect(events.find((e) => e.type === 'notice')).toMatchObject({ code: 'no-tools' });
-    expect(events.at(-1)).toMatchObject({ type: 'end', message: { content: 'Hi' } });
-    expect(calls).toHaveLength(2);
+    expect(error.kind).toBe('tools');
+    expect(calls).toHaveLength(1);
     expect(wire.toolsFor('gemma3:1b')).toBe(false);
-    await drain(wire.stream(request({ model: 'gemma3:1b' })));
-    expect(calls).toHaveLength(3);
-    expect(calls[2]?.body).not.toHaveProperty('tools');
   });
 
   it('asks again without thinking when the model can’t', async () => {
@@ -373,9 +369,13 @@ describe('the local engine', () => {
     run: async () => 'Saved.',
   };
 
-  async function engine(handler: Parameters<typeof fakeFetch>[0], models?: LocalModel[]) {
+  async function engine(
+    handler: Parameters<typeof fakeFetch>[0],
+    models?: LocalModel[],
+    { context }: { context?: number } = {},
+  ) {
     const { home, settings, keys } = await fakeHome();
-    const { link: l, calls } = link(handler, {}, models);
+    const { link: l, calls } = link(handler, context ? { contextFor: () => context } : {}, models);
     return { engine: new ApiEngine(ollamaVariant(l, { home }), settings, keys), calls };
   }
 
@@ -451,16 +451,34 @@ describe('the local engine', () => {
     );
   });
 
-  it('gives a model that can’t use tools none, and tells it so', async () => {
+  it('gives a model that can’t take tools natively its tools in words (ADR 0069)', async () => {
     const { engine: e, calls } = await engine(() => lines(done()), [GEMMA]);
     await e.capabilities();
-    await collect(e.runTurn(turn({ options: { ...turn().options, model: 'gemma3:1b' } })));
+    const events = await collect(
+      e.runTurn(turn({ options: { ...turn().options, model: 'gemma3:1b' } })),
+    );
+    const body = calls[0]?.body as { tools?: unknown; messages: { content: string }[] };
+    expect(body.tools).toBeUndefined();
+    const system = body.messages[0]?.content ?? '';
+    expect(system).toMatch(/running on this computer, through Ollama/);
+    expect(system).toContain('You have Conch’s tools for files');
+    expect(system).toContain('<tool_call>');
+    expect(system).toMatch(/^- Read\(/m);
+    expect(events.find((e) => e.type === 'notice' && e.code === 'chat-only')).toBeUndefined();
+  });
+
+  it('is chat-only, and says so, only when even the shortest list of tools won’t fit', async () => {
+    const { engine: e, calls } = await engine(() => lines(done()), [GEMMA], { context: 200 });
+    await e.capabilities();
+    const events = await collect(
+      e.runTurn(turn({ options: { ...turn().options, model: 'gemma3:1b' } })),
+    );
     const body = calls[0]?.body as { tools?: unknown; messages: { content: string }[] };
     expect(body.tools).toBeUndefined();
     expect(body.messages[0]?.content).toMatch(/You have no tools in this conversation/);
-    expect(body.messages[0]?.content).toMatch(/running on this computer, through Ollama/);
     expect(body.messages[0]?.content).toContain('you cannot read or write them');
-    expect(body.messages[0]?.content).not.toContain('You have Conch’s tools for files');
+    expect(body.messages[0]?.content).not.toContain('<tool_call>');
+    expect(events.find((e) => e.type === 'notice')).toMatchObject({ code: 'chat-only' });
   });
 
   it('reports usage as free', async () => {

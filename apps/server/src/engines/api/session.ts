@@ -20,6 +20,7 @@ import { z } from 'zod';
 import { Mutex, readJson, safeJoin, writeJson } from '../../lib/fs';
 import { newId } from '../../lib/ids';
 import { isToolPictures } from './pictures';
+import { isPromptedResults } from './prompted';
 import type { ApiProviderId, WireMessage } from './types';
 
 /**
@@ -82,12 +83,14 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 /**
  * Whether a message opens a new turn. A user message does — unless it only
  * carries tool results, which is how Anthropic answers a tool call, or a
- * tool's pictures (ADR 0070): both are the middle of a turn, not the start.
+ * tool's pictures (ADR 0070), or answers to calls asked for in words (ADR
+ * 0072): all are the middle of a turn, not the start.
  */
 export function startsTurn(message: WireMessage): boolean {
   if (message['role'] !== 'user') return false;
   if (isToolPictures(message)) return false;
   const content = message['content'];
+  if (isPromptedResults(content)) return false;
   if (!Array.isArray(content)) return true;
   return !content.every((block) => isRecord(block) && block['type'] === 'tool_result');
 }

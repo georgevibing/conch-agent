@@ -35,6 +35,8 @@ import {
 } from './chat';
 import { tooLong, windowIn } from './context';
 import { refusesImages } from './pictures';
+import { refusalError, toolRefusal } from './refusals';
+import type { SchemaFamily } from './schemas';
 import {
   ApiError,
   TOO_LONG,
@@ -114,6 +116,8 @@ export interface ChatPreset {
   rank?: readonly RegExp[];
   /** A small, cheap model among the listed ones, for naming chats. */
   small?: RegExp;
+  /** The schema dialect its models read (ADR 0069). Default . */
+  schemas?: SchemaFamily;
   /** Models that can't call tools in this API, whatever the list says. */
   noTools?: RegExp;
   /**
@@ -473,22 +477,6 @@ export function mapChatError(
   return new ApiError('other', said || `${label} couldn’t answer that request.`);
 }
 
-/** A 400 that only means "this model can't do that": tools, or a thinking level. */
-function refusalOf(error: ChatError | undefined): 'tools' | 'effort' | undefined {
-  const words = `${errorKind(error)} ${error?.message ?? ''}`.toLowerCase();
-  if (
-    /(tool|function)/.test(words) &&
-    /(not support|unsupported|does not|doesn't|cannot|not available|not enabled)/.test(words)
-  )
-    return 'tools';
-  if (
-    /(reasoning|thinking|effort)/.test(words) &&
-    /(not support|unsupported|invalid|unknown|unrecognized|not allowed)/.test(words)
-  )
-    return 'effort';
-  return undefined;
-}
-
 export class OpenAiWire implements Wire {
   readonly source: string;
   #fetch: FetchLike;
@@ -684,6 +672,11 @@ export class OpenAiWire implements Wire {
     return [...this.#models.values()].find((m) => small.test(m.id) && (m.tools ?? true))?.id;
   }
 
+  schemaFamily(model: string): SchemaFamily {
+    // A preset that says, else a Gemini model behind someone's own server.
+    return this.preset.schemas ?? (/(^|\/)gemini/i.test(model) ? 'gemini' : 'permissive');
+  }
+
   toolsFor(model: string): boolean | undefined {
     if (this.#noTools.has(model) || this.preset.noTools?.test(model)) return false;
     const known = this.#models.get(model);
@@ -717,7 +710,7 @@ export class OpenAiWire implements Wire {
     return this.preset.effortBody?.(effort, model) ?? { reasoning_effort: effort };
   }
 
-  #body(request: WireRequest, tools: boolean): Record<string, unknown> {
+  #body(request: WireRequest): Record<string, unknown> {
     return {
       model: request.model,
       messages: [
@@ -728,33 +721,35 @@ export class OpenAiWire implements Wire {
       ],
       stream: true,
       ...(this.preset.usageOption !== false && { stream_options: { include_usage: true } }),
-      ...(tools ? chatTools(request.tools) : {}),
+      ...chatTools(request.tools),
       ...this.#effort(request),
       ...this.preset.extraBody,
     };
   }
 
-  async #chat(request: WireRequest): Promise<{ response: Response; droppedTools: boolean }> {
-    let tools = request.tools.length > 0 && !this.#noTools.has(request.model);
-    let droppedTools = false;
+  /**
+   * Ask, healing a thinking level the model refuses. A refusal over tools is
+   * the engine's to heal (ADR 0069): a schema it simplifies, a model without
+   * tools it gives them in words. Neither ever drops them silently.
+   */
+  async #chat(request: WireRequest): Promise<Response> {
+    const tools = request.tools.length > 0;
     for (let attempt = 0; attempt < 3; attempt++) {
       const response = await this.#send(
         `${this.endpoint.base}/chat/completions`,
         'POST',
         request.key || undefined,
-        this.#body(request, tools),
+        this.#body(request),
         request.signal,
       );
-      if (response.ok) return { response, droppedTools };
-      if (response.status === 400 || response.status === 422) {
+      if (response.ok) return response;
+      if (response.status === 400 || response.status === 404 || response.status === 422) {
         const body = await text(response, this.preset.label).catch(() => '');
         const error = errorIn(body);
-        const refusal = refusalOf(error);
-        if (refusal === 'tools' && tools) {
-          this.#noTools.add(request.model);
-          tools = false;
-          droppedTools = true;
-          continue;
+        const refusal = toolRefusal(`${errorKind(error)} ${error?.message ?? ''}`);
+        if (tools && (refusal === 'schema' || refusal === 'tools')) {
+          if (refusal === 'tools') this.#noTools.add(request.model);
+          throw refusalError(refusal, this.preset.label);
         }
         if (
           refusal === 'effort' &&
@@ -772,13 +767,7 @@ export class OpenAiWire implements Wire {
   }
 
   async *stream(request: WireRequest): AsyncIterable<WireEvent> {
-    const { response, droppedTools } = await this.#chat(request);
-    if (droppedTools)
-      yield {
-        type: 'notice',
-        code: 'no-tools',
-        message: `${this.#models.get(request.model)?.name ?? request.model} can’t use tools, so it’s answering without your apps and memory.`,
-      };
+    const response = await this.#chat(request);
     if (!response.body) throw new ApiError('network', `${this.preset.label} sent an empty reply.`);
     yield* readChatStream(response.body, request.signal, {
       label: this.preset.label,

@@ -71,8 +71,10 @@ import {
   UNSEEN_PICTURE,
   wordsForPictures,
 } from './pictures';
-import { sessionsDir, TranscriptStore, type Session } from './session';
 import { describeOrSay, withSight } from './sight';
+import { UNREADABLE, UNREADABLE_MESSAGE } from './prompted';
+import { sessionsDir, TranscriptStore, type Session } from './session';
+import { ToolPlan, type ToolLessons } from './toolplan';
 import {
   ApiError,
   type ApiVariant,
@@ -259,7 +261,7 @@ export function buildTools(input: TurnInput, { computer = true } = {}): Map<stri
       spec: hostToolSpec(host, name),
       display,
       run: async (raw, id) => {
-        // Read forgivingly, checked strictly; what's authorised is what runs (ADR 0069).
+        // Read forgivingly, checked strictly; what's authorised is what runs (ADR 0072).
         const checked = checkHostArgs(host, raw, name);
         if (!checked.ok) return { text: checked.message, isError: true };
         const denied = await authorizeTool(input, display, checked.args, id);
@@ -337,6 +339,8 @@ export class ApiEngine implements Engine {
   #learned = new Map<string, number>();
   /** Models that refused a picture though nothing said they would: blind from then on (ADR 0070). */
   #blind = new Set<string>();
+  /** Models that refused a schema, or tools, and how they take them now (ADR 0072). */
+  #toolLessons: ToolLessons = new Map();
   /** A `/compact` in progress, by session: a turn waits for it rather than racing it. */
   #compacting = new Map<string, Promise<unknown>>();
   /** Conch keeps the transcript, so Conch fits long chats into the window (ADR 0055). */
@@ -703,37 +707,38 @@ export class ApiEngine implements Engine {
             )
           : this.variant.wire.userMessage(input.prompt, input.images),
       );
-      // A model that can't call tools (some small local ones) is never shown any.
-      const canCall =
-        this.variant.wire.toolsFor?.(model) ??
-        (await this.capabilities()).models.find((m) => m.id === model)?.tools ??
-        false;
-      if (!canCall)
-        yield {
-          type: 'notice',
-          code: 'chat-only',
-          message:
-            'This model is chat-only: it cannot use files, commands, memory or connected apps. Choose a tool-capable model for actions.',
-        };
-      // A tool's pictures reach a model that sees them; the rest get them in words (ADR 0070).
-      const tools = canCall
-        ? withSight(buildTools(input), {
-            sees,
-            ...(input.describe && { describe: input.describe }),
-            signal: input.signal,
-            spent,
-          })
-        : new Map<string, Callable>();
-      const specs = [...tools.values()].map((tool) => tool.spec);
-      // Conch's browser is the one way out to the web; the note mustn't deny it when it's there.
-      const canBrowse = canCall && input.tools.some((t) => t.name.startsWith('browser_'));
-      const note = capabilitiesNote({
-        canBrowse,
-        tools: canCall,
-        computer: canCall,
-        ...(this.variant.where && { where: this.variant.where }),
+      // Every model gets its tools: natively, else in words; chat-only only when
+      // even the shortest list won't fit (ADR 0072). Unknown counts as able (ADR 0050).
+      // A tool’s pictures reach a model that sees them natively; the rest, and a model
+      // using its tools in words (whose answers are text), get them in words (ADR 0070, 0072).
+      const tools = withSight(buildTools(input), {
+        sees: () => plan.mode === 'native' && sees(),
+        ...(input.describe && { describe: input.describe }),
+        signal: input.signal,
+        spent,
       });
-      const system = [input.systemAppend.trim(), note].filter(Boolean).join('\n\n');
+      const plan = new ToolPlan({
+        tools,
+        native:
+          (await this.variant.wire.toolsFor?.(model)) ??
+          (await this.capabilities()).models.find((m) => m.id === model)?.tools ??
+          true,
+        family: this.variant.wire.schemaFamily?.(model) ?? 'permissive',
+        window: await this.#window(model),
+        model,
+        lessons: this.#toolLessons,
+      });
+      if (plan.notice) yield plan.notice;
+      const systemFor = () => {
+        // Conch's browser is the one way out to the web; the note mustn't deny it when it's there.
+        const note = capabilitiesNote({
+          canBrowse: plan.usable && input.tools.some((t) => t.name.startsWith('browser_')),
+          tools: plan.usable,
+          computer: plan.usable,
+          ...(this.variant.where && { where: this.variant.where }),
+        });
+        return plan.system([input.systemAppend.trim(), note].filter(Boolean).join('\n\n'));
+      };
       const save = () =>
         this.#sessions
           .save(sessionId, {
@@ -749,8 +754,8 @@ export class ApiEngine implements Engine {
         session,
         model,
         label: listed?.label ?? model,
-        system,
-        specs,
+        system: systemFor(),
+        specs: plan.specs(),
         signal: input.signal,
         spent,
       };
@@ -780,16 +785,16 @@ export class ApiEngine implements Engine {
         const request: WireRequest = {
           key,
           model,
-          system,
-          messages: withSummary(session.messages, session.summary?.text),
+          system: fitting.system,
+          messages: plan.history(withSummary(session.messages, session.summary?.text)),
           // Tools go on every request in the loop, including the one carrying
           // results — leave them off and the model forgets it has any.
-          tools: specs,
+          tools: fitting.specs,
           effort: input.options.effort,
           signal: input.signal,
         };
         try {
-          for await (const event of this.#stream(request)) {
+          for await (const event of plan.read(this.#stream(request))) {
             if (event.type === 'notice') {
               yield event;
             } else if (event.type === 'text' || event.type === 'thinking') {
@@ -821,6 +826,14 @@ export class ApiEngine implements Engine {
             await save();
             continue;
           }
+          // Refused over its tools before a word was said: a plainer schema, else tools in words.
+          const mended = said || input.signal.aborted ? undefined : plan.heal(error);
+          if (mended) {
+            if (mended.notice) yield mended.notice;
+            fitting.system = systemFor();
+            fitting.specs = plan.specs();
+            continue;
+          }
           // "Too long" before a word was said: fold harder and ask once more, quietly.
           if (
             healed ||
@@ -842,7 +855,9 @@ export class ApiEngine implements Engine {
           session.factor = calibrate(
             session.factor,
             end.usage.inputTokens,
-            estimateTokens(system) + estimateTokens(specs) + estimateTokens(request.messages),
+            estimateTokens(request.system) +
+              estimateTokens(request.tools) +
+              estimateTokens(request.messages),
           );
         total.inputTokens += end.usage?.inputTokens ?? 0;
         total.outputTokens += end.usage?.outputTokens ?? 0;
@@ -905,7 +920,7 @@ export class ApiEngine implements Engine {
             ...(view && { view }),
           };
         }
-        session.messages.push(...this.variant.wire.toolResults(results));
+        session.messages.push(...plan.results(this.variant.wire, results));
         await save();
         if (stopped) {
           yield { type: 'done', outcome: 'interrupted', usage: usage() };
@@ -1177,6 +1192,7 @@ export class ApiEngine implements Engine {
     call: { name: string; id: string },
     input: TurnInput,
   ): Promise<{ text: string; status: ToolStatus; view?: ToolView; images?: ToolImage[] }> {
+    if (call.name === UNREADABLE) return { text: UNREADABLE_MESSAGE, status: 'error' };
     if ('problem' in read) return { text: read.problem, status: 'error' };
     if (!tool) {
       return {
@@ -1234,7 +1250,7 @@ export class ApiEngine implements Engine {
 
 /**
  * Arguments from the model are untrusted text: a bad one is a tool error, not
- * a crash. Almost-JSON is mended (ADR 0069); undefined when there's nothing to read.
+ * a crash. Almost-JSON is mended (ADR 0072); undefined when there's nothing to read.
  */
 export function parseArgs(json: string): Record<string, unknown> | undefined {
   const read = readArgs(json);

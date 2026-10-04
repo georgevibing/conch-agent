@@ -342,6 +342,9 @@ export function readable(message: WireMessage): string[] {
   const content = message.content;
   if (isToolPictures(message)) {
     lines.push('Tool result: [a picture]');
+  } else if (message.role === 'user' && !startsTurn(message) && typeof content === 'string') {
+    // Tool answers to calls asked for in words (ADR 0072).
+    lines.push(`Tool result: ${clipMiddle(content.trim(), TOOL_CLIP)}`);
   } else if (message.role === 'user') {
     const said = blocksText(content);
     const pictures = Array.isArray(message.images) && message.images.length ? '[a picture]' : '';

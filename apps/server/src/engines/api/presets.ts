@@ -153,9 +153,11 @@ export const PRESETS: readonly Preset[] = [
     hide: /(embedding|aqa|imagen|veo|tts|native-audio|live|image|robotics|computer-use|learnlm)/i,
     rank: [/^gemini-\d/, /^gemma/],
     small: /flash-lite|flash/,
-    // Gemma on the Gemini API has no function calling.
+    // Gemma on the Gemini API has no function calling: its tools go in the prompt (ADR 0069).
     noTools: /^gemma/,
     sees: true,
+    // The OpenAI endpoint reads only Gemini's OpenAPI subset of JSON Schema.
+    schemas: 'gemini',
     efforts: (model) => (model.thinking ? ['low', 'medium', 'high'] : []),
   },
   {

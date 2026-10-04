@@ -45,6 +45,7 @@ import {
   type WireToolCall,
   type WireUsage,
 } from './types';
+import { refusalError } from './refusals';
 import { send, text, validate, type ToolResult, type Wire } from './wire';
 
 /** What the person calls this provider (the picker's group, the chat's sentences). */
@@ -269,7 +270,7 @@ export class OllamaWire implements Wire {
     }
   }
 
-  #body(request: WireRequest, options: { tools: boolean; think: boolean }) {
+  #body(request: WireRequest, options: { think: boolean }) {
     const model = this.#models.get(request.model);
     const think = options.think ? thinkFor(model, request.effort) : undefined;
     return {
@@ -277,33 +278,38 @@ export class OllamaWire implements Wire {
       messages: [{ role: 'system', content: request.system }, ...request.messages],
       stream: true,
       options: { num_ctx: this.link.contextFor(request.model) },
-      ...(options.tools &&
-        request.tools.length && {
-          tools: request.tools.map((tool) => ({
-            type: 'function',
-            function: { name: tool.name, description: tool.description, parameters: tool.schema },
-          })),
-        }),
+      ...(request.tools.length && {
+        tools: request.tools.map((tool) => ({
+          type: 'function',
+          function: { name: tool.name, description: tool.description, parameters: tool.schema },
+        })),
+      }),
       ...(think !== undefined && { think }),
     };
   }
 
-  /** Ask, healing the two refusals that only mean "this model can't do that". */
+  /**
+   * Ask, healing a model that doesn't think. One that takes no tools is
+   * remembered and told to the engine, which gives it its tools in words
+   * instead (ADR 0069).
+   */
   async #chat(request: WireRequest): Promise<Response> {
-    let tools = !this.#noTools.has(request.model);
     let think = !this.#noThinking.has(request.model);
     for (let attempt = 0; attempt < 3; attempt++) {
       const response = await this.#post(
         '/api/chat',
-        this.#body(request, { tools, think }),
+        this.#body(request, { think }),
         request.signal,
       );
       if (response.ok) return response;
       const message = await errorOf(response);
-      if (response.status === 400 && tools && /does not support tools/i.test(message)) {
+      if (
+        response.status === 400 &&
+        request.tools.length &&
+        /does not support tools/i.test(message)
+      ) {
         this.#noTools.add(request.model);
-        tools = false;
-        continue;
+        throw refusalError('tools', this.#label(request.model));
       }
       if (response.status === 400 && think && /does not support think/i.test(message)) {
         this.#noThinking.add(request.model);
@@ -320,7 +326,6 @@ export class OllamaWire implements Wire {
   }
 
   async *stream(request: WireRequest): AsyncIterable<WireEvent> {
-    const toolsBefore = !this.#noTools.has(request.model);
     // A model that isn't in memory takes a few seconds to load: say so, rather than a silent spinner.
     if (!(await this.link.loaded(request.model).catch(() => true))) {
       yield {
@@ -330,13 +335,6 @@ export class OllamaWire implements Wire {
       };
     }
     const response = await this.#chat(request);
-    if (toolsBefore && this.#noTools.has(request.model) && request.tools.length) {
-      yield {
-        type: 'notice',
-        code: 'no-tools',
-        message: `${this.#label(request.model)} can’t use tools, so it’s answering without your apps and memory.`,
-      };
-    }
     if (!response.body) throw new ApiError('network', 'Ollama sent an empty reply.');
 
     let content = '';

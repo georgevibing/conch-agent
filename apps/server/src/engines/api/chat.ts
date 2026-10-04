@@ -46,7 +46,12 @@ export const ChatError = z.object({
   type: z.string().nullish(),
   status: z.union([z.number(), z.string()]).nullish(),
   metadata: z
-    .object({ error_type: z.string().nullish(), limit_source: z.string().nullish() })
+    .object({
+      error_type: z.string().nullish(),
+      limit_source: z.string().nullish(),
+      /** What the provider behind a router said, word for word (OpenRouter). */
+      raw: z.unknown().nullish(),
+    })
     .nullish(),
 });
 export type ChatError = z.infer<typeof ChatError>;
