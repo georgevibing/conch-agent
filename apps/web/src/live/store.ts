@@ -1,7 +1,7 @@
 import type { Attachment, ConversationEvent, LoginState } from '@conch/protocol';
 import { create } from 'zustand';
 
-import { emptyView, reduce, type ConversationView } from './reducer';
+import { decided, emptyView, reduce, type ConversationView } from './reducer';
 
 export type ConnectionState = 'connecting' | 'open' | 'reconnecting';
 
@@ -37,6 +37,12 @@ interface LiveState {
   apply(event: ConversationEvent): void;
   /** Stop pressed: the chat shows it stopped now, before the gateway says so. */
   stop(key: string): void;
+  /** An approval answered: the card shows the answer now; the gateway's echo says the same. */
+  decide(
+    conversationId: string,
+    permissionId: string,
+    decision: 'allow' | 'allow-always' | 'deny',
+  ): void;
   addPending(key: string, message: PendingMessage): void;
   dropPending(key: string, clientMessageId: string): void;
   /** Drop a pending message and hand its text back to the composer. */
@@ -87,6 +93,13 @@ export const useLiveStore = create<LiveState>((set) => ({
       };
     }),
   stop: (key) => set((state) => ({ stopping: { ...state.stopping, [key]: Date.now() } })),
+  decide: (conversationId, permissionId, decision) =>
+    set((state) => {
+      const view = state.views[conversationId];
+      if (!view) return state;
+      const next = decided(view, permissionId, decision);
+      return next === view ? state : { views: { ...state.views, [conversationId]: next } };
+    }),
   addPending: (key, message) =>
     set((state) => ({
       pending: { ...state.pending, [key]: [...(state.pending[key] ?? []), message] },

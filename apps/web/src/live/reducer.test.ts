@@ -2,6 +2,7 @@ import type { ConversationEvent, ConversationEventInput, ToolView } from '@conch
 import { describe, expect, it } from 'vitest';
 
 import {
+  decided,
   emptyView,
   heldMessage,
   lastUserText,
@@ -474,5 +475,36 @@ describe('Stop, drawn at once (stoppedView)', () => {
     } as ConversationEvent);
     const view = stoppedView(ended, 5000);
     expect(view.items.filter((i) => i.kind === 'turn-end')).toHaveLength(1);
+  });
+});
+
+describe('an approval, answered at once (decided)', () => {
+  const asking = () =>
+    reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'Tidy up' },
+        { type: 'status', status: 'running' },
+        {
+          type: 'permission.requested',
+          permissionId: 'p1',
+          toolName: 'Bash',
+          summary: 'Run rm',
+          input: {},
+        },
+        { type: 'status', status: 'awaiting-permission' },
+      ),
+    );
+
+  it('folds the card and carries on before the gateway echoes it', () => {
+    const view = decided(asking(), 'p1', 'allow');
+    expect(pendingPermission(view)).toBeUndefined();
+    expect(view.items.find((i) => i.kind === 'permission')).toMatchObject({ decision: 'allow' });
+    expect(view.status).toBe('running');
+  });
+
+  it('an answer that already came stays as it was', () => {
+    const view = asking();
+    const expired = decided(decided(view, 'p1', 'deny'), 'p1', 'allow');
+    expect(expired.items.find((i) => i.kind === 'permission')).toMatchObject({ decision: 'deny' });
   });
 });

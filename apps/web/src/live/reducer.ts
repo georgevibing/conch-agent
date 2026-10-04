@@ -962,6 +962,27 @@ export function heldMessage(view: ConversationView) {
 }
 
 /**
+ * An approval answered here, drawn before the gateway's `permission.resolved`
+ * (which says the same): the card folds to its line, and with nothing else
+ * waiting on you the reply carries on.
+ */
+export function decided(
+  view: ConversationView,
+  permissionId: string,
+  decision: 'allow' | 'allow-always' | 'deny',
+): ConversationView {
+  const items = updateItem(view.items, 'permission', permissionId, (item) =>
+    item.decision ? item : { ...item, decision },
+  );
+  if (!items) return view;
+  const next = { ...view, items };
+  const stillWaiting = pendingPermission(next) || pendingQuestion(next);
+  return view.status === 'awaiting-permission' && !stillWaiting
+    ? { ...next, status: 'running' }
+    : next;
+}
+
+/**
  * The chat as it will be once a Stop pressed at `at` lands, drawn straight
  * away: the reply ends where it is, a running tool says it stopped, a waiting
  * question or approval is put away, and the turn says "Stopped". Messages not

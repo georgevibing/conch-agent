@@ -345,6 +345,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         startedNew.current = [];
       },
       respond(conversationId, permissionId, decision) {
+        useLiveStore.getState().decide(conversationId, permissionId, decision);
         socketRef.current?.send({
           type: 'permission.respond',
           conversationId,
