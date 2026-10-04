@@ -1,5 +1,6 @@
 export {
   MeaningSearch,
+  MemoryCheck,
   MemoryItem,
   MemoryList,
   SkillSuggestionCard,
@@ -9,6 +10,7 @@ export {
   memorySourceLabels,
   type MeaningSearchProps,
   type MeaningSearchState,
+  type MemoryCheckProps,
   type MemoryItemProps,
   type MemoryKindName,
   type MemorySourceName,

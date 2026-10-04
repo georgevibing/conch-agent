@@ -28,6 +28,7 @@ export type BackupPowerInfo =
   | { kind: 'integration-never-asks'; name: string }
   | { kind: 'tools-never-ask'; name: string; tools: string[]; more?: number }
   | { kind: 'chats-never-ask' }
+  | { kind: 'safety-off'; checks: string[] }
   | { kind: 'routine-never-asks'; name: string }
   | { kind: 'routines-spend'; limitUsd: number | null }
   | { kind: 'routine-acts-on-events'; name: string }
@@ -77,6 +78,11 @@ export function powerWords(power: BackupPowerInfo): PowerWords {
       };
     case 'chats-never-ask':
       return { subject: 'New chats', text: 'Let Conch act without asking you first' };
+    case 'safety-off':
+      return {
+        subject: 'Safety',
+        text: `Turns off ${power.checks.length === 1 ? 'a check' : 'checks'}: ${power.checks.join(', ')}`,
+      };
     case 'routine-never-asks':
       return {
         subject: power.name,

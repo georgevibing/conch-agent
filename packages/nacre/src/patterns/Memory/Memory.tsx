@@ -1,10 +1,12 @@
 import {
+  Brain,
   CircleAlert,
   CircleHelp,
   Download,
   Lightbulb,
   Route,
   ShieldAlert,
+  ShieldX,
   Sparkles,
 } from 'lucide-react';
 import { useId, type ComponentProps, type ReactNode } from 'react';
@@ -45,6 +47,11 @@ export interface MemoryItemProps extends Omit<ComponentProps<'li'>, 'children'> 
   kind?: MemoryKindName;
   /** It waits for your OK (ADR 0032): why, in a sentence. */
   waiting?: ReactNode;
+  /**
+   * The memory check held it (ADR 0087): why it looks off, in a sentence or
+   * two, and where it came from. Shown instead of `waiting`'s line.
+   */
+  held?: { reasons: string[]; from?: string; refused?: boolean };
   /** Edit, Forget; or Keep, Forget while it waits. */
   actions?: ReactNode;
 }
@@ -60,18 +67,33 @@ export function MemoryItem({
   time,
   kind,
   waiting,
+  held,
   actions,
   className,
   ...props
 }: MemoryItemProps) {
   return (
-    <li className={cx(styles.item, className)} data-waiting={waiting ? '' : undefined} {...props}>
+    <li
+      className={cx(styles.item, className)}
+      data-waiting={waiting || held ? '' : undefined}
+      {...props}
+    >
       <div className={styles.content}>{children}</div>
-      {waiting && (
-        <p className={styles.waiting}>
-          <ShieldAlert aria-hidden />
-          <span>{waiting} Conch won’t use it until you keep it.</span>
-        </p>
+      {held ? (
+        <div className={styles.waiting}>
+          {held.refused ? <ShieldX aria-hidden /> : <ShieldAlert aria-hidden />}
+          <span>
+            {held.reasons.slice(0, 2).join(' ')} {held.from && <>From {held.from}. </>}
+            Conch won’t use it until you say.
+          </span>
+        </div>
+      ) : (
+        waiting && (
+          <p className={styles.waiting}>
+            <ShieldAlert aria-hidden />
+            <span>{waiting} Conch won’t use it until you keep it.</span>
+          </p>
+        )
       )}
       <div className={styles.meta}>
         {kind && (
@@ -426,6 +448,85 @@ export function MeaningSearch({
         </div>
       </div>
       {action && <div className={styles.meaningActions}>{action}</div>}
+    </section>
+  );
+}
+
+export interface MemoryCheckProps extends Omit<
+  ComponentProps<'section'>,
+  'title' | 'children' | 'content'
+> {
+  /** What it wants to remember, as it would be kept. */
+  content: ReactNode;
+  /** Why it looks off: a sentence or two in Conch's own words, never a page's. */
+  reasons: string[];
+  /** Where it came from: “news.example, a page this chat read”. */
+  from?: string;
+  /** Refused (a secret, hidden characters): it takes Remember anyway. */
+  refused?: boolean;
+  /** Takes the content's place while you edit it (Edit first). */
+  editor?: ReactNode;
+  /** Remember it · Don’t remember · Edit first. */
+  actions?: ReactNode;
+  /** You answered: it folds to a quiet line. */
+  settled?: 'kept' | 'dismissed';
+}
+
+/**
+ * A memory the memory check held (ADR 0087), in the chat. It wasn't saved and
+ * isn't used: it says what it wanted to remember, why that looks off, where
+ * it came from, and asks. Calm, not alarming: most of what's held is a page
+ * being pushy, and the person decides. A refused one (a password, hidden
+ * characters) is a shade firmer and needs Remember anyway. Once answered, it
+ * folds to a quiet line, like any memory.
+ */
+export function MemoryCheck({
+  content,
+  reasons,
+  from,
+  refused = false,
+  editor,
+  actions,
+  settled,
+  className,
+  ...props
+}: MemoryCheckProps) {
+  const titleId = useId();
+  if (settled)
+    return (
+      // Said aloud once it's answered: focus was on the button that's gone.
+      <p className={cx(styles.checkSettled, className)} data-settled={settled} role="status">
+        <Brain aria-hidden />
+        <span>
+          {settled === 'kept' ? 'Remembered, after you checked it: ' : 'Not remembered: '}
+          {content}
+        </span>
+      </p>
+    );
+  return (
+    <section
+      aria-labelledby={titleId}
+      className={cx(styles.check, className)}
+      data-refused={refused ? '' : undefined}
+      {...props}
+    >
+      <p className={styles.checkHead} id={titleId}>
+        {refused ? <ShieldX aria-hidden /> : <ShieldAlert aria-hidden />}
+        {refused ? 'I didn’t remember this' : 'Remember this?'}
+      </p>
+      {editor ?? (
+        <p className={styles.checkWhat}>
+          <span className="nc-visually-hidden">It wants to remember: </span>
+          {content}
+        </p>
+      )}
+      <ul className={styles.checkWhy} aria-label="Why it looks off">
+        {reasons.slice(0, 3).map((reason) => (
+          <li key={reason}>{reason}</li>
+        ))}
+      </ul>
+      {from && <p className={styles.checkFrom}>From {from}</p>}
+      {actions && <div className={styles.checkActions}>{actions}</div>}
     </section>
   );
 }

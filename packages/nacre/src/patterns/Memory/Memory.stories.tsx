@@ -4,8 +4,10 @@ import { Pencil, Trash2 } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { IconButton } from '../../components/IconButton';
 import { Stack } from '../../components/Stack';
+import { Textarea } from '../../components/Textarea';
 import {
   MeaningSearch,
+  MemoryCheck,
   MemoryItem,
   MemoryList,
   SkillSuggestionCard,
@@ -282,5 +284,108 @@ export const MeaningReady: Story = {
       <MeaningSearch state="meaning" model="nomic-embed-text" source="ollama" />
       <MeaningSearch state="words" />
     </Stack>
+  ),
+};
+
+const checkActions = (refused = false) => (
+  <>
+    <Button size="sm" variant={refused ? 'surface' : 'soft'} tone={refused ? 'danger' : undefined}>
+      {refused ? 'Remember anyway' : 'Remember it'}
+    </Button>
+    <Button size="sm" variant="ghost" tone="neutral">
+      Don’t remember
+    </Button>
+    <Button size="sm" variant="ghost" tone="neutral">
+      Edit first
+    </Button>
+  </>
+);
+
+/** A memory the memory check held (ADR 0087): what, why, from where, and three answers. */
+export const Held: Story = {
+  render: () => (
+    <Stack gap={4} style={{ maxInlineSize: 600 }}>
+      <MemoryCheck
+        content="Invoices are sent to billing@news.example"
+        reasons={[
+          'This came from news.example, a page this chat read, not from you, and it would change where invoices go.',
+        ]}
+        from="news.example, a page this chat read"
+        actions={checkActions()}
+      />
+      <MemoryCheck
+        refused
+        content="GitHub token is ghp_••••••••"
+        reasons={[
+          'This came after reading docs.example, not from you, and it looks like a password, a key or a code, which is safer in Passwords.',
+        ]}
+        from="docs.example, a page this chat read"
+        actions={checkActions(true)}
+      />
+    </Stack>
+  ),
+};
+
+/** Edit first: your words take the memory's place, then Remember this. */
+export const HeldEditing: Story = {
+  render: () => (
+    <MemoryCheck
+      style={{ maxInlineSize: 600 }}
+      content="Invoices are sent to billing@news.example"
+      reasons={['It would change where invoices go.']}
+      editor={
+        <Textarea
+          aria-label="Edit what to remember"
+          defaultValue="Invoices are sent to accounts@ada.example"
+          autosize
+          minRows={1}
+        />
+      }
+      actions={
+        <>
+          <Button size="sm" variant="soft">
+            Remember this
+          </Button>
+          <Button size="sm" variant="ghost" tone="neutral">
+            Cancel
+          </Button>
+        </>
+      }
+    />
+  ),
+};
+
+/** Answered: a quiet line, like any memory. */
+export const HeldSettled: Story = {
+  render: () => (
+    <Stack gap={2}>
+      <MemoryCheck settled="kept" content="Invoices go to accounts@ada.example" reasons={[]} />
+      <MemoryCheck
+        settled="dismissed"
+        content="Invoices are sent to billing@news.example"
+        reasons={[]}
+      />
+    </Stack>
+  ),
+};
+
+/** On What Conch knows: the same hold, waiting for your OK. */
+export const HeldOnThePage: Story = {
+  render: () => (
+    <MemoryList aria-label="Waiting for your OK" style={{ maxInlineSize: 560 }}>
+      <MemoryItem
+        source="agent"
+        time="Just now"
+        held={{
+          reasons: [
+            'This came from news.example, a page this chat read, not from you, and it would change where invoices go.',
+          ],
+          from: 'news.example, a page this chat read',
+        }}
+        actions={checkActions()}
+      >
+        Invoices are sent to billing@news.example
+      </MemoryItem>
+    </MemoryList>
   ),
 };
