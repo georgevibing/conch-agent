@@ -362,7 +362,7 @@ export class LocalService implements OllamaLink {
   }
 
   /**
-   * The context to ask for (ADR 0078): at least 16K tokens on a computer with
+   * The context to ask for (ADR 0086): at least 16K tokens on a computer with
    * less than 12 GB of memory and 32K above, as before; more when the model's
    * own shape says this computer has room for it — what its key and value
    * cache takes per token, within two fifths of the memory once the model

@@ -123,7 +123,7 @@ describe.skipIf(!hasBrowser)('the browser, for real', () => {
       });
       expect(asked.map((a) => a.browser?.kind)).toEqual(['site']);
       expect(asked[0]?.summary).toBe('use 127.0.0.1');
-      // After an action, only what changed comes back (ADR 0077), the new line marked.
+      // After an action, only what changed comes back (ADR 0085), the new line marked.
       expect(text).toContain('<page-changes>');
       expect(text).toMatch(/^\+ .*In your cart: 1/m);
       // The same site again: no question.

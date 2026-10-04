@@ -15,17 +15,26 @@ export interface Price {
   output: number;
   /** Input read from the provider's cache. Unset: the input price. */
   cachedInput?: number;
+  /** Input written to the provider's cache (Anthropic: a quarter more). Unset: the input price. */
+  cacheWrite?: number;
 }
 
 /** Most specific first: the first match wins. */
 const PRICES: readonly { match: RegExp; price: Price }[] = [
   // Anthropic, first-party API (checked 2026-09).
-  { match: /claude-(?:fable|mythos)/, price: { input: 10, output: 50, cachedInput: 1 } },
-  { match: /claude-opus-5[-.]5/, price: { input: 4, output: 20, cachedInput: 0.2 } },
-  { match: /claude-opus/, price: { input: 5, output: 25, cachedInput: 0.5 } },
-  { match: /claude-sonnet-5/, price: { input: 2, output: 10, cachedInput: 0.2 } },
-  { match: /claude-sonnet/, price: { input: 3, output: 15, cachedInput: 0.3 } },
-  { match: /claude-haiku/, price: { input: 1, output: 5, cachedInput: 0.1 } },
+  {
+    match: /claude-(?:fable|mythos)-5[-.]1/,
+    price: { input: 10, output: 50, cachedInput: 0.25, cacheWrite: 12.5 },
+  },
+  {
+    match: /claude-(?:fable|mythos)/,
+    price: { input: 10, output: 50, cachedInput: 1, cacheWrite: 12.5 },
+  },
+  { match: /claude-opus-5[-.]5/, price: { input: 4, output: 20, cachedInput: 0.2, cacheWrite: 5 } },
+  { match: /claude-opus/, price: { input: 5, output: 25, cachedInput: 0.5, cacheWrite: 6.25 } },
+  { match: /claude-sonnet-5/, price: { input: 2, output: 10, cachedInput: 0.2, cacheWrite: 2.5 } },
+  { match: /claude-sonnet/, price: { input: 3, output: 15, cachedInput: 0.3, cacheWrite: 3.75 } },
+  { match: /claude-haiku/, price: { input: 1, output: 5, cachedInput: 0.1, cacheWrite: 1.25 } },
   // OpenAI.
   { match: /gpt-5(?:[.-]\d+)?-nano/, price: { input: 0.05, output: 0.4, cachedInput: 0.005 } },
   { match: /gpt-5(?:[.-]\d+)?-mini/, price: { input: 0.25, output: 2, cachedInput: 0.025 } },
@@ -59,13 +68,15 @@ export function priceOf(model: string | undefined): Price | undefined {
 /** What these tokens cost at list price (USD). */
 export function costAt(
   price: Price,
-  usage: Pick<Usage, 'inputTokens' | 'outputTokens' | 'cachedInputTokens'>,
+  usage: Pick<Usage, 'inputTokens' | 'outputTokens' | 'cachedInputTokens' | 'cacheWriteTokens'>,
 ): number {
   const cached = Math.min(usage.cachedInputTokens ?? 0, usage.inputTokens);
-  const fresh = usage.inputTokens - cached;
+  const written = Math.min(usage.cacheWriteTokens ?? 0, usage.inputTokens - cached);
+  const fresh = usage.inputTokens - cached - written;
   return (
     (fresh * price.input +
       cached * (price.cachedInput ?? price.input) +
+      written * (price.cacheWrite ?? price.input) +
       usage.outputTokens * price.output) /
     1_000_000
   );

@@ -75,15 +75,19 @@ export function priceUsage(
 }
 
 /**
- * What reading from the cache saved: the cached tokens at the input price,
- * less what they cost as cached. Nothing when the model's price is unknown
- * or nothing came from the cache.
+ * What the cache saved, net (ADR 0085): the cached tokens at the input price
+ * less what they cost as cached, less the premium paid for writing to the
+ * cache (Anthropic's quarter more). Nothing when the model's price is
+ * unknown, or when the cache cost more than it saved this time.
  */
 export function cacheSaving(usage: Usage, model: string | undefined): number | undefined {
   const cached = Math.min(usage.cachedInputTokens ?? 0, usage.inputTokens);
+  const written = Math.min(usage.cacheWriteTokens ?? 0, usage.inputTokens - cached);
   const price = priceOf(model);
   if (!cached || !price) return undefined;
-  const saved = (cached * (price.input - (price.cachedInput ?? price.input))) / 1_000_000;
+  const read = cached * (price.input - (price.cachedInput ?? price.input));
+  const premium = written * Math.max(0, (price.cacheWrite ?? price.input) - price.input);
+  const saved = (read - premium) / 1_000_000;
   return saved > 0 ? saved : undefined;
 }
 

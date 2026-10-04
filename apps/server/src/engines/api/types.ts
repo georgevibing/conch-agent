@@ -83,6 +83,8 @@ export interface WireUsage {
   outputTokens: number;
   /** Of `inputTokens`, how many came from the provider's cache. */
   cachedInputTokens?: number;
+  /** Of `inputTokens`, how many were written to the provider's cache (billed a little higher). */
+  cacheWriteTokens?: number;
   costUsd?: number;
 }
 

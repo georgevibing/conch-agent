@@ -125,6 +125,62 @@ describe('a turn that failed', () => {
   });
 });
 
+describe('a turn that paused to check in (ADR 0085)', () => {
+  const paused = (id: string): TranscriptItem => ({
+    kind: 'turn-end',
+    id,
+    outcome: 'success',
+    paused: {
+      reason: 'steps',
+      message: 'Paused after 100 steps, so this doesn’t run on without you.',
+    },
+  });
+
+  it('says why in one sentence, and Carry on sends exactly that', async () => {
+    const onReply = vi.fn();
+    mockFetch({ 'GET /api/state': () => appState() });
+    renderApp(
+      <Transcript
+        view={{ lastSeq: 2, status: 'idle', items: [user, paused('end-2')] }}
+        pending={[]}
+        name="Pearl"
+        onRespond={() => {}}
+        onRetry={() => {}}
+        onReply={onReply}
+      />,
+    );
+    expect(await screen.findByText(/Paused after 100 steps/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Carry on' }));
+    expect(onReply).toHaveBeenCalledWith('Carry on');
+  });
+
+  it('is a quiet line once the chat has moved on', () => {
+    const onReply = vi.fn();
+    mockFetch({ 'GET /api/state': () => appState() });
+    renderApp(
+      <Transcript
+        view={{
+          lastSeq: 4,
+          status: 'idle',
+          items: [
+            user,
+            paused('end-2'),
+            { kind: 'user', id: 'u2', text: 'Carry on', at: 3 },
+            { kind: 'turn-end', id: 'end-4', outcome: 'success' },
+          ],
+        }}
+        pending={[]}
+        name="Pearl"
+        onRespond={() => {}}
+        onRetry={() => {}}
+        onReply={onReply}
+      />,
+    );
+    expect(screen.getByText(/Paused after 100 steps/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Carry on' })).not.toBeInTheDocument();
+  });
+});
+
 describe('a long chat’s summary (ADR 0055)', () => {
   it('is one quiet line that opens to show what the model keeps', async () => {
     show({
