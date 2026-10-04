@@ -331,21 +331,28 @@ function main(): void {
     gateway.start();
     // Development: the gateway starts again when its code changes.
     if (dev)
-      watchSource(join(at.conch, 'apps', 'server', 'src'), () => {
-        void gateway.stop().then(() => gateway.retry());
+      watchSource(join(at.conch, 'apps', 'server', 'src'), (file) => {
+        if (quitting) return;
+        log(`[app] apps/server/src/${file} changed: starting the gateway again.\n`);
+        void gateway.restart();
       });
   });
 }
 
-/** Development only: call `changed` a moment after the gateway's source changes. */
-function watchSource(folder: string, changed: () => void): void {
+/**
+ * Development only: call `changed` a moment after the gateway's code changes,
+ * with the last file that did. Tests and anything that isn't code (an editor's
+ * swap file, a test's scratch folder) don't count.
+ */
+function watchSource(folder: string, changed: (file: string) => void): void {
   let timer: NodeJS.Timeout | undefined;
   void import('node:fs').then(({ watch }) => {
     try {
-      watch(folder, { recursive: true }, (_event, file) => {
-        if (!file || /\.test\.ts$/.test(String(file))) return;
+      watch(folder, { recursive: true }, (_event, name) => {
+        const file = name ? String(name).replaceAll('\\', '/') : '';
+        if (!/\.(ts|mts|mjs|js|json)$/.test(file) || /\.test\.ts$/.test(file)) return;
         clearTimeout(timer);
-        timer = setTimeout(changed, 300);
+        timer = setTimeout(() => changed(file), 300);
       });
     } catch {
       // No watching here: restart the app to pick up changes.

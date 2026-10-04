@@ -59,6 +59,11 @@ export class Gateway extends EventEmitter<{
   /** What it said before it stopped, when it said why (`failed`). */
   #said?: string;
   #output: string[] = [];
+  /** Its goodbye, while it's on its way out (`stop`). */
+  #goodbye?: Promise<void>;
+  /** A restart under way (`restart`), and whether it's still wanted when it's down. */
+  #restarting?: Promise<void>;
+  #restartWanted = false;
 
   constructor(
     private readonly launch: () => GatewayLaunch,
@@ -119,7 +124,10 @@ export class Gateway extends EventEmitter<{
       void this.#exited(code, signal);
     };
     child.once('exit', done);
-    child.once('error', (error) => {
+    child.on('error', (error) => {
+      // Running, it's a message that couldn't go (its channel had closed), not a
+      // start that failed: its own 'exit' still comes.
+      if (child.pid !== undefined) return;
       out(`${error.message}\n`);
       done(1, null);
     });
@@ -182,22 +190,44 @@ export class Gateway extends EventEmitter<{
 
   /**
    * Stop it and wait until it has: asked nicely, then told after five
-   * seconds. Resolves at once when it isn't running.
+   * seconds. Resolves at once when it isn't running; asked again while it's
+   * on its way out, waits for the same goodbye.
    */
   async stop(timeoutMs = 5_000): Promise<void> {
+    // Stopping for good (quitting, installing an update) wins over a restart under way.
+    this.#restartWanted = false;
+    return this.#stop(timeoutMs);
+  }
+
+  async #stop(timeoutMs = 5_000): Promise<void> {
     this.#stopping = true;
     const child = this.#child;
     if (!child || child.exitCode !== null) return;
-    await new Promise<void>((resolve) => {
+    this.#goodbye ??= new Promise<void>((resolve) => {
       const forced = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
       child.once('exit', () => {
         clearTimeout(forced);
+        this.#goodbye = undefined;
         resolve();
       });
       // Windows has no SIGTERM: closing the channel is the gateway's cue to stop.
-      if (process.platform === 'win32') child.disconnect?.();
+      if (process.platform === 'win32' && child.connected) child.disconnect();
       else child.kill('SIGTERM');
     });
+    await this.#goodbye;
+  }
+
+  /**
+   * Start it again (development: its code changed). Asked again before the
+   * one running has stopped, it still starts just once, on the newest code.
+   */
+  restart(): Promise<void> {
+    this.#restartWanted = true;
+    this.#restarting ??= this.#stop().then(() => {
+      this.#restarting = undefined;
+      if (this.#restartWanted) this.retry();
+    });
+    return this.#restarting;
   }
 }
 

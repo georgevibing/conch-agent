@@ -26,12 +26,20 @@ class FakeChild extends EventEmitter {
     this.emit('exit', code, signal);
   }
   kill(signal: NodeJS.Signals) {
-    setTimeout(() => this.exit(null, signal), 1);
+    setTimeout(() => this.exit(null, signal), this.goodbyeMs);
     return true;
   }
+  /** How long it takes to say goodbye once its channel closes. */
+  goodbyeMs = 1;
   disconnect() {
+    // Node's own: a channel that's already closed is an error, not a no-op.
+    if (!this.connected) {
+      this.emit('error', new Error('IPC channel is already disconnected'));
+      return;
+    }
     // The gateway hears its channel close, says goodbye, and stops.
-    setTimeout(() => this.exit(0), 1);
+    this.connected = false;
+    setTimeout(() => this.exit(0), this.goodbyeMs);
   }
 }
 
@@ -39,6 +47,9 @@ function world() {
   const children: FakeChild[] = [];
   const slept: number[] = [];
   const states: GatewayState[] = [];
+  const logged: string[] = [];
+  /** A second gateway started while the one before it was still running. */
+  let overlapped = false;
   let now = 1_000_000;
   const gateway = new Gateway(
     () => ({
@@ -49,18 +60,30 @@ function world() {
     }),
     {
       spawn: ((_command: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
+        if (children.some((earlier) => earlier.exitCode === null)) overlapped = true;
         const child = new FakeChild(options.env);
         children.push(child);
         return child;
       }) as unknown as typeof spawn,
       now: () => now,
       sleep: async (ms) => void slept.push(ms),
+      log: (text) => void logged.push(text),
     },
   );
   gateway.on('state', (state) => states.push(state));
   const latest = () => children.at(-1) as FakeChild;
-  const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
-  return { gateway, children, slept, states, latest, settle, later: (ms: number) => (now += ms) };
+  const settle = (ms = 10) => new Promise((resolve) => setTimeout(resolve, ms));
+  return {
+    gateway,
+    children,
+    slept,
+    states,
+    logged,
+    overlapped: () => overlapped,
+    latest,
+    settle,
+    later: (ms: number) => (now += ms),
+  };
 }
 
 describe('the gateway, kept running by the app', () => {
@@ -164,6 +187,61 @@ describe('the gateway, kept running by the app', () => {
     expect(children[0]?.exitCode !== null || children[0]?.connected === false).toBe(true);
     // Stopping what isn't running is fine.
     await gateway.stop();
+  });
+
+  it('stopped again while it’s still on its way out, waits for it quietly', async () => {
+    const { gateway, latest, logged } = world();
+    gateway.start();
+    latest().goodbyeMs = 30;
+    let stopped = 0;
+    const first = gateway.stop().then(() => stopped++);
+    const second = gateway.stop().then(() => stopped++);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    // Still saying goodbye: nobody has been told it stopped.
+    expect(stopped).toBe(0);
+    await Promise.all([first, second]);
+    expect(latest().exitCode).toBe(0);
+    expect(logged.join('')).not.toMatch(/IPC channel/);
+  });
+
+  it('starts again once when its code changes, however often it changes on the way down', async () => {
+    const { gateway, children, latest, logged, overlapped, settle } = world();
+    gateway.start();
+    latest().emit('message', { type: 'listening', url: 'http://127.0.0.1:4317' });
+    latest().goodbyeMs = 30;
+    // A merge touches file after file, a few hundred milliseconds apart.
+    const restarts = [gateway.restart()];
+    await settle(10);
+    restarts.push(gateway.restart());
+    await settle(10);
+    restarts.push(gateway.restart());
+    await Promise.all(restarts);
+    await settle();
+    expect(overlapped()).toBe(false);
+    expect(children).toHaveLength(2);
+    expect(latest().env.CONCH_STARTED_BECAUSE).toBe('start');
+    expect(gateway.state).toEqual({ kind: 'starting' });
+    expect(logged.join('')).not.toMatch(/IPC channel/);
+  });
+
+  it('quitting while it starts again for a change: it stays stopped', async () => {
+    const { gateway, children, settle } = world();
+    gateway.start();
+    const restarted = gateway.restart();
+    await gateway.stop();
+    await restarted;
+    await settle();
+    expect(children).toHaveLength(1);
+  });
+
+  it('a change once it’s started again starts it again', async () => {
+    const { gateway, children, overlapped, settle } = world();
+    gateway.start();
+    await gateway.restart();
+    await gateway.restart();
+    await settle();
+    expect(children).toHaveLength(3);
+    expect(overlapped()).toBe(false);
   });
 
   it('tells it only what the protocol allows', () => {
