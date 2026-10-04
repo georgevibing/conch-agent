@@ -323,6 +323,15 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
     () => (location.state as { draft?: string } | null)?.draft ?? loadDraft(key),
   );
   useEffect(() => saveDraft(key, draft), [key, draft]);
+  // The words can arrive after the chat is already open (the welcome hands them over as it
+  // finishes): take them once per arrival.
+  const arrived = useRef(location.key);
+  useEffect(() => {
+    if (arrived.current === location.key) return;
+    arrived.current = location.key;
+    const handed = (location.state as { draft?: string } | null)?.draft;
+    if (handed) setDraft(handed);
+  }, [location.key, location.state]);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const columnRef = useRef<HTMLDivElement>(null);
   const attachments = useDraftAttachments();
