@@ -59,6 +59,8 @@ interface UiState {
   lastFind?: { conversationId: string; query: string };
   /** The header usage popover (so `/usage` and the composer notice can open it). */
   usageOpen: boolean;
+  /** The chat whose spending chip is open (ADR 0073), e.g. from ⌘K. */
+  chatSpendOpen: string | null;
   picker: Picker;
   /** Model/effort/mode chosen for a new chat before its first message. */
   draftOptions: TurnOptions;
@@ -154,6 +156,7 @@ export const useUi = create<UiState>((set) => ({
   paletteOpen: false,
   find: null,
   usageOpen: false,
+  chatSpendOpen: null,
   picker: null,
   draftOptions: {},
   composerText: null,

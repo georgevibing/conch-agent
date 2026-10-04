@@ -557,6 +557,26 @@ describe('Palette search', () => {
     act(() => useUi.setState({ stopHolding: undefined }));
   });
 
+  it('opens what the open chat spent, and its limit, by name (ADR 0073)', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    renderApp(
+      <Routes>
+        <Route path="/c/:conversationId" element={<Palette />} />
+      </Routes>,
+      { route: '/c/c7' },
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'spending limit');
+    await user.click(await screen.findByRole('option', { name: /What this chat spent/ }));
+    expect(useUi.getState().chatSpendOpen).toBe('c7');
+    act(() => useUi.setState({ chatSpendOpen: null }));
+  });
+
   it('summarises the start of the open chat by name, as /compact does (ADR 0055)', async () => {
     const user = userEvent.setup();
     const calls = mockFetch({

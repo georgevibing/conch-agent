@@ -59,6 +59,7 @@ import { providersApi } from '../providers/api';
 import { providerKeys, putProvider, useProviders } from '../providers/queries';
 import { useNeed } from '../setup/useNeed';
 import { UsageComposerNotice } from '../usage/UsageComposerNotice';
+import { ChatSpend } from '../spend/Spend';
 import styles from './ChatView.module.css';
 import { attachmentUrl } from './uploads';
 import { composerHistory, loadDraft, rememberSent, saveDraft } from './composer';
@@ -821,6 +822,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
             {(engine?.state === 'ready' || chosenReady) && (
               <ComposerControls turn={turn} name={name} />
             )}
+            <ChatSpend conversationId={conversationId} />
             <Tooltip content={app?.workspace ?? ''}>
               <ComposerChip
                 icon={<Folder />}

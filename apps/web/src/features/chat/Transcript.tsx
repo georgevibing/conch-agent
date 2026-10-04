@@ -23,6 +23,7 @@ import { IntegrationIssue } from '../integrations/ChatBits';
 import { AppOfferItem, AppShareItem } from '../conchapps/ChatCards';
 import { OfferAlsoTryItem, OfferItem } from '../offers/OfferItem';
 import { NeedsAppsItem } from './NeedsApps';
+import { CappedItem, SpendNoteItem } from '../spend/Spend';
 import { QuestionItem } from '../questions/QuestionItem';
 import { PastChatsItem } from './PastChatsItem';
 import { HeldItem, RoutedItem } from './OfflineBits';
@@ -203,6 +204,12 @@ const isPart = (block: Block) =>
     block.item.kind === 'summary' ||
     (block.item.kind === 'assistant' && !block.item.continuation)
   );
+
+/** How a reply's turn ended (its cost, ADR 0073), once it has. */
+function endOf(reply: Reply) {
+  const end = reply.parts.findLast((b) => b.item?.kind === 'turn-end')?.item;
+  return end?.kind === 'turn-end' ? end : undefined;
+}
 
 /** A reply's words, all of them, once every part has finished: what Copy takes. */
 function saidIn(reply: Reply): string | undefined {
@@ -399,6 +406,7 @@ export const Transcript = memo(function Transcript({
               </>
             ),
             said: rest === lastRow && turnRunning ? undefined : saidIn(rest),
+            ended: endOf(rest),
           })}
         />
       )}
@@ -508,6 +516,10 @@ export const Transcript = memo(function Transcript({
       {block.item?.kind === 'needs-apps' && (
         <NeedsAppsItem item={block.item} conversationId={conversationId} />
       )}
+      {block.item?.kind === 'capped' && (
+        <CappedItem item={block.item} conversationId={conversationId} />
+      )}
+      {block.item?.kind === 'spend-note' && <SpendNoteItem item={block.item} />}
       {block.item?.kind === 'offer' && (
         <OfferItem
           item={block.item}

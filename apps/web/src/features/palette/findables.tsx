@@ -25,6 +25,7 @@ import {
   CirclePause,
   BadgeCheck,
   BatteryMedium,
+  Coins,
   Folder,
   Settings2,
   Bell,
@@ -917,6 +918,15 @@ export function useFindables(query: string, conversationId: string | undefined):
             keywords: 'web browse page watch take over',
             icon: <Globe />,
             run: () => openBrowser(conversationId),
+          },
+          // What this chat spent, and a limit of its own (ADR 0073).
+          {
+            id: 'chat-spend',
+            label: 'What this chat spent',
+            keywords:
+              'cost costs money spend spent spending price dollars bill tokens cache saved limit cap budget this chat expensive',
+            icon: <Coins />,
+            run: () => useUi.setState({ chatSpendOpen: conversationId }),
           },
         ]
       : []),

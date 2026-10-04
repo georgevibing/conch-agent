@@ -29,6 +29,9 @@ import type {
   TurnOptions,
   TurnProblem,
   PlanStep,
+  SpendLimitKind,
+  SpendModel,
+  TurnCost,
   Usage,
 } from '@conch/protocol';
 
@@ -265,6 +268,29 @@ export type TranscriptItem =
     }
   | {
       /**
+       * A message (or a reply part way) met a spending limit (ADR 0073): it
+       * waits for one tap. `settled` says how it went on; `moved-on` when a
+       * newer message came instead.
+       */
+      kind: 'capped';
+      id: string;
+      limit: SpendLimitKind;
+      spentUsd: number;
+      limitUsd: number;
+      raiseTo: number;
+      switchTo?: SpendModel;
+      during?: boolean;
+      settled?: 'raised' | 'switched' | 'stopped' | 'moved-on';
+    }
+  | {
+      /** A quiet word about money, said once when it matters (ADR 0073). */
+      kind: 'spend-note';
+      id: string;
+      note: 'budget-near' | 'pricier' | 'stopped';
+      message: string;
+    }
+  | {
+      /**
        * Where the model's word-for-word memory of a long chat starts (ADR 0055):
        * what's above was folded into `summary`. Only the latest one is kept.
        */
@@ -298,6 +324,8 @@ export type TranscriptItem =
       /** Why it failed, when Conch can tell: decides what the chat offers. */
       problem?: TurnProblem;
       usage?: Usage;
+      /** What it cost, the way its provider charges (ADR 0073). */
+      cost?: TurnCost;
       /** Which provider answered, and with which model. */
       engine?: EngineId;
       model?: string;
@@ -419,7 +447,8 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         ...base,
         turnStartedAt: event.at,
         items: [
-          ...withoutPending,
+          // A message waiting at a spending limit goes with this one, or is let go (ADR 0073).
+          ...settleCapped(withoutPending, 'moved-on'),
           {
             kind: 'user',
             id: event.messageId,
@@ -709,12 +738,46 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             error: event.error,
             ...(event.problem && { problem: event.problem }),
             usage: event.usage,
+            ...(event.cost && { cost: event.cost }),
             engine: event.engine,
             model: event.model,
           },
         ],
       };
     }
+    case 'turn.capped':
+      return {
+        ...base,
+        items: [
+          // An older one still waiting was overtaken by this one.
+          ...settleCapped(items, 'moved-on'),
+          {
+            kind: 'capped',
+            id: `capped-${event.seq}`,
+            limit: event.limit,
+            spentUsd: event.spentUsd,
+            limitUsd: event.limitUsd,
+            raiseTo: event.raiseTo,
+            ...(event.switchTo && { switchTo: event.switchTo }),
+            ...(event.during && { during: true }),
+          },
+        ],
+      };
+    case 'turn.capped.settled':
+      return { ...base, items: settleCapped(items, event.outcome) };
+    case 'spend.notice':
+      return {
+        ...base,
+        items: [
+          ...items,
+          {
+            kind: 'spend-note',
+            id: `spend-${event.seq}`,
+            note: event.kind,
+            message: event.message,
+          },
+        ],
+      };
     case 'title':
       return { ...base, title: event.title };
     case 'notice':
@@ -946,6 +1009,21 @@ function settleNeeds(items: TranscriptItem[], options: TurnOptions | undefined):
     options.model === item.switchTo.model;
   const next = items.slice();
   next[index] = { ...item, settled: switched ? 'switched' : 'answered' };
+  return next;
+}
+
+/** The card at a spending limit that still waits, settled as the person chose. */
+function settleCapped(
+  items: TranscriptItem[],
+  outcome: NonNullable<Extract<TranscriptItem, { kind: 'capped' }>['settled']>,
+): TranscriptItem[] {
+  const index = items.findLastIndex((i) => i.kind === 'capped' && !i.settled);
+  if (index === -1) return items;
+  const next = items.slice();
+  next[index] = {
+    ...(items[index] as Extract<TranscriptItem, { kind: 'capped' }>),
+    settled: outcome,
+  };
   return next;
 }
 

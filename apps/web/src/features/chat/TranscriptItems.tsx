@@ -16,6 +16,7 @@ import {
   ThinkingIndicator,
   ToolCall,
   toast,
+  TurnCostTag,
   useSmoothText,
   type ToolCallStatus,
 } from '@conch/nacre';
@@ -157,6 +158,7 @@ export function AssistantMessage({
   entrance = true,
   attached,
   said,
+  ended,
 }: {
   item: Of<'assistant'>;
   name: string;
@@ -170,6 +172,8 @@ export function AssistantMessage({
    * Undefined while any of it is still being written (no actions yet).
    */
   said?: string;
+  /** How its turn ended: what it cost sits among its actions (ADR 0073). */
+  ended?: Of<'turn-end'>;
 }) {
   const streaming = !item.done;
   const arrivedLive = useContext(ArrivedLive);
@@ -218,6 +222,7 @@ export function AssistantMessage({
           <>
             <ReadAloud text={said} />
             <CopyButton value={said} label="Copy reply" />
+            {ended?.cost && <TurnCostTag cost={ended.cost} tokens={ended.usage} />}
           </>
         ) : undefined
       }
@@ -524,7 +529,13 @@ export function TurnEnd({
   recover?: TurnRecovery;
 }) {
   if (item.outcome === 'interrupted') {
-    return <div className={styles.stopped}>Stopped</div>;
+    return (
+      <div className={styles.stopped}>
+        Stopped
+        {/* What it had spent by then, quietly (ADR 0073). */}
+        {item.cost && <TurnCostTag cost={item.cost} tokens={item.usage} />}
+      </div>
+    );
   }
   // An earlier failure the chat has moved past: a quiet line, not an alarm.
   if (item.outcome === 'error' && item.problem && !onRetry) {
