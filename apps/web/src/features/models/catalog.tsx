@@ -110,9 +110,16 @@ export function pickerProviders(
   providers: ProviderModels[],
   defaultEngine: EngineId | undefined,
   key: (engine: string, model: string) => string,
+  /** The provider already chosen, which stays listed even when it would be folded away. */
+  current?: string,
 ): ModelProvider[] {
-  const many = providers.length > 1;
-  return providers.map((provider) => {
+  // Codex and Codex CLI are one ChatGPT plan: with both connected, list Codex once.
+  const folded =
+    providers.some((p) => p.engine === 'codex-cli') && current !== 'codex-agent'
+      ? providers.filter((p) => p.engine !== 'codex-agent')
+      : providers;
+  const many = folded.length > 1;
+  return folded.map((provider) => {
     const long = provider.models.length > FEATURED * 2;
     return {
       id: provider.engine,
