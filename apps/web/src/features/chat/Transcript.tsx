@@ -1,5 +1,5 @@
 import { MessageList, SkillHoldEnded, SummaryDivider } from '@conch/nacre';
-import { useState, type ReactNode, type Ref } from 'react';
+import { memo, useState, type ReactNode, type Ref } from 'react';
 
 import { isTurnStart, type ConversationView, type TranscriptItem } from '../../live/reducer';
 import { verbsFor } from './stream';
@@ -225,7 +225,8 @@ function timeOf(item: TranscriptItem): number | undefined {
   return undefined;
 }
 
-export function Transcript({
+/** Memoised: typing in the composer doesn't draw the whole chat again. */
+export const Transcript = memo(function Transcript({
   view,
   pending,
   name,
@@ -281,6 +282,7 @@ export function Transcript({
   const firstTaint = items.find((i) => i.kind === 'taint')?.id;
   const turns = turnChanges(items);
   const turnStart = items.findLastIndex(isTurnStart);
+  const position = new Map(items.map((item, n) => [item, n]));
   const started = items[turnStart];
   const prompt =
     started?.kind === 'user'
@@ -384,7 +386,7 @@ export function Transcript({
           item={block.item}
           name={name}
           wait={busy ? wait : undefined}
-          entrance={!(running && items.indexOf(block.item) > turnStart)}
+          entrance={!(running && (position.get(block.item) ?? -1) > turnStart)}
           {...(rest && {
             attached: (
               <>
@@ -568,4 +570,4 @@ export function Transcript({
       </div>
     </MessageList>
   );
-}
+});

@@ -21,7 +21,7 @@ import {
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { Brain, Check, ShieldQuestion, Undo2, X } from 'lucide-react';
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { memo, createContext, useContext, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
 import { api } from '../../api/client';
@@ -238,7 +238,8 @@ const toolStatus: Record<Of<'tool'>['status'], ToolCallStatus> = {
   error: 'error',
 };
 
-export function ToolItem({ item }: { item: Of<'tool'> }) {
+/** Memoised: a finished tool's row doesn't redo its label and diff as the reply streams. */
+export const ToolItem = memo(function ToolItem({ item }: { item: Of<'tool'> }) {
   const label = useToolLabel()(item.name, {
     running: item.status === 'running' || item.status === 'pending',
     input: item.input,
@@ -262,7 +263,7 @@ export function ToolItem({ item }: { item: Of<'tool'> }) {
       {diff && <Diff diff={diff} header={false} lineNumbers={false} />}
     </ToolCall>
   );
-}
+});
 
 /** Render `backticked` spans of a summary as inline code. */
 function withCode(text: string) {

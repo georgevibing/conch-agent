@@ -30,6 +30,7 @@ import { useLocation, useNavigate } from 'react-router';
 
 import { useAppState, useConversations, useUpdateSettings } from '../../api/queries';
 import { canPickHere, pickPath } from '../../lib/pick';
+import { useStable } from '../../lib/useStable';
 import { useUi } from '../../app/ui';
 import { greeting } from '../../lib/time';
 import { useLive } from '../../live/LiveProvider';
@@ -672,6 +673,35 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
     [app?.workspace],
   );
 
+  // The transcript draws again only when the chat does, not with every keystroke here.
+  const onRespond = useStable(
+    (permissionId: string, decision: 'allow' | 'allow-always' | 'deny') =>
+      conversationId && live.respond(conversationId, permissionId, decision),
+  );
+  const onRetry = useStable(() => {
+    const last = lastUserMessage(view);
+    if (last) send(last.text, last.attachments);
+  });
+  const onAskAgain = useStable((messageId: string) => {
+    const asked = view.items.find((i) => i.kind === 'user' && i.id === messageId);
+    if (asked?.kind === 'user') send(asked.text, asked.attachments ?? []);
+  });
+  const onSend = useStable((text: string) => send(text, []));
+  const focusComposer = useStable(() => composerRef.current?.focus());
+  const onReply = useStable((text: string) => send(text, [], { keepDraft: true }));
+  const overlay = useMemo(
+    () =>
+      conversationId && (
+        <ChatFind conversationId={conversationId} root={columnRef} onClose={focusComposer} />
+      ),
+    [conversationId, focusComposer],
+  );
+  const footer = useMemo(
+    // Save how I did this (ADR 0058): under the reply that earned it, once it's over.
+    () => <SkillOfferInChat conversationId={conversationId} view={view} running={busy} />,
+    [conversationId, view, busy],
+  );
+
   const composer = (
     <div className={styles.composerWrap}>
       {/* Another connected provider can answer while the default one is away. */}
@@ -878,36 +908,17 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
         columnRef={columnRef}
         routineRun={isRoutineRun}
         taskChat={origin?.kind === 'task'}
-        overlay={
-          conversationId && (
-            <ChatFind
-              conversationId={conversationId}
-              root={columnRef}
-              onClose={() => composerRef.current?.focus()}
-            />
-          )
-        }
+        overlay={overlay}
         pending={pending}
         name={name}
-        onRespond={(permissionId, decision) =>
-          conversationId && live.respond(conversationId, permissionId, decision)
-        }
-        onRetry={() => {
-          const last = lastUserMessage(view);
-          if (last) send(last.text, last.attachments);
-        }}
-        onAskAgain={(messageId) => {
-          const asked = view.items.find((i) => i.kind === 'user' && i.id === messageId);
-          if (asked?.kind === 'user') send(asked.text, asked.attachments ?? []);
-        }}
-        onSend={(text) => send(text, [])}
-        focusComposer={() => composerRef.current?.focus()}
-        onReply={(text) => send(text, [], { keepDraft: true })}
+        onRespond={onRespond}
+        onRetry={onRetry}
+        onAskAgain={onAskAgain}
+        onSend={onSend}
+        focusComposer={focusComposer}
+        onReply={onReply}
         recover={recover}
-        footer={
-          // Save how I did this (ADR 0058): under the reply that earned it, once it's over.
-          <SkillOfferInChat conversationId={conversationId} view={view} running={busy} />
-        }
+        footer={footer}
       />
       <div className={styles.dock}>{composer}</div>
     </div>
