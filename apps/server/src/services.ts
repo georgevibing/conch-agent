@@ -410,7 +410,10 @@ export class Services {
       ...(process.platform === 'linux' && { browserHome: () => linuxBrowserHome() }),
     });
     this.gate = new Gatekeeper(config, this.access, this.here);
-    this.memory = new MemoryStore(join(config.CONCH_HOME, 'memory'));
+    // Every write is checked where it's made (ADR 0087), as Settings → Safety says.
+    this.memory = new MemoryStore(join(config.CONCH_HOME, 'memory'), {
+      checkOn: async () => (await this.settings.get()).preferences.checkMemories,
+    });
     this.commands = new CommandStore(join(config.CONCH_HOME, 'commands'));
     this.attachments = new AttachmentStore(join(config.CONCH_HOME, 'attachments'));
     this.vault = new VaultService({

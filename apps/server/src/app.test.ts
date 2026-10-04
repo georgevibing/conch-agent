@@ -355,22 +355,20 @@ describe('memories the check held (ADR 0087)', () => {
     const { app, services } = await setup();
     close = () => app.close();
     const convo = await services.conversations.send({ clientMessageId: 'u1', text: 'hello' });
-    const held = {
-      verdict: 'ask' as const,
-      reasons: [{ code: 'redirect' as const, words: 'It would change where invoices go.' }],
-    };
-    const asked = await services.memory.add({
-      content: 'Invoices are sent to billing@news.example',
-      source: 'agent',
-      conversationId: convo.id,
-      held,
-    });
-    const refused = await services.memory.add({
-      content: 'Token is abcd1234efgh',
-      source: 'agent',
-      conversationId: convo.id,
-      held: { ...held, verdict: 'refuse' },
-    });
+    const page = [{ kind: 'web' as const, label: 'news.example', text: 'billing@news.example' }];
+    const asked = await services.memory.add(
+      {
+        content: 'Invoices are sent to billing@news.example',
+        source: 'agent',
+        conversationId: convo.id,
+      },
+      { via: 'chat', read: page, said: ['summarise'] },
+    );
+    const refused = await services.memory.add(
+      { content: 'Wi-Fi password is hunter22x', source: 'agent', conversationId: convo.id },
+      { via: 'chat', said: ['hi'] },
+    );
+    expect([asked.held?.verdict, refused.held?.verdict]).toEqual(['ask', 'refuse']);
     const keep = (id: string, payload: object = {}) =>
       app.inject({ method: 'POST', url: `/api/memories/${id}/keep`, payload });
     expect(

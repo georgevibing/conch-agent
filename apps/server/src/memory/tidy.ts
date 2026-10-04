@@ -27,7 +27,8 @@ import { writeJson } from '../lib/fs';
 import { newId } from '../lib/ids';
 import { readStore } from '../lib/recover';
 import { tokens } from './embed';
-import { checkMemory, holdOf, withoutHidden, type ReadThing } from './guard';
+import type { PersonConsent } from './consent';
+import { checkMemory, holdOf, type ReadThing } from './guard';
 import type { MemoryStore } from './store';
 
 /** How much of what you said goes to the model in one tidy-up. */
@@ -199,6 +200,16 @@ interface Learning {
   check: boolean;
 }
 
+/** What the store's check is told about something learned from these chats (ADR 0087). */
+function contextFor(chats: readonly Said[], on: boolean) {
+  return {
+    via: 'tidy' as const,
+    read: chats.flatMap((s) => s.read ?? []),
+    said: chats.map((s) => s.text),
+    on,
+  };
+}
+
 /** The memory check on something learned from these chats (ADR 0087). */
 function verdictFor(content: string, chats: readonly Said[], on: boolean) {
   return checkMemory({
@@ -291,7 +302,12 @@ export class MemoryTidy {
       const [keep, ...drop] = [...live].sort((a, b) => b.updatedAt - a.updatedAt);
       if (!keep) return;
       for (const m of live) touched.add(m.id);
-      const after = (await store.update(keep.id, { content })) ?? keep;
+      const after =
+        (await store.update(
+          keep.id,
+          { content },
+          { via: 'tidy', said: live.map((m) => m.content), on: checkMemories },
+        )) ?? keep;
       for (const d of drop) await store.remove(d.id);
       changes.push({
         id: newId('tc'),
@@ -396,7 +412,10 @@ export class MemoryTidy {
         });
         continue;
       }
-      const after = (await store.update(current.id, { content: proposed.content })) ?? proposed;
+      // Checked again where it's written (ADR 0087), with the same chats behind it.
+      const after =
+        (await store.update(current.id, { content: proposed.content }, contextFor(chats, check))) ??
+        proposed;
       changes.push({
         id: newId('tc'),
         kind: 'updated',
@@ -427,23 +446,25 @@ export class MemoryTidy {
           : undefined;
       const waits = Boolean(untrusted) || !autoMemory;
       const read = [...new Set(chats.flatMap((s) => s.read ?? []).map((r) => r.label))];
-      const after = await store.add({
-        content,
-        kind: a.kind,
-        source: 'tidy',
-        ...(chat && { conversationId: chat.conversationId }),
-        ...(waits && {
-          pending: true,
-          untrusted:
-            untrusted ?? 'Remember things automatically is off, so this waits for your OK.',
-        }),
-        ...(held && { held }),
-        provenance: {
-          via: 'tidy',
-          ...(read.length > 0 && { read: read.slice(0, 12) }),
-          ...(verdict.yours && { yours: true }),
+      const after = await store.add(
+        {
+          content,
+          kind: a.kind,
+          source: 'tidy',
+          ...(chat && { conversationId: chat.conversationId }),
+          ...(waits && {
+            pending: true,
+            untrusted:
+              untrusted ?? 'Remember things automatically is off, so this waits for your OK.',
+          }),
+          provenance: {
+            via: 'tidy',
+            ...(read.length > 0 && { read: read.slice(0, 12) }),
+            ...(verdict.yours && { yours: true }),
+          },
         },
-      });
+        contextFor(chats, check),
+      );
       known.push(after);
       changes.push({
         id: newId('tc'),
@@ -534,23 +555,26 @@ export class MemoryTidy {
     runId: string,
     changeId: string,
     answer: 'keep' | 'undo' | 'dismiss',
+    /** The person's answer (ADR 0087): what lets Keep and Undo past the memory check. */
+    consent?: PersonConsent,
   ): Promise<TidyStatus> {
     const file = await this.#read();
     const change = file.runs.find((r) => r.id === runId)?.changes.find((c) => c.id === changeId);
     if (!change) return this.status();
     const { store } = this.deps;
     if (change.state === 'applied' && answer === 'undo') {
-      for (const m of change.before) await store.restore(m);
+      for (const m of change.before) await store.restore(m, consent);
       if (change.kind === 'added' && change.after) await store.remove(change.after.id);
       change.state = 'undone';
     } else if (change.state === 'applied' && answer === 'keep') {
       change.state = 'kept';
     } else if (change.state === 'pending' && answer === 'keep') {
+      // Keep on the card is the person's own choice, with the why in front of them.
+      if (!consent) return this.status();
       if (change.kind === 'added' && change.after)
-        // Keep on the card is the person's own choice, with the why in front of them.
-        await store.keep(change.after.id, { anyway: true, clean: withoutHidden });
+        await store.keep(change.after.id, consent, { anyway: true });
       if (change.kind === 'updated' && change.after)
-        await store.update(change.after.id, { content: change.after.content });
+        await store.update(change.after.id, { content: change.after.content }, consent);
       change.state = 'kept';
     } else if (change.state === 'pending' && (answer === 'dismiss' || answer === 'undo')) {
       if (change.kind === 'added' && change.after) await store.remove(change.after.id);

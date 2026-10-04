@@ -13,7 +13,6 @@ import {
   ClientCommand,
   CommandName,
   CreateIntegrationBody,
-  CreateMemoryBody,
   CreateSkillBody,
   DescribeSkillBody,
   DraftSkillBody,
@@ -47,7 +46,6 @@ import {
   type SearchRepairResult,
   StartLoginBody,
   UpdateIntegrationBody,
-  UpdateMemoryBody,
   UpdateSettingsBody,
   UpdateSkillBody,
   UsageBudgetBody,
@@ -1092,17 +1090,7 @@ export async function buildApp(services: Services) {
 
   // ── Memory ─────────────────────────────────────────────────────────────
   app.get('/api/memories', () => services.memory.list());
-  app.post('/api/memories', async (request, reply) => {
-    const body = parse(CreateMemoryBody, request.body, reply);
-    if (!body) return;
-    return services.memory.add({ ...body, source: 'user' });
-  });
-  app.patch<{ Params: { id: string } }>('/api/memories/:id', async (request, reply) => {
-    const body = parse(UpdateMemoryBody, request.body, reply);
-    if (!body) return;
-    const memory = await services.memory.update(request.params.id, body);
-    return memory ?? reply.code(404).send({ error: 'not-found', message: 'Memory not found.' });
-  });
+  // Adding and editing a memory by hand are in `memory/routes.ts`: the person's answer (ADR 0087).
   app.delete<{ Params: { id: string } }>('/api/memories/:id', async (request, reply) => {
     const removed = await services.memory.remove(request.params.id);
     if (removed) await memoryDecided(removed, false).catch(() => undefined);

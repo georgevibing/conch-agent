@@ -2,7 +2,7 @@ import { MemoryKind, type Memory } from '@conch/protocol';
 import { z } from 'zod';
 
 import type { HostTool } from '../engines/types';
-import { checkMemory, holdOf, secondLook, type LookModel, type ReadThing } from './guard';
+import type { LookModel, ReadThing } from './guard';
 import type { MemoryStore } from './store';
 
 /** What the model is told when a memory is held: enough to carry on, nothing to work around. */
@@ -54,33 +54,33 @@ export function memoryTools(options: {
       const check = options.check;
       const read = check?.read() ?? [];
       const recent = check?.recent() ?? [];
-      const input = {
-        content,
-        via: 'chat' as const,
-        read,
-        said: check?.said() ?? [],
-        recent: recent.map(({ id, content: words }) => ({ id, content: words })),
-        wary: recent.some((r) => r.held),
-        on: (await check?.on().catch(() => true)) ?? true,
-      };
-      const verdict = await secondLook(checkMemory(input), input, check?.look);
-      const held = holdOf(verdict);
-      const memory = await store.add({
-        content,
-        kind,
-        source: 'agent',
-        conversationId,
-        ...(untrusted && {
-          ...(waits && { pending: true }),
-          untrusted: `Learned in a chat that ${untrusted.replace(/^This chat /, '').replace(/, which could be trying to steer me\.$/, '')}.`,
-        }),
-        ...(held && { held }),
-        provenance: {
-          via: 'chat',
-          ...(read.length > 0 && { read: [...new Set(read.map((r) => r.label))].slice(0, 12) }),
-          ...(verdict.yours && { yours: true }),
+      // The store runs the check where it writes (ADR 0087); this says what's behind it.
+      const { memory, verdict } = await store.write(
+        {
+          content,
+          kind,
+          source: 'agent',
+          conversationId,
+          ...(untrusted && {
+            ...(waits && { pending: true }),
+            untrusted: `Learned in a chat that ${untrusted.replace(/^This chat /, '').replace(/, which could be trying to steer me\.$/, '')}.`,
+          }),
+          provenance: {
+            via: 'chat',
+            ...(read.length > 0 && { read: [...new Set(read.map((r) => r.label))].slice(0, 12) }),
+          },
         },
-      });
+        {
+          via: 'chat',
+          read,
+          said: check?.said() ?? [],
+          recent: recent.map(({ id, content: words }) => ({ id, content: words })),
+          wary: recent.some((r) => r.held),
+          ...(check && { on: await check.on().catch(() => true) }),
+          ...(check?.look && { look: check.look }),
+        },
+      );
+      const held = memory.held;
       // What it adds up to with the pieces before it: those wait too.
       if (held && verdict.pieces)
         for (const id of verdict.pieces) {

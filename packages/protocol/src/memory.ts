@@ -54,6 +54,8 @@ export const MemoryHold = z.object({
   reasons: z.array(MemoryReason).min(1).max(8),
   /** Where it came from, in a few words: “news.example, a page this chat read”. */
   from: z.string().max(200).optional(),
+  /** Memories it adds up to a plant with, held with it. */
+  pieces: z.array(z.string()).max(4).optional(),
 });
 export type MemoryHold = z.infer<typeof MemoryHold>;
 

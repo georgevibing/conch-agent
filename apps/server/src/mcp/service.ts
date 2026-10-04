@@ -28,7 +28,6 @@ import { summarizeToolUse } from '../conversations/summarize';
 import { toJsonSchema, wireName } from '../engines/api/jsonschema';
 import type { EngineMcpServer, HostTool } from '../engines/types';
 import { Mutex } from '../lib/fs';
-import { checkMemory, holdOf } from '../memory/guard';
 import type { MemoryStore } from '../memory/store';
 import { argumentProblem, CallEngine, type CallResult } from './call';
 import type { McpClientStore } from './store';
@@ -306,21 +305,22 @@ export class McpService {
           .safeParse(args);
         if (!parsed.success) return refusal(argumentProblem(parsed.error));
         // It always waits for the person; the memory check says why when it looks planted (ADR 0087).
-        const verdict = checkMemory({
-          content: parsed.data.content,
-          via: 'app',
-          cameFrom: `${client.name}, an app using Conch`,
-          on: (await this.deps.checkMemories?.().catch(() => true)) ?? true,
-        });
-        const held = holdOf(verdict);
-        const memory = await this.deps.memory.add({
-          content: parsed.data.content,
-          source: 'agent',
-          pending: true,
-          untrusted: `Suggested by ${client.name}, through Conch.`,
-          ...(held && { held }),
-          provenance: { via: 'app', read: [client.name.slice(0, 120)] },
-        });
+        const memory = await this.deps.memory.add(
+          {
+            content: parsed.data.content,
+            source: 'agent',
+            pending: true,
+            untrusted: `Suggested by ${client.name}, through Conch.`,
+            provenance: { via: 'app', read: [client.name.slice(0, 120)] },
+          },
+          {
+            via: 'app',
+            cameFrom: `${client.name}, an app using Conch`,
+            ...(this.deps.checkMemories && {
+              on: await this.deps.checkMemories().catch(() => true),
+            }),
+          },
+        );
         return textOf(
           memory.pending
             ? 'Suggested. It waits for the user’s OK in Conch before it’s remembered.'

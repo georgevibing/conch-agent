@@ -42,6 +42,7 @@ import type {
   ImportSource,
   ImportSourceId,
   ImportStatus,
+  MemoryHold,
   MemoryProvenance,
   Persona,
   Profile,
@@ -127,12 +128,15 @@ export interface ImportTargets {
   };
   memory: {
     list(): Promise<{ id: string; content: string }[]>;
-    add(input: {
-      content: string;
-      kind?: 'fact' | 'preference' | 'project' | 'person';
-      source: 'user';
-      provenance?: MemoryProvenance;
-    }): Promise<{ id: string }>;
+    add(
+      input: {
+        content: string;
+        kind?: 'fact' | 'preference' | 'project' | 'person';
+        source: 'user';
+        provenance?: MemoryProvenance;
+      },
+      how?: { via: 'import'; cameFrom: string },
+    ): Promise<{ id: string; held?: MemoryHold }>;
     remove(id: string): Promise<unknown>;
   };
   /** Settings → Safety → Check what it remembers (ADR 0087). */
@@ -668,13 +672,20 @@ export class ImportService {
       // What you ticked comes, noting where from (ADR 0087); the plan already
       // left anything that looks planted unticked, with why.
       const bringIn = async (text: string, from: string) => {
-        const memory = await t.memory.add({
-          content: unsmuggle(text),
-          source: 'user',
-          provenance: { via: 'import', read: [from.slice(0, 120)] },
-        });
+        // Ticked by you, and still checked where it's written (ADR 0087): one
+        // that looks planted comes in waiting for your OK, saying why.
+        const memory = await t.memory.add(
+          {
+            content: text,
+            source: 'user',
+            provenance: { via: 'import', read: [from.slice(0, 120)] },
+          },
+          { via: 'import', cameFrom: `the memories you brought in from ${from}` },
+        );
         created.memories.push(memory.id);
-        return undefined;
+        return memory.held
+          ? `Waiting for your OK: ${memory.held.reasons[0]?.words ?? ''}`.trim()
+          : undefined;
       };
 
       // Persona and about you: what they replace is kept for Undo.

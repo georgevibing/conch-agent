@@ -110,7 +110,7 @@ With **Remember things automatically** off, anything new a tidy-up learns waits 
 
 ## Good to know
 
-- Memories are Markdown files in `~/.conch/memory`, one each. Open, edit or delete them with any editor. They are part of every [backup](../care/backups.md).
+- Memories are Markdown files in `~/.conch/memory`, one each. Open, edit or delete them with any editor. They are part of every [backup](../care/backups.md). A file changed outside Conch, or brought back from a backup, is looked at again when Conch reads it, and one that looks off waits for your OK.
 - The model for meaning isn't in backups: on a new computer, press **Get it** again. **Repair everything** notices if any of it goes missing and gets it back.
 - Memory belongs to Conch, so every provider you connect knows the same things. [Codex](../providers/codex-cli.md) reads your memories but can't save new ones itself.
 - Only your own words teach it. Routine runs, and messages from other people on a chat app, are left out.

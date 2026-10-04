@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SkillSuggester, habits } from '../skills/suggest';
 import { cosine, ollamaEmbedder, stem, wordsVector, type Embedder } from './embed';
 import { bm25, distance, forgive, MemoryIndex } from './index';
+import { mintConsent } from './consent';
 import { chatWords, yourWords } from './learning';
 import { MemoryStore } from './store';
 import { MemoryTidy, parseReply, repeats, type Said } from './tidy';
@@ -252,7 +253,7 @@ describe('remembering in a chat that read something untrusted', () => {
     });
     expect(await index.search('forward emails')).toEqual([]);
     expect((await index.forPrompt('')).memories).toEqual([]);
-    await memories.keep(memory?.id ?? '');
+    await memories.keep(memory?.id ?? '', mintConsent({ method: 'POST', url: '/keep' }, 'keep'));
     expect((await index.search('forward emails'))[0]).toBeDefined();
     // It survives being read back from its file.
     const again = new MemoryStore(join(home, 'memory'));
@@ -374,7 +375,12 @@ describe('the tidy-up', () => {
     const list = await t.memories.list();
     expect(list.find((m) => m.id === berlin.id)?.content).toBe('Lives in Lisbon');
     expect(list.find((m) => /Ana/.test(m.content))?.pending).toBe(true);
-    await t.run.answer(result.id, result.changes[1]?.id ?? '', 'keep');
+    await t.run.answer(
+      result.id,
+      result.changes[1]?.id ?? '',
+      'keep',
+      mintConsent({ method: 'POST', url: '/api/memory/tidy/answer' }, 'tidy'),
+    );
     expect((await t.memories.list()).find((m) => /Ana/.test(m.content))?.pending).toBeUndefined();
   });
 

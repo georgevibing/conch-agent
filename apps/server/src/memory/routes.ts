@@ -1,16 +1,18 @@
 import {
+  CreateMemoryBody,
   DismissSuggestionBody,
   GetMeaningBody,
   KeepMemoryBody,
   Memory,
   TidyAnswerBody,
+  UpdateMemoryBody,
 } from '@conch/protocol';
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 
 import type { SkillLearner } from '../skills/learn';
 import type { SkillSuggester } from '../skills/suggest';
-import { withoutHidden } from './guard';
+import { mintConsent } from './consent';
 import type { MemoryIndex } from './index';
 import type { MemoryStore } from './store';
 import type { MemoryTidy } from './tidy';
@@ -48,6 +50,23 @@ export function registerLearningRoutes(
     return { results: (await index.search(q, 50)).map((r) => r.memory) };
   });
 
+  // What you write on What Conch knows is yours: a person's answer, the one
+  // thing that skips the memory check (ADR 0087). These routes, and no other
+  // code, mint it (`consent.test.ts`).
+  app.post('/api/memories', async (request, reply) => {
+    const body = CreateMemoryBody.safeParse(request.body);
+    if (!body.success)
+      return reply.code(400).send({ error: 'bad-request', message: body.error.issues[0]?.message });
+    return store.add({ ...body.data, source: 'user' }, mintConsent(request, 'add'));
+  });
+  app.patch<{ Params: { id: string } }>('/api/memories/:id', async (request, reply) => {
+    const body = UpdateMemoryBody.safeParse(request.body);
+    if (!body.success)
+      return reply.code(400).send({ error: 'bad-request', message: body.error.issues[0]?.message });
+    const memory = await store.update(request.params.id, body.data, mintConsent(request, 'edit'));
+    return memory ?? reply.code(404).send({ error: 'not-found', message: 'Memory not found.' });
+  });
+
   // Keep a memory that waits: as it is, in your words (Edit first), or, for one
   // the memory check refused, only with `anyway` (ADR 0087). Only a person gets here.
   app.post<{ Params: { id: string } }>('/api/memories/:id/keep', async (request, reply) => {
@@ -55,12 +74,14 @@ export function registerLearningRoutes(
     if (!body.success)
       return reply.code(400).send({ error: 'bad-request', message: body.error.issues[0]?.message });
     const before = await store.get(request.params.id);
-    const kept = await store.keep(request.params.id, {
-      ...(body.data.content !== undefined && { content: body.data.content }),
-      ...(body.data.anyway && { anyway: true }),
-      // What you saw is what's kept: hidden characters don't come with it.
-      clean: withoutHidden,
-    });
+    const kept = await store.keep(
+      request.params.id,
+      mintConsent(request, body.data.anyway ? 'anyway' : 'keep'),
+      {
+        ...(body.data.content !== undefined && { content: body.data.content }),
+        ...(body.data.anyway && { anyway: true }),
+      },
+    );
     if (kept === 'needs-anyway')
       return reply.code(409).send({
         error: 'needs-anyway',
@@ -172,7 +193,12 @@ export function registerLearningRoutes(
     const body = TidyAnswerBody.safeParse(request.body);
     if (!body.success)
       return reply.code(400).send({ error: 'bad-request', message: body.error.issues[0]?.message });
-    return tidy.answer(body.data.runId, body.data.changeId, body.data.answer);
+    return tidy.answer(
+      body.data.runId,
+      body.data.changeId,
+      body.data.answer,
+      mintConsent(request, 'tidy'),
+    );
   });
 
   app.get<{ Querystring: { fresh?: string } }>('/api/skills/suggestions', async (request) => ({

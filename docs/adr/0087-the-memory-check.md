@@ -61,7 +61,7 @@ person is shown what it is, why it looks off and where it came from, and asked.
 | `suggest_memory` from another app (`mcp/service.ts`)         | Always waited; now says why when it looks planted.                                                                                                                                                                                                                                                  |
 | The tidy-up and learning before a summary (`memory/tidy.ts`) | A new or updated memory that looks planted waits as a pending change with the reason; a merge into words that look planted isn't made.                                                                                                                                                              |
 | Come home (`import/service.ts`)                              | The import plan already asks per item; a memory the check would hold starts unticked, saying why. What you tick comes.                                                                                                                                                                              |
-| What you add or edit on What Conch knows                     | Not checked: your own words.                                                                                                                                                                                                                                                                        |
+| What you add or edit on What Conch knows                     | Skips the check: your answer, as a token only those routes mint (§ 5).                                                                                                                                                                                                                              |
 
 ### 2. Layered, deterministic first; a model can only raise a flag
 
@@ -177,6 +177,41 @@ person said themselves, and other assistants' memories — none held.
   Turning it down asks that it's you, after a plain warning; off, only secrets and
   hidden characters are still held. The security checkup, Repair everything and a
   restore preview (`safety-off`) all say so.
+
+### 5. Enforced where memories are written
+
+The check doesn't rely on its callers. `MemoryStore` runs it in every write it
+has — `add`/`write`, `update` (even one that changes only the kind), `restore`
+(a tidy-up's Undo) — with whatever the caller says about where the words came
+from; a caller that says nothing is treated as outside. `hold` and `remove`
+only make things stricter. `keep` needs a person's answer.
+
+- **A person's answer is a token** (`memory/consent.ts`, `PersonConsent`): minted
+  only by the routes that take one (`memory/routes.ts`: add and edit on What
+  Conch knows, Remember it, Remember anyway, Edit first, Keep and Undo on a
+  tidy-up), behind the gateway's sign-in, host and origin checks. Only a token
+  minted there passes (a `WeakSet`, so a look-alike object doesn't), and a test
+  fails if any other file mints one. It is the only way past the check.
+- **One canonical form** (`canonical`): hidden characters out, Unicode NFKC,
+  whitespace as one space. Hidden characters and fullwidth names are looked for
+  as written; everything else is checked in the canonical form, and that same
+  form is what's kept, shown and read back. Nothing is checked in one form and
+  kept in another.
+- **Every field a model reads is read.** Besides the words, where it came from is
+  named in the prompt, so the names of what the chat read are checked too (a
+  chat-app display name can say "ignore previous instructions"), and the labels
+  and the `untrusted` note are kept in canonical form. Memories have no title
+  or tags; their kind is one of four words.
+- **Sealed files.** Each memory file carries an HMAC-SHA256 seal under a key only
+  this Conch has (`memory.seal`, never backed up). A file whose seal doesn't hold —
+  edited by hand, brought back by a restored backup, written by anything else — is
+  checked again when it's read, and none of what it says about where it came from
+  is believed. The first time there is a key (the first run with seals, or a new
+  computer), what's there is sealed after the checks that hold wherever a memory
+  came from (secrets, hidden characters, lookalikes, encoded text, beacons).
+- **The assistant can't write the files.** `memory/` and `memory.seal` are
+  protected paths (`lib/protect.ts`): the assistant's file and shell tools never
+  touch them, so `remember` is its only way in.
 
 ## Consequences
 

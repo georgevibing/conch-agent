@@ -8,6 +8,11 @@ import { join } from 'node:path';
  */
 export function protectedPaths(home: string): string[] {
   return [
+    // Memories are read into every chat: the assistant writes them only through
+    // `remember`, which checks them (ADR 0087), never by hand; and the key that
+    // seals them would let it forge one.
+    join(home, 'memory'),
+    join(home, 'memory.seal'),
     join(home, 'vault'),
     join(home, 'codex.secrets.json'),
     join(home, 'codex-runtime'),

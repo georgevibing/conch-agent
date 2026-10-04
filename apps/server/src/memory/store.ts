@@ -1,15 +1,65 @@
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { readdir, readFile, rm } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 
-import { Memory, type MemoryHold, type MemoryKind, type MemoryProvenance } from '@conch/protocol';
+import { Memory, type MemoryKind, type MemoryProvenance } from '@conch/protocol';
 
 import { Emitter } from '../lib/emitter';
 import { Mutex, safeJoin, writeFileAtomic } from '../lib/fs';
 import { newId } from '../lib/ids';
+import { isConsent, type PersonConsent } from './consent';
+import {
+  canonical,
+  checkMemory,
+  holdOf,
+  secondLook,
+  type GuardInput,
+  type LookModel,
+  type Verdict,
+} from './guard';
+
+/**
+ * Where a write comes from, for the memory check (ADR 0087): what the chat
+ * read, the person's own words, and the rest of `GuardInput`. Left out, a
+ * write is "from somewhere": the check treats it like something from outside.
+ */
+export type WriteContext = Omit<GuardInput, 'content' | 'via'> & {
+  via?: GuardInput['via'];
+  /** A cheap model for the second look; it can only raise a flag. */
+  look?: () => Promise<LookModel | undefined>;
+};
+
+/** A write is checked, unless it carries a person's answer (`mintConsent`, routes only). */
+export type MemoryWrite = WriteContext | PersonConsent;
+
+/** A memory as written, and what the check said about it. */
+export interface Written {
+  memory: Memory;
+  verdict: Verdict;
+}
+
+/** Where a memory came from is a field a model reads: every label in the one canonical form. */
+function cleanProvenance(p: MemoryProvenance | undefined): MemoryProvenance | undefined {
+  if (!p) return undefined;
+  const read = p.read?.map((label) => canonical(label).slice(0, 120)).filter(Boolean);
+  return { ...p, ...(read && { read: read.slice(0, 12) }) };
+}
+
+const OK: Verdict = { verdict: 'ok', reasons: [] };
 
 /**
  * Long-term memory, stored as one Markdown file per memory under
  * `~/.conch/memory/`. Plain files are deliberate: memories are the user's
  * data — readable, editable, greppable, easy to back up or delete.
+ *
+ * Every write goes through the memory check here, not in its callers (ADR
+ * 0087): the words are put in one canonical form, checked, and that same form
+ * is what's kept and read back. One that looks planted is kept `pending` with
+ * `held`, never used until a person answers; only a person's answer
+ * (`PersonConsent`, minted by the routes that take it) skips the check. Each
+ * file is sealed with a key only this Conch has, so a file changed outside it
+ * — by hand, by a restored backup, by anything else — is checked again when
+ * it's read.
  *
  * ```md
  * ---
@@ -18,6 +68,7 @@ import { newId } from '../lib/ids';
  * source: agent
  * createdAt: 1727600000000
  * updatedAt: 1727600000000
+ * seal: 3f…
  * ---
  * Prefers TypeScript examples over Python.
  * ```
@@ -26,8 +77,18 @@ export class MemoryStore {
   readonly changed = new Emitter<void>();
   #mutex = new Mutex();
   #cache?: Map<string, Memory>;
+  #key?: Buffer;
+  readonly #keyPath: string;
+  /** The check's switch (Settings → Safety); on when unknown. */
+  readonly #on: () => Promise<boolean>;
 
-  constructor(private readonly dir: string) {}
+  constructor(
+    private readonly dir: string,
+    options: { keyPath?: string; checkOn?: () => Promise<boolean> } = {},
+  ) {
+    this.#keyPath = options.keyPath ?? join(dirname(dir), 'memory.seal');
+    this.#on = options.checkOn ?? (() => Promise.resolve(true));
+  }
 
   async list(): Promise<Memory[]> {
     const all = [...(await this.#load()).values()];
@@ -38,29 +99,43 @@ export class MemoryStore {
     return (await this.#load()).get(id);
   }
 
-  add(input: {
-    content: string;
-    kind?: MemoryKind;
-    source: Memory['source'];
-    conversationId?: string;
-    /** Waiting for the person's OK (ADR 0032), and why. */
-    pending?: boolean;
-    untrusted?: string;
-    /** The memory check held it (ADR 0087): it waits, with why. */
-    held?: MemoryHold;
-    /** Where it came from (ADR 0087). */
-    provenance?: MemoryProvenance;
-  }): Promise<Memory> {
-    return this.#mutex.run(async () => {
+  /** The check, outside the lock (a second look may take seconds). */
+  async #check(content: string, how: MemoryWrite | undefined): Promise<Verdict> {
+    if (isConsent(how)) return OK;
+    const context: WriteContext = how ?? {};
+    const input: GuardInput = {
+      ...context,
+      via: context.via ?? 'other',
+      content,
+      on: context.on ?? (await this.#on().catch(() => true)),
+    };
+    return secondLook(checkMemory(input), input, context.look);
+  }
+
+  /**
+   * Remember something. It's checked (ADR 0087) unless `how` is a person's
+   * answer; one that looks planted is kept waiting, with why.
+   */
+  async add(input: MemoryInput, how?: MemoryWrite): Promise<Memory> {
+    return (await this.write(input, how)).memory;
+  }
+
+  /** `add`, with what the check said (the earlier pieces of a split plant, for the caller to hold). */
+  async write(input: MemoryInput, how?: MemoryWrite): Promise<Written> {
+    const content = canonical(input.content);
+    if (!content) throw new Error('A memory needs words.');
+    const verdict = await this.#check(input.content, how);
+    const held = holdOf(verdict);
+    const memory = await this.#mutex.run(async () => {
       const memories = await this.#load();
-      const content = normalise(input.content);
       // Re-saying something we already know refreshes it instead of duplicating.
       const existing = [...memories.values()].find(
-        (m) => normalise(m.content).toLowerCase() === content.toLowerCase(),
+        (m) => canonical(m.content).toLowerCase() === content.toLowerCase(),
       );
       // (Something already known never goes back to waiting for an OK.)
       if (existing) return this.#write({ ...existing, updatedAt: Date.now() });
       const now = Date.now();
+      const provenance = cleanProvenance(input.provenance);
       return this.#write(
         Memory.parse({
           id: newId('m'),
@@ -70,23 +145,47 @@ export class MemoryStore {
           conversationId: input.conversationId,
           createdAt: now,
           updatedAt: now,
-          ...((input.pending || input.held) && { pending: true }),
-          ...(input.untrusted && { untrusted: input.untrusted.slice(0, 300) }),
-          ...(input.held && { held: input.held }),
-          ...(input.provenance && { provenance: input.provenance }),
+          ...((input.pending || held) && { pending: true }),
+          ...(input.untrusted && { untrusted: canonical(input.untrusted).slice(0, 300) }),
+          ...(held && { held: { ...held, ...(verdict.pieces && { pieces: verdict.pieces }) } }),
+          ...(isConsent(how)
+            ? { provenance: { ...(provenance ?? { via: 'you' as const }), yours: true } }
+            : provenance && {
+                provenance: { ...provenance, ...(verdict.yours && { yours: true }) },
+              }),
         }),
       );
     });
+    return { memory, verdict };
   }
 
-  update(id: string, patch: { content?: string; kind?: MemoryKind }): Promise<Memory | undefined> {
+  /**
+   * Change a memory's words or kind. Checked like a new one (ADR 0087), even
+   * when only its kind changes: words that look planted make it wait again.
+   */
+  async update(
+    id: string,
+    patch: { content?: string; kind?: MemoryKind },
+    how?: MemoryWrite,
+  ): Promise<Memory | undefined> {
+    const before = await this.get(id);
+    if (!before) return undefined;
+    const words = patch.content ?? before.content;
+    const verdict = await this.#check(words, how);
+    const held = holdOf(verdict);
     return this.#mutex.run(async () => {
       const current = (await this.#load()).get(id);
       if (!current) return undefined;
+      const content = canonical(words);
+      if (!content) return current;
       return this.#write({
         ...current,
-        ...(patch.content !== undefined && { content: normalise(patch.content) }),
+        content,
         ...(patch.kind !== undefined && { kind: patch.kind }),
+        ...(held && { pending: true, held }),
+        ...(isConsent(how) && {
+          provenance: { ...(current.provenance ?? { via: 'you' as const }), yours: true },
+        }),
         updatedAt: Date.now(),
       });
     });
@@ -94,27 +193,28 @@ export class MemoryStore {
 
   /**
    * You looked at a memory waiting for your OK, and keep it: as it is, or in
-   * your own words (`content`). One the check refused (ADR 0087) needs
-   * `anyway`, and is kept without the hidden characters you couldn't see.
+   * your own words (`content`). Only a person's answer keeps one; one the
+   * check refused (ADR 0087) needs `anyway`.
    */
   keep(
     id: string,
-    options: { content?: string; anyway?: boolean; clean?: (text: string) => string } = {},
+    consent: PersonConsent,
+    options: { content?: string; anyway?: boolean } = {},
   ): Promise<Memory | undefined | 'needs-anyway'> {
+    if (!isConsent(consent)) return Promise.reject(new Error('Only a person keeps a memory.'));
     return this.#mutex.run(async () => {
       const current = (await this.#load()).get(id);
       if (!current) return undefined;
       if (current.held?.verdict === 'refuse' && !options.anyway && options.content === undefined)
         return 'needs-anyway';
       const { pending: _p, untrusted: _u, held: _h, ...kept } = current;
-      const words = options.content ?? options.clean?.(current.content) ?? current.content;
+      const content = canonical(options.content ?? current.content);
+      if (!content) return current;
       return this.#write({
         ...kept,
-        content: normalise(words),
+        content,
         // Kept by you: its words are yours now, wherever they came from.
-        ...((options.content !== undefined || current.held) && {
-          provenance: { ...(current.provenance ?? { via: 'chat' as const }), yours: true },
-        }),
+        provenance: { ...(current.provenance ?? { via: 'chat' as const }), yours: true },
         updatedAt: Date.now(),
       });
     });
@@ -122,9 +222,10 @@ export class MemoryStore {
 
   /**
    * Hold a memory already remembered (ADR 0087): with what came next, it adds
-   * up to something to ask about. It waits again, and isn't used meanwhile.
+   * up to something to ask about. It waits again and isn't used meanwhile.
+   * Only ever stricter, so it needs no check.
    */
-  hold(id: string, held: MemoryHold): Promise<Memory | undefined> {
+  hold(id: string, held: NonNullable<Memory['held']>): Promise<Memory | undefined> {
     return this.#mutex.run(async () => {
       const current = (await this.#load()).get(id);
       if (!current) return undefined;
@@ -132,11 +233,24 @@ export class MemoryStore {
     });
   }
 
-  /** Put a memory back exactly as it was (Undo after a tidy-up). */
-  restore(memory: Memory): Promise<Memory> {
-    return this.#mutex.run(() => this.#write(Memory.parse(memory)));
+  /**
+   * Put a memory back as it was (Undo after a tidy-up). Checked like any
+   * write: with your Undo, as it was; otherwise words that look planted wait.
+   */
+  async restore(memory: Memory, how?: MemoryWrite): Promise<Memory> {
+    const verdict = await this.#check(memory.content, how);
+    const held = holdOf(verdict);
+    const parsed = Memory.parse(memory);
+    return this.#mutex.run(() =>
+      this.#write({
+        ...parsed,
+        content: canonical(parsed.content) || parsed.content,
+        ...(held && { pending: true, held }),
+      }),
+    );
   }
 
+  /** Forget a memory. Only ever takes away, so it needs no check. */
   remove(id: string): Promise<Memory | undefined> {
     return this.#mutex.run(async () => {
       const memories = await this.#load();
@@ -167,10 +281,29 @@ export class MemoryStore {
   }
 
   async #write(memory: Memory): Promise<Memory> {
-    await writeFileAtomic(safeJoin(this.dir, `${memory.id}.md`), serialise(memory));
+    const { key } = await this.#sealKey();
+    await writeFileAtomic(safeJoin(this.dir, `${memory.id}.md`), sealed(serialise(memory), key));
     (await this.#load()).set(memory.id, memory);
     this.changed.emit();
     return memory;
+  }
+
+  /** This Conch's own key for sealing memory files; made the first time (what's there then is trusted once). */
+  async #sealKey(): Promise<{ key: Buffer; fresh: boolean }> {
+    if (this.#key) return { key: this.#key, fresh: false };
+    try {
+      const key = Buffer.from((await readFile(this.#keyPath, 'utf8')).trim(), 'base64url');
+      if (key.length >= 32) {
+        this.#key = key;
+        return { key, fresh: false };
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    const key = randomBytes(32);
+    await writeFileAtomic(this.#keyPath, key.toString('base64url'), 0o600);
+    this.#key = key;
+    return { key, fresh: true };
   }
 
   async #load(): Promise<Map<string, Memory>> {
@@ -182,13 +315,81 @@ export class MemoryStore {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
+    if (!files.length) {
+      this.#cache = map;
+      return map;
+    }
+    const { key, fresh } = await this.#sealKey();
     for (const file of files) {
-      const memory = parse(await readFile(safeJoin(this.dir, file), 'utf8'));
-      if (memory) map.set(memory.id, memory);
+      const text = await readFile(safeJoin(this.dir, file), 'utf8');
+      const memory = parse(text);
+      if (!memory) continue;
+      if (sealHolds(text, key)) {
+        map.set(memory.id, memory);
+        continue;
+      }
+      // No seal that holds: changed outside Conch (by hand, a restored backup,
+      // anything else), so it's checked again. With no key yet (the first run
+      // with seals, or a new computer), what's there gets the checks that hold
+      // wherever a memory came from: secrets, hidden characters, lookalikes,
+      // encoded text, beacons. With a key, a file it didn't seal is from outside.
+      const verdict = checkMemory({
+        content: rawContent(text) ?? memory.content,
+        via: fresh ? 'tidy' : 'other',
+        on: await this.#on().catch(() => true),
+      });
+      const held = holdOf(verdict);
+      const { held: _was, ...rest } = memory;
+      const checked: Memory = {
+        ...rest,
+        content: canonical(memory.content) || memory.content,
+        ...((held || memory.pending) && { pending: true }),
+        ...(held && { held }),
+        // What it says about where it came from came with the file: none of it is believed.
+        ...(memory.provenance && { provenance: { ...memory.provenance, yours: false } }),
+      };
+      map.set(checked.id, checked);
+      await writeFileAtomic(safeJoin(this.dir, file), sealed(serialise(checked), key));
     }
     this.#cache = map;
     return map;
   }
+}
+
+/** What `add` takes. */
+export interface MemoryInput {
+  content: string;
+  kind?: MemoryKind;
+  source: Memory['source'];
+  conversationId?: string;
+  /** Waiting for the person's OK (ADR 0032), and why. Only ever stricter. */
+  pending?: boolean;
+  untrusted?: string;
+  /** Where it came from (ADR 0087). */
+  provenance?: MemoryProvenance;
+}
+
+/** The seal on a memory file: HMAC-SHA256 of the rest of it, under this Conch's key. */
+function sealOf(body: string, key: Buffer): string {
+  return createHmac('sha256', key).update(body).digest('base64url');
+}
+
+function sealed(text: string, key: Buffer): string {
+  return text.replace(/\n---\n/, `\nseal: ${sealOf(text, key)}\n---\n`);
+}
+
+function sealHolds(text: string, key: Buffer): boolean {
+  const line = /\nseal: ([A-Za-z0-9_-]+)\n/.exec(text);
+  if (!line?.[1]) return false;
+  const body = text.replace(line[0], '\n');
+  const want = Buffer.from(sealOf(body, key));
+  const got = Buffer.from(line[1]);
+  return want.length === got.length && timingSafeEqual(want, got);
+}
+
+/** A file's words exactly as written, hidden characters and all, for the check. */
+function rawContent(text: string): string | undefined {
+  return /^---\n[\s\S]*?\n---\n?([\s\S]*)$/.exec(text)?.[1];
 }
 
 function normalise(content: string): string {

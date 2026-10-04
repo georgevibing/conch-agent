@@ -52,7 +52,7 @@ export interface ReadThing {
 export interface GuardInput {
   content: string;
   /** Which way it's being written. */
-  via: 'chat' | 'tidy' | 'import' | 'app';
+  via: 'chat' | 'tidy' | 'import' | 'app' | 'other';
   /** What the chat (or the chats it was learned from) read from outside. */
   read?: readonly ReadThing[];
   /** The person's own words, where it was learned. Unknown (a chat app with others in it): none. */
@@ -148,6 +148,17 @@ export function hiddenIn(text: string): string[] {
 export function withoutHidden(text: string): string {
   const chars = [...text];
   return chars.filter((_, i) => !hiddenAt(chars, i)).join('');
+}
+
+/**
+ * The one form of a memory's words that is checked, stored and read back
+ * (ADR 0087): hidden characters taken out, Unicode NFKC (fullwidth letters,
+ * ligatures and compatibility forms become what they stand for), and
+ * whitespace as one space. Checking one form and keeping another would let
+ * a plant through in the gap.
+ */
+export function canonical(text: string): string {
+  return withoutHidden(withoutHidden(text).normalize('NFKC')).replace(/\s+/g, ' ').trim();
 }
 
 // ── Lookalike names (UTS #39) ────────────────────────────────────────────
@@ -619,11 +630,13 @@ interface Signals {
 function signalsOf(text: string): Signals {
   const strong = new Set<MemoryReasonCode>();
   const context = new Set<MemoryReasonCode>();
+  // Hidden characters and fullwidth names are looked for as written; everything
+  // else in the form that's kept.
   if (hiddenIn(text).length) strong.add('hidden');
-  const seen = withoutHidden(text);
+  const seen = canonical(text);
   const secret = secretIn(seen);
   if (secret) strong.add('secret');
-  const lookalike = lookalikes(seen)[0];
+  const lookalike = lookalikes(withoutHidden(text))[0] ?? lookalikes(seen)[0];
   if (lookalike) strong.add('lookalike');
   if (encodedIn(seen)) strong.add('encoded');
   if (BEACON.test(seen) || PLACEHOLDER.test(seen)) strong.add('exfiltration');
@@ -681,9 +694,10 @@ export function checkMemory(input: GuardInput): Verdict {
   const read = input.read ?? [];
   const said = input.said ?? [];
   // Something other than the person could be behind it.
-  const exposed = read.length > 0 || input.via === 'import' || input.via === 'app';
+  const exposed =
+    read.length > 0 || input.via === 'import' || input.via === 'app' || input.via === 'other';
   const signals = signalsOf(input.content);
-  const seen = withoutHidden(input.content);
+  const seen = canonical(input.content);
   const saidText = said.join('\n');
 
   // Yours: its gist is in what you said, and so is every value in it.
@@ -755,6 +769,16 @@ export function checkMemory(input: GuardInput): Verdict {
     }
   }
 
+  // Every field that reaches a model is read, not only the words: where it came
+  // from is named in the prompt too, so a name that gives orders or hides
+  // something is held like words that do.
+  const oddName = read.find((r) => {
+    const named = signalsOf(r.label);
+    return [...named.strong, ...named.context].some((c) => c !== 'long');
+  });
+  const ownOrder = signals.strong.has('instruction') || signals.context.has('instruction');
+  if (oddName) codes.add(hiddenIn(oddName.label).length ? 'hidden' : 'instruction');
+
   // Turned down in Settings: only the clearly dangerous is still held.
   if (!on) for (const c of [...codes]) if (c !== 'hidden' && c !== 'secret') codes.delete(c);
   if (!codes.size) return { verdict: 'ok', reasons: [], yours };
@@ -784,6 +808,12 @@ export function checkMemory(input: GuardInput): Verdict {
           : EFFECT[code](seen);
       words = sentence(code === lead && origin ? `${origin}, and ${effect}` : effect);
     }
+    if (
+      oddName &&
+      ((code === 'instruction' && !ownOrder) ||
+        (code === 'hidden' && !signals.strong.has('hidden')))
+    )
+      words = 'Where it came from is named in words that give me orders or hide something.';
     reasons.push({ code, words: clip(words, 300) });
   }
   return {

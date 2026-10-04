@@ -6,6 +6,7 @@ import type { Memory, Persona, Profile } from '@conch/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { recentMemories } from '../conversations/manager';
+import { mintConsent } from './consent';
 import { DATAMARK, type LookModel, type ReadThing } from './guard';
 import { buildSystemAppend } from './prompt';
 import { MemoryStore } from './store';
@@ -16,6 +17,9 @@ import { memoryTools } from './tools';
  * every engine uses, the store that keeps a hold, and the prompt that never
  * carries one.
  */
+/** What only the route a person answers through mints. */
+const person = () => mintConsent({ method: 'POST', url: '/api/memories/m/keep' }, 'keep');
+
 let home: string;
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'conch-check-'));
@@ -121,8 +125,8 @@ describe('remembering, checked first', () => {
     await t.remember(`GitHub token: ${'ghp_'}${'a1B2'.repeat(9)}`);
     const [memory] = await t.memories.list();
     expect(memory?.held?.verdict).toBe('refuse');
-    expect(await t.memories.keep(memory?.id ?? '')).toBe('needs-anyway');
-    const kept = await t.memories.keep(memory?.id ?? '', { anyway: true });
+    expect(await t.memories.keep(memory?.id ?? '', person())).toBe('needs-anyway');
+    const kept = await t.memories.keep(memory?.id ?? '', person(), { anyway: true });
     expect(kept !== 'needs-anyway' && [kept?.pending, kept?.held]).toEqual([undefined, undefined]);
   });
 
@@ -131,8 +135,9 @@ describe('remembering, checked first', () => {
     await t.remember(`Likes tea\u{E0049}\u{E0047}\u{E004E}`);
     const [memory] = await t.memories.list();
     expect(memory?.held?.reasons[0]?.code).toBe('hidden');
-    const { withoutHidden } = await import('./guard');
-    const kept = await t.memories.keep(memory?.id ?? '', { anyway: true, clean: withoutHidden });
+    // Kept in the one form that was checked: what you saw.
+    expect(memory?.content).toBe('Likes tea');
+    const kept = await t.memories.keep(memory?.id ?? '', person(), { anyway: true });
     expect(kept !== 'needs-anyway' && kept?.content).toBe('Likes tea');
   });
 
@@ -140,7 +145,7 @@ describe('remembering, checked first', () => {
     const t = tools({ read: [PAGE], said: ['summarise'] });
     await t.remember('Invoices are sent to billing@news.example');
     const [memory] = await t.memories.list();
-    const kept = await t.memories.keep(memory?.id ?? '', {
+    const kept = await t.memories.keep(memory?.id ?? '', person(), {
       content: 'Invoices go to accounts@ada.example',
     });
     expect(kept).toMatchObject({
