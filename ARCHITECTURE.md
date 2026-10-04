@@ -591,19 +591,24 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   A turn keeps running in an archived chat.
 - API retries from the engine surface as live `notice` events ("Retrying in 4s…"),
   so a stalled provider is never a silent spinner.
-- **The browser** (`browser/`, [ADR 0014](./docs/adr/0014-browser.md)).
+- **The browser** (`browser/`, [ADR 0014](./docs/adr/0014-browser.md),
+  [ADR 0080](./docs/adr/0080-the-browser-does-what-you-do.md)).
   - **Runtime.** One headless browser per gateway, driven with `playwright-core`:
     the Chrome, Edge, Brave or Chromium already installed (`locate.ts`), else a
     Chromium downloaded on first use (`install.ts`). It gets its own profile in
-    `~/.conch/browser/profile`.
+    `~/.conch/browser/profile`. Or, by the person's choice (`backends.ts`), their own
+    Chrome (attached over CDP with Chrome's own consent; only Conch's tabs are
+    touched, each contained and badged), Browserbase, Steel or a DevTools address,
+    keys in the sealed `browser.secrets.json`; any of them falls back to the local one.
   - **Self-healing** (`runtime.ts`). A browser that won't start falls back to the
     next one found, then to a download. Processes still holding the profile are
     found by command line and ended. A crash relaunches, and each chat's tab
     reopens at its last address. The browser stops after 10 idle minutes. Each
     repair is logged in `BrowserStatus.healed`.
-  - **Tabs.** One per conversation (`tab.ts`). Popups (sign-in windows) stack.
-    The page's viewport takes the watching panel's shape: desktop-wide, as tall
-    as the panel.
+  - **Tabs.** Each conversation has its own tabs (`tab.ts`, up to eight): links to
+    a new tab and popups join and come into view, and closing one returns to its
+    opener. The page's viewport takes the watching panel's shape: desktop-wide, as
+    tall as the panel (never resized in the person's own Chrome).
   - **Agent tools.** `browser_*` host tools (`tools.ts`) reach every engine with
     host tools, the same way memory does. Claude Code gets them in-process, API
     engines and the mock as function tools, and Codex through app-server dynamic
@@ -615,14 +620,19 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
     - Permissions are the browser's own, via the tool context's `ask`, so every
       engine behaves the same. It asks per site (registrable domain via tldts)
       and always for high-stakes controls and downloads. Plan mode only reads.
-    - Typing into a secret field becomes a `browser.handoff` to the user.
+    - Typing into a secret field becomes a `browser.handoff` to the user; one that
+      starts at a sign-in or captcha ends by itself once it's passed (`handoff.ts`).
+    - `browser_click_at` acts by position (`point.ts` finds what's there, through
+      frames, for the same checks); `browser_upload` takes only the chat's own files
+      or the work folder's (`uploads.ts`), and always asks.
   - **Live view.** `/api/browser/live?conversationId=` is its own WebSocket:
     - binary JPEG screencast frames, sent only while a watcher is visible,
       latest wins;
     - `tab` and `action` events (for the agent's cursor and captions);
     - your mouse, keys and text when you take over, sent through CDP input.
   - **REST.** `GET /api/browser` (status), `PATCH /api/browser/settings` (`allowLocal`
-    needs recent verification), `DELETE /api/browser/sites/:site`, `POST
+    needs recent verification), `PUT /api/browser/backend` (anything but the local
+    one needs recent verification), `DELETE /api/browser/backend/:kind`, `DELETE /api/browser/sites/:site`, `POST
 /api/browser/repair`, `POST /api/browser/wipe`, `POST /api/browser/:id/control`
     (hand back from the transcript), and `GET /api/browser/shots/:id/:shot`.
     `browser.status` is broadcast on every change, install progress included.
