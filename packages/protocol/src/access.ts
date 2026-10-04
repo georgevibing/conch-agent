@@ -449,6 +449,8 @@ export const CheckupAction = z.enum([
   'check-after-reading',
   /** Commands are sealed again (ADR 0028). */
   'sealed-commands',
+  /** A memory that looks planted is held and asked about again (ADR 0087). */
+  'check-memories',
 ]);
 export type CheckupAction = z.infer<typeof CheckupAction>;
 

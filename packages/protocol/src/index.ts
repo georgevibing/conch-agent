@@ -212,6 +212,11 @@ export const Preferences = z.object({
    * and can't read where keys and passwords live (ADR 0028).
    */
   sealedCommands: z.boolean().default(true),
+  /**
+   * A memory that looks planted (ADR 0087) is held and asked about, not saved.
+   * Off: only passwords, keys and hidden characters are still held.
+   */
+  checkMemories: z.boolean().default(true),
   /** Conch in the menu bar, tray or panel, whenever it runs (ADR 0029). */
   menuBar: z.boolean().default(true),
   /** A Mac on mains power stays awake while Conch runs in the background (ADR 0029). */
@@ -321,9 +326,10 @@ export const UpdateSettingsBody = z.object({
       /** `null` goes back to waiting for the limit to reset. */
       limitFallback: EngineId.nullable(),
       mutedSuggestions: MutedSuggestions,
-      /** Turning either off needs a recent password or key (ADR 0028). */
+      /** Turning any of these off needs a recent password or key (ADR 0028, ADR 0087). */
       checkAfterReading: z.boolean(),
       sealedCommands: z.boolean(),
+      checkMemories: z.boolean(),
       menuBar: z.boolean(),
       keepAwake: z.boolean(),
       tidyMemory: z.boolean(),
@@ -521,6 +527,12 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     type: z.literal('memory.decided'),
     memoryId: z.string(),
     kept: z.boolean(),
+    /** What it said, so Activity can name it (ADR 0087). */
+    content: z.string().optional(),
+    /** You changed its words before keeping it. */
+    edited: z.boolean().optional(),
+    /** Kept although the check refused it (a secret, hidden characters): your explicit override. */
+    anyway: z.boolean().optional(),
   }),
   /** The chat read something from outside: from here on, sending and changing ask first (ADR 0028). */
   z.object({
