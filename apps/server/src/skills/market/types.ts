@@ -29,7 +29,7 @@ export interface Fetched {
 }
 
 /**
- * A place skills come from (ADR 0072). Each one: talks only to its own
+ * A place skills come from (ADR 0077). Each one: talks only to its own
  * hosts, pins every download to a commit or a content hash, and checks
  * what it downloaded against that pin before handing it over.
  */

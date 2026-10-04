@@ -1,6 +1,6 @@
 /**
  * ClawHub (clawhub.ai), OpenClaw's registry, through its documented public
- * read API (ADR 0072), and the skills.sh skills it indexes.
+ * read API (ADR 0077), and the skills.sh skills it indexes.
  *
  * - **Searching.** `GET /api/v1/search` (ClawHub's own skills and skills.sh's,
  *   with the scanners' verdicts) and `GET /api/v1/skills?sort=downloads` for

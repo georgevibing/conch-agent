@@ -1,7 +1,7 @@
 /**
  * Discover: skills people publish, found in a few public places and added
  * as one of yours in one press, after Conch has read every file in it
- * (ADR 0072). Nothing here is trusted because a registry said so: a skill
+ * (ADR 0077). Nothing here is trusted because a registry said so: a skill
  * from a marketplace is downloaded at one fixed version, read by the same
  * scan as every other skill, held to its own list of what it may do, and
  * never runs anything when it's added.
