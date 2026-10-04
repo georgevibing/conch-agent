@@ -49,6 +49,8 @@ export interface Door {
   url: string;
   /** The headers the agent must send, as ACP's `mcpServers` takes them. */
   headers: { name: string; value: string }[];
+  /** The turn's key, for the stdio door (`shim.mjs`) to knock with. */
+  key: string;
   close(): Promise<void>;
 }
 
@@ -77,6 +79,14 @@ export async function openDoor(
   tools: ReadonlyMap<string, Callable>,
   events: DoorEvents,
   signal: AbortSignal,
+  options: {
+    /**
+     * Conch's instructions, as an MCP server's own: programs that put a
+     * server's instructions in front of the model (Copilot, Gemini CLI) get
+     * them the way they get any server's, not as words in the user's message.
+     */
+    instructions?: string;
+  } = {},
 ): Promise<Door> {
   const key = randomBytes(32).toString('base64url');
   let calls = 0;
@@ -84,7 +94,10 @@ export async function openDoor(
   const mcp = () => {
     const server = new Server(
       { name: DOOR_NAME, version: '1.0.0' },
-      { capabilities: { tools: {} } },
+      {
+        capabilities: { tools: {} },
+        ...(options.instructions && { instructions: options.instructions }),
+      },
     );
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: [...tools.values()].map((tool) => ({
@@ -174,6 +187,7 @@ export async function openDoor(
   return {
     url: `http://127.0.0.1:${port}/mcp`,
     headers: [{ name: 'Authorization', value: `Bearer ${key}` }],
+    key,
     close,
   };
 }

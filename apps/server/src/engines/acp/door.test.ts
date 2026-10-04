@@ -1,9 +1,11 @@
+import { spawn } from 'node:child_process';
 import { request } from 'node:http';
 
 import { describe, expect, it } from 'vitest';
 
 import type { Callable } from '../api/engine';
 import { openDoor } from './door';
+import { SHIM_SCRIPT } from './engine';
 
 function tool(name: string): Callable {
   return {
@@ -69,5 +71,40 @@ describe('the door Conch opens for an agent’s turn', () => {
     const key = Object.fromEntries(door.headers.map((h) => [h.name, h.value]));
     await door.close();
     await expect(knock(door.url, key, list)).rejects.toThrow();
+  });
+});
+
+describe('the stdio door (shim.mjs)', () => {
+  const run = (env: Record<string, string>) =>
+    new Promise<number | null>((resolve) => {
+      const child = spawn(process.execPath, [SHIM_SCRIPT], { env, stdio: 'ignore' });
+      child.on('close', resolve);
+    });
+
+  it('relays only to a door on this computer, and only with a key', async () => {
+    expect(await run({ CONCH_DOOR_URL: 'http://evil.example:80/mcp', CONCH_DOOR_KEY: 'k' })).toBe(
+      2,
+    );
+    expect(await run({ CONCH_DOOR_URL: 'http://127.0.0.1:1/other', CONCH_DOOR_KEY: 'k' })).toBe(2);
+    expect(await run({ CONCH_DOOR_URL: 'http://127.0.0.1:4317/mcp', CONCH_DOOR_KEY: '' })).toBe(2);
+  });
+
+  it('gets nothing from the door with the wrong key', async () => {
+    const door = await openDoor(
+      new Map([['x', tool('x')]]),
+      { start() {}, end() {} },
+      new AbortController().signal,
+    );
+    const child = spawn(process.execPath, [SHIM_SCRIPT], {
+      env: { CONCH_DOOR_URL: door.url, CONCH_DOOR_KEY: 'not-the-key' },
+      stdio: ['pipe', 'pipe', 'ignore'],
+    });
+    const answer = new Promise<string>((resolve) =>
+      child.stdout.once('data', (d: Buffer) => resolve(d.toString())),
+    );
+    child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 7, method: 'tools/list' })}\n`);
+    expect(JSON.parse(await answer)).toMatchObject({ id: 7, error: { code: -32603 } });
+    child.kill();
+    await door.close();
   });
 });

@@ -56,6 +56,15 @@ export interface AcpAgent {
   dropEnv: readonly string[];
   /** Variables added to it. */
   env: Readonly<Record<string, string>>;
+  /**
+   * How Conch's instructions reach the model, the way the program takes them
+   * (ADR 0053 § Conch's instructions): `rules` in the session's `_meta`, added
+   * to its system prompt (Grok); the door's own MCP server instructions, read
+   * into the system prompt every session (`server`: Copilot) or into the
+   * chat's first message (`first-message`: Gemini CLI). Without a door, or for
+   * a carried-on chat that can't take new ones, they lead the message instead.
+   */
+  instructions: 'rules' | 'server' | 'first-message';
   /** Which of the methods the agent advertises to call `authenticate` with before a session, if any. */
   authenticate?(methods: readonly string[]): string | undefined;
   login: AcpLogin;
@@ -91,9 +100,13 @@ export const ACP_AGENTS: Readonly<Record<AcpAgentId, AcpAgent>> = {
       '--acp',
       '--stdio',
       '--no-auto-update',
+      // Conch's instructions come as its tool server's own (1.0.66): without this,
+      // Copilot keeps only a few known servers' instructions.
+      '--allow-all-mcp-server-instructions',
       ...(model && model !== 'default' ? [`--model=${model}`] : []),
     ],
     modelAtStart: true,
+    instructions: 'server',
     // `GH_TOKEN` and `GITHUB_TOKEN` are often a classic token for `gh`, which Copilot refuses outright.
     dropEnv: ['GH_TOKEN', 'GITHUB_TOKEN'],
     env: { COPILOT_AUTO_UPDATE: 'false' },
@@ -119,6 +132,7 @@ export const ACP_AGENTS: Readonly<Record<AcpAgentId, AcpAgent>> = {
     minVersion: '0.50.0',
     args: () => ['--acp'],
     modelAtStart: false,
+    instructions: 'first-message',
     dropEnv: [],
     env: {},
     // A saved sign-in is used as it is; the method is only chosen when someone signs in.
@@ -140,6 +154,7 @@ export const ACP_AGENTS: Readonly<Record<AcpAgentId, AcpAgent>> = {
     minVersion: '1.0.0',
     args: () => ['agent', 'stdio'],
     modelAtStart: false,
+    instructions: 'rules',
     dropEnv: [],
     env: {},
     // The sign-in `grok login` saved; an `XAI_API_KEY` in the environment otherwise.
