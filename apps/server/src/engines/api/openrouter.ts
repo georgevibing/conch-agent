@@ -150,7 +150,7 @@ export function mapError(
   }
   if (type === 'rate_limit_exceeded' || status === 429) {
     // Usually the model's provider upstream, and it passes: waited out with
-    // backoff and jitter when OpenRouter doesn't say how long (ADR 0069).
+    // backoff and jitter when OpenRouter doesn't say how long (ADR 0072).
     return new ApiError('rate-limit', 'OpenRouter is rate-limiting this key.', {
       retryable: true,
       ...(retryAfter !== undefined && { retryAfterMs: retryAfter }),
@@ -186,7 +186,7 @@ export function mapError(
 const EPHEMERAL = { type: 'ephemeral' } as const;
 
 /**
- * Which models want to be asked to cache (ADR 0069), as OpenRouter documents
+ * Which models want to be asked to cache (ADR 0072), as OpenRouter documents
  * it: Claude takes breakpoints — the system prompt, then the conversation by
  * itself with the request's own `cache_control`; Gemini takes one, so it goes
  * on the system prompt and the rest is its implicit caching. OpenAI, DeepSeek,

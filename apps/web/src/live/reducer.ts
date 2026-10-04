@@ -296,7 +296,7 @@ export type TranscriptItem =
       error?: string;
       /** Why it failed, when Conch can tell: decides what the chat offers. */
       problem?: TurnProblem;
-      /** It stopped to check in, not because it was done (ADR 0069): Carry on picks it up. */
+      /** It stopped to check in, not because it was done (ADR 0072): Carry on picks it up. */
       paused?: TurnPause;
       usage?: Usage;
       /** Which provider answered, and with which model. */

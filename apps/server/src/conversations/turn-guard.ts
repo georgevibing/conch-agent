@@ -1,5 +1,5 @@
 /**
- * The turn budget for agents that run their own loop (ADR 0069).
+ * The turn budget for agents that run their own loop (ADR 0072).
  *
  * The model APIs keep a turn within its budget themselves, because Conch runs
  * their loop (`engines/api`), and Claude Code's program has its own limits.

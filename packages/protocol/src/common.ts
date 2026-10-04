@@ -106,7 +106,7 @@ export const Usage = z.object({
 export type Usage = z.infer<typeof Usage>;
 
 /**
- * A turn that stopped to check in rather than run on (ADR 0069): it did a lot
+ * A turn that stopped to check in rather than run on (ADR 0072): it did a lot
  * for one message, or kept trying the same thing. Not a failure: the chat
  * offers **Carry on**, which picks up where it stopped.
  */

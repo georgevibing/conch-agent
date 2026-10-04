@@ -1,5 +1,5 @@
 /**
- * Lean mode: Conch for a model that reads little at once (ADR 0070).
+ * Lean mode: Conch for a model that reads little at once (ADR 0073).
  *
  * Conch's instructions and its full tool list are tens of thousands of tokens.
  * A model on this computer often reads 8K to 32K in all, so with everything

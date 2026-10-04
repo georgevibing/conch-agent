@@ -1,4 +1,4 @@
-# 0069 — Long jobs that finish and cost less: a turn budget, prompt caching, pages that say what changed
+# 0072 — Long jobs that finish and cost less: a turn budget, prompt caching, pages that say what changed
 
 - Status: accepted
 - Date: 2026-10-04

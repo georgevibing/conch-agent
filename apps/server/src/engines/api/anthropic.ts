@@ -233,7 +233,7 @@ export function cached(request: Pick<WireRequest, 'system' | 'messages' | 'tools
  * A refusal because a replayed thinking block no longer matches the
  * conversation before it. Newer models bind each block to everything that came
  * before it, and Conch does change the past on purpose: it summarises the start
- * of a long chat (ADR 0055) and lets stale pages go (ADR 0069).
+ * of a long chat (ADR 0055) and lets stale pages go (ADR 0072).
  */
 export function thinkingMismatch(detail: string): boolean {
   return (

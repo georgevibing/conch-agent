@@ -30,7 +30,7 @@ async function* program(
   yield { type: 'done', outcome: 'success' };
 }
 
-describe('the turn budget from outside (ADR 0069)', () => {
+describe('the turn budget from outside (ADR 0072)', () => {
   it('leaves an engine that keeps its own budget alone', () => {
     const tools: HostTool[] = [];
     const signal = new AbortController().signal;

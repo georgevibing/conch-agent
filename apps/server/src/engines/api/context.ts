@@ -371,7 +371,7 @@ export function readable(message: WireMessage): string[] {
 
 /**
  * How much of the chat one summarising request may carry, in characters, so
- * the whole request fits the model's window (ADR 0070): the window less the
+ * the whole request fits the model's window (ADR 0073): the window less the
  * instructions, the summary so far and the answer — each about `words` words —
  * at a careful three characters a token, and never more than `CHUNK_CHARS`.
  */

@@ -5,7 +5,7 @@ import { pageDiff } from './snapshot';
 const page = (n: number) =>
   Array.from({ length: n }, (_, i) => `  - listitem [ref=e${i}]: Result number ${i}`);
 
-describe('what changed on a page (ADR 0069)', () => {
+describe('what changed on a page (ADR 0072)', () => {
   it('says nothing changed, and ignores focus moving', () => {
     const before = ['- button "Go" [ref=e1]', '- textbox "Search" [ref=e2]'];
     const after = ['- button "Go" [active] [ref=e1]', '- textbox "Search" [ref=e2]'];

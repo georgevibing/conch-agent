@@ -1,5 +1,5 @@
 /**
- * Stale pages go first (ADR 0055, ADR 0069).
+ * Stale pages go first (ADR 0055, ADR 0072).
  *
  * A browser task reads page after page, and every view of a page is in the
  * transcript. Once the chat needs room, the views the model has moved past are

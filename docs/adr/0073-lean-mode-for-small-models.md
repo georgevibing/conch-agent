@@ -1,11 +1,11 @@
-# 0070 — Lean mode: Conch for a model that reads little at once
+# 0073 — Lean mode: Conch for a model that reads little at once
 
 - Status: accepted
 - Date: 2026-10-04
 - Builds on: [ADR 0022](./0022-a-model-on-this-computer.md) (Ollama),
   [ADR 0053](./0053-more-providers.md) (LM Studio, servers of your own),
   [ADR 0055](./0055-long-chats-on-every-model.md) (fitting the window),
-  [ADR 0069](./0069-long-jobs-that-finish-and-cost-less.md) (the turn budget)
+  [ADR 0072](./0072-long-jobs-that-finish-and-cost-less.md) (the turn budget)
 
 ## Context
 

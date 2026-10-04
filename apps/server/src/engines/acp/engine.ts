@@ -1019,7 +1019,7 @@ export class AcpEngine implements Engine {
         type: 'done',
         outcome: interrupted ? 'interrupted' : 'success',
         usage,
-        // The program's own step limit: a pause with Carry on, like Conch's own (ADR 0069).
+        // The program's own step limit: a pause with Carry on, like Conch's own (ADR 0072).
         ...(!interrupted &&
           result.stopReason === 'max_turn_requests' && {
             paused: {

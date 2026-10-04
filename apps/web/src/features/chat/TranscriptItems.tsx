@@ -523,7 +523,7 @@ export function TurnEnd({
   item: Of<'turn-end'>;
   onRetry?: () => void;
   recover?: TurnRecovery;
-  /** The latest turn paused to check in (ADR 0069): send “Carry on”. */
+  /** The latest turn paused to check in (ADR 0072): send “Carry on”. */
   onCarryOn?: () => void;
 }) {
   if (item.outcome === 'success' && item.paused) {

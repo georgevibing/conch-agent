@@ -782,7 +782,7 @@ export class Services {
       questions: this.questions,
       // A spend that can't be saved is lost, not fatal: an unhandled rejection would stop Conch.
       onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
-      // Over the monthly budget, a turn checks in sooner (ADR 0069); it never blocks (ADR 0005).
+      // Over the monthly budget, a turn checks in sooner (ADR 0072); it never blocks (ADR 0005).
       overBudget: async () => {
         const spend = await this.usage.spend();
         return spend.budget !== undefined && spend.month >= spend.budget;

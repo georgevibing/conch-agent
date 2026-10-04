@@ -293,7 +293,7 @@ describe('an Anthropic turn', () => {
         name: 'mcp__conch__remember',
         description: 'Save a fact.',
         input_schema: { type: 'object', properties: { content: { type: 'string' } } },
-        // The tool list is the start of every request: cached (ADR 0069).
+        // The tool list is the start of every request: cached (ADR 0072).
         cache_control: { type: 'ephemeral' },
       },
     ]);
@@ -403,7 +403,7 @@ describe('an Anthropic turn', () => {
   });
 });
 
-describe('earlier thinking that no longer matches (ADR 0069)', () => {
+describe('earlier thinking that no longer matches (ADR 0072)', () => {
   it('drops the old thinking and asks again, once, by itself', async () => {
     let calls = 0;
     const { wire: api, calls: sent } = wire(() => {

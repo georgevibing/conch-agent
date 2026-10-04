@@ -125,7 +125,7 @@ describe('a turn that failed', () => {
   });
 });
 
-describe('a turn that paused to check in (ADR 0069)', () => {
+describe('a turn that paused to check in (ADR 0072)', () => {
   const paused = (id: string): TranscriptItem => ({
     kind: 'turn-end',
     id,

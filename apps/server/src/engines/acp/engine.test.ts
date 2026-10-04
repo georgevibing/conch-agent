@@ -409,7 +409,7 @@ describe('a turn with an ACP agent', () => {
     });
   });
 
-  it('is watched from outside: a loop through the door is pointed out, then paused (ADR 0069)', async () => {
+  it('is watched from outside: a loop through the door is pointed out, then paused (ADR 0072)', async () => {
     const saved: string[] = [];
     const answers: string[] = [];
     let door: { url: string; headers: { name: string; value: string }[] } | undefined;

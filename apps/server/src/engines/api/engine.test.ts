@@ -740,7 +740,7 @@ const toolTurnTop = (calls: WireToolCall[], text = '') =>
     };
   })();
 
-describe('a model that reads little at once (ADR 0070)', () => {
+describe('a model that reads little at once (ADR 0073)', () => {
   const small = (context: number) =>
     stubWire({
       models: async () => [
@@ -863,7 +863,7 @@ describe('a model that reads little at once (ADR 0070)', () => {
   });
 });
 
-describe('stale pages (ADR 0069)', () => {
+describe('stale pages (ADR 0072)', () => {
   it('go before anything is summarised, keeping the page the model is on', async () => {
     const page = (n: number) =>
       `Page: Result ${n}
@@ -1034,7 +1034,7 @@ describe('when a turn is interrupted or retried', () => {
     });
   });
 
-  it('waits out a rate limit that says nothing about how long, with backoff (ADR 0069)', async () => {
+  it('waits out a rate limit that says nothing about how long, with backoff (ADR 0072)', async () => {
     let attempts = 0;
     const { engine } = await engineFor(
       stubWire({

@@ -60,7 +60,7 @@ const TOOLS = [
   { name: 'Bash', display: 'Bash', description: 'Run a shell command in the work folder.' },
 ];
 
-describe('lean mode (ADR 0070)', () => {
+describe('lean mode (ADR 0073)', () => {
   it('goes lean for a small window, or when Conch’s fixed part would crowd it', () => {
     expect(isLean({ window: 8_192, system: 500, tools: 500 })).toBe(true);
     expect(isLean({ window: 32_768, system: 6_000, tools: 20_000 })).toBe(true);

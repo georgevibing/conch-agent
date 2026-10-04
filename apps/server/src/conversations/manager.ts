@@ -528,7 +528,7 @@ export class ConversationManager {
        * another model the person connected.
        */
       describe?: (engine: Engine, model?: string) => DescribeImages;
-      /** Past the monthly budget the person set: turns check in sooner (ADR 0069). */
+      /** Past the monthly budget the person set: turns check in sooner (ADR 0072). */
       overBudget?: () => Promise<boolean>;
       integrations?: TurnIntegrationsProvider;
       /** Where uploaded files and long pastes are kept (ADR 0017). */
@@ -1598,7 +1598,7 @@ export class ConversationManager {
       }));
 
       // How much this turn may do before it checks in, watched from outside for
-      // agents that run their own loop (ADR 0069).
+      // agents that run their own loop (ADR 0072).
       const system = systemParts({
         persona: settings.persona,
         profile: settings.profile,
@@ -1631,7 +1631,7 @@ export class ConversationManager {
             }),
             seq: asked,
             // What stays the same turn after turn first, the memories this message
-            // brought up after it, so the provider's prompt cache keeps the prefix (ADR 0069).
+            // brought up after it, so the provider's prompt cache keeps the prefix (ADR 0072).
             systemAppend: [
               system.identity,
               await this.deps.context?.(engine, conversationId),

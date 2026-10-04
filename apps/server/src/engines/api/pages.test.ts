@@ -7,7 +7,7 @@ const whole = (title: string, body = 'x'.repeat(2_000)) =>
 const changes = (title: string) =>
   `Page: ${title}\nAddress: https://shop.example/${title}\n<page-changes>\n(warning)\n+ - button "Buy" [ref=e9]\n</page-changes>`;
 
-describe('stale pages go first (ADR 0069)', () => {
+describe('stale pages go first (ADR 0072)', () => {
   it('keeps the newest whole view and the changes after it, in OpenAI’s shape', () => {
     const messages = [
       { role: 'user', content: 'Find me a mug' },

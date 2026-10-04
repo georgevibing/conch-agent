@@ -111,7 +111,7 @@ const BACKOFF_MS = 2_000;
 const MAX_WAIT_MS = 60_000;
 
 /**
- * How long to wait before asking again (ADR 0069): what the provider asked
+ * How long to wait before asking again (ADR 0072): what the provider asked
  * for, when it said; else exponential backoff — 2, 4, 8 seconds — with
  * jitter, so many chats (or many Conches) hitting one limit don't all come
  * back at the same moment and hit it again.
@@ -132,7 +132,7 @@ export const MAX_MODELS = 60;
 const MAX_TOOLS = 128;
 /** A title is a handful of words; nothing here needs a long answer. */
 const COMPLETION_MAX_TOKENS = 256;
-/** Past this share of the budget, stale page views are let go (ADR 0069). */
+/** Past this share of the budget, stale page views are let go (ADR 0072). */
 const STALE_PAGES = 0.75;
 /** One summarising request may take this long before the next model is asked. */
 const SUMMARY_TIMEOUT_MS = 90_000;
@@ -344,7 +344,7 @@ async function run(
 const NOT_RUN = 'Not run: Conch paused this turn here to check in with the person.';
 
 /**
- * The person's next message, after a turn that paused (ADR 0069): the model is
+ * The person's next message, after a turn that paused (ADR 0072): the model is
  * told it stopped part-way, so "Carry on" picks the work up instead of
  * starting again. Conch's own words, in front of the person's.
  */
@@ -361,7 +361,7 @@ export function carryOnNote(message: WireMessage, reason: TurnPause['reason']): 
 }
 
 /**
- * The tools a lean turn starts with (ADR 0070): `find_tools`, and the ones this
+ * The tools a lean turn starts with (ADR 0073): `find_tools`, and the ones this
  * chat loaded before. `find_tools` loads more into the same map, so they're
  * sent from the next request on, and remembers them in the session.
  */
@@ -428,7 +428,7 @@ function load(
 
 export class ApiEngine implements Engine {
   readonly commandSandbox = 'conch' as const;
-  /** Conch runs this loop, so it keeps each turn within its budget itself (ADR 0069). */
+  /** Conch runs this loop, so it keeps each turn within its budget itself (ADR 0072). */
   readonly turnBudget = 'own' as const;
   readonly id;
   readonly label;
@@ -857,7 +857,7 @@ export class ApiEngine implements Engine {
         ...(this.variant.where && { where: this.variant.where }),
       });
       const full = [input.systemAppend.trim(), note].filter(Boolean).join('\n\n');
-      // A small window goes lean by itself: a short prompt, tools loaded on demand (ADR 0070).
+      // A small window goes lean by itself: a short prompt, tools loaded on demand (ADR 0073).
       const lean = isLean({
         window: await this.#window(model),
         system: estimateTokens(full),
@@ -900,7 +900,7 @@ export class ApiEngine implements Engine {
       let healed = false;
       /** Asked again once without pictures, after the model refused them (ADR 0070). */
       let unseen = false;
-      /** How much this turn may do before it checks in (ADR 0069). */
+      /** How much this turn may do before it checks in (ADR 0072). */
       const watch = new TurnWatch(input.budget ?? turnBudget({ local: this.local }));
       const pause = async (paused: TurnPause): Promise<EngineEvent> => {
         session.paused = paused.reason;
@@ -1026,7 +1026,7 @@ export class ApiEngine implements Engine {
 
         const results: ToolResult[] = [];
         let stopped = false;
-        /** The watch paused the turn at one of these calls (ADR 0069). */
+        /** The watch paused the turn at one of these calls (ADR 0072). */
         let paused: TurnPause | undefined;
         for (const call of end.toolCalls) {
           stopped ||= input.signal.aborted;
@@ -1183,7 +1183,7 @@ export class ApiEngine implements Engine {
       ? Math.ceil(textTokens(preface(session.summary.text)) * factor)
       : 0;
     const room = { budget: Math.max(1, budget - summaryCost), low };
-    // Stale page views go before any turn is folded (ADR 0069): the page has changed since.
+    // Stale page views go before any turn is folded (ADR 0072): the page has changed since.
     if (session.messages.reduce((sum, m) => sum + count(m), 0) > room.budget * STALE_PAGES) {
       const pages = collapseStalePages(session.messages);
       if (pages.collapsed) session.messages = pages.messages;
@@ -1249,7 +1249,7 @@ export class ApiEngine implements Engine {
     previous?: string;
     messages: WireMessage[];
     words: number;
-    /** The window of the model that may summarise, so each request fits it (ADR 0070). */
+    /** The window of the model that may summarise, so each request fits it (ADR 0073). */
     window: number;
     model: string;
     signal: AbortSignal;

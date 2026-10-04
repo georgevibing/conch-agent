@@ -114,7 +114,7 @@ export class ClaudeCodeEngine implements Engine {
   readonly plans = 'native' as const;
   /**
    * Its program runs the loop and paces long work itself (compaction, its own
-   * limits); Conch doesn't second-guess a coding session from outside (ADR 0069).
+   * limits); Conch doesn't second-guess a coding session from outside (ADR 0072).
    */
   readonly turnBudget = 'own' as const;
   /**

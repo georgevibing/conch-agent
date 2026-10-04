@@ -230,7 +230,7 @@ describe('reading a failure the way each provider means it', () => {
     expect(mapChatError(status, error, undefined, label).kind).toBe(kind);
   });
 
-  it('retries a rate limit: as long as it was told, else with backoff (ADR 0069)', () => {
+  it('retries a rate limit: as long as it was told, else with backoff (ADR 0072)', () => {
     expect(mapChatError(429, { message: 'slow down' }, 3000, label)).toMatchObject({
       retryable: true,
       retryAfterMs: 3000,

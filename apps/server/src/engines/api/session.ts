@@ -57,9 +57,9 @@ const Transcript = z.object({
   seqs: z.array(z.number().int().nullable()).optional(),
   /** The provider's real token count over Conch's estimate, for this chat. */
   factor: z.number().positive().optional(),
-  /** The last turn paused to check in, and why (ADR 0069): the next one is told, so it carries on. */
+  /** The last turn paused to check in, and why (ADR 0072): the next one is told, so it carries on. */
   paused: z.enum(['steps', 'tokens', 'time', 'loop']).optional(),
-  /** Tools this chat has loaded in lean mode (ADR 0070), kept so they stay loaded. */
+  /** Tools this chat has loaded in lean mode (ADR 0073), kept so they stay loaded. */
   revealed: z.array(z.string()).optional(),
 });
 type Transcript = z.infer<typeof Transcript>;

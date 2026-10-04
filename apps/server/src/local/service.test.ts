@@ -390,7 +390,7 @@ describe('finding Ollama', () => {
     expect(local.contextFor('qwen3:4b-instruct')).toBe(16_384);
   });
 
-  it('asks for more context where the model’s shape says the computer has room (ADR 0070)', async () => {
+  it('asks for more context where the model’s shape says the computer has room (ADR 0073)', async () => {
     // Qwen3 4B as Ollama describes it: 36 layers, 8 key-value heads of 128 — 144 KB a token.
     const info = {
       'general.architecture': 'qwen3',

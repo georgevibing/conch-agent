@@ -155,7 +155,7 @@ each turn sits in the chat's log.
   show it.
 - **Known limits:**
   - Conch's own system prompt and tool list can be most of a very small window (4K
-    to 8K). Lean mode ([ADR 0070](./0070-lean-mode-for-small-models.md)) now sends a
+    to 8K). Lean mode ([ADR 0073](./0073-lean-mode-for-small-models.md)) now sends a
     short prompt and loads tools on demand there, and the summariser's requests are
     sized to the window.
   - The ACP programs get Conch's handoff each turn, which keeps the newest 60,000

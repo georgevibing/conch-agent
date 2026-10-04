@@ -1,5 +1,5 @@
 /**
- * Prompt caching on every provider that has it (ADR 0069), and what it saves.
+ * Prompt caching on every provider that has it (ADR 0072), and what it saves.
  *
  * The savings test drives a real `ApiEngine` through a twelve-step tool loop
  * against a pretend Anthropic that caches the way Anthropic documents it: a

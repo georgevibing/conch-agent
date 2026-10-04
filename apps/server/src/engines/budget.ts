@@ -1,5 +1,5 @@
 /**
- * How much one turn may do before it checks in (ADR 0069).
+ * How much one turn may do before it checks in (ADR 0072).
  *
  * A turn used to stop after 24 tool steps, which cut long browser tasks off
  * halfway. Now each turn has a generous budget in steps, fresh tokens and

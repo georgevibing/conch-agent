@@ -275,7 +275,7 @@ export interface TurnInput {
    */
   sandbox?: { allowWrite: string[]; denyRead: string[] };
   /**
-   * How much this turn may do before it pauses to check in (ADR 0069): more
+   * How much this turn may do before it pauses to check in (ADR 0072): more
    * for a routine or a task, less over the monthly budget. Unset: the
    * engine's own default for someone watching (`turnBudget({})`).
    */
@@ -344,7 +344,7 @@ export type EngineEvent =
       error?: string;
       /** Why it failed, when the engine knows (a signed-out account, an overloaded service). */
       problem?: TurnProblem;
-      /** It stopped to check in, with room to carry on (ADR 0069). Only with `success`. */
+      /** It stopped to check in, with room to carry on (ADR 0072). Only with `success`. */
       paused?: TurnPause;
     };
 
@@ -489,7 +489,7 @@ export interface Engine {
   mcpStatus?(): Promise<EngineMcpStatus[]>;
   /**
    * The engine keeps each turn within `TurnInput.budget` itself and pauses
-   * with `done.paused` (ADR 0069): the model APIs, whose loop Conch runs, and
+   * with `done.paused` (ADR 0072): the model APIs, whose loop Conch runs, and
    * Claude Code, whose program has its own. Absent: Conch watches the turn's
    * tool calls from outside and pauses it there (Codex, the ACP programs).
    */

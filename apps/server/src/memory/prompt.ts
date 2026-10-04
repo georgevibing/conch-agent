@@ -43,7 +43,7 @@ export function buildSystemAppend(input: SystemInput): string {
  * and the person are (the same turn after turn), and the memories this
  * message brought up (different every turn). A caller puts the second after
  * everything else that stays the same, so the provider's prompt cache keeps
- * the whole prefix before it (ADR 0069).
+ * the whole prefix before it (ADR 0072).
  */
 export function systemParts(input: SystemInput): { identity: string; memory: string } {
   const { persona, profile, memories, autoMemory } = input;

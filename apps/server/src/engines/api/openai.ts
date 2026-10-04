@@ -458,7 +458,7 @@ export function mapChatError(
     /rate.?limit|too many requests|slow_down|limit_requests|\b1302\b/.test(words)
   )
     // Spent credit was caught above, so this passes: waited out with backoff
-    // and jitter when the provider doesn't say how long (ADR 0069).
+    // and jitter when the provider doesn't say how long (ADR 0072).
     return new ApiError('rate-limit', `${label} is rate-limiting this key.`, {
       retryable: true,
       ...(retryAfter !== undefined && { retryAfterMs: retryAfter }),
