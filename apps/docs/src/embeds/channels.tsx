@@ -605,6 +605,38 @@ const SCENES: Record<string, Record<string, () => ReactNode>> = {
       />
     ),
   },
+  rocketchat: {
+    key: () => (
+      <PortalSketch
+        label="Rocket.Chat, making a personal access token for the bot"
+        address="chat.example.com/account/tokens"
+        nav={['Profile', 'Preferences', 'Personal Access Tokens']}
+        active="Personal Access Tokens"
+        title="Personal Access Tokens"
+        color={colorOf('rocketchat')}
+      >
+        <PortalSketch.Field label="Token name">Conch</PortalSketch.Field>
+        <PortalSketch.Field label="Ignore Two Factor Authentication">On</PortalSketch.Field>
+        <PortalSketch.Row>
+          <PortalSketch.Button>Add</PortalSketch.Button>
+        </PortalSketch.Row>
+      </PortalSketch>
+    ),
+    hello: () => (
+      <Handset
+        label="A direct message with your bot in Rocket.Chat, once Conch knows it’s you"
+        brand="rocketchat"
+        color={colorOf('rocketchat')}
+        title={BOT}
+        subtitle="Bot"
+        messages={[
+          { id: '1', from: 'you', text: 'hi' },
+          { id: '2', from: 'them', text: WELCOME },
+        ]}
+        footer={<Handset.Composer placeholder="Message" />}
+      />
+    ),
+  },
 };
 
 function colorOf(id: string): string | undefined {

@@ -53,6 +53,7 @@ import {
 } from './types';
 import { normalizeLine } from './line';
 import { normalizeMattermost } from './mattermost';
+import { normalizeRocketChat } from './rocketchat';
 import { normalizeSms } from './sms';
 import {
   BUSY,
@@ -205,6 +206,7 @@ export function normalizeSecrets(secrets: ChannelSecrets, kept?: ChannelSecrets)
     return normalizeWeChat(secrets, kept?.kind === 'wechat' ? kept : undefined);
   if (secrets.kind === 'sms') return normalizeSms(secrets, kept?.kind === 'sms' ? kept : undefined);
   if (secrets.kind === 'mattermost') return normalizeMattermost(secrets);
+  if (secrets.kind === 'rocketchat') return normalizeRocketChat(secrets);
   if (secrets.kind === 'line')
     return normalizeLine(secrets, kept?.kind === 'line' ? kept : undefined);
   const pick = (value: string, pattern: RegExp) => pattern.exec(value)?.[1] ?? value.trim();
@@ -819,27 +821,9 @@ export class ChannelService {
         'invalid',
         `${CHANNEL_NAMES[current.kind]} has no key to paste: link it again with the code on its page.`,
       );
-    // Only a new app password for an email account, or a new Auth Token for SMS:
-    // everything else stays as it was.
+    // A key on its own (an app password, an Auth Token, a bot's token): the rest stays.
     const kept = await this.deps.store.secrets(id);
-    const merged: ChannelSecrets | undefined =
-      input.kind === 'sms' && !('accountSid' in input)
-        ? kept?.kind === 'sms'
-          ? { ...kept, authToken: input.authToken }
-          : undefined
-        : input.kind === 'mattermost' && !('server' in input)
-          ? kept?.kind === 'mattermost'
-            ? { ...kept, token: input.token }
-            : undefined
-          : input.kind === 'line' && !('channelSecret' in input)
-            ? kept?.kind === 'line'
-              ? { ...kept, accessToken: input.accessToken }
-              : undefined
-            : input.kind === 'email' && !('address' in input)
-              ? kept?.kind === 'email'
-                ? { ...kept, password: input.password }
-                : undefined
-              : (input as ChannelSecrets);
+    const merged = withTheRest(input, kept);
     if (!merged)
       throw new ChannelServiceError(
         'invalid',
@@ -2585,6 +2569,30 @@ export class ChannelService {
         : [],
     );
   }
+}
+
+/**
+ * A new key on its own (an email's app password, a Twilio Auth Token, a bot's
+ * token), with everything else the channel already has; a whole set of keys
+ * as it is. Undefined when there's nothing to add it to.
+ */
+function withTheRest(
+  input: ReplaceChannelTokenBody,
+  kept: ChannelSecrets | undefined,
+): ChannelSecrets | undefined {
+  if (input.kind === 'email' && !('address' in input))
+    return kept?.kind === 'email' ? { ...kept, password: input.password } : undefined;
+  if (input.kind === 'sms' && !('accountSid' in input))
+    return kept?.kind === 'sms' ? { ...kept, authToken: input.authToken } : undefined;
+  if (input.kind === 'mattermost' && !('server' in input))
+    return kept?.kind === 'mattermost' ? { ...kept, token: input.token } : undefined;
+  if (input.kind === 'rocketchat' && !('server' in input))
+    return kept?.kind === 'rocketchat'
+      ? { ...kept, userId: input.userId, token: input.token }
+      : undefined;
+  if (input.kind === 'line' && !('channelSecret' in input))
+    return kept?.kind === 'line' ? { ...kept, accessToken: input.accessToken } : undefined;
+  return input as ChannelSecrets;
 }
 
 /** Plain words for any failure, never a stack or a key. */

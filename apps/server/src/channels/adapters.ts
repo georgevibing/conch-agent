@@ -8,6 +8,7 @@ import { ImessageAdapter, type ImessageOptions } from './imessage';
 import type { ChannelDoorService } from './door';
 import { LineAdapter } from './line';
 import { MattermostAdapter } from './mattermost';
+import { RocketChatAdapter } from './rocketchat';
 import { MatrixAdapter } from './matrix';
 import { SLACK_API, SlackAdapter } from './slack';
 import { TwilioSmsAdapter } from './sms';
@@ -90,6 +91,8 @@ export function adapterFor(
       return new MattermostAdapter(secrets);
     case 'line':
       return new LineAdapter(secrets, endpoints);
+    case 'rocketchat':
+      return new RocketChatAdapter(secrets);
   }
 }
 

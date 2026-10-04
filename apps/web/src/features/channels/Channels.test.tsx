@@ -1199,3 +1199,38 @@ describe('Connecting LINE (ADR 0082)', () => {
     expect(await screen.findByRole('button', { name: 'It’s on' })).toBeInTheDocument();
   });
 });
+
+describe('Connecting Rocket.Chat (ADR 0083)', () => {
+  it('takes the address, the user id and the token, checks them together, and connects', async () => {
+    const made = channel({
+      kind: 'rocketchat',
+      bot: {
+        id: 'B0tB0tB0tB0tB0tB0',
+        name: 'Conch',
+        username: 'conch',
+        workspace: 'chat.example.com',
+      },
+    });
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'POST /api/channels/check': () => ({ ok: true, bot: made.bot, checked: [] }),
+      'POST /api/channels': () => made,
+      'GET /api/auth': () => ({ method: 'none' }),
+    });
+    renderApp(<ConnectChannel kind="rocketchat" />, { route: '/channels/new/rocketchat' });
+    expect(await screen.findByRole('heading', { name: 'Connect Rocket.Chat' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'I have the token' }));
+    await userEvent.type(screen.getByLabelText('Server address'), 'https://chat.example.com');
+    await userEvent.type(screen.getByLabelText('User id'), 'B0tB0tB0tB0tB0tB0');
+    await userEvent.type(screen.getByLabelText('Personal access token'), 'a'.repeat(43));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST' && c.path === '/api/channels')?.body).toEqual({
+        kind: 'rocketchat',
+        server: 'https://chat.example.com',
+        userId: 'B0tB0tB0tB0tB0tB0',
+        token: 'a'.repeat(43),
+      }),
+    );
+  });
+});

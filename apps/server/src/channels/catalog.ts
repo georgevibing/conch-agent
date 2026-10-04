@@ -129,6 +129,16 @@ export const CHANNEL_CATALOG: ChannelCatalogEntry[] = [
     available: true,
     groups: true,
   },
+  {
+    id: 'rocketchat',
+    name: 'Rocket.Chat',
+    tagline: 'A bot on your own Rocket.Chat server. No public address.',
+    short: 'A bot on your server',
+    color: '#F5455C',
+    minutes: 3,
+    available: true,
+    groups: true,
+  },
 ];
 
 export const CHANNEL_NAMES: Record<ChannelKind, string> = {
@@ -145,6 +155,7 @@ export const CHANNEL_NAMES: Record<ChannelKind, string> = {
   sms: 'SMS',
   mattermost: 'Mattermost',
   line: 'LINE',
+  rocketchat: 'Rocket.Chat',
 };
 
 /** Channels that only work on some systems: elsewhere the tile says so and can't be chosen. */

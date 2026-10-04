@@ -35,7 +35,7 @@ WhatsApp and Signal have no bots to make. Instead Conch joins **your own account
 
 ## In a group
 
-Telegram, Discord, Slack, Mattermost and LINE can answer in a group, a server's channel or a team's channel, once you turn that group on in Conch. Add the bot to the group in the app; the group shows up on the bot's page in Conch under **Groups**, with a switch.
+Telegram, Discord, Slack, Mattermost, Rocket.Chat and LINE can answer in a group, a server's channel or a team's channel, once you turn that group on in Conch. Add the bot to the group in the app; the group shows up on the bot's page in Conch under **Groups**, with a switch.
 
 - **Only when it's asked.** In a group that's on, your assistant answers only when someone mentions it (`@yourbot`) or replies to one of its messages. Everything else in the group is never read.
 - **You get everything.** When you mention it, it's the same assistant as in your private chat, in a conversation of its own for that group.

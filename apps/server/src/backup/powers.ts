@@ -50,6 +50,7 @@ const APP_NAMES: Record<string, string> = {
   sms: 'SMS',
   mattermost: 'Mattermost',
   line: 'LINE',
+  rocketchat: 'Rocket.Chat',
 };
 
 const text = (value: unknown, fallback: string) => {

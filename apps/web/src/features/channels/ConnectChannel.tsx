@@ -58,6 +58,7 @@ import { MatrixSetup } from './MatrixSetup';
 import { TeamsSetup } from './TeamsSetup';
 import { LineSetup } from './LineSetup';
 import { MattermostSetup } from './MattermostSetup';
+import { RocketChatSetup } from './RocketChatSetup';
 import { SmsSetup } from './SmsSetup';
 import { WeChatSetup } from './WeChatSetup';
 import { useKeyCheck, usePasteAnywhere, usePointerFine } from './hooks';
@@ -81,6 +82,7 @@ export function ConnectChannel({ kind }: { kind: string }) {
   if (kind === 'sms') return <SmsSetup />;
   if (kind === 'mattermost') return <MattermostSetup />;
   if (kind === 'line') return <LineSetup />;
+  if (kind === 'rocketchat') return <RocketChatSetup />;
   return <SlackSetup />;
 }
 

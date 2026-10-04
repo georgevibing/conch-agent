@@ -39,6 +39,7 @@ export const ChannelKind = z.enum([
   'sms',
   'mattermost',
   'line',
+  'rocketchat',
 ]);
 export type ChannelKind = z.infer<typeof ChannelKind>;
 
@@ -327,6 +328,7 @@ export const ChannelField = z.enum([
   'authToken',
   'number',
   'channelSecret',
+  'userId',
 ]);
 export type ChannelField = z.infer<typeof ChannelField>;
 
@@ -431,6 +433,17 @@ const line = {
 };
 
 /**
+ * Rocket.Chat (ADR 0083): a bot user on your server, reached over its
+ * realtime API, with its user id and a personal access token.
+ */
+const rocketchat = {
+  kind: z.literal('rocketchat'),
+  server: short,
+  userId: short,
+  token: secret,
+};
+
+/**
  * Mail services Conch knows the settings of (ADR 0044). `other` takes the
  * server names by hand.
  */
@@ -488,6 +501,7 @@ export const ChannelSecrets = z.discriminatedUnion('kind', [
   z.object(sms),
   z.object(mattermost),
   z.object(line),
+  z.object(rocketchat),
 ]);
 export type ChannelSecrets = z.infer<typeof ChannelSecrets>;
 
@@ -510,6 +524,12 @@ export const CheckChannelBody = z.discriminatedUnion('kind', [
   z.object({ ...sms, accountSid: secret.optional(), authToken: secret.optional() }),
   z.object({ ...mattermost, server: short.optional(), token: secret.optional() }),
   z.object({ ...line, channelSecret: secret.optional(), accessToken: secret.optional() }),
+  z.object({
+    ...rocketchat,
+    server: short.optional(),
+    userId: short.optional(),
+    token: secret.optional(),
+  }),
 ]);
 export type CheckChannelBody = z.infer<typeof CheckChannelBody>;
 
@@ -556,6 +576,8 @@ export const ReplaceChannelTokenBody = z.union([
   z.object({ kind: z.literal('mattermost'), token: secret }),
   // A new LINE channel access token: the secret and the address stay as they were.
   z.object({ kind: z.literal('line'), accessToken: secret }),
+  // A new Rocket.Chat token (with its user id): the server stays as it was.
+  z.object({ kind: z.literal('rocketchat'), userId: short, token: secret }),
 ]);
 export type ReplaceChannelTokenBody = z.infer<typeof ReplaceChannelTokenBody>;
 
