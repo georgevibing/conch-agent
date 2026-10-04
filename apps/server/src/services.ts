@@ -1313,6 +1313,7 @@ export class Services {
         endpoints.googleChat = base;
         endpoints.googleToken = `${base}/token`;
         endpoints.googleCerts = `${base}/certs`;
+        endpoints.googleChatCerts = `${base}/chatcerts`;
       }
       if (this.mockRocketChat)
         await this.mockRocketChat.start(Number(process.env.CONCH_MOCK_ROCKETCHAT_PORT ?? 0));

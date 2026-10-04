@@ -36,11 +36,35 @@ door, answering through the Chat API with a service account's key.
   Google's own failures become the step to take (the API off, no Chat app
   configured yet, a deleted key).
 - **Nothing is read before the bearer token checks out**: `jose` verifies the
-  signature with Google's keys (cached six hours, an unknown key id refreshes
-  them at most every five minutes), RS256 only, the issuer, the audience
-  (this channel's own address), the expiry, and the email claim
-  (`chat@system.gserviceaccount.com`, verified). A delivery seen before is
-  one event; one more than an hour old isn't read.
+  signature with Google's keys, RS256 only, the issuer, the audience, the
+  expiry, and the email claim (`chat@system.gserviceaccount.com`, verified).
+  - **The audience** is this channel's own public address as the door was
+    set up, never anything the request says about where it was sent (`Host`,
+    `X-Forwarded-*`): a token minted for another Conch's address is refused.
+  - **Google's keys** are cached six hours. Google is asked again for a key
+    id it hasn't seen, or when they're old, but never more than once every
+    five minutes, whatever arrives, so a flood of made-up key ids can't make
+    Conch hammer Google. If Google can't be reached, what isn't known is
+    refused: it fails closed.
+- **A token isn't bound to the body**, and lasts an hour. So:
+  - **each event is taken once**: by its message's name (a click by its
+    place and moment), remembered on disk (`channels/googlechat-<id>.json`,
+    `derived` in backups) for two hours, so a replay after a restart is
+    still one event;
+  - **an event's own time must be within five minutes of now**;
+  - **who wrote what, and where, comes from Google Chat itself**: the
+    message is read back with the app's own token (`spaces.messages.get`)
+    and its space's kind with `spaces.get`, and only that copy is acted on.
+    A forged body under a captured token names a message Google never had
+    (nothing happens), or a real one whose sender and words are the server's,
+    not the body's. A click must name a question the app itself posted in
+    that space; its data is a one-time key the service checks against the
+    question asked there, from someone let in.
+- **The other way Google Chat signs**, for the project number as audience
+  (tokens from `chat@system.gserviceaccount.com`, checked against its X.509
+  certificates), is never accepted: Conch doesn't know the project number.
+  A genuine one only makes the channel say, in plain words, to set
+  **Authentication Audience** to **HTTP endpoint URL**.
 - **Answers** are written in Chat's own marks (`*bold*`, `_italic_`,
   `<url|label>`), at most 3900 characters a message; approvals a card whose
   buttons say what was decided once pressed.
@@ -60,13 +84,22 @@ account exchanges with keys of its own.
 ## Security
 
 - **Who can reach it**: the internet, at the door, only with a token Google
-  signed for this address. Forged deliveries (another key, another audience,
-  another sender, another issuer, an expired token, none) are tested to be
-  401s that reach no conversation.
+  signed for this address. Tested (`googlechat.test.ts`): another key,
+  another audience (another Conch's, or one claimed in headers), another
+  sender, another issuer, an expired token, none, a flood of made-up key ids
+  (at most one fetch), Google's keys unreachable (refused), a body claiming
+  the owner wrote a member's message (the member it is), a replay of the
+  same message (once, across a restart), a replay with a forged body
+  (nothing), a stale or future event time, and a project-number token
+  (refused, the setting named).
+- **Who may act**: the owner is the Google user (`users/<id>`) who said
+  hello; anyone else in a DM is a request, and in a space gets words only
+  (ADR 0075), their words read as someone else's.
 - **The service account** needs no roles in the project: it can only act as
-  the Chat app. Its key lives in the sealed `channels.secrets.json`, listed in
-  Passwords, never logged; the access tokens it's traded for go only to
-  Google Chat's API.
+  the Chat app. Its key lives in the sealed `channels.secrets.json` (a
+  `secret` in backups), listed in Passwords, never logged or returned; the
+  access tokens it's traded for go only to Google Chat's API. The bearer
+  tokens Google sends are never logged either.
 - **Who may talk**: the Chat app's visibility in the configuration, and then
   Conch's own rule: nobody until **That's me** or **Let in**.
 

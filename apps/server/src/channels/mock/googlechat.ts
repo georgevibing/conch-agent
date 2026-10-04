@@ -9,8 +9,11 @@ import {
   exportPKCS8,
   generateKeyPair,
   importJWK,
+  importPKCS8,
   jwtVerify,
 } from 'jose';
+
+import { CHAT_SA_CERT, CHAT_SA_KEY } from './googlechat-fixture';
 
 export interface MockChatMessage {
   name: string;
@@ -57,6 +60,11 @@ export class MockGoogleChat {
   #nextId = 1;
   base = '';
   readonly sent: MockChatMessage[] = [];
+  /** How often Google's keys and Chat's certificates were asked for. */
+  certFetches = 0;
+  /** Google's keys can't be fetched. */
+  certsDown = false;
+  chatCertFetches = 0;
   /** The Chat API is off in this project. */
   apiOff = false;
   /** The service account's key was deleted. */
@@ -83,6 +91,11 @@ export class MockGoogleChat {
     return `spaces/dm${user.replace(/\D/g, '').slice(0, 8)}`;
   }
 
+  /** Messages as Google Chat itself has them: what `spaces.messages.get` answers. */
+  readonly #messages = new Map<string, Record<string, unknown>>();
+  /** The last token sent, as someone watching could capture it. */
+  lastToken = '';
+
   async start(port = 0): Promise<string> {
     const google = await generateKeyPair('RS256', { extractable: true });
     this.#google = { private: google.privateKey, public: await exportJWK(google.publicKey) };
@@ -100,9 +113,11 @@ export class MockGoogleChat {
       { parseAs: 'string' },
       (_request, body, done) => done(null, Object.fromEntries(new URLSearchParams(String(body)))),
     );
-    app.get('/certs', () => ({
-      keys: [{ ...this.#google?.public, kid: 'google-key', alg: 'RS256', use: 'sig' }],
-    }));
+    app.get('/certs', (_request, reply) => {
+      this.certFetches++;
+      if (this.certsDown) return reply.code(503).send({});
+      return { keys: [{ ...this.#google?.public, kid: 'google-key', alg: 'RS256', use: 'sig' }] };
+    });
     app.post('/token', async (request, reply) => {
       const body = (request.body ?? {}) as Record<string, string>;
       if (this.keyRevoked)
@@ -182,8 +197,33 @@ export class MockGoogleChat {
     app.post<{ Params: { space: string } }>('/v1/spaces/:space/messages', (request) => {
       const space = `spaces/${request.params.space}`;
       const name = `${space}/messages/m${this.#nextId++}`;
-      record(space, request.body as { text?: string }, name);
+      const body = request.body as { text?: string };
+      record(space, body, name);
+      this.#messages.set(name, {
+        name,
+        sender: { name: 'users/app', type: 'BOT' },
+        text: body.text ?? '',
+      });
       return { name };
+    });
+    app.get<{ Params: { space: string; message: string } }>(
+      '/v1/spaces/:space/messages/:message',
+      (request, reply) =>
+        this.#messages.get(`spaces/${request.params.space}/messages/${request.params.message}`) ??
+        reply.code(404).send({ error: { message: 'Message not found.', status: 'NOT_FOUND' } }),
+    );
+    app.get<{ Params: { space: string } }>('/v1/spaces/:space', (request) =>
+      `spaces/${request.params.space}` === MockGoogleChat.SPACE.name
+        ? MockGoogleChat.SPACE
+        : {
+            name: `spaces/${request.params.space}`,
+            spaceType: 'DIRECT_MESSAGE',
+            singleUserBotDm: true,
+          },
+    );
+    app.get('/chatcerts', () => {
+      this.chatCertFetches++;
+      return { 'chat-key': CHAT_SA_CERT };
     });
     app.patch<{ Params: { space: string; message: string } }>(
       '/v1/spaces/:space/messages/:message',
@@ -244,7 +284,7 @@ export class MockGoogleChat {
           spaceType: 'DIRECT_MESSAGE',
           singleUserBotDm: true,
         };
-    return {
+    const event = {
       type: 'MESSAGE',
       eventTime: new Date().toISOString(),
       space,
@@ -268,6 +308,68 @@ export class MockGoogleChat {
         }),
       },
     };
+    // What Google Chat itself keeps: the server's copy Conch reads back.
+    this.#messages.set(event.message.name, { ...event.message, sender: from });
+    return event;
+  }
+
+  /** A genuine Google token, but for another address (another Conch's, say). */
+  async tokenFor(audience: string): Promise<string> {
+    return new SignJWT({ email: 'chat@system.gserviceaccount.com', email_verified: true })
+      .setProtectedHeader({ alg: 'RS256', kid: 'google-key', typ: 'JWT' })
+      .setIssuer('https://accounts.google.com')
+      .setAudience(audience)
+      .setIssuedAt()
+      .setExpirationTime('1h')
+      .sign(this.#google?.private as Key);
+  }
+
+  /** A token signed by a key Google never published, under a key id nobody knows. */
+  async unknownKey(): Promise<string> {
+    return new SignJWT({ email: 'chat@system.gserviceaccount.com', email_verified: true })
+      .setProtectedHeader({
+        alg: 'RS256',
+        kid: `made-up-${randomBytes(4).toString('hex')}`,
+        typ: 'JWT',
+      })
+      .setIssuer('https://accounts.google.com')
+      .setAudience(this.#endpoint)
+      .setIssuedAt()
+      .setExpirationTime('1h')
+      .sign(this.#other as Key);
+  }
+
+  /** Post `body` with a token captured earlier (a replay), as someone who saw one could. */
+  async replay(body: unknown, token = this.lastToken): Promise<number> {
+    return this.#post(body, token);
+  }
+
+  /** An event signed the other way Google Chat can sign: for its project number. */
+  async projectNumber(body: unknown): Promise<number> {
+    const token = await new SignJWT({})
+      .setProtectedHeader({ alg: 'RS256', kid: 'chat-key', typ: 'JWT' })
+      .setIssuer('chat@system.gserviceaccount.com')
+      .setAudience('123456789012')
+      .setIssuedAt()
+      .setExpirationTime('1h')
+      .sign(await importPKCS8(CHAT_SA_KEY, 'RS256'));
+    return this.#post(body, token);
+  }
+
+  async #post(body: unknown, token: string | undefined): Promise<number> {
+    try {
+      const response = await fetch(this.resolve(this.#endpoint), {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(token && { authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify(body),
+      });
+      return response.status;
+    } catch {
+      return 0;
+    }
   }
 
   /** Send an event to the endpoint, signed as Google does (or wrong in one way). */
@@ -276,19 +378,8 @@ export class MockGoogleChat {
     wrong?: 'key' | 'audience' | 'sender' | 'expired' | 'issuer' | 'none',
   ): Promise<number> {
     const token = wrong === 'none' ? undefined : await this.#token(wrong);
-    try {
-      const response = await fetch(this.resolve(this.#endpoint), {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          ...(token && { authorization: `Bearer ${token}` }),
-        },
-        body: JSON.stringify(event),
-      });
-      return response.status;
-    } catch {
-      return 0;
-    }
+    if (token && !wrong) this.lastToken = token;
+    return this.#post(event, token);
   }
 
   say(

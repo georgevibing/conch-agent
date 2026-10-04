@@ -19,7 +19,8 @@
  * - **Groups** (ADR 0075): in a space, Chat only delivers what @mentions the
  *   app; a space is answered only once you turn it on.
  */
-import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import type { ChannelBot, ChannelSecrets } from '@conch/protocol';
 import {
@@ -29,9 +30,11 @@ import {
   errors as joseErrors,
   importJWK,
   importPKCS8,
+  importX509,
   jwtVerify,
 } from 'jose';
 
+import { writeFileAtomic } from '../lib/fs';
 import type { ChannelEndpoints } from './adapters';
 import type { HookReply, HookRequest } from './door';
 import { blocks, fit, inline, prose } from './format';
@@ -51,6 +54,9 @@ import {
 export const GOOGLE_CHAT_API = 'https://chat.googleapis.com';
 export const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 export const GOOGLE_CERTS = 'https://www.googleapis.com/oauth2/v3/certs';
+/** Google Chat's own service account's certificates (the "project number" audience). */
+export const CHAT_CERTS =
+  'https://www.googleapis.com/service_accounts/v1/metadata/x509/chat@system.gserviceaccount.com';
 /** Who Google Chat's tokens are about. */
 export const CHAT_SENDER = 'chat@system.gserviceaccount.com';
 const ISSUERS = ['https://accounts.google.com', 'accounts.google.com'];
@@ -60,8 +66,12 @@ type GoogleChatSecrets = Extract<ChannelSecrets, { kind: 'googlechat' }>;
 
 /** Chat takes 4096 characters a message; parts this long stay under. */
 const PART = 3900;
-const SEEN = 1000;
-const STALE_MS = 60 * 60_000;
+/** Events remembered, on disk, so none is taken twice. */
+const SEEN = 2000;
+/** For longer than a Google token lasts (an hour), with room to spare. */
+const REMEMBER_MS = 2 * 60 * 60_000;
+/** An event's own time must be this close to now. */
+const FRESH_MS = 5 * 60_000;
 const KEYS_FOR_MS = 6 * 60 * 60_000;
 const REFRESH_AT_MOST_EVERY_MS = 5 * 60_000;
 
@@ -131,23 +141,41 @@ export function toGoogleChat(markdown: string): string {
     .trim();
 }
 
-/** Google's signing keys for ID tokens, cached by key id. */
+/**
+ * Google's signing keys for ID tokens, cached by key id. Google is asked
+ * again only when the keys are old, or for a key id it hasn't seen, and
+ * never more than once every few minutes whatever arrives (so a flood of
+ * made-up key ids can't make Conch hammer Google). If Google can't be
+ * reached, what isn't known is refused: it fails closed.
+ */
 export class GoogleKeys {
   #keys = new Map<string, JWK>();
   #fetchedAt = 0;
+  /** When Google was last asked, whether or not it answered. */
+  #askedAt = 0;
   #loading?: Promise<void>;
+  /** How many times Google was asked (for the tests). */
+  fetches = 0;
 
-  constructor(private readonly url = GOOGLE_CERTS) {}
+  constructor(
+    private readonly url = GOOGLE_CERTS,
+    private readonly every = REFRESH_AT_MOST_EVERY_MS,
+  ) {}
 
   async key(kid: string): Promise<JWK | undefined> {
-    const stale = Date.now() - this.#fetchedAt > KEYS_FOR_MS;
-    if (stale || (!this.#keys.has(kid) && Date.now() - this.#fetchedAt > REFRESH_AT_MOST_EVERY_MS))
+    const now = Date.now();
+    const stale = now - this.#fetchedAt > KEYS_FOR_MS;
+    const unknown = !this.#keys.has(kid);
+    if ((stale || unknown) && now - this.#askedAt > this.every)
       await this.#load().catch(() => undefined);
+    else if (this.#loading) await this.#loading.catch(() => undefined);
     return this.#keys.get(kid);
   }
 
   #load(): Promise<void> {
     this.#loading ??= (async () => {
+      this.#askedAt = Date.now();
+      this.fetches++;
       if (!/^https:\/\//.test(this.url) && !/^http:\/\/127\.0\.0\.1[:/]/.test(this.url))
         throw new Error('Google’s keys must come over HTTPS.');
       const response = await fetch(this.url, {
@@ -162,6 +190,76 @@ export class GoogleKeys {
       this.#fetchedAt = Date.now();
     })().finally(() => (this.#loading = undefined));
     return this.#loading;
+  }
+}
+
+/**
+ * Google Chat's other way of signing (the "project number" audience): a JWT
+ * Google Chat's own service account signs, with its X.509 certificates.
+ * Conch doesn't take events this way, because the project number isn't
+ * something it knows; it only recognises a genuine one, to tell the person
+ * which setting to change. Cached and rate-limited like `GoogleKeys`.
+ */
+export class ChatCerts {
+  #certs = new Map<string, string>();
+  #askedAt = 0;
+  #loading?: Promise<void>;
+
+  constructor(
+    private readonly url = CHAT_CERTS,
+    private readonly every = REFRESH_AT_MOST_EVERY_MS,
+  ) {}
+
+  async cert(kid: string): Promise<string | undefined> {
+    if (!this.#certs.has(kid) && Date.now() - this.#askedAt > this.every)
+      await this.#load().catch(() => undefined);
+    return this.#certs.get(kid);
+  }
+
+  #load(): Promise<void> {
+    this.#loading ??= (async () => {
+      this.#askedAt = Date.now();
+      if (!/^https:\/\//.test(this.url) && !/^http:\/\/127\.0\.0\.1[:/]/.test(this.url))
+        throw new Error('Google’s certificates must come over HTTPS.');
+      const response = await fetch(this.url, {
+        signal: AbortSignal.timeout(10_000),
+        redirect: 'error',
+      });
+      if (!response.ok) throw new Error(`Google certificates: ${response.status}`);
+      const certs = (await response.json()) as Record<string, string>;
+      this.#certs = new Map(Object.entries(certs).filter(([, pem]) => typeof pem === 'string'));
+    })().finally(() => (this.#loading = undefined));
+    return this.#loading;
+  }
+}
+
+/**
+ * Whether this is a genuine Google Chat token of the "project number" kind:
+ * signed by Google Chat's service account, from it, whatever its audience.
+ * Never a reason to accept an event; only to say which setting to change.
+ */
+export async function projectNumberToken(
+  authorization: string | undefined,
+  certs: ChatCerts,
+): Promise<boolean> {
+  const token = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.exec(
+    authorization ?? '',
+  )?.[1];
+  if (!token) return false;
+  try {
+    const header = decodeProtectedHeader(token);
+    if (header.alg !== 'RS256' || typeof header.kid !== 'string') return false;
+    const pem = await certs.cert(header.kid);
+    if (!pem) return false;
+    const { payload } = await jwtVerify(token, await importX509(pem, 'RS256'), {
+      issuer: CHAT_SENDER,
+      algorithms: ['RS256'],
+      clockTolerance: 60,
+      requiredClaims: ['exp', 'iss', 'aud'],
+    });
+    return /^\d{6,20}$/.test(String(payload.aud));
+  } catch {
+    return false;
   }
 }
 
@@ -205,6 +303,14 @@ interface ChatUser {
   type?: 'HUMAN' | 'BOT';
 }
 
+interface ChatMessage {
+  name: string;
+  sender?: ChatUser;
+  text?: string;
+  argumentText?: string;
+  annotations?: { type?: string; userMention?: { user?: ChatUser } }[];
+}
+
 interface ChatEvent {
   type?: string;
   eventTime?: string;
@@ -234,12 +340,16 @@ export class GoogleChatAdapter implements ChannelAdapter {
   #token?: { value: string; expiresAt: number };
   #dms = new Map<string, string>();
   readonly #keys: GoogleKeys;
+  readonly #chatCerts: ChatCerts;
+  #seen?: Map<string, number>;
+  #spaces = new Map<string, { direct: boolean; name: string }>();
 
   constructor(
     private readonly secrets: GoogleChatSecrets,
     private readonly endpoints: ChannelEndpoints = {},
   ) {
     this.#keys = new GoogleKeys(endpoints.googleCerts ?? GOOGLE_CERTS);
+    this.#chatCerts = new ChatCerts(endpoints.googleChatCerts ?? CHAT_CERTS);
   }
 
   get #api() {
@@ -380,7 +490,6 @@ export class GoogleChatAdapter implements ChannelAdapter {
 
   connect(events: ChannelEvents): ChannelConnection {
     const door = this.endpoints.door;
-    const seen = new Set<string>();
 
     let closed = false;
     const health = async () => {
@@ -406,8 +515,12 @@ export class GoogleChatAdapter implements ChannelAdapter {
       }
     };
 
+    let toldAudience = false;
+    const ok = { status: 200, body: '{}', type: 'application/json' } as const;
     const deliver = async (request: HookRequest): Promise<HookReply> => {
       if (request.method !== 'POST') return { status: 405 };
+      // The audience is this channel's own public address, as the door was set up:
+      // never anything the request says about where it was sent (Host, X-Forwarded-*).
       const url = this.hook().url;
       // Nothing is read before Google's token for this address checks out.
       if (
@@ -418,8 +531,25 @@ export class GoogleChatAdapter implements ChannelAdapter {
           this.#keys,
           this.endpoints.googleIssuers,
         ))
-      )
+      ) {
+        // Google Chat set to the "project number" audience: a genuine token, but never
+        // taken. Say which setting to change, once.
+        if (
+          !toldAudience &&
+          (await projectNumberToken(request.headers.authorization, this.#chatCerts))
+        ) {
+          toldAudience = true;
+          events.state('error', {
+            message:
+              'Google Chat is set to sign with the project number. In the Google Chat API’s Configuration, set Authentication Audience to “HTTP endpoint URL”, then save.',
+          });
+        }
         return { status: 401 };
+      }
+      if (toldAudience) {
+        toldAudience = false;
+        events.state('online');
+      }
       let event: ChatEvent;
       try {
         event = JSON.parse(request.body) as ChatEvent;
@@ -427,15 +557,14 @@ export class GoogleChatAdapter implements ChannelAdapter {
         return { status: 400 };
       }
       events.heard?.();
-      const time = event.eventTime ? Date.parse(event.eventTime) : Date.now();
-      if (Number.isFinite(time) && Date.now() - time > STALE_MS)
-        return { status: 200, body: '{}', type: 'application/json' };
-      const fingerprint = createHash('sha256').update(request.body).digest('base64url');
-      if (seen.has(fingerprint)) return { status: 200, body: '{}', type: 'application/json' };
-      seen.add(fingerprint);
-      if (seen.size > SEEN) seen.delete(seen.values().next().value ?? '');
-      this.#event(event, events);
-      return { status: 200, body: '{}', type: 'application/json' };
+      // A token lasts an hour and isn't bound to the body: an event must be fresh,
+      // and each one is taken once, even across a restart.
+      const time = event.eventTime ? Date.parse(event.eventTime) : Number.NaN;
+      if (!Number.isFinite(time) || Math.abs(Date.now() - time) > FRESH_MS) return ok;
+      const id = eventId(event);
+      if (!id || !(await this.#firstTime(id))) return ok;
+      void this.#event(event, events).catch(() => undefined);
+      return ok;
     };
 
     const unmount = door?.mount(this.secrets.hookId ?? '', 'googlechat', deliver);
@@ -493,70 +622,174 @@ export class GoogleChatAdapter implements ChannelAdapter {
     return space.name;
   }
 
-  #event(event: ChatEvent, events: ChannelEvents) {
-    const space = event.space;
+  // ── Taking each event once ─────────────────────────────────────────────
+
+  #seenPath() {
+    const home = this.endpoints.home;
+    return home && this.secrets.hookId
+      ? join(home, 'channels', `googlechat-${this.secrets.hookId}.json`)
+      : undefined;
+  }
+
+  /** Whether this event is new; remembered (on disk, for longer than a token lasts) if so. */
+  async #firstTime(id: string): Promise<boolean> {
+    if (!this.#seen) {
+      this.#seen = new Map();
+      const path = this.#seenPath();
+      if (path)
+        try {
+          const raw = JSON.parse(await readFile(path, 'utf8')) as { seen?: [string, number][] };
+          for (const [key, at] of raw.seen ?? [])
+            if (typeof key === 'string' && typeof at === 'number') this.#seen.set(key, at);
+        } catch {
+          // Missing or damaged: freshness still turns away anything older than a few minutes.
+        }
+    }
+    const now = Date.now();
+    for (const [key, at] of this.#seen) if (now - at > REMEMBER_MS) this.#seen.delete(key);
+    if (this.#seen.has(id)) return false;
+    this.#seen.set(id, now);
+    while (this.#seen.size > SEEN) this.#seen.delete(this.#seen.keys().next().value ?? '');
+    const path = this.#seenPath();
+    if (path)
+      await writeFileAtomic(path, `${JSON.stringify({ seen: [...this.#seen] })}\n`).catch(
+        () => undefined,
+      );
+    return true;
+  }
+
+  // ── Reading an event: the server's copy, never the posted body ──────────
+
+  /** A message as Google Chat itself has it, read with the app's own token. */
+  async #serverCopy(name: string): Promise<ChatMessage | undefined> {
+    if (!/^spaces\/[\w-]+\/messages\/[\w.-]+$/.test(name)) return undefined;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await this.call<ChatMessage>('GET', `/v1/${name}`);
+      } catch (error) {
+        if (
+          error instanceof ChannelError &&
+          error.code !== 'network' &&
+          error.code !== 'rate-limit'
+        )
+          return undefined;
+        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+      }
+    }
+    return undefined;
+  }
+
+  /** A space as Google Chat itself has it: a direct message, or a space with its name. */
+  async #space(name: string): Promise<{ direct: boolean; name: string } | undefined> {
+    const known = this.#spaces.get(name);
+    if (known) return known;
+    if (!/^spaces\/[\w-]+$/.test(name)) return undefined;
+    const space = await this.call<{
+      spaceType?: string;
+      type?: string;
+      singleUserBotDm?: boolean;
+      displayName?: string;
+    }>('GET', `/v1/${name}`).catch(() => undefined);
+    if (!space) return undefined;
+    const found = {
+      direct:
+        space.spaceType === 'DIRECT_MESSAGE' ||
+        space.type === 'DM' ||
+        space.singleUserBotDm === true,
+      name: space.displayName || 'A Google Chat space',
+    };
+    this.#spaces.set(name, found);
+    return found;
+  }
+
+  /**
+   * Act on an event. Google's token only proves Google sent it, not that the
+   * body is the one it sent (a token captured in the hour it lasts could carry
+   * another body). So who wrote what, and where, is read again from Google
+   * Chat with the app's own token, and only that copy is acted on.
+   */
+  async #event(event: ChatEvent, events: ChannelEvents) {
+    if (event.type === 'MESSAGE' && event.message?.name) {
+      const copy = await this.#serverCopy(event.message.name);
+      const sender = copy?.sender;
+      if (!copy || !sender?.name || sender.type === 'BOT') return;
+      const spaceName = copy.name.replace(/\/messages\/.*$/, '');
+      const space = await this.#space(spaceName);
+      if (!space) return;
+      // Its display name comes from the event, but the person is the server's.
+      const shown = event.user?.name === sender.name ? event.user.displayName : sender.displayName;
+      const user: ChannelUser = { id: personId(sender.name), name: shown || 'Someone' };
+      if (space.direct) {
+        this.#dms.set(sender.name, spaceName);
+        events.message({
+          chatId: spaceName,
+          messageId: copy.name,
+          user,
+          text: copy.text ?? '',
+          files: [],
+          direct: true,
+        });
+        return;
+      }
+      // In a space, Chat delivers only what mentions the app; argumentText is the rest.
+      const mentioned = (copy.annotations ?? []).some(
+        (a) => a.type === 'USER_MENTION' && a.userMention?.user?.type === 'BOT',
+      );
+      events.message({
+        chatId: spaceName,
+        messageId: copy.name,
+        user,
+        text: (mentioned ? copy.argumentText : copy.text)?.trim() ?? '',
+        files: [],
+        direct: false,
+        mentioned,
+        group: space.name,
+      });
+      return;
+    }
     const sender = event.user;
-    if (!space?.name || !sender?.name || sender.type === 'BOT') return;
+    if (!event.space?.name || !sender?.name || sender.type === 'BOT') return;
+    const space = await this.#space(event.space.name);
+    if (!space) return;
     const user: ChannelUser = { id: personId(sender.name), name: sender.displayName || 'Someone' };
-    const direct =
-      space.type === 'DM' || space.spaceType === 'DIRECT_MESSAGE' || space.singleUserBotDm === true;
-    if (direct) this.#dms.set(sender.name, space.name);
     if (event.type === 'CARD_CLICKED') {
+      // A click names the app's own question, which must be in this space; its data is a
+      // one-time key the service checks against the question asked there, from someone let in.
       const data =
         event.common?.parameters?.data ??
         event.action?.parameters?.find((p) => p.key === 'data')?.value;
-      if (!data) return;
+      const asked = event.message?.name ? await this.#serverCopy(event.message.name) : undefined;
+      if (!data || asked?.sender?.type !== 'BOT' || !asked.name.startsWith(`${event.space.name}/`))
+        return;
       events.press({
-        chatId: space.name,
+        chatId: event.space.name,
         user,
         data,
-        message: { chatId: space.name, messageId: event.message?.name ?? '' },
+        message: { chatId: event.space.name, messageId: asked.name },
         ack: () => Promise.resolve(),
       });
       return;
     }
     // Added to a space: it shows on the channel's page, off.
-    if (event.type === 'ADDED_TO_SPACE' && !direct) {
+    if (event.type === 'ADDED_TO_SPACE' && !space.direct)
       events.message({
-        chatId: space.name,
+        chatId: event.space.name,
         messageId: `added-${event.eventTime ?? Date.now()}`,
         user,
         text: '',
         files: [],
         direct: false,
         mentioned: false,
-        group: space.displayName || 'A Google Chat space',
+        group: space.name,
       });
-      return;
-    }
-    if (event.type !== 'MESSAGE' || !event.message) return;
-    const message = event.message;
-    if (direct) {
-      events.message({
-        chatId: space.name,
-        messageId: message.name,
-        user,
-        text: message.text ?? '',
-        files: [],
-        direct: true,
-      });
-      return;
-    }
-    // In a space, Chat delivers only what mentions the app; argumentText is the rest.
-    const mentioned = (message.annotations ?? []).some(
-      (a) => a.type === 'USER_MENTION' && a.userMention?.user?.type === 'BOT',
-    );
-    events.message({
-      chatId: space.name,
-      messageId: message.name,
-      user,
-      text: (mentioned ? message.argumentText : message.text)?.trim() ?? '',
-      files: [],
-      direct: false,
-      mentioned,
-      group: space.displayName || 'A Google Chat space',
-    });
   }
+}
+
+/** What makes an event itself: a message's name, or a click's place and moment. */
+function eventId(event: ChatEvent): string | undefined {
+  if (event.type === 'MESSAGE') return event.message?.name ? `m:${event.message.name}` : undefined;
+  if (!event.space?.name || !event.eventTime) return undefined;
+  return `${event.type ?? 'event'}:${event.space.name}:${event.user?.name ?? ''}:${event.message?.name ?? ''}:${event.eventTime}`;
 }
 
 /** A card with the question's buttons; a click comes back with the button's data. */

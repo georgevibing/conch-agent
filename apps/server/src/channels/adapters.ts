@@ -52,6 +52,7 @@ export interface ChannelEndpoints {
   googleToken?: string;
   googleCerts?: string;
   googleIssuers?: string[];
+  googleChatCerts?: string;
   /** The public door (Teams, Official Accounts), and where channels keep what they remember. */
   door?: ChannelDoorService;
   home?: string;

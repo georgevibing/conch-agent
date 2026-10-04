@@ -374,6 +374,11 @@ export const RULES: readonly BackupRule[] = [
     why: 'Your channels (bots on Telegram, Discord, Slack, Microsoft Teams, Matrix and WeChat; your linked WhatsApp and Signal; iMessage; your email account) and who may talk to them, not their keys.',
   },
   {
+    match: 'channels/googlechat-*.json',
+    class: 'derived',
+    why: 'Which Google Chat events were already read, so none is taken twice. Rebuilt as messages come.',
+  },
+  {
     match: 'channels/teams-*.json',
     class: 'kept',
     group: 'integrations',
