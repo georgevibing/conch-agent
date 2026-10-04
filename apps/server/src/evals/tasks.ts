@@ -143,14 +143,22 @@ export function checkList(saved: readonly { item: string; quantity: number }[][]
     : pass('saved all ten');
 }
 
-const firstOption = (question: Question): QuestionAnswer | null => {
+/**
+ * What a person who doesn't mind answers: the first option of a choice, "your
+ * call" for words, the suggested number. A field it can't fill (a date with no
+ * suggestion) is left out when it may be, and otherwise the question is skipped.
+ */
+export function firstOption(question: Question): QuestionAnswer | null {
   const values: QuestionAnswer['values'] = {};
   for (const field of question.fields) {
     if (field.kind === 'choice' && field.options[0])
       values[field.id] = field.multiple ? [field.options[0].id] : field.options[0].id;
+    else if (field.kind === 'text') values[field.id] = 'Whatever you think is best.';
+    else if (field.kind === 'number') values[field.id] = field.suggested ?? field.min ?? 1;
+    else if (!field.optional) return null;
   }
-  return Object.keys(values).length ? { values, text: 'The first option' } : null;
-};
+  return Object.keys(values).length ? { values, text: 'Whatever you think is best.' } : null;
+}
 
 export const TASKS: readonly EvalTask[] = [
   {

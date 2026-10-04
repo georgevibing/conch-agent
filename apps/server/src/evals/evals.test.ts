@@ -8,7 +8,17 @@ import { describe, expect, it } from 'vitest';
 import { SITE, startSite } from './fixtures/site';
 import { EVAL_MODELS, keyFrom, pickModel, SWITCH_FROM } from './models';
 import { compare, html, markdown, type RunResults, type TaskResult } from './report';
-import { checkList, checkSignup, mentionsAmount, SHOPPING, TASKS, unanswered } from './tasks';
+import { QuestionDesk } from '../questions/desk';
+import type { ToolContext } from '../conversations/manager';
+import {
+  checkList,
+  checkSignup,
+  firstOption,
+  mentionsAmount,
+  SHOPPING,
+  TASKS,
+  unanswered,
+} from './tasks';
 
 describe('the checkers', () => {
   it('reads an amount however it is written', () => {
@@ -52,6 +62,38 @@ describe('the checkers', () => {
     expect(unanswered({ chat: 'c', text: '', outcome: 'error', error: 'boom' })?.reason).toMatch(
       /boom/,
     );
+  });
+
+  it('answers every kind of question a card can hold, so a reply never waits', async () => {
+    const desk = new QuestionDesk();
+    const asked: unknown[] = [];
+    const ctx = {
+      conversationId: 'c1',
+      signal: new AbortController().signal,
+      append: (event: unknown) => asked.push(event),
+    } as unknown as ToolContext;
+    const waiting = desk.ask(ctx, {
+      fields: [
+        { id: 'ledger', label: 'Which ledger?', kind: 'text', optional: false, multiline: false },
+        {
+          id: 'invoice',
+          label: 'Link to an invoice?',
+          kind: 'choice',
+          optional: false,
+          multiple: false,
+          other: true,
+          options: [
+            { id: 'inv-101', label: 'INV-101' },
+            { id: 'none', label: 'No' },
+          ],
+        },
+        { id: 'count', label: 'How many?', kind: 'number', optional: false },
+      ],
+    });
+    const question = desk.waiting('c1');
+    if (!question) throw new Error('no question');
+    desk.answer('c1', question.questionId, firstOption(question));
+    expect(await waiting).toMatch(/They answered/);
   });
 
   it('has the tasks the suite promises, each with a unique id', () => {

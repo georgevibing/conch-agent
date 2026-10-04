@@ -263,8 +263,15 @@ export async function runTask(task: EvalTask, options: RunOptions): Promise<Task
         setTimeout(() => {
           try {
             services.questions.answer(chat, event.question.questionId, reply);
-          } catch {
-            // Already settled (the turn stopped).
+          } catch (error) {
+            // An answer the card refuses is skipped, as a person would, so the
+            // reply never waits for nobody. (Already settled: nothing to do.)
+            log(`  question answer refused (${String(error)}); skipping it`);
+            try {
+              services.questions.answer(chat, event.question.questionId, null);
+            } catch {
+              // The turn stopped first.
+            }
           }
         }, 50);
       }
