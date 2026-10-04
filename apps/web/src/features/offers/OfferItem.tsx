@@ -1,4 +1,4 @@
-import type { AcceptOfferBody, CatalogEntry } from '@conch/protocol';
+import { MUTED_MARKET, type AcceptOfferBody, type CatalogEntry } from '@conch/protocol';
 import { OfferAlsoTry, OfferCard, type OfferCardState, toast } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
@@ -17,6 +17,7 @@ import {
   useIntegrations,
 } from '../integrations/queries';
 import { signInResults } from '../integrations/useSignInResult';
+import { MarketOfferDialog } from '../skills/Discover';
 import { skillKeys, useSkills } from '../skills/queries';
 import { offersApi } from './api';
 
@@ -24,7 +25,11 @@ type OfferEntry = Extract<TranscriptItem, { kind: 'offer' }>;
 
 /** How a muted offer is written in `mutedSuggestions`: apps by id, skills as `skill:<id>`. */
 export const mutedKey = (offer: OfferEntry['offer']) =>
-  offer.kind === 'skill' ? `skill:${offer.target}` : offer.target;
+  offer.kind === 'skill'
+    ? `skill:${offer.target}`
+    : offer.kind === 'market'
+      ? MUTED_MARKET
+      : offer.target;
 
 /**
  * An offer to turn on what a request is missing (ADR 0060), under the reply
@@ -74,6 +79,9 @@ export function OfferItem({
   const accepting = useRef(false);
 
   const isApp = offer.kind === 'app';
+  // A skill people share (ADR 0070): read in a dialog, added, then the chat carries on.
+  const isMarket = offer.kind === 'market';
+  const [reading, setReading] = useState(false);
   // A Conch app you have but switched off (ADR 0061): its card is `capp_<id>`, and the fix is its switch.
   const conchApp = isApp && offer.target.startsWith('capp_');
   const { data: conchApps } = useConchApps();
@@ -82,11 +90,17 @@ export function OfferItem({
   const integration = isApp
     ? data?.integrations.find((i) => (i.catalogId ?? i.id) === offer.target)
     : undefined;
-  const skill = isApp ? undefined : skills?.skills.find((s) => s.id === offer.target);
+  const skill = isApp
+    ? undefined
+    : isMarket
+      ? skills?.skills.find((s) => s.origin?.listingId === offer.target)
+      : skills?.skills.find((s) => s.id === offer.target);
   const manual = offer.skillMode === 'manual';
   const on = isApp
     ? integration?.health.state === 'ok' || integration?.health.state === 'warning'
-    : Boolean(skill && !skill.problem && (manual ? skill.mode === 'auto' : skill.mode !== 'off'));
+    : isMarket
+      ? Boolean(skill && !skill.problem && skill.mode !== 'off')
+      : Boolean(skill && !skill.problem && (manual ? skill.mode === 'auto' : skill.mode !== 'off'));
   const open = !item.resolution;
   const muted = app?.preferences.mutedSuggestions ?? [];
   const isMuted = mutedHere ?? muted.includes(mutedKey(offer));
@@ -208,7 +222,16 @@ export function OfferItem({
         className={className}
         kind={offer.kind}
         name={offer.name}
-        brand={isApp ? offer.target : (skill?.name ?? offer.target)}
+        brand={
+          isApp
+            ? offer.target
+            : (skill?.name ?? (isMarket ? offer.target.split('/').pop() : offer.target))
+        }
+        {...(isMarket &&
+          offer.market && {
+            market: offer.market,
+            muteLabel: 'Don’t suggest skills from Discover',
+          })}
         color={offer.color}
         description={offer.description}
         why={offer.why}
@@ -234,7 +257,9 @@ export function OfferItem({
                   setWaiting(true);
                   setDialog(entry);
                 })
-              : () => setReviewing(true)
+              : isMarket
+                ? () => setReading(true)
+                : () => setReviewing(true)
         }
         onTurnOn={() => accept('on')}
         onUseOnce={() => accept('once')}
@@ -255,6 +280,18 @@ export function OfferItem({
           focusComposer?.();
         }}
       />
+      {isMarket && (
+        <MarketOfferDialog
+          listingId={offer.target}
+          open={reading && !item.resolution}
+          onOpenChange={setReading}
+          onAdded={(added) => {
+            setReading(false);
+            toast.success(`Added ${added.title}`);
+            accept();
+          }}
+        />
+      )}
       {isApp && !conchApp && (
         <ConnectDialog
           // Taken: the dialog has done its job.
