@@ -16,7 +16,7 @@ Your chats are in the sidebar, newest first, grouped by day. Point at one and pr
 
 ## While it works
 
-<kbd>esc</kbd> or the stop button stops the reply. It ends there at once and says **Stopped**, and you can write your next message straight away: if the provider is still winding down, it waits a moment and then goes.
+<kbd>esc</kbd> or the stop button stops the reply. It ends there at once with a **Stopped** mark (and how long it ran), and you can write your next message straight away: if the provider is still winding down, it waits a moment and then goes.
 
 You don't have to wait to say what's next. Write it and press <kbd>enter</kbd>: it waits above the message box, **Sends when Conch is done**, and goes by itself the moment the reply is over. Anything more you send meanwhile joins it.
 

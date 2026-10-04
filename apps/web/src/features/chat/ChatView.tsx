@@ -827,9 +827,12 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
       {canTalk && (
         <Talk conversationId={conversationId} send={(text) => send(text, [])} name={name} />
       )}
-      <Text size="2xs" tone="subtle" align="center" className={styles.hint}>
-        {name} can make mistakes, and {modeInfo(turn.options.permissionMode).hint}.
-      </Text>
+      {/* Said once, where a chat starts: under every reply it would only be noise. */}
+      {isEmpty && (
+        <Text size="2xs" tone="subtle" align="center" className={styles.hint}>
+          {name} can make mistakes, and {modeInfo(turn.options.permissionMode).hint}.
+        </Text>
+      )}
       <input
         ref={picker}
         type="file"

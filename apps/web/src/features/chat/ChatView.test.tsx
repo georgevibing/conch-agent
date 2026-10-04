@@ -52,6 +52,8 @@ describe('ChatView', () => {
     mockFetch({ 'GET /api/state': () => appState(), 'GET /api/conversations': () => [] });
     renderApp(<ChatView />);
     expect(await screen.findByRole('heading', { name: /, Ada\.$/ })).toBeInTheDocument();
+    // Said once, where a chat starts.
+    expect(screen.getByText(/^Conch can make mistakes/)).toBeInTheDocument();
 
     const box = screen.getByRole('textbox', { name: 'Message Conch' });
     await userEvent.type(box, 'Hello there{Enter}');
@@ -66,6 +68,8 @@ describe('ChatView', () => {
     };
     // Optimistic bubble appears immediately.
     expect(screen.getByText('Hello there')).toBeInTheDocument();
+    // Under a conversation it would only be noise.
+    expect(screen.queryByText(/^Conch can make mistakes/)).not.toBeInTheDocument();
 
     const summary = {
       id: 'c1',

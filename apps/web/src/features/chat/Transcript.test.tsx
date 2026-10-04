@@ -322,3 +322,22 @@ describe('a reply and what belongs to it (ADR 0060)', () => {
     expect(screen.queryByRole('button', { name: 'Copy reply' })).toBeNull();
   });
 });
+
+describe('a reply you stopped', () => {
+  it('ends with a quiet mark across the column, saying how long it ran', () => {
+    show({
+      items: [
+        user,
+        assistant('Once upon a time', true),
+        {
+          kind: 'turn-end',
+          id: 'end-1',
+          outcome: 'interrupted',
+          usage: { inputTokens: 1, outputTokens: 1, durationMs: 479_000 },
+        },
+      ],
+    });
+    expect(screen.getByText('Stopped')).toBeInTheDocument();
+    expect(screen.getByText('after 7m 59s')).toBeInTheDocument();
+  });
+});

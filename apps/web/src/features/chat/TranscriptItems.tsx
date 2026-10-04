@@ -5,6 +5,7 @@ import {
   CopyButton,
   Diff,
   DraftReview,
+  formatDuration,
   GuardNote,
   InlineCode,
   Message,
@@ -524,11 +525,23 @@ export function TurnEnd({
   recover?: TurnRecovery;
 }) {
   if (item.outcome === 'interrupted') {
-    return <div className={styles.stopped}>Stopped</div>;
+    // Where the reply ended because you said so: a quiet mark across the column.
+    const after = item.usage?.durationMs;
+    return (
+      <div className={styles.stopped}>
+        <span className={styles.stoppedMark}>
+          <span aria-hidden className={styles.stoppedGlyph} />
+          Stopped
+          {after ? (
+            <span className={styles.stoppedAfter}>after {formatDuration(after)}</span>
+          ) : null}
+        </span>
+      </div>
+    );
   }
   // An earlier failure the chat has moved past: a quiet line, not an alarm.
   if (item.outcome === 'error' && item.problem && !onRetry) {
-    return <div className={styles.stopped}>Didn’t go through: {item.error}</div>;
+    return <div className={styles.quietEnd}>Didn’t go through: {item.error}</div>;
   }
   if (item.outcome === 'error' && item.problem && recover && onRetry) {
     const { problem } = item;

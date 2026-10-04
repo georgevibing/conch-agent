@@ -269,7 +269,56 @@
     color: var(--nc-text-muted);
   }
 
+  /* Where a reply ended because you stopped it: a hairline across the column
+     with a small mark in the middle, so it reads as an end, not as a message. */
   .stopped {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    margin-block: var(--nc-space-1);
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .stopped::before,
+  .stopped::after {
+    content: '';
+    flex: 1;
+    block-size: 1px;
+    background: linear-gradient(to right, transparent, var(--nc-border-subtle));
+  }
+
+  .stopped::after {
+    background: linear-gradient(to left, transparent, var(--nc-border-subtle));
+  }
+
+  .stoppedMark {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    padding: var(--nc-space-0-5) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-wash-1);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-muted);
+    white-space: nowrap;
+  }
+
+  .stoppedGlyph {
+    inline-size: 7px;
+    block-size: 7px;
+    border-radius: 1.5px;
+    background: var(--nc-text-subtle);
+  }
+
+  .stoppedAfter {
+    font-weight: var(--nc-weight-regular);
+    color: var(--nc-text-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .quietEnd {
     align-self: center;
     font-size: var(--nc-text-xs);
     color: var(--nc-text-subtle);

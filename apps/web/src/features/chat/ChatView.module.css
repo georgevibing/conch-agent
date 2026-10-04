@@ -7,6 +7,19 @@
     min-block-size: 0;
   }
 
+  /* The top edge, the same: messages fade out as they scroll away under the
+     header, instead of being sliced. The column's own top padding keeps the
+     first message clear of it at rest. */
+  .chat::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    z-index: 1;
+    block-size: var(--nc-space-8);
+    background: linear-gradient(to top, transparent, var(--nc-canvas));
+    pointer-events: none;
+  }
+
   .dock {
     position: relative;
     padding: 0 var(--nc-space-5) var(--nc-space-3);
