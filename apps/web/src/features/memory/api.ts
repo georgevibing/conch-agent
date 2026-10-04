@@ -21,9 +21,9 @@ export const memoryApi = {
         signal,
       },
     ),
-  /** Put back a memory the assistant forgot, exactly as it was. */
-  restore: (memory: Memory) =>
-    request(Memory, '/api/memories/restore', { method: 'POST', body: { memory } }),
+  /** Put back a memory the assistant forgot, from Conch's own copy: by its id only (ADR 0087). */
+  restore: (id: string) =>
+    request(Memory, '/api/memories/restore', { method: 'POST', body: { id } }),
   /**
    * Keep a memory that waits for your OK: as it is, in your words (Edit
    * first), or, one the memory check refused, `anyway` (ADR 0087).

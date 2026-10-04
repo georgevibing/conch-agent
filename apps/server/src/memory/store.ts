@@ -55,7 +55,7 @@ export interface MemoryInput {
 type Gate = 'check' | 'person' | 'stricter';
 
 /** Every way a memory changes, as `#commit` sees it (tests hold each method to it). */
-export type CommitMethod = 'add' | 'update' | 'keep' | 'hold' | 'restore' | 'remove';
+export type CommitMethod = 'add' | 'update' | 'keep' | 'hold' | 'restore' | 'unforget' | 'remove';
 
 const OK: Verdict = { verdict: 'ok', reasons: [] };
 
@@ -219,6 +219,9 @@ export class MemoryStore {
       if (next === undefined) return { ...(current && { memory: current }), verdict: OK };
       if (next === null) {
         if (!current) return { verdict: OK };
+        // Kept aside, sealed, for Undo on "Forgot": the server's own copy, never the client's.
+        const { key } = await this.#sealKey();
+        await writeFileAtomic(this.#tomb(current.id), sealed(serialise(current), key));
         await rm(safeJoin(this.dir, `${current.id}.md`), { force: true });
         memories.delete(current.id);
         this.#hashes.delete(current.id);
@@ -255,7 +258,10 @@ export class MemoryStore {
         ...(provenance && { provenance }),
       };
       if (yours) {
-        committed.provenance = { ...(provenance ?? { via: 'you' }), yours: true };
+        // A person's Undo puts it back as it was: it doesn't make it theirs.
+        committed.provenance =
+          method === 'restore' ? provenance : { ...(provenance ?? { via: 'you' }), yours: true };
+        if (!committed.provenance) delete committed.provenance;
         // Only Keep lifts a hold: an edit, even yours, leaves a waiting memory
         // waiting, and one put back waits if it was waiting.
         const waiting =
@@ -278,7 +284,10 @@ export class MemoryStore {
           ? { ...held, ...(verdict.pieces && { pieces: verdict.pieces }) }
           : (next.held ?? was);
         if (stricter && committed.pending) committed.held = stricter;
-        if (gate === 'check' && verdict.yours && provenance && !committed.held)
+        // Put back from Conch's own sealed copy, it keeps where it came from.
+        if (method === 'unforget') {
+          if (provenance) committed.provenance = provenance;
+        } else if (gate === 'check' && verdict.yours && provenance && !committed.held)
           committed.provenance = { ...provenance, yours: true };
         else if (provenance?.yours) committed.provenance = { ...provenance, yours: false };
       }
@@ -439,9 +448,67 @@ export class MemoryStore {
     return restored ?? parsed;
   }
 
-  /** Forget a memory. */
+  /** Forget a memory. Conch keeps its own sealed copy aside, for Undo. */
   async remove(id: string): Promise<Memory | undefined> {
     return (await this.#commit('remove', id, () => null, undefined, 'stricter')).memory;
+  }
+
+  /** Where a forgotten memory's copy is kept for Undo. */
+  #tomb(id: string): string {
+    return safeJoin(join(this.dir, '.forgotten'), `${id}.md`);
+  }
+
+  /**
+   * Undo on "Forgot": put back a memory from Conch's own copy, made when it was
+   * forgotten (ADR 0087). Only an id comes in, never the words. The copy is
+   * spent; it comes back with the provenance and the hold it had, through the
+   * same check as any write, and it's never made the person's by this.
+   */
+  async unforget(id: string): Promise<Memory | undefined> {
+    if (!/^m_[\w-]{1,64}$/.test(id) || (await this.get(id))) return undefined;
+    // Spent once, under the lock: a second Undo finds nothing.
+    const text = await this.#mutex.run(async () => {
+      const path = this.#tomb(id);
+      const found = await readFile(path, 'utf8').catch(() => undefined);
+      if (found !== undefined) await rm(path, { force: true });
+      return found;
+    });
+    const was = text && parse(text);
+    if (!text || !was || was.id !== id) return undefined;
+    const { key } = await this.#sealKey();
+    const ours = sealHolds(text, key) && hashLine(text) === wordsHash(was.content);
+    const memory: Memory = ours
+      ? was
+      : {
+          ...was,
+          ...(was.provenance && { provenance: { ...was.provenance, yours: false } }),
+        };
+    const yours = ours && Boolean(was.provenance?.yours);
+    const context: WriteContext = ours
+      ? {
+          via: 'chat',
+          read: (was.provenance?.read ?? []).map((label) => ({
+            kind: label.includes('.') ? ('web' as const) : ('app' as const),
+            label,
+          })),
+          said: yours ? [was.content] : [],
+        }
+      : { via: 'other' };
+    try {
+      return (
+        await this.#commit(
+          'unforget',
+          undefined,
+          () => ({ ...memory, updatedAt: Date.now() }),
+          context,
+          'check',
+        )
+      ).memory;
+    } catch (error) {
+      // It didn't go back: the copy stays for another try.
+      await writeFileAtomic(this.#tomb(id), text).catch(() => undefined);
+      throw error;
+    }
   }
 
   /** Keyword search over what a model may be given, ranked by term overlap then recency (`MemoryIndex` is better). */

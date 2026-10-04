@@ -3,7 +3,6 @@ import {
   DismissSuggestionBody,
   GetMeaningBody,
   KeepMemoryBody,
-  Memory,
   TidyAnswerBody,
   UpdateMemoryBody,
 } from '@conch/protocol';
@@ -142,17 +141,23 @@ export function registerLearningRoutes(
     return kept;
   });
 
-  // Put back a memory the assistant forgot (Undo on "Forgot" in a chat): exactly as it was.
+  // Put back a memory the assistant forgot (Undo on "Forgot" in a chat): from
+  // Conch's own copy, made when it was forgotten, by its id alone (ADR 0087).
+  // Never the words a request sends, never more trusted than it was, and once.
   app.post('/api/memories/restore', async (request, reply) => {
-    const body = z.object({ memory: Memory }).safeParse(request.body);
+    const body = z
+      .object({ id: z.string().min(1).max(80) })
+      .strict()
+      .safeParse(request.body);
     if (!body.success)
-      return reply.code(400).send({ error: 'bad-request', message: 'That isn’t a memory.' });
-    // Your Undo, for the words the chat's line showed you (ADR 0087).
-    const { memory } = body.data;
-    const restored = await store.restore(
-      memory,
-      mintConsent(request, 'keep', { id: memory.id, content: memory.content }),
-    );
+      return reply
+        .code(400)
+        .send({ error: 'bad-request', message: 'Say which memory to put back.' });
+    const restored = await store.unforget(body.data.id);
+    if (!restored)
+      return reply
+        .code(404)
+        .send({ error: 'not-found', message: 'There’s nothing to put back for that memory.' });
     void index.sync();
     await deps.decided?.(restored, true).catch(() => undefined);
     return restored;

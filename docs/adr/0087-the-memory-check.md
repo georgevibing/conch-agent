@@ -229,6 +229,13 @@ strict than it was: an edit of a waiting memory leaves it waiting, and only
   and held memories are never in one. A merge or update the check would hold is
   never applied by itself: it waits on the card, and Keep there is a person's
   answer like any other.
+- **Undo on "Forgot" puts back Conch's own copy.** Forgetting a memory keeps a
+  sealed copy aside (`memory/.forgotten/`). `POST /api/memories/restore` takes
+  only an id: the copy comes back once, with the provenance and the hold it had,
+  through the same gate, and is never made the person's by it. A request's words,
+  verdict or hold are never taken. The tidy-up's Undo puts back the tidy-up's own
+  record (`memory-tidy.json`, which the assistant can't touch) and doesn't make
+  it the person's either.
 - **The assistant can't write the files.** `memory/` and `memory.seal` are
   protected paths (`lib/protect.ts`): the assistant's file and shell tools never
   touch them, so `remember` is its only way in.

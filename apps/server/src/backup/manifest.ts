@@ -125,6 +125,11 @@ export const RULES: readonly BackupRule[] = [
     why: 'Memory search by meaning: vectors made from your memories, made again when missing.',
   },
   {
+    match: 'memory/.forgotten/*.md',
+    class: 'derived',
+    why: 'Conch’s own copies of memories the assistant forgot, for Undo on “Forgot” in a chat (ADR 0087). Sealed, used once, never backed up.',
+  },
+  {
     match: 'memory.seal',
     class: 'derived',
     why: 'The key that seals your memory files (ADR 0087). Never backed up: memories from a backup, or changed by hand, are checked again when Conch reads them.',

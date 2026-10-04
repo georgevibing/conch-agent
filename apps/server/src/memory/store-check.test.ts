@@ -58,6 +58,10 @@ const MUTATING: Record<string, (s: MemoryStore, id: string) => Promise<unknown>>
   hold: (s, id) =>
     s.hold(id, { verdict: 'ask', reasons: [{ code: 'redirect', words: 'It would.' }] }),
   remove: (s, id) => s.remove(id),
+  unforget: async (s, id) => {
+    await s.remove(id);
+    return s.unforget(id);
+  },
 };
 const READS = ['list', 'get', 'search', 'usable'];
 
