@@ -11,7 +11,7 @@ import { SettingsStore } from '../../settings/store';
 import { fakeCodexApp } from '../../test/fakeCodexApp';
 import type { LoginState } from '@conch/protocol';
 import type { EngineEvent, TurnInput } from '../types';
-import { CodexEngine, codexPlan } from './app-engine';
+import { CodexEngine, codexPlan, escapes } from './app-engine';
 
 const homes: string[] = [];
 afterEach(() => {
@@ -398,6 +398,63 @@ describe('Codex CLI: Codex with its own tools, asking through Conch (ADR 0066)',
     );
     expect(ask).not.toHaveBeenCalled();
     expect(await decisionOf(fake)).toBe('decline');
+  });
+
+  it('never grants a way out of the sandbox, in any mode: network, other folders, or a retry outside', () => {
+    const command = 'item/commandExecution/requestApproval';
+    const change = 'item/fileChange/requestApproval';
+    const plain = { itemId: 'cmd1', command: 'npm test' };
+    expect(escapes(command, plain, false)).toBeUndefined();
+    expect(escapes(change, { itemId: 'fc1' }, false)).toBeUndefined();
+    expect(escapes(command, plain, true)).toMatch(/outside its sandbox/);
+    expect(
+      escapes(
+        command,
+        { ...plain, networkApprovalContext: { host: 'x.example', protocol: 'https' } },
+        false,
+      ),
+    ).toMatch(/network/);
+    expect(
+      escapes(
+        command,
+        { ...plain, proposedNetworkPolicyAmendments: [{ host: 'x.example' }] },
+        false,
+      ),
+    ).toMatch(/network/);
+    expect(
+      escapes(command, { ...plain, reason: 'command failed; retry without sandbox?' }, false),
+    ).toMatch(/outside its sandbox/);
+    expect(escapes(change, { itemId: 'fc1', grantRoot: '/' }, false)).toMatch(
+      /outside your work folder/,
+    );
+  });
+
+  it('declines an escalation before asking anyone, and says why in the chat', async () => {
+    const { engine, fake, turn } = await agent({ native: { command: 'npm test' } });
+    const ask = vi.fn(async () => 'allow' as const);
+    const guard = vi.fn(async () => undefined);
+    // Full trust, and still: a request that names the network is turned down.
+    const events = await collect(
+      engine.runTurn(turn({ guard, requestPermission: ask, options: mode('bypassPermissions') })),
+    );
+    expect(await decisionOf(fake)).toBe('accept');
+    expect(events.some((e) => e.type === 'notice')).toBe(false);
+    const {
+      engine: second,
+      fake: other,
+      turn: turn2,
+    } = await agent({
+      native: { command: 'npm test', network: true },
+    });
+    const events2 = await collect(
+      second.runTurn(turn2({ guard, requestPermission: ask, options: mode('bypassPermissions') })),
+    );
+    expect(await decisionOf(other)).toBe('decline');
+    expect(events2).toContainEqual({
+      type: 'notice',
+      code: 'sandbox',
+      message: 'Codex asked to reach the network. Its commands have no network in Conch.',
+    });
   });
 
   it('leaves Codex (Conch’s tools) as it was: its own tools off and every request declined', async () => {

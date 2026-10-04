@@ -57,6 +57,11 @@ What holds it:
     - **Full trust** allows both, unless the guard said to ask.
   - "Always allow" is remembered by Conch for the chat, never written into Codex's settings.
   - A request for more permissions (`item/permissions/requestApproval`) is answered with none.
+  - Nothing that would leave the sandbox is ever granted, in any mode, and the chat says so: a
+    request that names the network (`networkApprovalContext`, network rule changes), a change
+    asking for lasting write access under another folder (`grantRoot`), a second request for the
+    same command (Codex asking to retry outside its sandbox after it blocked the command), or a
+    reason that says so. These are refused before the guard or the person is asked.
 - **What it did shows like Claude Code's.** Each command and change is a tool card. It is in
   Activity, and Undo puts changed files back: the guard snapshots before a change, and the turn
   tracker covers the work folder.

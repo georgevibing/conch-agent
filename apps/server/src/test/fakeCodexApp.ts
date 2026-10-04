@@ -20,7 +20,7 @@ export async function fakeCodexApp(
      * Codex CLI's own work (ADR 0066): announce a command or a change, ask to
      * approve it, then run it (or not) as the answer says.
      */
-    native?: { command?: string; paths?: string[] };
+    native?: { command?: string; paths?: string[]; network?: boolean };
   } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), 'conch-app-server-'));
@@ -63,7 +63,7 @@ rl.createInterface({input:process.stdin}).on('line', line => {
    else if (OPTIONS.tool) send({id:'call1',method:'item/tool/call',params:{threadId:'t1',turnId:'turn1',callId:'tool1',tool:OPTIONS.tool,arguments:OPTIONS.args || {}}});
    else if (OPTIONS.native && OPTIONS.native.command) {
      note('item/started',{threadId:'t1',turnId:'turn1',item:{type:'commandExecution',id:'cmd1',command:OPTIONS.native.command,cwd:'/work',status:'inProgress',aggregatedOutput:null,exitCode:null}});
-     send({id:'approve1',method:'item/commandExecution/requestApproval',params:{kind:'command',threadId:'t1',turnId:'turn1',itemId:'cmd1',startedAtMs:1,environmentId:null,command:OPTIONS.native.command,cwd:'/work'}});
+     send({id:'approve1',method:'item/commandExecution/requestApproval',params:{kind:'command',threadId:'t1',turnId:'turn1',itemId:'cmd1',startedAtMs:1,environmentId:null,command:OPTIONS.native.command,cwd:'/work',...(OPTIONS.native.network ? {networkApprovalContext:{host:'x.example',protocol:'https'}} : {})}});
    }
    else if (OPTIONS.native && OPTIONS.native.paths) {
      note('item/started',{threadId:'t1',turnId:'turn1',item:{type:'fileChange',id:'fc1',status:'inProgress',changes:OPTIONS.native.paths.map(p=>({path:p,kind:{type:'update',move_path:null},diff:''}))}});

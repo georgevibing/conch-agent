@@ -122,6 +122,35 @@ const TOOL_CONFIG = [
 // only where Conch allows, reads nowhere secrets live, and has no network.
 const AGENT_CONFIG = SHARED_CONFIG;
 
+/**
+ * Why an approval request asks for more than "do this, in the sandbox": the
+ * network, lasting write access somewhere else, or a retry outside the
+ * sandbox after it blocked the command. Conch never grants any of these
+ * (ADR 0066); undefined for an ordinary request.
+ */
+export function escapes(
+  method: string,
+  params: Record<string, unknown>,
+  alreadyAsked: boolean,
+): string | undefined {
+  if (method === 'item/fileChange/requestApproval' && params.grantRoot)
+    return 'Codex asked to write outside your work folder from now on. Conch never allows that.';
+  if (method !== 'item/commandExecution/requestApproval') return undefined;
+  const amendments = params.proposedNetworkPolicyAmendments;
+  if (params.networkApprovalContext || (Array.isArray(amendments) && amendments.length))
+    return 'Codex asked to reach the network. Its commands have no network in Conch.';
+  if (alreadyAsked)
+    return 'Codex asked to run that again outside its sandbox. Conch never allows that.';
+  const reason = typeof params.reason === 'string' ? params.reason : '';
+  if (
+    /sandbox|escalat|outside|unrestricted|network|without (?:the )?(?:sandbox|restrictions)/i.test(
+      reason,
+    )
+  )
+    return 'Codex asked to run a command outside its sandbox. Conch never allows that.';
+  return undefined;
+}
+
 /** What Codex CLI's command or change is, as Conch's guard and approval cards read a tool call. */
 export function nativeRequest(
   method: string,
@@ -489,6 +518,8 @@ export class CodexEngine implements Engine {
         .join(',');
       /** Codex CLI's own commands and changes, by item id, as Codex announced them. */
       const items = new Map<string, Record<string, unknown>>();
+      /** Items already asked about: a second request for one is Codex wanting out of its sandbox. */
+      const asked = new Set<string>();
       /**
        * Codex CLI asks before a command or a change (ADR 0066): the protected
        * places first, then Conch's guard in every mode (ADR 0028), then the
@@ -498,6 +529,15 @@ export class CodexEngine implements Engine {
         method: string,
         params: Record<string, unknown>,
       ): Promise<'accept' | 'decline'> => {
+        const itemId = typeof params.itemId === 'string' ? params.itemId : '';
+        const again = Boolean(itemId) && asked.has(itemId);
+        if (itemId) asked.add(itemId);
+        // More than "this, in the sandbox" is never granted, whatever the mode.
+        const escape = escapes(method, params, again);
+        if (escape) {
+          emit({ type: 'notice', code: 'sandbox', message: escape });
+          return 'decline';
+        }
         const request = nativeRequest(
           method,
           params,
