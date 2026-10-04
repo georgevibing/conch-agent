@@ -167,6 +167,8 @@ import { lookup } from './updates/latest';
 import { mockPrograms } from './updates/mock';
 import { UpdatesService } from './updates/service';
 import { UsageService } from './usage/service';
+import { Billings, turnCost } from './usage/billing';
+import { ChatSpendDesk } from './usage/desk';
 import { REPOSITORY, SERVER_VERSION } from './version';
 import { theApp } from './desktop/app';
 import { AppReleases } from './updates/app';
@@ -177,14 +179,22 @@ export { SERVER_VERSION };
 /** How long Passwords waits on a provider's sign-in before using what it last said. */
 const SIGN_IN_LOOK_MS = 1_500;
 
-/** Every past turn's cost, oldest conversations included. */
+/**
+ * Every past turn's money, oldest conversations included: what Conch worked
+ * out (ADR 0073) where it did, so a plan's turns cost nothing; else what the
+ * provider said.
+ */
 async function turnCosts(store: ConversationStore) {
   const turns: { at: number; costUsd: number }[] = [];
   for (const record of await store.list()) {
     for (const event of await store.events(record.id)) {
-      if (event.type === 'turn.completed' && event.usage?.costUsd) {
-        turns.push({ at: event.at, costUsd: event.usage.costUsd });
-      }
+      if (event.type !== 'turn.completed') continue;
+      const usd = event.cost
+        ? event.cost.billing === 'metered'
+          ? event.cost.usd
+          : 0
+        : event.usage?.costUsd;
+      if (usd) turns.push({ at: event.at, costUsd: usd });
     }
   }
   return turns;
@@ -677,7 +687,17 @@ export class Services {
         once: (id, request) => this.skills.once(id, request),
       },
     });
+    // How each provider charges, asked once a minute at most: chats and routines share it.
+    const billings = new Billings();
     this.conversations = new ConversationManager({
+      // What each turn costs, what a chat has spent, and its limits (ADR 0073).
+      spend: new ChatSpendDesk({
+        billings,
+        usage: () => this.usage,
+        catalog: () => this.providers.models(),
+        engineFor: (id) => this.providers.engineFor(id),
+        task: (id) => this.tasks.get(id),
+      }),
       store: conversationStore,
       settings: this.settings,
       memory: this.memory,
@@ -792,7 +812,12 @@ export class Services {
       skillPermissions: (skillId) => this.skills.permissions(skillId),
       questions: this.questions,
       // A spend that can't be saved is lost, not fatal: an unhandled rejection would stop Conch.
-      onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
+      // Naming a chat on a plan costs no money (ADR 0073).
+      onSpend: (usage, engine) =>
+        void billings
+          .of(engine)
+          .then((info) => this.usage.recordTurn(usage, turnCost(usage, info, undefined)))
+          .catch(() => undefined),
       // Before a long chat's start is summarised, what you said there is learned (ADR 0055).
       learn: async ({ conversationId, origin, events, beforeSeq }) => {
         await this.tidy.learn(
@@ -810,6 +835,7 @@ export class Services {
       home: config.CONCH_HOME,
       engine: (id) => this.providers.engineFor(id),
       heal,
+      billings,
       changed: () =>
         void this.routines
           .spending()
@@ -925,11 +951,7 @@ export class Services {
       history: () => turnCosts(conversationStore),
     });
     this.usage.changed.on((usage) => this.broadcast.emit({ type: 'usage.changed', usage }));
-    this.conversations.events.on((event) => {
-      if (event.type === 'conversation.event' && event.event.type === 'turn.completed') {
-        void this.usage.recordTurn(event.event.usage).catch(() => undefined);
-      }
-    });
+    // Each turn's money is counted by the chat as it ends (ADR 0073), so it can say when the month nears its budget.
     this.usage.start();
     void (this.mockVendor?.start() ?? Promise.resolve()).then(() => this.integrations.start());
     this.googleApps.start();

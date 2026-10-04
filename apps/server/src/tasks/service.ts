@@ -598,7 +598,8 @@ export class TaskService {
             : turn.outcome === 'interrupted'
               ? {
                   status: stopped ? 'stopped' : 'interrupted',
-                  error: stopped ? undefined : 'It stopped before it finished.',
+                  // At a spending limit it says which (ADR 0073).
+                  error: stopped ? undefined : (turn.error ?? 'It stopped before it finished.'),
                 }
               : { status: 'failed', error: tidy(turn.error ?? 'Something went wrong.', 1_000) },
       );

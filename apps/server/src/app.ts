@@ -34,6 +34,8 @@ import {
   type CompactResult,
   ServerId,
   ReleaseTurnBody,
+  CappedChoiceBody,
+  ChatSpendLimitBody,
   SchedulePreviewBody,
   UpdateRoutineBody,
   WhenPreviewBody,
@@ -1084,6 +1086,36 @@ export async function buildApp(services: Services) {
       return sendError(reply, error);
     }
   });
+  /**
+   * A message at a spending limit goes on as the person chose (ADR 0073): raise
+   * the limit, carry on with a model that costs less, or stop. Only from the UI.
+   */
+  app.post<{ Params: { id: string } }>('/api/conversations/:id/capped', async (request, reply) => {
+    const body = parse(CappedChoiceBody, request.body, reply);
+    if (!body) return;
+    try {
+      if (await services.conversations.settleCapped(request.params.id, body.choice))
+        return { ok: true };
+      return reply
+        .code(409)
+        .send({ error: 'conflict', message: 'Nothing is waiting at a limit in this chat now.' });
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  /** This chat's own spending limit (ADR 0073), or none. Only from the UI. */
+  app.put<{ Params: { id: string } }>(
+    '/api/conversations/:id/spend-limit',
+    async (request, reply) => {
+      const body = parse(ChatSpendLimitBody, request.body, reply);
+      if (!body) return;
+      try {
+        return await services.conversations.setSpendLimit(request.params.id, body.capUsd);
+      } catch (error) {
+        return sendError(reply, error);
+      }
+    },
+  );
   /** `/compact`: summarise the start of a long chat now (ADR 0055). */
   app.post<{ Params: { id: string } }>('/api/conversations/:id/compact', async (request, reply) => {
     const body = parse(CompactBody, request.body ?? {}, reply);

@@ -48,6 +48,7 @@ import { SkillPermissions } from './skills';
 import { Task, TaskKind, TaskStatus } from './tasks';
 import { UpdatesStatus } from './updates';
 import { UsageSnapshot } from './usage';
+import { CappedOutcome, ChatSpend, SpendLimitKind, SpendModel, TurnCost } from './spend';
 
 export * from './access';
 export * from './address';
@@ -91,6 +92,7 @@ export * from './terminal';
 export * from './undo';
 export * from './updates';
 export * from './usage';
+export * from './spend';
 export * from './vault';
 export * from './passwords';
 export * from './pick';
@@ -341,6 +343,8 @@ export const ConversationSummary = z.object({
    * it, or it needing you, puts it back.
    */
   archivedAt: z.number().optional(),
+  /** What it has spent, its tasks included, and its own limit (ADR 0073). */
+  spend: ChatSpend.optional(),
 });
 export type ConversationSummary = z.infer<typeof ConversationSummary>;
 
@@ -528,8 +532,42 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     /** Which provider answered, and with which model when it said. */
     engine: EngineId.optional(),
     model: z.string().optional(),
+    /** What it cost, the way its provider charges (ADR 0073). */
+    cost: TurnCost.optional(),
   }),
   z.object({ ...logged, type: z.literal('title'), title: z.string() }),
+  /**
+   * A message met a spending limit (ADR 0073): the chat's own, or the monthly
+   * budget. It waits for one tap: raise the limit, carry on with a model that
+   * costs less, or stop. `during`: a reply was stopped part way, and carries
+   * on from there.
+   */
+  z.object({
+    ...logged,
+    type: z.literal('turn.capped'),
+    limit: SpendLimitKind,
+    /** Spent so far: this chat's, or this month's (USD). */
+    spentUsd: z.number().nonnegative(),
+    limitUsd: z.number().positive(),
+    /** What "Raise it" sets the limit to (USD). */
+    raiseTo: z.number().positive(),
+    switchTo: SpendModel.optional(),
+    during: z.boolean().optional(),
+  }),
+  /** The person chose how a message at a limit goes on. */
+  z.object({ ...logged, type: z.literal('turn.capped.settled'), outcome: CappedOutcome }),
+  /**
+   * A quiet word about money, said once when it matters (ADR 0073):
+   * `budget-near`, the month is most of the way to its budget; `pricier`, the
+   * model just picked costs a lot more a reply on a chat this long; `stopped`,
+   * a task stopped at the limit of the chat it came from.
+   */
+  z.object({
+    ...logged,
+    type: z.literal('spend.notice'),
+    kind: z.enum(['budget-near', 'pricier', 'stopped']),
+    message: z.string().max(400),
+  }),
   /**
    * A skill was used in this turn — asked for by name, or picked by the
    * assistant — or came with work from another chat. From here on the chat is

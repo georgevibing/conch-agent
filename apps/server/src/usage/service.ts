@@ -1,6 +1,12 @@
 import { join } from 'node:path';
 
-import type { Usage, UsageSnapshot } from '@conch/protocol';
+import {
+  BUDGET_NEAR_PERCENT,
+  type EngineId,
+  type TurnCost,
+  type Usage,
+  type UsageSnapshot,
+} from '@conch/protocol';
 import { z } from 'zod';
 
 import type { Engine, EngineUsage, LimitSignal } from '../engines/types';
@@ -21,6 +27,8 @@ const KEEP_DAYS = 400;
 const LedgerFile = z.object({
   version: z.literal(1).default(1),
   budget: z.number().positive().optional(),
+  /** The month (YYYY-MM) a chat said it was most of the way to the budget: once a month. */
+  warned: z.string().optional(),
   /** Local calendar day (YYYY-MM-DD) → USD spent through Conch. */
   days: z.record(z.string(), z.number().nonnegative()).default({}),
 });
@@ -46,6 +54,11 @@ export function spendOf(ledger: Ledger, now: number): UsageSnapshot['spend'] {
 }
 
 const METERED_NOTE = "Spend counts what you've run through Conch, at list prices.";
+
+/** "$41.20", "$50". */
+function usd(amount: number): string {
+  return Number.isInteger(amount) ? `$${amount}` : `$${amount.toFixed(2)}`;
+}
 
 /**
  * One answer to "how much do I have left?", whatever the engine or sign-in.
@@ -123,13 +136,30 @@ export class UsageService {
     return this.#reading;
   }
 
-  /** Called when a turn finishes: add its cost, then look at the provider again. */
-  async recordTurn(usage: Usage | undefined): Promise<void> {
-    const cost = usage?.costUsd ?? 0;
+  /**
+   * Called when a turn finishes: add its money, then look at the provider
+   * again. With `priced` (ADR 0073), only money counts: a turn on a plan or
+   * on this computer costs nothing here, and list prices fill in for a
+   * provider that doesn't say. Returns one sentence, once a month, when this
+   * turn took the month past most of its budget (`tell`: someone will read it).
+   */
+  async recordTurn(
+    usage: Usage | undefined,
+    priced?: TurnCost,
+    { tell = false } = {},
+  ): Promise<string | undefined> {
+    const cost = priced
+      ? priced.billing === 'metered'
+        ? (priced.usd ?? 0)
+        : 0
+      : (usage?.costUsd ?? 0);
+    let near: string | undefined;
     if (cost > 0) {
-      await this.#mutex.run(async () => {
+      near = await this.#mutex.run(async () => {
         const ledger = await this.#load();
-        const day = dayKey(this.#now);
+        const now = this.#now;
+        const day = dayKey(now);
+        const before = spendOf(ledger, now).month;
         ledger.days[day] = (ledger.days[day] ?? 0) + cost;
         // Keep the most recent days only (keys sort chronologically).
         ledger.days = Object.fromEntries(
@@ -137,10 +167,44 @@ export class UsageService {
             .sort(([a], [b]) => a.localeCompare(b))
             .slice(-KEEP_DAYS),
         );
+        const month = day.slice(0, 7);
+        const after = before + cost;
+        const budget = ledger.budget;
+        const line = budget ? (budget * BUDGET_NEAR_PERCENT) / 100 : undefined;
+        const said =
+          tell &&
+          budget &&
+          line !== undefined &&
+          before < line &&
+          after >= line &&
+          after < budget &&
+          ledger.warned !== month
+            ? `This month you’ve spent ${usd(after)} of your ${usd(budget)} budget. When it’s used up, a chat asks before spending more.`
+            : undefined;
+        if (said) ledger.warned = month;
         await writeJson(this.#path, ledger);
+        return said;
       });
     }
     this.#scheduleRefresh();
+    return near;
+  }
+
+  /**
+   * The plan's windows as last read, when `engine` is the one this meter
+   * watches; never a new read.
+   */
+  seen(engine: EngineId): EngineUsage | undefined {
+    const usage = this.#engineUsage;
+    if (!usage || usage.kind !== 'plan' || this.deps.engine().id !== engine) return undefined;
+    return usage;
+  }
+
+  /** This month's money through Conch, and the budget when one is set. */
+  async month(): Promise<{ usd: number; budgetUsd?: number }> {
+    const ledger = await this.#mutex.run(() => this.#load());
+    const spend = spendOf(ledger, this.#now);
+    return { usd: spend.month, ...(spend.budget && { budgetUsd: spend.budget }) };
   }
 
   async setBudget(budget: number | null): Promise<UsageSnapshot> {
@@ -148,6 +212,8 @@ export class UsageService {
       const ledger = await this.#load();
       if (budget === null) delete ledger.budget;
       else ledger.budget = budget;
+      // A new budget gets its own word when it's nearly used.
+      delete ledger.warned;
       await writeJson(this.#path, ledger);
     });
     return this.#engineUsage ? this.#publish() : this.refresh();

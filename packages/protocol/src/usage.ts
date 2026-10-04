@@ -47,7 +47,10 @@ export type ExtraUsage = z.infer<typeof ExtraUsage>;
 export const UsageSpend = z.object({
   today: z.number().nonnegative(),
   month: z.number().nonnegative(),
-  /** Your own monthly budget, if you set one. Conch never blocks on it. */
+  /**
+   * Your own monthly budget, if you set one. At it, a chat on a key you pay as
+   * you go asks before spending more (ADR 0073).
+   */
   budget: z.number().positive().optional(),
 });
 export type UsageSpend = z.infer<typeof UsageSpend>;
