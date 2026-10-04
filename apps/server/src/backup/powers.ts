@@ -49,6 +49,7 @@ const APP_NAMES: Record<string, string> = {
   wechat: 'WeChat',
   sms: 'SMS',
   mattermost: 'Mattermost',
+  line: 'LINE',
 };
 
 const text = (value: unknown, fallback: string) => {

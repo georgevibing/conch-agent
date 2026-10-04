@@ -119,6 +119,16 @@ export const CHANNEL_CATALOG: ChannelCatalogEntry[] = [
     available: true,
     groups: true,
   },
+  {
+    id: 'line',
+    name: 'LINE',
+    tagline: 'A LINE Official Account of your own, answering you.',
+    short: 'An Official Account of your own',
+    color: '#06C755',
+    minutes: 6,
+    available: true,
+    groups: true,
+  },
 ];
 
 export const CHANNEL_NAMES: Record<ChannelKind, string> = {
@@ -134,6 +144,7 @@ export const CHANNEL_NAMES: Record<ChannelKind, string> = {
   wechat: 'WeChat',
   sms: 'SMS',
   mattermost: 'Mattermost',
+  line: 'LINE',
 };
 
 /** Channels that only work on some systems: elsewhere the tile says so and can't be chosen. */

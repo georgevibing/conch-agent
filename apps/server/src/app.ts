@@ -257,6 +257,7 @@ export async function buildApp(services: Services) {
         wechat: services.mockWeChat?.base,
         sms: services.mockTwilio?.base,
         mattermost: services.mockMattermost?.base,
+        line: services.mockLine?.base,
       })),
     services.door,
     // Gmail's app password, offered for talking by email too (ADR 0052).

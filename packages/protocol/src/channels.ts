@@ -38,6 +38,7 @@ export const ChannelKind = z.enum([
   'wechat',
   'sms',
   'mattermost',
+  'line',
 ]);
 export type ChannelKind = z.infer<typeof ChannelKind>;
 
@@ -325,6 +326,7 @@ export const ChannelField = z.enum([
   'accountSid',
   'authToken',
   'number',
+  'channelSecret',
 ]);
 export type ChannelField = z.infer<typeof ChannelField>;
 
@@ -416,6 +418,19 @@ const mattermost = {
 };
 
 /**
+ * LINE (ADR 0082): a Messaging API channel. Messages come in through the
+ * public door, signed with the channel secret; answers go out with the
+ * channel access token. Conch points the channel's webhook at its door itself.
+ */
+const line = {
+  kind: z.literal('line'),
+  channelSecret: secret,
+  /** A long-lived channel access token. */
+  accessToken: secret,
+  hookId: hookId.optional(),
+};
+
+/**
  * Mail services Conch knows the settings of (ADR 0044). `other` takes the
  * server names by hand.
  */
@@ -472,6 +487,7 @@ export const ChannelSecrets = z.discriminatedUnion('kind', [
   z.object(wechat),
   z.object(sms),
   z.object(mattermost),
+  z.object(line),
 ]);
 export type ChannelSecrets = z.infer<typeof ChannelSecrets>;
 
@@ -493,6 +509,7 @@ export const CheckChannelBody = z.discriminatedUnion('kind', [
   z.object({ ...wechat, appId: secret.optional(), secret: secret.optional() }),
   z.object({ ...sms, accountSid: secret.optional(), authToken: secret.optional() }),
   z.object({ ...mattermost, server: short.optional(), token: secret.optional() }),
+  z.object({ ...line, channelSecret: secret.optional(), accessToken: secret.optional() }),
 ]);
 export type CheckChannelBody = z.infer<typeof CheckChannelBody>;
 
@@ -537,6 +554,8 @@ export const ReplaceChannelTokenBody = z.union([
   z.object({ kind: z.literal('sms'), authToken: secret }),
   // A new Mattermost bot token: the server stays as it was.
   z.object({ kind: z.literal('mattermost'), token: secret }),
+  // A new LINE channel access token: the secret and the address stay as they were.
+  z.object({ kind: z.literal('line'), accessToken: secret }),
 ]);
 export type ReplaceChannelTokenBody = z.infer<typeof ReplaceChannelTokenBody>;
 

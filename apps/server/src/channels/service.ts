@@ -51,6 +51,7 @@ import {
   personId,
   type VoiceNote,
 } from './types';
+import { normalizeLine } from './line';
 import { normalizeMattermost } from './mattermost';
 import { normalizeSms } from './sms';
 import {
@@ -204,6 +205,8 @@ export function normalizeSecrets(secrets: ChannelSecrets, kept?: ChannelSecrets)
     return normalizeWeChat(secrets, kept?.kind === 'wechat' ? kept : undefined);
   if (secrets.kind === 'sms') return normalizeSms(secrets, kept?.kind === 'sms' ? kept : undefined);
   if (secrets.kind === 'mattermost') return normalizeMattermost(secrets);
+  if (secrets.kind === 'line')
+    return normalizeLine(secrets, kept?.kind === 'line' ? kept : undefined);
   const pick = (value: string, pattern: RegExp) => pattern.exec(value)?.[1] ?? value.trim();
   if (secrets.kind === 'telegram')
     return { kind: 'telegram', token: pick(secrets.token, TELEGRAM_TOKEN) };
@@ -828,11 +831,15 @@ export class ChannelService {
           ? kept?.kind === 'mattermost'
             ? { ...kept, token: input.token }
             : undefined
-          : input.kind === 'email' && !('address' in input)
-            ? kept?.kind === 'email'
-              ? { ...kept, password: input.password }
+          : input.kind === 'line' && !('channelSecret' in input)
+            ? kept?.kind === 'line'
+              ? { ...kept, accessToken: input.accessToken }
               : undefined
-            : (input as ChannelSecrets);
+            : input.kind === 'email' && !('address' in input)
+              ? kept?.kind === 'email'
+                ? { ...kept, password: input.password }
+                : undefined
+              : (input as ChannelSecrets);
     if (!merged)
       throw new ChannelServiceError(
         'invalid',

@@ -11,6 +11,9 @@ export const SLACK_APPS_URL = 'https://api.slack.com/apps';
 export const TEAMS_BOTS_URL = 'https://dev.teams.microsoft.com/bots';
 /** Twilio: the Console's first page (Account Info), and buying a number that can text. */
 export const TWILIO_CONSOLE_URL = 'https://console.twilio.com/';
+/** LINE: where an Official Account is made, and where its channel's keys are. */
+export const LINE_MANAGER_URL = 'https://manager.line.biz/';
+export const LINE_CONSOLE_URL = 'https://developers.line.biz/console/';
 export const TWILIO_NUMBERS_URL =
   'https://console.twilio.com/us1/develop/phone-numbers/manage/search?capabilities[sms]=true';
 export const WECOM_URL = 'https://work.weixin.qq.com/';

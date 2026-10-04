@@ -190,6 +190,12 @@ export function HelloStep({
                 allow Direct Messages.
               </Text>
             </>
+          ) : channel.kind === 'line' ? (
+            <p>
+              {fine ? 'Scan the code with LINE on your phone, or open it there' : 'Open it in LINE'}
+              : add <b>{channel.bot.name}</b> as a friend and send it anything, like “hi”. Then
+              press <b>That’s me</b> here.
+            </p>
           ) : channel.kind === 'mattermost' ? (
             <p>
               In Mattermost, open a direct message with <b>{who}</b> (search for it under Direct

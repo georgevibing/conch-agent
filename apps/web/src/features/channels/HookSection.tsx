@@ -15,6 +15,7 @@ import { errorText } from './queries';
 export const usesDoor = (channel: Channel) =>
   channel.kind === 'microsoftteams' ||
   channel.kind === 'sms' ||
+  channel.kind === 'line' ||
   (channel.kind === 'wechat' && channel.bot.account === 'official');
 
 /** One value to paste somewhere else, with its copy button. */
@@ -95,8 +96,14 @@ export function HookSection({ channel }: { channel: Channel }) {
   if (!usesDoor(channel)) return null;
   const teams = channel.kind === 'microsoftteams';
   // Conch points the Twilio number at its address itself: nothing to paste.
-  const sms = channel.kind === 'sms';
-  const app = teams ? 'Teams' : sms ? 'Twilio' : 'WeChat';
+  const sms = channel.kind === 'sms' || channel.kind === 'line';
+  const app = teams
+    ? 'Teams'
+    : channel.kind === 'sms'
+      ? 'Twilio'
+      : channel.kind === 'line'
+        ? 'LINE'
+        : 'WeChat';
   return (
     <section aria-labelledby="ch-hook" className={styles.section}>
       <Heading level={2} id="ch-hook" size="sm" tone="muted">

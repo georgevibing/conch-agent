@@ -56,6 +56,7 @@ import { LinkedSetup } from './LinkedSetup';
 import { TALK_PATH } from '../integrations/paths';
 import { MatrixSetup } from './MatrixSetup';
 import { TeamsSetup } from './TeamsSetup';
+import { LineSetup } from './LineSetup';
 import { MattermostSetup } from './MattermostSetup';
 import { SmsSetup } from './SmsSetup';
 import { WeChatSetup } from './WeChatSetup';
@@ -79,6 +80,7 @@ export function ConnectChannel({ kind }: { kind: string }) {
   if (kind === 'wechat') return <WeChatSetup />;
   if (kind === 'sms') return <SmsSetup />;
   if (kind === 'mattermost') return <MattermostSetup />;
+  if (kind === 'line') return <LineSetup />;
   return <SlackSetup />;
 }
 

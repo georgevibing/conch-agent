@@ -585,7 +585,11 @@ function ReplaceKey({ channel }: { channel: Channel }) {
   const slack = channel.kind === 'slack';
   // An email's app password, a Twilio Auth Token or a Mattermost bot token: only that
   // changes, the rest stays (so it's checked when you press Reconnect).
-  const email = channel.kind === 'email' || channel.kind === 'sms' || channel.kind === 'mattermost';
+  const email =
+    channel.kind === 'email' ||
+    channel.kind === 'sms' ||
+    channel.kind === 'mattermost' ||
+    channel.kind === 'line';
   const body =
     email || !token.trim()
       ? undefined
@@ -615,6 +619,7 @@ function ReplaceKey({ channel }: { channel: Channel }) {
     sms: 'On the Twilio Console’s first page, under Account Info, copy the Auth Token (it was probably changed).',
     mattermost:
       'In Mattermost, open Integrations → Bot Accounts, find your bot, press Create New Token, and copy it.',
+    line: 'In the LINE Developers Console, on your channel’s Messaging API tab, press Reissue under Channel access token and copy it.',
   };
 
   const save = async () => {
@@ -624,11 +629,13 @@ function ReplaceKey({ channel }: { channel: Channel }) {
         ? { kind: 'sms', authToken: token }
         : channel.kind === 'mattermost'
           ? { kind: 'mattermost', token }
-          : email
-            ? { kind: 'email', password: token }
-            : channel.kind === 'discord'
-              ? { kind: 'discord', token }
-              : { kind: 'telegram', token };
+          : channel.kind === 'line'
+            ? { kind: 'line', accessToken: token }
+            : email
+              ? { kind: 'email', password: token }
+              : channel.kind === 'discord'
+                ? { kind: 'discord', token }
+                : { kind: 'telegram', token };
     setBusy(true);
     setError(undefined);
     try {

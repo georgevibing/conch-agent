@@ -17,6 +17,7 @@ export const APPS: Record<ChannelKind, { name: string; color: string }> = {
   wechat: { name: 'WeChat', color: '#07C160' },
   sms: { name: 'SMS', color: '#F22F46' },
   mattermost: { name: 'Mattermost', color: '#1E325C' },
+  line: { name: 'LINE', color: '#06C755' },
 };
 
 /** More words people would type to find each app (⌘K). */
@@ -30,6 +31,7 @@ export const APP_WORDS: Partial<Record<string, string>> = {
   wechat: '微信 企业微信 wecom weixin 公众号 测试号 official account',
   sms: 'text message texting phone number twilio mms',
   mattermost: 'mattermost self-hosted team chat server bot',
+  line: 'line official account messaging api japan taiwan thailand',
 };
 
 export const isKind = (value: string | undefined): value is ChannelKind =>

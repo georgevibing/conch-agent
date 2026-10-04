@@ -1149,3 +1149,53 @@ describe('Connecting Mattermost (ADR 0081)', () => {
     expect(await screen.findByText('There’s no Mattermost at that address.')).toBeInTheDocument();
   });
 });
+
+describe('Connecting LINE (ADR 0082)', () => {
+  it('takes the secret and the token, then the address, then the one switch only you can turn', async () => {
+    const SECRET = '0123456789abcdef' + 'fedcba9876543210';
+    const made = channel({
+      kind: 'line',
+      bot: {
+        id: 'Ub0b',
+        name: 'Conch',
+        username: '@123conch',
+        chatUrl: 'https://line.me/R/ti/p/@123conch',
+      },
+      hook: {},
+      health: { state: 'error', message: 'LINE can’t reach Conch yet.' },
+    });
+    let doorState: object = { state: 'off', apps: ['line'] };
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'POST /api/channels/check': () => ({ ok: true, bot: made.bot, checked: [] }),
+      'POST /api/channels': () => made,
+      'GET /api/channels/door': () => doorState,
+      'POST /api/channels/door/tailscale': () => {
+        doorState = {
+          state: 'ready',
+          apps: ['line'],
+          url: 'https://mac.tail1.ts.net/conch',
+          via: 'tailscale',
+        };
+        return doorState;
+      },
+      'GET /api/auth': () => ({ method: 'none' }),
+    });
+    renderApp(<ConnectChannel kind="line" />, { route: '/channels/new/line' });
+    expect(await screen.findByRole('heading', { name: 'Connect LINE' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'I made it' }));
+    await userEvent.type(screen.getByLabelText('Channel secret'), `Channel secret ${SECRET}`);
+    expect(screen.getByLabelText('Channel secret')).toHaveValue(SECRET);
+    await userEvent.type(screen.getByLabelText('Channel access token'), 'longlivedtoken/abc=');
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST' && c.path === '/api/channels')?.body).toEqual({
+        kind: 'line',
+        channelSecret: SECRET,
+        accessToken: 'longlivedtoken/abc=',
+      }),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Turn on with Tailscale' }));
+    expect(await screen.findByRole('button', { name: 'It’s on' })).toBeInTheDocument();
+  });
+});

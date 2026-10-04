@@ -6,6 +6,7 @@ import type { SignalDaemon } from './signal-cli';
 import { EmailAdapter, type MailEndpoints } from './email';
 import { ImessageAdapter, type ImessageOptions } from './imessage';
 import type { ChannelDoorService } from './door';
+import { LineAdapter } from './line';
 import { MattermostAdapter } from './mattermost';
 import { MatrixAdapter } from './matrix';
 import { SLACK_API, SlackAdapter } from './slack';
@@ -41,6 +42,9 @@ export interface ChannelEndpoints {
   wechatFiles?: string[];
   /** Twilio's REST API (the pretend Twilio in tests). */
   twilio?: string;
+  /** LINE's Messaging API, and where it serves content (the pretend LINE in tests). */
+  line?: string;
+  lineData?: string;
   /** The public door (Teams, Official Accounts), and where channels keep what they remember. */
   door?: ChannelDoorService;
   home?: string;
@@ -84,6 +88,8 @@ export function adapterFor(
       return new TwilioSmsAdapter(secrets, endpoints);
     case 'mattermost':
       return new MattermostAdapter(secrets);
+    case 'line':
+      return new LineAdapter(secrets, endpoints);
   }
 }
 

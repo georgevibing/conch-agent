@@ -573,6 +573,38 @@ const SCENES: Record<string, Record<string, () => ReactNode>> = {
       />
     ),
   },
+  line: {
+    key: () => (
+      <PortalSketch
+        label="The LINE Developers Console, on your channel’s Messaging API tab"
+        address="developers.line.biz/console"
+        nav={['Basic settings', 'Messaging API', 'Statistics']}
+        active="Messaging API"
+        title={BOT}
+        color={colorOf('line')}
+      >
+        <PortalSketch.Field label="Channel access token (long-lived)" />
+        <PortalSketch.Row>
+          <PortalSketch.Button>Issue</PortalSketch.Button>
+        </PortalSketch.Row>
+        <PortalSketch.Field label="Use webhook">On</PortalSketch.Field>
+      </PortalSketch>
+    ),
+    hello: () => (
+      <Handset
+        label="Your assistant in LINE, once Conch knows it’s you"
+        brand="line"
+        color={colorOf('line')}
+        title={BOT}
+        subtitle="Official account"
+        messages={[
+          { id: '1', from: 'you', text: 'hi' },
+          { id: '2', from: 'them', text: WELCOME },
+        ]}
+        footer={<Handset.Composer placeholder="Aa" />}
+      />
+    ),
+  },
 };
 
 function colorOf(id: string): string | undefined {

@@ -77,6 +77,7 @@ import { MockTeams } from './channels/mock/teams';
 import { MockTelegram } from './channels/mock/telegram';
 import { linkedChannels, type LinkedChannels } from './channels/linked-setup';
 import { ChannelLinking } from './channels/linking';
+import { MockLine } from './channels/mock/line';
 import { MockMattermost } from './channels/mock/mattermost';
 import { MockTwilio } from './channels/mock/twilio';
 import { MockWeChat } from './channels/mock/wechat';
@@ -330,6 +331,7 @@ export class Services {
   readonly mockWeChat?: MockWeChat;
   readonly mockTwilio?: MockTwilio;
   readonly mockMattermost?: MockMattermost;
+  readonly mockLine?: MockLine;
   /** The public door, for the channels that only deliver to a web address (ADR 0045). */
   readonly door: ChannelDoorService;
   /** Your own address, over HTTPS by Conch itself (ADR 0064). Started by main.ts, never by tests. */
@@ -1068,6 +1070,7 @@ export class Services {
     this.mockWeChat = config.CONCH_ENGINE === 'mock' ? new MockWeChat() : undefined;
     this.mockTwilio = config.CONCH_ENGINE === 'mock' ? new MockTwilio() : undefined;
     this.mockMattermost = config.CONCH_ENGINE === 'mock' ? new MockMattermost() : undefined;
+    this.mockLine = config.CONCH_ENGINE === 'mock' ? new MockLine() : undefined;
     // In mock mode the "internet" is this computer: what's sent to the public address reaches the door.
     const door: ChannelDoorService = new ChannelDoorService({
       home: config.CONCH_HOME,
@@ -1092,6 +1095,7 @@ export class Services {
     if (this.mockTeams) this.mockTeams.resolve = (url) => door.localFor(url);
     if (this.mockWeChat) this.mockWeChat.resolve = (url) => door.localFor(url);
     if (this.mockTwilio) this.mockTwilio.resolve = (url) => door.localFor(url);
+    if (this.mockLine) this.mockLine.resolve = (url) => door.localFor(url);
     this.mockMail = config.CONCH_ENGINE === 'mock' ? new MockMail() : undefined;
     this.mockMessages = config.CONCH_ENGINE === 'mock' ? new MockMessages() : undefined;
     this.linked = linkedChannels({
@@ -1295,6 +1299,10 @@ export class Services {
       // The Mattermost server is whatever's typed: the pretend one says where it is.
       if (this.mockMattermost)
         await this.mockMattermost.start(Number(process.env.CONCH_MOCK_MATTERMOST_PORT ?? 0));
+      if (this.mockLine) {
+        await this.mockLine.start(Number(process.env.CONCH_MOCK_LINE_PORT ?? 0));
+        endpoints.line = this.mockLine.base;
+      }
     })();
   }
 
@@ -2063,6 +2071,7 @@ export class Services {
     void this.mockWeChat?.stop();
     void this.mockTwilio?.stop();
     void this.mockMattermost?.stop();
+    void this.mockLine?.stop();
     clearInterval(this.#sweeper);
     clearInterval(this.#hereSweeper);
     this.#stopAsks?.();

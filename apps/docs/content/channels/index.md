@@ -15,7 +15,7 @@ A channel is a bot you make in the chat app, connected to the Conch on your comp
 
 Conch connects **outward** to the app. Nothing on your computer is opened to the internet, and you need no public address and no tunnel.
 
-Some apps only deliver to a web address: **Microsoft Teams**, a WeChat **Official Account**, and **SMS** through Twilio. For them, Conch can open one public address with one press (through Tailscale Funnel), or use an address of your own. It leads to a small door of its own, not to Conch: the door lets in only messages the app signed, for the channels you connected. A WeChat **WeCom bot** and **Matrix** connect outward like the others.
+Some apps only deliver to a web address: **Microsoft Teams**, a WeChat **Official Account**, **LINE**, and **SMS** through Twilio. For them, Conch can open one public address with one press (through Tailscale Funnel), or use an address of your own. It leads to a small door of its own, not to Conch: the door lets in only messages the app signed, for the channels you connected. A WeChat **WeCom bot** and **Matrix** connect outward like the others.
 
 Setting one up is a short numbered path in Conch, from **Apps → Talk to me here**, beside a picture of exactly what you'll see in the other app. Keys are checked the moment you paste them, anywhere on the page.
 
@@ -35,7 +35,7 @@ WhatsApp and Signal have no bots to make. Instead Conch joins **your own account
 
 ## In a group
 
-Telegram, Discord, Slack and Mattermost can answer in a group, a server's channel or a team's channel, once you turn that group on in Conch. Add the bot to the group in the app; the group shows up on the bot's page in Conch under **Groups**, with a switch.
+Telegram, Discord, Slack, Mattermost and LINE can answer in a group, a server's channel or a team's channel, once you turn that group on in Conch. Add the bot to the group in the app; the group shows up on the bot's page in Conch under **Groups**, with a switch.
 
 - **Only when it's asked.** In a group that's on, your assistant answers only when someone mentions it (`@yourbot`) or replies to one of its messages. Everything else in the group is never read.
 - **You get everything.** When you mention it, it's the same assistant as in your private chat, in a conversation of its own for that group.
