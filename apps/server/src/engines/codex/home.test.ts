@@ -15,6 +15,7 @@ import { SettingsStore } from '../../settings/store';
 import { fakeCodexApp } from '../../test/fakeCodexApp';
 import { CodexEngine } from './app-engine';
 import { CodexHome } from './home';
+import { CodexRefusal } from './rpc';
 
 /**
  * Windows keeps a program's open files locked for a moment after it has
@@ -168,5 +169,84 @@ describe('the saved Codex sign-in', () => {
         { timeout: 5000, interval: 100 },
       );
     });
+  });
+});
+
+describe('Codex and Codex CLI side by side', () => {
+  const token = async (rpc: { request: (m: string, p: unknown) => Promise<unknown> }) =>
+    ((await rpc.request('test/token', {})) as { token: string | null }).token;
+
+  it('runs at once, and a new run never takes a live one’s sign-in away', async () => {
+    const { engine, home, bin } = await setup();
+    await login(engine);
+    // Codex CLI is the second provider on the same sign-in.
+    const agent = new CodexEngine(
+      new SettingsStore(home),
+      new ProviderKeys(new SettingsStore(home)),
+      bin,
+      undefined,
+      'agent',
+    );
+    let release!: () => void;
+    const held = new Promise<void>((done) => (release = done));
+    const long = new CodexHome(home).withClient(bin, async (rpc) => {
+      await held;
+      // Still signed in after the other provider started and finished runs.
+      return token(rpc);
+    });
+    // While that turn goes on, the other provider checks in, more than once, without waiting.
+    expect((await agent.detect({ force: true })).state).toBe('ready');
+    expect((await engine.detect({ force: true })).state).toBe('ready');
+    release();
+    expect(await long).toBe('test-only-token');
+  });
+
+  it('hands a renewal to every run still going, and an older run never puts back the old one', async () => {
+    const { engine, home, bin } = await setup();
+    await login(engine);
+    const saved = async () =>
+      (
+        await readStore(
+          join(home, 'codex.secrets.json'),
+          z.object({ auth: z.unknown().optional() }),
+        )
+      ).value.auth;
+    let renewed!: () => void;
+    const afterRenewal = new Promise<void>((done) => (renewed = done));
+    const older = new CodexHome(home).withClient(bin, async (rpc) => {
+      await afterRenewal;
+      await vi.waitFor(async () => expect(await token(rpc)).toBe('renewed-token'), {
+        timeout: 5000,
+        interval: 100,
+      });
+    });
+    await new CodexHome(home).withClient(bin, async (rpc) => {
+      await rpc.request('test/renew', {});
+      await vi.waitFor(
+        async () =>
+          expect(await saved()).toMatchObject({ tokens: { access_token: 'renewed-token' } }),
+        { timeout: 5000, interval: 100 },
+      );
+    });
+    renewed();
+    await older;
+    expect(await saved()).toMatchObject({ tokens: { access_token: 'renewed-token' } });
+  });
+});
+
+describe('a request Codex refuses', () => {
+  it('says why, without anything that looks like a credential', async () => {
+    const { engine, home, bin } = await setup();
+    await login(engine);
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const error: unknown = await new CodexHome(home)
+      .withClient(bin, (rpc) => rpc.request('test/refuse', {}))
+      .catch((e: unknown) => e);
+    if (!(error instanceof CodexRefusal)) throw new Error('expected a refusal');
+    expect(error.method).toBe('test/refuse');
+    expect(error.message).toContain('unknown field "x"');
+    expect(error.message).not.toMatch(/abc\.def|ABCDEFGHIJKLMNOP/);
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining('[codex] test/refuse refused:'));
+    logged.mockRestore();
   });
 });

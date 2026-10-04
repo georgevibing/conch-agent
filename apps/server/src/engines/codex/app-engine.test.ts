@@ -11,7 +11,7 @@ import { SettingsStore } from '../../settings/store';
 import { fakeCodexApp } from '../../test/fakeCodexApp';
 import type { LoginState } from '@conch/protocol';
 import type { EngineEvent, TurnInput } from '../types';
-import { CodexEngine, codexPlan, escapes } from './app-engine';
+import { CodexEngine, codexPlan, codexProblem, escapes } from './app-engine';
 
 const homes: string[] = [];
 afterEach(() => {
@@ -57,6 +57,21 @@ async function login(engine: CodexEngine) {
   return states;
 }
 
+describe('why a Codex turn failed', () => {
+  it('reads a refused connection by its status, so the chat offers the right next step', () => {
+    expect(codexProblem('unauthorized')).toBe('signed-out');
+    expect(codexProblem({ responseStreamDisconnected: { httpStatusCode: 401 } })).toBe(
+      'signed-out',
+    );
+    expect(codexProblem({ responseStreamDisconnected: { httpStatusCode: 429 } })).toBe('limit');
+    expect(codexProblem({ responseStreamDisconnected: { httpStatusCode: 502 } })).toBe(
+      'unavailable',
+    );
+    expect(codexProblem('usageLimitExceeded')).toBe('limit');
+    expect(codexProblem(undefined)).toBeUndefined();
+  });
+});
+
 describe('Codex app-server parity', () => {
   it('does not borrow ambient sign-ins or secret environment variables', async () => {
     vi.stubEnv('CODEX_HOME', '/not-conch');
@@ -95,7 +110,7 @@ describe('Codex app-server parity', () => {
   it('runs Conch tools through schema validation and the guard, with normalized events', async () => {
     const { engine, turn, fake } = await setup({
       signedIn: true,
-      tool: 'mcp__conch__remember',
+      tool: 'conch__remember',
       args: { text: 'tea' },
     });
     const run = vi.fn(async () => 'Saved.');
@@ -126,7 +141,7 @@ describe('Codex app-server parity', () => {
   it('passes on what a host tool found for the person, beside the text the model reads', async () => {
     const { engine, turn } = await setup({
       signedIn: true,
-      tool: 'mcp__conch__remember',
+      tool: 'conch__remember',
       args: { text: 'tea' },
     });
     const view = { kind: 'files' as const, items: [{ name: 'Tea notes' }] };
@@ -149,7 +164,7 @@ describe('Codex app-server parity', () => {
   it('never runs a denied tool, including in full trust', async () => {
     const { engine, turn } = await setup({
       signedIn: true,
-      tool: 'mcp__conch__remember',
+      tool: 'conch__remember',
       args: { text: 'tea' },
     });
     const run = vi.fn(async () => 'Saved.');

@@ -16,6 +16,56 @@ const Message = z.object({
 export type RpcMessage = z.infer<typeof Message>;
 const MAX_LINE = 2_000_000;
 
+/**
+ * What Codex said when it refused a request, safe to log and to show: anything
+ * that looks like a credential (a bearer token, a key, a JWT, a long opaque
+ * string) is blanked, and it's cut short.
+ */
+export function redact(text: string): string {
+  return text
+    .replace(/\b(bearer|basic)\s+[^\s,;"']+/gi, '$1 …')
+    .replace(/\b(sk|pk|rk|sess)-[A-Za-z0-9_-]{8,}/g, '$1-…')
+    .replace(/\beyJ[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]+)*/g, '…')
+    .replace(/[A-Za-z0-9+/_=-]{40,}/g, '…')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 240);
+}
+
+/** Codex answered a request with an error: which request, and why (redacted). */
+export class CodexRefusal extends Error {
+  constructor(
+    message: string,
+    readonly method: string,
+    readonly reason: string,
+  ) {
+    super(message);
+  }
+}
+
+function refusal(method: string, error: unknown): CodexRefusal {
+  const raw =
+    typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message: unknown }).message)
+      : '';
+  const reason = redact(raw);
+  // The real reason goes to the gateway's log, so one failure can be told from the next.
+  console.error(`[codex] ${method} refused: ${reason || '(no reason given)'}`);
+  if (/bwrap:|sandbox helper failed|sandbox-exec:/i.test(raw))
+    return new CodexRefusal(
+      'Codex could not start its OS sandbox. Check the host sandbox prerequisites in Settings → Health; Conch will not run unrestricted.',
+      method,
+      reason,
+    );
+  return new CodexRefusal(
+    reason
+      ? `Codex refused the request: ${reason}`
+      : 'Codex could not complete this request. Check your sign-in or update Codex in Settings.',
+    method,
+    reason,
+  );
+}
+
 export class CodexRpc {
   readonly child: ChildProcessWithoutNullStreams;
   #id = 0;
@@ -24,6 +74,7 @@ export class CodexRpc {
   #pending = new Map<
     number,
     {
+      method: string;
       resolve: (value: unknown) => void;
       reject: (error: Error) => void;
       timer: ReturnType<typeof setTimeout>;
@@ -79,18 +130,7 @@ export class CodexRpc {
             this.#pending.delete(message.id);
             clearTimeout(waiting.timer);
             // Raw provider errors may contain request headers or credential material.
-            if (message.error)
-              waiting.reject(
-                new Error(
-                  typeof message.error === 'object' &&
-                    message.error !== null &&
-                    'message' in message.error &&
-                    typeof message.error.message === 'string' &&
-                    /bwrap:|sandbox helper failed|sandbox-exec:/i.test(message.error.message)
-                    ? 'Codex could not start its OS sandbox. Check the host sandbox prerequisites in Settings → Health; Conch will not run unrestricted.'
-                    : 'Codex could not complete this request. Check your sign-in or update Codex in Settings.',
-                ),
-              );
+            if (message.error) waiting.reject(refusal(waiting.method, message.error));
             else waiting.resolve(message.result);
           }
         } else for (const listener of this.#listeners) listener(message);
@@ -128,7 +168,7 @@ export class CodexRpc {
         this.#pending.delete(id);
         reject(new Error('Codex took too long to answer.'));
       }, timeoutMs).unref();
-      this.#pending.set(id, { resolve, reject, timer });
+      this.#pending.set(id, { method, resolve, reject, timer });
       this.send({ id, method, params });
     });
   }

@@ -230,15 +230,21 @@ export function capModels(models: ModelInfo[], chosen?: string): ModelInfo[] {
 /**
  * The tools a model can call through Conch. `computer: false` leaves out
  * Conch's own computer tools (commands, files) for an agent that brings its
- * own and asks through Conch for them (Codex CLI, ADR 0066).
+ * own and asks through Conch for them (Codex CLI, ADR 0066). `bare` sends
+ * them without the `mcp__` prefix, for a provider that keeps names starting
+ * with it for its own servers (Codex refuses a thread whose tools use one);
+ * what Conch shows and records keeps the prefix.
  */
-export function buildTools(input: TurnInput, { computer = true } = {}): Map<string, Callable> {
+export function buildTools(
+  input: TurnInput,
+  { computer = true, bare = false } = {},
+): Map<string, Callable> {
   const off = new Set(input.disallowedTools ?? []);
   const tools = new Map<string, Callable>();
   const taken = new Set<string>();
   const add = (display: string, make: (name: string) => Callable) => {
     if (off.has(display) || tools.size >= MAX_TOOLS) return;
-    const name = wireName(display, taken);
+    const name = wireName(bare ? display.replace(/^mcp__/, '') : display, taken);
     taken.add(name);
     tools.set(name, make(name));
   };

@@ -62,6 +62,15 @@ class CodexFailure extends Error {
 }
 export function codexProblem(info: unknown): TurnProblem | undefined {
   if (info === 'unauthorized') return 'signed-out';
+  // A refused connection says so by its status: `{responseStreamDisconnected: {httpStatusCode: 401}}`.
+  const status =
+    info && typeof info === 'object'
+      ? Object.values(info)
+          .map((v) => object(v).httpStatusCode)
+          .find((s) => typeof s === 'number')
+      : undefined;
+  if (status === 401 || status === 403) return 'signed-out';
+  if (status === 429) return 'limit';
   if (['usageLimitExceeded', 'rateLimitExceeded', 'sessionBudgetExceeded'].includes(String(info)))
     return 'limit';
   if (
@@ -504,7 +513,7 @@ export class CodexEngine implements Engine {
         );
       signal.throwIfAborted();
       const agent = this.variant === 'agent';
-      const tools = buildTools({ ...input, signal }, { computer: !agent });
+      const tools = buildTools({ ...input, signal }, { computer: !agent, bare: true });
       const profile = [
         // Codex CLI writes where the chat may (the work folder is the profile's own).
         ...(agent ? (input.sandbox?.allowWrite ?? []).map((p) => [p, 'write'] as const) : []),

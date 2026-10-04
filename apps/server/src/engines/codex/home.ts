@@ -30,14 +30,19 @@ async function discard(dir: string): Promise<void> {
 
 /**
  * A crash leaves no reusable plaintext cache: remove every run folder nothing
- * is using. Runs take turns (the mutex), so a folder of this process found here
- * was left by a run that couldn't remove it; another process's stays while that
- * process is alive.
+ * is using. A folder of this process that no run of it is using was left by a
+ * run that couldn't remove it; another process's stays while that process is
+ * alive. `live` are the folders of runs still going here (Codex and Codex CLI
+ * run side by side, and a turn can last an hour): those are never touched.
  */
-export async function cleanCodexRuntime(root: string): Promise<void> {
+export async function cleanCodexRuntime(
+  root: string,
+  live: ReadonlySet<string> = new Set(),
+): Promise<void> {
   for (const entry of await readdir(root, { withFileTypes: true }).catch(() => [])) {
     if (!entry.isDirectory() || !/^run-[A-Za-z0-9]+$/.test(entry.name)) continue;
     const dir = join(root, entry.name);
+    if (live.has(dir)) continue;
     let owner: unknown;
     try {
       owner = JSON.parse(await readFile(join(dir, 'owner.json'), 'utf8'));
@@ -60,41 +65,58 @@ export async function cleanCodexRuntime(root: string): Promise<void> {
   }
 }
 
-/**
- * Keep the sign-in as Codex left it. A run that ends without one only means
- * "signed out" when signing out was the run: otherwise (Codex tidied up, the
- * run stopped short) the saved sign-in stays.
- */
-async function saveCredentials(path: string, dir: string, signOut: boolean): Promise<void> {
-  try {
-    const auth = Auth.parse(JSON.parse(await readFile(join(dir, 'auth.json'), 'utf8')));
-    await writeJson(path, { auth });
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
-      throw new Error('Conch could not safely save the Codex sign-in. Please reconnect.');
-    if (signOut) await writeJson(path, {});
-  }
+/** A run going on now: its folder, and the sign-in it was last given or last saved. */
+interface Run {
+  dir: string;
+  last: string | undefined;
 }
 
 /**
- * Codex renews its ChatGPT sign-in as it goes, and an old one is refused once
- * it has been renewed. Save each new one as soon as it lands: Conch can stop
- * mid-run (a restart, a crash), and the renewal would go with the run folder.
+ * What every run of one Conch home shares, whichever provider started it
+ * (Codex and Codex CLI use one ChatGPT sign-in): a lock held only while the
+ * saved sign-in is read or written, and the runs going on now.
  */
-function keepRenewals(path: string, dir: string, written: string | undefined) {
-  let last = written;
+interface Shared {
+  mutex: Mutex;
+  runs: Set<Run>;
+}
+const shared = new Map<string, Shared>();
+function sharedFor(home: string): Shared {
+  let entry = shared.get(home);
+  if (!entry) shared.set(home, (entry = { mutex: new Mutex(), runs: new Set() }));
+  return entry;
+}
+
+const authText = (dir: string) => readFile(join(dir, 'auth.json'), 'utf8').catch(() => undefined);
+
+/**
+ * Codex renews its ChatGPT sign-in as it goes, and an old one is refused once
+ * it has been renewed. A renewal is saved as soon as it lands (Conch can stop
+ * mid-run: a restart, a crash), and handed to every other run going on, so
+ * none of them goes on with the one that was just replaced.
+ */
+async function keep(path: string, all: Shared, run: Run, text: string): Promise<void> {
+  let auth: z.infer<typeof Auth>;
+  try {
+    auth = Auth.parse(JSON.parse(text));
+  } catch {
+    return; // Still being written: the next look gets it whole.
+  }
+  await writeJson(path, { auth });
+  run.last = text;
+  for (const other of all.runs) {
+    if (other === run || other.last === text) continue;
+    await writeFile(join(other.dir, 'auth.json'), text, { mode: 0o600 }).catch(() => undefined);
+    other.last = text;
+  }
+}
+
+function keepRenewals(path: string, all: Shared, run: Run) {
   let saving = Promise.resolve();
   const look = async () => {
-    const text = await readFile(join(dir, 'auth.json'), 'utf8').catch(() => undefined);
-    if (text === undefined || text === last) return;
-    let auth: z.infer<typeof Auth>;
-    try {
-      auth = Auth.parse(JSON.parse(text));
-    } catch {
-      return; // Still being written: the next look gets it whole.
-    }
-    await writeJson(path, { auth });
-    last = text;
+    const text = await authText(run.dir);
+    if (text === undefined || text === run.last) return;
+    await all.mutex.run(() => keep(path, all, run, text));
   };
   const timer = setInterval(() => {
     saving = saving.then(look).catch(() => undefined);
@@ -106,11 +128,45 @@ function keepRenewals(path: string, dir: string, written: string | undefined) {
   };
 }
 
-export class CodexHome {
-  #mutex = new Mutex();
-  constructor(readonly home: string) {}
+/**
+ * Keep the sign-in as Codex left it, when this run changed it. A run that ends
+ * without one only means "signed out" when signing out was the run: otherwise
+ * (Codex tidied up, the run stopped short) the saved sign-in stays. A run that
+ * ends with what it was given changed nothing, and never puts back a sign-in
+ * another run has renewed since.
+ */
+async function saveCredentials(
+  path: string,
+  all: Shared,
+  run: Run,
+  signOut: boolean,
+): Promise<void> {
+  const text = await authText(run.dir);
+  if (text === undefined) {
+    if (signOut) await writeJson(path, {});
+    return;
+  }
+  if (text === run.last) return;
+  try {
+    Auth.parse(JSON.parse(text));
+  } catch {
+    throw new Error('Conch could not safely save the Codex sign-in. Please reconnect.');
+  }
+  await keep(path, all, run, text);
+}
 
-  /** Serialize refresh ownership. A waiting cancelled turn never starts a child. */
+/**
+ * Isolated Codex state for one Conch home. Every run gets a folder of its own
+ * (Codex's state and a copy of the sign-in), so runs go on side by side: a
+ * background task never holds up the chat, or the check that says Codex is
+ * ready.
+ */
+export class CodexHome {
+  readonly #shared: Shared;
+  constructor(readonly home: string) {
+    this.#shared = sharedFor(home);
+  }
+
   async withClient<T>(
     executable: string,
     run: (rpc: CodexRpc) => Promise<T>,
@@ -121,45 +177,61 @@ export class CodexHome {
       signOut?: boolean;
     } = {},
   ): Promise<T> {
-    return this.#mutex.run(async () => {
+    options.signal?.throwIfAborted();
+    const path = join(this.home, 'codex.secrets.json');
+    if (!sealerFor(path))
+      throw new Error('Conch’s protected key storage is not ready. Open Settings → Health.');
+    const all = this.#shared;
+    // Read the sign-in and make the folder under the lock, so a renewal saved
+    // by another run is never missed in between. A cancelled turn stops here.
+    const current = await all.mutex.run(async () => {
       options.signal?.throwIfAborted();
-      const path = join(this.home, 'codex.secrets.json');
-      if (!sealerFor(path))
-        throw new Error('Conch’s protected key storage is not ready. Open Settings → Health.');
       const saved = await readStore(path, Credentials, { fallback: () => ({}) });
       const root = join(this.home, 'codex-runtime');
       await mkdir(root, { recursive: true, mode: 0o700 });
-      await cleanCodexRuntime(root);
+      await cleanCodexRuntime(root, new Set([...all.runs].map((r) => r.dir)));
       const dir = await mkdtemp(join(root, 'run-'));
-      let rpc: CodexRpc | undefined;
-      let stopKeeping: (() => Promise<void>) | undefined;
-      const stop = () => {
-        void rpc?.close();
+      const entry: Run = {
+        dir,
+        last: saved.value.auth ? JSON.stringify(saved.value.auth) : undefined,
       };
+      all.runs.add(entry);
       try {
         await writeFile(join(dir, 'owner.json'), String(process.pid), { mode: 0o600 });
-        const written = saved.value.auth ? JSON.stringify(saved.value.auth) : undefined;
-        if (written) await writeFile(join(dir, 'auth.json'), written, { mode: 0o600 });
-        stopKeeping = keepRenewals(path, dir, written);
-        options.signal?.throwIfAborted();
-        rpc = new CodexRpc(executable, {
-          cwd: dir,
-          env: { ...hostEnvironment(), CODEX_HOME: dir },
-          config: ['cli_auth_credentials_store="file"', ...(options.config ?? [])],
-        });
-        options.signal?.addEventListener('abort', stop, { once: true });
-        await rpc.initialize();
-        return await run(rpc);
-      } finally {
-        options.signal?.removeEventListener('abort', stop);
-        await rpc?.close();
-        await stopKeeping?.();
-        try {
-          if (rpc) await saveCredentials(path, dir, options.signOut === true);
-        } finally {
-          await discard(dir);
-        }
+        if (entry.last) await writeFile(join(dir, 'auth.json'), entry.last, { mode: 0o600 });
+      } catch (error) {
+        all.runs.delete(entry);
+        await discard(dir);
+        throw error;
       }
+      return entry;
     });
+    let rpc: CodexRpc | undefined;
+    const stopKeeping = keepRenewals(path, all, current);
+    const stop = () => {
+      void rpc?.close();
+    };
+    try {
+      options.signal?.throwIfAborted();
+      rpc = new CodexRpc(executable, {
+        cwd: current.dir,
+        env: { ...hostEnvironment(), CODEX_HOME: current.dir },
+        config: ['cli_auth_credentials_store="file"', ...(options.config ?? [])],
+      });
+      options.signal?.addEventListener('abort', stop, { once: true });
+      await rpc.initialize();
+      return await run(rpc);
+    } finally {
+      options.signal?.removeEventListener('abort', stop);
+      await rpc?.close();
+      await stopKeeping();
+      try {
+        if (rpc)
+          await all.mutex.run(() => saveCredentials(path, all, current, options.signOut === true));
+      } finally {
+        all.runs.delete(current);
+        await discard(current.dir);
+      }
+    }
   }
 }

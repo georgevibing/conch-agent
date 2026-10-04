@@ -55,8 +55,15 @@ rl.createInterface({input:process.stdin}).on('line', line => {
  else if (m.method === 'account/logout') { fs.rmSync(auth,{force:true}); reply({}); }
  else if (m.method === 'test/renew') { fs.writeFileSync(auth,JSON.stringify({auth_mode:'chatgpt',tokens:{access_token:'renewed-token'}})); reply({}); }
  else if (m.method === 'test/lose') { fs.rmSync(auth,{force:true}); reply({}); }
+ else if (m.method === 'test/token') { let t = null; try { t = JSON.parse(fs.readFileSync(auth,'utf8')).tokens.access_token; } catch {} reply({token: t}); }
+ else if (m.method === 'test/refuse') send({id:m.id,error:{code:-32600,message:'Invalid request: unknown field "x" (Authorization: Bearer abc.def-123 sk-proj-ABCDEFGHIJKLMNOP)'}});
  else if (m.method === 'model/list') reply({data:[{id:'m',model:'account-model',displayName:'Account model',description:'Listed by this account',supportedReasoningEfforts:[{reasoningEffort:'high'}],inputModalities:['text','image']}],nextCursor:null});
- else if (m.method === 'thread/start') reply({thread:{id:'t1'}});
+ else if (m.method === 'thread/start') {
+   // Like Codex 0.159: names starting mcp__ belong to its own MCP servers.
+   const reserved = ((m.params && m.params.dynamicTools) || []).find(t => /^mcp__/.test(t.name));
+   if (reserved) send({id:m.id,error:{code:-32600,message:'dynamic tool name is reserved: '+reserved.name}});
+   else reply({thread:{id:'t1'}});
+ }
  else if (m.method === 'turn/start') {
    reply({turn:{id:'turn1'}});
    if (OPTIONS.malformed) process.stdout.write('not-json\\n');
