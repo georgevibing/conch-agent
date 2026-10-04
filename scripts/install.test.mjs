@@ -59,8 +59,6 @@ if (name === 'corepack' && args.includes('tsx')) console.log('python');
           env: {
             HOME: root,
             PATH: bin,
-            // A screen, so this runs the desktop path whatever machine runs the test.
-            DISPLAY: ':0',
             TMPDIR: root,
             CONCH_HOME: join(root, 'data'),
             CALLS: join(root, 'calls'),
