@@ -3,7 +3,7 @@ import { create } from 'zustand';
 
 import type { PageOwner } from '../features/conchapps/api';
 import { leaveSettings, showSettings, type SettingsMove } from '../features/settings/navigate';
-import type { SettingsTab } from '../features/settings/paths';
+import { MEMORY_ALL, type SettingsTab } from '../features/settings/paths';
 
 export type { SettingsTab };
 
@@ -126,6 +126,9 @@ interface UiState {
   terminalPaste: string | null;
   /** Bumped to ask the drawer for a new terminal. */
   terminalNew: number;
+  /** What to do as the memories open (⌘K → Tidy up, or Search by meaning): once. */
+  memoryIntent: 'tidy' | 'meaning' | null;
+  setMemoryIntent(intent: 'tidy' | 'meaning' | null): void;
   /** Something the person is setting up in the terminal (a need), watched until it lands. */
   watchingNeed: string | null;
   watchNeed(id: string | null): void;
@@ -188,8 +191,10 @@ export const useUi = create<UiState>((set) => ({
     }),
   setMobileSidebar: (mobileSidebarOpen) => set({ mobileSidebarOpen }),
   openSettings: (tab, focus, move) => {
-    // A provider's page is a place of its own; any other focus is brought into view.
-    const item = tab === 'providers' ? focus : undefined;
+    // A provider's page, and every memory, are places of their own; any other focus is
+    // brought into view.
+    const item =
+      tab === 'providers' || (tab === 'memory' && focus === MEMORY_ALL) ? focus : undefined;
     set({ settingsFocus: item ? undefined : focus, paletteOpen: false });
     showSettings(tab, item, move);
   },
@@ -282,6 +287,8 @@ export const useUi = create<UiState>((set) => ({
   terminalPaste: null,
   terminalNew: 0,
   watchingNeed: null,
+  memoryIntent: null,
+  setMemoryIntent: (memoryIntent) => set({ memoryIntent }),
   watchNeed: (watchingNeed) => set({ watchingNeed }),
   setTerminalOpen: (terminalOpen) => set({ terminalOpen, paletteOpen: false }),
   toggleTerminal: () => set((s) => ({ terminalOpen: !s.terminalOpen, paletteOpen: false })),

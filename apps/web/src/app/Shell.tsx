@@ -12,7 +12,6 @@ import { useArtifact } from '../features/artifacts/queries';
 import { AppPageView } from '../features/conchapps/AppPage';
 import { appIdOf } from '../features/conchapps/words';
 import { useUnsavedGuard } from '../features/artifacts/edits';
-import { MemoryView } from '../features/memory/MemoryView';
 import { RestartWatch } from '../features/health/RestartWatch';
 import { NeedWatcher } from '../features/setup/NeedWatcher';
 import { PushKeeper } from '../features/notifications/PushKeeper';
@@ -44,6 +43,7 @@ import { BrowserToggle } from '../features/browser/BrowserToggle';
 import { TerminalDock } from '../features/terminal/TerminalDock';
 import { TerminalToggle } from '../features/terminal/TerminalToggle';
 import { useProviderSignInResult } from '../features/providers/useSignInResult';
+import { MEMORY_ALL } from '../features/settings/paths';
 import { useUi } from './ui';
 import { useHotkey } from './useHotkey';
 
@@ -245,7 +245,7 @@ export function Shell() {
           {pinnedArea && artifactId ? (
             <AppView key={artifactId} artifactId={artifactId} />
           ) : memoryArea ? (
-            <MemoryView />
+            <MemoryMoved />
           ) : tasksArea ? (
             <TasksView />
           ) : archiveArea ? (
@@ -305,4 +305,17 @@ export function Shell() {
       <OpenFromLink />
     </div>
   );
+}
+
+/**
+ * What Conch remembers lives in Settings → Memory now. An old link (or a
+ * bookmark) to `/memory` goes there, over the chats, so leaving Settings
+ * doesn't come straight back.
+ */
+function MemoryMoved() {
+  const openSettings = useUi((s) => s.openSettings);
+  useEffect(() => {
+    openSettings('memory', MEMORY_ALL, { replace: true, from: '/' });
+  }, [openSettings]);
+  return null;
 }

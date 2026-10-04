@@ -122,6 +122,35 @@ describe('Settings', () => {
     expect(where()).toBe('/settings/providers');
   });
 
+  it('opens what Conch remembers inside Memory, with ‹ Memory back', async () => {
+    narrowScreen(false);
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/memories': () => [
+        {
+          id: 'm_1',
+          content: 'Projects live in ~/projects',
+          kind: 'project',
+          source: 'agent',
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+    });
+    const { where } = renderApp(<Settings />, { route: '/settings/memory' });
+    const page = await screen.findByRole('dialog', { name: 'Settings' });
+    await userEvent.click(await within(page).findByRole('button', { name: 'Open' }));
+    expect(where()).toBe('/settings/memory/everything');
+    // Still Settings, its places beside it: the memories are a page inside Memory.
+    expect(
+      await within(page).findByRole('heading', { name: 'What Conch knows about you' }),
+    ).toBeVisible();
+    expect(within(page).getByRole('tab', { name: 'Memory' })).toBeInTheDocument();
+    expect(await within(page).findByText('Projects live in ~/projects')).toBeVisible();
+    await userEvent.click(within(page).getByRole('button', { name: 'Memory' }));
+    expect(where()).toBe('/settings/memory');
+  });
+
   it('on a phone, is a list and then the place you chose, with ‹ Settings back to the list', async () => {
     narrowScreen(true);
     mockFetch({ 'GET /api/state': () => appState() });

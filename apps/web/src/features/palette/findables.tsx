@@ -77,6 +77,7 @@ import { useNavigate } from 'react-router';
 
 import { useConversations } from '../../api/queries';
 import { useUi, type SettingsTab } from '../../app/ui';
+import { MEMORY_ALL } from '../settings/paths';
 import { ARCHIVE_PATH, isChat, useArchive } from '../archive/useArchive';
 import { COME_HOME_FOCUS } from '../import/api';
 import { doctorApi } from '../health/api';
@@ -781,14 +782,17 @@ export function useFindables(query: string, conversationId: string | undefined):
       keywords:
         'what do you know remember about me memory memories remembered profile forget learned learnings',
       icon: <Brain />,
-      run: () => void navigate('/memory'),
+      run: () => openSettings('memory', MEMORY_ALL),
     },
     {
       id: 'tidy-memory',
       label: 'Tidy up memories',
       keywords: 'tidy clean merge duplicates repeats memories dream sleep nightly learn',
       icon: <Sparkles />,
-      run: () => void navigate('/memory', { state: { tidy: true } }),
+      run: () => {
+        useUi.getState().setMemoryIntent('tidy');
+        openSettings('memory', MEMORY_ALL);
+      },
     },
     {
       id: 'meaning-search',
@@ -796,7 +800,10 @@ export function useFindables(query: string, conversationId: string | undefined):
       keywords:
         'meaning understand synonyms smarter search memories model download embedding semantic offline',
       icon: <Brain />,
-      run: () => void navigate('/memory', { state: { meaning: true } }),
+      run: () => {
+        useUi.getState().setMemoryIntent('meaning');
+        openSettings('memory', MEMORY_ALL);
+      },
     },
     {
       id: 'export-memories',

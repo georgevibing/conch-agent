@@ -22,6 +22,7 @@ import { api } from '../../api/client';
 import { compactChat } from '../chat/compact';
 import { keys, useCommands } from '../../api/queries';
 import { useUi } from '../../app/ui';
+import { MEMORY_ALL } from '../settings/paths';
 import { effortLabels, modelLabel, modes } from '../models/catalog';
 import { modelKey, type useTurnOptions } from '../models/useTurnOptions';
 import { usableSkills, useSkills } from '../skills/queries';
@@ -209,7 +210,7 @@ export function useSlashCommands(options: {
           },
         );
       case 'memory':
-        return void navigate('/memory');
+        return ui.openSettings('memory', MEMORY_ALL);
       case 'routines':
         return void navigate('/routines');
       case 'skills':

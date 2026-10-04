@@ -40,6 +40,7 @@ import { useLocation, useNavigate, useParams } from 'react-router';
 
 import { useAppState, useConversations } from '../../api/queries';
 import { useUi } from '../../app/ui';
+import { MEMORY_ALL } from '../settings/paths';
 import { relativeTime } from '../../lib/time';
 import { compactChat } from '../chat/compact';
 import { useSearchPreview, useSearchResults } from '../search/useSearch';
@@ -236,7 +237,7 @@ export function Palette() {
       label: 'What do you remember about me?',
       icon: <Brain />,
       keywords: 'memory memories',
-      run: () => void navigate('/memory'),
+      run: () => openSettings('memory', MEMORY_ALL),
     },
     {
       id: 'usage',

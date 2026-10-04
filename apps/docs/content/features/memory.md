@@ -17,7 +17,7 @@ It is told to leave out passwords, keys, and health or money details unless you 
 
 ## See what it knows
 
-Open **What Conch knows about you** with <kbd>mod+k</kbd>, by typing `/memory`, or from **Settings → Memory → Open**. The page holds:
+Open **What Conch knows about you** with <kbd>mod+k</kbd>, by typing `/memory`, or from **Settings → Memory → Open**. It opens inside Settings, and **‹ Memory** goes back to the memory settings. The page holds:
 
 - **About you.** Your name and a few lines about you. Your assistant always has these in mind.
 - **Memories.** Everything it remembers. Each one says whether you added it, it was learned in a chat, or it came from a tidy-up. Show one kind at a time: **Preferences**, **People**, **Projects** or **Facts**.

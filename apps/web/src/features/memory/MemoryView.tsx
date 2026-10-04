@@ -21,7 +21,6 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { Brain, Download, Plus, Search, Sparkles } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
 
 import { api } from '../../api/client';
 import { keys, useAppState, useMemories, useUpdateSettings } from '../../api/queries';
@@ -73,8 +72,8 @@ function Learnings({ autoMemory }: { autoMemory: boolean }) {
   const tidy = useTidy();
   const client = useQueryClient();
   const update = useUpdateSettings();
-  const location = useLocation();
-  const navigate = useNavigate();
+  const intent = useUi((s) => s.memoryIntent);
+  const setIntent = useUi((s) => s.setMemoryIntent);
   const asked = useRef(false);
 
   const now = async () => {
@@ -86,9 +85,9 @@ function Learnings({ autoMemory }: { autoMemory: boolean }) {
   };
   // ⌘K → Tidy up memories: start as the page opens.
   useEffect(() => {
-    if (asked.current || !(location.state as { tidy?: boolean } | null)?.tidy) return;
+    if (asked.current || intent !== 'tidy') return;
     asked.current = true;
-    void navigate('/memory', { replace: true, state: null });
+    setIntent(null);
     void now();
     // Once, on arrival.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -194,18 +193,18 @@ function Learnings({ autoMemory }: { autoMemory: boolean }) {
 function SearchMode() {
   const index = useMemoryIndex();
   const client = useQueryClient();
-  const location = useLocation();
-  const navigate = useNavigate();
+  const intent = useUi((s) => s.memoryIntent);
+  const setIntent = useUi((s) => s.setMemoryIntent);
   const button = useRef<HTMLButtonElement>(null);
   const status = index.data;
   // ⌘K → Search memories by meaning: the offer, ready to press.
-  const asked = (location.state as { meaning?: boolean } | null)?.meaning;
+  const asked = intent === 'meaning';
   useEffect(() => {
     if (!asked || !status) return;
-    void navigate('/memory', { replace: true, state: null });
+    setIntent(null);
     button.current?.scrollIntoView({ block: 'center' });
     button.current?.focus();
-  }, [asked, status, navigate]);
+  }, [asked, status, setIntent]);
   if (!status) return null;
   const get = async () => {
     try {
@@ -246,7 +245,7 @@ function SearchMode() {
  * kind, what's waiting for your OK, and what it learned lately — searchable,
  * editable, forgettable and yours to export.
  */
-export function MemoryView() {
+export function MemoryView({ inSettings = false }: { inSettings?: boolean } = {}) {
   const app = useAppState();
   const memories = useMemories();
   const client = useQueryClient();
@@ -264,6 +263,8 @@ export function MemoryView() {
     (m) => kind === 'all' || m.kind === kind,
   );
   const profile = app.data?.profile;
+  // A page of its own, or a place inside Settings (its column is already the page).
+  const Shell = inSettings ? Stack : Page;
 
   const add = async () => {
     const content = draft.trim();
@@ -278,10 +279,10 @@ export function MemoryView() {
   };
 
   return (
-    <Page gap={8}>
+    <Shell gap={8}>
       <header className={styles.header}>
         <Stack gap={1}>
-          <Heading level={1} display size="3xl">
+          <Heading level={1} display={!inSettings} size={inSettings ? 'xl' : '3xl'}>
             What Conch knows about you
           </Heading>
           <Text tone="muted">
@@ -425,6 +426,6 @@ export function MemoryView() {
         )}
         <SearchMode />
       </section>
-    </Page>
+    </Shell>
   );
 }

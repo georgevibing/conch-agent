@@ -25,6 +25,9 @@ export const SETTINGS_TABS = [
 
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
+/** Everything Conch remembers: a page inside Settings → Memory (`/settings/memory/everything`). */
+export const MEMORY_ALL = 'everything';
+
 /**
  * Where Settings is. No `tab`: Settings itself (General, or the list on a
  * phone). `item`: a page inside a place — a provider's own page is

@@ -335,7 +335,7 @@ export function Sidebar({
         )}
       </ScrollArea>
       <div className={styles.footer}>
-        <button type="button" className={styles.me} onClick={() => openSettings('about')}>
+        <button type="button" className={styles.me} onClick={() => openSettings()}>
           <Avatar size="sm" name={app?.profile.name || 'You'} />
           <span className={styles.meName}>{app?.profile.name || 'You'}</span>
         </button>

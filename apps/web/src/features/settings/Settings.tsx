@@ -43,7 +43,7 @@ import {
   User,
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
-import { useLocation, useNavigate } from 'react-router';
+import { useLocation } from 'react-router';
 
 import { useAppState, useMemories, useUpdateSettings } from '../../api/queries';
 import { useUi } from '../../app/ui';
@@ -53,6 +53,7 @@ import { BrowserSettings } from '../browser/BrowserSettings';
 import { HealthTab } from '../health/HealthTab';
 import { OtherAppsTab } from '../otherapps/OtherAppsTab';
 import { ComeHomeSection } from '../import/ComeHomeSection';
+import { MemoryView } from '../memory/MemoryView';
 import { NotificationsTab } from '../notifications/NotificationsTab';
 import { VoiceTab } from '../voice/VoiceTab';
 import { TerminalSettings } from '../terminal/TerminalSettings';
@@ -61,7 +62,7 @@ import { ProvidersTab } from '../providers/ProvidersTab';
 import { UsageTab } from '../usage/UsageTab';
 import styles from './Settings.module.css';
 import { CommandsTab } from './CommandsTab';
-import { settingsAt, type SettingsTab } from './paths';
+import { MEMORY_ALL, settingsAt, type SettingsTab } from './paths';
 import { GeneralTab } from './GeneralTab';
 import { ModelsTab } from './ModelsTab';
 import { SaveStatus, Section } from './Section';
@@ -160,10 +161,35 @@ function AboutTab({ initial }: { initial: Profile }) {
   );
 }
 
-function MemoryTab({ autoMemory, tidyMemory }: { autoMemory: boolean; tidyMemory: boolean }) {
+function MemoryTab({
+  autoMemory,
+  tidyMemory,
+  item,
+}: {
+  autoMemory: boolean;
+  tidyMemory: boolean;
+  /** `everything`: what Conch remembers, a page inside Memory. */
+  item?: string;
+}) {
   const memories = useMemories();
   const update = useUpdateSettings();
-  const navigate = useNavigate();
+  const openSettings = useUi((s) => s.openSettings);
+  if (item === MEMORY_ALL)
+    return (
+      <Stack gap={5}>
+        <div>
+          <Button
+            variant="ghost"
+            size="sm"
+            leadingIcon={<ChevronLeft />}
+            onClick={() => openSettings('memory')}
+          >
+            Memory
+          </Button>
+        </div>
+        <MemoryView inSettings />
+      </Stack>
+    );
   const all = memories.data ?? [];
   const waiting = all.filter((m) => m.pending).length;
   const kept = all.length - waiting;
@@ -205,7 +231,7 @@ function MemoryTab({ autoMemory, tidyMemory }: { autoMemory: boolean; tidyMemory
                 {waiting > 0 && ` · ${waiting} waiting for your OK`}
               </Text>
             </Stack>
-            <Button size="sm" variant="surface" onClick={() => void navigate('/memory')}>
+            <Button size="sm" variant="surface" onClick={() => openSettings('memory', MEMORY_ALL)}>
               Open
             </Button>
           </div>
@@ -488,6 +514,7 @@ export function Settings() {
                   <MemoryTab
                     autoMemory={app.preferences.autoMemory}
                     tidyMemory={app.preferences.tidyMemory}
+                    item={tab === 'memory' ? address?.item : undefined}
                   />
                 </Tabs.Content>
                 <Tabs.Content value="models">
